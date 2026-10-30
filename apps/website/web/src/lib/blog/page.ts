@@ -1,5 +1,5 @@
 import type { BlogPosting } from 'schema-dts';
-import { fitMetaDescription, organizationId, SITE_NAME } from '../seo';
+import { fitMetaDescription, headline, organizationId, SITE_NAME } from '../seo';
 import type { BlogApi, Post, PostListItem, PostPage } from './api';
 import { OG_HEIGHT, OG_WIDTH } from './ogImage';
 
@@ -49,18 +49,6 @@ export function parsePageNumber(value: string | undefined): number | null {
 /** The path of page `page` of the list at `base` (`/blog` or `/blog/tags/<tag>`). */
 export function pagePath(base: string, page: number): string {
   return page === 1 ? base : `${base}/page/${page}`;
-}
-
-const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
-
-/** A post date as it reads on the page, such as "October 30, 2026". */
-export function formatPostDate(iso: string): string {
-  return dateFormat.format(new Date(iso));
-}
-
-/** A time for `<time datetime>`, in the same UTC ISO form whatever the API wrote. */
-export function isoTime(iso: string): string {
-  return new Date(iso).toISOString();
 }
 
 const LIST_DESCRIPTION = `Posts from the ${SITE_NAME} team on agentic development, how Relay and the agents work, and what changed in each release of the desktop app.`;
@@ -117,15 +105,6 @@ export function postImage(post: PostListItem) {
     return { src: url, width, height, alt };
   }
   return { src: `/blog/${post.slug}/og.png`, width: OG_WIDTH, height: OG_HEIGHT, alt: post.title };
-}
-
-const MAX_HEADLINE = 110;
-
-/** A title cut at a word to the 110 characters search engines read from a headline. */
-function headline(title: string): string {
-  if (title.length <= MAX_HEADLINE) return title;
-  const cut = title.slice(0, MAX_HEADLINE - 1);
-  return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:.]+$/, '')}…`;
 }
 
 /** The BlogPosting node of a post page, published by the site's Organization. */

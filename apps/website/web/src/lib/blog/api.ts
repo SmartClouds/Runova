@@ -3,6 +3,8 @@
  * is cached here: the pages send Cache-Control and the proxy in front of the site caches by it.
  */
 
+import { type ApiResult, apiGetter, type WebsiteApiOptions } from '../websiteApi';
+
 export interface PostTag {
   slug: string;
   name: string;
@@ -43,10 +45,6 @@ export interface PostPage {
   totalItems: number;
   totalPages: number;
 }
-
-export type ApiResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; reason: 'not-found' | 'unavailable' };
 
 /** The slugs the API's `/posts/{slug}` route accepts; anything else could never be a post. */
 export const POST_SLUG = /^[a-z0-9-]*[a-z][a-z0-9-]*$/;
@@ -151,36 +149,16 @@ export interface ListPostsQuery {
   tags?: string[];
 }
 
-export interface BlogApiOptions {
-  fetch?: typeof fetch;
-  timeoutMs?: number;
-}
-
 export interface BlogApi {
   listPosts(query: ListPostsQuery): Promise<ApiResult<PostPage>>;
   getPost(slug: string): Promise<ApiResult<Post>>;
 }
 
-export function createBlogApi(baseUrl: string | undefined, options: BlogApiOptions = {}): BlogApi {
-  const { fetch: fetchFn = globalThis.fetch, timeoutMs = 3_000 } = options;
-
-  async function get<T>(path: string, parse: (value: unknown) => T | null): Promise<ApiResult<T>> {
-    if (!baseUrl) return { ok: false, reason: 'unavailable' };
-    try {
-      const response = await fetchFn(`${baseUrl.replace(/\/+$/, '')}${path}`, {
-        headers: { accept: 'application/json' },
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (response.status === 404) return { ok: false, reason: 'not-found' };
-      if (response.ok) {
-        const value = parse(await response.json());
-        if (value) return { ok: true, value };
-      }
-    } catch {
-      // Down, slow or not JSON: the same as any other failure.
-    }
-    return { ok: false, reason: 'unavailable' };
-  }
+export function createBlogApi(
+  baseUrl: string | undefined,
+  options: WebsiteApiOptions = {},
+): BlogApi {
+  const get = apiGetter(baseUrl, options);
 
   return {
     listPosts({ page = 1, pageSize = 10, tags = [] }) {

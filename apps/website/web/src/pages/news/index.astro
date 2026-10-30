@@ -1,0 +1,15 @@
+---
+import NewsList from '../../components/news/NewsList.astro';
+import { applyState } from '../../lib/blog/page';
+import { newsApi } from '../../lib/news/api';
+import { CACHE, loadNewsList } from '../../lib/news/page';
+
+// Rendered per request from the API; the proxy caches it by its Cache-Control. The filters and the
+// page number are in the query string.
+export const prerender = false;
+
+const result = await loadNewsList(newsApi(), Astro.url.searchParams);
+applyState(Astro.response, result.state, CACHE.list);
+---
+
+<NewsList result={result} />

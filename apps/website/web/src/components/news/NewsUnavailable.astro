@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// What a news page shows, with status 503, while the API cannot be reached.
+---
+
+<BaseLayout
+  title="News unavailable"
+  description="The Runova technology news could not be loaded just now because its server did not answer. Try again in a minute, or read the help center."
+  noindex
+>
+  <section aria-labelledby="unavailable-title" class="max-w-[60ch] py-16 md:py-24">
+    <h1 id="unavailable-title" class="font-bold text-[clamp(2rem,5vw,3rem)] leading-[1.1]">
+      The news could not be loaded
+    </h1>
+    <p class="mt-4 text-lg text-muted-foreground">
+      The news did not load just now. Try again in a minute. The
+      <a href="/help" class="text-primary underline underline-offset-4">help center</a> is still there in the
+      meantime.
+    </p>
+  </section>
+</BaseLayout>

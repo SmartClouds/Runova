@@ -1,0 +1,34 @@
+---
+import type { Severity } from '../../lib/news/api';
+import { SEVERITY_LABELS } from '../../lib/news/page';
+import { SEVERITY_ICONS } from './icons';
+
+// A severity as icon, label and color together, never color alone (docs/website/design.md). The
+// colors meet AA on the tint only over the page background, so the badge is never put on a card.
+
+interface Props {
+  severity: Severity;
+  class?: string;
+}
+
+// Written out in full so Tailwind finds every class.
+const COLORS: Record<Severity, string> = {
+  info: 'border-severity-info/30 bg-severity-info/12 text-severity-info',
+  low: 'border-severity-low/30 bg-severity-low/12 text-severity-low',
+  medium: 'border-severity-medium/30 bg-severity-medium/12 text-severity-medium',
+  high: 'border-severity-high/30 bg-severity-high/12 text-severity-high',
+  critical: 'border-severity-critical/30 bg-severity-critical/12 text-severity-critical',
+};
+
+const { severity, class: className } = Astro.props;
+const Icon = SEVERITY_ICONS[severity];
+---
+
+<span
+  data-severity-badge={severity}
+  class:list={[
+    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium text-xs',
+    COLORS[severity],
+    className,
+  ]}
+><Icon aria-hidden="true" className="size-3.5 shrink-0" />{SEVERITY_LABELS[severity]}</span>

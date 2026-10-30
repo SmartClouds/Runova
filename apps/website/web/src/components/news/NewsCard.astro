@@ -1,0 +1,36 @@
+---
+import { formatLongDate, isoTime } from '../../lib/dates';
+import type { NewsListItem } from '../../lib/news/api';
+import AffectedList from './AffectedList.astro';
+import CategoryChip from './CategoryChip.astro';
+import SecurityBox from './SecurityBox.astro';
+import SeverityBadge from './SeverityBadge.astro';
+
+interface Props {
+  item: NewsListItem;
+}
+
+const { item } = Astro.props;
+---
+
+<article data-news-card={item.slug} data-severity={item.severity} class="flex flex-col gap-3 rounded-lg border p-5 md:p-6">
+  <div class="flex flex-wrap items-center gap-2">
+    <CategoryChip category={item.category} />
+    <span class="sr-only">Severity:</span>
+    <SeverityBadge severity={item.severity} />
+    <time datetime={isoTime(item.publishedAt)} class="text-muted-foreground text-sm sm:ml-auto">
+      {formatLongDate(item.publishedAt)}
+    </time>
+  </div>
+  <h2 class="text-balance font-semibold text-xl leading-snug">
+    <a href={`/news/${item.slug}`} class="hover:text-primary">{item.title}</a>
+  </h2>
+  <p class="text-muted-foreground">{item.summary}</p>
+  {
+    item.category === 'security' ? (
+      <SecurityBox item={item} />
+    ) : (
+      <AffectedList technologies={item.technologies} label="Technologies" />
+    )
+  }
+</article>

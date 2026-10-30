@@ -11,6 +11,15 @@ export const DEFAULT_OG_IMAGE = {
   alt: 'Runova, the Agentic Development Environment',
 };
 
+const MAX_HEADLINE = 110;
+
+/** A title cut at a word to the 110 characters search engines read from an article headline. */
+export function headline(title: string): string {
+  if (title.length <= MAX_HEADLINE) return title;
+  const cut = title.slice(0, MAX_HEADLINE - 1);
+  return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:.]+$/, '')}…`;
+}
+
 const MIN_DESCRIPTION = 70;
 const MAX_DESCRIPTION = 160;
 

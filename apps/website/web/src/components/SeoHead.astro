@@ -19,12 +19,22 @@ interface Props {
   /** The page's own JSON-LD nodes; Organization and WebSite are always added first. */
   jsonLd?: Thing[];
   noindex?: boolean;
+  /** A path to use as the canonical instead of this page's own, such as `/news` on a filtered view. */
+  canonicalPath?: string;
 }
 
-const { title, description, image, type = 'website', jsonLd = [], noindex = false } = Astro.props;
+const {
+  title,
+  description,
+  image,
+  type = 'website',
+  jsonLd = [],
+  noindex = false,
+  canonicalPath,
+} = Astro.props;
 const site = Astro.site ?? new URL('https://runovahq.com');
 const fullTitle = pageTitle(title);
-const canonical = canonicalUrl(site, Astro.url);
+const canonical = canonicalPath ? new URL(canonicalPath, site).href : canonicalUrl(site, Astro.url);
 const ogImage = image ?? {
   src: DEFAULT_OG_IMAGE.path,
   alt: DEFAULT_OG_IMAGE.alt,

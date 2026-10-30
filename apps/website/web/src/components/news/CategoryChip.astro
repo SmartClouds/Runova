@@ -1,0 +1,21 @@
+---
+import type { Category } from '../../lib/news/api';
+import { CATEGORY_LABELS } from '../../lib/news/page';
+import { CATEGORY_ICONS } from './icons';
+
+interface Props {
+  category: Category;
+  class?: string;
+}
+
+const { category, class: className } = Astro.props;
+const Icon = CATEGORY_ICONS[category];
+---
+
+<span
+  data-category-chip={category}
+  class:list={[
+    'inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 font-medium text-secondary-foreground text-xs',
+    className,
+  ]}
+><Icon aria-hidden="true" className="size-3.5 shrink-0" />{CATEGORY_LABELS[category]}</span>

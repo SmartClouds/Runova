@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { blogApi, POST_SLUG } from '../../../lib/blog/api';
 import { renderOgImage } from '../../../lib/blog/ogImage';
-import { CACHE, formatPostDate, RETRY_AFTER_SECONDS } from '../../../lib/blog/page';
+import { CACHE, RETRY_AFTER_SECONDS } from '../../../lib/blog/page';
+import { formatLongDate } from '../../../lib/dates';
 
 // Drawn per request for posts without a cover; the proxy caches it by its Cache-Control.
 export const prerender = false;
@@ -24,7 +25,7 @@ export const GET: APIRoute = async ({ params }) => {
   const post = result.value;
   const png = await renderOgImage({
     title: post.title,
-    byline: `${post.author.displayName}  ·  ${formatPostDate(post.publishedAt)}`,
+    byline: `${post.author.displayName}  ·  ${formatLongDate(post.publishedAt)}`,
   });
   return new Response(new Uint8Array(png), {
     headers: { 'Content-Type': 'image/png', 'Cache-Control': CACHE.post },
