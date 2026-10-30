@@ -1,31 +1,31 @@
 [
   {
     "name": "workspace",
-    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "dark",
     "alt": "The Runova workspace on the Northwind storefront: Claude Code has finished adding discount codes in an agent pane, the diff of the cart totals is open next to it, and the source control panel lists the changes."
   },
   {
     "name": "workspace-light",
-    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "light",
     "alt": "The same Northwind storefront workspace in the Light theme, with the agent pane, the cart totals diff and source control."
   },
   {
     "name": "workspace-vscode-dark",
-    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "vscode-dark",
     "alt": "The Northwind storefront workspace in the VS Code Dark theme, with the agent pane, the cart totals diff and source control."
   },
   {
     "name": "workspace-vs2026",
-    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "vs2026",
     "alt": "The Northwind storefront workspace in the VS 2026 theme, with the agent pane, the cart totals diff and source control."
   },
   {
     "name": "workspace-git",
-    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "dark",
     "alt": "Source control in the Northwind storefront workspace: the new discount function in price.ts is staged on its own hunk, while the rest of the change waits unstaged next to a new test file."
   },
@@ -37,7 +37,7 @@
   },
   {
     "name": "project-detail",
-    "route": "/projects/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/projects/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "dark",
     "alt": "The storefront project's page: its description, agent and tags, the standing prompt every agent starts from, and notes for the discount code launch."
   },
@@ -49,7 +49,7 @@
   },
   {
     "name": "blueprint",
-    "route": "/projects/23e130f0-3888-4a98-8295-7bb62ba78d72?tab=blueprint",
+    "route": "/projects/17622fc0-67c6-4040-a70f-9cd1e7fc8218?tab=blueprint",
     "theme": "dark",
     "alt": "The admin portal's Blueprint partway through: the idea, architecture and backend steps of a wholesale portal are written, with frontend, CI/CD and quality still to come."
   },
@@ -79,7 +79,7 @@
   },
   {
     "name": "mcp",
-    "route": "/mcp?projectId=944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "route": "/mcp?projectId=d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "dark",
     "alt": "The MCP directory filtered to the four servers installed in the storefront project: Sentry, Linear, Figma and a copy-paste detector."
   },
@@ -100,5 +100,113 @@
     "route": "/settings?tab=general",
     "theme": "dark",
     "alt": "Settings on the General tab: the theme picker set to Dark next to Light, System, VS Code Dark and VS 2026, the main menu placement and the status bar limits."
+  },
+  {
+    "name": "deploy-overview",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "A server's Overview in Deploy: its health score, live processor, memory and network charts, and the state of the server core, over a live connection."
+  },
+  {
+    "name": "deploy-containers",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "The server's containers grouped by Compose project, each with its state and live processor and memory use."
+  },
+  {
+    "name": "deploy-app-store",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "The Deploy App Store: a catalog of databases, caches and tools that install on the server in one step."
+  },
+  {
+    "name": "deploy-websites",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "Websites on the server, served by nginx that Runova manages: the Northwind shop with its certificate and the API, each proxied to a service on the server."
+  },
+  {
+    "name": "deploy-firewall",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "The server's firewall with its rules. Every change is reviewed as the exact commands first and rolls back by itself unless it is kept."
+  },
+  {
+    "name": "deploy-backups",
+    "route": "/deploy",
+    "theme": "dark",
+    "alt": "Server backups on their Overview: an encrypted nightly plan to a backup disk, with the history of its runs."
+  },
+  {
+    "name": "ssh",
+    "route": "/remote",
+    "theme": "dark",
+    "alt": "The SSH tab on the Remote page with the saved Northwind servers, from the production shop to the database and mail relay, each ready to open in a terminal."
+  },
+  {
+    "name": "remote-desktop",
+    "route": "/remote",
+    "theme": "dark",
+    "alt": "The Remote Desktop tab with saved Windows machines: the office PC, the roastery kiosk and the build server, each opening in its own window."
+  },
+  {
+    "name": "help",
+    "route": "/help/workspace",
+    "theme": "dark",
+    "alt": "The Help center on its Workspace guide, with every topic listed by area on the left and an outline of the article on the right."
+  },
+  {
+    "name": "ai-pet",
+    "route": "/settings?tab=companion",
+    "theme": "dark",
+    "alt": "The AI Pet in Settings, turned on, with its characters to pick from: a coder pup, an orange voxel, a gremlin, an orca and more."
+  },
+  {
+    "name": "api-client",
+    "route": "/api-client",
+    "theme": "dark",
+    "alt": "The API Client with a Northwind collection: a request for the open orders and the API's JSON response next to it."
+  },
+  {
+    "name": "studio",
+    "route": "/studio",
+    "theme": "dark",
+    "alt": "Studio with a short video for the autumn roast launch open: three scenes, each with a title and the narration that will be read over it."
+  },
+  {
+    "name": "monitoring-uptime",
+    "route": "/monitoring",
+    "theme": "dark",
+    "alt": "Monitoring's Uptime view: the Northwind storefront, API and admin portal are up, while the mailer is down because its queue refuses connections."
+  },
+  {
+    "name": "monitoring-errors",
+    "route": "/monitoring?view=errors",
+    "theme": "dark",
+    "alt": "Monitoring's Errors view with the issues Sentry recorded for the storefront's web app and API, grouped under the project and ready to hand to an agent."
+  },
+  {
+    "name": "relay",
+    "route": "/projects/17622fc0-67c6-4040-a70f-9cd1e7fc8218",
+    "theme": "dark",
+    "alt": "The Relay board for the admin portal's wholesale work: tasks move from To do through In progress and Testing to Done as agent sessions pick them up."
+  },
+  {
+    "name": "usage",
+    "route": "/usage",
+    "theme": "dark",
+    "alt": "Token Usage built from the local logs of Claude Code and Codex: tokens and cost per day for the last two weeks, by model and by Northwind project."
+  },
+  {
+    "name": "pipelines",
+    "route": "/pipelines",
+    "theme": "dark",
+    "alt": "Pipelines with the GitHub Actions runs of the Northwind repos: the discount codes branch is still building, the few failed runs stand out in red, and the rest passed."
+  },
+  {
+    "name": "docker",
+    "route": "/docker",
+    "theme": "dark",
+    "alt": "The Docker page with the Northwind containers: the storefront, API, Postgres and Redis running with their CPU and memory, and the stopped mail queue easy to spot."
   }
 ]

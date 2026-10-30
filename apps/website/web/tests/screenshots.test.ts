@@ -56,11 +56,13 @@ const manifest: ManifestEntry[] = existsSync(manifestFile)
   : [];
 
 describe('app screenshots', () => {
-  it('has a manifest entry for every shot the spec gives T012', () => {
-    const wanted = specShotNames('T012');
-    expect(wanted.length).toBeGreaterThan(10);
-    expect(manifest.map((entry) => entry.name)).toEqual(expect.arrayContaining(wanted));
-  });
+  for (const task of ['T012', 'T013']) {
+    it(`has a manifest entry for every shot the spec gives ${task}`, () => {
+      const wanted = specShotNames(task);
+      expect(wanted.length).toBeGreaterThan(10);
+      expect(manifest.map((entry) => entry.name)).toEqual(expect.arrayContaining(wanted));
+    });
+  }
 
   it('lists each name once', () => {
     const names = manifest.map((entry) => entry.name);

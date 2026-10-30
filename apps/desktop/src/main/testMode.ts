@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { app, safeStorage } from 'electron';
 import { LEGACY_USER_DATA_ENV } from '../shared/legacyNames';
 
@@ -32,7 +33,23 @@ if (isE2E && process.platform === 'linux') {
  * Electron asks the OS for the profile folder, so `home` is moved here too.
  */
 export const homeOverride = isE2E ? process.env.RUNOVA_E2E_HOME?.trim() || undefined : undefined;
-if (homeOverride) app.setPath('home', resolve(homeOverride));
+if (homeOverride) {
+  const home = resolve(homeOverride);
+  app.setPath('home', home);
+  // The OS knows no user folders for a made-up profile, so getPath('videos') would throw.
+  for (const [name, folder] of [
+    ['desktop', 'Desktop'],
+    ['documents', 'Documents'],
+    ['downloads', 'Downloads'],
+    ['music', 'Music'],
+    ['pictures', 'Pictures'],
+    ['videos', 'Videos'],
+  ] as const) {
+    // Electron refuses a folder that does not exist.
+    mkdirSync(join(home, folder), { recursive: true });
+    app.setPath(name, join(home, folder));
+  }
+}
 
 /**
  * Windows stay hidden during e2e runs so a test run doesn't pop apps up over whatever the
