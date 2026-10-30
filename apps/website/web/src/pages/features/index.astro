@@ -1,0 +1,30 @@
+---
+import { getCollection } from 'astro:content';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import FeatureGrid from '../../components/features/FeatureGrid.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { type FeatureCard, featureCrumbs } from '../../lib/features';
+import { breadcrumbList } from '../../lib/seo';
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const crumbs = featureCrumbs();
+const features: FeatureCard[] = (await getCollection('features'))
+  .map((entry) => ({ slug: entry.id, ...entry.data }))
+  .sort((a, b) => a.order - b.order);
+const description =
+  'Every part of Runova explained: the workspace and agents, git and review, Relay, token usage, Build, Agents, Ship, Connect, Studio and the rest of the app.';
+---
+
+<BaseLayout title="Features" description={description} jsonLd={[breadcrumbList(site, crumbs)]}>
+  <Breadcrumbs crumbs={crumbs} />
+  <div class="pb-16 md:pb-24">
+    <header class="max-w-[70ch] pt-6">
+      <h1 class="text-balance font-bold text-[clamp(2.25rem,6vw,3.5rem)] leading-[1.1]">Features</h1>
+      <p class="mt-5 text-lg text-muted-foreground">
+        Runova is built around agents doing the typing and you doing the steering. These pages walk
+        through what the app does, group by group, with screenshots taken from the app itself.
+      </p>
+    </header>
+    <FeatureGrid features={features} />
+  </div>
+</BaseLayout>

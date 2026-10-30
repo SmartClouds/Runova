@@ -1,0 +1,15 @@
+---
+import { getCollection, render } from 'astro:content';
+import type { GetStaticPaths } from 'astro';
+import FeatureLayout from '../../layouts/FeatureLayout.astro';
+
+export const getStaticPaths = (async () => {
+  const features = await getCollection('features');
+  return features.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}) satisfies GetStaticPaths;
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<FeatureLayout slug={entry.id} data={entry.data} Content={Content} />

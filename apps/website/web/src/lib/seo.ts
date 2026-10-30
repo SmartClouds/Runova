@@ -1,4 +1,4 @@
-import type { Organization, Thing, WebSite } from 'schema-dts';
+import type { BreadcrumbList, Organization, Thing, WebSite } from 'schema-dts';
 
 export const SITE_NAME = 'Runova';
 export const HOME_TITLE = 'Runova: the Agentic Development Environment';
@@ -67,4 +67,23 @@ export function jsonLdGraph(site: string | URL, nodes: Thing[] = []) {
 /** JSON for a <script type="application/ld+json">, with `<` escaped so it cannot end the element. */
 export function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');
+}
+
+/** One step in a breadcrumb trail: the page name and its path on the site. */
+export interface Crumb {
+  name: string;
+  path: string;
+}
+
+/** The trail as a BreadcrumbList, numbered from 1, with absolute URLs. */
+export function breadcrumbList(site: string | URL, crumbs: Crumb[]): BreadcrumbList {
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: crumbs.map((crumb, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: crumb.name,
+      item: new URL(crumb.path, site).href,
+    })),
+  };
 }
