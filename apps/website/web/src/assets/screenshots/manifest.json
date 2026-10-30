@@ -1,0 +1,104 @@
+[
+  {
+    "name": "workspace",
+    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "dark",
+    "alt": "The Runova workspace on the Northwind storefront: Claude Code has finished adding discount codes in an agent pane, the diff of the cart totals is open next to it, and the source control panel lists the changes."
+  },
+  {
+    "name": "workspace-light",
+    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "light",
+    "alt": "The same Northwind storefront workspace in the Light theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-vscode-dark",
+    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "vscode-dark",
+    "alt": "The Northwind storefront workspace in the VS Code Dark theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-vs2026",
+    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "vs2026",
+    "alt": "The Northwind storefront workspace in the VS 2026 theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-git",
+    "route": "/workspace/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "dark",
+    "alt": "Source control in the Northwind storefront workspace: the new discount function in price.ts is staged on its own hunk, while the rest of the change waits unstaged next to a new test file."
+  },
+  {
+    "name": "projects",
+    "route": "/projects",
+    "theme": "dark",
+    "alt": "The Projects page listing the Northwind projects, from the storefront and its API to the admin portal, mailer, docs site, infrastructure, design tokens and company blog."
+  },
+  {
+    "name": "project-detail",
+    "route": "/projects/944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "dark",
+    "alt": "The storefront project's page: its description, agent and tags, the standing prompt every agent starts from, and notes for the discount code launch."
+  },
+  {
+    "name": "dashboard",
+    "route": "/",
+    "theme": "dark",
+    "alt": "The Runova dashboard with its default cards: quick actions, tokens and cost today, location and network status, and live CPU, GPU, memory and disk charts."
+  },
+  {
+    "name": "blueprint",
+    "route": "/projects/23e130f0-3888-4a98-8295-7bb62ba78d72?tab=blueprint",
+    "theme": "dark",
+    "alt": "The admin portal's Blueprint partway through: the idea, architecture and backend steps of a wholesale portal are written, with frontend, CI/CD and quality still to come."
+  },
+  {
+    "name": "prompt-builder",
+    "route": "/prompt-builder",
+    "theme": "dark",
+    "alt": "Prompt Builder with a generated prompt for Claude Code: a short request about discount codes turned into a structured task with context, steps, constraints and a definition of done."
+  },
+  {
+    "name": "cli-manager",
+    "route": "/cli-manager",
+    "theme": "dark",
+    "alt": "The AI CLI Manager with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet."
+  },
+  {
+    "name": "skills",
+    "route": "/skills",
+    "theme": "dark",
+    "alt": "The Skills page on its directory of popular agent skills, with official publishers marked, install counts, and four skills already installed for every project."
+  },
+  {
+    "name": "skill-security",
+    "route": "/skills",
+    "theme": "dark",
+    "alt": "A finished security check of the store-setup skill, which flags the instruction to pipe a downloaded script straight into the shell."
+  },
+  {
+    "name": "mcp",
+    "route": "/mcp?projectId=944934a0-9387-49ba-ba6a-ac88bf159d47",
+    "theme": "dark",
+    "alt": "The MCP directory filtered to the four servers installed in the storefront project: Sentry, Linear, Figma and a copy-paste detector."
+  },
+  {
+    "name": "agent-tools",
+    "route": "/tools?tab=dev-setup",
+    "theme": "dark",
+    "alt": "Agent Tools on the Dev Setup checklist: Git, Node.js, npm and the GitHub CLI are installed and ready for the coding agents."
+  },
+  {
+    "name": "vault",
+    "route": "/vault",
+    "theme": "dark",
+    "alt": "The Vault with Northwind demo entries: logins for GitHub, Cloudflare and the staging database, Stripe and Sentry keys, and a note."
+  },
+  {
+    "name": "settings",
+    "route": "/settings?tab=general",
+    "theme": "dark",
+    "alt": "Settings on the General tab: the theme picker set to Dark next to Light, System, VS Code Dark and VS 2026, the main menu placement and the status bar limits."
+  }
+]

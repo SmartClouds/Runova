@@ -27,6 +27,14 @@ if (isE2E && process.platform === 'linux') {
 }
 
 /**
+ * A home folder of the test's own (the website screenshots), so nothing from the real one shows.
+ * Node's homedir() follows HOME and USERPROFILE, which the test sets as well, but on Windows
+ * Electron asks the OS for the profile folder, so `home` is moved here too.
+ */
+export const homeOverride = isE2E ? process.env.RUNOVA_E2E_HOME?.trim() || undefined : undefined;
+if (homeOverride) app.setPath('home', resolve(homeOverride));
+
+/**
  * Windows stay hidden during e2e runs so a test run doesn't pop apps up over whatever the
  * developer is doing. Set RUNOVA_E2E_SHOW=1 to watch a run.
  */

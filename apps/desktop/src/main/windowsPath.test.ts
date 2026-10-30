@@ -147,3 +147,35 @@ describe('refreshWindowsEnvVars', () => {
     expect(exec.execFile).not.toHaveBeenCalled();
   });
 });
+
+describe('refreshWindowsPath', () => {
+  beforeEach(() => {
+    vi.stubEnv('RUNOVA_E2E', '');
+    vi.stubEnv('RUNOVA_E2E_HOME', '');
+  });
+
+  it('adds the folders the registry has and this process does not', async () => {
+    vi.stubEnv('PATH', 'C:\Windows');
+    registry({ [USER]: { Path: 'C:\Windows;C:\Tools\bin' } });
+    const { refreshWindowsPath, pathKey } = await load();
+
+    await refreshWindowsPath({ force: true });
+
+    expect(process.env[pathKey(process.env)]).toBe('C:\Windows;C:\Tools\bin');
+  });
+
+  it('keeps the PATH an e2e run with a home of its own started with', async () => {
+    // The website screenshots give the app a PATH of demo tools; reading the registry back
+    // would bring this machine's real CLIs, and their paths, into the shots.
+    vi.stubEnv('RUNOVA_E2E', '1');
+    vi.stubEnv('RUNOVA_E2E_HOME', 'X:\northwind\home');
+    vi.stubEnv('PATH', 'X:\northwind\bin');
+    registry({ [USER]: { Path: 'C:\Tools\bin' } });
+    const { refreshWindowsPath, pathKey } = await load();
+
+    await refreshWindowsPath({ force: true });
+
+    expect(process.env[pathKey(process.env)]).toBe('X:\northwind\bin');
+    expect(exec.execFile).not.toHaveBeenCalled();
+  });
+});
