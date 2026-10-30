@@ -18,7 +18,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'bun e2e/fakeReleaseApiServer.ts',
+      command: 'bun e2e/fakeApiServer.ts',
       url: `http://127.0.0.1:${apiPort}/api/v1/releases/latest`,
       env: { FAKE_API_PORT: String(apiPort) },
       reuseExistingServer: false,

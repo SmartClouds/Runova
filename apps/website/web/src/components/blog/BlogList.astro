@@ -1,0 +1,58 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { type ListResult, listMeta } from '../../lib/blog/page';
+import NotFound from '../NotFound.astro';
+import BlogUnavailable from './BlogUnavailable.astro';
+import Pager from './Pager.astro';
+import PostCard from './PostCard.astro';
+
+interface Props {
+  /** What the page's route loaded; a redirect never gets this far. */
+  result: Exclude<ListResult, { state: 'redirect' }>;
+}
+
+const { result } = Astro.props;
+const meta = result.state === 'ok' ? listMeta(result.page.page, result.page.totalPages, result.tagName) : undefined;
+---
+
+{
+  result.state === 'ok' && meta ? (
+    <BaseLayout title={meta.title} description={meta.description}>
+      <link slot="head" rel="alternate" type="application/rss+xml" title="Runova blog" href="/blog/rss.xml" />
+      <header class="max-w-[70ch] pt-12 md:pt-20">
+        {result.tagName && (
+          <p class="text-sm">
+            <a href="/blog" class="text-primary underline underline-offset-4">All posts</a>
+          </p>
+        )}
+        <h1 class="mt-2 font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">{meta.heading}</h1>
+        {!result.tagName && result.page.page === 1 && (
+          <p class="mt-4 text-lg text-muted-foreground">
+            Notes from the team on agentic development, Relay and each new release.
+          </p>
+        )}
+        <p class="mt-4 text-sm">
+          <a href="/blog/rss.xml" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Follow with RSS
+          </a>
+        </p>
+      </header>
+      <div class="pt-10 pb-16 md:pb-24">
+        {result.page.items.length > 0 ? (
+          <div class="grid gap-6 md:grid-cols-2">
+            {result.page.items.map((post, index) => (
+              <PostCard post={post} eager={index === 0} />
+            ))}
+          </div>
+        ) : (
+          <p class="text-muted-foreground">No posts yet. The first one is on its way.</p>
+        )}
+        <Pager base={result.base} page={result.page.page} totalPages={result.page.totalPages} />
+      </div>
+    </BaseLayout>
+  ) : result.state === 'not-found' ? (
+    <NotFound />
+  ) : (
+    <BlogUnavailable />
+  )
+}

@@ -7,12 +7,15 @@ const year = new Date().getFullYear();
     class="mx-auto flex max-w-[1200px] flex-col gap-2 px-4 py-8 text-muted-foreground text-sm md:flex-row md:items-center md:justify-between md:px-6"
   >
     <p>&copy; {year} SmartClouds. Runova is open source.</p>
-    <a
-      href="https://github.com/SmartClouds/Runova"
-      class="text-primary underline underline-offset-4"
-      rel="noopener"
-    >
-      Source on GitHub
-    </a>
+    <nav aria-label="Footer" class="flex flex-wrap gap-x-6 gap-y-2">
+      <a href="/blog" class="text-primary underline underline-offset-4">Blog</a>
+      <a
+        href="https://github.com/SmartClouds/Runova"
+        class="text-primary underline underline-offset-4"
+        rel="noopener"
+      >
+        Source on GitHub
+      </a>
+    </nav>
   </div>
 </footer>

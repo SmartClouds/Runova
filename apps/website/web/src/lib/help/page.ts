@@ -1,34 +1,12 @@
 import type { TechArticle } from 'schema-dts';
-import { type Crumb, organizationId, SITE_NAME } from '../seo';
+import { type Crumb, fitMetaDescription, organizationId, SITE_NAME } from '../seo';
 
-const MIN_DESCRIPTION = 70;
-const MAX_DESCRIPTION = 160;
-
-/**
- * An article's summary as a meta description of 70 to 160 characters: whole sentences while they
- * fit, else the first sentence cut at a word with an ellipsis. A short one gets a closing line.
- */
+/** An article's summary as a meta description, with a closing line when it is short. */
 export function helpMetaDescription(summary: string): string {
-  let description = summary.trim();
-  if (description.length > MAX_DESCRIPTION) {
-    const sentences = description.match(/[^.!?]+[.!?]+(?=\s|$)/g) ?? [];
-    let fitting = '';
-    for (const sentence of sentences) {
-      const next = `${fitting}${sentence}`.trim();
-      if (next.length > MAX_DESCRIPTION) break;
-      fitting = next;
-    }
-    if (fitting.length >= MIN_DESCRIPTION) {
-      description = fitting;
-    } else {
-      const cut = description.slice(0, MAX_DESCRIPTION);
-      description = `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:]+$/, '')}…`;
-    }
-  }
-  if (description.length < MIN_DESCRIPTION) {
-    description = `${description} A step-by-step guide from the ${SITE_NAME} help center for the desktop app.`;
-  }
-  return description;
+  return fitMetaDescription(
+    summary,
+    `A step-by-step guide from the ${SITE_NAME} help center for the desktop app.`,
+  );
 }
 
 /** Home, Help, and the article when there is one. */

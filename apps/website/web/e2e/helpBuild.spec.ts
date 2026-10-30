@@ -37,15 +37,19 @@ function builtFile(path: string): string | undefined {
   return undefined;
 }
 
-/** Site paths of the top-level pages rendered on demand, which have no file in the build. */
+/**
+ * Site paths of the pages without route parameters that are rendered on demand, which have no
+ * file in the build. `blog/index.astro` is `/blog`.
+ */
 function onDemandPages(): Set<string> {
   return new Set(
-    readdirSync(pagesDir)
-      .filter((name) => name.endsWith('.astro'))
+    readdirSync(pagesDir, { recursive: true, encoding: 'utf8' })
+      .map((name) => name.replace(/\\/g, '/'))
+      .filter((name) => name.endsWith('.astro') && !name.includes('['))
       .filter((name) =>
         /export const prerender = false/.test(readFileSync(new URL(name, pagesDir), 'utf8')),
       )
-      .map((name) => `/${name.slice(0, -'.astro'.length)}`),
+      .map((name) => `/${name.slice(0, -'.astro'.length)}`.replace(/\/index$/, '')),
   );
 }
 

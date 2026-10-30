@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { buttonVariants } from './ui/button';
+
+// The site's 404 page. On-demand pages render it with status 404 for a slug that does not exist.
+const link = 'text-primary underline underline-offset-4';
+---
+
+<BaseLayout
+  title="Page not found"
+  description="There is no page at this address. It may have moved, or the link may have a typo. Start again from the Runova home page, the blog or the help center."
+  noindex
+>
+  <section aria-labelledby="not-found-title" class="max-w-[60ch] py-16 md:py-24">
+    <p class="font-medium text-primary text-sm">404</p>
+    <h1 id="not-found-title" class="mt-2 font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">
+      Page not found
+    </h1>
+    <p class="mt-4 text-lg text-muted-foreground">
+      There is no page at this address. It may have moved, or the link may have a typo.
+    </p>
+    <a href="/" class:list={[buttonVariants({ size: 'lg' }), 'mt-8']}>Go to the home page</a>
+    <p class="mt-6 text-muted-foreground">
+      Or read the <a href="/blog" class={link}>blog</a>, or look something up in the
+      <a href="/help" class={link}>help center</a>.
+    </p>
+  </section>
+</BaseLayout>

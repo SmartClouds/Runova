@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /** The ReleaseDto the fake API serves unless told otherwise (v2.2.0's desktop assets). */
@@ -23,26 +23,39 @@ export interface FakeReleaseApi {
   close: () => Promise<void>;
 }
 
+/**
+ * Answers `GET /api/v1/releases/latest` from `options`. Returns false for any other request so a
+ * server can try other routes.
+ */
+export function handleReleaseRequest(
+  request: IncomingMessage,
+  reply: ServerResponse,
+  options: Pick<FakeReleaseApiOptions, 'status' | 'body'> = {},
+): boolean {
+  const { status = 200, body = FAKE_RELEASE } = options;
+  if (request.method !== 'GET' || request.url !== '/api/v1/releases/latest') return false;
+  if (status !== 200) {
+    reply.writeHead(status, { 'content-type': 'application/problem+json' });
+    reply.end(JSON.stringify({ status, title: 'Unavailable.' }));
+    return true;
+  }
+  reply.writeHead(200, { 'content-type': 'application/json', etag: '"fake-release"' });
+  reply.end(JSON.stringify(body));
+  return true;
+}
+
 /** A stand-in for the website API's `GET /api/v1/releases/latest`, for page and e2e tests. */
 export async function startFakeReleaseApi(
   options: FakeReleaseApiOptions = {},
 ): Promise<FakeReleaseApi> {
-  const { status = 200, body = FAKE_RELEASE, port = 0, host = '127.0.0.1' } = options;
+  const { port = 0, host = '127.0.0.1' } = options;
   const requests: string[] = [];
   const server: Server = createServer((request, reply) => {
     requests.push(request.url ?? '');
-    if (request.method !== 'GET' || request.url !== '/api/v1/releases/latest') {
+    if (!handleReleaseRequest(request, reply, options)) {
       reply.writeHead(404, { 'content-type': 'application/problem+json' });
       reply.end(JSON.stringify({ status: 404, title: 'Not found.' }));
-      return;
     }
-    if (status !== 200) {
-      reply.writeHead(status, { 'content-type': 'application/problem+json' });
-      reply.end(JSON.stringify({ status, title: 'Unavailable.' }));
-      return;
-    }
-    reply.writeHead(200, { 'content-type': 'application/json', etag: '"fake-release"' });
-    reply.end(JSON.stringify(body));
   });
   server.listen(port, host);
   await once(server, 'listening');

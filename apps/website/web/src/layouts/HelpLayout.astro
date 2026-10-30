@@ -2,6 +2,7 @@
 import { getImage } from 'astro:assets';
 import AppScreenshot from '../components/AppScreenshot.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Prose from '../components/Prose.astro';
 import type { HelpArticleData } from '../lib/help/articles';
 import { helpCrumbs, helpMetaDescription, helpTechArticle } from '../lib/help/page';
 import { screenshot } from '../lib/screenshots';
@@ -67,7 +68,7 @@ const link = 'text-primary underline underline-offset-4';
 
       {shot && <AppScreenshot name={shot} loading="eager" sizes="(min-width: 1200px) 800px, (min-width: 1024px) 66vw, 100vw" class="mt-8 max-w-[800px]" />}
 
-      <div class="help-prose mt-8 max-w-[800px]" set:html={html} />
+      <Prose html={html} class="mt-8 max-w-[800px]" />
     </article>
 
     {
@@ -109,137 +110,3 @@ const link = 'text-primary underline underline-offset-4';
     }
   </nav>
 </BaseLayout>
-
-<style>
-  .help-prose {
-    line-height: 1.65;
-  }
-
-  .help-prose :global(h2) {
-    margin-top: 3rem;
-    scroll-margin-top: 5rem;
-    font-family: var(--font-display);
-    font-size: clamp(1.4rem, 3vw, 1.75rem);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-  }
-
-  .help-prose :global(h3),
-  .help-prose :global(h4) {
-    margin-top: 2rem;
-    scroll-margin-top: 5rem;
-    font-size: 1.15rem;
-    font-weight: 600;
-  }
-
-  .help-prose :global(p),
-  .help-prose :global(ul),
-  .help-prose :global(ol),
-  .help-prose :global(table),
-  .help-prose :global(pre),
-  .help-prose :global(blockquote) {
-    margin-top: 1rem;
-  }
-
-  .help-prose :global(p),
-  .help-prose :global(li) {
-    max-width: 70ch;
-    color: hsl(var(--muted-foreground));
-  }
-
-  .help-prose :global(ul) {
-    padding-left: 1.25rem;
-    list-style: disc;
-  }
-
-  .help-prose :global(ol) {
-    padding-left: 1.5rem;
-    list-style: decimal;
-  }
-
-  .help-prose :global(li + li) {
-    margin-top: 0.4rem;
-  }
-
-  .help-prose :global(strong) {
-    color: hsl(var(--foreground));
-    font-weight: 600;
-  }
-
-  .help-prose :global(code) {
-    border-radius: calc(var(--radius) - 4px);
-    background: hsl(var(--secondary));
-    padding: 0.1rem 0.35rem;
-    color: hsl(var(--secondary-foreground));
-    font-family: var(--font-mono);
-    font-size: 0.875em;
-  }
-
-  .help-prose :global(pre) {
-    overflow-x: auto;
-    border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
-    padding: 1rem;
-  }
-
-  .help-prose :global(pre code) {
-    background: none;
-    padding: 0;
-  }
-
-  .help-prose :global(a) {
-    color: hsl(var(--primary));
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
-
-  .help-prose :global(table) {
-    display: block;
-    overflow-x: auto;
-    border-collapse: collapse;
-    font-size: 0.925rem;
-  }
-
-  .help-prose :global(th),
-  .help-prose :global(td) {
-    border: 1px solid hsl(var(--border));
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-    vertical-align: top;
-  }
-
-  .help-prose :global(th) {
-    background: hsl(var(--secondary));
-    font-weight: 600;
-  }
-
-  .help-prose :global(blockquote) {
-    border-left: 3px solid hsl(var(--border));
-    padding-left: 1rem;
-  }
-
-  .help-prose :global(blockquote.callout) {
-    border: 1px solid hsl(var(--border));
-    border-left-width: 4px;
-    border-radius: var(--radius);
-    background: hsl(var(--card));
-    padding: 0.75rem 1rem;
-  }
-
-  .help-prose :global(blockquote.callout p:first-child) {
-    margin-top: 0;
-  }
-
-  .help-prose :global(blockquote[data-callout='note']) {
-    border-left-color: hsl(var(--primary));
-  }
-
-  .help-prose :global(blockquote[data-callout='tip']) {
-    border-left-color: hsl(var(--ring));
-  }
-
-  .help-prose :global(blockquote[data-callout='warning']) {
-    border-left-color: hsl(var(--destructive));
-  }
-</style>

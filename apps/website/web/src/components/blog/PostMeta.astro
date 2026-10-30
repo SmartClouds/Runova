@@ -1,0 +1,19 @@
+---
+import type { PostListItem } from '../../lib/blog/api';
+import { formatPostDate, isoTime } from '../../lib/blog/page';
+
+interface Props {
+  post: PostListItem;
+  class?: string;
+}
+
+const { post, class: className } = Astro.props;
+---
+
+<p class:list={['flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-sm', className]}>
+  <span>{post.author.displayName}</span>
+  <span aria-hidden="true">·</span>
+  <time datetime={isoTime(post.publishedAt)}>{formatPostDate(post.publishedAt)}</time>
+  <span aria-hidden="true">·</span>
+  <span>{post.readingTimeMinutes} min read</span>
+</p>

@@ -29,11 +29,13 @@
     "astro": "7.4.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "fontkitten": "1.0.3",
     "lucide-react": "1.65.0",
     "radix-ui": "1.8.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "schema-dts": "2.1.0",
+    "sharp": "0.35.5",
     "tailwind-merge": "3.7.0",
     "tailwindcss": "4.3.3",
     "three": "0.187.0"
@@ -47,6 +49,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.187.0",
+    "fast-xml-parser": "5.11.2",
     "pagefind": "1.5.2",
     "typescript": "6.0.3",
     "vitest": "5.0.5"

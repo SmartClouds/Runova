@@ -11,6 +11,34 @@ export const DEFAULT_OG_IMAGE = {
   alt: 'Runova, the Agentic Development Environment',
 };
 
+const MIN_DESCRIPTION = 70;
+const MAX_DESCRIPTION = 160;
+
+/**
+ * Text as a meta description of 70 to 160 characters: whole sentences while they fit, else the
+ * first sentence cut at a word with an ellipsis. A short one gets `closing` after it.
+ */
+export function fitMetaDescription(text: string, closing: string): string {
+  let description = text.trim();
+  if (description.length > MAX_DESCRIPTION) {
+    const sentences = description.match(/[^.!?]+[.!?]+(?=\s|$)/g) ?? [];
+    let fitting = '';
+    for (const sentence of sentences) {
+      const next = `${fitting}${sentence}`.trim();
+      if (next.length > MAX_DESCRIPTION) break;
+      fitting = next;
+    }
+    if (fitting.length >= MIN_DESCRIPTION) {
+      description = fitting;
+    } else {
+      const cut = description.slice(0, MAX_DESCRIPTION);
+      description = `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:]+$/, '')}…`;
+    }
+  }
+  if (description.length < MIN_DESCRIPTION) description = `${description} ${closing}`;
+  return description;
+}
+
 /** Pages use the `%s | Runova` template; the home page passes no title and gets its own. */
 export function pageTitle(title?: string): string {
   return title ? `${title} | ${SITE_NAME}` : HOME_TITLE;
