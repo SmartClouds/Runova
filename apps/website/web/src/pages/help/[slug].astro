@@ -1,0 +1,41 @@
+---
+import { getCollection } from 'astro:content';
+import type { GetStaticPaths } from 'astro';
+import manifest from '../../assets/screenshots/manifest.json';
+import HelpLayout from '../../layouts/HelpLayout.astro';
+import { helpNeighbours, sortHelpArticles } from '../../lib/help/articles';
+import { featureForArticle, screenshotForArticle } from '../../lib/help/routes';
+
+export const getStaticPaths = (async () => {
+  const articles = sortHelpArticles(await getCollection('help'));
+  const features = await getCollection('features');
+  const link = (entry?: { id: string; data: { title: string } }) =>
+    entry ? { slug: entry.id, title: entry.data.title } : undefined;
+  return articles.map((entry) => {
+    const { previous, next } = helpNeighbours(articles, entry.id);
+    const featureSlug = featureForArticle(entry.id, entry.data.route);
+    return {
+      params: { slug: entry.id },
+      props: {
+        entry,
+        previous: link(previous),
+        next: link(next),
+        feature: link(features.find((feature) => feature.id === featureSlug)),
+        shot: screenshotForArticle(entry.id, entry.data.route, manifest),
+      },
+    };
+  });
+}) satisfies GetStaticPaths;
+
+const { entry, previous, next, feature, shot } = Astro.props;
+---
+
+<HelpLayout
+  slug={entry.id}
+  data={entry.data}
+  html={entry.rendered?.html ?? ''}
+  previous={previous}
+  next={next}
+  feature={feature}
+  shot={shot}
+/>

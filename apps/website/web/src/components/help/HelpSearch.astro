@@ -1,0 +1,94 @@
+---
+// Search over the help articles with the Pagefind index the build writes to /pagefind. The box
+// stays hidden until the script below binds it, so the page without JavaScript is just the list.
+---
+
+<search data-help-search hidden aria-label="Help articles" class="mt-10 max-w-[640px]">
+  <form>
+    <label for="help-search" class="font-medium text-sm">Search the help center</label>
+    <input
+      id="help-search"
+      type="search"
+      data-help-search-input
+      autocomplete="off"
+      placeholder="Worktrees, SSH keys, firewall..."
+      class="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    />
+  </form>
+  <p data-help-search-status aria-live="polite" class="mt-3 text-muted-foreground text-sm"></p>
+  <ul data-help-search-results class="mt-2 flex flex-col gap-3"></ul>
+</search>
+
+<script>
+  interface PagefindResult {
+    data(): Promise<{ url: string; excerpt: string; meta: { title?: string; category?: string } }>;
+  }
+  interface Pagefind {
+    search(query: string): Promise<{ results: PagefindResult[] }>;
+  }
+
+  const MAX_RESULTS = 8;
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-help-search]')) {
+    const input = root.querySelector<HTMLInputElement>('[data-help-search-input]');
+    const status = root.querySelector<HTMLElement>('[data-help-search-status]');
+    const list = root.querySelector<HTMLUListElement>('[data-help-search-results]');
+    if (!input || !status || !list) continue;
+    let pagefind: Promise<Pagefind> | undefined;
+    let latest = 0;
+
+    // The index is built after Astro, so it is loaded by URL and not bundled.
+    const load = () => {
+      const url = '/pagefind/pagefind.js';
+      pagefind ??= import(/* @vite-ignore */ url) as Promise<Pagefind>;
+      return pagefind;
+    };
+
+    const show = async () => {
+      const query = input.value.trim();
+      const run = ++latest;
+      if (!query) {
+        list.replaceChildren();
+        status.textContent = '';
+        return;
+      }
+      try {
+        const search = await (await load()).search(query);
+        const results = await Promise.all(
+          search.results.slice(0, MAX_RESULTS).map((result) => result.data()),
+        );
+        if (run !== latest) return;
+        list.replaceChildren(
+          ...results.map((result) => {
+            const item = document.createElement('li');
+            item.className = 'rounded-lg border bg-card p-4';
+            const link = document.createElement('a');
+            // Pagefind lists the built folders with a trailing slash; the site's URLs have none.
+            link.href = result.url.replace(/\/(index\.html)?$/, '') || '/';
+            link.className = 'font-semibold text-primary underline-offset-4 hover:underline';
+            link.textContent = result.meta.title ?? link.href;
+            const excerpt = document.createElement('p');
+            excerpt.className = 'mt-1 text-muted-foreground text-sm';
+            // Pagefind escapes the page text and only adds <mark> around the matches.
+            excerpt.innerHTML = result.excerpt;
+            item.append(link, excerpt);
+            return item;
+          }),
+        );
+        const count = search.results.length;
+        status.textContent =
+          count === 0
+            ? `No article matches "${query}".`
+            : `${count} ${count === 1 ? 'article matches' : 'articles match'} "${query}".`;
+      } catch {
+        if (run === latest) status.textContent = 'Search could not load. The list below has every article.';
+      }
+    };
+
+    input.addEventListener('focus', () => void load().catch(() => undefined), { once: true });
+    root.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
+    input.addEventListener('input', () => void show());
+    root.hidden = false;
+    root.dataset.ready = '';
+  }
+</script>

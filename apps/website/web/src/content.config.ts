@@ -2,6 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { FEATURE_GROUP_IDS } from './lib/features';
+import { HELP_ARTICLES_DIR, helpLoader } from './lib/help/articles';
 
 /** One MDX entry per feature group in the README (docs/epics/40-website.md, Features). */
 const features = defineCollection({
@@ -23,4 +24,24 @@ const features = defineCollection({
   }),
 });
 
-export const collections = { features };
+/** The app's help articles, read from the desktop app's folder at build time (T016). */
+const help = defineCollection({
+  loader: helpLoader({ base: HELP_ARTICLES_DIR }),
+  schema: z.object({
+    title: z.string(),
+    category: z.string(),
+    order: z.number(),
+    summary: z.string(),
+    keywords: z.array(z.string()),
+    route: z.string().optional(),
+    toc: z.array(
+      z.object({
+        id: z.string(),
+        heading: z.string(),
+        level: z.union([z.literal(2), z.literal(3)]),
+      }),
+    ),
+  }),
+});
+
+export const collections = { features, help };

@@ -7,10 +7,16 @@ interface Props {
   name: string;
   /** The sizes attribute for the responsive image. */
   sizes?: string;
+  /** Eager for a shot near the top of a page, lazy (the default) below the fold. */
+  loading?: 'eager' | 'lazy';
   class?: string;
 }
 
-const { name, sizes = '(min-width: 1200px) 680px, (min-width: 768px) 56vw, 100vw' } = Astro.props;
+const {
+  name,
+  sizes = '(min-width: 1200px) 680px, (min-width: 768px) 56vw, 100vw',
+  loading = 'lazy',
+} = Astro.props;
 const shot = screenshot(name);
 // A frame like the app window: the shot already has the app's title bar, so this adds the
 // rounded corners and the thin border (design.md, Layout and surfaces).
@@ -26,7 +32,7 @@ const shot = screenshot(name);
     height={1000}
     widths={[640, 960, 1600]}
     sizes={sizes}
-    loading="lazy"
+    loading={loading}
     decoding="async"
     class="block h-auto w-full"
   />
