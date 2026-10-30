@@ -1,4 +1,4 @@
-import type { BreadcrumbList, Organization, Thing, WebSite } from 'schema-dts';
+import type { BreadcrumbList, Organization, SoftwareApplication, Thing, WebSite } from 'schema-dts';
 
 export const SITE_NAME = 'Runova';
 export const HOME_TITLE = 'Runova: the Agentic Development Environment';
@@ -52,6 +52,39 @@ export function webSite(site: string | URL): WebSite {
     name: SITE_NAME,
     url: new URL('/', site).href,
     inLanguage: 'en',
+    publisher: { '@id': organizationId(site) },
+  };
+}
+
+/** What the download page adds to the SoftwareApplication node. */
+export interface AppReleaseDetails {
+  softwareVersion?: string;
+  /** The page or files a visitor downloads from. Defaults to the download page. */
+  downloadUrl?: string | string[];
+  releaseNotes?: string;
+}
+
+/** Runova as a free SoftwareApplication, for the home and download pages. */
+export function softwareApplication(
+  site: string | URL,
+  details: AppReleaseDetails = {},
+): SoftwareApplication {
+  const { softwareVersion, downloadUrl = new URL('/download', site).href, releaseNotes } = details;
+  return {
+    '@type': 'SoftwareApplication',
+    '@id': new URL('/#app', site).href,
+    name: SITE_NAME,
+    description:
+      'An Agentic Development Environment: run Claude Code, Codex, Gemini and other AI coding CLIs in panes, with the git panel, diffs, tests and pipelines next to them.',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Windows, macOS, Linux',
+    url: new URL('/', site).href,
+    downloadUrl,
+    ...(softwareVersion ? { softwareVersion } : {}),
+    ...(releaseNotes ? { releaseNotes } : {}),
+    image: new URL('/icon-512.png', site).href,
+    license: 'https://opensource.org/licenses/MIT',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@id': organizationId(site) },
   };
 }

@@ -1,32 +1,17 @@
 ---
-import type { SoftwareApplication } from 'schema-dts';
 import AppScreenshot from '../components/AppScreenshot.astro';
 import HeroArt from '../components/home/HeroArt.astro';
 import HeroScene from '../components/home/HeroScene.astro';
 import { buttonVariants } from '../components/ui/button';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../lib/home';
-import { organizationId } from '../lib/seo';
+import { softwareApplication } from '../lib/seo';
 
 const site = Astro.site ?? new URL('https://runovahq.com');
 const description =
   'Runova runs your AI coding agents side by side, with git, review, tests and deploys in the same window. Free and open source for Windows, macOS and Linux.';
 
-const app: SoftwareApplication = {
-  '@type': 'SoftwareApplication',
-  '@id': new URL('/#app', site).href,
-  name: 'Runova',
-  description:
-    'An Agentic Development Environment: run Claude Code, Codex, Gemini and other AI coding CLIs in panes, with the git panel, diffs, tests and pipelines next to them.',
-  applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'Windows, macOS, Linux',
-  url: new URL('/', site).href,
-  downloadUrl: new URL('/download', site).href,
-  image: new URL('/icon-512.png', site).href,
-  license: 'https://opensource.org/licenses/MIT',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  publisher: { '@id': organizationId(site) },
-};
+const app = softwareApplication(site);
 
 const primaryButton = buttonVariants({ size: 'lg' });
 const outlineButton = buttonVariants({ variant: 'outline', size: 'lg' });

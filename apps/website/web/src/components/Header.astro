@@ -8,20 +8,27 @@ import ThemeToggle from './ThemeToggle.astro';
   <div class="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-4 px-4 md:px-6">
     <a href="/" class="flex items-center gap-2 font-display font-semibold text-lg tracking-tight">
       <img src="/favicon-32.png" alt="" width="24" height="24" class="rounded-[6px]" />
-      Runova
+      {/* Phones keep the mark alone, or three links and the toggle do not fit in 320px. */}
+      <span class="max-sm:sr-only">Runova</span>
     </a>
     <nav aria-label="Main" class="flex items-center gap-1">
       <a
         href="/features"
-        class="rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
       >
         Features
       </a>
       <a
         href="/help"
-        class="rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
       >
         Help
+      </a>
+      <a
+        href="/download"
+        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+      >
+        Download
       </a>
       <ThemeToggle />
     </nav>

@@ -1,0 +1,73 @@
+{
+  "version": "2.2.0",
+  "tagName": "v2.2.0",
+  "name": "Runova 2.2.0",
+  "publishedAt": "2026-10-30T02:18:11.000Z",
+  "notesUrl": "https://github.com/SmartClouds/Runova/releases/tag/v2.2.0",
+  "fetchedAt": "2026-10-30T11:45:00.000Z",
+  "assets": [
+    {
+      "name": "Runova-Setup-2.2.0.exe",
+      "platform": "windows",
+      "arch": "x64",
+      "kind": "nsis",
+      "size": 262371947,
+      "sha256": "9de6dc34acae92ac25fcc9099afb411190566f7f5a5734990b13ba88ca4fd879",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-Setup-2.2.0.exe"
+    },
+    {
+      "name": "Runova-2.2.0-arm64.dmg",
+      "platform": "macos",
+      "arch": "arm64",
+      "kind": "dmg",
+      "size": 291057198,
+      "sha256": "0aeff8b3842097caf4c5150add5725c98d8665ce1d0c70b13ee265398ce7f5c1",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0-arm64.dmg"
+    },
+    {
+      "name": "Runova-2.2.0.dmg",
+      "platform": "macos",
+      "arch": "x64",
+      "kind": "dmg",
+      "size": 297114095,
+      "sha256": "0c126b8b1f61432adea0bf8c3da8bd13e96f24a5816af5faf57798fdcac9cbef",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0.dmg"
+    },
+    {
+      "name": "Runova-2.2.0-arm64-mac.zip",
+      "platform": "macos",
+      "arch": "arm64",
+      "kind": "zip",
+      "size": 290266721,
+      "sha256": "049a5f8b8f264464780b361f7b6fb49e3b1e8cfb752462beed1704fd5dc456b2",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0-arm64-mac.zip"
+    },
+    {
+      "name": "Runova-2.2.0-mac.zip",
+      "platform": "macos",
+      "arch": "x64",
+      "kind": "zip",
+      "size": 296395607,
+      "sha256": "85640b0edcf124f94f45a18270c776913a3ecf87363bd854ea5c8cec01760062",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0-mac.zip"
+    },
+    {
+      "name": "Runova-2.2.0.AppImage",
+      "platform": "linux",
+      "arch": "x64",
+      "kind": "appimage",
+      "size": 500720746,
+      "sha256": "8e0f976caecb0ef7c6c53b438e2db5d1fcb3644c71cb663b72d0fda1216f3050",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0.AppImage"
+    },
+    {
+      "name": "Runova-2.2.0-amd64.deb",
+      "platform": "linux",
+      "arch": "x64",
+      "kind": "deb",
+      "size": 355220116,
+      "sha256": "83523865468fc36260adf8ae0b949ae771b9deceb4976c33f5483c51850cb929",
+      "downloadUrl": "https://github.com/SmartClouds/Runova/releases/download/v2.2.0/Runova-2.2.0-amd64.deb"
+    }
+  ]
+}

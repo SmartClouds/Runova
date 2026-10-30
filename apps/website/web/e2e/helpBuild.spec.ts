@@ -8,6 +8,7 @@ import { readableText, scanHtml } from '../tests/helpers/textScan';
 // Playwright first loads this file, the web server may not have built it yet.
 const client = fileURLToPath(new URL('../dist/client/', import.meta.url));
 const articlesDir = new URL('../../../desktop/src/shared/help/articles/', import.meta.url);
+const pagesDir = new URL('../src/pages/', import.meta.url);
 
 let built: Map<string, string> | undefined;
 
@@ -36,6 +37,18 @@ function builtFile(path: string): string | undefined {
   return undefined;
 }
 
+/** Site paths of the top-level pages rendered on demand, which have no file in the build. */
+function onDemandPages(): Set<string> {
+  return new Set(
+    readdirSync(pagesDir)
+      .filter((name) => name.endsWith('.astro'))
+      .filter((name) =>
+        /export const prerender = false/.test(readFileSync(new URL(name, pagesDir), 'utf8')),
+      )
+      .map((name) => `/${name.slice(0, -'.astro'.length)}`),
+  );
+}
+
 function article(name: string): string {
   return readFileSync(new URL(name, articlesDir), 'utf8');
 }
@@ -49,6 +62,7 @@ test.describe('built help pages', () => {
 
   test('every internal link on every help page resolves', () => {
     const broken: string[] = [];
+    const onDemand = onDemandPages();
     let checked = 0;
     for (const [path, source] of helpPages()) {
       const base = new URL(path, 'https://runovahq.com');
@@ -57,6 +71,7 @@ test.describe('built help pages', () => {
         const url = new URL(href, base);
         if (url.origin !== base.origin) continue;
         checked++;
+        if (onDemand.has(url.pathname) && !url.hash) continue;
         const file = builtFile(url.pathname);
         if (!file) {
           broken.push(`${path} -> ${href}`);

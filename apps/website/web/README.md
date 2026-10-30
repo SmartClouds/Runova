@@ -27,7 +27,7 @@ An empty value turns the feature off and breaks nothing.
 | -------------------------------------- | ------------------------------------------------------------------------ |
 | `SITE_URL`                             | Canonical and Open Graph URLs (default `https://runovahq.com`)           |
 | `WEBSITE_API_URL`                      | The dev proxy target                                                     |
-| `WEBSITE_API_INTERNAL_URL`             | Server-side API calls (later tasks)                                      |
+| `WEBSITE_API_INTERNAL_URL`             | Server-side API calls: `/download` reads the latest release from it      |
 | `PUBLIC_SENTRY_DSN`                    | Sentry; read at build time for the browser and at runtime for the server |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Sentry environment and release                                           |
 | `SENTRY_AUTH_TOKEN`                    | Source map upload during the build, only when set                        |
