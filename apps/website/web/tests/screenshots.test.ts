@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { forbiddenPhrases } from './helpers/textScan';
 
 interface ManifestEntry {
   name: string;
@@ -32,17 +33,6 @@ function specShotNames(task: string): string[] {
     }
   }
   return names;
-}
-
-/** The phrases in the spec's `forbidden` block, up to the first line starting with `#`. */
-function forbiddenPhrases(): string[] {
-  const block = /```forbidden\r?\n([\s\S]*?)```/.exec(spec)?.[1] ?? '';
-  const phrases: string[] = [];
-  for (const line of block.split(/\r?\n/)) {
-    if (line.startsWith('#')) break;
-    if (line.trim()) phrases.push(line.trim().toLowerCase());
-  }
-  return phrases;
 }
 
 /** Width and height from a PNG's IHDR chunk. */

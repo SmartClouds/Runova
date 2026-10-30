@@ -57,6 +57,13 @@ describe('BaseLayout', () => {
     expect(header).toMatch(/<button[^>]*aria-label="Switch to (light|dark) theme"/);
   });
 
+  it('renders the theme toggle without a framework island, with both icons for CSS to pick', () => {
+    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+    expect(header).not.toContain('<astro-island');
+    expect(header).toMatch(/<button[^>]* data-theme-toggle/);
+    expect(header.match(/<svg[^>]* data-theme-icon="(sun|moon)"/g)).toHaveLength(2);
+  });
+
   it('includes the SEO head', () => {
     expect(html).toContain('<title>Test | Runova</title>');
     expect(html).toContain('<link rel="canonical" href="https://runovahq.com/test"');

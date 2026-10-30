@@ -1,20 +1,192 @@
 ---
+import type { SoftwareApplication } from 'schema-dts';
+import AppScreenshot from '../components/AppScreenshot.astro';
+import HeroArt from '../components/home/HeroArt.astro';
+import HeroScene from '../components/home/HeroScene.astro';
+import { buttonVariants } from '../components/ui/button';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../lib/home';
+import { organizationId } from '../lib/seo';
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const description =
+  'Runova runs your AI coding agents side by side, with git, review, tests and deploys in the same window. Free and open source for Windows, macOS and Linux.';
+
+const app: SoftwareApplication = {
+  '@type': 'SoftwareApplication',
+  '@id': new URL('/#app', site).href,
+  name: 'Runova',
+  description:
+    'An Agentic Development Environment: run Claude Code, Codex, Gemini and other AI coding CLIs in panes, with the git panel, diffs, tests and pipelines next to them.',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Windows, macOS, Linux',
+  url: new URL('/', site).href,
+  downloadUrl: new URL('/download', site).href,
+  image: new URL('/icon-512.png', site).href,
+  license: 'https://opensource.org/licenses/MIT',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  publisher: { '@id': organizationId(site) },
+};
+
+const primaryButton = buttonVariants({ size: 'lg' });
+const outlineButton = buttonVariants({ variant: 'outline', size: 'lg' });
 ---
 
-<BaseLayout
-  description="Runova runs your AI coding agents side by side with git, review, tests and deploys in one desktop app."
->
-  <section class="py-24">
-    <h1 class="max-w-[18ch] font-semibold text-[clamp(2.25rem,6vw,4rem)]">
-      The Agentic Development Environment
-    </h1>
-    <p class="mt-6 max-w-[70ch] text-lg text-muted-foreground">
-      This site is being built. Runova itself is ready: get it from
-      <a
-        href="https://github.com/SmartClouds/Runova/releases/latest"
-        class="text-primary underline underline-offset-4">GitHub Releases</a
-      >.
+<BaseLayout description={description} jsonLd={[app]}>
+  <section
+    id="hero"
+    aria-labelledby="hero-title"
+    class="hero-grid relative -mx-4 grid items-center gap-10 px-4 pt-12 pb-16 md:-mx-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:px-6 md:pt-20 md:pb-24"
+  >
+    <div>
+      <p class="font-medium text-primary text-sm">Runova, the Agentic Development Environment</p>
+      <h1
+        id="hero-title"
+        class="mt-3 text-balance font-bold text-[clamp(2.5rem,7vw,4.5rem)] leading-[1.05]"
+      >
+        Run the work, not just watch it.
+      </h1>
+      <p class="mt-6 max-w-[60ch] text-lg text-muted-foreground">
+        Open a workspace, split it into panes, and put Claude Code, Codex, Cursor, Gemini, Grok,
+        OpenCode or a plain shell in each one. Git, diffs, the editor, tests and pipelines sit right
+        next to the agents, so a change goes from prompt to review to commit to tag without leaving
+        the app.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center gap-3">
+        <a href="/download" class={primaryButton}>Download Runova</a>
+        <a href="https://github.com/SmartClouds/Runova" class={outlineButton} rel="noopener">
+          Source on GitHub
+        </a>
+      </div>
+      <p class="mt-4 text-muted-foreground text-sm">
+        Free and open source (MIT), for Windows, macOS and Linux.
+      </p>
+    </div>
+    <div
+      data-hero
+      data-state="idle"
+      class="hero-stage relative aspect-[4/3] w-full overflow-hidden rounded-lg border bg-card/40"
+    >
+      <HeroArt />
+      <HeroScene />
+    </div>
+  </section>
+
+  <section id="ade" aria-labelledby="ade-title" class="border-t py-16 md:py-24">
+    <h2 id="ade-title" class="font-semibold text-[clamp(1.75rem,4vw,2.75rem)]">Why an ADE</h2>
+    <p class="mt-4 max-w-[70ch] text-lg text-muted-foreground">
+      An IDE is built around a person typing code. An ADE is built around agents writing it and a
+      person steering. That changes what the app has to do.
     </p>
+    <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        ADE_POINTS.map((point) => (
+          <li class="rounded-lg border bg-card p-6">
+            <h3 class="font-semibold text-lg">{point.title}</h3>
+            <p class="mt-2 text-muted-foreground">{point.body}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section id="features" aria-labelledby="features-title" class="border-t py-16 md:py-24">
+    <h2 id="features-title" class="font-semibold text-[clamp(1.75rem,4vw,2.75rem)]">
+      Everything the loop needs, next to the agents
+    </h2>
+    <div class="mt-12 flex flex-col gap-20 md:gap-28">
+      {
+        HIGHLIGHTS.map((highlight, index) => (
+          <article
+            aria-labelledby={`highlight-${highlight.slug}`}
+            class="grid items-center gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-12"
+          >
+            <div class:list={[index % 2 === 1 && 'md:order-last']}>
+              <p class="font-medium text-primary text-sm">{highlight.eyebrow}</p>
+              <h3
+                id={`highlight-${highlight.slug}`}
+                class="mt-2 font-semibold text-[clamp(1.4rem,3vw,2rem)]"
+              >
+                {highlight.title}
+              </h3>
+              <p class="mt-4 text-muted-foreground">{highlight.body}</p>
+              <a
+                href={`/features/${highlight.slug}`}
+                class="mt-4 inline-block text-primary underline underline-offset-4"
+              >
+                More about {highlight.eyebrow.toLowerCase()}
+              </a>
+            </div>
+            <AppScreenshot name={highlight.shot} />
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section id="agents" aria-labelledby="agents-title" class="border-t py-16 md:py-20">
+    <h2 id="agents-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+      Works with the agents you already use
+    </h2>
+    <p class="mt-4 max-w-[70ch] text-muted-foreground">
+      The AI CLI Manager finds these on your machine and installs or updates the missing ones.
+      Anything else runs in a shell pane.
+    </p>
+    <ul class="mt-8 flex flex-wrap gap-2">
+      {
+        AGENT_CLIS.map((cli) => (
+          <li class="rounded-md border bg-secondary px-3 py-1.5 font-mono text-secondary-foreground text-sm">{cli}</li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section id="download" aria-labelledby="download-title" class="border-t py-16 md:py-24">
+    <div class="rounded-lg border bg-card px-6 py-12 text-center md:px-12">
+      <h2 id="download-title" class="font-semibold text-[clamp(1.75rem,4vw,2.75rem)]">
+        Get Runova
+      </h2>
+      <p class="mx-auto mt-4 max-w-[60ch] text-muted-foreground">
+        Installers for Windows, macOS and Linux, with updates from inside the app.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a href="/download" class={primaryButton}>Download Runova</a>
+      </div>
+      <p class="mt-6 text-muted-foreground text-sm">
+        On Windows: <code class="rounded bg-secondary px-1.5 py-0.5 text-secondary-foreground"
+          >winget install SmartClouds.Runova</code
+        >
+      </p>
+    </div>
   </section>
 </BaseLayout>
+
+<style>
+  .hero-grid {
+    background-image:
+      radial-gradient(ellipse 60% 50% at 70% 40%, hsl(var(--glow) / 0.12), transparent 70%),
+      linear-gradient(hsl(var(--grid-line)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line)) 1px, transparent 1px);
+    background-size:
+      100% 100%,
+      48px 48px,
+      48px 48px;
+  }
+
+  .hero-stage :global(canvas) {
+    opacity: 0;
+    transition: opacity 800ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .hero-stage :global(.hero-art) {
+    transition: opacity 800ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .hero-stage:is([data-state="running"], [data-state="paused"]) :global(canvas) {
+    opacity: 1;
+  }
+
+  .hero-stage:is([data-state="running"], [data-state="paused"]) :global(.hero-art) {
+    opacity: 0;
+  }
+</style>

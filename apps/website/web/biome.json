@@ -3,7 +3,7 @@
   "root": true,
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!dist", "!.astro", "!playwright-report", "!test-results"]
+    "includes": ["**", "!dist", "!.astro", "!playwright-report", "!test-results", "!.lighthouseci"]
   },
   "formatter": {
     "enabled": true,

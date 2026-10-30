@@ -3,11 +3,11 @@ import { expect, type Page, test } from '@playwright/test';
 const html = (page: Page) => page.locator('html');
 const toggle = (page: Page) => page.getByRole('button', { name: /Switch to (light|dark) theme/ });
 
-/** Opens the home page with a system color scheme and waits until the toggle island hydrates. */
+/** Opens the home page with a system color scheme and waits until the toggle's script has run. */
 async function open(page: Page, colorScheme: 'dark' | 'light') {
   await page.emulateMedia({ colorScheme });
   await page.goto('/');
-  await page.locator('astro-island:not([ssr])').first().waitFor({ state: 'attached' });
+  await page.locator('[data-theme-toggle][data-ready]').waitFor({ state: 'attached' });
 }
 
 test.describe('theme', () => {
@@ -31,7 +31,7 @@ test.describe('theme', () => {
     expect(await page.evaluate(() => localStorage.getItem('runova-theme'))).toBe('light');
 
     await page.reload();
-    await page.locator('astro-island:not([ssr])').first().waitFor({ state: 'attached' });
+    await page.locator('[data-theme-toggle][data-ready]').waitFor({ state: 'attached' });
     await expect(html(page)).not.toHaveClass(/\bdark\b/);
     await expect(toggle(page)).toHaveAccessibleName('Switch to dark theme');
 

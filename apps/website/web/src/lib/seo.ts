@@ -29,10 +29,15 @@ export function canonicalUrl(site: string | URL, url: URL): string {
   return canonical.href;
 }
 
+/** The Organization node's id, for pages that point at it (a publisher, an author). */
+export function organizationId(site: string | URL): string {
+  return new URL('/#organization', site).href;
+}
+
 export function organization(site: string | URL): Organization {
   return {
     '@type': 'Organization',
-    '@id': new URL('/#organization', site).href,
+    '@id': organizationId(site),
     name: SITE_NAME,
     url: new URL('/', site).href,
     logo: new URL('/icon-512.png', site).href,
@@ -47,7 +52,7 @@ export function webSite(site: string | URL): WebSite {
     name: SITE_NAME,
     url: new URL('/', site).href,
     inLanguage: 'en',
-    publisher: { '@id': new URL('/#organization', site).href },
+    publisher: { '@id': organizationId(site) },
   };
 }
 

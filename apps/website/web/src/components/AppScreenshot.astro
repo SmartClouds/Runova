@@ -1,0 +1,33 @@
+---
+import { Picture } from 'astro:assets';
+import { screenshot } from '../lib/screenshots';
+
+interface Props {
+  /** The name in src/assets/screenshots/manifest.json. */
+  name: string;
+  /** The sizes attribute for the responsive image. */
+  sizes?: string;
+  class?: string;
+}
+
+const { name, sizes = '(min-width: 1200px) 680px, (min-width: 768px) 56vw, 100vw' } = Astro.props;
+const shot = screenshot(name);
+// A frame like the app window: the shot already has the app's title bar, so this adds the
+// rounded corners and the thin border (design.md, Layout and surfaces).
+---
+
+<div class:list={['overflow-hidden rounded-lg border bg-card', Astro.props.class]}>
+  <Picture
+    src={shot.image}
+    alt={shot.alt}
+    formats={['avif', 'webp']}
+    fallbackFormat="webp"
+    width={1600}
+    height={1000}
+    widths={[640, 960, 1600]}
+    sizes={sizes}
+    loading="lazy"
+    decoding="async"
+    class="block h-auto w-full"
+  />
+</div>

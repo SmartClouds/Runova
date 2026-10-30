@@ -183,12 +183,26 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  html {
+  /* Smooth only for in-page links (a clicked link has focus). A visitor landing on /#section jumps
+     straight there, so a fragment URL does not scroll past the hero and start its scene. */
+  html:focus-within {
     scroll-behavior: smooth;
   }
 
   @view-transition {
     navigation: auto;
+  }
+
+  /* Page view transitions take 300ms (design.md, Motion): the old page leaves on the exit easing,
+     the new one arrives on the entrance easing. */
+  ::view-transition-old(root) {
+    animation-duration: 300ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  ::view-transition-new(root) {
+    animation-duration: 300ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
 }
 
