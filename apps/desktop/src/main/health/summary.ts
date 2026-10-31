@@ -76,6 +76,7 @@ export function toHealthSummary(
     lastCheckedAt: result?.lastCheckedAt ?? null,
     nextCheckAt: result?.nextCheckAt ?? null,
     latencyMs: report?.latencyMs ?? null,
+    version: target.showVersion === false ? null : (report?.version ?? null),
     uptime24h: healthUptimeSince(hours, context.now - DAY_MS),
     daily: healthDays(hours, { days: CHART_DAYS, now: context.now }),
     samples: samples.slice(-STRIP_SAMPLES),

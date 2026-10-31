@@ -51,6 +51,7 @@ export function buildHealthSetupPrompt(input: HealthSetupPromptInput): string {
     '',
     `- Serve it at \`${input.path}\`.`,
     `- ${auth} I will set that variable on the server myself; do not invent a value, do not commit one, and add it to the example env file with an empty value.`,
+    "- Put the app's version in the report's `version` field, read from where the project already keeps it (package.json, the assembly or project file, pyproject.toml, a build-time variable or a git tag), and the deployed commit or build in `releaseId` when the build knows it. Runova shows the version on its Health page.",
     '- Check every service and dependency this project actually uses. Read the code and config to find them (database, cache, queues, storage, mail, external APIs, workers, migrations) instead of guessing.',
     '- Follow every rule in the "Authentication" and "Safety and performance" sections. They are requirements, not suggestions.',
     '- Use the libraries and patterns the project already has. Keep the change self-contained, add tests for the authentication and the report shape, and tell me what you added and which checks it runs.',
@@ -64,6 +65,7 @@ export function buildHealthErrorDigest(report: HealthReport): string {
   const lines: string[] = [
     `Overall: ${report.state}${report.httpStatus ? ` (HTTP ${report.httpStatus})` : ''}`,
   ];
+  if (report.version) lines.push(`Version: ${report.version}`);
   if (report.releaseId) lines.push(`Release: ${report.releaseId}`);
   if (report.problem) lines.push(`Probe problem: ${report.problem}`);
   if (report.output) lines.push(`Endpoint output: ${report.output}`);

@@ -692,7 +692,10 @@ export function HealthTargetDetail({
                   <Fact label="Every">{formatHealthInterval(target.intervalSec)}</Fact>
                   <Fact label="Timeout">{target.timeoutSec} sec</Fact>
                   <Fact label="HTTP status">{report?.httpStatus ?? 'No answer'}</Fact>
-                  <Fact label="Release">{report?.releaseId ?? report?.version ?? 'Not given'}</Fact>
+                  {target.showVersion !== false && (
+                    <Fact label="Version">{target.version ?? 'Not given'}</Fact>
+                  )}
+                  <Fact label="Release">{report?.releaseId ?? 'Not given'}</Fact>
                 </dl>
 
                 <Section title="History">

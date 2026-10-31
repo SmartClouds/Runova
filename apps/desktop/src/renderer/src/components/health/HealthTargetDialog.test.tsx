@@ -99,6 +99,19 @@ describe('HealthTargetDialog', () => {
     expect(screen.getByText(/cannot contain a colon/)).toBeInTheDocument();
   });
 
+  it('saves the version option, on by default', async () => {
+    const { user, bridge: fake } = renderWithProviders(<Harness />, { bridge });
+    await fillBasics(user, 'https://api.example.com/_runova/health');
+    const toggle = screen.getByRole('switch', { name: 'Show app version' });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: 'Add target' }));
+    await screen.findByRole('heading', { name: 'Save this key now' });
+    expect(fake.$fn('health.create')).toHaveBeenCalledWith(
+      expect.objectContaining({ showVersion: false }),
+    );
+  });
+
   it('shows the new key once, with its hash and variable, and never again after closing', async () => {
     const { user, bridge: fake } = renderWithProviders(<Harness />, { bridge });
     await fillBasics(user, 'https://api.example.com/_runova/health');

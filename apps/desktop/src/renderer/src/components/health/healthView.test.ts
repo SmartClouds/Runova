@@ -3,6 +3,7 @@ import {
   emptyHealthDraft,
   formatAgo,
   formatIn,
+  formatVersion,
   groupHealthTargets,
   HEALTH_STATE_META,
   healthBucket,
@@ -199,6 +200,12 @@ describe('health drafts', () => {
     });
   });
 
+  it('keeps the version option, on unless it was turned off', () => {
+    expect(healthDraftToInput(healthDraftFromTarget(target())).showVersion).toBe(true);
+    const hidden = healthDraftFromTarget(target({ showVersion: false }));
+    expect(healthDraftToInput(hidden).showVersion).toBe(false);
+  });
+
   it('starts a new target on the defaults with auto-diagnose on', () => {
     const draft = emptyHealthDraft('p1');
     expect(draft.autoDiagnose).toBe(true);
@@ -208,5 +215,15 @@ describe('health drafts', () => {
       serverLabel: null,
       intervalSec: 60,
     });
+  });
+});
+    expect(draft.showVersion).toBe(true);
+
+describe('formatVersion', () => {
+  it('puts a v before a numbered version and leaves anything else alone', () => {
+    expect(formatVersion('1.4.2')).toBe('v1.4.2');
+    expect(formatVersion(' 2026.10 ')).toBe('v2026.10');
+    expect(formatVersion('v3.0.0')).toBe('v3.0.0');
+    expect(formatVersion('beta-7')).toBe('beta-7');
   });
 });

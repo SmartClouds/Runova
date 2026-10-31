@@ -221,6 +221,30 @@ describe('editing targets', () => {
     expect(sent).toEqual([`Bearer ${secret.secret}`]);
   });
 
+  it('shows the version the endpoint reports, until an edit turns it off', async () => {
+    respond = { status: 200, body: { status: 'pass', version: '1.4.2', releaseId: '3f2a9c1' } };
+    const { target } = await create();
+    expect(target.showVersion).toBe(true);
+    expect(target.version).toBeNull();
+    const checked = await invoke<HealthTargetDetail>(IPC.health.checkNow, target.id);
+    expect(checked.target.version).toBe('1.4.2');
+    expect(checked.report?.releaseId).toBe('3f2a9c1');
+
+    const renamed = await invoke<HealthTargetSummary>(IPC.health.update, target.id, {
+      name: 'Shop',
+    });
+    expect(renamed).toMatchObject({ showVersion: true, version: '1.4.2' });
+    const hidden = await invoke<HealthTargetSummary>(IPC.health.update, target.id, {
+      showVersion: false,
+    });
+    expect(hidden).toMatchObject({ showVersion: false, version: null });
+    const [listed] = await invoke<HealthTargetSummary[]>(IPC.health.list);
+    expect(listed.version).toBeNull();
+    await expect(invoke(IPC.health.update, target.id, { showVersion: 'yes' })).rejects.toThrow(
+      /showVersion/,
+    );
+  });
+
   it('refuses an update that does not hold up, or a target that is gone', async () => {
     const { target } = await create();
     await expect(

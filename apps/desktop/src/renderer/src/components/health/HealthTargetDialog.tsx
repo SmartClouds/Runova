@@ -563,6 +563,13 @@ export function HealthTargetDialog({
                 {busy && <Spinner className="h-3.5 w-3.5 animate-spin" />}
                 {editing ? 'Save changes' : 'Add target'}
               </Button>
+                <SwitchRow
+                  id={id('version')}
+                  label="Show app version"
+                  description="Shows the version the endpoint reports, when it gives one, on the Health page."
+                  checked={draft.showVersion}
+                  onCheckedChange={(checked) => set('showVersion', checked)}
+                />
             </DialogFooter>
           </form>
         )}

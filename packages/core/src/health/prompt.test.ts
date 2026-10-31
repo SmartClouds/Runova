@@ -118,6 +118,19 @@ describe('buildHealthSetupPrompt', () => {
     });
     expect(prompt).not.toMatch(/rnh_[A-Za-z0-9_-]{20,}/);
   });
+
+  it("asks for the app's version, read from where the project keeps it", () => {
+    const prompt = buildHealthSetupPrompt({
+      projectName: 'X',
+      environmentName: null,
+      serverLabel: null,
+      path: '/h',
+      authMode: 'bearer',
+    });
+    expect(prompt).toMatch(/app's version in the report's `version` field/);
+    expect(prompt).toContain('package.json');
+    expect(buildHealthSpecMarkdown()).toContain('"version": "1.4.2"');
+  });
 });
 
 describe('healthUrlForPrompt', () => {
@@ -150,6 +163,12 @@ describe('buildHealthErrorDigest', () => {
       problem: 'Timed out after 10 s',
     });
     expect(digest).toContain('Timed out after 10 s');
+  });
+
+  it('names the version and release the endpoint reported', () => {
+    const digest = buildHealthErrorDigest({ ...FAILING, version: '2.1.0', releaseId: 'a1b2c3' });
+    expect(digest).toContain('Version: 2.1.0');
+    expect(digest).toContain('Release: a1b2c3');
   });
 });
 

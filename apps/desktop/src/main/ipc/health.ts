@@ -56,6 +56,7 @@ const inputSchema = z.object({
   allowInsecure: z.boolean(),
   autoDiagnose: z.boolean(),
 });
+  showVersion: z.boolean().optional(),
 
 const patchSchema = inputSchema.partial();
 const filterSchema = z.object({ projectId: id.optional() }).optional();
@@ -85,6 +86,7 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
     autoDiagnose: target.autoDiagnose,
   };
 }
+    showVersion: target.showVersion,
 
 function context(target: StoredHealthTarget) {
   return { now: Date.now(), locked: isLockedEnvelope(target.secretEnvelope ?? undefined) };

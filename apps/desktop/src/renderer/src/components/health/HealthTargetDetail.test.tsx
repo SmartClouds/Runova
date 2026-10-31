@@ -77,6 +77,33 @@ describe('HealthTargetDetail', () => {
     expect(await navigator.clipboard.readText()).toContain('at connect (db.js:10:5)');
   });
 
+  it('shows the reported version beside the release, or says it was not given', async () => {
+    const fact = (view: HTMLElement, label: string) =>
+      within(view).queryByText(label, { selector: 'dt' })?.nextElementSibling ?? null;
+    const failing = { state: 'fail' as const, openIncident: incident() };
+
+    const shown = renderPanel({
+      'health.get': async () => detail({ target: target({ ...failing, version: '1.4.2' }) }),
+    });
+    let view = await panel();
+    expect(fact(view, 'Version')).toHaveTextContent('1.4.2');
+    expect(fact(view, 'Release')).toHaveTextContent('abc123');
+    shown.unmount();
+
+    const missing = renderPanel();
+    view = await panel();
+    expect(fact(view, 'Version')).toHaveTextContent('Not given');
+    missing.unmount();
+
+    renderPanel({
+      'health.get': async () =>
+        detail({ target: target({ ...failing, showVersion: false, version: null }) }),
+    });
+    view = await panel();
+    expect(fact(view, 'Version')).toBeNull();
+    expect(fact(view, 'Release')).toHaveTextContent('abc123');
+  });
+
   it('charts the response time of the last 24 hours', async () => {
     renderPanel({
       'health.get': async () =>

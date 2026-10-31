@@ -117,6 +117,8 @@ const targetSchema = z.object({
   paused: z.boolean(),
   secretEnvelope: envelopeSchema.nullable(),
   secretRotatedAt: time.nullable(),
+  // Older files have no version option, so it reads as on.
+  showVersion: z.boolean().default(true),
 });
 
 const probeState = z.enum(['pass', 'warn', 'fail', 'unreachable', 'unauthorized', 'invalid']);
@@ -358,6 +360,7 @@ export async function cleanHealthTargetInput(input: HealthTargetInput): Promise<
  * while keeping the target. Takes the ids just removed, and also sweeps against what is saved,
  * which is how it catches what a restored backup left behind at startup. Never throws: a disk
  * error leaves the orphans for the next sweep.
+    showVersion: input.showVersion !== false,
  */
 export async function pruneOrphanHealthTargets(
   removed: { projectIds?: string[]; environmentIds?: string[] } = {},

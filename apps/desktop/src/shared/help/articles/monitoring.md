@@ -26,7 +26,7 @@ The endpoint is private. It only answers a request that carries the target's key
 Your app needs the endpoint before Runova can watch it, and your AI agent can write it for you. Click **Build with AI** (in the toolbar, on the first-use screen, or in a target's details while it does not answer yet).
 
 1. Pick the project, and if you like the environment and the server. Choose **Bearer key** or **HTTP Basic** and the path (`/_runova/health` by default). Runova only picks the project for you when you open the dialog from a project's own Monitoring tab, when a project is chosen in the page's project filter, or when you have a single project. Otherwise the prompt area shows **Which project is the endpoint for?** with your projects listed, and you click one. The footer always says which project the agent will open in ("Opens in (project)"), or "Pick a project first".
-2. The prompt on the right updates as you go. It carries the whole Runova Health Protocol: the request, the report format, the security rules and an example. It asks the agent to read the project, check every service it really uses (database, cache, queues, storage, mail, external APIs), and add tests.
+2. The prompt on the right updates as you go. It carries the whole Runova Health Protocol: the request, the report format, the security rules and an example. It asks the agent to read the project, check every service it really uses (database, cache, queues, storage, mail, external APIs), report the app's version (read from where the project already keeps it, such as `package.json`), and add tests.
 3. Click **Send to Claude Code** (the button names your project's agent) to start it in the project's workspace with the prompt, or **Copy prompt** to use it anywhere else. The **Protocol** tab has the protocol on its own, for a developer or another AI.
 
 The prompt never contains a key. It only names the server variables, and the key is made when you add the target.
@@ -41,7 +41,7 @@ The prompt never contains a key. It only names the server variables, and the key
 
 ## Reading a target
 
-Each card shows the target's state in words and with a colored dot, how long the last check took, when it ran and when the next one is due, and a strip of the last 50 checks (point at a bar to see when it ran and what it found). Click a card to open its details: every service with its result, the full error of a failing one, the incident history, and the raw report.
+Each card shows the target's state in words and with a colored dot, the app's version when the endpoint reports one (such as `v1.4.2`), how long the last check took, when it ran and when the next one is due, and a strip of the last 50 checks (point at a bar to see when it ran and what it found). To hide the version, turn **Show app version** off in the target's settings. Click a card to open its details: the version and release, every service with its result, the full error of a failing one, the incident history, and the raw report.
 
 Above the cards, **Availability by day** shows one bar per day for the last 7 or 30 days, for the targets in view (it follows the project and environment filters). A full green bar is a day with no failed checks; amber and red bars had some. Point at a bar for that day's uptime, how many checks ran and failed, and which targets failed. Click a day that had failures to list those targets and open one.
 

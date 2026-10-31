@@ -15,6 +15,17 @@ describe('HealthTargetCard', () => {
     expect(within(card).getByText('Healthy')).toBeInTheDocument();
   });
 
+  it('shows the version the endpoint reported, and nothing when there is none', () => {
+    const { unmount } = renderWithProviders(
+      <HealthTargetCard target={target({ version: '1.4.2' })} now={NOW} onOpen={vi.fn()} />,
+    );
+    const card = screen.getByRole('article', { name: 'API' });
+    expect(within(card).getByLabelText('Version 1.4.2')).toHaveTextContent('v1.4.2');
+    unmount();
+    renderWithProviders(<HealthTargetCard target={target()} now={NOW} onOpen={vi.fn()} />);
+    expect(screen.queryByLabelText(/^Version/)).not.toBeInTheDocument();
+  });
+
   it('shows the latency, the last and the next check, and the uptime', () => {
     renderWithProviders(<HealthTargetCard target={target()} now={NOW} onOpen={vi.fn()} />);
     const card = screen.getByRole('article', { name: 'API' });

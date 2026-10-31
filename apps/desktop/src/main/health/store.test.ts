@@ -161,6 +161,14 @@ describe('reading and writing', () => {
     expect(state.results.t1.lastCheckedAt).toBe(5);
   });
 
+  it('reads a target saved before the version option as showing the version', async () => {
+    const { showVersion: _none, ...old } = await storedTarget();
+    const hidden = await storedTarget({ id: 't2', showVersion: false });
+    userData.writeData('health-targets.json', [old, hidden]);
+    const state = await health.readHealthState();
+    expect(state.targets.map((target) => target.showVersion)).toEqual([true, false]);
+  });
+
   it('builds the hours of a results file saved before hours were kept from its samples', async () => {
     const samples = [
       { at: 1_760_000_000_000, state: 'pass', latencyMs: 10 },
@@ -242,6 +250,12 @@ describe('cleanHealthTargetInput', () => {
       /username or password/,
     ],
     ['a username in the address', { url: 'https://user@example.com/h' }, /username or password/],
+  it('shows the version unless it is turned off', async () => {
+    expect((await health.cleanHealthTargetInput(input())).showVersion).toBe(true);
+    const hidden = await health.cleanHealthTargetInput(input({ showVersion: false }));
+    expect(hidden.showVersion).toBe(false);
+  });
+
     ['a very long address', { url: `https://example.com/${'x'.repeat(2050)}` }, /long/],
     ['Basic without a username', { authMode: 'basic', basicUser: null }, /username/],
     ['a username with a colon', { authMode: 'basic', basicUser: 'a:b' }, /colon/],

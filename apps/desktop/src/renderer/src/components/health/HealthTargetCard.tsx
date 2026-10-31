@@ -12,6 +12,7 @@ import {
   formatLatency,
   formatObserved,
   formatUptime,
+  formatVersion,
   healthBucket,
   SERVICE_STATUS_META,
   targetHost,
@@ -150,6 +151,20 @@ export function HealthTargetCard({
               </>
             )}
             <span className="truncate font-mono text-[11px]">{targetHost(target.url)}</span>
+            {target.version && (
+              <>
+                <span aria-hidden className="text-muted-foreground/50">
+                  ·
+                </span>
+                <span
+                  title={`Version ${target.version}`}
+                  aria-label={`Version ${target.version}`}
+                  className="max-w-[10rem] shrink-0 truncate font-mono text-[11px] font-medium text-foreground/80"
+                >
+                  {formatVersion(target.version)}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <HealthStatusChip state={target.state} />

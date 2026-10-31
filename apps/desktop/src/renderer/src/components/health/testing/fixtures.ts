@@ -65,6 +65,7 @@ export function target(overrides: Partial<HealthTargetSummary> = {}): HealthTarg
     lastCheckedAt: NOW - 30_000,
     nextCheckAt: NOW + 30_000,
     latencyMs: 120,
+    version: null,
     uptime24h: 0.995,
     daily: [],
     samples: samples(['pass', 'pass', 'warn', 'pass']),

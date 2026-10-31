@@ -18,8 +18,8 @@ export const HEALTH_ENV = {
 
 const EXAMPLE = `{
   "status": "fail",
-  "version": "1",
-  "releaseId": "1.4.2+3f2a9c1",
+  "version": "1.4.2",
+  "releaseId": "3f2a9c1",
   "serviceId": "shop-api",
   "description": "Shop API",
   "time": "2026-10-17T10:00:00Z",
@@ -136,7 +136,7 @@ Top level:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | \`status\` | yes | \`pass\`, \`warn\` or \`fail\`. The worst status of the checks that matter. |
-| \`version\` | no | Public version of the service. |
+| \`version\` | recommended | The app's version as people know it, such as \`1.4.2\`. Runova shows it next to the target. |
 | \`releaseId\` | no | The deployed build or commit, so an error can be matched to the code. |
 | \`serviceId\`, \`description\` | no | Which service this is. |
 | \`time\` | no | When the report was produced (ISO 8601). |
@@ -178,6 +178,7 @@ The \`runova\` object of a failing check helps the person or AI that fixes it:
 - Give every check its own timeout of 2 seconds or less and run them in parallel. A check that times out is \`fail\` with \`output\` saying so.
 - Cache the whole report for about 5 seconds so repeated calls cannot overload a dependency.
 - Responses must never include secrets: no environment variable values, passwords, keys, tokens, connection strings with credentials, session data or personal data of users. Strip the password out of a connection string before putting an error in \`output\`, \`detail\` or \`stack\`. Runova redacts what it can recognize, but the endpoint is the first line of defense.
+- Read \`version\` from where the project already keeps it (\`package.json\`, the assembly version, \`pyproject.toml\`, a build-time variable or a git tag) once at startup. Never hard-code a second copy that can drift, and leave the field out rather than send a placeholder.
 - Catch every error inside the healthcheck. The endpoint itself must never crash or return an HTML error page.
 
 ## 6. Example (Node.js and Express)

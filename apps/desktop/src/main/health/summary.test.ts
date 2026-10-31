@@ -118,6 +118,14 @@ describe('toHealthSummary', () => {
     });
   });
 
+  it('shows the reported version unless the target hides it', () => {
+    const record = result({ report: report({ version: '1.4.2' }) });
+    expect(summarize(record).version).toBe('1.4.2');
+    expect(summarize(record, false, { ...target, showVersion: false }).version).toBeNull();
+    expect(summarize(result({ report: report() })).version).toBeNull();
+    expect(summarize(undefined).version).toBeNull();
+  });
+
   it('is paused or locked whatever the last report said, paused first', () => {
     const record = result({ report: report({ state: 'fail' }) });
     expect(summarize(record, true).state).toBe('locked');

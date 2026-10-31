@@ -49,6 +49,8 @@ export interface HealthTargetSummary extends HealthTargetInput {
   createdAt: number;
   updatedAt: number;
   paused: boolean;
+  /** Shows the app version the endpoint reports on the Health page. Missing means on. */
+  showVersion?: boolean;
   hasSecret: boolean;
   secretRotatedAt: number | null;
   state: HealthState;
@@ -63,6 +65,8 @@ export interface HealthTargetSummary extends HealthTargetInput {
   samples: HealthSample[];
   servicesTotal: number;
   servicesFailing: number;
+  /** The app version from the last report, or null when it gave none or the option is off. */
+  version: string | null;
   /** A short line for the card: the problem, or the first failing service's error. */
   headline: string | null;
   openIncident: HealthIncident | null;

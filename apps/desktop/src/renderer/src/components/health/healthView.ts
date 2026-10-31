@@ -150,6 +150,12 @@ export function formatUptime(share: number | null): string {
   const percent = share * 100;
   if (percent === 100) return '100%';
   return `${percent >= 99 ? percent.toFixed(2) : percent.toFixed(1)}%`;
+/** A reported version as a label: "1.4.2" reads as "v1.4.2", anything else stays as it is. */
+export function formatVersion(version: string): string {
+  const text = version.trim();
+  return /^\d/.test(text) ? `v${text}` : text;
+}
+
 }
 
 export function formatLatency(ms: number | null): string {
@@ -285,6 +291,7 @@ export type HealthDraftErrors = Partial<
 const PRESET_SET = new Set<number>(HEALTH_INTERVAL_PRESETS);
 
 export function emptyHealthDraft(projectId: string): HealthDraft {
+  showVersion: boolean;
   return {
     projectId,
     environmentId: '',
@@ -310,6 +317,7 @@ function parseServerLink(value: string): HealthServerLink | null {
   const match = /^(ssh|wordpress):(.+)$/.exec(value);
   return match ? { kind: match[1] as HealthServerLink['kind'], id: match[2] } : null;
 }
+    showVersion: true,
 
 export function healthDraftFromTarget(one: HealthTargetSummary): HealthDraft {
   const preset = PRESET_SET.has(one.intervalSec);
@@ -340,6 +348,7 @@ export function healthDraftToInput(draft: HealthDraft): HealthTargetInput {
     projectId: draft.projectId,
     environmentId: draft.environmentId || null,
     name: draft.name.trim(),
+    showVersion: one.showVersion !== false,
     serverLabel: serverLabel || null,
     serverLink: parseServerLink(draft.serverLink),
     url: draft.url.trim(),
@@ -363,6 +372,7 @@ export function isInsecureRemote(url: string): boolean {
   try {
     const parsed = new URL(url.trim());
     return parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname);
+    showVersion: draft.showVersion,
   } catch {
     return false;
   }
