@@ -1,4 +1,9 @@
-import { type AgentStatus, type AutoContinuePending, catalogModelForApiId } from '@runova/core';
+import {
+  type AgentStatus,
+  type AutoContinuePending,
+  catalogModelForApiId,
+  launchEffort,
+} from '@runova/core';
 import type {
   AgentRunInfo,
   AgentRunInfoMap,
@@ -32,6 +37,30 @@ export function useAgentStatus(sessionId: string): AgentStatus {
 
 export function useAgentRunInfo(sessionId: string): AgentRunInfo | undefined {
   return useAgentStatusStore((s) => s.runInfos[sessionId]);
+}
+
+/**
+ * Shows a model or effort switch the user just made from the chat right away. Main reports the
+ * real values once the CLI writes the switch to its transcript, which replaces this.
+ */
+export function noteRunSwitch(sessionId: string, change: AgentRunInfo): void {
+  useAgentStatusStore.setState((s) => ({
+    runInfos: { ...s.runInfos, [sessionId]: { ...s.runInfos[sessionId], ...change } },
+  }));
+}
+
+/**
+ * What an agent reports, with the effort its launch command asked for filled in when the agent
+ * reports a model but no effort (Claude Code only says so after an `/effort` switch, or when it
+ * was started with one in its environment).
+ */
+export function withLaunchEffort(
+  runInfo: AgentRunInfo | undefined,
+  launchInput: string | null | undefined,
+): AgentRunInfo | undefined {
+  if (!runInfo?.model || runInfo.effort) return runInfo;
+  const effort = launchEffort(launchInput);
+  return effort ? { ...runInfo, effort } : runInfo;
 }
 
 /**

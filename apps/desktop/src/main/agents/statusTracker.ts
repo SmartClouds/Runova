@@ -69,12 +69,23 @@ function modelFromSwitchLine(line: string): string | undefined {
   }
 }
 
+/** "Set effort level to max (this session only): ...", what Claude Code prints after `/effort`. */
+const EFFORT_SWITCH_LINE =
+  /<local-command-stdout>Set effort level to (low|medium|high|xhigh|max)\b/i;
+
+function effortFromSwitchLine(line: string): string | undefined {
+  const match = EFFORT_SWITCH_LINE.exec(line);
+  return match?.[1]?.toLowerCase();
+}
+
 /**
  * The model of the newest assistant reply in a Claude Code transcript, or of a `/model` switch
- * made after it. Reading it each turn is what keeps the tab current after a switch mid-session.
+ * made after it, and the effort of the newest `/effort` switch. Reading it each turn is what
+ * keeps the tab current after a switch mid-session.
  */
-async function modelFromTranscript(path: string): Promise<string | undefined> {
-  if (!isAbsolute(path) || !path.endsWith('.jsonl')) return undefined;
+async function runInfoFromTranscript(path: string): Promise<{ model?: string; effort?: string }> {
+  const found: { model?: string; effort?: string } = {};
+  if (!isAbsolute(path) || !path.endsWith('.jsonl')) return found;
   let handle: Awaited<ReturnType<typeof open>> | null = null;
   try {
     handle = await open(path, 'r');
@@ -83,30 +94,38 @@ async function modelFromTranscript(path: string): Promise<string | undefined> {
     const buffer = Buffer.alloc(length);
     await handle.read(buffer, 0, length, size - length);
     const lines = buffer.toString('utf8').split('\n');
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
+    for (let i = lines.length - 1; i >= 0 && !(found.model && found.effort); i -= 1) {
       const line = lines[i];
-      // A `/model` switch newer than the last reply: the next reply comes from that model.
-      if (line?.includes('Set model to')) {
-        const switched = modelFromSwitchLine(line);
-        if (switched) return switched;
+      if (!line) continue;
+      if (!found.effort && line.includes('Set effort level to')) {
+        found.effort = effortFromSwitchLine(line);
       }
-      if (!line?.includes('"assistant"') || !line.includes('"model"')) continue;
+      if (found.model) continue;
+      // A `/model` switch newer than the last reply: the next reply comes from that model.
+      if (line.includes('Set model to')) {
+        const switched = modelFromSwitchLine(line);
+        if (switched) {
+          found.model = switched;
+          continue;
+        }
+      }
+      if (!line.includes('"assistant"') || !line.includes('"model"')) continue;
       try {
         const entry = JSON.parse(line) as { type?: string; message?: { model?: unknown } };
         const model = entry.message?.model;
         if (entry.type === 'assistant' && typeof model === 'string' && !model.startsWith('<')) {
-          return model;
+          found.model = model;
         }
       } catch {
         // The first line of the tail is usually cut in half.
       }
     }
   } catch {
-    return undefined;
+    return {};
   } finally {
     await handle?.close().catch(() => undefined);
   }
-  return undefined;
+  return found;
 }
 
 /**
@@ -373,10 +392,11 @@ export const agentStatus = {
     if (input.transcriptPath) followTranscript(id, input.transcriptPath);
     const current = runInfos.get(id) ?? {};
     const transcriptPath = input.transcriptPath ?? followed.get(id)?.path;
-    const fromTranscript = transcriptPath ? await modelFromTranscript(transcriptPath) : undefined;
+    const fromTranscript = transcriptPath ? await runInfoFromTranscript(transcriptPath) : {};
     const next: AgentRunInfo = {
-      model: fromTranscript ?? input.model ?? current.model,
-      effort: input.effort ?? current.effort,
+      model: fromTranscript.model ?? input.model ?? current.model,
+      // An `/effort` switch is newer than whatever the session started with.
+      effort: fromTranscript.effort ?? input.effort ?? current.effort,
       // Claude Code names the transcript after the session, which `--resume` takes.
       conversationId: input.transcriptPath
         ? basename(input.transcriptPath, '.jsonl')

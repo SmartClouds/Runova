@@ -3,7 +3,7 @@ title: Terminals and agents
 category: Workspace
 order: 20
 summary: Start AI agent CLIs and shells in Workspace panes, follow their status, and use copy, paste, images, links and past conversations.
-keywords: terminal, agent, claude code, codex, cli, shell, powershell, status, needs input, auto-continue, paste image, screenshot, resume, history, token usage, cost, fix with ai, notifications, rtl, persian, launch defaults, agent order
+keywords: terminal, agent, claude code, codex, cli, shell, powershell, chat, model, effort, status, needs input, auto-continue, paste image, screenshot, resume, history, token usage, cost, fix with ai, notifications, rtl, persian, launch defaults, agent order
 route: /workspace
 ---
 
@@ -77,6 +77,10 @@ A shell that exits cleanly (exit code 0) closes its own tab, like closing a term
 An agent tab shows the CLI's logo. While an agent works on a task, the tab keeps the CLI's name. When the task is done, the tab takes the task name the agent set for itself, so several agents of the same kind do not all look alike. Rename a tab yourself by double-clicking it or choosing **Rename** in its right-click menu, and your name wins.
 
 Hover an agent tab to see its name, the CLI, the model and effort it is running on, its status and its folder. Agents that report back live (Claude Code) keep the model line current when you switch mid-session; every other agent shows the model it started with.
+
+### Model and effort in the chat view
+
+When an agent tab is shown as a **Chat**, its header shows the model and effort it runs on, and the same appears as a small button next to **Send**. For Claude Code, click it to pick another model or effort level. Runova types `/model` or `/effort` into the CLI for you, exactly as if you had typed it, so the change applies to this conversation from the next message on. Effort levels the chosen model can't use are left out. The button is greyed out while the agent is working or waiting on you; switch once it is ready. Other CLIs only show what they run on, since their own model pickers can't be driven from the chat.
 
 When a shell ends, the pane shows a bar at the bottom: **Process exited.** (or **Process exited with code {n}.**) with **Restart** and **Close**. **Restart** starts the tab again with the same command.
 

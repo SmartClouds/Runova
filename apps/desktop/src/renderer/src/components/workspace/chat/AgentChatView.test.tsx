@@ -300,3 +300,74 @@ describe('AgentChatView', () => {
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 2000 }));
   });
 });
+
+describe('AgentChatView model and effort', () => {
+  it('shows the model and effort and switches them through the CLI', async () => {
+    useAgentStatusStore.setState({
+      statuses: { 'tab-1': 'idle' },
+      runInfos: { 'tab-1': { model: 'claude-opus-5-5', effort: 'high' } },
+    });
+    const { user, bridge } = renderChat();
+    const pill = await screen.findByRole('button', { name: /Model and effort: Opus 5\.5 · High/ });
+    expect(screen.getByText('Opus 5.5 · high effort')).toBeInTheDocument();
+
+    await user.click(pill);
+    expect(screen.getByRole('radio', { name: 'Opus 5.5' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'Sonnet 5.5' }));
+    expect(runtime.insertText).toHaveBeenLastCalledWith('tab-1', '/model sonnet');
+    await vi.waitFor(() =>
+      expect(bridge.$fn('terminal.write')).toHaveBeenCalledWith('tab-1', '\r'),
+    );
+    // Shows the switch right away, before the CLI reports it.
+    expect(useAgentStatusStore.getState().runInfos['tab-1']?.model).toBe('claude-sonnet-5-5');
+
+    await vi.waitFor(() => expect(screen.getByRole('radio', { name: 'Extra high' })).toBeEnabled());
+    await user.click(screen.getByRole('radio', { name: 'Extra high' }));
+    expect(runtime.insertText).toHaveBeenLastCalledWith('tab-1', '/effort xhigh');
+    expect(useAgentStatusStore.getState().runInfos['tab-1']?.effort).toBe('xhigh');
+  });
+
+  it('shows the effort the tab was launched with before the CLI reports one', async () => {
+    useAgentStatusStore.setState({
+      statuses: { 'tab-1': 'idle' },
+      runInfos: { 'tab-1': { model: 'claude-opus-5-5' } },
+    });
+    renderChat({}, { tab: { ...tab, launchInput: 'claude --effort max\r' } });
+    expect(
+      await screen.findByRole('button', { name: /Model and effort: Opus 5\.5 · Max/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("won't switch while the agent works", async () => {
+    useAgentStatusStore.setState({
+      statuses: { 'tab-1': 'working' },
+      runInfos: { 'tab-1': { model: 'claude-opus-5-5', effort: 'high' } },
+    });
+    renderChat();
+    expect(await screen.findByRole('button', { name: /Model and effort/ })).toBeDisabled();
+  });
+
+  it('says when the CLI is not ready for the command', async () => {
+    useAgentStatusStore.setState({
+      statuses: { 'tab-1': 'idle' },
+      runInfos: { 'tab-1': { model: 'claude-opus-5-5', effort: 'high' } },
+    });
+    runtime.insertText.mockReturnValue(false);
+    const { user } = renderChat();
+    await user.click(await screen.findByRole('button', { name: /Model and effort/ }));
+    await user.click(screen.getByRole('radio', { name: 'Low' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      "Claude Code isn't ready for a command yet",
+    );
+    expect(useAgentStatusStore.getState().runInfos['tab-1']?.effort).toBe('high');
+  });
+
+  it('only shows what a CLI runs on when it cannot switch in place', async () => {
+    useAgentStatusStore.setState({ statuses: { 'tab-2': 'idle' }, runInfos: {} });
+    renderChat({}, { tab: { ...tab, id: 'tab-2', cliId: 'codex-cli', runLabel: 'Luna · High' } });
+    await screen.findByRole('textbox');
+    // In the header and beside Send, but not as a picker.
+    expect(screen.getAllByText('Luna · High')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Model and effort/ })).not.toBeInTheDocument();
+  });
+});

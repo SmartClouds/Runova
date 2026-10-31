@@ -107,6 +107,21 @@ describe('tab tooltip model line', () => {
     expect(tabRunLine(undefined, undefined, null)).toBeNull();
   });
 
+  it('fills in the effort the tab was launched with when the agent reports none', async () => {
+    const { withLaunchEffort } = await import('./agentStatusStore');
+    const launch = 'claude --model opus --effort high\r';
+    expect(withLaunchEffort({ model: 'claude-opus-5' }, launch)).toEqual({
+      model: 'claude-opus-5',
+      effort: 'high',
+    });
+    // A reported effort (say after an /effort switch) wins over the launch flag.
+    expect(withLaunchEffort({ model: 'claude-opus-5', effort: 'low' }, launch)?.effort).toBe('low');
+    expect(withLaunchEffort({ model: 'claude-opus-5' }, 'claude\r')).toEqual({
+      model: 'claude-opus-5',
+    });
+    expect(withLaunchEffort(undefined, launch)).toBeUndefined();
+  });
+
   it('falls back to the last run and then the launch default per CLI', async () => {
     const status = await import('./agentStatusStore');
     const { useCliStore } = await import('./cliStore');

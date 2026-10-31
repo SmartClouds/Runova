@@ -47,6 +47,7 @@ import {
   useAgentStatus,
   useAutoContinuePending,
   useCliRunLine,
+  withLaunchEffort,
 } from '@/stores/agentStatusStore';
 import { confirmDialog } from '@/stores/confirmStore';
 import { useShortcutLabel } from '@/stores/shortcutStore';
@@ -386,7 +387,9 @@ function PaneTab({
   // /model or /effort switch mid-session still shows up for hooked agents and
   // every other agent shows the model it started with.
   const runLine =
-    tab.kind !== 'terminal' || !tab.cliId ? null : tabRunLine(runInfo, tab.runLabel, cliRunLine);
+    tab.kind !== 'terminal' || !tab.cliId
+      ? null
+      : tabRunLine(withLaunchEffort(runInfo, tab.launchInput), tab.runLabel, cliRunLine);
   const tooltip =
     tab.kind === 'terminal' ? (
       <span className="flex flex-col gap-0.5">

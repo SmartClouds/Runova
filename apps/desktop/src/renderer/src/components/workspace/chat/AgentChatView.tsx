@@ -12,6 +12,7 @@ import {
   useAgentRunInfo,
   useAgentStatus,
   useCliRunLine,
+  withLaunchEffort,
 } from '@/stores/agentStatusStore';
 import type { WorkspaceTerminalTab } from '@/stores/workspaceStore';
 import { ChatComposer } from './ChatComposer';
@@ -119,7 +120,7 @@ export function AgentChatView({
   const chat = useAgentChatStore((s) => s.chats[tab.id]);
   const pending = useAgentChatStore((s) => s.pending[tab.id] ?? NO_PENDING);
   const status = useAgentStatus(tab.id);
-  const runInfo = useAgentRunInfo(tab.id);
+  const runInfo = withLaunchEffort(useAgentRunInfo(tab.id), tab.launchInput);
   const cliRunLine = useCliRunLine(tab.cliId);
   const runLine = tabRunLine(runInfo, tab.runLabel, cliRunLine);
   const reduceMotion = useReducedMotion();
@@ -307,6 +308,9 @@ export function AgentChatView({
         cliId={cliId}
         theme={theme}
         working={working}
+        needsInput={status === 'needs-input'}
+        runInfo={runInfo}
+        runLabel={runLine}
       />
     </section>
   );
