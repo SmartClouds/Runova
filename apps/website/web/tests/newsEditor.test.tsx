@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import NewsEditor from '../src/components/admin/NewsEditor';
 import { NEWS_ITEM, TECHNOLOGIES } from './fixtures/admin/items';
+import { enter } from './helpers/enter';
 import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
 
 const techRoute = { 'GET /api/v1/technologies': json(TECHNOLOGIES) };
@@ -15,8 +16,9 @@ beforeEach(() => {
 });
 
 async function fillNewItem(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText('Title'), 'Git 2.47.1 fixes a clone bug');
-  await user.type(
+  await enter(user, screen.getByLabelText('Title'), 'Git 2.47.1 fixes a clone bug');
+  await enter(
+    user,
     screen.getByLabelText('Summary'),
     'Cloning a crafted repository could write outside the target folder.',
   );
@@ -26,10 +28,10 @@ async function fillNewItem(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Add technology' }));
   const range = screen.getByLabelText('Affected versions of Git');
   await user.clear(range);
-  await user.type(range, '<2.47.1');
-  await user.type(screen.getByLabelText('Fixed in for Git'), '2.47.1');
-  await user.type(screen.getByLabelText('CVE ids'), 'cve-2026-50001');
-  await user.type(screen.getByLabelText('Body (Markdown)'), 'Update Git.');
+  await enter(user, range, '<2.47.1');
+  await enter(user, screen.getByLabelText('Fixed in for Git'), '2.47.1');
+  await enter(user, screen.getByLabelText('CVE ids'), 'cve-2026-50001');
+  await enter(user, screen.getByLabelText('Body (Markdown)'), 'Update Git.');
 }
 
 describe('NewsEditor, a new item', () => {

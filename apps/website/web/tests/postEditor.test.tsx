@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import PostEditor from '../src/components/admin/PostEditor';
 import { POST } from './fixtures/admin/items';
+import { enter } from './helpers/enter';
 import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
 
 const MEDIA = {
@@ -27,7 +28,7 @@ beforeEach(() => {
 
 async function uploadCover(user: ReturnType<typeof userEvent.setup>) {
   await user.upload(screen.getByLabelText('Cover image file'), coverFile());
-  await user.type(screen.getByLabelText('Alt text'), MEDIA.alt);
+  await enter(user, screen.getByLabelText('Alt text'), MEDIA.alt);
   await user.click(screen.getByRole('button', { name: 'Upload cover' }));
 }
 
@@ -43,13 +44,14 @@ describe('PostEditor, a new post', () => {
     const user = userEvent.setup();
     render(<PostEditor />);
 
-    await user.type(screen.getByLabelText('Title'), 'Handoffs that survive a reset');
-    await user.type(
+    await enter(user, screen.getByLabelText('Title'), 'Handoffs that survive a reset');
+    await enter(
+      user,
       screen.getByLabelText('Excerpt'),
       'What a session writes down so the next one can start cold.',
     );
-    await user.type(screen.getByLabelText('Tags'), 'Relay, AI agents');
-    await user.type(screen.getByLabelText('Body (Markdown)'), 'Write it **down**.');
+    await enter(user, screen.getByLabelText('Tags'), 'Relay, AI agents');
+    await enter(user, screen.getByLabelText('Body (Markdown)'), 'Write it **down**.');
     await uploadCover(user);
 
     expect(await screen.findByRole('img', { name: MEDIA.alt })).toHaveAttribute('src', MEDIA.url);

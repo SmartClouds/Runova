@@ -223,6 +223,10 @@ jobs:
         with:
           dotnet-version: 10.0.4xx
 
+      # The unit tests ask pnpm whether the site stays outside the repository's workspace.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -261,6 +265,7 @@ jobs:
       # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and the
       # CSP that allows their runovahq.com images) expect.
       - name: Start the compose stack
+        id: stack
         env:
           SITE_URL: https://localhost:18443
         run: docker compose -f ../compose.yaml up --detach --build --wait
@@ -268,8 +273,9 @@ jobs:
       - name: Full-stack tests
         run: bun run e2e:stack
 
+      # Even when a full-stack spec fails, but only on a stack that came up.
       - name: Lighthouse against the stack
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
         run: bun run lighthouse:stack
 
       - name: Stack logs

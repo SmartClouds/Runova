@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { jsonLdProblems } from '../scripts/jsonLdCheck';
 
 const organization = {
@@ -12,65 +12,82 @@ function graph(...nodes: object[]): string {
   return JSON.stringify({ '@context': 'https://schema.org', '@graph': nodes });
 }
 
-describe('jsonLdProblems', () => {
-  it('passes a graph of real schema.org types', () => {
-    const block = graph(organization, {
+// Each block is on a page of its own, so one check covers every case. That is how the build check
+// calls it too, and each check builds the whole schema.org type graph, which costs far more than
+// the blocks in it.
+const BLOCKS = [
+  {
+    path: '/blog/hello',
+    json: graph(organization, {
       '@type': 'BlogPosting',
       headline: 'Hello',
       datePublished: '2026-10-01T00:00:00Z',
       author: { '@id': 'https://runovahq.com/#organization' },
       image: ['https://runovahq.com/og.png'],
-    });
-    expect(jsonLdProblems([{ path: '/blog/hello', json: block }])).toEqual([]);
+    }),
+  },
+  { path: '/', json: JSON.stringify({ '@context': 'https://schema.org', ...organization }) },
+  { path: '/news/x', json: graph({ '@type': 'NewsArticel', headline: 'x' }) },
+  { path: '/help/relay', json: graph({ '@type': 'TechArticle', headlien: 'Relay' }) },
+  {
+    path: '/features',
+    json: graph({
+      '@type': 'BreadcrumbList',
+      itemListElement: [{ '@type': 'ListItem', position: {} }],
+    }),
+  },
+  {
+    path: '/download',
+    json: JSON.stringify({ '@context': 'https://example.com', ...organization }),
+  },
+  { path: '/a', json: graph(organization) },
+  { path: '/b', json: graph({ '@type': 'Organisation' }) },
+  { path: '/c', json: graph(organization) },
+  { path: '/d', json: graph({ '@type': 'WebSite', nmae: 'x' }) },
+];
+
+let problems: string[];
+beforeAll(() => {
+  problems = jsonLdProblems(BLOCKS);
+});
+
+const problemsOf = (path: string) => problems.filter((problem) => problem.startsWith(`${path}: `));
+
+describe('jsonLdProblems', () => {
+  it('passes a graph of real schema.org types', () => {
+    expect(problemsOf('/blog/hello')).toEqual([]);
   });
 
   it('passes a single node with a context', () => {
-    const block = JSON.stringify({ '@context': 'https://schema.org', ...organization });
-    expect(jsonLdProblems([{ path: '/', json: block }])).toEqual([]);
+    expect(problemsOf('/')).toEqual([]);
   });
 
   it('fails a type schema.org does not have', () => {
-    const problems = jsonLdProblems([
-      { path: '/news/x', json: graph({ '@type': 'NewsArticel', headline: 'x' }) },
-    ]);
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toMatch(/^\/news\/x: /);
+    expect(problemsOf('/news/x')).toHaveLength(1);
   });
 
   it('fails a property the type does not have', () => {
-    const problems = jsonLdProblems([
-      { path: '/help/relay', json: graph({ '@type': 'TechArticle', headlien: 'Relay' }) },
-    ]);
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('headlien');
+    expect(problemsOf('/help/relay')).toHaveLength(1);
+    expect(problemsOf('/help/relay')[0]).toContain('headlien');
   });
 
   it('fails a value of the wrong kind', () => {
-    const problems = jsonLdProblems([
-      {
-        path: '/',
-        json: graph({
-          '@type': 'BreadcrumbList',
-          itemListElement: [{ '@type': 'ListItem', position: {} }],
-        }),
-      },
-    ]);
-    expect(problems).toHaveLength(1);
+    expect(problemsOf('/features')).toHaveLength(1);
   });
 
   it('fails a block without the schema.org context', () => {
-    const block = JSON.stringify({ '@context': 'https://example.com', ...organization });
-    expect(jsonLdProblems([{ path: '/', json: block }])).toHaveLength(1);
+    expect(problemsOf('/download')).toHaveLength(1);
   });
 
   it('names the page of each bad block, and only those', () => {
-    const problems = jsonLdProblems([
-      { path: '/a', json: graph(organization) },
-      { path: '/b', json: graph({ '@type': 'Organisation' }) },
-      { path: '/c', json: graph(organization) },
-      { path: '/d', json: graph({ '@type': 'WebSite', nmae: 'x' }) },
+    expect(problems.map((problem) => problem.split(':')[0])).toEqual([
+      '/news/x',
+      '/help/relay',
+      '/features',
+      '/download',
+      '/b',
+      '/d',
     ]);
-    expect(problems.map((problem) => problem.split(':')[0])).toEqual(['/b', '/d']);
   });
 
   it('reports a block that does not parse', () => {
