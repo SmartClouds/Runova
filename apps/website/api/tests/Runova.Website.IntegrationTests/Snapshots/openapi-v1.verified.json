@@ -1636,8 +1636,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK"
+          "302": {
+            "description": "Found"
           }
         }
       }

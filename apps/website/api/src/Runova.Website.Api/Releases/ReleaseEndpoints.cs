@@ -28,7 +28,7 @@ internal static class ReleaseEndpoints
         var latest = api.MapGroup("/releases/latest").AllowAnonymous();
         latest.MapGet("", GetAsync).Produces(StatusCodes.Status304NotModified);
         latest.MapGet("/assets", AssetsAsync).Produces(StatusCodes.Status304NotModified);
-        latest.MapGet("/downloads/{platform}", DownloadAsync);
+        latest.MapGet("/downloads/{platform}", DownloadAsync).Produces(StatusCodes.Status302Found);
         return api;
     }
 

@@ -2,8 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 import { STACK_URL } from './e2e/stack/stackConfig';
 
 // The stack specs run against apps/website/compose.yaml, the way production runs: PostgreSQL, the
-// API and the site in their images behind Caddy on one HTTPS origin. Start the stack first
-// (`docker compose -f ../compose.yaml up -d --build --wait`); this config starts nothing.
+// API and the site in their images behind Caddy on one HTTPS origin, plus the test-only telemetry
+// sink from ../compose.test.yaml. Start the stack first
+// (`docker compose -f ../compose.yaml -f ../compose.test.yaml up -d --build --wait`); this config
+// starts nothing.
 export default defineConfig({
   testDir: 'e2e/stack',
   globalSetup: './e2e/stack/globalSetup.ts',

@@ -1,6 +1,7 @@
-// Runs `docker compose` against the stack in apps/website/compose.yaml, for the stack specs.
+// Runs `docker compose` against the test stack (apps/website/compose.yaml and compose.test.yaml),
+// for the stack specs.
 import { spawnSync } from 'node:child_process';
-import { COMPOSE_FILE, OWNER } from './stackConfig.ts';
+import { COMPOSE_FILES, OWNER } from './stackConfig.ts';
 
 export interface Result {
   status: number;
@@ -10,9 +11,12 @@ export interface Result {
 
 /** Runs a compose command to the end; `input` goes to its stdin. Never throws on a non-zero exit. */
 export function compose(args: string[], input = ''): Result {
-  const result = spawnSync('docker', ['compose', '-f', COMPOSE_FILE, ...args], {
+  const files = COMPOSE_FILES.flatMap((file) => ['-f', file]);
+  const result = spawnSync('docker', ['compose', ...files, ...args], {
     input,
     encoding: 'utf8',
+    // `compose logs` of a whole run is several megabytes.
+    maxBuffer: 256 * 1024 * 1024,
   });
   if (result.error) throw new Error(`Could not run docker compose: ${result.error.message}`);
   return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };

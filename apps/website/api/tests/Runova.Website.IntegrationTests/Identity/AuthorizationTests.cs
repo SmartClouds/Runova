@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Runova.Website.Api.Identity;
 using Runova.Website.IntegrationTests.Infrastructure;
 
 namespace Runova.Website.IntegrationTests.Identity;
@@ -32,6 +33,24 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
             await ProblemAssert.IsProblemAsync(response, HttpStatusCode.Unauthorized, ProblemAssert.Type("unauthorized"), path);
             Assert.Null(response.Headers.Location);
         }
+    }
+
+    [Fact]
+    public void Every_write_needs_credentials_except_sign_in_and_password_setup_which_need_antiforgery()
+    {
+        string[] safe = ["GET", "HEAD", "OPTIONS"];
+        var anonymousWrites = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+            .SelectMany(e => (e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["*"])
+                .Where(method => !safe.Contains(method))
+                .Select(method => (Method: method, Path: e.RoutePattern.RawText, Antiforgery: e.Metadata.GetMetadata<RequiresAntiforgery>() is not null)))
+            .OrderBy(w => w.Path, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            [("POST", "/api/v1/password-setups", true), ("POST", "/api/v1/sessions", true)],
+            anonymousWrites);
     }
 
     [Theory]

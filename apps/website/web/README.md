@@ -44,9 +44,17 @@ authority; http://localhost:8080 redirects there). `HTTP_PORT`, `HTTPS_PORT`, `S
 repository root, since the build reads the desktop app's version and help articles.
 
 `bun run e2e:stack` checks the running stack: one origin, `/hangfire` for Admins, a news item a
-signed API client posts showing on `/news`, media at `/media`, and both images running as non-root
-with no SDK in the API's. It makes the owner account with `admin create-owner` the first time.
-CI runs the same, then Lighthouse, in the `website-web` job.
+signed API client posts showing on `/news`, media at `/media`, both images running as non-root
+with no SDK in the API's, and no secret, cookie or signature in the container logs, Sentry events
+or OpenTelemetry spans. For that last one, start the stack with `../compose.test.yaml` on top,
+which sends the API's telemetry to a sink the spec reads:
+
+```sh
+docker compose -f apps/website/compose.yaml -f apps/website/compose.test.yaml up -d --build --wait
+```
+
+It makes the owner account with `admin create-owner` the first time. CI runs the same, then
+Lighthouse, in the `website-web` job.
 
 ## Environment
 

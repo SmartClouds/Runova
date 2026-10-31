@@ -25,14 +25,17 @@ internal static class HealthEndpoints
         return services;
     }
 
+    // MapHealthChecks answers every method; the contract has GET (and so HEAD), and nothing else.
+    private static readonly HttpMethodMetadata _getOrHead = new(["GET", "HEAD"]);
+
     public static IEndpointRouteBuilder MapHealth(this IEndpointRouteBuilder app)
     {
-        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous().WithMetadata(_getOrHead);
         app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             Predicate = check => check.Tags.Contains(ReadyTag),
             ResponseWriter = WriteReadyAsync,
-        }).AllowAnonymous();
+        }).AllowAnonymous().WithMetadata(_getOrHead);
         return app;
     }
 

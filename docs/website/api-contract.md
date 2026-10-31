@@ -443,7 +443,7 @@ author is the signed-in user, or the API client's name.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/media` | Editor or posts:write | query `page`, `pageSize` | 200 `Page<MediaDto>`; 401; 403 |
+| GET | `/api/v1/media` | Editor or posts:write | query `page`, `pageSize` | 200 `Page<MediaDto>`; 400; 401; 403 |
 | POST | `/api/v1/media` | Editor or posts:write | multipart: `file`, `alt` (1 to 200 chars) | 201 `MediaDto`, `Location: /api/v1/media/{id}`; 400 wrong or disguised type; 401; 403; 413 over 5 MB |
 | DELETE | `/api/v1/media/{id}` | Editor or posts:write | none | 204; 401; 403; 404; 409 still a post's cover |
 
@@ -457,7 +457,7 @@ Files land in the configured media folder under a random name and are served at
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/api-clients` | Admin | query `page`, `pageSize`, `revoked` | 200 `Page<ApiClientDto>`; 401; 403 |
+| GET | `/api/v1/api-clients` | Admin | query `page`, `pageSize`, `revoked` | 200 `Page<ApiClientDto>`; 400; 401; 403 |
 | POST | `/api/v1/api-clients` | Admin | `{ "name": string, "scopes": string[], "ipAllowlist": string[], "expiresAt": time or null }` | 201 `ApiClientCreatedDto`, `Location`; 400; 401; 403; 409 name taken |
 | GET | `/api/v1/api-clients/{id}` | Admin | none | 200 `ApiClientDto`; 401; 403; 404 |
 | PATCH | `/api/v1/api-clients/{id}` | Admin | merge patch of `name`, `scopes`, `ipAllowlist`, `expiresAt`; `If-Match` | 200 `ApiClientDto`; 400; 401; 403; 404; 412; 428 |

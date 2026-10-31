@@ -17,6 +17,21 @@ public sealed class HealthTests(PostgresFixture postgres) : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("POST", "/health/live")]
+    [InlineData("DELETE", "/health/live")]
+    [InlineData("PUT", "/health/ready")]
+    public async Task Health_answers_only_GET_and_HEAD(string method, string path)
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), TestContext.Current.CancellationToken);
+        var head = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path), TestContext.Current.CancellationToken);
+
+        await ProblemAssert.IsProblemAsync(response, HttpStatusCode.MethodNotAllowed, "about:blank", path);
+        Assert.Equal(HttpStatusCode.OK, head.StatusCode);
+    }
+
     [Fact]
     public async Task Ready_answers_200_when_the_database_answers()
     {

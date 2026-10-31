@@ -24,6 +24,8 @@
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- The recorded GitHub release that the unit tests classify, served by the fake GitHub. -->
     <None Include="..\Runova.Website.Tests\Releases\Fixtures\**" Link="Fixtures\Releases\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The REST contract that ApiConventionTests holds the OpenAPI document to. -->
+    <None Include="..\..\..\..\..\docs\website\api-contract.md" Link="Contract\api-contract.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Where Snapshot finds the committed snapshots. CallerFilePath would not do: CI builds map

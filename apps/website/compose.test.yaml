@@ -1,0 +1,34 @@
+# Test-only additions to compose.yaml for the stack specs. Never deploy with it. Start the test
+# stack from the repository root with both files:
+#   docker compose -f apps/website/compose.yaml -f apps/website/compose.test.yaml up -d --build --wait
+# The API sends its Sentry events and its OpenTelemetry spans, logs and metrics to a sink
+# (web/e2e/stack/telemetrySink.ts), so web/e2e/stack/secrets.spec.ts can check that no secret,
+# cookie or signature ends up in them.
+services:
+  api:
+    environment:
+      Sentry__Dsn: http://stack@telemetry-sink:4318/1
+      # Every Information log becomes a Sentry event with its request attached, so the scrubbing is
+      # tried on ordinary requests and not only on the rare unhandled error.
+      Sentry__MinimumEventLevel: Information
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry-sink:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # Export every second rather than every 5 (spans, logs) or 60 (metrics), so the spec waits less.
+      OTEL_BSP_SCHEDULE_DELAY: "1000"
+      OTEL_BLRP_SCHEDULE_DELAY: "1000"
+      OTEL_METRIC_EXPORT_INTERVAL: "1000"
+    depends_on:
+      telemetry-sink:
+        condition: service_healthy
+
+  telemetry-sink:
+    image: oven/bun:1.4.4-slim
+    volumes:
+      - ./web/e2e/stack/telemetrySink.ts:/sink/telemetrySink.ts:ro
+    command: ["bun", "/sink/telemetrySink.ts"]
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:4318/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped

@@ -271,12 +271,13 @@ jobs:
         run: bun run e2e
 
       # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and the
-      # CSP that allows their runovahq.com images) expect.
+      # CSP that allows their runovahq.com images) expect. compose.test.yaml adds the telemetry
+      # sink that the secrets spec reads.
       - name: Start the compose stack
         id: stack
         env:
           SITE_URL: https://localhost:18443
-        run: docker compose -f ../compose.yaml up --detach --build --wait
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml up --detach --build --wait
 
       - name: Full-stack tests
         run: bun run e2e:stack
@@ -288,11 +289,11 @@ jobs:
 
       - name: Stack logs
         if: ${{ failure() }}
-        run: docker compose -f ../compose.yaml logs --no-color --tail 300
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml logs --no-color --tail 300
 
       - name: Stop the compose stack
         if: ${{ always() }}
-        run: docker compose -f ../compose.yaml down --volumes --remove-orphans
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml down --volumes --remove-orphans
 
       - name: Upload reports
         if: ${{ failure() }}
