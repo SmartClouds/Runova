@@ -309,6 +309,8 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
             results.push(...(await runOne(statement, run.maxRows)));
           } catch (error) {
             if (run.signal.aborted) return { results, cancelled: true };
+            // A transaction the batch began must not stay open with half its changes in it.
+            await connection.query('ROLLBACK').catch(() => undefined);
             return { results, error: { message: describeError(error), statementIndex: index } };
           }
           // USE inside the query moves the session; remember it so the next run starts there.

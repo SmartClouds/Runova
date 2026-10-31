@@ -270,7 +270,7 @@ describe('DatabasePanel', () => {
     const editor = await screen.findByRole('textbox', { name: 'Query' });
     await view.user.clear(editor);
     await view.user.type(editor, 'SELECT 42 AS n');
-    await view.user.click(screen.getByRole('button', { name: /^run/i }));
+    await view.user.click(screen.getByRole('button', { name: 'Run query' }));
     expect(await screen.findByText('42')).toBeInTheDocument();
     expect(view.bridge.$fn('database.query')).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'sess-1', text: 'SELECT 42 AS n', origin: 'editor' }),
@@ -291,7 +291,7 @@ describe('DatabasePanel', () => {
     const editor = await screen.findByRole('textbox', { name: 'Query' });
     await view.user.clear(editor);
     await view.user.type(editor, 'DROP TABLE orders');
-    await view.user.click(screen.getByRole('button', { name: /^run/i }));
+    await view.user.click(screen.getByRole('button', { name: 'Run query' }));
 
     expect(await screen.findByText(/deletes data or structure/i)).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: /run anyway/i }));
@@ -310,7 +310,7 @@ describe('DatabasePanel', () => {
       },
     });
     await view.user.click(await screen.findByRole('button', { name: /new query/i }));
-    await view.user.click(screen.getByRole('button', { name: /^run/i }));
+    await view.user.click(screen.getByRole('button', { name: 'Run query' }));
     expect(await screen.findByText(/relation "nope" does not exist/)).toBeInTheDocument();
   });
 

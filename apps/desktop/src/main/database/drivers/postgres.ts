@@ -336,6 +336,9 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
             for (const one of list)
               results.push(resultSet(one, statement, started, options.maxRows));
           } catch (error) {
+            // A transaction left aborted fails every later statement, and one the batch began must
+            // not keep half its changes, so whatever is open is rolled back.
+            await client.query('ROLLBACK').catch(() => undefined);
             if (options.signal.aborted) return { results, cancelled: true };
             return { results, error: { message: describeError(error), statementIndex: index } };
           }
@@ -345,11 +348,6 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
         options.signal.removeEventListener('abort', onAbort);
         if (options.readOnly) {
           await client.query('SET default_transaction_read_only = off').catch(() => undefined);
-        }
-        // A statement that failed inside a transaction the user began leaves it aborted; the next
-        // run would fail on every statement, so it is rolled back here.
-        if ((client as unknown as { _txStatus?: string })._txStatus === 'E') {
-          await client.query('ROLLBACK').catch(() => undefined);
         }
       }
     },

@@ -227,7 +227,7 @@ function CandidateCard({
       <Button
         size="sm"
         shape="pill"
-        variant={candidate.connectionId ? 'soft' : 'default'}
+        variant="tint"
         className="mt-auto w-full"
         disabled={disabled || !candidate.running}
         onClick={onConnect}

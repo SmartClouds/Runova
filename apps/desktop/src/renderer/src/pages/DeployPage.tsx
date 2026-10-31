@@ -40,7 +40,7 @@ import { useSiteListUpdate, useWordPressSites } from '@/components/deploy/wordpr
 import { wpProblem } from '@/components/deploy/wordpress/messages';
 import { siteSectionFromView } from '@/components/deploy/wordpress/SiteSections';
 import { SiteView } from '@/components/deploy/wordpress/SiteView';
-import { CloudUpload, Lock, RefreshCw, Server, Sliders } from '@/components/icons';
+import { CloudUpload, Database, Lock, RefreshCw, Server, Sliders } from '@/components/icons';
 import { Chip, EmptyState, GLASS_CARD, GLASS_PANEL } from '@/components/pageKit';
 import { RecaptchaMark } from '@/components/recaptcha/RecaptchaMark';
 import { RecaptchaView } from '@/components/recaptcha/RecaptchaView';
@@ -501,6 +501,9 @@ export default function DeployPage(): React.JSX.Element {
               </Button>
               <Button variant="soft" onClick={openRecaptcha}>
                 <RecaptchaMark className="h-3.5 w-3.5" /> Get reCAPTCHA keys
+              </Button>
+              <Button variant="soft" onClick={openDatabases}>
+                <Database className="h-3.5 w-3.5" /> Databases on this computer
               </Button>
             </div>
           }

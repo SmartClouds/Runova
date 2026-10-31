@@ -1,3 +1,4 @@
+import { buildRowEdits } from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import {
@@ -215,6 +216,34 @@ for (const engine of CASES) {
       expect(outcome.results).toHaveLength(1);
       expect(outcome.error?.statementIndex).toBe(1);
       expect(outcome.error?.message).toMatch(/missing_table/);
+    });
+
+    it('applies row edits all together, or none of them when one fails', async () => {
+      const columns = (await driver.describe(ref)).columns;
+      const good = buildRowEdits(engine.options(db).engine, ref, columns, [
+        { kind: 'update', key: { id: 1 }, values: { name: 'apple2' } },
+        { kind: 'insert', values: { name: 'kiwi', price: '9' } },
+      ]);
+      expect((await run(driver, good)).error).toBeUndefined();
+      const names = await run(driver, 'SELECT name FROM items ORDER BY id');
+      expect(names.results[0]?.rows.map((row) => row[0])).toEqual([
+        'apple2',
+        'pear',
+        'plum',
+        'kiwi',
+      ]);
+
+      const bad = buildRowEdits(engine.options(db).engine, ref, columns, [
+        { kind: 'update', key: { id: 1 }, values: { name: 'lost' } },
+        { kind: 'update', key: { id: 2 }, values: { missing_column: 'x' } },
+      ]);
+      expect((await run(driver, bad)).error).toBeDefined();
+      const after = await run(driver, 'SELECT name FROM items WHERE id = 1');
+      expect(after.results[0]?.rows).toEqual([['apple2']]);
+      await run(
+        driver,
+        "UPDATE items SET name = 'apple' WHERE id = 1; DELETE FROM items WHERE name = 'kiwi'",
+      );
     });
 
     it('caps a big result and says there was more', async () => {

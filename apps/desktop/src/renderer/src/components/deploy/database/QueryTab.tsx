@@ -4,6 +4,7 @@ import { lazy, Suspense, useRef, useState } from 'react';
 import { Play, Spinner, StopCircle } from '@/components/icons';
 import { Notice, PillTabs } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
+import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { cn } from '@/lib/utils';
 import { ResultGrid } from './ResultGrid';
 
@@ -49,6 +50,7 @@ export function QueryTab({
   const [outcome, setOutcome] = useState<DbQueryOutcome | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [resultIndex, setResultIndex] = useState(0);
+  const [editorHeight, setEditorHeight] = useState(220);
   const textRef = useRef(text);
   textRef.current = text;
   const info = engineInfo(engine);
@@ -67,7 +69,10 @@ export function QueryTab({
         ...(confirmed ? { confirmed: true } : {}),
       });
       setOutcome(next);
-      setResultIndex(0);
+      // The last statement is usually the one the query was written for.
+      setResultIndex(
+        next.status === 'needsConfirmation' ? 0 : Math.max(0, next.results.length - 1),
+      );
     } catch (error) {
       setOutcome({
         status: 'failed',
@@ -86,10 +91,20 @@ export function QueryTab({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-foreground/[0.06] px-3 py-2">
-        <Button size="sm" shape="pill" onClick={() => void run()} disabled={running !== null}>
+        <Button
+          size="sm"
+          shape="pill"
+          onClick={() => void run()}
+          disabled={running !== null}
+          aria-label="Run query"
+          title="Run query (Ctrl+Enter)"
+        >
           {running ? <Spinner className="animate-spin" /> : <Play />}
           Run
-          <kbd className="ml-1 rounded bg-primary-foreground/15 px-1 text-[10px] font-normal">
+          <kbd
+            aria-hidden
+            className="ml-1 rounded bg-primary-foreground/15 px-1 text-[10px] font-normal"
+          >
             Ctrl+Enter
           </kbd>
         </Button>
@@ -110,7 +125,8 @@ export function QueryTab({
       </div>
 
       <div
-        className="h-[38%] min-h-[8rem] border-b border-foreground/[0.06]"
+        className="relative shrink-0 overflow-hidden"
+        style={{ height: editorHeight }}
         onKeyDownCapture={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
             event.preventDefault();
@@ -122,9 +138,23 @@ export function QueryTab({
         <Suspense
           fallback={<div className="h-full animate-pulse bg-foreground/[0.02]" aria-busy="true" />}
         >
-          <MonacoEditor value={text} onChange={onTextChange} language={info.editorLanguage} />
+          <MonacoEditor
+            value={text}
+            onChange={onTextChange}
+            language={info.editorLanguage}
+            className="absolute inset-0 min-h-0 rounded-none border-0"
+          />
         </Suspense>
       </div>
+      <ResizeHandle
+        orientation="horizontal"
+        label="Resize the editor"
+        size={editorHeight}
+        min={96}
+        max={640}
+        defaultSize={220}
+        onSizeChange={setEditorHeight}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col">
         {outcome?.status === 'needsConfirmation' ? (

@@ -20,6 +20,7 @@ export * from './cli/liveSwitch.js';
 export * from './cli/registry.js';
 export * from './database/classify.js';
 export * from './database/connectionUrl.js';
+export * from './database/ddl.js';
 export * from './database/detectContainer.js';
 export * from './database/engines.js';
 export * from './database/sqlBuild.js';
