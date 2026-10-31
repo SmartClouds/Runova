@@ -1,7 +1,8 @@
-import type { DbObjectRef } from '@shared/databaseTypes';
+import type { DbObjectRef, DbTableDescription } from '@shared/databaseTypes';
 import { useQuery } from '@tanstack/react-query';
-import { Key } from '@/components/icons';
+import { Key, Pencil } from '@/components/icons';
 import { Notice, SECTION_HEADING } from '@/components/pageKit';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
@@ -11,9 +12,12 @@ import { CODE_WELL } from '../security/SecurityCard';
 export function StructureTab({
   sessionId,
   objectRef,
+  onEditColumns,
 }: {
   sessionId: string;
   objectRef: DbObjectRef;
+  /** Opens the designer on this table. Left out where the engine cannot change columns. */
+  onEditColumns?: (table: DbTableDescription) => void;
 }): React.JSX.Element {
   const table = useQuery({
     queryKey: queryKeys.databaseTable(sessionId, JSON.stringify(objectRef)),
@@ -41,9 +45,16 @@ export function StructureTab({
   return (
     <div className="h-full space-y-5 overflow-auto p-4">
       <section className="space-y-2">
-        <h4 className={SECTION_HEADING}>
-          Columns{rowEstimate !== null ? ` · about ${rowEstimate.toLocaleString()} rows` : ''}
-        </h4>
+        <div className="flex items-center justify-between gap-2">
+          <h4 className={SECTION_HEADING}>
+            Columns{rowEstimate !== null ? ` · about ${rowEstimate.toLocaleString()} rows` : ''}
+          </h4>
+          {onEditColumns && table.data.kind === 'table' ? (
+            <Button size="xs" shape="pill" variant="soft" onClick={() => onEditColumns(table.data)}>
+              <Pencil /> Edit columns
+            </Button>
+          ) : null}
+        </div>
         <table aria-label="Columns" className="w-full border-separate border-spacing-0 text-xs">
           <thead>
             <tr className="text-left text-muted-foreground">

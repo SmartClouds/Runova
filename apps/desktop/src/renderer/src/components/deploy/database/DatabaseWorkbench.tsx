@@ -1,5 +1,5 @@
 import { engineInfo, qualifiedName } from '@runova/core';
-import type { DbObjectNode } from '@shared/databaseTypes';
+import type { DbObjectNode, DbObjectRef, DbTableDescription } from '@shared/databaseTypes';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Code, Layers, Lock, Plug, Plus, RefreshCw, Table, X } from '@/components/icons';
@@ -18,6 +18,7 @@ import { EngineMark } from './EngineMark';
 import { ObjectTree } from './ObjectTree';
 import { QueryTab } from './QueryTab';
 import { StructureTab } from './StructureTab';
+import { type DesignerTarget, TableDesigner } from './TableDesigner';
 
 /**
  * An open connection: the object tree on the left, tabs for rows, structure and queries in the
@@ -53,6 +54,7 @@ export function DatabaseWorkbench({
   const { session, tabs, activeTabId } = state;
   const { connection } = session;
   const store = useDatabaseWorkbenchStore();
+  const [designer, setDesigner] = useState<DesignerTarget | null>(null);
   const queryClient = useQueryClient();
   const [treeWidth, setTreeWidth] = useState(250);
   const info = engineInfo(connection.engine);
@@ -82,6 +84,25 @@ export function DatabaseWorkbench({
         objectKind: node.kind,
       }),
     openQuery: (node: DbObjectNode) => openQuery(node),
+    ...(info.capabilities.createTable
+      ? {
+          newTable: (node: DbObjectNode) =>
+            setDesigner({
+              mode: 'create',
+              where: {
+                ...(node.ref.database ? { database: node.ref.database } : {}),
+                ...(node.kind === 'schema' ? { schema: node.ref.schema ?? node.name } : {}),
+              },
+            }),
+        }
+      : {}),
+  };
+  const defaultWhere = (): Omit<DbObjectRef, 'name'> => {
+    const database = connection.database ?? undefined;
+    if (connection.engine === 'postgres') return { database, schema: 'public' };
+    if (connection.engine === 'mssql') return { database, schema: 'dbo' };
+    if (connection.engine === 'sqlite') return {};
+    return { database };
   };
 
   return (
@@ -102,6 +123,16 @@ export function DatabaseWorkbench({
             {connection.user ? ` · signed in as ${connection.user}` : ''}
           </p>
         </div>
+        {info.capabilities.createTable ? (
+          <Button
+            size="sm"
+            shape="pill"
+            variant="soft"
+            onClick={() => setDesigner({ mode: 'create', where: defaultWhere() })}
+          >
+            <Table /> New {info.objectNoun}
+          </Button>
+        ) : null}
         <Button size="sm" shape="pill" variant="tint" onClick={() => openQuery()}>
           <Plus /> New query
         </Button>
@@ -128,7 +159,13 @@ export function DatabaseWorkbench({
           style={{ width: treeWidth }}
           aria-label="Objects"
         >
-          <ObjectTree sessionId={session.sessionId} actions={actions} />
+          <ObjectTree
+            sessionId={session.sessionId}
+            actions={actions}
+            tablesLiveIn={
+              info.capabilities.schemas ? 'schema' : info.capabilities.databases ? 'database' : null
+            }
+          />
         </aside>
         <ResizeHandle
           orientation="vertical"
@@ -161,7 +198,17 @@ export function DatabaseWorkbench({
           ) : null}
           <div className="min-h-0 flex-1">
             {active ? (
-              <TabBody key={active.id} scope={scope} state={state} tab={active} />
+              <TabBody
+                key={active.id}
+                scope={scope}
+                state={state}
+                tab={active}
+                onEditColumns={
+                  info.capabilities.createTable
+                    ? (table) => setDesigner({ mode: 'edit', table })
+                    : undefined
+                }
+              />
             ) : (
               <EmptyState
                 icon={Table}
@@ -177,6 +224,12 @@ export function DatabaseWorkbench({
           </div>
         </section>
       </div>
+      <TableDesigner
+        sessionId={session.sessionId}
+        engine={connection.engine}
+        target={designer}
+        onClose={() => setDesigner(null)}
+      />
     </div>
   );
 }
@@ -228,18 +281,33 @@ function TabBody({
   scope,
   state,
   tab,
+  onEditColumns,
 }: {
   scope: string;
   state: WorkbenchScope;
   tab: WorkbenchTab;
+  onEditColumns?: (table: DbTableDescription) => void;
 }): React.JSX.Element {
   const updateTab = useDatabaseWorkbenchStore((store) => store.updateTab);
   const { session } = state;
   if (tab.kind === 'data' && tab.ref) {
-    return <DataTab sessionId={session.sessionId} objectRef={tab.ref} />;
+    return (
+      <DataTab
+        sessionId={session.sessionId}
+        engine={session.connection.engine}
+        readOnly={session.connection.readOnly}
+        objectRef={tab.ref}
+      />
+    );
   }
   if (tab.kind === 'structure' && tab.ref) {
-    return <StructureTab sessionId={session.sessionId} objectRef={tab.ref} />;
+    return (
+      <StructureTab
+        sessionId={session.sessionId}
+        objectRef={tab.ref}
+        onEditColumns={onEditColumns}
+      />
+    );
   }
   return (
     <QueryTab

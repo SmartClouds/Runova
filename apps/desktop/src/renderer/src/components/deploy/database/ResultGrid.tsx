@@ -1,5 +1,6 @@
 import type { DbCell, DbResultSet } from '@shared/databaseTypes';
-import { ArrowDown, ArrowUp } from '@/components/icons';
+import { useState } from 'react';
+import { ArrowDown, ArrowUp, Trash2 } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,6 +17,15 @@ export function formatCell(cell: DbCell): string {
   return String(cell);
 }
 
+/** Editing in place: cells change on double click, rows can be marked for deletion. */
+export interface GridEdit {
+  /** The pending value of a cell, or undefined when it has not been changed. */
+  pending: (row: number, column: string) => DbCell | undefined;
+  onChange: (row: number, column: string, value: DbCell) => void;
+  deleted: ReadonlySet<number>;
+  onToggleDelete: (row: number) => void;
+}
+
 export interface GridSort {
   column: string;
   direction: 'asc' | 'desc';
@@ -27,6 +37,7 @@ export function ResultGrid({
   firstRowNumber = 1,
   sort,
   onSort,
+  edit,
   className,
 }: {
   label: string;
@@ -34,8 +45,10 @@ export function ResultGrid({
   firstRowNumber?: number;
   sort?: GridSort | null;
   onSort?: (column: string) => void;
+  edit?: GridEdit;
   className?: string;
 }): React.JSX.Element {
+  const [editing, setEditing] = useState<{ row: number; column: number } | null>(null);
   return (
     <div className={cn('min-h-0 overflow-auto', className)}>
       <table
@@ -87,22 +100,64 @@ export function ResultGrid({
         </thead>
         <tbody>
           {result.rows.map((row, index) => (
-            <tr key={index} className="hover:bg-primary/[0.04]">
+            <tr
+              key={index}
+              className={cn(
+                'group/row hover:bg-primary/[0.04]',
+                edit?.deleted.has(index) && 'bg-destructive/[0.06] line-through opacity-70',
+              )}
+            >
               <td className="border-b border-foreground/[0.05] px-2 py-1 text-right font-mono text-[10px] text-muted-foreground/60">
-                {firstRowNumber + index}
+                {edit ? (
+                  <button
+                    type="button"
+                    aria-label={`${edit.deleted.has(index) ? 'Keep' : 'Delete'} row ${firstRowNumber + index}`}
+                    onClick={() => edit.onToggleDelete(index)}
+                    className="w-full text-right hover:text-destructive"
+                  >
+                    <span className="group-hover/row:hidden">{firstRowNumber + index}</span>
+                    <Trash2 className="ml-auto hidden h-3 w-3 group-hover/row:block" />
+                  </button>
+                ) : (
+                  firstRowNumber + index
+                )}
               </td>
-              {row.map((cell, column) => {
+              {row.map((original, column) => {
+                const name = result.columns[column]?.name ?? '';
+                const changed = edit?.pending(index, name);
+                const cell = changed === undefined ? original : changed;
                 const text = formatCell(cell);
                 const long = text.length > LONG_TEXT;
+                if (edit && editing?.row === index && editing.column === column) {
+                  return (
+                    <td key={column} className="border-b border-l border-primary/40 p-0">
+                      <CellEditor
+                        label={`Edit ${name}`}
+                        value={cell}
+                        onDone={(value) => {
+                          setEditing(null);
+                          if (value !== undefined && formatCell(value) !== formatCell(original)) {
+                            edit.onChange(index, name, value);
+                          } else if (value !== undefined && changed !== undefined) {
+                            edit.onChange(index, name, original);
+                          }
+                        }}
+                      />
+                    </td>
+                  );
+                }
                 return (
                   <td
                     key={column}
                     title={long ? text : undefined}
+                    onDoubleClick={edit ? () => setEditing({ row: index, column }) : undefined}
                     className={cn(
                       'max-w-[28rem] truncate border-b border-l border-foreground/[0.05] px-2.5 py-1 font-mono',
                       cell === null && 'italic text-muted-foreground/60',
                       typeof cell === 'number' && 'text-right tabular-nums',
                       typeof cell === 'boolean' && 'text-primary',
+                      changed !== undefined && 'bg-warning/12 text-foreground',
+                      edit && 'cursor-text',
                     )}
                   >
                     {long ? `${text.slice(0, LONG_TEXT)}...` : text}
@@ -116,6 +171,55 @@ export function ResultGrid({
       {result.rows.length === 0 && result.columns.length > 0 ? (
         <p className="px-3 py-6 text-center text-xs text-muted-foreground">No rows.</p>
       ) : null}
+    </div>
+  );
+}
+
+/** A cell being edited: Enter keeps it, Escape drops it, and NULL is one click. */
+function CellEditor({
+  label,
+  value,
+  onDone,
+}: {
+  label: string;
+  value: DbCell;
+  onDone: (value: DbCell | undefined) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState(value === null ? '' : formatCell(value));
+  const parse = (): DbCell => {
+    if (value !== null && typeof value === 'object') {
+      try {
+        return JSON.parse(text) as DbCell;
+      } catch {
+        return text;
+      }
+    }
+    return text;
+  };
+  return (
+    <div className="flex items-center gap-1 bg-background px-1">
+      <input
+        aria-label={label}
+        value={text}
+        autoFocus
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') onDone(parse());
+          if (event.key === 'Escape') onDone(undefined);
+        }}
+        onBlur={() => onDone(parse())}
+        className="h-6 min-w-[8rem] flex-1 bg-transparent font-mono text-xs outline-none"
+      />
+      <button
+        type="button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          onDone(null);
+        }}
+        className="rounded px-1 text-[10px] text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground"
+      >
+        NULL
+      </button>
     </div>
   );
 }

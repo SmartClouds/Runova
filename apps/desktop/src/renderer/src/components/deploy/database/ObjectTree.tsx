@@ -1,6 +1,6 @@
 import type { DbObjectKind, DbObjectNode, DbObjectRef } from '@shared/databaseTypes';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import {
   ChevronRight,
   Code,
@@ -9,6 +9,7 @@ import {
   Folder,
   Key,
   Layers,
+  Plus,
   Spinner,
   Table,
 } from '@/components/icons';
@@ -38,21 +39,30 @@ export interface ObjectTreeActions {
   openRows: (node: DbObjectNode) => void;
   openQuery: (node: DbObjectNode) => void;
   openStructure: (node: DbObjectNode) => void;
+  /** Starts a new table inside this node. */
+  newTable?: (node: DbObjectNode) => void;
 }
 
 export function ObjectTree({
   sessionId,
   actions,
+  tablesLiveIn,
 }: {
   sessionId: string;
   actions: ObjectTreeActions;
+  /** Which kind of node holds tables, for the "new table" button on it. */
+  tablesLiveIn?: DbObjectKind | null;
 }): React.JSX.Element {
   return (
     <div role="tree" aria-label="Databases" className="space-y-px py-1 text-xs">
-      <Level sessionId={sessionId} parent={null} depth={0} actions={actions} />
+      <TreeContext.Provider value={tablesLiveIn ?? null}>
+        <Level sessionId={sessionId} parent={null} depth={0} actions={actions} />
+      </TreeContext.Provider>
     </div>
   );
 }
+
+const TreeContext = createContext<DbObjectKind | null>(null);
 
 function Level({
   sessionId,
@@ -128,6 +138,7 @@ function Node({
   actions: ObjectTreeActions;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const tablesLiveIn = useContext(TreeContext);
   const Icon = ICONS[node.kind];
   const leaf = !node.hasChildren;
   const activate = () => (leaf ? actions.openRows(node) : setOpen((value) => !value));
@@ -201,6 +212,15 @@ function Node({
                 <Layers className="h-3 w-3" />
               </HoverButton>
             ) : null}
+          </span>
+        ) : actions.newTable && tablesLiveIn === node.kind ? (
+          <span className="hidden shrink-0 items-center group-focus-within:flex group-hover:flex">
+            <HoverButton
+              label={`New table in ${node.name}`}
+              onClick={() => actions.newTable?.(node)}
+            >
+              <Plus className="h-3 w-3" />
+            </HoverButton>
           </span>
         ) : null}
         {leaf && node.rowEstimate !== null ? (
