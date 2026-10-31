@@ -15,7 +15,7 @@ import type {
  * How the app reaches a server's core: a tunnel to its socket, its stdio bridge, the DevHost, or
  * the core's own HTTPS port (direct TLS, E16).
  */
-export type DeployTransport = 'streamlocal' | 'bridge' | 'dev-tcp' | 'direct-tls';
+export type DeployTransport = 'streamlocal' | 'bridge' | 'dev-tcp' | 'direct-tls' | 'core-domain';
 
 /** What the app remembers about the core it installed on a server. */
 /**

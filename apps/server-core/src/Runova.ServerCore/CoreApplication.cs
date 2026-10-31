@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Runova.ServerCore.Audit;
 using Runova.ServerCore.Cloudflare;
+using Runova.ServerCore.CoreDomain;
 using Runova.ServerCore.Data;
 using Runova.ServerCore.DirectTls;
 using Runova.ServerCore.Endpoints;
@@ -79,6 +80,8 @@ internal static class CoreApplication
         builder.Services.AddCloudflare();
         // The opt-in HTTPS listener (E16): nothing is bound until the mode is turned on.
         builder.AddDirectTls();
+        // The core behind its own domain in nginx (E44): nothing is bound until the mode is turned on.
+        builder.AddCoreDomain();
         // Warnings and errors to a Sentry project as OpenTelemetry logs, once a person sets it up (E29).
         builder.AddErrorReporting();
         // Alerts to a Telegram chat through a bot, once a person sets it up (E30).
@@ -128,8 +131,10 @@ internal static class CoreApplication
         // Host filtering already ran (the host adds it first). Origin checks come next, then
         // authentication, so a browser request is refused without ever being authenticated.
         app.UseMiddleware<OriginRejectionMiddleware>();
-        // Over direct TLS, every request names its device again from the client certificate.
+        // Over direct TLS, every request names its device again from the client certificate; on
+        // the core domain's port, from the certificate nginx passes on, with nginx's key.
         app.UseMiddleware<DirectTlsGuard>();
+        app.UseMiddleware<CoreDomainGuard>();
         app.UseRouting();
         app.UseRateLimiter();
         app.UseAuthentication();

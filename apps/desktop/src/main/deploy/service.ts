@@ -59,6 +59,7 @@ import {
   devTcpTransport,
   streamLocalTransport,
 } from './connection/transport';
+import { coreDomainTransport } from './coreDomain/transport';
 import { coreNames, LEGACY_CORE, RUNOVA_CORE } from './coreLayout';
 import { updateCoreLive } from './coreUpdate';
 import { clientCertificate } from './directTls/clientCertificate';
@@ -133,15 +134,28 @@ export interface DeployServiceDeps {
   connectionChanged?: (connection: DeployConnection) => void;
   /** Called when the servers with a core and this computer on it may have changed. */
   serversChanged?: () => void;
-  /** Opens a TLS socket for direct TLS; tests pass a fake. */
+  /** Opens a TLS socket for direct TLS and the core domain; tests pass a fake. */
   tlsConnect?: TlsConnect;
   now?: () => number;
 }
 
-/** How long a direct TLS port that did not answer is left alone before it is tried again. */
+/** The key for one server's way in without SSH, in the up and down maps. */
+function routeKey(serverId: string, kind: 'core-domain' | 'direct-tls'): string {
+  return `${serverId}\u0000${kind}`;
+}
+
+/** How long a way in without SSH that did not answer is left alone before it is tried again. */
 const DIRECT_DOWN_MS = 60_000;
-/** How long a direct TLS port that answered is used without asking it for its health again. */
+/** How long a way in without SSH that answered is used without asking it for its health again. */
 const DIRECT_UP_MS = 30_000;
+
+/** The ways in that skip SSH: the core domain (E44) and direct TLS (E16). */
+type OffSshKind = 'core-domain' | 'direct-tls';
+
+interface OffSshRoute {
+  kind: OffSshKind;
+  transport: CoreTransport;
+}
 
 async function startHub(
   transport: CoreTransport,
@@ -175,7 +189,10 @@ export class DeployService {
   ) => Promise<CoreHubSession>;
   private readonly sessions: CoreSessions;
   private readonly now: () => number;
-  /** Until when each server's direct TLS port counts as down, or as up, after the last try. */
+  /**
+   * Until when each server's ways in without SSH count as down, or as up, after the last try.
+   * Keyed by server and kind (see `routeKey`).
+   */
   private readonly directDown = new Map<string, number>();
   private readonly directUp = new Map<string, number>();
 
@@ -663,16 +680,16 @@ export class DeployService {
 
   /**
    * The Deploy page asks this every 30 seconds per server, so it goes the way the link does:
-   * through direct TLS when that is on and answering, which leaves the SSH login idle and the pool
-   * closes it after a minute. Over SSH only when direct TLS is off or did not answer lately.
+   * through the core domain or direct TLS when one is on and answering, which leaves the SSH login
+   * idle and the pool closes it after a minute. Over SSH only when neither is on or answered lately.
    */
   async health(serverId: string): Promise<DeployHealth> {
     let answer: HealthResponse;
     let transport: DeployTransport;
     const direct = await this.directHealth(serverId);
     if (direct) {
-      answer = direct;
-      transport = 'direct-tls';
+      answer = direct.answer;
+      transport = direct.kind;
     } else if (serverId === DEV_SERVER_ID && this.deps.devCorePort !== null) {
       answer = await this.healthOf(devTcpTransport(this.deps.devCorePort));
       transport = 'dev-tcp';
@@ -720,22 +737,25 @@ export class DeployService {
   }
 
   /**
-   * The core's health over direct TLS, or null when SSH should ask instead. Same rules as the
-   * link: a pin mismatch is thrown, a port that does not answer is left alone for a while.
+   * The core's health over the core domain or direct TLS, or null when SSH should ask instead.
+   * Same rules as the link: a pin mismatch is thrown, a way in that does not answer is left alone
+   * for a while and the next one is tried.
    */
-  private async directHealth(serverId: string): Promise<HealthResponse | null> {
-    const direct = await this.directRoute(serverId, { probe: false });
-    if (!direct) return null;
-    try {
-      const answer = await this.healthOf(direct);
-      this.directUp.set(serverId, this.now() + DIRECT_UP_MS);
-      return answer;
-    } catch (error) {
-      if (error instanceof PinMismatchError) throw new Error(error.message);
-      if (!this.worthSsh(error)) throw error;
-      this.directDown.set(serverId, this.now() + DIRECT_DOWN_MS);
-      return null;
+  private async directHealth(
+    serverId: string,
+  ): Promise<{ answer: HealthResponse; kind: OffSshKind } | null> {
+    for (const route of await this.offSshRoutes(serverId)) {
+      try {
+        const answer = await this.healthOf(route.transport);
+        this.markRoute(serverId, route.kind, 'up');
+        return { answer, kind: route.kind };
+      } catch (error) {
+        if (error instanceof PinMismatchError) throw new Error(error.message);
+        if (!this.worthSsh(error)) throw error;
+        this.markRoute(serverId, route.kind, 'down');
+      }
     }
+    return null;
   }
 
   /**
@@ -903,7 +923,10 @@ export class DeployService {
    */
   withSshHub<T>(serverId: string, work: (hub: ICoreHub) => Promise<T>): Promise<T> {
     const link = this.links.info(serverId);
-    const overSsh = link.transport !== undefined && link.transport !== 'direct-tls';
+    const overSsh =
+      link.transport !== undefined &&
+      link.transport !== 'direct-tls' &&
+      link.transport !== 'core-domain';
     if (this.links.isOnline(serverId) && overSsh) {
       return this.links.call(serverId, work).catch((error: unknown) => {
         throw new Error(hubMessage(error));
@@ -933,8 +956,30 @@ export class DeployService {
 
   /** Forgets whether direct TLS answered lately and opens the link again, after a change to it. */
   directTlsChanged(serverId: string): void {
-    this.directDown.delete(serverId);
-    this.directUp.delete(serverId);
+    this.offSshChanged(serverId);
+  }
+
+  /** The same after a change to the core domain (E44). */
+  coreDomainChanged(serverId: string): void {
+    this.offSshChanged(serverId);
+  }
+
+  /** A transport through the core domain, signed with this computer's device key; null without a device. */
+  async coreDomainTransport(serverId: string, domain: string): Promise<CoreTransport | null> {
+    const device = await this.deps.state.device(serverId);
+    if (!device) return null;
+    return coreDomainTransport(
+      domain,
+      async () => clientCertificate(await this.deps.unseal(device.privateKey)),
+      this.deps.tlsConnect,
+    );
+  }
+
+  private offSshChanged(serverId: string): void {
+    for (const kind of ['core-domain', 'direct-tls'] as const) {
+      this.directDown.delete(routeKey(serverId, kind));
+      this.directUp.delete(routeKey(serverId, kind));
+    }
     this.links.reset(serverId);
   }
 
@@ -1090,56 +1135,95 @@ export class DeployService {
   }
 
   /**
-   * The link over direct TLS, when it is on for this server and did not fail lately. A pin
-   * mismatch stops the link outright; any other failure leaves the port alone for a while and the
-   * link goes over SSH as before. Null when SSH is the way.
+   * The link through the core domain or direct TLS, the first of them that is on for this server,
+   * did not fail lately and starts. A pin mismatch stops the link outright; any other failure
+   * leaves that way in alone for a while and the next is tried, then SSH as before. Null when SSH
+   * is the way.
    */
   private async startDirectLive(serverId: string): Promise<LiveHubSession | null> {
-    const direct = await this.directRoute(serverId, { probe: false });
-    if (!direct) return null;
-    try {
-      const session = await this.startLive(serverId, direct);
-      this.directUp.set(serverId, this.now() + DIRECT_UP_MS);
-      return session;
-    } catch (error) {
-      if (error instanceof PinMismatchError) throw new LinkBlockedError('offline', error.message);
-      if (!this.worthSsh(error)) throw error;
-      this.directDown.set(serverId, this.now() + DIRECT_DOWN_MS);
-      return null;
+    for (const route of await this.offSshRoutes(serverId)) {
+      try {
+        const session = await this.startLive(serverId, route.transport);
+        this.markRoute(serverId, route.kind, 'up');
+        return session;
+      } catch (error) {
+        if (error instanceof PinMismatchError) throw new LinkBlockedError('offline', error.message);
+        if (!this.worthSsh(error)) throw error;
+        this.markRoute(serverId, route.kind, 'down');
+      }
     }
+    return null;
   }
 
   /**
-   * The direct TLS transport for a server, or null when SSH is the way: the mode is off on this
-   * computer, the port failed lately, or (with `probe`) it does not answer its health now. A pin
-   * mismatch is thrown, never turned into a quiet fallback.
+   * The first way in without SSH that answers, or null when SSH is the way: none is on for this
+   * computer, each failed lately, or (with `probe`) none answers its health now. A pin mismatch is
+   * thrown, never turned into a quiet fallback.
    */
   private async directRoute(
     serverId: string,
     options: { probe: boolean },
   ): Promise<CoreTransport | null> {
-    const pinned = await this.deps.state.directTls(serverId);
-    if (!pinned?.enabled) return null;
-    const now = this.now();
-    if ((this.directDown.get(serverId) ?? 0) > now) return null;
+    for (const route of await this.offSshRoutes(serverId)) {
+      if (!options.probe || (this.directUp.get(routeKey(serverId, route.kind)) ?? 0) > this.now()) {
+        return route.transport;
+      }
+      try {
+        await this.healthOf(route.transport);
+        this.markRoute(serverId, route.kind, 'up');
+        return route.transport;
+      } catch (error) {
+        if (error instanceof PinMismatchError) throw new Error(error.message);
+        if (!this.worthSsh(error)) throw error;
+        this.markRoute(serverId, route.kind, 'down');
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The ways in without SSH this computer may try for a server, in order: the core domain (E44)
+   * when it is on here, then direct TLS (E16). One that failed lately is left out; both need this
+   * computer's device key, which is their client certificate.
+   */
+  private async offSshRoutes(serverId: string): Promise<OffSshRoute[]> {
     const device = await this.deps.state.device(serverId);
-    if (!device) return null;
-    const host = await this.directTlsHost(serverId);
-    const transport = directTlsTransport(
-      { host, port: pinned.port, pin: pinned.pin },
-      async () => clientCertificate(await this.deps.unseal(device.privateKey)),
-      this.deps.tlsConnect,
-    );
-    if (!options.probe || (this.directUp.get(serverId) ?? 0) > now) return transport;
-    try {
-      await this.healthOf(transport);
-      this.directUp.set(serverId, this.now() + DIRECT_UP_MS);
-      return transport;
-    } catch (error) {
-      if (error instanceof PinMismatchError) throw new Error(error.message);
-      if (!this.worthSsh(error)) throw error;
-      this.directDown.set(serverId, this.now() + DIRECT_DOWN_MS);
-      return null;
+    if (!device) return [];
+    const now = this.now();
+    const down = (kind: OffSshKind) => (this.directDown.get(routeKey(serverId, kind)) ?? 0) > now;
+    const credentials = async () => clientCertificate(await this.deps.unseal(device.privateKey));
+    const routes: OffSshRoute[] = [];
+    // The DevHost has no nginx in front of it.
+    const domain = this.isDevHost(serverId) ? null : await this.deps.state.coreDomain(serverId);
+    if (domain?.enabled && !down('core-domain')) {
+      routes.push({
+        kind: 'core-domain',
+        transport: coreDomainTransport(domain.domain, credentials, this.deps.tlsConnect),
+      });
+    }
+    const pinned = await this.deps.state.directTls(serverId);
+    if (pinned?.enabled && !down('direct-tls')) {
+      const host = await this.directTlsHost(serverId);
+      routes.push({
+        kind: 'direct-tls',
+        transport: directTlsTransport(
+          { host, port: pinned.port, pin: pinned.pin },
+          credentials,
+          this.deps.tlsConnect,
+        ),
+      });
+    }
+    return routes;
+  }
+
+  private markRoute(serverId: string, kind: OffSshKind, state: 'up' | 'down'): void {
+    const key = routeKey(serverId, kind);
+    if (state === 'up') {
+      this.directUp.set(key, this.now() + DIRECT_UP_MS);
+      this.directDown.delete(key);
+    } else {
+      this.directDown.set(key, this.now() + DIRECT_DOWN_MS);
+      this.directUp.delete(key);
     }
   }
 

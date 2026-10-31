@@ -97,7 +97,7 @@ On an installed server, open the menu (three dots) on the **Server core** card o
 The **Server core** card on the Overview shows a live look at the core:
 
 - A badge: **Online**, **Not answering** or **Connecting…**, and how it answers ("Answering through the SSH tunnel, checked 20 s ago", or the core's bridge over SSH, loopback to the DevHost, or the core's own TLS port).
-- **Version**, **Up for**, **Installed**, **Operating system**, **Processor** and **Connection** (SSH tunnel, Core bridge over SSH, Loopback (DevHost) or Direct TLS).
+- **Version**, **Up for**, **Installed**, **Operating system**, **Processor** and **Connection** (SSH tunnel, Core bridge over SSH, Loopback (DevHost), Direct TLS or Core domain).
 - **Check now** (the refresh button) to ask again right away.
 - A **More actions** menu with **Update or reinstall**, **Remove the core, keep its data** and **Remove the core and its data**.
 

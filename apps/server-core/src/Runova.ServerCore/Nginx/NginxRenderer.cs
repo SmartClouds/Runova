@@ -10,7 +10,8 @@ internal sealed record NginxRelease(int Number, string Directory, IReadOnlyList<
 /// <param name="Path">Relative to the release directory, with forward slashes.</param>
 /// <param name="SiteId">For a snippet file, the site it belongs to, so nginx's errors can be mapped back to it.</param>
 /// <param name="Snippet">For a snippet file, which of the site's snippets it holds. Its lines are the snippet's lines.</param>
-internal sealed record NginxReleaseFile(string Path, string Content, string? SiteId = null, NginxSnippetContext? Snippet = null);
+/// <param name="Private">Written root-only (0600): nginx's master reads it as root. The core domain's site holds a secret.</param>
+internal sealed record NginxReleaseFile(string Path, string Content, string? SiteId = null, NginxSnippetContext? Snippet = null, bool Private = false);
 
 /// <summary>
 /// Renders the typed model into the files of one release. Output is deterministic (the same model
@@ -59,6 +60,12 @@ internal static class NginxRenderer
         var files = new List<NginxReleaseFile> { new(HttpFile, RenderHttp(configuration, layout, directory)) };
         foreach (var site in configuration.Sites)
         {
+            if (site.Upstream is NginxCoreUpstream core)
+            {
+                files.Add(new NginxReleaseFile(SitePath(site), RenderCoreSite(site, core, layout, configuration.CoreKey), site.Id, Private: true));
+                continue;
+            }
+
             files.Add(new NginxReleaseFile(SitePath(site), RenderSite(site, layout, upstreams, directory, configuration.OriginLock)));
 
             if (site.BasicAuth is { } auth)
@@ -238,6 +245,92 @@ internal static class NginxRenderer
 
         return writer.ToString();
     }
+
+    /// <summary>
+    /// The server core behind its own domain (E44). Plain HTTP only answers ACME challenges, so the
+    /// core is never reached without TLS. Over HTTPS nginx asks for a client certificate without
+    /// asking a CA to vouch for it (the desktop signs its own with its device key); the handshake
+    /// proves the caller holds that key, and nginx hands the certificate to the core, which checks it
+    /// against its enrolled devices. The key header proves to the core the request came through here.
+    /// Nothing the visitor sends can stand in for either header: proxy_set_header replaces them.
+    /// </summary>
+    private static string RenderCoreSite(NginxSite site, NginxCoreUpstream core, NginxLayout layout, string? key)
+    {
+        if (!CoreDomain.CoreDomainSettings.IsKey(key))
+        {
+            throw new NginxConfigurationException([new NginxProblem($"sites[{site.Id}].upstream", "The server core's domain has lost its key. Turn the core domain off and on again under Security, Connection.")]);
+        }
+
+        var domain = site.Domains[0].ToLowerInvariant();
+        var writer = new ConfigWriter();
+        writer.Section($"# Site {site.Id}: {domain}", "# The Runova server core (E44). Root-only: it holds the key the core checks.");
+
+        writer.Open("server", "# Plain HTTP answers ACME challenges and nothing else; the core is only reached over HTTPS.");
+        writer.Section(Listen(layout, "80").Concat([$"server_name {domain};", "server_tokens off;"]).Concat(Logs(site, layout)));
+        WriteAcmeLocation(writer, layout);
+        writer.Open("location /");
+        writer.Section(site.Certificate is null ? "return 404;" : "return 301 https://$host$request_uri;");
+        writer.Close();
+        writer.Close();
+
+        if (site.Certificate is not { } certificate)
+        {
+            return writer.ToString();
+        }
+
+        writer.Open("server");
+        writer.Section(Listen(layout, "443 ssl").Concat([$"server_name {domain};", "server_tokens off;"]).Concat(Logs(site, layout)));
+        writer.Section(
+            $"ssl_certificate {certificate.CertificatePath};",
+            $"ssl_certificate_key {certificate.KeyPath};",
+            "ssl_protocols TLSv1.2 TLSv1.3;",
+            $"ssl_ciphers {Ciphers};",
+            $"ssl_session_cache shared:{layout.NamePrefix}_tls:10m;",
+            "ssl_session_timeout 1d;",
+            "ssl_session_tickets off;",
+            "ssl_stapling off;");
+        writer.Section(
+            "# The device certificate is self-signed, so no CA is asked to vouch for it. The handshake",
+            "# still proves the caller holds its key, and the core checks the key on every request.",
+            "ssl_verify_client optional_no_ca;");
+        if (site.IpRules is { } rules)
+        {
+            writer.Section(
+                rules.Deny.Select(network => $"deny {Network(network)};")
+                    .Concat(rules.Allow.Select(network => $"allow {Network(network)};"))
+                    .Concat(rules.Allow.Count > 0 ? ["deny all;"] : []));
+        }
+
+        writer.Section("# Uploads and downloads stream through; the core sets its own limits.", "client_max_body_size 0;");
+        writer.Open("location /");
+        writer.Open("if ($ssl_client_escaped_cert = \"\")");
+        writer.Section("return 403;");
+        writer.Close();
+        var timeouts = site.Timeouts ?? new NginxTimeouts();
+        writer.Section(
+        [
+            $"proxy_pass http://127.0.0.1:{Number(core.Port)};",
+            "proxy_http_version 1.1;",
+            $"proxy_set_header Host {CoreHostName};",
+            $"proxy_set_header {CoreDomain.CoreDomainSettings.KeyHeader} {Quote(key!)};",
+            $"proxy_set_header {CoreDomain.CoreDomainSettings.CertificateHeader} $ssl_client_escaped_cert;",
+            "proxy_set_header X-Forwarded-For $remote_addr;",
+            "proxy_set_header Upgrade $http_upgrade;",
+            $"proxy_set_header Connection {ConnectionUpgradeVariable(layout)};",
+            "proxy_buffering off;",
+            "proxy_request_buffering off;",
+            .. timeouts.ConnectSeconds is { } connect ? [$"proxy_connect_timeout {Number(connect)}s;"] : Array.Empty<string>(),
+            "# The hub's WebSocket sits idle between messages; nginx's 60 seconds would cut it off.",
+            $"proxy_read_timeout {Number(timeouts.ReadSeconds ?? 3600)}s;",
+            $"proxy_send_timeout {Number(timeouts.SendSeconds ?? 3600)}s;",
+        ]);
+        writer.Close();
+        writer.Close();
+        return writer.ToString();
+    }
+
+    /// <summary>The Host the core answers to; the core domain itself is nginx's business.</summary>
+    private static string CoreHostName => Hosting.CoreLayout.HostNames[0];
 
     /// <summary>
     /// Let's Encrypt's HTTP-01 challenge files, served from the shared webroot. IP rules and basic

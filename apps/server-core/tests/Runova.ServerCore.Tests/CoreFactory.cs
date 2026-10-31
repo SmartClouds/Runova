@@ -5,6 +5,7 @@ using Runova.ServerCore.Alerts;
 using Runova.ServerCore.Assistant;
 using Runova.ServerCore.Backups;
 using Runova.ServerCore.Cloudflare;
+using Runova.ServerCore.CoreDomain;
 using Runova.ServerCore.DevHost.Fakes;
 using Runova.ServerCore.DirectTls;
 using Runova.ServerCore.Docker;
@@ -72,6 +73,8 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             // Direct TLS: the in-memory server binds no ports, so the listener counts as open
             // whenever the mode asks for it.
             services.AddSingleton<IDirectTlsBinding, FakeDirectTlsBinding>();
+            // The core domain's loopback port for nginx (E44), the same way.
+            services.AddSingleton<ICoreDomainBinding, FakeCoreDomainBinding>();
 
             // Docker: the pretend engine (shared with the DevHost) and an installer that only records.
             services.AddSingleton(provider => new InMemoryDockerEngine(provider.GetRequiredService<TimeProvider>()) { Tick = TimeSpan.FromMilliseconds(50) });

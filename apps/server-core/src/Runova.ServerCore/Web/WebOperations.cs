@@ -79,6 +79,7 @@ internal static class WebOperations
         services.TryAddSingleton<INginxSigningKeySource, HttpNginxSigningKeySource>();
         services.AddSingleton<NginxSetup>();
         services.AddSingleton<CertificateKeys>();
+        services.TryAddSingleton(provider => new CoreDomain.CoreDomainStore(provider.GetRequiredService<CoreDirectories>()));
         services.AddSingleton<WebSites>();
         services.AddSingleton<WebJobs>();
         services.AddSingleton(provider => new SiteLogs(provider.GetRequiredService<INginxMachine>(), provider.GetRequiredService<TimeProvider>()));

@@ -21,12 +21,13 @@ const LABEL: Record<DeployConnectionState, string> = {
   locked: 'Servers locked',
 };
 
-/** What the connection rides on, in a word or two (E16 adds the core's own TLS port). */
+/** What the connection rides on, in a word or two (E16 adds the core's own TLS port, E44 its domain). */
 const VIA: Record<DeployTransport, string> = {
   streamlocal: 'SSH',
   bridge: 'SSH',
   'dev-tcp': 'loopback',
   'direct-tls': 'direct TLS',
+  'core-domain': 'the core domain',
 };
 
 const VIA_SENTENCE: Record<DeployTransport, string> = {
@@ -34,6 +35,7 @@ const VIA_SENTENCE: Record<DeployTransport, string> = {
   bridge: "It runs through the core's bridge over SSH.",
   'dev-tcp': 'It runs over loopback to the DevHost.',
   'direct-tls': "It runs straight to the core's TLS port, with this computer's device key.",
+  'core-domain': "It runs through the core's domain in nginx, with this computer's device key.",
 };
 
 const PIN_MISMATCH = 'Certificate mismatch';

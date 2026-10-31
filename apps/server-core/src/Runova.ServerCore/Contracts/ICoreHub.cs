@@ -532,6 +532,17 @@ public interface ICoreHub
     /// <summary>Closes the port. Owner.</summary>
     Task<DirectTlsStatus> DisableDirectTls();
 
+    // Core domain (E44): every role reads it; Owners change it, turning it on needs a step-up.
+
+    /// <summary>The domain, whether nginx and the core's port for it are up, and its certificate.</summary>
+    Task<CoreDomainStatus> GetCoreDomain();
+
+    /// <summary>Puts the core behind a domain in nginx, or changes it. Owner, with a step-up. nginx has to be running.</summary>
+    Task<CoreDomainStatus> EnableCoreDomain(CoreDomainRequest request);
+
+    /// <summary>Takes the domain out of nginx and closes the core's port for it. Owner.</summary>
+    Task<CoreDomainStatus> DisableCoreDomain();
+
     // Error reporting (E29): the core's warnings and errors, sent to a Sentry project as OpenTelemetry logs.
 
     /// <summary>Where logs go, how sending is going, and the options. Never the key. Admin.</summary>

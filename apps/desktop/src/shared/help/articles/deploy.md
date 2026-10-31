@@ -52,7 +52,7 @@ Further down the rail, the **FTP and SFTP sites** group lists folders you deploy
 Above the sections you see the server's nickname and its login as `user@host:port`. Two extra markers can appear:
 
 - **Development** (a badge): this is the DevHost, a built-in test server that only exists in development builds of Runova. It has no SSH, so you cannot update or remove its core from the page.
-- A connection badge on the right (once the core is installed). It says **Connected**, **Connecting**, **Reconnecting**, **Not connected**, **Sign-in needed**, **Access to set up again** or **Servers locked**. Hover it for the reason and what happens next. When the connection is live it also says how it travels (SSH, direct TLS or loopback). If a direct TLS certificate does not match the pinned one the badge says **Certificate mismatch**.
+- A connection badge on the right (once the core is installed). It says **Connected**, **Connecting**, **Reconnecting**, **Not connected**, **Sign-in needed**, **Access to set up again** or **Servers locked**. Hover it for the reason and what happens next. When the connection is live it also says how it travels (SSH, direct TLS, the core domain or loopback). If a direct TLS certificate does not match the pinned one the badge says **Certificate mismatch**.
 
 ### Locked servers banner
 

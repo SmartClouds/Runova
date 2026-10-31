@@ -155,6 +155,7 @@ internal static class SiteMapping
     {
         { Kind: UpstreamKind.ServicePort } service => new NginxServiceUpstream(Label(service), service.Port ?? 0),
         { Kind: UpstreamKind.Url } url => new NginxUrlUpstream(url.Address ?? string.Empty, url.VerifyCertificate, url.SendUpstreamHost),
+        { Kind: UpstreamKind.RunovaCore } core => new NginxCoreUpstream(core.Port ?? 0),
         _ => new Unsupported(),
     };
 

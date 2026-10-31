@@ -20,6 +20,7 @@ import type {
   ContainerStatsBatch,
   ContainerStatsRequest,
   ContainerSummary,
+  CoreDomainRequest,
   CoreUpdateRequest,
   DirectTlsRequest,
   DnsCredentialRequest,
@@ -326,6 +327,62 @@ export class FakeCoreConnection implements ICoreHub {
       changedBy: this.core.userName,
     };
     return this.answer({ ...this.core.directTls });
+  };
+
+  // The core domain (E44): every role reads it, Owners change it, turning it on needs a step-up.
+
+  getCoreDomain = async () => {
+    this.assertOpen();
+    this.assertRole('GetCoreDomain', VIEWERS);
+    return this.answer({ ...this.core.coreDomain });
+  };
+  enableCoreDomain = async (request: CoreDomainRequest) => {
+    this.assertOpen();
+    this.assertRole('EnableCoreDomain', OWNERS);
+    if (this.core.stepUpUntil <= this.core.now()) throw unauthorizedError('EnableCoreDomain');
+    const status = this.core.coreDomain;
+    if (!status.nginxInstalled) {
+      throw invocationError(
+        'EnableCoreDomain',
+        'nginx is not installed on this server. Install it under Websites first, then come back here.',
+      );
+    }
+    const domain = request.domain.trim().toLowerCase();
+    if (!domain.includes('.') || domain.startsWith('*.')) {
+      throw invocationError(
+        'EnableCoreDomain',
+        'The server core answers for one domain, not a wildcard.',
+      );
+    }
+    const sameDomain = status.domain === domain;
+    this.core.coreDomain = {
+      ...status,
+      enabled: true,
+      domain,
+      sources: request.sources ?? [],
+      listening: true,
+      siteApplied: true,
+      certificate: sameDomain ? status.certificate : undefined,
+      ready: sameDomain && status.certificate !== undefined,
+      changedAtUnixMs: this.core.now(),
+      changedBy: this.core.userName,
+    };
+    return this.answer({ ...this.core.coreDomain });
+  };
+  disableCoreDomain = async () => {
+    this.assertOpen();
+    this.assertRole('DisableCoreDomain', OWNERS);
+    this.core.coreDomain = {
+      ...this.core.coreDomain,
+      enabled: false,
+      listening: false,
+      siteApplied: false,
+      ready: false,
+      certificate: undefined,
+      changedAtUnixMs: this.core.now(),
+      changedBy: this.core.userName,
+    };
+    return this.answer({ ...this.core.coreDomain });
   };
 
   // Error reporting (E29): Admins read and test it, Owners change it with a step-up.

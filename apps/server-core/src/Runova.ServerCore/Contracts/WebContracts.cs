@@ -16,6 +16,12 @@ public enum UpstreamKind
 
     /// <summary>host:port in Address. Stream proxies only.</summary>
     Endpoint,
+
+    /// <summary>
+    /// The Runova core on its loopback port for nginx. Only the core domain's own site (E44), which
+    /// the core makes itself; a site saved through the Websites calls cannot use it.
+    /// </summary>
+    RunovaCore,
 }
 
 /// <summary>Where a site or stream proxy sends its traffic.</summary>

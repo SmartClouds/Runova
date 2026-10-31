@@ -23,6 +23,7 @@
     "src/preload/cloudflareServer.ts",
     "src/preload/deployHardening.ts",
     "src/preload/deployServerBackups.ts",
+    "src/preload/deployCoreDomain.ts",
     "src/preload/deployDirectTls.ts",
     "src/preload/deployErrorReporting.ts",
     "src/preload/deployTelegram.ts",

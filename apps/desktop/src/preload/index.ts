@@ -509,6 +509,7 @@ import type { SshHostKeyStatus } from '../shared/sshHostKey';
 import { createCiAutoFix } from './ciAutoFix';
 import { cloudflareServer } from './cloudflareServer';
 import { createDeployAssistant, createDeployLogs } from './deployAssistant';
+import { createDeployCoreDomain } from './deployCoreDomain';
 import { createDeployDirectTls } from './deployDirectTls';
 import { createDeployDocker } from './deployDocker';
 import { createDeployErrorReporting } from './deployErrorReporting';
@@ -1959,6 +1960,7 @@ const deployJobs = {
 /** Docker on a server: containers, their stats, logs and console, and Docker's resources. */
 const deployDocker = createDeployDocker(subscribe);
 const deployDirectTls = createDeployDirectTls();
+const deployCoreDomain = createDeployCoreDomain();
 const deployErrorReporting = createDeployErrorReporting();
 const deployTelegram = createDeployTelegram();
 
@@ -2971,6 +2973,7 @@ const runovaApi = {
   deployAlerts,
   deployDocker,
   deployDirectTls,
+  deployCoreDomain,
   deployErrorReporting,
   deployTelegram,
   deployAssistant,

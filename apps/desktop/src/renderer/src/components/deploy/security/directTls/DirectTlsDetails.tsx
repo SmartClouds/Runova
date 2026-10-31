@@ -37,6 +37,8 @@ function via(connection: DeployConnection | undefined): string {
   switch (connection.transport) {
     case 'direct-tls':
       return 'Connected over direct TLS';
+    case 'core-domain':
+      return 'Connected through the core domain';
     case 'streamlocal':
     case 'bridge':
       return 'Connected over SSH';

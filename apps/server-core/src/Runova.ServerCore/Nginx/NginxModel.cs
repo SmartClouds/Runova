@@ -5,6 +5,12 @@ namespace Runova.ServerCore.Nginx;
 internal sealed record NginxConfiguration(IReadOnlyList<NginxSite> Sites, IReadOnlyList<NginxStreamProxy> Streams, NginxOriginLock? OriginLock = null)
 {
     public static NginxConfiguration Empty { get; } = new([], []);
+
+    /// <summary>
+    /// The secret the core domain's site sends to the core (E44). Only set for a render that will be
+    /// applied; validation on save goes without it.
+    /// </summary>
+    public string? CoreKey { get; init; }
 }
 
 /// <summary>
@@ -73,6 +79,12 @@ internal sealed record NginxServiceUpstream(string Service, int Port) : NginxUps
 /// <param name="VerifyCertificate">For https://, check the upstream's certificate against the system's trusted CAs.</param>
 /// <param name="SendUpstreamHost">Send the upstream's own host name as Host instead of the visitor's.</param>
 internal sealed record NginxUrlUpstream(string Url, bool VerifyCertificate = true, bool SendUpstreamHost = false) : NginxUpstream;
+
+/// <summary>
+/// The Runova core itself on its loopback port for nginx (E44). Only the reserved core domain site
+/// may use it, and that site takes no option that could change what reaches the core.
+/// </summary>
+internal sealed record NginxCoreUpstream(int Port) : NginxUpstream;
 
 /// <summary>A stream proxy's upstream given as host:port.</summary>
 internal sealed record NginxEndpointUpstream(string Endpoint) : NginxUpstream;

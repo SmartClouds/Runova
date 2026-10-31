@@ -46,6 +46,7 @@ internal sealed partial class CoreHub(
     Backups.BackupCenter backupCenter,
     Backups.BackupOperations backupOperations,
     DirectTls.DirectTlsManager directTls,
+    CoreDomain.CoreDomainManager coreDomain,
     ErrorReporting.ErrorReportingManager errorReporting,
     Notifications.TelegramManager telegram,
     AssistantHubServices assistant,

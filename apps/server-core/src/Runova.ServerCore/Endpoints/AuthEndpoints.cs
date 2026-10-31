@@ -302,10 +302,10 @@ internal static class AuthEndpoints
         TimeProvider time,
         CancellationToken cancellationToken)
     {
-        // A caller over direct TLS is an enrolled device already; a new one enrolls through SSH.
+        // A caller over direct TLS or the core domain is an enrolled device already; a new one enrolls through SSH.
         if (DirectTlsDevices.IsDirect(http))
         {
-            return Refuse(AuthErrorCode.InvalidCredentials, "Enroll a new device over SSH, not over direct TLS.", StatusCodes.Status403Forbidden);
+            return Refuse(AuthErrorCode.InvalidCredentials, "Enroll a new device over SSH, not over direct TLS or the core domain.", StatusCodes.Status403Forbidden);
         }
 
         var peer = PeerCredentials.UidOf(http);

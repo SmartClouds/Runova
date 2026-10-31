@@ -1255,6 +1255,20 @@ export const IPC = {
     acceptPin: 'deployDirectTls:acceptPin',
   },
   /**
+   * The core domain (E44): the server core behind a domain in nginx, with this computer's device
+   * certificate checked on every request. The certificate for the domain goes through deployCerts.
+   */
+  deployCoreDomain: {
+    /** (serverId) -> DeployCoreDomainInfo: the core's account and what this computer does with it. */
+    status: 'deployCoreDomain:status',
+    /** (DeployCoreDomainEnableInput) -> DeployCoreDomainInfo; Owner, may need a step-up. */
+    enable: 'deployCoreDomain:enable',
+    /** (serverId) -> DeployCoreDomainInfo, after this computer stopped using the domain. */
+    disable: 'deployCoreDomain:disable',
+    /** (serverId) -> DeployCoreDomainInfo, with a fresh check of the domain from this computer. */
+    check: 'deployCoreDomain:check',
+  },
+  /**
    * Error reporting on a server (E29): its core sends warnings and errors to a Sentry project as
    * OpenTelemetry logs. The DSN only goes in; nothing here returns one.
    */

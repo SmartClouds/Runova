@@ -2,6 +2,7 @@ import type {
   AlertInfo,
   AlertKind,
   AlertSeverity,
+  CoreDomainStatus,
   CoreUpdateRequest,
   CoreUpdateResult,
   DirectTlsStatus,
@@ -134,6 +135,22 @@ export class FakeCore {
     pin: FAKE_CORE_TLS_PIN,
     certificateNotAfterUnixMs: Date.UTC(2046, 0, 1),
     defaultPort: 7443,
+  };
+
+  /**
+   * The core domain (E44): off until an Owner turns it on. nginx counts as installed and running;
+   * a test that wants otherwise changes the flags. Ready once a certificate is set here.
+   */
+  coreDomain: CoreDomainStatus = {
+    enabled: false,
+    sources: [],
+    nginxInstalled: true,
+    nginxRunning: true,
+    originLocked: false,
+    listening: false,
+    siteApplied: false,
+    ready: false,
+    siteId: 'runova-core',
   };
 
   /** Error reporting (E29): where the core sends its warnings and errors. Off until an Owner sets it up. */

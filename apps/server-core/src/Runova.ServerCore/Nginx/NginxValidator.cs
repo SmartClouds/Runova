@@ -141,6 +141,9 @@ internal static class NginxValidator
                 }
 
                 break;
+            case NginxCoreUpstream core:
+                ValidateCoreSite(site, core, Add);
+                break;
             default:
                 Add("upstream", "A site's upstream is a stack service's port or an http:// or https:// URL.");
                 break;
@@ -227,6 +230,37 @@ internal static class NginxValidator
         var snippetRules = new NginxSnippetRules(layout.SiteFolder(site.Id), upstreams);
         ValidateSnippet(site.ServerSnippet, NginxSnippetContext.Server, "serverSnippet", snippetRules, Add);
         ValidateSnippet(site.LocationSnippet, NginxSnippetContext.Location, "locationSnippet", snippetRules, Add);
+    }
+
+    /// <summary>
+    /// The core domain's site (E44) sends the core a secret and the client certificate, so nothing
+    /// may run beside them that could rewrite a header or answer for the core: no snippets, no
+    /// basic auth, no cache, one plain domain. IP rules and timeouts are the only options it takes.
+    /// </summary>
+    private static void ValidateCoreSite(NginxSite site, NginxCoreUpstream core, Action<string, string, int?> add)
+    {
+        void Add(string name, string message) => add(name, message, null);
+        if (site.Id != CoreDomain.CoreDomainSettings.SiteId)
+        {
+            Add("upstream", "Only the server core's own domain can send requests to the core.");
+        }
+
+        if (core.Port is < 1 or > 65535)
+        {
+            Add("upstream", "The core's port for nginx must be a number from 1 to 65535.");
+        }
+
+        if (site.Domains.Count != 1 || site.Domains.Any(domain => domain?.StartsWith("*.", StringComparison.Ordinal) == true))
+        {
+            Add("domains", "The server core answers for one domain, not a wildcard.");
+        }
+
+        if (site.BasicAuth is not null || site.ProxyCache is not null || site.RateLimit is not null
+            || !string.IsNullOrWhiteSpace(site.ServerSnippet) || !string.IsNullOrWhiteSpace(site.LocationSnippet)
+            || site.ResponseHeaders.Count > 0)
+        {
+            Add("upstream", "The server core's domain takes no basic auth, cache, rate limit, extra headers or snippets.");
+        }
     }
 
     private static void ValidateStream(

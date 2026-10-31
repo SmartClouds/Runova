@@ -256,6 +256,7 @@ export const queryKeys = {
   /** Everything the Firewall section reads (E13), dropped at once after a change. */
   deployFirewall: (serverId: string) => ['deploy', 'firewall', serverId] as const,
   deployDirectTls: (serverId: string) => ['deploy', 'directTls', serverId] as const,
+  deployCoreDomain: (serverId: string) => ['deploy', 'coreDomain', serverId] as const,
   /** How a server's core reports its warnings and errors to Sentry (E29); never the DSN. */
   deployErrorReporting: (serverId: string) => ['deploy', 'errorReporting', serverId] as const,
   deployTelegram: (serverId: string) => ['deploy', 'telegram', serverId] as const,

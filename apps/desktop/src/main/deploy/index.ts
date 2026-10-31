@@ -11,6 +11,7 @@ import { broadcastHealthChanged, mutateHealth } from '../health/store';
 import { registerDeployHandlers } from '../ipc/deploy';
 import { registerDeployAppStoreHandlers } from '../ipc/deployAppStore';
 import { registerDeployAssistantHandlers } from '../ipc/deployAssistant';
+import { registerDeployCoreDomainHandlers } from '../ipc/deployCoreDomain';
 import { registerDeployDirectTlsHandlers } from '../ipc/deployDirectTls';
 import { registerDeployDockerHandlers } from '../ipc/deployDocker';
 import { registerDeployErrorReportingHandlers } from '../ipc/deployErrorReporting';
@@ -50,6 +51,7 @@ import {
   repoReleaseDirectory,
 } from './bootstrap/releaseSource';
 import { registerCloudflareIpc } from './cloudflare';
+import { DeployCoreDomain } from './coreDomain/service';
 import { DeployDirectTls } from './directTls/service';
 import { DeployDocker } from './docker';
 import { setDockerFilesHost } from './dockerFiles/backend';
@@ -234,6 +236,13 @@ export function registerDeployIpc(): void {
   registerDeployDirectTlsHandlers({
     ipc: ipcMain,
     directTls: new DeployDirectTls({ service, state, roles: (id) => service.roles(id) }),
+    guard,
+  });
+
+  // The core domain (E44): the core behind a domain in nginx, tried before direct TLS and SSH.
+  registerDeployCoreDomainHandlers({
+    ipc: ipcMain,
+    coreDomain: new DeployCoreDomain({ service, state, roles: (id) => service.roles(id) }),
     guard,
   });
 

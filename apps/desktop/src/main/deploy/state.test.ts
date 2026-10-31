@@ -287,6 +287,31 @@ describe('DeployState alert marks', () => {
 
     expect(await state.directTls('srv-1')).toBeNull();
   });
+
+  it('keeps a core domain route, skips a damaged one and forgets it with the core', async () => {
+    const state = new DeployState(
+      memoryFiles({
+        version: 1,
+        cores: { 'srv-1': RECORD },
+        devices: {},
+        coreDomains: {
+          url: { enabled: true, domain: 'https://core.example.com' },
+          noDot: { enabled: true, domain: 'localhost' },
+          noFlag: { domain: 'core.example.com' },
+        },
+      }).port,
+    );
+    await state.setCoreDomain('srv-1', { enabled: true, domain: 'core.example.com' });
+
+    expect(await state.coreDomain('srv-1')).toEqual({ enabled: true, domain: 'core.example.com' });
+    expect(await state.coreDomain('url')).toBeNull();
+    expect(await state.coreDomain('noDot')).toBeNull();
+    expect(await state.coreDomain('noFlag')).toBeNull();
+
+    await state.remove('srv-1');
+
+    expect(await state.coreDomain('srv-1')).toBeNull();
+  });
 });
 
 describe('jsonFilePort', () => {

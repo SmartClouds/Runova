@@ -40,6 +40,13 @@ internal sealed record DirectTlsSettings(bool Enabled, int Port, string[] Source
             return $"Port {port} is the SSH port. Pick another one.";
         }
 
+        return ValidateSources(sources, out normalized);
+    }
+
+    /// <summary>Addresses or networks, canonical and without repeats; null when they are fine. Shared with the core domain.</summary>
+    public static string? ValidateSources(string[]? sources, out string[] normalized)
+    {
+        normalized = [];
         var list = sources ?? [];
         if (list.Length > MaxSources)
         {

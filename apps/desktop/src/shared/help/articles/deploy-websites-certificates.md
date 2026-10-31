@@ -2,16 +2,16 @@
 title: Websites and certificates
 category: Deploy
 order: 40
-summary: Put an app on a domain with nginx, apply changes safely, read site logs, get Let's Encrypt certificates, and use Direct TLS when SSH is not available.
-keywords: nginx, website, site, domain, reverse proxy, ssl, https, certificate, let's encrypt, acme, hsts, basic auth, rate limit, tcp proxy, udp proxy, stream, direct tls, mtls, apply, wildcard
+summary: Put an app on a domain with nginx, apply changes safely, read site logs, get Let's Encrypt certificates, and reach the core through its own domain or Direct TLS when SSH is not available.
+keywords: nginx, website, site, domain, reverse proxy, ssl, https, certificate, let's encrypt, acme, hsts, basic auth, rate limit, tcp proxy, udp proxy, stream, direct tls, mtls, core domain, apply, wildcard
 route: /deploy
 ---
 
-The **Websites** section of a server in Deploy manages nginx on that server. You add a site (a domain), say where its traffic goes (a port on the server or another address), tune it, and then **Apply** the saved changes to put them live. The same section issues and renews free Let's Encrypt certificates. A separate part of Deploy, Direct TLS, lets your computer reach the server core on its own HTTPS port when SSH is not an option.
+The **Websites** section of a server in Deploy manages nginx on that server. You add a site (a domain), say where its traffic goes (a port on the server or another address), tune it, and then **Apply** the saved changes to put them live. The same section issues and renews free Let's Encrypt certificates. Two separate parts of Deploy, the core domain and Direct TLS, let your computer reach the server core without SSH.
 
 ## Where to find it
 
-Click **Deploy** in the sidebar under Ship, pick a server in the rail on the left, then click **Websites** in the strip of sections (Overview, Apps, Containers, App Store, Websites, Firewall, Logs, Security). The server needs its core installed and you must be signed in to it (see [Servers and setup](deploy-servers-setup.md)). Direct TLS lives in **Security**, on the **Connection** tab.
+Click **Deploy** in the sidebar under Ship, pick a server in the rail on the left, then click **Websites** in the strip of sections (Overview, Apps, Containers, App Store, Websites, Firewall, Logs, Security). The server needs its core installed and you must be signed in to it (see [Servers and setup](deploy-servers-setup.md)). The core domain and Direct TLS live in **Security**, on the **Connection** tab.
 
 You can also arrive here from [Cloudflare](cloudflare.md): after you point a domain at a server, a button there opens the Websites section with a new site already filled in.
 
@@ -23,7 +23,7 @@ The Websites section is visible to everyone who is signed in to the server core,
 | --- | --- |
 | Viewer, Operator | Look at sites, routes, certificates and logs. Fields are read-only and the button says **View** instead of **Edit**. |
 | Admin | Add, edit and delete sites, proxies and certificates, set up nginx, and apply changes. |
-| Owner | Everything an Admin can do, plus custom nginx directives (the **Advanced** tab) and Direct TLS. |
+| Owner | Everything an Admin can do, plus custom nginx directives (the **Advanced** tab), the core domain and Direct TLS. |
 
 The server core checks your role again on every call, so hiding a button is only a convenience.
 
@@ -187,9 +187,31 @@ These switches work once the site has a certificate and take effect with the nex
 > [!WARNING]
 > HSTS is hard to take back, because browsers remember it. Turn it on only when HTTPS works everywhere on the domain.
 
+## Core domain
+
+Normally your computer talks to the server core through SSH, so closing the SSH port in a firewall cuts the app off. The **core domain** puts the core behind a domain of its own, such as `core.example.com`, served by nginx over HTTPS. nginx asks each computer for a client certificate made from its device key, and the core checks it against the enrolled devices on every request. The usual sign-in, sessions and roles apply on top.
+
+Open **Deploy**, pick the server, click **Security**, then the **Connection** tab. Everyone signed in can see how it stands. Only an Owner can change it, and an Admin can get its certificate.
+
+### Before you start
+
+- **nginx installed and running.** The core domain is an nginx site, so install nginx under **Websites** first. Until it runs, the card says so and keeps its form disabled.
+- **DNS only.** Point an A record (and AAAA, if the server has IPv6) for the domain straight at the server. On Cloudflare, keep the proxy off for that record (the grey cloud). A proxy ends HTTPS itself and never passes your computer's device certificate on, so the core would refuse every request.
+- **Ports 80 and 443 open** in the firewall. Port 80 is only used for Let's Encrypt and to send visitors to HTTPS.
+- **The Cloudflare origin lock off.** It lets only Cloudflare reach ports 80 and 443.
+
+### Turn it on
+
+1. As an Owner, enter the **Domain** and, if you like, **Allowed from** (addresses or networks, one per line, empty for any address).
+2. Click **Turn on the core domain**. You may be asked for your password again if you have not confirmed it in the last 10 minutes.
+3. Click **Get a certificate** and issue one from Let's Encrypt. Until the domain has a certificate it only answers Let's Encrypt over port 80, never the core.
+4. Once the card says "On, answering at" the domain, click **Check from this computer**. When the check passes, this computer connects through the domain first, then Direct TLS, then SSH. If Cloudflare answers for the domain, the check says so and explains how to turn the proxy off.
+
+The domain's site is managed here, not in the Websites list. **Change domain or sources** edits it (a new domain needs a new certificate), and **Turn off** takes the site out of nginx and sends every computer back to Direct TLS or SSH.
+
 ## Direct TLS
 
-Normally your computer talks to the server core through SSH. **Direct TLS** adds an optional second way in: the core's own HTTPS port, for when SSH is not available. Each computer proves itself with a client certificate made from its device key, and checks the core's key against a pin that was read over SSH. When the port does not answer, the app falls back to SSH as before.
+Normally your computer talks to the server core through SSH. **Direct TLS** adds another way in: the core's own HTTPS port, for when SSH is not available. Each computer proves itself with a client certificate made from its device key, and checks the core's key against a pin that was read over SSH. When the port does not answer, the app falls back to SSH as before.
 
 Open **Deploy**, pick the server, click **Security**, then the **Connection** tab. Everyone signed in can see how it stands. Only an Owner can change it.
 

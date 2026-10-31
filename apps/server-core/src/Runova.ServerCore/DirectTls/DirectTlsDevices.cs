@@ -50,16 +50,20 @@ internal sealed class DirectTlsDevices(IDbContextFactory<CoreDbContext> database
         return device;
     }
 
-    /// <summary>Whether this request came in over the direct TLS listener.</summary>
-    public static bool IsDirect(HttpContext? context) => context?.Features.Get<ITlsConnectionFeature>() is not null;
+    /// <summary>
+    /// Whether this request came in without SSH behind it: over the direct TLS listener, or through
+    /// nginx on the core domain (E44). Either way a client certificate named its device.
+    /// </summary>
+    public static bool IsDirect(HttpContext? context) =>
+        context?.Features.Get<ITlsConnectionFeature>() is not null || CoreDomain.CoreDomainEndpoint.IsProxied(context);
 
-    /// <summary>The device the request's client certificate proved, set by <see cref="DirectTlsGuard"/>.</summary>
+    /// <summary>The device the request's client certificate proved, set by <see cref="DirectTlsGuard"/> or the core domain's guard.</summary>
     public static Guid? DeviceOf(HttpContext? context) =>
         context?.Items.TryGetValue(ItemKey, out var value) == true && value is Guid device ? device : null;
 
     /// <summary>
-    /// Whether a request names a device other than the one its certificate proved. Always false off
-    /// the TLS listener, where SSH stands behind the caller instead.
+    /// Whether a request names a device other than the one its certificate proved. Always false
+    /// over the Unix socket, where SSH stands behind the caller instead.
     /// </summary>
     public static bool Mismatch(HttpContext? context, Guid deviceId) =>
         IsDirect(context) && DeviceOf(context) != deviceId;

@@ -42,6 +42,7 @@ export const TRANSPORT_TEXT: Record<Transport, string> = {
   bridge: 'Core bridge over SSH',
   'dev-tcp': 'Loopback (DevHost)',
   'direct-tls': 'Direct TLS',
+  'core-domain': 'Core domain',
 };
 
 /** The same, inside a sentence: "Answering through ...". */
@@ -50,4 +51,5 @@ export const TRANSPORT_PHRASE: Record<Transport, string> = {
   bridge: "the core's bridge over SSH",
   'dev-tcp': 'loopback to the DevHost',
   'direct-tls': "the core's own TLS port",
+  'core-domain': "the core's own domain, through nginx",
 };

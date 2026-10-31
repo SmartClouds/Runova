@@ -239,7 +239,7 @@ The backup is checked with its passphrase before anything changes. Then the core
 
 ### Connection
 
-The **Connection** tab holds the direct TLS settings that decide how this app reaches the core. See [Deploy websites and certificates](deploy-websites-certificates.md#direct-tls).
+The **Connection** tab holds the core domain and direct TLS settings that decide how this app reaches the core when SSH is not available. See [Core domain](deploy-websites-certificates.md#core-domain) and [Direct TLS](deploy-websites-certificates.md#direct-tls).
 
 ## Tips
 

@@ -18,7 +18,7 @@ export const CORE_SOCKET_PATHS: readonly string[] = [
   LEGACY_CORE.socketPath,
 ];
 
-export type CoreTransportKind = 'streamlocal' | 'bridge' | 'dev-tcp' | 'direct-tls';
+export type CoreTransportKind = 'streamlocal' | 'bridge' | 'dev-tcp' | 'direct-tls' | 'core-domain';
 
 /** A way to open a fresh byte stream to the core's HTTP listener. */
 export interface CoreTransport {

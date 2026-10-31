@@ -1091,6 +1091,46 @@ export type DnsCredentialSaveResult = {
     credential?: DnsCredentialInfo;
 }
 
+/** Transpiled from Runova.ServerCore.Contracts.CoreDomainStatus */
+export type CoreDomainStatus = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from string? */
+    domain?: string;
+    /** Transpiled from string[] */
+    sources: string[];
+    /** Transpiled from bool */
+    nginxInstalled: boolean;
+    /** Transpiled from bool */
+    nginxRunning: boolean;
+    /** Transpiled from bool */
+    originLocked: boolean;
+    /** Transpiled from bool */
+    listening: boolean;
+    /** Transpiled from bool */
+    siteApplied: boolean;
+    /** Transpiled from bool */
+    ready: boolean;
+    /** Transpiled from string */
+    siteId: string;
+    /** Transpiled from Runova.ServerCore.Contracts.CertificateInfo? */
+    certificate?: CertificateInfo;
+    /** Transpiled from long */
+    changedAtUnixMs?: number;
+    /** Transpiled from string? */
+    changedBy?: string;
+    /** Transpiled from string? */
+    error?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CoreDomainRequest */
+export type CoreDomainRequest = {
+    /** Transpiled from string */
+    domain: string;
+    /** Transpiled from string[]? */
+    sources?: string[];
+}
+
 /** Transpiled from Runova.ServerCore.Contracts.CoreUpdateRequest */
 export type CoreUpdateRequest = {
     /** Transpiled from string */
@@ -3018,7 +3058,7 @@ export type ResetUserPasswordRequest = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.UpstreamKind */
-export type UpstreamKind = "servicePort" | "url" | "endpoint";
+export type UpstreamKind = "servicePort" | "url" | "endpoint" | "runovaCore";
 
 /** Transpiled from Runova.ServerCore.Contracts.UpstreamTarget */
 export type UpstreamTarget = {

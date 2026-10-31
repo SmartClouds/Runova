@@ -385,9 +385,11 @@ public sealed class HubAccountTests
         string[] cloudflare = ["GetOriginLock", "ListDnsCredentials"];
         // Direct TLS (E16): how the listener stands and the pin of its certificate.
         string[] directTls = ["GetDirectTls"];
+        // The core domain (E44): its status, never the key.
+        string[] coreDomain = ["GetCoreDomain"];
         // The layout migration's status: the health route says as much to anyone.
         string[] layout = ["MigrationStatus"];
-        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. layout];
+        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. coreDomain, .. layout];
         Assert.Equal(account.Concat(reads).Concat(firewallReads).Order(StringComparer.Ordinal), open.Order(StringComparer.Ordinal));
     }
 

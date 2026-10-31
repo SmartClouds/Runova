@@ -19,6 +19,7 @@ internal sealed partial class WebSites(
     NginxSeLinux seLinux,
     UpstreamPolicy upstreams,
     CertificateKeys keys,
+    CoreDomain.CoreDomainStore coreDomain,
     OsInfo os,
     TimeProvider time,
     ILogger<WebSites> logger) : INginxMoveData
@@ -58,10 +59,17 @@ internal sealed partial class WebSites(
             last?.AppliedByName);
     }
 
-    public async Task<SiteInfo[]> ListSitesAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// The sites a person manages under Websites. The core domain's own site (E44) is left out
+    /// unless asked for: it is changed under Security, Connection, and only through the core.
+    /// </summary>
+    public async Task<SiteInfo[]> ListSitesAsync(CancellationToken cancellationToken, bool includeCoreSite = false)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        var sites = await db.Sites.AsNoTracking().OrderBy(s => s.Id).ToListAsync(cancellationToken);
+        var sites = await db.Sites.AsNoTracking()
+            .Where(s => includeCoreSite || s.Id != CoreDomain.CoreDomainSettings.SiteId)
+            .OrderBy(s => s.Id)
+            .ToListAsync(cancellationToken);
         var certificates = await db.Certificates.AsNoTracking().ToDictionaryAsync(c => c.SiteId, StringComparer.Ordinal, cancellationToken);
         return [.. sites.Select(site => ToInfo(site, certificates.GetValueOrDefault(site.Id)))];
     }
@@ -84,6 +92,11 @@ internal sealed partial class WebSites(
         if (WireProblem(settings) is { } wire)
         {
             return Refused(wire);
+        }
+
+        if (CoreSiteProblem(settings.Id, settings.Upstream) is { } reserved)
+        {
+            return Refused(reserved);
         }
 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
@@ -134,6 +147,11 @@ internal sealed partial class WebSites(
         }
 
         var field = $"sites[{snippets.SiteId}]";
+        if (CoreSiteProblem(snippets.SiteId, upstream: null) is { } reserved)
+        {
+            return Refused(reserved);
+        }
+
         if ((snippets.ServerSnippet?.Length ?? 0) > SiteMapping.MaxSnippetLength || (snippets.LocationSnippet?.Length ?? 0) > SiteMapping.MaxSnippetLength)
         {
             return Refused(new NginxProblem(field, $"A snippet is at most {SiteMapping.MaxSnippetLength} characters."));
@@ -162,11 +180,73 @@ internal sealed partial class WebSites(
         return new SiteSaveResult([], await GetSiteAsync(site.Id, cancellationToken));
     }
 
-    /// <summary>Removes the site (and its certificate) from the database; the next apply takes it out of nginx.</summary>
+    /// <summary>
+    /// Removes the site (and its certificate) from the database; the next apply takes it out of nginx.
+    /// The core domain's site is not one of these: it goes when the core domain is turned off.
+    /// </summary>
     public async Task<bool> DeleteSiteAsync(string siteId, CancellationToken cancellationToken)
     {
+        if (siteId == CoreDomain.CoreDomainSettings.SiteId)
+        {
+            return false;
+        }
+
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         return await db.Sites.Where(s => s.Id == siteId).ExecuteDeleteAsync(cancellationToken) > 0;
+    }
+
+    /// <summary>
+    /// Saves the core domain's own site (E44): one domain, the core's loopback port, and who may
+    /// reach it. A new domain drops the old certificate, which would not cover it. Nothing is saved
+    /// when there are problems, such as another site holding the domain.
+    /// </summary>
+    internal async Task<NginxProblem[]> SaveCoreSiteAsync(string domain, int port, string[] sources, CancellationToken cancellationToken)
+    {
+        var id = CoreDomain.CoreDomainSettings.SiteId;
+        var settings = new SiteSettings(
+            id,
+            [domain],
+            new UpstreamTarget(UpstreamKind.RunovaCore, Port: port, Service: "Runova core"),
+            Websocket: true,
+            Http2: false,
+            SecurityHeaders: new SiteSecurityHeaders(false, SiteFrameOptions.Off, SiteReferrerPolicy.Off),
+            IpRules: sources.Length > 0 ? new SiteIpRules(sources, []) : null);
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var candidate = SiteMapping.ToModel(settings, new Dictionary<string, string>(), null, null, certificate: null);
+        var problems = await ValidateSiteAsync(db, candidate, cancellationToken);
+        if (problems.Count > 0)
+        {
+            return [.. problems];
+        }
+
+        var now = Now;
+        var existing = await db.Sites.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        if (existing is null)
+        {
+            existing = new Site { Id = id, Settings = string.Empty, CreatedAt = now };
+            db.Sites.Add(existing);
+        }
+        else if (!SiteMapping.Deserialize<SiteSettings>(existing.Settings).Domains.SequenceEqual([domain], StringComparer.Ordinal))
+        {
+            await db.Certificates.Where(c => c.SiteId == id).ExecuteDeleteAsync(cancellationToken);
+        }
+
+        existing.Settings = SiteMapping.Serialize(settings);
+        existing.BasicAuthHashes = null;
+        existing.ServerSnippet = null;
+        existing.LocationSnippet = null;
+        existing.UpdatedAt = now;
+        await db.SiteDomains.Where(d => d.SiteId == id).ExecuteDeleteAsync(cancellationToken);
+        db.SiteDomains.Add(new SiteDomain { Domain = domain, SiteId = id, Position = 0 });
+        await db.SaveChangesAsync(cancellationToken);
+        return [];
+    }
+
+    /// <summary>Removes the core domain's site and its certificate; the next apply takes it out of nginx.</summary>
+    internal async Task<bool> DeleteCoreSiteAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await db.Sites.Where(s => s.Id == CoreDomain.CoreDomainSettings.SiteId).ExecuteDeleteAsync(cancellationToken) > 0;
     }
 
     public async Task<StreamProxyInfo[]> ListStreamsAsync(CancellationToken cancellationToken)
@@ -343,7 +423,11 @@ internal sealed partial class WebSites(
 
         var streamStates = streams.ToDictionary(p => p.Id, p => SiteMapping.Fingerprint(p.Settings), StringComparer.Ordinal);
         var originLock = Cloudflare.OriginLockRows.ToModel(await db.OriginLock.AsNoTracking().FirstOrDefaultAsync(setting => setting.Id == OriginLockSetting.SingletonId, cancellationToken));
-        var configuration = new NginxConfiguration(models, [.. streams.Select(p => SiteMapping.ToModel(SiteMapping.Deserialize<StreamProxySettings>(p.Settings)))], originLock);
+        var configuration = new NginxConfiguration(models, [.. streams.Select(p => SiteMapping.ToModel(SiteMapping.Deserialize<StreamProxySettings>(p.Settings)))], originLock)
+        {
+            // Only an apply renders the core domain's site, and only an apply needs its key.
+            CoreKey = withKeys && models.Any(site => site.Upstream is NginxCoreUpstream) ? coreDomain.Read().Key : null,
+        };
         var hash = SiteMapping.Fingerprint([
             .. siteStates.Select(e => $"s:{e.Key}={e.Value}"),
             .. streamStates.Select(e => $"t:{e.Key}={e.Value}"),
@@ -418,6 +502,14 @@ internal sealed partial class WebSites(
     }
 
     private static SiteSaveResult Refused(NginxProblem problem) => new([SiteMapping.ToInfo(problem)]);
+
+    /// <summary>The core domain's site, and the core as an upstream, are the core's to set (E44).</summary>
+    private static NginxProblem? CoreSiteProblem(string? siteId, UpstreamTarget? upstream) =>
+        siteId == CoreDomain.CoreDomainSettings.SiteId
+            ? new NginxProblem($"sites[{siteId}]", "This site is the server core's own domain. Change it under Security, Connection.")
+            : upstream is { Kind: UpstreamKind.RunovaCore }
+                ? new NginxProblem($"sites[{siteId}].upstream", "Only the server core's own domain can send requests to the core. Set it up under Security, Connection.")
+                : null;
 
     private static bool Blank(string? text) => string.IsNullOrWhiteSpace(text);
 

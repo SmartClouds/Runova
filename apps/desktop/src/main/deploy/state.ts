@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { SecretEnvelope } from '../../shared/apiTypes';
 import type { AlertSeverity } from '../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type { DeployCoreDomainRoute } from '../../shared/deployCoreDomainTypes';
 import type { DeployDirectTlsPin } from '../../shared/deployDirectTlsTypes';
 import type { DeployCoreRecord, DeployTransport } from '../../shared/deployTypes';
 import type { SealedSecretStore } from '../ssh/vault';
@@ -47,6 +48,8 @@ export interface DeployStateFile {
   alerts?: Record<string, AlertMark>;
   /** Direct TLS pins, read over SSH (E16); left out by older files. */
   directTls?: Record<string, DeployDirectTlsPin>;
+  /** Core domains this computer connects through (E44); left out by older files. */
+  coreDomains?: Record<string, DeployCoreDomainRoute>;
 }
 
 export interface DeployStatePort {
@@ -114,6 +117,20 @@ function isPin(value: unknown): value is DeployDirectTlsPin {
   );
 }
 
+/** A lowercase DNS name with at least one dot, as the core keeps it. */
+const DOMAIN =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+function isRoute(value: unknown): value is DeployCoreDomainRoute {
+  if (typeof value !== 'object' || value === null) return false;
+  const route = value as Record<string, unknown>;
+  return (
+    typeof route.enabled === 'boolean' &&
+    typeof route.domain === 'string' &&
+    DOMAIN.test(route.domain)
+  );
+}
+
 const SEVERITIES: ReadonlySet<string> = new Set<AlertSeverity>(['info', 'warning', 'critical']);
 
 function parseMark(value: unknown): AlertMark | null {
@@ -139,11 +156,13 @@ function parse(value: unknown): DeployStateFile {
     devices?: unknown;
     alerts?: unknown;
     directTls?: unknown;
+    coreDomains?: unknown;
   };
   const cores: Record<string, DeployCoreRecord> = {};
   const devices: Record<string, DeviceCredentials> = {};
   const alerts: Record<string, AlertMark> = {};
   const directTls: Record<string, DeployDirectTlsPin> = {};
+  const coreDomains: Record<string, DeployCoreDomainRoute> = {};
   if (file.version === 1) {
     if (typeof file.cores === 'object' && file.cores !== null) {
       for (const [serverId, record] of Object.entries(file.cores)) {
@@ -166,8 +185,13 @@ function parse(value: unknown): DeployStateFile {
         if (isPin(pin)) directTls[serverId] = pin;
       }
     }
+    if (typeof file.coreDomains === 'object' && file.coreDomains !== null) {
+      for (const [serverId, route] of Object.entries(file.coreDomains)) {
+        if (isRoute(route)) coreDomains[serverId] = route;
+      }
+    }
   }
-  return { version: 1, cores, devices, alerts, directTls };
+  return { version: 1, cores, devices, alerts, directTls, coreDomains };
 }
 
 export class DeployState {
@@ -220,7 +244,8 @@ export class DeployState {
       const { [serverId]: _device, ...devices } = file.devices;
       const { [serverId]: _mark, ...alerts } = file.alerts ?? {};
       const { [serverId]: _pin, ...directTls } = file.directTls ?? {};
-      return { ...file, cores, devices, alerts, directTls };
+      const { [serverId]: _route, ...coreDomains } = file.coreDomains ?? {};
+      return { ...file, cores, devices, alerts, directTls, coreDomains };
     });
   }
 
@@ -240,6 +265,19 @@ export class DeployState {
   /** Only ever with a pin read over SSH (see directTls/service.ts). */
   setDirectTls(serverId: string, pin: DeployDirectTlsPin): Promise<void> {
     return this.update((file) => ({ ...file, directTls: { ...file.directTls, [serverId]: pin } }));
+  }
+
+  /** The core domain this computer connects through for a server (E44), if any. */
+  async coreDomain(serverId: string): Promise<DeployCoreDomainRoute | null> {
+    return (await this.read()).coreDomains?.[serverId] ?? null;
+  }
+
+  /** Set from what the core says (see coreDomain/service.ts), never from user input alone. */
+  setCoreDomain(serverId: string, route: DeployCoreDomainRoute): Promise<void> {
+    return this.update((file) => ({
+      ...file,
+      coreDomains: { ...file.coreDomains, [serverId]: route },
+    }));
   }
 
   /** Servers this computer has a device on. */

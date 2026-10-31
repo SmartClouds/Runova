@@ -285,8 +285,9 @@ internal sealed partial class NginxApplier(
         foreach (var file in release.Files)
         {
             // nginx's workers read basic auth files at request time, not as root, so these stay
-            // world-readable like the rest (they hold SHA-512 crypt hashes, never passwords).
-            await Machine.WriteAsync($"{release.Directory}/{file.Path}", Encoding.UTF8.GetBytes(file.Content), Readable, cancellationToken);
+            // world-readable like the rest (they hold SHA-512 crypt hashes, never passwords). The
+            // core domain's site holds a secret and is only read by the master, as root.
+            await Machine.WriteAsync($"{release.Directory}/{file.Path}", Encoding.UTF8.GetBytes(file.Content), file.Private ? PrivateFile : Readable, cancellationToken);
         }
     }
 
