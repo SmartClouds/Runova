@@ -388,7 +388,7 @@ export function SiteAccessPanel({
     <div className="flex flex-col gap-2">
       <PlainHttpCard site={site} />
       <ConnectionCard site={site} />
-      <div className="grid items-start gap-2 xl:grid-cols-2">
+      <div className="grid gap-2 xl:grid-cols-2">
         <RenameCard site={site} />
         <HttpAuthCard site={site} />
       </div>
