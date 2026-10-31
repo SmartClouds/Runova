@@ -223,11 +223,13 @@ jobs:
         with:
           dotnet-version: 10.0.4xx
 
-      # Node before pnpm, as in the check job.
+      # Node before pnpm, as in the check job. The astro CLI runs on Node and asks for a newer 22
+      # than one runner had in its tool cache, so take the latest 22 rather than a cached one.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+          check-latest: true
 
       # The unit tests ask pnpm whether the site stays outside the repository's workspace. Set up
       # the way the check job does it (see the comments there).
