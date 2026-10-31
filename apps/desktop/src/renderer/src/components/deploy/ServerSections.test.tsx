@@ -37,6 +37,20 @@ describe('ServerSections backups', () => {
   });
 });
 
+describe('ServerSections database', () => {
+  it('lists Database right before Backups and switches to it (E44)', async () => {
+    const onChange = vi.fn();
+    const { user } = renderWithProviders(<ServerSections value="overview" onChange={onChange} />);
+    const names = within(screen.getByRole('navigation', { name: 'Server sections' }))
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(names.indexOf('Database')).toBe(names.indexOf('Backups') - 1);
+    await user.click(screen.getByRole('button', { name: 'Database' }));
+    expect(onChange).toHaveBeenCalledWith('database');
+    expect(sectionFromView('database')).toBe('database');
+  });
+});
+
 describe('ServerSections notifications', () => {
   it('lists Notifications last, after Security, and switches to it (E30)', async () => {
     const onChange = vi.fn();

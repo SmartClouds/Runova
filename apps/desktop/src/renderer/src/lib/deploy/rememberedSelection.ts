@@ -14,6 +14,7 @@ const KEPT = [
   'files',
   'cloudflare',
   'recaptcha',
+  'databases',
   'zone',
   'view',
   'tab',
@@ -25,7 +26,7 @@ const KEPT = [
   'target',
 ] as const;
 
-const SELECTION = ['server', 'site', 'files', 'cloudflare', 'recaptcha'] as const;
+const SELECTION = ['server', 'site', 'files', 'cloudflare', 'recaptcha', 'databases'] as const;
 
 function named(params: ParamReader): boolean {
   return SELECTION.some((name) => params.get(name) !== null);

@@ -2,6 +2,7 @@ import {
   Archive,
   Bell,
   Blocks,
+  Database,
   Docker,
   FileText,
   FolderOpen,
@@ -26,6 +27,7 @@ export type ServerSection =
   | 'firewall'
   | 'logs'
   | 'backups'
+  | 'database'
   | 'security'
   | 'notifications';
 
@@ -39,6 +41,7 @@ const SECTIONS: ReadonlyArray<{ value: ServerSection; label: string; icon?: type
   { value: 'websites', label: 'Websites', icon: Globe },
   { value: 'firewall', label: 'Firewall', icon: Lock },
   { value: 'logs', label: 'Logs', icon: FileText },
+  { value: 'database', label: 'Database', icon: Database },
   { value: 'backups', label: 'Backups', icon: Archive },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'notifications', label: 'Notifications', icon: Bell },

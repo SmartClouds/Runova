@@ -5,7 +5,7 @@ import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { CloudflareMark } from '@/components/cloudflare/CloudflareMark';
-import { ExternalLink, Plus, RefreshCw, Sliders, Spinner } from '@/components/icons';
+import { Database, ExternalLink, Plus, RefreshCw, Sliders, Spinner } from '@/components/icons';
 import { Chip, SECTION_HEADING } from '@/components/pageKit';
 import { RecaptchaMark } from '@/components/recaptcha/RecaptchaMark';
 import { Button } from '@/components/ui/button';
@@ -408,6 +408,8 @@ export function ServerRail({
   cloudflareSelected = false,
   onOpenRecaptcha,
   recaptchaSelected = false,
+  onOpenDatabases,
+  databasesSelected = false,
   fileSites,
   fileSitesLoading = false,
   fileSitesError = null,
@@ -436,6 +438,10 @@ export function ServerRail({
   onOpenRecaptcha?: () => void;
   /** Whether the reCAPTCHA page is the one on screen. */
   recaptchaSelected?: boolean;
+  /** Opens the databases on this computer (E44). Left out, the rail has no row for it. */
+  onOpenDatabases?: () => void;
+  /** Whether the databases page is the one on screen. */
+  databasesSelected?: boolean;
   /** Left out, the WordPress group is not shown at all. */
   sites?: DeployWordPressSite[];
   sitesLoading?: boolean;
@@ -546,6 +552,22 @@ export function ServerRail({
             >
               {recaptchaSelected && <ActivePill />}
               <RecaptchaMark /> reCAPTCHA: keys for your sites
+            </button>
+          )}
+          {onOpenDatabases && (
+            <button
+              type="button"
+              aria-current={databasesSelected ? 'true' : undefined}
+              onClick={onOpenDatabases}
+              className={cn(
+                LINK_ROW,
+                'relative isolate w-full',
+                databasesSelected &&
+                  'font-medium text-primary hover:bg-transparent hover:text-primary',
+              )}
+            >
+              {databasesSelected && <ActivePill />}
+              <Database /> Databases on this computer
             </button>
           )}
         </div>

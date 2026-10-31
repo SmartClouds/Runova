@@ -4,7 +4,8 @@ import type { DeployWordPressSite } from '@shared/deployWordPressTypes';
 
 /**
  * What the Deploy page shows, read from its address (E23): `?cloudflare=1` the Cloudflare page,
- * `?recaptcha=1` the reCAPTCHA page (E40), `?files=` an FTP or SFTP site, `?site=` a WordPress
+ * `?recaptcha=1` the reCAPTCHA page (E40), `?databases=1` the databases on this computer
+ * (E44), `?files=` an FTP or SFTP site, `?site=` a WordPress
  * site and `?server=` a server, in that order.
  * A link to something that is gone falls back to the first server, and with no servers to the
  * first site of either kind.
@@ -13,6 +14,7 @@ import type { DeployWordPressSite } from '@shared/deployWordPressTypes';
 export type RailSelection =
   | { kind: 'cloudflare' }
   | { kind: 'recaptcha' }
+  | { kind: 'databases' }
   | { kind: 'files'; site: FileSite }
   | { kind: 'wordpress'; site: DeployWordPressSite }
   | { kind: 'server'; server: DeployServer }
@@ -35,9 +37,14 @@ export function isRecaptcha(params: ParamReader): boolean {
   return params.get('recaptcha') !== null;
 }
 
-/** The pages that belong to an account rather than to one server or site. */
+/** The databases on this computer and the connections saved by hand (E44). */
+export function isDatabases(params: ParamReader): boolean {
+  return params.get('databases') !== null;
+}
+
+/** The pages that belong to an account (or this computer) rather than to one server or site. */
 function isAccountPage(params: ParamReader): boolean {
-  return isCloudflare(params) || isRecaptcha(params);
+  return isCloudflare(params) || isRecaptcha(params) || isDatabases(params);
 }
 
 export function resolveSelection(
@@ -48,6 +55,7 @@ export function resolveSelection(
 ): RailSelection {
   if (isCloudflare(params)) return { kind: 'cloudflare' };
   if (isRecaptcha(params)) return { kind: 'recaptcha' };
+  if (isDatabases(params)) return { kind: 'databases' };
   const fileSite = fileSites.find((site) => site.id === params.get('files'));
   if (fileSite) return { kind: 'files', site: fileSite };
   const wpSite = wpSites.find((site) => site.id === params.get('site'));

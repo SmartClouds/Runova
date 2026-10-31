@@ -47,6 +47,23 @@ describe('resolveSelection', () => {
     });
   });
 
+  it('opens the databases on this computer ahead of a server or site (E44)', () => {
+    expect(
+      resolveSelection(params('databases=1&server=srv-1&site=wp-1'), [SERVER], [WP], [FILES]),
+    ).toEqual({ kind: 'databases' });
+    expect(resolveSelection(params('databases=1'), [], [], [])).toEqual({ kind: 'databases' });
+    expect(
+      waitForRail(
+        params('databases=1'),
+        { servers: false, wpSites: true, fileSites: true },
+        {
+          servers: 0,
+          wpSites: 0,
+        },
+      ),
+    ).toBe(false);
+  });
+
   it('opens the FTP or SFTP site the address names', () => {
     expect(resolveSelection(params('files=fs-2'), [SERVER], [WP], [FILES, FILES_2])).toEqual({
       kind: 'files',

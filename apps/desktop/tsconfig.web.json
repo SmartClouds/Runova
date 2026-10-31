@@ -36,6 +36,7 @@
     "src/preload/relay.ts",
     "src/preload/ciAutoFix.ts",
     "src/preload/errorTracking.ts",
-    "src/preload/sftp.ts"
+    "src/preload/sftp.ts",
+    "src/preload/database.ts"
   ]
 }

@@ -60,6 +60,7 @@ import {
   faCopy,
   faCrosshairs,
   faCubes,
+  faDatabase,
   faDice,
   faDisplay,
   faDownload,
@@ -443,6 +444,7 @@ export const ListTodo = makeIcon(faSquareCheck);
 export const Quote = makeIcon(faQuoteLeft);
 export const Code = makeIcon(faCode);
 export const Table = makeIcon(faTable);
+export const Database = makeIcon(faDatabase);
 export const HorizontalRule = makeIcon(faMinus);
 export const FileText = makeIcon(faFileLines);
 export const SplitView = makeIcon(faTableColumns);

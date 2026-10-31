@@ -15,6 +15,7 @@ import { ChooseServersDialog } from '@/components/deploy/ChooseServersDialog';
 import { CoreUpdatePanel } from '@/components/deploy/CoreUpdatePanel';
 import { CleanupPanel } from '@/components/deploy/cleanup/CleanupPanel';
 import { ContainersPanel } from '@/components/deploy/containers/ContainersPanel';
+import { DatabasePanel } from '@/components/deploy/database/DatabasePanel';
 import { Notice } from '@/components/deploy/deployKit';
 import { FileSiteView, fileSectionFromView } from '@/components/deploy/files/FileSiteView';
 import { useFileSiteListUpdate, useFileSites } from '@/components/deploy/files/hooks';
@@ -350,6 +351,7 @@ export default function DeployPage(): React.JSX.Element {
   // The Cloudflare page is picked like a server, so the address names it and nothing else.
   const openCloudflare = () => setParams({ cloudflare: '1' }, { replace: true });
   const openRecaptcha = () => setParams({ recaptcha: '1' }, { replace: true });
+  const openDatabases = () => setParams({ databases: '1' }, { replace: true });
 
   // The servers and which of them were chosen both have to be in before the rail can list any. A
   // site asked for by the address, or no servers to fall back on: wait for the sites rather
@@ -435,9 +437,12 @@ export default function DeployPage(): React.JSX.Element {
   );
 
   const selection = resolveSelection(params, servers, sites, fileSites);
-  // The Cloudflare and reCAPTCHA pages need no server or site, and the rail shows the lists'
-  // failures itself.
-  const accountPage = selection.kind === 'cloudflare' || selection.kind === 'recaptcha';
+  // The Cloudflare, reCAPTCHA and local databases pages need no server or site, and the rail
+  // shows the lists' failures itself.
+  const accountPage =
+    selection.kind === 'cloudflare' ||
+    selection.kind === 'recaptcha' ||
+    selection.kind === 'databases';
 
   // A failure only stands in for the page when there is no server to pick either. With saved
   // servers still to choose from, the empty state below is the more useful way out.
@@ -534,6 +539,7 @@ export default function DeployPage(): React.JSX.Element {
     onConnectSite: () => setConnectOpen(true),
     onOpenCloudflare: openCloudflare,
     onOpenRecaptcha: openRecaptcha,
+    onOpenDatabases: openDatabases,
     fileSites,
     fileSitesLoading: fileSitesQuery.isPending,
     fileSitesError: fileSitesQuery.isError ? filesProblem(fileSitesQuery.error) : null,
@@ -560,6 +566,19 @@ export default function DeployPage(): React.JSX.Element {
     return (
       <DeployLayout rail={<ServerRail {...railProps} selectedId={null} recaptchaSelected />}>
         <RecaptchaView />
+        {connectDialog}
+        {unlockDialog}
+        {fileFormDialog}
+        {chooseDialog}
+      </DeployLayout>
+    );
+  }
+
+  if (selection.kind === 'databases') {
+    // The databases in this computer's Docker, and the ones saved by hand (E44).
+    return (
+      <DeployLayout rail={<ServerRail {...railProps} selectedId={null} databasesSelected />}>
+        <DatabasePanel server={null} />
         {connectDialog}
         {unlockDialog}
         {fileFormDialog}
@@ -689,6 +708,9 @@ export default function DeployPage(): React.JSX.Element {
   } else if (section === 'firewall') {
     sections = true;
     content = <FirewallPanel server={selected} />;
+  } else if (section === 'database') {
+    sections = true;
+    content = <DatabasePanel server={selected} />;
   } else if (section === 'backups') {
     sections = true;
     content = <BackupsPanel server={selected} />;

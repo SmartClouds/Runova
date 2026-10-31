@@ -217,6 +217,17 @@ export const queryKeys = {
   deployCoreRelease: ['deploy', 'coreRelease'] as const,
   /** Whether this computer is signed in to a server's core, or what it needs first. */
   deployAccess: (serverId: string) => ['deploy', 'access', serverId] as const,
+  /** Database containers on a server, or on this computer for 'local' (E44). */
+  databaseDiscovery: (scope: string) => ['database', 'discovery', scope] as const,
+  databaseConnections: () => ['database', 'connections'] as const,
+  /** Everything read through one open connection, so a disconnect can drop it all. */
+  databaseSession: (sessionId: string) => ['database', 'session', sessionId] as const,
+  databaseObjects: (sessionId: string, parent: string) =>
+    ['database', 'session', sessionId, 'objects', parent] as const,
+  databaseRows: (sessionId: string, table: string, page: string) =>
+    ['database', 'session', sessionId, 'rows', table, page] as const,
+  databaseTable: (sessionId: string, table: string) =>
+    ['database', 'session', sessionId, 'table', table] as const,
   /** Prefix of a core's Security area: users, devices, sessions, the audit trail and the step-up. */
   deploySecurity: (serverId: string) => ['deploy', 'security', serverId] as const,
   deployUsers: (serverId: string) => ['deploy', 'security', serverId, 'users'] as const,
