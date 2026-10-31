@@ -4,6 +4,7 @@ import { app, dialog, ipcMain } from 'electron';
 import type { DirectoryEntry, ImageFileData } from '../../shared/apiTypes';
 import { imageMimeType } from '../../shared/imageFiles';
 import { IPC } from '../../shared/ipcChannels';
+import { openFiles } from '../fs/openFileWatcher';
 import { assertPathWithinRoots } from '../pathGuard';
 import { store } from '../store';
 import { knownWorktreePaths } from '../worktrees/resolve';
@@ -45,6 +46,17 @@ export function registerFileSystemHandlers(): void {
     const safePath = await assertPathWithinRoots(path, await allowedRoots());
     await mkdir(dirname(safePath), { recursive: true });
     await writeFile(safePath, content, 'utf-8');
+  });
+
+  // An editor tab watches its file, so a change made outside the app (an agent, another editor)
+  // reaches it. The push carries the path exactly as the tab sent it.
+  ipcMain.handle(IPC.fs.watchFile, async (event, path: string): Promise<void> => {
+    const safePath = await assertPathWithinRoots(path, await allowedRoots());
+    openFiles.watch(path, safePath, event.sender);
+  });
+
+  ipcMain.handle(IPC.fs.unwatchFile, (event, path: string): void => {
+    openFiles.unwatch(path, event.sender);
   });
 
   ipcMain.handle(IPC.fs.listDirectory, async (_event, path: string): Promise<DirectoryEntry[]> => {

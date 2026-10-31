@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { Project } from '@runova/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEditorRevealStore } from '@/stores/editorRevealStore';
@@ -40,7 +40,26 @@ vi.mock('@/components/editor/MonacoEditor', async () => {
     },
   };
 });
-vi.mock('@/components/editor/MonacoDiffEditor', () => ({ languageFor: () => 'plaintext' }));
+vi.mock('@/components/editor/MonacoDiffEditor', () => ({
+  languageFor: () => 'plaintext',
+  MonacoDiffEditor: ({
+    original,
+    modified,
+    onModifiedChange,
+  }: {
+    original: string;
+    modified: string;
+    onModifiedChange?: (value: string) => void;
+  }) => (
+    <>
+      <div data-testid="diff-original">{original}</div>
+      <div data-testid="diff-modified">{modified}</div>
+      <button type="button" onClick={() => onModifiedChange?.(`${original} merged`)}>
+        merge
+      </button>
+    </>
+  ),
+}));
 
 const FileTab = (await import('./FileTab')).default;
 
@@ -211,5 +230,211 @@ describe('FileTab', () => {
 
     expect(await screen.findByTestId('monaco')).toHaveTextContent('const a = 1;');
     expect(screen.queryByLabelText('Show the picture')).not.toBeInTheDocument();
+  });
+});
+
+describe('FileTab when the file changes on disk', () => {
+  const path = 'E:\\work\\app\\.env.prod';
+
+  /** The file on disk, which the tests rewrite the way an agent would. */
+  let disk = '';
+
+  function installDisk() {
+    disk = 'A=1';
+    return installRunovaBridge({
+      'fs.readFile': () => disk,
+      'fs.writeFile': (_path: string, content: string) => {
+        disk = content;
+      },
+    });
+  }
+
+  /** Rewrites the file (or deletes it, for null) and has the watcher report it. */
+  async function changeOnDisk(
+    bridge: ReturnType<typeof installRunovaBridge>,
+    next: string | null,
+  ): Promise<void> {
+    if (next !== null) disk = next;
+    await act(async () => {
+      bridge.$emit('fs.onFileChanged', path, { exists: next !== null });
+    });
+  }
+
+  it('watches its file while open and lets go when closed', async () => {
+    const bridge = installDisk();
+    const view = renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    expect(bridge.$fn('fs.watchFile')).toHaveBeenCalledWith(path);
+
+    view.unmount();
+    expect(bridge.$fn('fs.unwatchFile')).toHaveBeenCalledWith(path);
+    expect(bridge.$listenerCount('fs.onFileChanged')).toBe(0);
+  });
+
+  it('reloads a file with no unsaved edits and says so', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    expect(await screen.findByTestId('monaco')).toHaveTextContent('A=1');
+
+    await changeOnDisk(bridge, 'A=2');
+
+    await waitFor(() => expect(screen.getByTestId('monaco')).toHaveTextContent('A=2'));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '.env.prod changed on disk and was reloaded.',
+    );
+    fireEvent.click(screen.getByLabelText('Dismiss'));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('drops the reloaded note once the file is edited', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    await changeOnDisk(bridge, 'A=2');
+    await screen.findByRole('status');
+
+    fireEvent.click(screen.getByText('type'));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('ignores a change to another file', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+
+    await act(async () => {
+      bridge.$emit('fs.onFileChanged', 'E:\\work\\app\\.env.local', { exists: true });
+    });
+    expect(bridge.$fn('fs.readFile')).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('keeps unsaved edits when the file changes on disk, and asks what to do', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+
+    await changeOnDisk(bridge, 'A=2');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('.env.prod changed on disk. Your edits are not saved.');
+    expect(screen.getByTestId('monaco')).toHaveTextContent('A=1 edited');
+    expect(screen.getByText('Unsaved')).toBeInTheDocument();
+  });
+
+  it('shows the new version when asked, dropping the edits', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+    await changeOnDisk(bridge, 'A=2');
+    await screen.findByRole('alert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show new version' }));
+
+    expect(screen.getByTestId('monaco')).toHaveTextContent('A=2');
+    expect(screen.queryByText('A=1 edited')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unsaved')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the edits when asked, and a save then writes them over the new version', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+    await changeOnDisk(bridge, 'A=2');
+    await screen.findByRole('alert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('monaco')).toHaveTextContent('A=1 edited');
+    expect(screen.getByText('Unsaved')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(bridge.$fn('fs.writeFile')).toHaveBeenCalledWith(path, 'A=1 edited'),
+    );
+  });
+
+  it('compares the disk with the edits, and keeps what was merged there', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+    await changeOnDisk(bridge, 'A=2');
+    await screen.findByRole('alert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(screen.getByTestId('diff-original')).toHaveTextContent('A=2');
+    expect(screen.getByTestId('diff-modified')).toHaveTextContent('A=1 edited');
+    expect(screen.getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByText('merge'));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }));
+
+    expect(screen.queryByTestId('diff-original')).not.toBeInTheDocument();
+    expect(screen.getByTestId('monaco')).toHaveTextContent('A=2 merged');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(bridge.$fn('fs.writeFile')).toHaveBeenCalledWith(path, 'A=2 merged'),
+    );
+  });
+
+  it('follows a second change while it is still asking', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+    await changeOnDisk(bridge, 'A=2');
+    await screen.findByRole('alert');
+    await changeOnDisk(bridge, 'A=3');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await waitFor(() => expect(screen.getByTestId('diff-original')).toHaveTextContent('A=3'));
+  });
+
+  it('says nothing about its own save', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+    fireEvent.click(screen.getByText('type'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByText('Unsaved')).not.toBeInTheDocument());
+
+    // The save is itself a change on disk, and the watcher reports it like any other.
+    await changeOnDisk(bridge, 'A=1 edited');
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('says when the file was deleted on disk, and that a save brings it back', async () => {
+    const bridge = installDisk();
+    renderTab(tab(path));
+    await screen.findByTestId('monaco');
+
+    await changeOnDisk(bridge, null);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '.env.prod was deleted on disk. Saving will create it again.',
+    );
+    expect(screen.getByTestId('monaco')).toHaveTextContent('A=1');
+  });
+
+  it('reloads a picture that changed on disk', async () => {
+    const imagePath = 'E:\\work\\app\\assets\\logo.png';
+    const bridge = installRunovaBridge({
+      'fs.readImage': { dataUrl: 'data:image/png;base64,AAA', bytes: 2048 },
+    });
+    renderTab(tab(imagePath));
+    await screen.findByAltText('logo.png');
+    expect(bridge.$fn('fs.watchFile')).toHaveBeenCalledWith(imagePath);
+
+    await act(async () => {
+      bridge.$emit('fs.onFileChanged', imagePath, { exists: true });
+    });
+    await waitFor(() => expect(bridge.$fn('fs.readImage')).toHaveBeenCalledTimes(2));
   });
 });

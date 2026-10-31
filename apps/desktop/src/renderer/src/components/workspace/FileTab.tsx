@@ -3,10 +3,10 @@ import { isImagePath, isTextImagePath } from '@shared/imageFiles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { languageFor } from '@/components/editor/MonacoDiffEditor';
+import { languageFor, MonacoDiffEditor } from '@/components/editor/MonacoDiffEditor';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
-import { ExternalLink, File, ImageIcon, RefreshCw, Save, Spinner } from '@/components/icons';
-import { Chip, EmptyState } from '@/components/pageKit';
+import { ExternalLink, File, ImageIcon, RefreshCw, Save, Spinner, X } from '@/components/icons';
+import { Chip, EmptyState, Notice } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -16,9 +16,17 @@ import { useEditorRevealStore } from '@/stores/editorRevealStore';
 import { setFileDirty } from '@/stores/explorerStore';
 import { useWorkspaceStore, type WorkspaceFileTab } from '@/stores/workspaceStore';
 import { ImageFileTab } from './ImageFileTab';
+import { useFileDiskChanges } from './useFileDiskChanges';
 
 /** Files past this open read-only: Monaco copes, but editing a multi-megabyte file here is a trap. */
 const MAX_EDITABLE_CHARS = 2_000_000;
+
+/**
+ * What the bar over the editor says after the file changed on disk: it was reloaded (there were
+ * no unsaved edits to lose), it changed under unsaved edits (`text` is the new version), or it
+ * was deleted.
+ */
+type DiskNotice = { kind: 'reloaded' } | { kind: 'conflict'; text: string } | { kind: 'deleted' };
 
 export function fileQueryKey(path: string): readonly unknown[] {
   return queryKeys.workspaceFile(path);
@@ -65,7 +73,10 @@ export default function FileTab({
   );
 }
 
-/** A file in an editor: Ctrl+S saves, and a clean file follows changes on disk. */
+/**
+ * A file in an editor. Ctrl+S saves. When the file changes on disk, a clean file reloads and says
+ * so, and a file with unsaved edits keeps them and asks which version to keep.
+ */
 function TextFileTab({
   project,
   tab,
@@ -86,8 +97,14 @@ function TextFileTab({
   });
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [diskNotice, setDiskNotice] = useState<DiskNotice | null>(null);
+  const [comparing, setComparing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dirty = draft !== null && draft !== file.data;
+  // A change on disk is handled after an await, by which time the draft may have moved on.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const conflict = diskNotice?.kind === 'conflict' ? diskNotice : null;
   const tooLarge = (file.data?.length ?? 0) > MAX_EDITABLE_CHARS;
   // A search result opened here asks for its line; the editor takes it once it has the text.
   const reveal = useEditorRevealStore((s) => s.pending[tab.path] ?? null);
@@ -109,13 +126,71 @@ function TextFileTab({
   const name = parts.pop() ?? relative;
   const dir = parts.join('/');
 
+  function clearDiskNotice(): void {
+    setDiskNotice(null);
+    setComparing(false);
+  }
+
+  useFileDiskChanges(tab.path, (change) => {
+    if (!change.exists) {
+      setDiskNotice({ kind: 'deleted' });
+      setComparing(false);
+      return;
+    }
+    void (async () => {
+      let text: string;
+      try {
+        text = await window.runova.fs.readFile(tab.path);
+      } catch {
+        // Gone again, or locked mid-write. The next change says more.
+        return;
+      }
+      const key = fileQueryKey(tab.path);
+      const shown = queryClient.getQueryData<string>(key);
+      const edits = draftRef.current;
+      if (text === shown) {
+        // Nothing new to show: our own save, or a file that came back as it was.
+        setDiskNotice((notice) => (notice?.kind === 'deleted' ? null : notice));
+        return;
+      }
+      if (edits === null || edits === shown || edits === text) {
+        // No edits to lose (or the disk now says exactly what they say), so just follow it.
+        queryClient.setQueryData(key, text);
+        setDraft(null);
+        setComparing(false);
+        setDiskNotice(edits === text ? null : { kind: 'reloaded' });
+        return;
+      }
+      setDiskNotice({ kind: 'conflict', text });
+    })();
+  });
+
+  /** Drops the unsaved edits for the version on disk. */
+  function takeDiskVersion(text: string): void {
+    queryClient.setQueryData(fileQueryKey(tab.path), text);
+    setDraft(null);
+    clearDiskNotice();
+  }
+
+  /** Keeps the edits, with the version on disk as what they are now measured against. */
+  function keepEdits(text: string): void {
+    queryClient.setQueryData(fileQueryKey(tab.path), text);
+    clearDiskNotice();
+  }
+
+  // A file deleted on disk can be saved back as it is shown, edits or not.
+  const deleted = diskNotice?.kind === 'deleted';
+  const canSave = (dirty || deleted) && !saving;
+
   async function save(): Promise<void> {
-    if (!dirty || draft === null || saving) return;
+    const content = draft ?? file.data;
+    if (!canSave || content === undefined) return;
     setSaving(true);
     try {
-      await window.runova.fs.writeFile(tab.path, draft);
-      queryClient.setQueryData(fileQueryKey(tab.path), draft);
+      await window.runova.fs.writeFile(tab.path, content);
+      queryClient.setQueryData(fileQueryKey(tab.path), content);
       setDraft(null);
+      clearDiskNotice();
     } catch (error) {
       toast.error('Could not save the file', {
         description: error instanceof Error ? error.message : undefined,
@@ -139,7 +214,7 @@ function TextFileTab({
     };
     el.addEventListener('keydown', onKeyDown, true);
     return () => el.removeEventListener('keydown', onKeyDown, true);
-  }, [draft, file.data, saving]);
+  }, [draft, file.data, saving, diskNotice]);
 
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-col">
@@ -179,6 +254,7 @@ function TextFileTab({
             aria-label="Reload from disk"
             onClick={() => {
               setDraft(null);
+              clearDiskNotice();
               void file.refetch();
             }}
           >
@@ -196,11 +272,22 @@ function TextFileTab({
             <ExternalLink />
           </Button>
         </SimpleTooltip>
-        <Button type="button" size="xs" onClick={() => void save()} disabled={!dirty || saving}>
+        <Button type="button" size="xs" onClick={() => void save()} disabled={!canSave}>
           {saving ? <Spinner className="animate-spin" /> : <Save />}
           Save
         </Button>
       </div>
+      {diskNotice ? (
+        <DiskNoticeBar
+          name={name}
+          notice={diskNotice}
+          comparing={comparing}
+          onDismiss={clearDiskNotice}
+          onTakeDisk={takeDiskVersion}
+          onKeepEdits={keepEdits}
+          onToggleCompare={() => setComparing((on) => !on)}
+        />
+      ) : null}
       <div className="relative min-h-0 flex-1">
         {file.isPending ? (
           <div className="space-y-2 p-4">
@@ -224,11 +311,25 @@ function TextFileTab({
             }
             className="h-full"
           />
+        ) : conflict && comparing ? (
+          // The version on disk on the left, the edits on the right, where they can be merged.
+          <MonacoDiffEditor
+            path={tab.path.replaceAll('\\', '/')}
+            original={conflict.text}
+            modified={draft ?? file.data ?? ''}
+            sideBySide
+            ignoreWhitespace={false}
+            editable={!tooLarge}
+            onModifiedChange={setDraft}
+            className="absolute inset-0 min-h-0 rounded-none border-0"
+          />
         ) : (
           <MonacoEditor
             value={draft ?? file.data ?? ''}
             onChange={(value) => {
               setDraft(value);
+              // The note that the file was reloaded has done its job once the file is edited.
+              setDiskNotice((notice) => (notice?.kind === 'reloaded' ? null : notice));
               // Editing a preview tab keeps it, so the edit isn't lost to the next file clicked.
               if (tab.preview) openFile(project.id, tab.path, { pin: true });
             }}
@@ -241,5 +342,92 @@ function TextFileTab({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The bar over the editor after the file changed on disk, the way VS Code and Visual Studio
+ * say it: a quiet note when the file simply reloaded, a warning with a choice when the change
+ * landed under unsaved edits, and a warning when the file is gone.
+ */
+function DiskNoticeBar({
+  name,
+  notice,
+  comparing,
+  onDismiss,
+  onTakeDisk,
+  onKeepEdits,
+  onToggleCompare,
+}: {
+  name: string;
+  notice: DiskNotice;
+  comparing: boolean;
+  onDismiss: () => void;
+  onTakeDisk: (text: string) => void;
+  onKeepEdits: (text: string) => void;
+  onToggleCompare: () => void;
+}): React.JSX.Element {
+  const file = <span className="font-medium">{name}</span>;
+  const barClass =
+    'shrink-0 items-center rounded-none py-1.5 shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)]';
+  const dismiss = (
+    <SimpleTooltip label="Dismiss">
+      <Button variant="ghost" size="icon-xs" type="button" aria-label="Dismiss" onClick={onDismiss}>
+        <X />
+      </Button>
+    </SimpleTooltip>
+  );
+
+  if (notice.kind === 'reloaded') {
+    return (
+      <Notice tone="primary" size="sm" role="status" className={barClass} action={dismiss}>
+        {file} changed on disk and was reloaded.
+      </Notice>
+    );
+  }
+
+  if (notice.kind === 'deleted') {
+    return (
+      <Notice tone="warning" size="sm" role="alert" className={barClass} action={dismiss}>
+        {file} was deleted on disk. Saving will create it again.
+      </Notice>
+    );
+  }
+
+  return (
+    <Notice
+      tone="warning"
+      size="sm"
+      role="alert"
+      className={barClass}
+      action={
+        <>
+          <Button type="button" size="xs" variant="soft" onClick={() => onTakeDisk(notice.text)}>
+            Show new version
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="soft"
+            aria-pressed={comparing}
+            className={cn(comparing && 'bg-foreground/10')}
+            onClick={onToggleCompare}
+          >
+            Compare
+          </Button>
+          <Button type="button" size="xs" variant="soft" onClick={() => onKeepEdits(notice.text)}>
+            Keep mine
+          </Button>
+        </>
+      }
+    >
+      {file} changed on disk. Your edits are not saved.
+      {comparing ? (
+        <span className="text-muted-foreground">
+          {' '}
+          Left is the file on disk, right is your version, which you can edit here.
+        </span>
+      ) : null}
+    </Notice>
   );
 }

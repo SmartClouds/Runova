@@ -383,6 +383,9 @@ export const IPC = {
     listDirectory: 'fs:listDirectory',
     writeScratchFile: 'fs:writeScratchFile',
     saveFileAs: 'fs:saveFileAs',
+    watchFile: 'fs:watchFile',
+    unwatchFile: 'fs:unwatchFile',
+    onFileChanged: 'fs:onFileChanged',
   },
   explorer: {
     createFile: 'explorer:createFile',

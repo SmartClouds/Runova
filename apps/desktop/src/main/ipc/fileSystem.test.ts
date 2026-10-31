@@ -1,13 +1,15 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DirectoryEntry, ImageFileData } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { queueDialog } from '../../test/main/electronMock';
 import { tempDir, writeTree } from '../../test/main/fixtures';
 import {
   expectChannelsCovered,
+  fakeWebContents,
   invoke,
+  invokeFrom,
   loadIpc,
   useTempUserData,
 } from '../../test/main/ipcHarness';
@@ -21,7 +23,8 @@ import {
 const userData = useTempUserData();
 const project = { dir: '' };
 
-expectChannelsCovered(IPC.fs);
+// A push from main, not something the renderer invokes.
+expectChannelsCovered(IPC.fs, [IPC.fs.onFileChanged]);
 
 beforeEach(async () => {
   project.dir = tempDir('runova-fs-project-');
@@ -184,5 +187,33 @@ describe('fs:saveFileAs', () => {
   it('returns null and writes nothing when the dialog is cancelled', async () => {
     queueDialog('showSaveDialog', { canceled: true, filePath: undefined });
     expect(await invoke<string | null>(IPC.fs.saveFileAs, 'export.json', 'body')).toBeNull();
+  });
+});
+
+describe('fs:watchFile', () => {
+  it('pushes a change to the window that watches the file, until it stops watching', async () => {
+    const path = join(project.dir, 'README.md');
+    const window = fakeWebContents();
+    await invokeFrom(window, IPC.fs.watchFile, path);
+    // Give the watcher a moment to read the file's starting state.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    writeFileSync(path, '# changed by an agent', 'utf-8');
+    await vi.waitFor(
+      () => expect(window.sentOn(IPC.fs.onFileChanged)).toEqual([[path, { exists: true }]]),
+      { timeout: 5000 },
+    );
+
+    await invokeFrom(window, IPC.fs.unwatchFile, path);
+    writeFileSync(path, '# changed again, much longer this time', 'utf-8');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(window.sentOn(IPC.fs.onFileChanged)).toHaveLength(1);
+  });
+
+  it('refuses to watch a path outside every allowed root', async () => {
+    const outside = writeTree(tempDir('runova-fs-outside-'), { 'secret.txt': 'do not watch' });
+    await expect(invoke(IPC.fs.watchFile, join(outside, 'secret.txt'))).rejects.toThrow(
+      'outside of the allowed directories',
+    );
   });
 });

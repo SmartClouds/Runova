@@ -1579,6 +1579,11 @@ export interface ImageFileData {
   bytes: number;
 }
 
+/** Pushed when a file open in the editor changes on disk. `exists` is false once it is deleted. */
+export interface FileDiskChange {
+  exists: boolean;
+}
+
 /**
  * Both sides of a changed image, for the viewer the changes panel shows in place of a text
  * diff. A side the change does not have (a new or a deleted file) is null.

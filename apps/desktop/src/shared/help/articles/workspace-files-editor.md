@@ -124,6 +124,19 @@ A file opens in a tab whose header shows its name, its folder, and these buttons
 - **Open in its default app** opens the file outside Runova.
 - For an image opened as source, **Show the picture** goes back to the viewer.
 
+### When a file changes on disk
+
+Runova watches every open file. When something outside the editor changes it (an agent, a script, another editor), a bar appears above the editor.
+
+- **No unsaved edits.** The tab loads the new version by itself and the bar says **changed on disk and was reloaded**. Click the **×** to close the bar, or just keep working. It goes away on your next edit.
+- **Unsaved edits.** Your edits stay where they are, and the bar warns that the file **changed on disk** and your edits are not saved. Pick one:
+  - **Show new version** throws away your edits and shows the file as it is on disk now.
+  - **Compare** puts the two side by side, the file on disk on the left and your version on the right. You can edit the right side to bring changes over, then save. Click **Compare** again to go back to the editor.
+  - **Keep mine** keeps your edits. **Save** then writes them over the version on disk.
+- **Deleted.** The bar says the file **was deleted on disk**. The text stays in the tab, and **Save** creates the file again.
+
+Pictures in the image viewer reload on their own when they change.
+
 The editor is the same one VS Code uses (Monaco), with syntax coloring chosen from the file extension, your app theme, word wrap on, and its usual find, multi-cursor and code editing keys. Files larger than about two million characters open read-only. A file that cannot be read shows **This file could not be opened** with the reason.
 
 ### Right-click menu of a file tab

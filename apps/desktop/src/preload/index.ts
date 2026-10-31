@@ -174,6 +174,7 @@ import type {
   FaviconResult,
   FavoriteSkillInput,
   FavoriteSkillRecord,
+  FileDiskChange,
   GitApplyLinesInput,
   GitBranchHistory,
   GitDiffSide,
@@ -1209,6 +1210,18 @@ const fs = {
     ipcRenderer.invoke(IPC.fs.writeScratchFile, fileName, content),
   saveFileAs: (defaultFileName: string, content: string): Promise<string | null> =>
     ipcRenderer.invoke(IPC.fs.saveFileAs, defaultFileName, content),
+  /** Pushes through onFileChanged whenever the file changes on disk. Call once per open tab. */
+  watchFile: (path: string): Promise<void> => ipcRenderer.invoke(IPC.fs.watchFile, path),
+  unwatchFile: (path: string): Promise<void> => ipcRenderer.invoke(IPC.fs.unwatchFile, path),
+  onFileChanged: (callback: (path: string, change: FileDiskChange) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      path: string,
+      change: FileDiskChange,
+    ): void => callback(path, change);
+    ipcRenderer.on(IPC.fs.onFileChanged, listener);
+    return () => ipcRenderer.removeListener(IPC.fs.onFileChanged, listener);
+  },
 };
 
 /** File operations from the workspace explorer. Every path must sit inside the project folder. */

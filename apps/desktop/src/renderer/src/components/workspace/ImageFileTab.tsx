@@ -11,6 +11,7 @@ import { formatBytes } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import type { WorkspaceFileTab } from '@/stores/workspaceStore';
+import { useFileDiskChanges } from './useFileDiskChanges';
 
 /** An image file opened from the explorer or the changes panel, shown instead of its bytes. */
 export function ImageFileTab({
@@ -30,6 +31,11 @@ export function ImageFileTab({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const [size, setSize] = useState<ImageSize | null>(null);
+
+  // A picture has no edits to lose, so a new version on disk simply replaces the old one.
+  useFileDiskChanges(tab.path, (change) => {
+    if (change.exists) void image.refetch();
+  });
 
   const relative = tab.path.startsWith(project.folderPath)
     ? tab.path.slice(project.folderPath.length).replace(/^[\\/]/, '')
