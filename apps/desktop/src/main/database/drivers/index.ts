@@ -1,4 +1,6 @@
+import { openCassandra } from './cassandra';
 import { openMongo } from './mongodb';
+import { openMssql } from './mssql';
 import { openMysql } from './mysql';
 import { openPostgres } from './postgres';
 import { openRedis } from './redis';
@@ -19,6 +21,10 @@ export async function openDriver(options: DriverConnectOptions): Promise<DbDrive
       return openRedis(options);
     case 'sqlite':
       return openSqlite(options);
+    case 'cassandra':
+      return openCassandra(options);
+    case 'mssql':
+      return openMssql(options);
     default:
       throw new DriverError(`Connecting to ${options.engine} is not supported yet.`);
   }
