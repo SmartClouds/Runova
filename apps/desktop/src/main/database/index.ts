@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
+import Database from 'better-sqlite3';
 import { app, dialog, type IpcMainInvokeEvent, ipcMain, shell } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
 import type { DeployDocker } from '../deploy/docker';
@@ -97,6 +98,14 @@ export function registerDatabaseIpc(
         ? localProcess(where.containerId, script)
         : openOnServer(where, script),
     progress: (event) => sendToWindow(getMainWindow(), IPC.database.onBackupProgress, event),
+    copySqlite: async (from, to) => {
+      const db = new Database(from, { readonly: true, fileMustExist: true });
+      try {
+        db.prepare('VACUUM INTO ?').run(to);
+      } finally {
+        db.close();
+      }
+    },
   });
   registerDatabaseHandlers({
     ipc: ipcMain,

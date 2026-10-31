@@ -195,6 +195,26 @@ describe('DatabaseBackups', () => {
     );
   });
 
+  it('backs a SQLite file up with a consistent copy', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'runova-backups-'));
+    const copySqlite = vi.fn(async (_from: string, to: string) => writeFileSync(to, 'SQLITE'));
+    const backups = new DatabaseBackups({
+      source: {
+        connection: async () =>
+          connection({ kind: 'sqliteFile', path: '/data/app.db' }, { engine: 'sqlite' }),
+        password: async () => undefined,
+      },
+      folder: () => folder,
+      open: async () => fakeProcess({}).handle,
+      progress: vi.fn(),
+      copySqlite,
+      now: () => new Date('2026-11-01T10:20:30Z').getTime(),
+    });
+    const file = await backups.backup('conn-1');
+    expect(file.name).toBe('Shop-DB-2026-11-01-102030.sqlite');
+    expect(copySqlite).toHaveBeenCalledWith('/data/app.db', join(folder, file.name));
+  });
+
   it('says a direct connection cannot use the native tools', async () => {
     const { backups } = harness(async () => fakeProcess({}).handle, {
       kind: 'direct',

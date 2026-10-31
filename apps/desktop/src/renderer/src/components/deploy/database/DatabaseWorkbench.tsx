@@ -80,6 +80,7 @@ export function DatabaseWorkbench({
   const store = useDatabaseWorkbenchStore();
   const [designer, setDesigner] = useState<DesignerTarget | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [keySearch, setKeySearch] = useState('');
   const [aiSeed, setAiSeed] = useState<AiSeed | null>(null);
   const askAi = (request: Omit<AiSeed, 'nonce'>) => {
     setAiOpen(true);
@@ -231,8 +232,20 @@ export function DatabaseWorkbench({
           style={{ width: treeWidth }}
           aria-label="Objects"
         >
+          {connection.engine === 'redis' ? (
+            <div className="border-b border-foreground/[0.06] p-2">
+              <input
+                aria-label="Find keys"
+                value={keySearch}
+                onChange={(event) => setKeySearch(event.target.value)}
+                placeholder="Find keys, like user:*"
+                className="h-7 w-full rounded-md bg-foreground/[0.04] px-2 font-mono text-[11px] outline-none ring-1 ring-inset ring-foreground/[0.06] focus:ring-primary/40"
+              />
+            </div>
+          ) : null}
           <ObjectTree
             sessionId={session.sessionId}
+            search={keySearch}
             actions={actions}
             tablesLiveIn={
               info.capabilities.schemas ? 'schema' : info.capabilities.databases ? 'database' : null

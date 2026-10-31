@@ -143,32 +143,38 @@ export function DataTab({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-foreground/[0.06] px-3 py-2">
-        <form
-          className="flex min-w-[14rem] flex-1 items-center gap-2 rounded-lg bg-foreground/[0.04] px-2.5 ring-1 ring-inset ring-foreground/[0.06] focus-within:ring-primary/40"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (pending) return;
-            setOffset(0);
-            setFilter(draft.trim());
-          }}
-        >
-          <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {engine === 'mongodb' ? 'find' : 'WHERE'}
-          </span>
-          <input
-            aria-label="Filter rows"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={
-              engine === 'mongodb'
-                ? '{ status: "paid", total: { $gt: 10 } }'
-                : "total > 10 AND status = 'paid'"
-            }
-            spellCheck={false}
-            className="h-8 min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/50"
-          />
-        </form>
+        {engine === 'redis' ? (
+          <p className="flex-1 text-xs text-muted-foreground">
+            {page?.result.statement.split(' ')[0] ?? 'Key'} contents
+          </p>
+        ) : (
+          <form
+            className="flex min-w-[14rem] flex-1 items-center gap-2 rounded-lg bg-foreground/[0.04] px-2.5 ring-1 ring-inset ring-foreground/[0.06] focus-within:ring-primary/40"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (pending) return;
+              setOffset(0);
+              setFilter(draft.trim());
+            }}
+          >
+            <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {engine === 'mongodb' ? 'find' : 'WHERE'}
+            </span>
+            <input
+              aria-label="Filter rows"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={
+                engine === 'mongodb'
+                  ? '{ status: "paid", total: { $gt: 10 } }'
+                  : "total > 10 AND status = 'paid'"
+              }
+              spellCheck={false}
+              className="h-8 min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/50"
+            />
+          </form>
+        )}
         {editable ? (
           <Button size="sm" shape="pill" variant="soft" onClick={() => setAdding(true)}>
             <Plus /> Add row

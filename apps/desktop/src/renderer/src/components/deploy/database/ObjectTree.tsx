@@ -47,22 +47,28 @@ export function ObjectTree({
   sessionId,
   actions,
   tablesLiveIn,
+  search,
 }: {
   sessionId: string;
   actions: ObjectTreeActions;
   /** Which kind of node holds tables, for the "new table" button on it. */
   tablesLiveIn?: DbObjectKind | null;
+  /** A pattern for what is listed inside a database (Redis keys: user:*). */
+  search?: string;
 }): React.JSX.Element {
   return (
     <div role="tree" aria-label="Databases" className="space-y-px py-1 text-xs">
       <TreeContext.Provider value={tablesLiveIn ?? null}>
-        <Level sessionId={sessionId} parent={null} depth={0} actions={actions} />
+        <SearchContext.Provider value={search?.trim() ?? ''}>
+          <Level sessionId={sessionId} parent={null} depth={0} actions={actions} />
+        </SearchContext.Provider>
       </TreeContext.Provider>
     </div>
   );
 }
 
 const TreeContext = createContext<DbObjectKind | null>(null);
+const SearchContext = createContext('');
 
 function Level({
   sessionId,
@@ -75,16 +81,19 @@ function Level({
   depth: number;
   actions: ObjectTreeActions;
 }): React.JSX.Element {
+  const search = useContext(SearchContext);
+  const searched = parent?.kind === 'database' && search ? search : '';
   const children = useQuery({
     queryKey: queryKeys.databaseObjects(
       sessionId,
-      refKey(parent?.ref ?? null) + (parent?.kind ?? ''),
+      refKey(parent?.ref ?? null) + (parent?.kind ?? '') + (searched ? `?${searched}` : ''),
     ),
     queryFn: () =>
       window.runova.database.listObjects({
         sessionId,
         parent: parent?.ref ?? null,
         parentKind: parent?.kind ?? null,
+        ...(searched ? { search: searched } : {}),
       }),
     staleTime: 60_000,
   });

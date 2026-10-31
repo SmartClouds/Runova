@@ -31,6 +31,7 @@ const TOOLS: Record<string, string> = {
   mongodb: 'mongodump',
   redis: 'redis-cli --rdb',
   mssql: 'BACKUP DATABASE',
+  sqlite: 'VACUUM INTO',
   cassandra: 'cqlsh DESCRIBE',
 };
 
@@ -52,6 +53,7 @@ function runsWhere(connection: DatabaseConnection): string | null {
   if (target.kind === 'server') {
     return target.containerName ? `inside ${target.containerName} on the server` : 'on the server';
   }
+  if (target.kind === 'sqliteFile') return 'on this computer';
   return null;
 }
 
@@ -158,7 +160,7 @@ export function BackupsTab({ connection }: { connection: DatabaseConnection }): 
 
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold text-muted-foreground">Saved backups</h4>
-        {connection.engine !== 'redis' ? (
+        {connection.engine !== 'redis' && connection.engine !== 'sqlite' ? (
           <Button
             size="xs"
             shape="pill"
@@ -194,7 +196,7 @@ export function BackupsTab({ connection }: { connection: DatabaseConnection }): 
                   {file.complete ? '' : ' · schema only'}
                 </p>
               </div>
-              {connection.engine !== 'redis' ? (
+              {connection.engine !== 'redis' && connection.engine !== 'sqlite' ? (
                 <Button
                   size="xs"
                   shape="pill"
@@ -225,6 +227,11 @@ export function BackupsTab({ connection }: { connection: DatabaseConnection }): 
           ))}
         </ul>
       )}
+      {connection.engine === 'sqlite' ? (
+        <Notice size="sm">
+          To restore a SQLite file, disconnect, then copy the backup over the database file.
+        </Notice>
+      ) : null}
       {connection.engine === 'redis' ? (
         <Notice size="sm">
           Redis loads a snapshot only when it starts. To restore, copy the file into its data folder

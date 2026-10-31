@@ -41,6 +41,8 @@ export interface BackupSource {
 
 export interface DatabaseBackupsDeps {
   source: BackupSource;
+  /** Writes a consistent copy of a SQLite file (VACUUM INTO), for a connection to a file. */
+  copySqlite?: (from: string, to: string) => Promise<void>;
   folder: (connectionId: string) => string;
   open: OpenProcess;
   progress: (event: DatabaseBackupProgress) => void;
@@ -199,6 +201,10 @@ export class DatabaseBackups {
   }
 
   async backup(connectionId: string): Promise<DatabaseBackupFile> {
+    const target = (await this.deps.source.connection(connectionId)).target;
+    if (target.kind === 'sqliteFile' && this.deps.copySqlite) {
+      return this.backupSqlite(connectionId, target.path);
+    }
     const { connection, place, plan, password } = await this.plan(connectionId, 'backup');
     const folder = this.deps.folder(connectionId);
     await mkdir(folder, { recursive: true });
@@ -230,6 +236,23 @@ export class DatabaseBackups {
     this.deps.progress({ connectionId, kind: 'backup', bytes, done: true });
     const info = await stat(file);
     return { name, size: info.size, createdAt: info.mtimeMs, complete: plan.complete };
+  }
+
+  private async backupSqlite(connectionId: string, path: string): Promise<DatabaseBackupFile> {
+    const connection = await this.deps.source.connection(connectionId);
+    const folder = this.deps.folder(connectionId);
+    await mkdir(folder, { recursive: true });
+    const name = `${safeName(connection.name)}-${stamp(this.now())}.sqlite`;
+    const file = join(folder, name);
+    try {
+      await this.deps.copySqlite?.(path, file);
+    } catch (error) {
+      await rm(file, { force: true }).catch(() => undefined);
+      throw error;
+    }
+    const info = await stat(file);
+    this.deps.progress({ connectionId, kind: 'backup', bytes: info.size, done: true });
+    return { name, size: info.size, createdAt: info.mtimeMs, complete: true };
   }
 
   /** Restores from a backup in the connection's folder, or a file the user picked. */

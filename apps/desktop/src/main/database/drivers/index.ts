@@ -1,6 +1,8 @@
 import { openMongo } from './mongodb';
 import { openMysql } from './mysql';
 import { openPostgres } from './postgres';
+import { openRedis } from './redis';
+import { openSqlite } from './sqlite';
 import { type DbDriver, type DriverConnectOptions, DriverError } from './types';
 
 /** Signs in to a database with the adapter for its engine. */
@@ -13,6 +15,10 @@ export async function openDriver(options: DriverConnectOptions): Promise<DbDrive
       return openMysql(options);
     case 'mongodb':
       return openMongo(options);
+    case 'redis':
+      return openRedis(options);
+    case 'sqlite':
+      return openSqlite(options);
     default:
       throw new DriverError(`Connecting to ${options.engine} is not supported yet.`);
   }
