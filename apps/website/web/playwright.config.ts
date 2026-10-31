@@ -19,7 +19,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', testIgnore: 'admin/**', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      testIgnore: ['admin/**', 'stack/**'],
+      use: { ...devices['Desktop Chrome'] },
+    },
     {
       name: 'admin',
       testMatch: 'admin/**/*.spec.ts',

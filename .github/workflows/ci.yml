@@ -8,8 +8,9 @@ name: CI
 # It runs on our two self-hosted runners (CD never uses them). Everything that
 # does not care about the OS (lint, types, the build, the unit suites and
 # mobile) runs on the Mac mini, which is much faster. The Linux runner keeps
-# what needs Linux: Docker, the server core and the Linux end-to-end shards.
-# The macOS end-to-end shards run on the Mac too. GitHub's hosted runners are
+# what needs Linux: Docker, the server core, the website (its API, its site and
+# the compose stack they run in) and the Linux end-to-end shards. The macOS
+# end-to-end shards run on the Mac too. GitHub's hosted runners are
 # for CD, which packages the installers.
 #
 # The self-hosted runners keep their disks between jobs, so every job that runs on one starts with
@@ -142,13 +143,160 @@ jobs:
     with:
       e2e: true
 
+  # The website API (apps/website/api). Its global.json pins the SDK feature band and the
+  # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. The
+  # integration tests start PostgreSQL with Testcontainers, so this needs the Linux runner's Docker.
+  website-api:
+    name: Website API
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    defaults:
+      run:
+        working-directory: apps/website/api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        # The default, /usr/share/dotnet, needs root, which a self-hosted runner may not have.
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.4xx
+
+      # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
+      # this step through NuGet audit.
+      - name: Restore
+        run: dotnet restore Runova.Website.slnx --locked-mode
+
+      - name: Format
+        run: dotnet format Runova.Website.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build Runova.Website.slnx --no-restore --configuration Release
+
+      - name: Unit and integration tests
+        run: dotnet test --solution Runova.Website.slnx --no-build --configuration Release --output Detailed
+
+  # The website (apps/website/web): lint, types, unit tests and the build, the e2e suite (a fake
+  # API, plus the real API and PostgreSQL for the admin pages), then the compose stack the way
+  # production runs it, with the full-stack specs and Lighthouse against it. The e2e admin stack
+  # needs Node (Testcontainers), the .NET SDK and Docker, so this runs on Linux too.
+  website-web:
+    name: Website
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    # One compose stack per machine at a time: they would fight over its ports.
+    concurrency: website-stack
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      # The runova-e2e- prefix lets Runner cleanup remove the stack if a cancelled run leaves it.
+      COMPOSE_PROJECT_NAME: runova-e2e-website
+      HTTP_PORT: "18080"
+      HTTPS_PORT: "18443"
+      STACK_URL: https://localhost:18443
+      STACK_HTTP_URL: http://localhost:18080
+    defaults:
+      run:
+        working-directory: apps/website/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.4xx
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: bunx biome ci --reporter=github .
+
+      - name: Astro check
+        if: ${{ !cancelled() }}
+        run: bun run check
+
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: bun run test
+
+      - name: Build
+        if: ${{ !cancelled() }}
+        run: bun run build
+
+      - name: Playwright browser
+        run: bunx playwright install chromium
+
+      - name: End-to-end tests
+        run: bun run e2e
+
+      # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and the
+      # CSP that allows their runovahq.com images) expect.
+      - name: Start the compose stack
+        env:
+          SITE_URL: https://localhost:18443
+        run: docker compose -f ../compose.yaml up --detach --build --wait
+
+      - name: Full-stack tests
+        run: bun run e2e:stack
+
+      - name: Lighthouse against the stack
+        if: ${{ !cancelled() }}
+        run: bun run lighthouse:stack
+
+      - name: Stack logs
+        if: ${{ failure() }}
+        run: docker compose -f ../compose.yaml logs --no-color --tail 300
+
+      - name: Stop the compose stack
+        if: ${{ always() }}
+        run: docker compose -f ../compose.yaml down --volumes --remove-orphans
+
+      - name: Upload reports
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-reports
+          path: |
+            apps/website/web/test-results
+            apps/website/web/.lighthouseci
+          if-no-files-found: ignore
+
   # One status to require in branch protection: the matrix job names change whenever the OS list
   # does, and a skipped job would otherwise count as success. Left out for a fork pull request,
   # so the required status stays pending instead of passing on tests that never ran.
   all-green:
     name: All checks passed
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    needs: [check, tests]
+    needs: [check, tests, website-api, website-web]
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Fail if anything failed, was cancelled or was skipped

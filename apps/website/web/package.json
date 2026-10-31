@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "lighthouse": "bun scripts/lighthouse.ts"
+    "e2e:stack": "playwright test -c playwright.stack.config.ts",
+    "lighthouse": "bun scripts/lighthouse.ts",
+    "lighthouse:stack": "bun scripts/lighthouseStack.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "8.1.2",

@@ -1,0 +1,35 @@
+# The reverse proxy in compose.yaml: one origin for the site, the API, the uploaded media and the
+# jobs dashboard. With the default SITE_ADDRESS (localhost), Caddy signs the certificate with its
+# own local authority; a real domain gets one from Let's Encrypt.
+{
+	http_port {$HTTP_PORT:8080}
+	https_port {$HTTPS_PORT:8443}
+	skip_install_trust
+	# Caddy's own redirect assumes the public HTTPS port is 443; the one below names the real one.
+	auto_https disable_redirects
+}
+
+http://{$SITE_ADDRESS:localhost} {
+	redir https://{host}:{$HTTPS_PORT:8443}{uri} 308
+}
+
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# Media files are written once under a name made from their hash, so they never change.
+	handle_path /media/* {
+		root * /srv/media
+		header Cache-Control "public, max-age=31536000, immutable"
+		header X-Content-Type-Options nosniff
+		file_server
+	}
+
+	@api path /api /api/* /hangfire /hangfire/*
+	handle @api {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:4321
+	}
+}

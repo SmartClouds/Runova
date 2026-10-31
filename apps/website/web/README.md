@@ -18,9 +18,35 @@ Run these here, or `pnpm website:dev | website:build | website:test | website:e2
 | `bun run build`                 | Static pages and the server in `dist/`, then `scripts/seoCheck.ts`                        |
 | `bun run start`                 | Serves `dist/` with the security headers, `bun scripts/server.ts` (`HOST`, `PORT`)        |
 | `bun run e2e`                   | Builds, starts the server under bun and runs Playwright                                   |
+| `bun run e2e:stack`             | Playwright against the running compose stack (`e2e/stack/`)                               |
+| `bun run lighthouse`            | Lighthouse CI over a local build with the fake API (`lighthouserc.json`)                  |
+| `bun run lighthouse:stack`      | Seeds the compose stack, then Lighthouse CI over it (`lighthouserc.stack.json`)           |
 
 `bun run e2e` needs Docker and the .NET SDK: the `admin` Playwright project (`e2e/admin/`) runs
 against the real API, which it builds and starts on a PostgreSQL container (`e2e/admin/stack.ts`).
+
+## The compose stack
+
+`../compose.yaml` runs the site the way production does: PostgreSQL 18, the API and the site in
+their images (`../api/Dockerfile` and `Dockerfile`, both non-root), and Caddy (`../Caddyfile`)
+serving everything on one origin. `/api`, `/hangfire` and the site go to their containers, and
+Caddy serves `/media` from the API's media volume. The API migrates the database on start. From
+the repository root:
+
+```sh
+docker compose -f apps/website/compose.yaml up -d --build --wait
+```
+
+The site is then at https://localhost:8443 (Caddy signs the certificate with its own local
+authority; http://localhost:8080 redirects there). `HTTP_PORT`, `HTTPS_PORT`, `SITE_URL`,
+`SITE_ADDRESS` (a real domain gets a Let's Encrypt certificate), `POSTGRES_PASSWORD`, `VERSION`,
+`SENTRY_DSN`, `PUBLIC_SENTRY_DSN` and `GITHUB_TOKEN` change it. The web image builds from the
+repository root, since the build reads the desktop app's version and help articles.
+
+`bun run e2e:stack` checks the running stack: one origin, `/hangfire` for Admins, a news item a
+signed API client posts showing on `/news`, media at `/media`, and both images running as non-root
+with no SDK in the API's. It makes the owner account with `admin create-owner` the first time.
+CI runs the same, then Lighthouse, in the `website-web` job.
 
 ## Environment
 

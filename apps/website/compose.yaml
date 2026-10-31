@@ -1,0 +1,98 @@
+# The website as production runs it: PostgreSQL, the API and the site in their images, and Caddy
+# in front of them on one origin (see Caddyfile). From the repository root:
+#   docker compose -f apps/website/compose.yaml up -d --build --wait
+# then open https://localhost:8443. The API migrates the database on start. Make the first Admin with:
+#   echo "$PASSWORD" | docker compose -f apps/website/compose.yaml exec -T api \
+#     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
+name: runova-website
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: runova_website
+      POSTGRES_USER: runova
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-runova}
+    volumes:
+      # PostgreSQL 18 keeps its data in a versioned folder under /var/lib/postgresql.
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runova -d runova_website"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    build:
+      context: api
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    image: runova-website-api:${VERSION:-0.1.0}
+    environment:
+      ConnectionStrings__Default: Host=db;Database=runova_website;Username=runova;Password=${POSTGRES_PASSWORD:-runova}
+      Database__MigrateOnStart: "true"
+      Website__SiteUrl: ${SITE_URL:-https://localhost:8443}
+      # The API port is not published, so only containers on this network reach it.
+      Website__KnownProxies: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      Sentry__Dsn: ${SENTRY_DSN:-}
+      GitHub__Token: ${GITHUB_TOKEN:-}
+    volumes:
+      - media:/var/lib/runova/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/website/web/Dockerfile
+      args:
+        SITE_URL: ${SITE_URL:-https://localhost:8443}
+        PUBLIC_SENTRY_DSN: ${PUBLIC_SENTRY_DSN:-}
+    image: runova-website-web:${VERSION:-0.1.0}
+    environment:
+      WEBSITE_API_INTERNAL_URL: http://api:8080
+      SITE_URL: ${SITE_URL:-https://localhost:8443}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:4321/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      HTTP_PORT: ${HTTP_PORT:-8080}
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+    ports:
+      # The same numbers inside and out, so Caddy's redirect to HTTPS names the right port.
+      - ${HTTP_PORT:-8080}:${HTTP_PORT:-8080}
+      - ${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}
+      - ${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}/udp
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - media:/srv/media:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    # The API image has no shell to check itself with, so the proxy waits for both upstreams.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://api:8080/health/ready && wget -q -O /dev/null http://web:4321/"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db:
+  media:
+  caddy-data:
+  caddy-config:

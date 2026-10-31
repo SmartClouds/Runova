@@ -3,6 +3,7 @@ using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Cli;
 using Runova.Website.Api.Database;
 using Runova.Website.Api.Health;
+using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Jobs;
 using Runova.Website.Api.Json;
@@ -19,6 +20,7 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(AdminCli.IsCommand(args) ? [] : args);
 
 builder.AddWebsiteTelemetry();
+builder.Services.AddWebsiteForwardedHeaders();
 builder.Services.AddWebsiteData();
 builder.Services.AddWebsiteIdentity();
 builder.Services.AddWebsiteApiClients();
@@ -49,6 +51,7 @@ if (AdminCli.IsCommand(args))
     return await AdminCli.RunAsync(args, app.Services, Console.In, Console.Out, Console.Error);
 }
 
+app.UseForwardedHeaders();
 app.UseWebsiteProblemDetails();
 MediaStorage.UseMediaFiles(app);
 app.UseWebsiteIdentity();
