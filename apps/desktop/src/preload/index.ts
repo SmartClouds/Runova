@@ -1962,7 +1962,7 @@ const deployJobs = {
 
 /** Docker on a server: containers, their stats, logs and console, and Docker's resources. */
 const deployDocker = createDeployDocker(subscribe);
-const database = createDatabase();
+const database = createDatabase(subscribe);
 const deployDirectTls = createDeployDirectTls();
 const deployCoreDomain = createDeployCoreDomain();
 const deployErrorReporting = createDeployErrorReporting();

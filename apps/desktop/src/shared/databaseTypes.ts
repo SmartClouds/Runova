@@ -276,3 +276,20 @@ export interface DbUser {
   /** Anything else worth showing: roles, flags. */
   detail: string | null;
 }
+
+/** A backup file kept for a connection. */
+export interface DatabaseBackupFile {
+  name: string;
+  size: number;
+  createdAt: number;
+  /** False when the backup holds only part of the database (Cassandra keeps only the schema). */
+  complete: boolean;
+}
+
+/** main -> renderer while a backup or restore streams. */
+export interface DatabaseBackupProgress {
+  connectionId: string;
+  kind: 'backup' | 'restore';
+  bytes: number;
+  done: boolean;
+}

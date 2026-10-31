@@ -3,6 +3,7 @@ import type { DbObjectNode, DbObjectRef, DbTableDescription } from '@shared/data
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
+  Archive,
   Code,
   Layers,
   Lock,
@@ -24,6 +25,7 @@ import {
   type WorkbenchScope,
   type WorkbenchTab,
 } from '@/stores/databaseWorkbenchStore';
+import { BackupsTab } from './BackupsTab';
 import { DataTab } from './DataTab';
 import { EngineMark } from './EngineMark';
 import { ObjectTree } from './ObjectTree';
@@ -44,6 +46,7 @@ const TAB_ICONS = {
   structure: Layers,
   settings: Sliders,
   users: Users,
+  backups: Archive,
 } as const;
 
 function starterQuery(
@@ -164,6 +167,17 @@ export function DatabaseWorkbench({
             onClick={() => store.openTab(scope, { kind: 'users', title: 'Users' })}
           >
             <Users />
+          </Button>
+        ) : null}
+        {info.capabilities.backup ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Backups"
+            title="Back up and restore"
+            onClick={() => store.openTab(scope, { kind: 'backups', title: 'Backups' })}
+          >
+            <Archive />
           </Button>
         ) : null}
         {info.capabilities.settings ? (
@@ -341,6 +355,7 @@ function TabBody({
       />
     );
   }
+  if (tab.kind === 'backups') return <BackupsTab connection={session.connection} />;
   if (tab.kind === 'settings') {
     return <SettingsTab sessionId={session.sessionId} engine={session.connection.engine} />;
   }

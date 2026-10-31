@@ -19,8 +19,19 @@ import { type DeployIpcRegistry, object, optionalText, serverId, text } from './
  * is checked here, so nothing malformed reaches a driver or a server.
  */
 
+/** Backups, run with the engines' own tools (see database/backup.ts). */
+export interface DatabaseBackupHandlers {
+  list: (connectionId: string) => Promise<unknown>;
+  backup: (connectionId: string) => Promise<unknown>;
+  restore: (connectionId: string, name: string) => Promise<void>;
+  restoreFromFile: (connectionId: string) => Promise<boolean>;
+  remove: (connectionId: string, name: string) => Promise<void>;
+  reveal: (connectionId: string, name: string) => void;
+}
+
 export interface DatabaseHandlerDeps {
   ipc: DeployIpcRegistry;
+  backups?: DatabaseBackupHandlers;
   service: Pick<
     DatabaseService,
     | 'listConnections'
@@ -256,7 +267,21 @@ function queryInput(value: unknown): DbQueryInput {
   return out;
 }
 
-export function registerDatabaseHandlers({ ipc, service, guard }: DatabaseHandlerDeps): void {
+const BACKUP_NAME = /^[A-Za-z0-9._-]{1,200}$/;
+
+function backupName(value: unknown): string {
+  if (typeof value !== 'string' || !BACKUP_NAME.test(value) || value.startsWith('.')) {
+    throw new Error('That is not a backup file.');
+  }
+  return value;
+}
+
+export function registerDatabaseHandlers({
+  ipc,
+  service,
+  guard,
+  backups,
+}: DatabaseHandlerDeps): void {
   const handle = (channel: string, run: (...args: unknown[]) => unknown) => {
     ipc.handle(channel, async (event, ...args) => {
       if (!guard(event)) throw new Error('Databases are only available in the main window.');
@@ -282,6 +307,21 @@ export function registerDatabaseHandlers({ ipc, service, guard }: DatabaseHandle
   );
   handle(IPC.database.readRows, (value) => service.readRows(rowsInput(value)));
   handle(IPC.database.query, (value) => service.query(queryInput(value)));
+  if (backups) {
+    const connection = (value: unknown) => id(value, 'saved connection');
+    handle(IPC.database.listBackups, (value) => backups.list(connection(value)));
+    handle(IPC.database.backup, (value) => backups.backup(connection(value)));
+    handle(IPC.database.restore, (value, name) =>
+      backups.restore(connection(value), backupName(name)),
+    );
+    handle(IPC.database.restoreFromFile, (value) => backups.restoreFromFile(connection(value)));
+    handle(IPC.database.removeBackup, (value, name) =>
+      backups.remove(connection(value), backupName(name)),
+    );
+    handle(IPC.database.revealBackup, (value, name) =>
+      backups.reveal(connection(value), backupName(name)),
+    );
+  }
   handle(IPC.database.settings, (sessionId) => service.settings(id(sessionId, 'connection')));
   handle(IPC.database.users, (sessionId) => service.users(id(sessionId, 'connection')));
   handle(IPC.database.cancelQuery, (sessionId, queryId) =>

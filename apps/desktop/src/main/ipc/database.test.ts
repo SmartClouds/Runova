@@ -18,23 +18,33 @@ function harness(trusted = true) {
   const service = Object.fromEntries(
     Object.keys(C).map((name) => [name, vi.fn(async () => 'ok')]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
+  const backups = {
+    list: vi.fn(async () => []),
+    backup: vi.fn(async () => ({})),
+    restore: vi.fn(async () => undefined),
+    restoreFromFile: vi.fn(async () => true),
+    remove: vi.fn(async () => undefined),
+    reveal: vi.fn(),
+  };
   registerDatabaseHandlers({
     ipc: { handle: (channel, listener) => handlers.set(channel, listener) },
     service: service as unknown as DatabaseHandlerDeps['service'],
     guard: () => trusted,
+    backups,
   });
   const call = (channel: string, ...args: unknown[]) => {
     const listener = handlers.get(channel);
     if (!listener) throw new Error(`no handler for ${channel}`);
     return listener({} as IpcMainInvokeEvent, ...args);
   };
-  return { handlers, service, call };
+  return { handlers, service, backups, call };
 }
 
 describe('registerDatabaseHandlers', () => {
   it('handles every channel', () => {
     const { handlers } = harness();
-    expect([...handlers.keys()].sort()).toEqual(Object.values(C).sort());
+    const invoked = Object.values(C).filter((channel) => !channel.includes(':on'));
+    expect([...handlers.keys()].sort()).toEqual(invoked.sort());
   });
 
   it('answers only the main window', async () => {
@@ -178,6 +188,20 @@ describe('registerDatabaseHandlers', () => {
         orderBy: { column: 'a', direction: 'sideways' },
       }),
     ).rejects.toThrow();
+  });
+
+  it('checks the backup channels, refusing names that leave the folder', async () => {
+    const { call, backups } = harness();
+    await call(C.listBackups, 'conn-1');
+    await call(C.backup, 'conn-1');
+    await call(C.restore, 'conn-1', 'shop-2026-01-01-000000.dump');
+    await call(C.restoreFromFile, 'conn-1');
+    await call(C.removeBackup, 'conn-1', 'shop-2026-01-01-000000.dump');
+    await call(C.revealBackup, 'conn-1', 'shop-2026-01-01-000000.dump');
+    expect(backups.restore).toHaveBeenCalledWith('conn-1', 'shop-2026-01-01-000000.dump');
+    expect(backups.reveal).toHaveBeenCalled();
+    await expect(call(C.restore, 'conn-1', '../../etc/passwd')).rejects.toThrow(/not a backup/);
+    await expect(call(C.removeBackup, 'conn-1', '.hidden')).rejects.toThrow(/not a backup/);
   });
 
   it('checks a query', async () => {

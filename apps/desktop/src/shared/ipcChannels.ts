@@ -1876,6 +1876,20 @@ export const IPC = {
     settings: 'database:settings',
     // (sessionId) -> DbUser[]
     users: 'database:users',
+    // (connectionId) -> DatabaseBackupFile[]
+    listBackups: 'database:listBackups',
+    // (connectionId) -> DatabaseBackupFile, once the engine's own tool finished
+    backup: 'database:backup',
+    // (connectionId, fileName) -> void
+    restore: 'database:restore',
+    // (connectionId) -> boolean: restores from a file picked in a dialog; false when cancelled
+    restoreFromFile: 'database:restoreFromFile',
+    // (connectionId, fileName) -> void
+    removeBackup: 'database:removeBackup',
+    // (connectionId, fileName) -> void: shows the file in the system file manager
+    revealBackup: 'database:revealBackup',
+    // main -> renderer: DatabaseBackupProgress
+    onBackupProgress: 'database:onBackupProgress',
   },
   apiClient: {
     listCollections: 'apiClient:listCollections',
