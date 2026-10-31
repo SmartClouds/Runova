@@ -223,14 +223,20 @@ jobs:
         with:
           dotnet-version: 10.0.4xx
 
-      # The unit tests ask pnpm whether the site stays outside the repository's workspace.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
+      # Node before pnpm, as in the check job.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+
+      # The unit tests ask pnpm whether the site stays outside the repository's workspace. Set up
+      # the way the check job does it (see the comments there).
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        env:
+          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
+        with:
+          dest: ${{ runner.tool_cache }}/setup-pnpm
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
