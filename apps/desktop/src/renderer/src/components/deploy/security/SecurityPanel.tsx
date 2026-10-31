@@ -7,10 +7,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
-import { CoreAccessCard } from '../CoreAccessCard';
 import { ErrorReportingCard } from '../errorReporting/ErrorReportingCard';
+import { SignInGate } from '../SignInGate';
 import { AuditCard } from './AuditCard';
 import { BackupCard } from './backup/BackupCard';
+import { CoreDomainCard } from './coreDomain/CoreDomainCard';
 import { RestoreDialog } from './backup/RestoreDialog';
 import { ChecklistCard } from './checklist/ChecklistCard';
 import { DevicesCard } from './DevicesCard';
@@ -65,20 +66,16 @@ export function SecurityPanel({
 
   if (access.data?.state !== 'signed-in') {
     return (
-      <div className="space-y-2">
-        <p className="px-1 text-sm text-muted-foreground">
-          Sign in to see who can reach {server.nickname}, and from which computers.
-        </p>
-        <CoreAccessCard server={server} />
+      <SignInGate server={server} purpose="see who can reach it, and from which computers">
         {!server.dev && (
           <>
-            <Button size="sm" variant="soft" onClick={() => setRestoring(true)}>
+            <Button size="sm" variant="ghost" onClick={() => setRestoring(true)}>
               <ArchiveRestore className="h-3.5 w-3.5" /> Restore a backup over SSH
             </Button>
             <RestoreDialog server={server} open={restoring} onOpenChange={setRestoring} />
           </>
         )}
-      </div>
+      </SignInGate>
     );
   }
 
@@ -160,6 +157,7 @@ export function SecurityPanel({
         </TabsContent>
       )}
       <TabsContent value="connection" className="mt-0">
+        <CoreDomainCard server={server} owner={owner} admin={admin} />
         <DirectTlsCard server={server} owner={owner} />
       </TabsContent>
     </Tabs>

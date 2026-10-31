@@ -15,7 +15,7 @@ Both sections need the server core to be installed and you to be signed in to it
 
 Click **Deploy** in the sidebar, pick a server in the server rail on the left, then click **Containers** or **Apps** in the strip of sections above the content. The same strip also holds **Overview**, **App Store**, **Websites**, **Firewall**, **Logs** and **Security**. You can also open the command palette and type Deploy.
 
-If the section says "Sign in to (server name) on its Overview to see and manage its containers", open the **Overview** section and sign in first.
+If this computer is not signed in, the section shows a card with a **Sign in** button instead. Click it and sign in right there; the containers appear once you are in. While the connection to the server is still being tried, the card says **Reconnecting** with a spinner and opens by itself when the server answers.
 
 ## Containers
 

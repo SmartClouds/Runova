@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
-import { CoreAccessCard } from '../CoreAccessCard';
+import { SignInGate } from '../SignInGate';
 import { hasRole } from '../security/format';
 import { SECURITY_CARD } from '../security/SecurityCard';
 import { TelegramCard } from './TelegramCard';
@@ -39,14 +39,7 @@ export function NotificationsPanel({
   }
 
   if (access.data?.state !== 'signed-in') {
-    return (
-      <div className="space-y-2">
-        <p className="px-1 text-sm text-muted-foreground">
-          Sign in to choose where {server.nickname} sends its alerts.
-        </p>
-        <CoreAccessCard server={server} />
-      </div>
-    );
+    return <SignInGate server={server} purpose="choose where it sends its alerts" />;
   }
 
   const roles = access.data.user?.roles;

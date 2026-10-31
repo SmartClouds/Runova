@@ -40,9 +40,9 @@ describe('SitesPanel states', () => {
 
   it('asks for a sign-in first', async () => {
     renderPanel({ 'deploy.access': { state: 'needs-sign-in' } });
-    expect(
-      await screen.findByText(/Sign in to see the websites on Production/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to Production')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to see its websites.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('shimmers each card on its own while it loads', async () => {

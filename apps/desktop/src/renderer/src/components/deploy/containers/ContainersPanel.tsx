@@ -8,8 +8,7 @@ import type { DeployServer } from '@shared/deployTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Docker } from '@/components/icons';
-import { EmptyState, GLASS_CARD, LoadFailure } from '@/components/pageKit';
+import { GLASS_CARD, LoadFailure } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { allContainers } from '@/lib/deploy/containers/list';
@@ -20,6 +19,7 @@ import { useFinishedOnce, useFollowedJob } from '@/stores/deployFollowedJobStore
 import { useDeployConnection } from '../overview/hooks';
 import { JobLogDialog } from '../overview/JobLogDialog';
 import { useProofStepUp } from '../overview/useProofStepUp';
+import { SignInGate } from '../SignInGate';
 import { hasRole } from '../security/format';
 import { StackToolsSheet } from '../stackTools/StackToolsSheet';
 import { useTabParam } from '../useTabParam';
@@ -218,15 +218,7 @@ export function ContainersPanel({ server }: { server: DeployServer }): React.JSX
 
   if (access.isPending) return <PanelSkeleton />;
   if (!signedIn) {
-    return (
-      <EmptyState
-        card
-        size="sm"
-        icon={Docker}
-        title="Not signed in"
-        description={`Sign in to ${server.nickname} on its Overview to see and manage its containers.`}
-      />
-    );
+    return <SignInGate server={server} purpose="see and manage its containers" />;
   }
   if (status.isPending) return <PanelSkeleton />;
   if (status.error) {

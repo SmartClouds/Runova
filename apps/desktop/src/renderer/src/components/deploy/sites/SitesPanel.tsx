@@ -5,15 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Globe } from '@/components/icons';
-import { EmptyState, GLASS_CARD } from '@/components/pageKit';
+import { GLASS_CARD } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SiteTab } from '@/lib/deploy/sites/problems';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { useFinishedOnce, useFollowedJob } from '@/stores/deployFollowedJobStore';
-import { CoreAccessCard } from '../CoreAccessCard';
 import { JobLogDialog } from '../overview/JobLogDialog';
+import { SignInGate } from '../SignInGate';
 import { hasRole } from '../security/format';
 import { ApplyBar } from './ApplyBar';
 import { useNginxStatus, useRefreshWeb, useSites, useStreams } from './hooks';
@@ -99,18 +98,7 @@ export function SitesPanel({ server }: { server: DeployServer }): React.JSX.Elem
     );
   }
   if (!signedIn) {
-    return (
-      <div className="flex flex-col gap-2">
-        <EmptyState
-          card
-          size="sm"
-          icon={Globe}
-          title="Not signed in"
-          description={`Sign in to see the websites on ${server.nickname}.`}
-        />
-        <CoreAccessCard server={server} />
-      </div>
-    );
+    return <SignInGate server={server} purpose="see its websites" />;
   }
 
   const roles = access.data?.user?.roles;

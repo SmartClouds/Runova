@@ -54,7 +54,9 @@ describe('AppStorePanel', () => {
 
   it('asks for a sign-in first', async () => {
     renderStore({ 'deploy.access': { state: 'needs-sign-in' } });
-    expect(await screen.findByText(/Sign in to Production on its Overview/)).toBeTruthy();
+    expect(await screen.findByText('Sign in to Production')).toBeTruthy();
+    expect(screen.getByText('Sign in to install apps on it.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
   });
 
   it('lists every app by category and finds them by name', async () => {

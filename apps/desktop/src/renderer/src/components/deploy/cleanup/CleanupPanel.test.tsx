@@ -247,7 +247,10 @@ describe('CleanupPanel', () => {
 
   it('asks the user to sign in first', async () => {
     open(['owner'], { 'deploy.access': { state: 'needs-sign-in' } });
-    expect(await screen.findByText('Not signed in', {}, { timeout: 10_000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Sign in to Production', {}, { timeout: 10_000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Sign in to see what could be cleaned up.')).toBeInTheDocument();
   });
 
   it('clears the build cache after asking', async () => {

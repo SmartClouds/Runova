@@ -135,9 +135,9 @@ describe('ServerFilesPanel, when it cannot open', () => {
     renderPanel('server=srv-1&view=files&source=container', {
       'deploy.access': { state: 'needs-sign-in' } satisfies DeployAccess,
     });
-    expect(await screen.findByText('Not signed in')).toBeTruthy();
+    expect(await screen.findByText('Sign in to Production')).toBeTruthy();
     expect(
-      screen.getByText('Sign in to Production to browse the files in its containers and volumes.'),
+      screen.getByText('Sign in to browse the files in its containers and volumes.'),
     ).toBeTruthy();
     expect(screen.queryByTestId('files-view')).toBeNull();
     expect(sourcePicker()).toBeEnabled();

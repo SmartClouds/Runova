@@ -19,9 +19,9 @@ import { missingRules, takeFirewallRules } from '@/lib/deploy/firewall/restoredR
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
-import { CoreAccessCard } from '../CoreAccessCard';
 import { useDeployConnection } from '../overview/hooks';
 import { useProofStepUp } from '../overview/useProofStepUp';
+import { SignInGate } from '../SignInGate';
 import { hasRole } from '../security/format';
 import { SECURITY_CARD } from '../security/SecurityCard';
 import { ApplyDialog } from './ApplyDialog';
@@ -283,14 +283,7 @@ export function FirewallPanel({ server }: { server: DeployServer }): React.JSX.E
     );
   }
   if (!signedIn) {
-    return (
-      <div className="space-y-2">
-        <p className="px-1 text-sm text-muted-foreground">
-          Sign in to see the firewall on {server.nickname}.
-        </p>
-        <CoreAccessCard server={server} />
-      </div>
-    );
+    return <SignInGate server={server} purpose="see its firewall" />;
   }
 
   return (

@@ -40,8 +40,11 @@ describe('SecurityPanel', () => {
   it('offers the way in when this computer is not signed in', async () => {
     renderPanel(async () => ({ state: 'needs-sign-in' }));
 
-    expect(await screen.findByText('Sign in to manage this core.')).toBeTruthy();
-    expect(screen.getByText(/Sign in to see who can reach Production/)).toBeTruthy();
+    expect(await screen.findByText('Sign in to Production')).toBeTruthy();
+    expect(
+      screen.getByText('Sign in to see who can reach it, and from which computers.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
     expect(screen.queryByRole('tablist')).toBeNull();
     expect(screen.getByRole('button', { name: 'Restore a backup over SSH' })).toBeTruthy();
   });
