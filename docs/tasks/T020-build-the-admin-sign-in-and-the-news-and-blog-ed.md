@@ -1,7 +1,7 @@
 ---
 id: T020
 title: Build the admin sign-in and the news and blog editors
-status: todo
+status: done
 epic: E40
 depends: [T018, T019]
 estimate: 200000

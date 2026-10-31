@@ -1,7 +1,7 @@
 ---
 id: T024
 title: Show news on the Dashboard
-status: todo
+status: done
 epic: E42
 depends: [T023]
 estimate: 200000

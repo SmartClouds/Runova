@@ -1,7 +1,7 @@
 ---
 id: T022
 title: Finish SEO across the site
-status: todo
+status: done
 epic: E40
 depends: [T015, T016, T017, T018, T019, T021]
 estimate: 160000

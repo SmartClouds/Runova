@@ -1,7 +1,7 @@
 ---
 id: T023
 title: Fetch news in the desktop main process
-status: todo
+status: done
 epic: E42
 depends: [T006]
 estimate: 190000

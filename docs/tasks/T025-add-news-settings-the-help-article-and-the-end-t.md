@@ -1,7 +1,7 @@
 ---
 id: T025
 title: Add news settings, the help article and the end-to-end test
-status: todo
+status: done
 epic: E42
 depends: [T024]
 estimate: 180000

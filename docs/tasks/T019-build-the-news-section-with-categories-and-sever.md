@@ -1,7 +1,7 @@
 ---
 id: T019
 title: Build the news section with categories and severity
-status: todo
+status: done
 epic: E40
 depends: [T006, T014]
 estimate: 170000

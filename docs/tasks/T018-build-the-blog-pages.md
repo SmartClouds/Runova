@@ -1,7 +1,7 @@
 ---
 id: T018
 title: Build the blog pages
-status: todo
+status: done
 epic: E40
 depends: [T009, T014]
 estimate: 160000
