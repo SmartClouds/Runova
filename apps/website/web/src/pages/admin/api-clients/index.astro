@@ -1,0 +1,10 @@
+---
+import ApiClientList from '../../../components/admin/ApiClientList';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="API clients">
+  <ApiClientList client:only="react" />
+</AdminLayout>

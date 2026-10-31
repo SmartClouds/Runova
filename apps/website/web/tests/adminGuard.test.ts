@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { adminMiddleware, isAdminPath } from '../src/lib/admin/guard';
+import { adminMiddleware, FORBIDDEN_PATH, isAdminPath } from '../src/lib/admin/guard';
 
 const API = 'http://api.internal';
 const EDITOR = {
@@ -9,11 +9,15 @@ const EDITOR = {
   roles: ['Editor'],
 };
 
+const ADMIN = { ...EDITOR, id: 1, displayName: 'Ada Admin', roles: ['Admin'] };
+
 let meStatus = 200;
+let me = EDITOR;
 let seenCookies: (string | null)[] = [];
 
 beforeEach(() => {
   meStatus = 200;
+  me = EDITOR;
   seenCookies = [];
   process.env.WEBSITE_API_INTERNAL_URL = API;
   vi.stubGlobal(
@@ -22,7 +26,7 @@ beforeEach(() => {
       expect(input).toBe(`${API}/api/v1/users/me`);
       seenCookies.push(new Headers(init.headers).get('cookie'));
       if (meStatus === 0) throw new TypeError('connect ECONNREFUSED');
-      return meStatus === 200 ? Response.json(EDITOR) : new Response(null, { status: meStatus });
+      return meStatus === 200 ? Response.json(me) : new Response(null, { status: meStatus });
     }),
   );
 });
@@ -118,5 +122,67 @@ describe('adminMiddleware', () => {
     expect(response.headers.get('retry-after')).toBe('30');
     expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
     expect(await response.text()).toContain('could not reach');
+  });
+});
+
+describe('pages for Admins only', () => {
+  const ADMIN_ONLY = ['/admin/api-clients', '/admin/api-clients/new', '/admin/users/7'];
+  const session = '__Host-runova-session=abc';
+
+  for (const path of ADMIN_ONLY) {
+    it(`shows an Editor the forbidden page with 403 on ${path}`, async () => {
+      const rewrites: (string | undefined)[] = [];
+      const next = (rewrite?: string) => {
+        rewrites.push(rewrite);
+        return Promise.resolve(new Response('<html>forbidden</html>', { status: 200 }));
+      };
+
+      const response = await adminMiddleware(context(path, session), next);
+
+      expect(rewrites).toEqual([FORBIDDEN_PATH]);
+      expect(response.status).toBe(403);
+      expect(await response.text()).toBe('<html>forbidden</html>');
+      expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+    });
+  }
+
+  it('renders them for an Admin', async () => {
+    me = ADMIN;
+    const rewrites: (string | undefined)[] = [];
+    const next = (rewrite?: string) => {
+      rewrites.push(rewrite);
+      return page();
+    };
+
+    const response = await adminMiddleware(context('/admin/users', session), next);
+
+    expect(rewrites).toEqual([undefined]);
+    expect(response.status).toBe(200);
+  });
+
+  it('leaves similar paths to the usual rules', async () => {
+    const response = await adminMiddleware(context('/admin/users-guide', session), page);
+
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('the set-password page', () => {
+  it('renders without a session, since the person it is for has none yet', async () => {
+    const response = await adminMiddleware(context('/admin/set-password'), page);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('renders for a signed-in visitor too', async () => {
+    const response = await adminMiddleware(
+      context('/admin/set-password', '__Host-runova-session=abc'),
+      page,
+    );
+
+    expect(response.status).toBe(200);
   });
 });

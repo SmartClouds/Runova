@@ -1,0 +1,10 @@
+---
+import ApiClientEditor from '../../../components/admin/ApiClientEditor';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="New API client">
+  <ApiClientEditor client:only="react" />
+</AdminLayout>

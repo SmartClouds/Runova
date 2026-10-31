@@ -4,7 +4,7 @@
 const port = (name: string, fallback: number) => Number(process.env[name] || fallback);
 
 export const STACK = {
-  /** The HTTPS proxy the browser talks to: `/api` and `/media` go to the API, the rest to the site. */
+  /** The HTTPS proxy the browser talks to: `/api`, `/hangfire` and `/media` go to the API, the rest to the site. */
   proxyPort: port('E2E_ADMIN_PORT', 4369),
   /** The API on HTTPS, which its Secure cookies and antiforgery need. */
   apiHttpsPort: port('E2E_ADMIN_API_HTTPS_PORT', 4349),

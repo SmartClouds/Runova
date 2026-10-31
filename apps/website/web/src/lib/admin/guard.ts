@@ -1,6 +1,7 @@
 /**
  * The gate in front of `/admin/**`. Every admin response is private and kept out of search
- * engines, and a page other than sign-in renders only for a staff session the API recognises.
+ * engines, and a page other than sign-in and set-password renders only for a staff session the
+ * API recognises. The pages for API clients and users render only for an Admin.
  */
 
 /** A `UserDto` reduced to what the admin pages show. */
@@ -17,9 +18,17 @@ export const ADMIN_HEADERS = {
 } as const;
 
 export const SIGN_IN_PATH = '/admin/sign-in';
+export const SET_PASSWORD_PATH = '/admin/set-password';
+/** The page an Editor sees, with 403, on a page for Admins only. */
+export const FORBIDDEN_PATH = '/admin/forbidden';
 
 /** Admin pages that render without a session. */
-const PUBLIC_PATHS = [SIGN_IN_PATH];
+const PUBLIC_PATHS = [SIGN_IN_PATH, SET_PASSWORD_PATH];
+
+export const isAdminOnlyPath = (pathname: string) =>
+  /^\/admin\/(?:api-clients|users)(?:\/|$)/.test(pathname);
+
+export const isAdmin = (user: AdminUser | undefined) => user?.roles.includes('Admin') === true;
 
 const RETRY_AFTER_SECONDS = 30;
 
@@ -75,10 +84,13 @@ interface AdminContext {
   locals: App.Locals;
 }
 
-/** The middleware for admin paths; anything else goes straight to `next`. */
+/**
+ * The middleware for admin paths; anything else goes straight to `next`. `next` takes the path
+ * to render instead, as Astro's rewrite does.
+ */
 export async function adminMiddleware(
   context: AdminContext,
-  next: () => Promise<Response>,
+  next: (rewrite?: string) => Promise<Response>,
 ): Promise<Response> {
   const { pathname, search } = context.url;
   if (!isAdminPath(pathname)) return next();
@@ -89,6 +101,12 @@ export async function adminMiddleware(
   if (session.state === 'signed-in') {
     if (pathname === SIGN_IN_PATH) return withAdminHeaders(redirect('/admin'));
     context.locals.adminUser = session.user;
+    if (isAdminOnlyPath(pathname) && !isAdmin(session.user)) {
+      const page = await next(FORBIDDEN_PATH);
+      return withAdminHeaders(
+        new Response(page.body, { status: 403, headers: new Headers(page.headers) }),
+      );
+    }
     return withAdminHeaders(await next());
   }
   if (isPublic) return withAdminHeaders(await next());

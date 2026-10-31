@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import { apiRequest, type Problem } from '@/lib/admin/api';
 import type { ItemStatus } from '@/lib/admin/publishing';
@@ -7,6 +7,7 @@ import type { Category, Severity } from '@/lib/news/api';
 import { CATEGORY_LABELS, SEVERITY_LABELS } from '@/lib/news/page';
 import { ErrorSummary } from './ErrorSummary';
 import { Field } from './Field';
+import { Pager } from './Pager';
 
 const PAGE_SIZE = 20;
 
@@ -84,9 +85,6 @@ function statusOf(item: ListItem, filter: Filter): ItemStatus {
   if (!item.publishedAt) return 'draft';
   return new Date(item.publishedAt).getTime() > Date.now() ? 'scheduled' : 'published';
 }
-
-// The paging buttons at either end are aria-disabled, not disabled, so focus stays on them.
-const EDGE = 'aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -210,30 +208,12 @@ export default function ItemList({ kind }: { kind: keyof typeof KINDS }) {
           </table>
         </div>
       )}
-      {list && list.totalPages > 1 && (
-        <nav aria-label="Pages" className="flex flex-wrap items-center gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            className={EDGE}
-            aria-disabled={list.page <= 1}
-            onClick={() => list.page > 1 && go({ filter, page: list.page - 1 })}
-          >
-            Previous page
-          </Button>
-          <span className="text-sm">
-            Page {list.page} of {list.totalPages}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            className={EDGE}
-            aria-disabled={list.page >= list.totalPages}
-            onClick={() => list.page < list.totalPages && go({ filter, page: list.page + 1 })}
-          >
-            Next page
-          </Button>
-        </nav>
+      {list && (
+        <Pager
+          page={list.page}
+          totalPages={list.totalPages}
+          onPage={(next) => go({ filter, page: next })}
+        />
       )}
     </div>
   );

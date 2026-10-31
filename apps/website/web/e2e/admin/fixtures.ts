@@ -1,5 +1,6 @@
 // Fixtures for the admin specs. Each worker gets an Editor of its own, with two-factor on, made
-// through the real API by the owner account, and a browser that is signed in as that Editor.
+// through the real API by the owner account, and a browser that is signed in as that Editor. A
+// spec for the Admin pages signs the browser in as the owner instead, with `adminSession`.
 import {
   type APIRequestContext,
   type APIResponse,
@@ -22,7 +23,7 @@ type StorageState = Exclude<BrowserContextOptions['storageState'], string | unde
 
 export const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
 
-const newApiContext = () =>
+export const newApiContext = () =>
   request.newContext({ baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true });
 
 async function antiforgeryToken(context: APIRequestContext): Promise<string> {
@@ -51,7 +52,7 @@ export async function apiCall(
   return response;
 }
 
-const signIn = (
+export const signIn = (
   context: APIRequestContext,
   email: string,
   password: string,
@@ -91,11 +92,15 @@ export async function createEditor(owner: APIRequestContext, workerIndex: number
   return editor;
 }
 
-/** The cookies of a fresh session for the Editor, signed in with a code of theirs. */
-async function sessionState(editor: Editor): Promise<StorageState> {
+/** The cookies of a fresh session, signed in with the code when the account has two-factor on. */
+async function sessionState(
+  email: string,
+  password: string,
+  code: () => Promise<string | null>,
+): Promise<StorageState> {
   const context = await newApiContext();
   try {
-    await signIn(context, editor.email, editor.password, await nextCode(editor));
+    await signIn(context, email, password, await code());
     return await context.storageState();
   } finally {
     await context.dispose();
@@ -104,7 +109,12 @@ async function sessionState(editor: Editor): Promise<StorageState> {
 
 export const test = base.extend<
   Record<never, never>,
-  { owner: APIRequestContext; editor: Editor; editorSession: StorageState }
+  {
+    owner: APIRequestContext;
+    editor: Editor;
+    editorSession: StorageState;
+    adminSession: StorageState;
+  }
 >({
   owner: [
     // biome-ignore lint/correctness/noEmptyPattern: Playwright reads fixture names from this pattern.
@@ -121,7 +131,16 @@ export const test = base.extend<
     { scope: 'worker' },
   ],
   // One session per worker: every code works once, so a sign-in per test would wait on the clock.
-  editorSession: [async ({ editor }, use) => use(await sessionState(editor)), { scope: 'worker' }],
+  editorSession: [
+    async ({ editor }, use) =>
+      use(await sessionState(editor.email, editor.password, () => nextCode(editor))),
+    { scope: 'worker' },
+  ],
+  adminSession: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads fixture names from this pattern.
+    async ({}, use) => use(await sessionState(OWNER.email, OWNER.password, async () => null)),
+    { scope: 'worker' },
+  ],
   // Pages start signed in as the worker's Editor unless a spec asks for SIGNED_OUT.
   storageState: async ({ editorSession }, use) => use(editorSession),
 });

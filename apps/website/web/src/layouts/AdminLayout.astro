@@ -5,6 +5,7 @@ import '../styles/global.css';
 import SignOutButton from '../components/admin/SignOutButton';
 import SeoHead from '../components/SeoHead.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
+import { isAdmin } from '../lib/admin/guard';
 import { themeInitScript } from '../lib/theme';
 
 interface Props {
@@ -18,6 +19,14 @@ const section = Astro.url.pathname.split('/')[2] ?? '';
 const links = [
   { href: '/admin/news', label: 'News', section: 'news' },
   { href: '/admin/blog', label: 'Blog', section: 'blog' },
+  ...(isAdmin(user)
+    ? [
+        { href: '/admin/api-clients', label: 'API clients', section: 'api-clients' },
+        { href: '/admin/users', label: 'Users', section: 'users' },
+        // The API serves the Hangfire dashboard itself, behind the same Admin check.
+        { href: '/hangfire', label: 'Jobs', section: 'hangfire' },
+      ]
+    : []),
 ];
 ---
 
