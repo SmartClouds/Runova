@@ -14,6 +14,7 @@ import {
 } from '@/stores/deployAppRunStore';
 import { Notice } from '../deployKit';
 import { RegistriesPanel } from '../registries/RegistriesPanel';
+import { SignInGate } from '../SignInGate';
 import { AppDetail } from './AppDetail';
 import { AppsList } from './AppsList';
 import { useAppsAccess, useStack, useStacks } from './hooks';
@@ -124,11 +125,7 @@ export function AppsPanel({ server }: { server: DeployServer }): React.JSX.Eleme
   }
 
   if (!access.signedIn) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Sign in to {server.nickname} on its Overview to see and deploy its apps.
-      </p>
-    );
+    return <SignInGate server={server} purpose="see and deploy its apps" />;
   }
 
   if (registries) {

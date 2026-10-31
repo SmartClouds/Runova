@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { allContainers } from '@/lib/deploy/containers/list';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
-import { CoreAccessCard } from '../CoreAccessCard';
+import { SignInGate } from '../SignInGate';
 import { hasRole, isRole, withArticle } from '../security/format';
 import {
   type FilesChoice,
@@ -151,18 +151,7 @@ export function ServerFilesPanel({ server }: { server: DeployServer }): React.JS
   } else if (access.isPending) {
     body = <FilesSkeleton />;
   } else if (!signedIn) {
-    body = (
-      <div className="flex flex-col gap-2">
-        <EmptyState
-          card
-          size="sm"
-          icon={Docker}
-          title="Not signed in"
-          description={`Sign in to ${server.nickname} to browse the files in its containers and volumes.`}
-        />
-        <CoreAccessCard server={server} />
-      </div>
-    );
+    body = <SignInGate server={server} purpose="browse the files in its containers and volumes" />;
   } else if (!admin) {
     body = (
       <EmptyState

@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
-import { CoreAccessCard } from '../CoreAccessCard';
+import { SignInGate } from '../SignInGate';
 import { hasRole, roleLabel } from '../security/format';
 import { CARD_BODY, SECURITY_CARD, SecurityCard } from '../security/SecurityCard';
 import { useStepUp } from '../security/useStepUp';
@@ -56,14 +56,7 @@ export function BackupsPanel({ server }: { server: DeployServer }): React.JSX.El
   }
 
   if (access.data?.state !== 'signed-in') {
-    return (
-      <div className="space-y-2">
-        <p className="px-1 text-sm text-muted-foreground">
-          Sign in to see the backups of {server.nickname}.
-        </p>
-        <CoreAccessCard server={server} />
-      </div>
-    );
+    return <SignInGate server={server} purpose="see its backups" />;
   }
 
   const roles = access.data.user?.roles;

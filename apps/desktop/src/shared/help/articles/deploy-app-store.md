@@ -13,7 +13,7 @@ Every catalog image is an official Docker image or comes from a verified publish
 
 ## Where to find it
 
-Click **Deploy** in the sidebar, pick a server in the server rail, then click **App Store** in the strip of sections above the content. You need to be signed in to that server's core first (see [Servers and setup](deploy-servers-setup.md)); otherwise the section says "Sign in to (server name) on its Overview to install apps on it."
+Click **Deploy** in the sidebar, pick a server in the server rail, then click **App Store** in the strip of sections above the content. You need to be signed in to that server's core first (see [Servers and setup](deploy-servers-setup.md)); otherwise the section shows a card with a **Sign in** button, so you can sign in without leaving it.
 
 Installing needs the **Operator** role. Putting an app on a domain and revealing its passwords later need the **Admin** role.
 

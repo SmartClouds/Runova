@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Problem } from '@/components/cloudflare/fields';
-import { Lock } from '@/components/icons';
 import { GLASS_CARD } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/queryKeys';
@@ -15,7 +14,7 @@ import {
   useDeployAppStoreInstallStore,
 } from '@/stores/deployAppStoreInstallStore';
 import { useAppsAccess } from '../apps/hooks';
-import { Notice } from '../deployKit';
+import { SignInGate } from '../SignInGate';
 import { CatalogGrid } from './CatalogGrid';
 import { useInstalledApps } from './hooks';
 import { InstalledAppView } from './InstalledAppView';
@@ -67,11 +66,7 @@ export function AppStorePanel({ server }: { server: DeployServer }): React.JSX.E
     );
   }
   if (!access.signedIn) {
-    return (
-      <Notice icon={Lock}>
-        Sign in to {server.nickname} on its Overview to install apps on it.
-      </Notice>
-    );
+    return <SignInGate server={server} purpose="install apps on it" />;
   }
 
   const taken = (installed.stacks ?? []).map((stack) => stack.name);

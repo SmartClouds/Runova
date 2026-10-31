@@ -25,6 +25,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
 import { useDockerEvents } from '../containers/hooks';
+import { SignInGate } from '../SignInGate';
 import { hasRole } from '../security/format';
 import {
   CleanupGroup,
@@ -235,14 +236,7 @@ export function CleanupPanel({
 
   if (access.isPending) return <PanelSkeleton />;
   if (!signedIn) {
-    return (
-      <EmptyState
-        card
-        icon={Docker}
-        title="Not signed in"
-        description={`Sign in to ${server.nickname} on its Overview to see what could be cleaned up.`}
-      />
-    );
+    return <SignInGate server={server} purpose="see what could be cleaned up" />;
   }
   if (status.isPending) return <PanelSkeleton />;
   if (status.error) {

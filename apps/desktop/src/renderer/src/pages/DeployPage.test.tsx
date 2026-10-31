@@ -891,7 +891,7 @@ describe('DeployPage security', () => {
     const sections = await screen.findByRole('navigation', { name: 'Server sections' });
     await user.click(within(sections).getByRole('button', { name: /Websites/ }));
 
-    expect(await screen.findByText(/Sign in to see the websites on/)).toBeTruthy();
+    expect(await screen.findByText('Sign in to see its websites.')).toBeTruthy();
     expect(
       within(sections)
         .getByRole('button', { name: /Websites/ })
@@ -908,7 +908,9 @@ describe('DeployPage security', () => {
       '/deploy?server=srv-1&view=security',
     );
 
-    expect(await screen.findByText(/Sign in to see who can reach Production/)).toBeTruthy();
+    expect(
+      await screen.findByText('Sign in to see who can reach it, and from which computers.'),
+    ).toBeTruthy();
   });
 
   it('offers to join a core that already runs there with an enrollment code, no sudo needed', async () => {
@@ -1010,9 +1012,7 @@ describe('DeployPage files', () => {
       '/deploy?server=srv-1&view=files&source=container&target=shop-api-1',
     );
     expect(
-      await screen.findByText(
-        'Sign in to Production to browse the files in its containers and volumes.',
-      ),
+      await screen.findByText('Sign in to browse the files in its containers and volumes.'),
     ).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Source' })).toHaveTextContent('Container');
   });

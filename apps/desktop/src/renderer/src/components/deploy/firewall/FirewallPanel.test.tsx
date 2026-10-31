@@ -72,7 +72,9 @@ describe('FirewallPanel', () => {
   it('offers the way in when this computer is not signed in', async () => {
     renderPanel({ 'deploy.access': async () => ({ state: 'needs-sign-in' }) });
 
-    expect(await screen.findByText(/Sign in to see the firewall on Production/)).toBeTruthy();
+    expect(await screen.findByText('Sign in to Production')).toBeTruthy();
+    expect(screen.getByText('Sign in to see its firewall.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
   });
 
   it('shows a Viewer everything and no way to change it', async () => {

@@ -36,6 +36,10 @@ export function useConnectionUpdates(): void {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.deployHealth(connection.serverId),
           });
+          // A section waiting on the connection asks again who is signed in, so it opens by itself.
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.deployAccess(connection.serverId),
+          });
         }
       }),
     [queryClient],

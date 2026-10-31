@@ -45,7 +45,9 @@ describe('AppsPanel list', () => {
 
   it('asks for a sign-in first', async () => {
     renderApps({ 'deploy.access': { state: 'needs-sign-in' } });
-    expect(await screen.findByText(/Sign in to Production on its Overview/)).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to Production')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to see and deploy its apps.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('shows each app with its status, revision, containers and source', async () => {
