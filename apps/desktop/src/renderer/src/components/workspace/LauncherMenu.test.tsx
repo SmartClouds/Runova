@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { Project } from '@runova/core';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useCliStore } from '@/stores/cliStore';
@@ -198,6 +198,38 @@ describe('LauncherMenu model and effort picker', () => {
     await user.click(opus);
     await user.keyboard('{/Alt}');
     expect(lastLaunch().input).toBe('claude --model opus\r');
+  });
+});
+
+/** Stands in for a browser tab's start page, whose address box takes focus as it appears. */
+function BrowserStartStandIn(): React.JSX.Element | null {
+  const opened = useWorkspaceStore((s) =>
+    Object.values(s.workspaces.p1?.tabs ?? {}).some((tab) => tab.kind === 'browser'),
+  );
+  return opened ? <input aria-label="Open a page" autoFocus /> : null;
+}
+
+describe('LauncherMenu browser row', () => {
+  it('leaves focus in the new browser tab, not in the closing menu', async () => {
+    useWorkspaceStore.getState().openProject('p1');
+    const groupId = useWorkspaceStore.getState().workspaces.p1?.focusedGroupId ?? '';
+    const { user } = renderWithProviders(
+      <>
+        <LauncherMenu project={project} groupId={groupId}>
+          <button type="button">New tab</button>
+        </LauncherMenu>
+        <BrowserStartStandIn />
+      </>,
+      { bridge: { 'cli.detectAll': ORDER.map(installed), platform: 'win32' } },
+    );
+    await user.click(screen.getByRole('button', { name: 'New tab' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Browser/ }));
+
+    const address = await screen.findByRole('textbox', { name: 'Open a page' });
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    // Radix hands focus back after the menu's exit, on a timer, so look again after that.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(address).toHaveFocus();
   });
 });
 

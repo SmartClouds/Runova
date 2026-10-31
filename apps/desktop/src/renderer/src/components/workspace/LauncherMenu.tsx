@@ -5,6 +5,7 @@ import {
   launchPickOptions,
   type Project,
 } from '@runova/core';
+import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CliLogo } from '@/components/cliLogos';
 import { Globe, Keyboard, SettingsIcon, Sparkles, TerminalSquare } from '@/components/icons';
@@ -54,6 +55,10 @@ export function LauncherMenu({
   const promptKey = useShortcutLabel('workspace.buildPrompt');
   const launchDefaults = useCliStore((s) => s.cliLaunchDefaults);
   const hasLaunchDefaults = Object.keys(launchDefaults).length > 0;
+  // Something to open once the menu has closed. While the menu is open it keeps focus inside
+  // itself, so a tab that focuses its own field as it appears (the browser's address box) has to
+  // wait until the menu lets go, or the menu takes the focus back and drops it on the page.
+  const afterClose = useRef<(() => void) | null>(null);
 
   const launchAgent = (cliId: string, skipLaunchDefaults = false, pick?: LaunchPick): void => {
     launchAgentTab(project, cliId, groupId, {
@@ -70,7 +75,12 @@ export function LauncherMenu({
         align={align}
         // Wide enough for "Claude Code CLI", the Default chip, a digit and the flyout arrow.
         className="w-[17rem]"
-        onCloseAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const open = afterClose.current;
+          afterClose.current = null;
+          open?.();
+        }}
         onKeyDown={(event) => {
           // A flyout is portaled out of this menu, but its key presses still bubble up to here.
           if (!event.currentTarget.contains(event.target as Node)) return;
@@ -161,7 +171,10 @@ export function LauncherMenu({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => useWorkspaceStore.getState().openBrowser(project.id, { groupId })}
+          onSelect={() => {
+            afterClose.current = () =>
+              useWorkspaceStore.getState().openBrowser(project.id, { groupId });
+          }}
         >
           <Globe className="h-3.5 w-3.5 text-muted-foreground" />
           Browser
