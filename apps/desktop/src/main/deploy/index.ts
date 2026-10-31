@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { app, dialog, type IpcMainInvokeEvent, ipcMain, net, shell } from 'electron';
 import { registryOfImage } from '../../shared/deploy/registries';
 import { IPC } from '../../shared/ipcChannels';
+import { registerDatabaseIpc } from '../database';
 import { pullImage } from '../docker/dockerCli';
 import { DockerHubClient } from '../docker/dockerHub';
 import { indexProjectFiles } from '../explorer/fileIndex';
@@ -572,20 +573,23 @@ function registerDeployDockerIpc(
   const links = new DockerLinks(service.links);
   const subscriptions = new DockerSubscriptions({ links });
   const ownerOf = subscriptionOwners((ownerId) => subscriptions.dropOwner(ownerId));
+  const docker = new DeployDocker({
+    links: service.links,
+    roles: (id) => service.roles(id),
+    // An image pull on the Containers screen signs in with this computer's sign-in too (E08).
+    registryAuth: async (reference) =>
+      (await registries.authsForRegistries([registryOfImage(reference)]))[0] ?? null,
+    // The file manager's sessions on a removed container or volume end with it (E27).
+    removed: closeDockerFileSessions,
+  });
   registerDeployDockerHandlers({
     ipc: ipcMain,
-    docker: new DeployDocker({
-      links: service.links,
-      roles: (id) => service.roles(id),
-      // An image pull on the Containers screen signs in with this computer's sign-in too (E08).
-      registryAuth: async (reference) =>
-        (await registries.authsForRegistries([registryOfImage(reference)]))[0] ?? null,
-      // The file manager's sessions on a removed container or volume end with it (E27).
-      removed: closeDockerFileSessions,
-    }),
+    docker,
     subscriptions,
     guard,
     owner: (event) => ownerOf(event.sender),
   });
+  // The Database section (E44) finds and reads database containers with the same calls.
+  registerDatabaseIpc(docker, guard);
   app.on('will-quit', () => links.closeAll());
 }

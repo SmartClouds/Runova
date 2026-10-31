@@ -510,6 +510,7 @@ import type { EditCommand, SpellcheckMenuPayload } from '../shared/spellcheck';
 import type { SshHostKeyStatus } from '../shared/sshHostKey';
 import { createCiAutoFix } from './ciAutoFix';
 import { cloudflareServer } from './cloudflareServer';
+import { createDatabase } from './database';
 import { createDeployAssistant, createDeployLogs } from './deployAssistant';
 import { createDeployCoreDomain } from './deployCoreDomain';
 import { createDeployDirectTls } from './deployDirectTls';
@@ -1961,6 +1962,7 @@ const deployJobs = {
 
 /** Docker on a server: containers, their stats, logs and console, and Docker's resources. */
 const deployDocker = createDeployDocker(subscribe);
+const database = createDatabase();
 const deployDirectTls = createDeployDirectTls();
 const deployCoreDomain = createDeployCoreDomain();
 const deployErrorReporting = createDeployErrorReporting();
@@ -2983,6 +2985,7 @@ const runovaApi = {
   deployJobs,
   deployAlerts,
   deployDocker,
+  database,
   deployDirectTls,
   deployCoreDomain,
   deployErrorReporting,

@@ -1846,6 +1846,33 @@ export const IPC = {
     // main -> renderer: ChatAppend with the lines the CLI added since
     onAppend: 'agentChat:onAppend',
   },
+  // The Database section (E44). Passwords go in, never come back out.
+  database: {
+    // () -> DatabaseConnection[]
+    listConnections: 'database:listConnections',
+    // (DatabaseSaveInput) -> DatabaseConnection
+    saveConnection: 'database:saveConnection',
+    // (connectionId) -> void, closing its open sessions first
+    removeConnection: 'database:removeConnection',
+    // (DatabaseDiscoverInput) -> DatabaseDiscovery: database containers on a server or here
+    discover: 'database:discover',
+    // (DatabaseConnectCandidateInput) -> DatabaseConnectResult: one-click connect to a container
+    connectCandidate: 'database:connectCandidate',
+    // (connectionId, password?) -> DatabaseConnectResult
+    connect: 'database:connect',
+    // (sessionId) -> void
+    disconnect: 'database:disconnect',
+    // (DbListObjectsInput) -> DbObjectNode[]
+    listObjects: 'database:listObjects',
+    // (sessionId, DbObjectRef) -> DbTableDescription
+    describe: 'database:describe',
+    // (DbReadRowsInput) -> DbRowsPage
+    readRows: 'database:readRows',
+    // (DbQueryInput) -> DbQueryOutcome
+    query: 'database:query',
+    // (sessionId, queryId) -> boolean
+    cancelQuery: 'database:cancelQuery',
+  },
   apiClient: {
     listCollections: 'apiClient:listCollections',
     getCollection: 'apiClient:getCollection',
