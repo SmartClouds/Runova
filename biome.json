@@ -176,7 +176,12 @@
       }
     },
     {
-      "includes": ["scripts/**", ".github/actions/**", "docs/tasks/handoffs/**"],
+      "includes": [
+        "scripts/**",
+        ".github/actions/**",
+        "docs/tasks/handoffs/**",
+        "docs/website/examples/**"
+      ],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
     },
     {

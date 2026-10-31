@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { delimiter } from 'node:path';
+import { win32 } from 'node:path';
 
 /** PATH rarely changes, so reading it back more often than this only costs reg.exe runs. */
 const REFRESH_THROTTLE_MS = 30_000;
@@ -59,7 +59,7 @@ async function readRegistryPath(): Promise<void> {
     regQueryPath('HKCU\\Environment'),
   ]);
   const key = pathKey(process.env);
-  const current = (process.env[key] ?? '').split(delimiter).filter(Boolean);
+  const current = (process.env[key] ?? '').split(win32.delimiter).filter(Boolean);
   const known = new Set(current.map((dir) => dir.toLowerCase().replace(/[\\/]+$/, '')));
   const added = [...machine, ...user].filter((dir) => {
     const normalized = dir.toLowerCase().replace(/[\\/]+$/, '');
@@ -67,7 +67,7 @@ async function readRegistryPath(): Promise<void> {
     known.add(normalized);
     return true;
   });
-  if (added.length > 0) process.env[key] = [...current, ...added].join(delimiter);
+  if (added.length > 0) process.env[key] = [...current, ...added].join(win32.delimiter);
 }
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;

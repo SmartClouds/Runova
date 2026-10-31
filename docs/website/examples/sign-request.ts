@@ -28,7 +28,11 @@ export interface SignInput {
 }
 
 export type SignedHeaders = Record<
-  'X-Runova-Key-Id' | 'X-Runova-Timestamp' | 'X-Runova-Nonce' | 'X-Runova-Content-SHA256' | 'X-Runova-Signature',
+  | 'X-Runova-Key-Id'
+  | 'X-Runova-Timestamp'
+  | 'X-Runova-Nonce'
+  | 'X-Runova-Content-SHA256'
+  | 'X-Runova-Signature',
   string
 >;
 
@@ -85,7 +89,15 @@ export function canonicalString(
   nonce: string,
   contentSha256: string,
 ): string {
-  return ['RUNOVA-HMAC-SHA256', method.toUpperCase(), path, canonicalQuery(rawQuery), timestamp, nonce, contentSha256].join('\n');
+  return [
+    'RUNOVA-HMAC-SHA256',
+    method.toUpperCase(),
+    path,
+    canonicalQuery(rawQuery),
+    timestamp,
+    nonce,
+    contentSha256,
+  ].join('\n');
 }
 
 /** The five headers that sign one request. */
@@ -98,11 +110,16 @@ export function signRequest(input: SignInput): SignedHeaders {
 
   const timestamp = String(input.timestamp ?? Math.floor(Date.now() / 1000));
   const nonce = input.nonce ?? randomBytes(16).toString('base64url');
-  const body = typeof input.body === 'string' ? Buffer.from(input.body, 'utf8') : (input.body ?? new Uint8Array());
+  const body =
+    typeof input.body === 'string'
+      ? Buffer.from(input.body, 'utf8')
+      : (input.body ?? new Uint8Array());
   const contentSha256 = createHash('sha256').update(body).digest('hex');
 
   const canonical = canonicalString(input.method, path, rawQuery, timestamp, nonce, contentSha256);
-  const signature = createHmac('sha256', signingKey(input.secret)).update(canonical, 'utf8').digest('hex');
+  const signature = createHmac('sha256', signingKey(input.secret))
+    .update(canonical, 'utf8')
+    .digest('hex');
   return {
     'X-Runova-Key-Id': input.keyId,
     'X-Runova-Timestamp': timestamp,
@@ -145,7 +162,10 @@ if (import.meta.main ?? import.meta.url === `file://${process.argv[1]}`) {
   ];
 
   let failed = false;
-  if (signingKey(secret).toString('hex') !== '78bc032006bcf9367830b2d91c2abf86ea4d334972e2ad6a9fd8c0e646f583bb') {
+  if (
+    signingKey(secret).toString('hex') !==
+    '78bc032006bcf9367830b2d91c2abf86ea4d334972e2ad6a9fd8c0e646f583bb'
+  ) {
     console.error('signing key: wrong');
     failed = true;
   }

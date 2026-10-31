@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { DASHBOARD_CHART_IDS } from '../../../packages/core/src/types';
 import { closeApp, type LaunchedApp, launchApp } from './app';
 import {
   AI_NEWS,
@@ -26,8 +27,27 @@ test.afterEach(async () => {
   news = undefined;
 });
 
+/**
+ * A Dashboard with the News card alone. With the usual layout it sits under cards that grow as
+ * this machine's real GitHub, Docker and network data comes in, and on a busy machine that can
+ * move the card between Playwright's stability check and its click, so a click meant for the
+ * header lands on the first news row and opens it.
+ */
+const NEWS_ONLY_DASHBOARD = {
+  dashboardLayout: [{ id: 'row-news', columns: 1, items: ['news'] }],
+  dashboardChartCards: ['news'],
+  dashboardIntroducedCharts: [...DASHBOARD_CHART_IDS],
+  dashboardStatCards: [],
+  dashboardUsageCards: [],
+  dashboardUsageSummaryCards: [],
+};
+
 function launch(apiUrl: string, reuseRoot?: string): Promise<LaunchedApp> {
-  return launchApp({ env: { RUNOVA_NEWS_API_URL: apiUrl }, reuseRoot }).then((launched) => {
+  return launchApp({
+    env: { RUNOVA_NEWS_API_URL: apiUrl },
+    settings: NEWS_ONLY_DASHBOARD,
+    reuseRoot,
+  }).then((launched) => {
     opened.push(launched);
     return launched;
   });

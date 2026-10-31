@@ -72,6 +72,28 @@ Core and Identity 10.0.12, xunit.v3 4.x on Microsoft.Testing.Platform, Docker.Do
 attributes), Tapper 1.14 (attributes), `@microsoft/signalr` 10.0.x, `cloudflare` 7.x, `yaml`
 (eemeli), `tar` (npm's own).
 
+## Website decisions
+
+The public site at runovahq.com (E40W), its API (E41) and the Dashboard's News card (E42) are
+specified in [`epics/40-website.md`](epics/40-website.md), [`epics/41-website-api.md`](epics/41-website-api.md),
+[`epics/42-dashboard-news.md`](epics/42-dashboard-news.md), the
+[API contract](website/api-contract.md) and the [design spec](website/design.md). They were built in
+the worktree `../Runova-website` (tasks T002 to T027) and merged into `master` in T028.
+
+| Topic | Decision | Why |
+|---|---|---|
+| Location | `apps/website/web` (Astro) and `apps/website/api` (.NET 10) in this repository. The site is outside the pnpm workspace (two levels under `apps/`), with its own `biome.json`; root Biome ignores `apps/website/**`. Root `website:*` and `website-api:*` scripts call `scripts/website.mjs` and `scripts/website-api.mjs` | The help articles, screenshots and news types are shared with the desktop app, so one repository keeps them in step |
+| Site stack | Astro with `@astrojs/node` in standalone mode run by bun, static routes prerendered, React islands only for what is interactive, MDX for feature pages, Tailwind CSS 4 and shadcn/ui, Pagefind for search | Mostly static content; islands keep JavaScript off above-the-fold content so LCP stays under 2.5 s |
+| One origin | Caddy sends `/api/`, `/media/` and `/hangfire` to the API and everything else to the site. Server-side rendering reaches the API on the internal network (`WEBSITE_API_INTERNAL_URL`) | First-party cookies, no CORS, admin pages call `/api/v1` with relative URLs |
+| API shape | Minimal APIs under `/api/v1`, plural nouns, problem details on every 4xx and 5xx, ETags from PostgreSQL's `xmin`. `docs/website/api-contract.md` is the source of truth, and `ApiConventionTests` holds the OpenAPI document to it | One contract that the site, the desktop client and outside publishers all read |
+| Staff identity | ASP.NET Core Identity on bigint keys, roles Admin and Editor, invitations instead of sign-up, TOTP with recovery codes, a `__Host-` cookie with SameSite=Strict, antiforgery on every cookie write, a deny-by-default fallback policy | Only staff sign in, so there is no public account surface at all |
+| Programs that publish | API clients sign each request with HMAC-SHA256 over a canonical string (method, path, query, timestamp, nonce, body hash), with scopes, an IP allowlist, nonces and idempotency keys | A leaked request cannot be replayed or changed, and no long-lived bearer token exists |
+| Content safety | Markdown through Markdig without raw HTML, then HtmlSanitizer; uploads sniffed and re-encoded to drop metadata. The desktop sanitizes the news body again with DOMPurify | Neither side trusts the other's cleaning alone |
+| Observability | Sentry with PII off and a scrubber for cookies, `Authorization` and `X-Runova-*` headers; OpenTelemetry over OTLP without SQL text; an empty setting turns each off. `compose.test.yaml` adds a telemetry sink that the stack tests search for leaked secrets, and production never gets it | Errors and traces without secrets, checked against real output rather than assumed |
+| Background work | Hangfire on PostgreSQL with every recurring job registered in one class, jobs on `TimeProvider` so tests run them directly | Scheduled publishing, nonce and idempotency purges and the release sync in one visible place |
+| Dashboard news | The desktop's main process polls `GET /api/v1/news` (30 seconds after start, then every 30 minutes, backing off after failures), caches it with its ETag, and matches technologies against detected tool versions on this machine. The request carries no account, machine id or tool list | A developer learns when a security fix applies to them without telling the server what they run |
+| Versions | Latest stable releases, pinned exactly (`bun.lock`, `Directory.Packages.props` with lock files), and the same no-Chinese-publisher rule as the app | Same rules as the rest of the repository |
+
 ## Server core at a glance
 
 - **Install layout:** binary `/opt/runova-core/releases/<version>/runova-core` plus a
@@ -231,3 +253,6 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E37](epics/37-studio-local-voices-cloning.md) | Studio local voices and cloning: Piper, OmniVoice (optional), voice profiles with consent | Standalone (Studio) | E36 |
 | [E38](epics/38-studio-generated-media.md) | Studio generated images and video: OpenAI and Gemini pictures, Gemini Omni clips | Standalone (Studio) | E35, E36 |
 | [E39](epics/39-studio-recipes-history-hardening.md) | Studio recipes, history browser and hardening | Standalone (Studio) | E31 to E38 |
+| [E40W](epics/40-website.md) | Website: the public site at runovahq.com | Standalone (Website) | none |
+| [E41](epics/41-website-api.md) | Website API: staff sign-in, news, blog, media, signed API clients, releases | Standalone (Website) | none |
+| [E42](epics/42-dashboard-news.md) | Dashboard news: the News card and "Affects your system" | Standalone (Website) | E41 |

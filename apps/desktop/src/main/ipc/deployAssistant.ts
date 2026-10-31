@@ -1,5 +1,5 @@
-import type { EffortLevel } from '@runova/core';
 import { isAbsolute } from 'node:path';
+import type { EffortLevel } from '@runova/core';
 import type { IpcMainInvokeEvent } from 'electron';
 import type {
   DeployAssistantAppInput,

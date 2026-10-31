@@ -11,6 +11,12 @@ const exec = vi.hoisted(() => ({
   execFile: vi.fn(),
 }));
 vi.mock('node:child_process', () => ({ execFile: exec.execFile }));
+// CI runs these on Linux and macOS, where the host's PATH delimiter is ':'. A Windows PATH still
+// splits on ';', so pin the host delimiter to the POSIX one to catch code that relies on it.
+vi.mock('node:path', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:path')>()),
+  delimiter: ':',
+}));
 
 /** What `reg query <hive> /v <name>` would print, per hive and name. */
 function registry(values: Record<string, Record<string, string>>): void {
@@ -155,27 +161,27 @@ describe('refreshWindowsPath', () => {
   });
 
   it('adds the folders the registry has and this process does not', async () => {
-    vi.stubEnv('PATH', 'C:\Windows');
-    registry({ [USER]: { Path: 'C:\Windows;C:\Tools\bin' } });
+    vi.stubEnv('PATH', 'C:\\Windows');
+    registry({ [USER]: { Path: 'C:\\Windows;C:\\Tools\\bin' } });
     const { refreshWindowsPath, pathKey } = await load();
 
     await refreshWindowsPath({ force: true });
 
-    expect(process.env[pathKey(process.env)]).toBe('C:\Windows;C:\Tools\bin');
+    expect(process.env[pathKey(process.env)]).toBe('C:\\Windows;C:\\Tools\\bin');
   });
 
   it('keeps the PATH an e2e run with a home of its own started with', async () => {
     // The website screenshots give the app a PATH of demo tools; reading the registry back
     // would bring this machine's real CLIs, and their paths, into the shots.
     vi.stubEnv('RUNOVA_E2E', '1');
-    vi.stubEnv('RUNOVA_E2E_HOME', 'X:\northwind\home');
-    vi.stubEnv('PATH', 'X:\northwind\bin');
-    registry({ [USER]: { Path: 'C:\Tools\bin' } });
+    vi.stubEnv('RUNOVA_E2E_HOME', 'X:\\northwind\\home');
+    vi.stubEnv('PATH', 'X:\\northwind\\bin');
+    registry({ [USER]: { Path: 'C:\\Tools\\bin' } });
     const { refreshWindowsPath, pathKey } = await load();
 
     await refreshWindowsPath({ force: true });
 
-    expect(process.env[pathKey(process.env)]).toBe('X:\northwind\bin');
+    expect(process.env[pathKey(process.env)]).toBe('X:\\northwind\\bin');
     expect(exec.execFile).not.toHaveBeenCalled();
   });
 });

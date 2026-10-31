@@ -46,12 +46,12 @@ import {
   stopSshTask,
   type TaskTarget,
 } from '../../agents/sshTaskRunner';
+import { isImagePath, loadTaskAttachments } from '../../agents/taskAttachments';
 import { ADMIN_ROLES, type CoreCallDeps, callCore } from '../coreCalls';
 import type { DeployDocker } from '../docker';
 import type { DeployStacks } from '../stacks/service';
 import { chainOf, chatsFrom } from './chats';
 import { coreExecutor } from './coreExecutor';
-import { isImagePath, loadTaskAttachments } from '../../agents/taskAttachments';
 
 /**
  * The Deploy AI (E09 T5, T7): the SSH AI's loop with the server core as its shell. Its modes are

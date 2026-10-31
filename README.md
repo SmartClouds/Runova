@@ -167,7 +167,7 @@ Everything else is support around that, so you don't leave the app to go and get
 
 ### The rest
 
-- **Dashboard**: CLIs, usage, GitHub activity, GitHub Actions, and system health (CPU per core, GPU, memory, disk, network, and temperatures where they can be read) at a glance. Rearrange the cards, run a speed test, and see which apps are using the most resources.
+- **Dashboard**: CLIs, usage, GitHub activity, GitHub Actions, and system health (CPU per core, GPU, memory, disk, network, and temperatures where they can be read) at a glance. Rearrange the cards, run a speed test, and see which apps are using the most resources. A News card brings in technology news from runovahq.com, filtered by category and severity, and marks a security fix with "Affects your system" when it applies to a tool version installed on this machine (the match happens locally, and the request carries nothing about you or your tools). A matched high or critical fix raises one notification; Settings > Notifications can turn news off or change that threshold.
 - **Status bar**: agent statuses, project runs, file transfers, plan limits, Docker containers, Android emulators, CPU and memory, network, the GitHub account, and the keep-awake state, each an interactive popover that takes you to the thing it is about.
 - **Notifications**: GitHub Actions failures, background CLI activity, and tool updates, folded into one recent-messages list, with optional Telegram delivery.
 - **Help center**: press `F1` for a guide to every part of the app. Search works offline, and an "Ask the guide" chat answers in your own words from the same articles.
@@ -299,6 +299,16 @@ Open Deploy, pick DevHost, and sign in with its development password, `runova-lo
 
 The delivery plan, each epic's notes and what is still unverified are in [`docs/`](docs/DELIVERY_STATUS.md).
 
+## Website
+
+The public site for [runovahq.com](https://runovahq.com) lives in this repository too, in `apps/website`, and is not part of the desktop app:
+
+- **`apps/website/web`**: the site, Astro on bun with React islands, MDX and Tailwind CSS 4. A home page with a three.js hero, a page per feature group with real screenshots of the app, the help center (built from the app's own help articles), download links from the latest GitHub release, a blog, a news feed, and a small admin area where staff write the blog and the news. It sits outside the pnpm workspace and has its own `biome.json` and `bun.lock`.
+- **`apps/website/api`**: the API behind it, .NET 10 and EF Core on PostgreSQL. Staff sign in with ASP.NET Core Identity (Admin and Editor roles, two-factor, no public sign-up), and other programs publish news and posts with HMAC-SHA256 signed requests from API clients. It serves news, posts, media, the latest desktop release, and uses Sentry, OpenTelemetry and Hangfire. Every endpoint, status code and the signing scheme are in [`docs/website/api-contract.md`](docs/website/api-contract.md), and a test holds the OpenAPI document to it.
+- **`apps/website/compose.yaml`**: the whole stack behind Caddy on one origin (`/api/`, `/media/` and `/hangfire` go to the API, everything else to the site), so cookies are first-party and no CORS is set up.
+
+The news the API serves is the same news the Dashboard's News card shows. The specs are [`docs/epics/40-website.md`](docs/epics/40-website.md), [`41-website-api.md`](docs/epics/41-website-api.md), [`42-dashboard-news.md`](docs/epics/42-dashboard-news.md) and the [design spec](docs/website/design.md). Working on the site needs [bun](https://bun.sh), the API needs the .NET 10 SDK, and the full-stack tests need Docker.
+
 ## Tech stack
 
 | Layer | Stack |
@@ -315,6 +325,7 @@ The delivery plan, each epic's notes and what is still unverified are in [`docs/
 | Updates | electron-updater (GitHub Releases) |
 | Server core | .NET 10, ASP.NET Core, SignalR over a Unix socket, xUnit v3; Tapper and TypedSignalR.Client.TypeScript generate the desktop's typed client |
 | WordPress connector | A PHP plugin (PHP 7.4+, WordPress 6.0+), tested with PHPUnit and checked for PHP and WordPress compatibility with PHP_CodeSniffer |
+| Website | Astro on bun, React islands, MDX, Tailwind CSS 4, Vitest and Playwright; the API on .NET 10, ASP.NET Core Identity, EF Core on PostgreSQL, Hangfire, Sentry and OpenTelemetry, tested with xUnit v3 and Testcontainers; Caddy in front |
 | Tooling | pnpm workspaces, Biome |
 
 ## Project structure
@@ -325,9 +336,11 @@ Runova/
 │   ├── desktop/     Electron app (main, preload, renderer), the primary product
 │   ├── mobile/      Expo/React Native companion app for the Remote feature
 │   ├── server-core/ .NET 10 service the Deploy section installs on your servers
+│   ├── website/     runovahq.com: the Astro site (web/), its .NET 10 API (api/) and the compose stack
 │   └── wordpress-connector/  PHP plugin that lets a WordPress site talk to Deploy and WordPress projects
 ├── docs/            Delivery plan: roadmap, risks, status and one file per epic (Deploy, WordPress,
-│                    Monitoring, FTP and SFTP, error tracking, the SFTP file manager, Relay)
+│                    Monitoring, FTP and SFTP, error tracking, the SFTP file manager, Relay, the
+│                    website), the website's API contract and design spec, and the Relay task files
 ├── packages/
 │   ├── core/        Shared business logic (@runova/core)
 │   └── protocol/    Shared types and wire protocol (@runova/protocol)
@@ -397,6 +410,8 @@ On Windows you can also just run `run.bat`, which installs dependencies, verifie
 | `pnpm server-core:publish linux-x64` | Publish the server core for a platform, which the Deploy system tests install on their servers |
 | `pnpm wordpress-connector:test` | The WordPress connector's PHPUnit suite, in Docker (`:lint` and `:compat` check PHP syntax and compatibility, `:build` writes the plugin zip) |
 | `pnpm catalog:refresh-digests` | Refresh the image digests that the Deploy App Store pins |
+| `pnpm website:dev` | Run the website's Astro dev server (`website:build` type-checks and builds it, `website:test` lints it and runs its unit tests, `website:e2e` runs its Playwright suite) |
+| `pnpm website-api:test` | The website API's unit and integration tests (integration tests start PostgreSQL in Docker; `website-api:build`, `website-api:format` and `website-api:format:check` as for the server core) |
 
 ### Testing
 
@@ -413,6 +428,8 @@ Tests live next to the code they cover (`foo.ts` has `foo.test.ts` beside it). E
 | Server core system | `apps/server-core/tests/Runova.ServerCore.SystemTests` | xUnit v3, Linux with Docker only (the nightly workflow) |
 | Deploy system | `apps/desktop/src/main/deploy/*.int.test.ts` | Vitest against systemd test servers in Docker, with the published core (`RUNOVA_SYSTEM_TESTS=1`) |
 | WordPress connector | `apps/wordpress-connector/tests` | PHPUnit in Docker, plus a smoke test of the plugin zip and a sync test of the desktop engine, both on a real WordPress |
+| Website API | `apps/website/api/tests` | xUnit v3 on Microsoft.Testing.Platform; integration tests run the API with `WebApplicationFactory` over PostgreSQL in Testcontainers |
+| Website | `apps/website/web/tests`, `apps/website/web/e2e` | Vitest; Playwright against a fake API, and against the whole compose stack (`bun run e2e:stack`, including a check that no secret reaches logs, Sentry or spans); Lighthouse budgets |
 
 The desktop suite is split into two Vitest projects, configured in `apps/desktop/vitest.config.mts`:
 
@@ -434,7 +451,7 @@ The Deploy system tests boot whole Linux machines, so they only run when asked. 
 
 ### CI
 
-Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the mobile Jest suite, the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), and the end-to-end tests. CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build, the unit suites and mobile) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core and the Linux end-to-end tests. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
+Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the mobile Jest suite, the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), and the end-to-end tests. Two more jobs in `ci.yml` cover the website: `website-api` (format, build and tests) and `website-web` (lint, types, unit tests, the build, both Playwright suites and Lighthouse). CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build, the unit suites and mobile) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core and the Linux end-to-end tests. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
 
 A deprecated dependency you cannot drop yet goes in [`.github/deprecated-deps-allowlist.json`](.github/deprecated-deps-allowlist.json) with a reason for keeping it.
 
