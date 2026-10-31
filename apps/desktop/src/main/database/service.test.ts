@@ -455,6 +455,121 @@ describe('queries', () => {
     expect(h.driver.close).toHaveBeenCalled();
   });
 
+  it('gives the AI the tables and columns of the database in use, and rows only when allowed', async () => {
+    const h = harness({
+      open: async () =>
+        fakeDriver({
+          listObjects: async (parent, kind) => {
+            if (!parent) {
+              return [
+                {
+                  kind: 'database',
+                  name: 'shop',
+                  ref: { database: 'shop', name: 'shop' },
+                  hasChildren: true,
+                  rowEstimate: null,
+                },
+                {
+                  kind: 'database',
+                  name: 'other',
+                  ref: { database: 'other', name: 'other' },
+                  hasChildren: true,
+                  rowEstimate: null,
+                },
+              ];
+            }
+            if (kind === 'database') {
+              return [
+                {
+                  kind: 'schema',
+                  name: 'public',
+                  ref: { database: 'shop', schema: 'public', name: 'public' },
+                  hasChildren: true,
+                  rowEstimate: null,
+                },
+              ];
+            }
+            return [
+              {
+                kind: 'table',
+                name: 'orders',
+                ref: { database: 'shop', schema: 'public', name: 'orders' },
+                hasChildren: false,
+                rowEstimate: 2,
+              },
+            ];
+          },
+          describe: async (ref) => ({
+            ref,
+            kind: 'table',
+            columns: [
+              {
+                name: 'id',
+                type: 'integer',
+                nullable: false,
+                defaultValue: null,
+                primaryKey: true,
+                generated: true,
+              },
+              {
+                name: 'total',
+                type: 'numeric',
+                nullable: true,
+                defaultValue: null,
+                primaryKey: false,
+                generated: false,
+              },
+            ],
+            indexes: [],
+            rowEstimate: 2,
+            definition: null,
+          }),
+          readRows: vi.fn(async () => ({
+            result: {
+              columns: [
+                { name: 'id', type: null },
+                { name: 'total', type: null },
+              ],
+              rows: [[1, '9.50']],
+              affectedRows: null,
+              truncated: false,
+              durationMs: 1,
+              statement: '',
+              notice: null,
+            },
+            total: 1,
+            keyColumns: ['id'],
+          })),
+        }),
+    });
+    const result = await h.service.connectCandidate({ serverId: 's1', containerId: 'c-pg' });
+    if (!('sessionId' in result)) throw new Error('not connected');
+    const without = await h.service.aiContext({
+      sessionId: result.sessionId,
+      includeSamples: false,
+    });
+    expect(without).toEqual({
+      database: 'shop',
+      schema: [
+        {
+          name: 'public.orders',
+          columns: [
+            { name: 'id', type: 'integer', primaryKey: true },
+            { name: 'total', type: 'numeric' },
+          ],
+        },
+      ],
+      samples: [],
+    });
+    const withRows = await h.service.aiContext({
+      sessionId: result.sessionId,
+      includeSamples: true,
+    });
+    expect(withRows.samples).toEqual([
+      { table: 'public.orders', columns: ['id', 'total'], rows: [[1, '9.50']] },
+    ]);
+  });
+
   it('removing a connection closes its sessions', async () => {
     const { service, driver, sessionId } = await connected();
     const [saved] = await service.listConnections();

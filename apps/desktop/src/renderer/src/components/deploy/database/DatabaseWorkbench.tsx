@@ -11,6 +11,7 @@ import {
   Plus,
   RefreshCw,
   Sliders,
+  Sparkles,
   Table,
   Users,
   X,
@@ -25,6 +26,7 @@ import {
   type WorkbenchScope,
   type WorkbenchTab,
 } from '@/stores/databaseWorkbenchStore';
+import { AiPanel, type AiSeed } from './AiPanel';
 import { BackupsTab } from './BackupsTab';
 import { DataTab } from './DataTab';
 import { EngineMark } from './EngineMark';
@@ -77,6 +79,12 @@ export function DatabaseWorkbench({
   const { connection } = session;
   const store = useDatabaseWorkbenchStore();
   const [designer, setDesigner] = useState<DesignerTarget | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiSeed, setAiSeed] = useState<AiSeed | null>(null);
+  const askAi = (request: Omit<AiSeed, 'nonce'>) => {
+    setAiOpen(true);
+    setAiSeed({ ...request, nonce: Date.now() });
+  };
   const queryClient = useQueryClient();
   const [treeWidth, setTreeWidth] = useState(250);
   const info = engineInfo(connection.engine);
@@ -157,6 +165,15 @@ export function DatabaseWorkbench({
         ) : null}
         <Button size="sm" shape="pill" variant="tint" onClick={() => openQuery()}>
           <Plus /> New query
+        </Button>
+        <Button
+          size="sm"
+          shape="pill"
+          variant={aiOpen ? 'tint' : 'soft'}
+          aria-pressed={aiOpen}
+          onClick={() => setAiOpen((open) => !open)}
+        >
+          <Sparkles /> Ask AI
         </Button>
         {info.capabilities.users ? (
           <Button
@@ -263,6 +280,7 @@ export function DatabaseWorkbench({
                     ? (table) => setDesigner({ mode: 'edit', table })
                     : undefined
                 }
+                onAskAi={askAi}
               />
             ) : (
               <EmptyState
@@ -278,6 +296,28 @@ export function DatabaseWorkbench({
             )}
           </div>
         </section>
+        {aiOpen ? (
+          <section className={cn(GLASS_PANEL, 'ml-2 w-[22rem] shrink-0')}>
+            <AiPanel
+              session={session}
+              database={
+                active?.kind === 'query'
+                  ? (active.database ?? connection.database)
+                  : (active?.ref?.database ?? connection.database)
+              }
+              seed={aiSeed}
+              onInsert={(query) =>
+                store.openTab(scope, {
+                  kind: 'query',
+                  title: 'From AI',
+                  text: query,
+                  database: connection.database,
+                })
+              }
+              onClose={() => setAiOpen(false)}
+            />
+          </section>
+        ) : null}
       </div>
       <TableDesigner
         sessionId={session.sessionId}
@@ -337,11 +377,13 @@ function TabBody({
   state,
   tab,
   onEditColumns,
+  onAskAi,
 }: {
   scope: string;
   state: WorkbenchScope;
   tab: WorkbenchTab;
   onEditColumns?: (table: DbTableDescription) => void;
+  onAskAi?: (request: { question: string; lastQuery: string; lastError: string }) => void;
 }): React.JSX.Element {
   const updateTab = useDatabaseWorkbenchStore((store) => store.updateTab);
   const { session } = state;
@@ -385,6 +427,7 @@ function TabBody({
       text={tab.text ?? ''}
       database={tab.database ?? null}
       onTextChange={(text) => updateTab(scope, tab.id, { text })}
+      onAskAi={onAskAi}
     />
   );
 }

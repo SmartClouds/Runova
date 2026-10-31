@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Duplex } from 'node:stream';
-import { classifyStatement, type DbEngine, detectContainer, engineFromImage } from '@runova/core';
+import {
+  classifyStatement,
+  type DbEngine,
+  detectContainer,
+  engineFromImage,
+  type SchemaTable,
+} from '@runova/core';
 import type {
   DatabaseCandidate,
   DatabaseConnectCandidateInput,
@@ -10,6 +16,8 @@ import type {
   DatabaseSaveInput,
   DatabaseSession,
   DatabaseTarget,
+  DbAiContext,
+  DbAiContextInput,
   DbListObjectsInput,
   DbObjectNode,
   DbObjectRef,
@@ -43,6 +51,11 @@ import type { LocalContainer, LocalDocker } from './localDocker';
 const IDLE_MS = 30 * 60_000;
 const DEFAULT_MAX_ROWS = 1000;
 const MAX_ROWS = 50_000;
+/** How much of a schema the AI gets: tables described in full, then names only. */
+const AI_DESCRIBED_TABLES = 60;
+const AI_SCHEMAS = 8;
+const AI_SAMPLED_TABLES = 8;
+const AI_SAMPLE_ROWS = 3;
 
 export interface ServerDocker {
   listContainers: (serverId: string) => Promise<ContainerList>;
@@ -406,6 +419,65 @@ export class DatabaseService {
 
   describe(sessionId: string, ref: DbObjectRef): Promise<DbTableDescription> {
     return this.withSession(sessionId, (session) => session.driver.describe(ref));
+  }
+
+  /**
+   * The tables and columns the AI is shown, from the database the editor points at. Rows only
+   * come along when the user allowed sample rows, a few per table.
+   */
+  aiContext(input: DbAiContextInput): Promise<DbAiContext> {
+    return this.withSession(input.sessionId, async (session) => {
+      const stored = await this.deps.connections.get(session.connectionId);
+      const database = input.database ?? stored.database ?? null;
+      const driver = session.driver;
+      const top = await driver.listObjects(null, null);
+      let containers = top.filter((node) => node.kind === 'database');
+      let tables = top.filter((node) => !node.hasChildren);
+      if (containers.length > 0) {
+        const chosen = containers.find((node) => node.name === database) ?? containers[0];
+        containers = chosen ? [chosen] : [];
+        tables = [];
+        for (const node of containers) {
+          const inside = await driver.listObjects(node.ref, node.kind);
+          const schemas = inside.filter((child) => child.kind === 'schema').slice(0, AI_SCHEMAS);
+          tables.push(...inside.filter((child) => !child.hasChildren));
+          for (const schema of schemas) {
+            tables.push(...(await driver.listObjects(schema.ref, schema.kind)));
+          }
+        }
+      }
+      const schema: SchemaTable[] = [];
+      const samples: DbAiContext['samples'] = [];
+      for (const [index, node] of tables.entries()) {
+        const name = [node.ref.schema, node.ref.name].filter(Boolean).join('.');
+        if (index >= AI_DESCRIBED_TABLES || node.kind === 'key') {
+          schema.push({ name: node.detail ? `${name} (${node.detail})` : name, columns: [] });
+          continue;
+        }
+        try {
+          const table = await driver.describe(node.ref);
+          schema.push({
+            name,
+            columns: table.columns.map((column) => ({
+              name: column.name,
+              type: column.type,
+              ...(column.primaryKey ? { primaryKey: true } : {}),
+            })),
+          });
+          if (input.includeSamples && samples.length < AI_SAMPLED_TABLES) {
+            const page = await driver.readRows({ ref: node.ref, limit: AI_SAMPLE_ROWS, offset: 0 });
+            samples.push({
+              table: name,
+              columns: page.result.columns.map((column) => column.name),
+              rows: page.result.rows,
+            });
+          }
+        } catch {
+          schema.push({ name, columns: [] });
+        }
+      }
+      return { database: containers[0]?.name ?? database, schema, samples };
+    });
   }
 
   /** The server's settings, or none where the engine has none to show. */

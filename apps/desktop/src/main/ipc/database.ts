@@ -48,6 +48,7 @@ export interface DatabaseHandlerDeps {
     | 'cancelQuery'
     | 'settings'
     | 'users'
+    | 'aiContext'
   >;
   guard: (event: IpcMainInvokeEvent) => boolean;
 }
@@ -322,6 +323,16 @@ export function registerDatabaseHandlers({
       backups.reveal(connection(value), backupName(name)),
     );
   }
+  handle(IPC.database.aiContext, (value) => {
+    const input = object(value, 'what the AI may see');
+    return service.aiContext({
+      sessionId: id(input.sessionId, 'connection'),
+      ...(input.database === undefined || input.database === null
+        ? {}
+        : { database: text(input.database, MAX_NAME, 'database') }),
+      includeSamples: input.includeSamples === true,
+    });
+  });
   handle(IPC.database.settings, (sessionId) => service.settings(id(sessionId, 'connection')));
   handle(IPC.database.users, (sessionId) => service.users(id(sessionId, 'connection')));
   handle(IPC.database.cancelQuery, (sessionId, queryId) =>

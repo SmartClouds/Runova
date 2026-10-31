@@ -45,7 +45,7 @@ export function QueryTab({
   database: string | null;
   onTextChange: (text: string) => void;
   /** Hands the query and its error to the AI panel. */
-  onAskAi?: (prompt: string) => void;
+  onAskAi?: (request: { question: string; lastQuery: string; lastError: string }) => void;
 }): React.JSX.Element {
   const [outcome, setOutcome] = useState<DbQueryOutcome | null>(null);
   const [running, setRunning] = useState<string | null>(null);
@@ -193,9 +193,11 @@ export function QueryTab({
                   shape="pill"
                   variant="tint"
                   onClick={() =>
-                    onAskAi(
-                      `This query failed with: ${outcome.error}\n\nFix it:\n${textRef.current}`,
-                    )
+                    onAskAi({
+                      question: 'Fix this query so it runs.',
+                      lastQuery: textRef.current,
+                      lastError: outcome.error,
+                    })
                   }
                 >
                   Fix with AI

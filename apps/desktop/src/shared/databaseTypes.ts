@@ -1,4 +1,4 @@
-import type { AccessLevel, DbEngine, DbObjectRef, StatementClass } from '@runova/core';
+import type { AccessLevel, DbEngine, DbObjectRef, SchemaTable, StatementClass } from '@runova/core';
 
 /**
  * Plain data the Database section passes between main and the renderer. Passwords never come
@@ -292,4 +292,18 @@ export interface DatabaseBackupProgress {
   kind: 'backup' | 'restore';
   bytes: number;
   done: boolean;
+}
+
+/** What the AI is shown about a database: its tables and columns, and sample rows if allowed. */
+export interface DbAiContext {
+  database: string | null;
+  schema: SchemaTable[];
+  samples: { table: string; columns: string[]; rows: DbCell[][] }[];
+}
+
+export interface DbAiContextInput {
+  sessionId: string;
+  database?: string | null;
+  /** Off unless the user turned "Let the AI see sample rows" on. */
+  includeSamples: boolean;
 }

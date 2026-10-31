@@ -7,6 +7,8 @@ import type {
   DatabaseConnectResult,
   DatabaseDiscovery,
   DatabaseSaveInput,
+  DbAiContext,
+  DbAiContextInput,
   DbListObjectsInput,
   DbObjectNode,
   DbObjectRef,
@@ -52,6 +54,8 @@ export function createDatabase(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.database.readRows, input),
     query: (input: DbQueryInput): Promise<DbQueryOutcome> =>
       ipcRenderer.invoke(IPC.database.query, input),
+    aiContext: (input: DbAiContextInput): Promise<DbAiContext> =>
+      ipcRenderer.invoke(IPC.database.aiContext, input),
     settings: (sessionId: string): Promise<DbSetting[]> =>
       ipcRenderer.invoke(IPC.database.settings, sessionId),
     users: (sessionId: string): Promise<DbUser[]> =>

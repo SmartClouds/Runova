@@ -1876,6 +1876,8 @@ export const IPC = {
     settings: 'database:settings',
     // (sessionId) -> DbUser[]
     users: 'database:users',
+    // (DbAiContextInput) -> DbAiContext: the schema (and sample rows if allowed) for the AI
+    aiContext: 'database:aiContext',
     // (connectionId) -> DatabaseBackupFile[]
     listBackups: 'database:listBackups',
     // (connectionId) -> DatabaseBackupFile, once the engine's own tool finished

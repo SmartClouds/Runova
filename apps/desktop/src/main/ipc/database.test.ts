@@ -133,6 +133,8 @@ describe('registerDatabaseHandlers', () => {
     await call(C.connect, 'conn-1', 'typed');
     await call(C.disconnect, SESSION);
     await call(C.cancelQuery, SESSION, 'q-1');
+    await call(C.aiContext, { sessionId: SESSION, includeSamples: 'yes' });
+    expect(service.aiContext).toHaveBeenCalledWith({ sessionId: SESSION, includeSamples: false });
     await call(C.settings, SESSION);
     await call(C.users, SESSION);
     expect(service.settings).toHaveBeenCalledWith(SESSION);
