@@ -1,0 +1,139 @@
+---
+import { buttonVariants } from '@/components/ui/button';
+import { FEATURE_GROUPS, type FeatureCard, groupLabel } from '@/lib/features';
+import AppScreenshot from '../AppScreenshot.astro';
+
+interface Props {
+  /** In the order the grid shows them. */
+  features: FeatureCard[];
+}
+
+const { features } = Astro.props;
+const groups = FEATURE_GROUPS.filter((group) => features.some((card) => card.group === group.id));
+const toggle = `${buttonVariants({ variant: 'outline', size: 'sm' })} aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90`;
+const total = features.length;
+
+// Every card is in the server HTML, so the grid works without JavaScript. The controls stay hidden
+// until the script below binds them, then it hides the cards that do not match.
+---
+
+<div data-feature-filter data-total={total} class="mt-10">
+  <div data-filter-controls hidden class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <fieldset class="m-0 min-w-0 border-0 p-0">
+      <legend class="sr-only">Filter by group</legend>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class={toggle} data-filter-group="all" aria-pressed="true">All</button>
+        {
+          groups.map((group) => (
+            <button type="button" class={toggle} data-filter-group={group.id} aria-pressed="false">
+              {group.label}
+            </button>
+          ))
+        }
+      </div>
+    </fieldset>
+    <div class="flex flex-col gap-1.5 md:w-72">
+      <label for="feature-search" class="font-medium text-sm">Search features</label>
+      <input
+        id="feature-search"
+        type="search"
+        data-filter-search
+        autocomplete="off"
+        placeholder="SSH, Docker, worktrees..."
+        class="h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      />
+    </div>
+  </div>
+
+  <p data-filter-status aria-live="polite" class="mt-4 text-muted-foreground text-sm">
+    Showing {total} of {total} features
+  </p>
+
+  <ul class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    {
+      features.map((card) => (
+        <li
+          data-feature-card
+          data-group={card.group}
+          data-search={[card.title, card.summary, ...card.covers].join(' ')}
+          class="relative flex flex-col gap-4 rounded-lg border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60"
+        >
+          <AppScreenshot
+            name={card.cover}
+            sizes="(min-width: 1200px) 360px, (min-width: 1024px) 30vw, (min-width: 640px) 46vw, 100vw"
+          />
+          <div class="flex flex-1 flex-col gap-2">
+            <p class="font-medium text-primary text-sm">{groupLabel(card.group)}</p>
+            <h2 class="font-semibold text-xl">
+              <a
+                href={`/features/${card.slug}`}
+                class="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:underline"
+              >
+                {card.title}
+              </a>
+            </h2>
+            <p class="text-muted-foreground">{card.summary}</p>
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+
+  <div data-filter-empty hidden class="mt-6 rounded-lg border border-dashed p-8 text-center">
+    <p class="font-medium">No feature matches that filter.</p>
+    <button type="button" data-filter-clear class={`${buttonVariants({ variant: 'outline' })} mt-4`}>
+      Clear the filter
+    </button>
+  </div>
+</div>
+
+<script>
+  import { matchesFilter } from '@/lib/features';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-feature-filter]')) {
+    const controls = root.querySelector<HTMLElement>('[data-filter-controls]');
+    const search = root.querySelector<HTMLInputElement>('[data-filter-search]');
+    const status = root.querySelector<HTMLElement>('[data-filter-status]');
+    const empty = root.querySelector<HTMLElement>('[data-filter-empty]');
+    const toggles = [...root.querySelectorAll<HTMLButtonElement>('[data-filter-group]')];
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-feature-card]')];
+    if (!controls || !search || !status || !empty) continue;
+    let group = 'all';
+
+    const update = () => {
+      let shown = 0;
+      for (const card of cards) {
+        const visible = matchesFilter(
+          { group: card.dataset.group ?? '', text: card.dataset.search ?? '' },
+          group,
+          search.value,
+        );
+        card.hidden = !visible;
+        if (visible) shown += 1;
+      }
+      for (const button of toggles) {
+        button.setAttribute('aria-pressed', String(button.dataset.filterGroup === group));
+      }
+      status.textContent = `Showing ${shown} of ${cards.length} features`;
+      empty.hidden = shown > 0;
+    };
+
+    for (const button of toggles) {
+      button.addEventListener('click', () => {
+        group = button.dataset.filterGroup ?? 'all';
+        update();
+      });
+    }
+    search.addEventListener('input', update);
+    root.querySelector('[data-filter-clear]')?.addEventListener('click', () => {
+      group = 'all';
+      search.value = '';
+      update();
+      search.focus();
+    });
+
+    controls.hidden = false;
+    controls.dataset.ready = '';
+    update();
+  }
+</script>

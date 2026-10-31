@@ -1,0 +1,47 @@
+---
+import { Moon, Sun } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+// Switches between Dark and Light and remembers the choice. The button and icons render on the
+// server only, so no framework ships for it: CSS shows the icon for the current theme, and the
+// small script below sets the label and handles the click. The inline head script has already
+// applied the theme, so the server render assumes Dark and the script corrects the label.
+---
+
+<Button
+  variant="ghost"
+  size="icon"
+  aria-label="Switch to light theme"
+  title="Switch to light theme"
+  data-theme-toggle
+>
+  <Sun aria-hidden="true" data-theme-icon="sun" className="hidden dark:block" />
+  <Moon aria-hidden="true" data-theme-icon="moon" className="dark:hidden" />
+</Button>
+
+<script>
+  import { applyTheme, THEME_STORAGE_KEY, type Theme } from '@/lib/theme';
+
+  const root = document.documentElement;
+  const current = (): Theme => (root.classList.contains('dark') ? 'dark' : 'light');
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]')) {
+    const label = () => {
+      const text = `Switch to ${current() === 'dark' ? 'light' : 'dark'} theme`;
+      button.setAttribute('aria-label', text);
+      button.title = text;
+    };
+    button.addEventListener('click', () => {
+      const next: Theme = current() === 'dark' ? 'light' : 'dark';
+      applyTheme(root, next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // Storage can be blocked; the theme still changes for this page.
+      }
+      label();
+    });
+    label();
+    button.dataset.ready = '';
+  }
+</script>

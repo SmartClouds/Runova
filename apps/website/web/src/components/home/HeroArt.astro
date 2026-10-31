@@ -1,0 +1,97 @@
+---
+/**
+ * The hero's static image: the runway and the star from the logo, drawn in the theme tokens. It is
+ * what the server renders, what stays under reduced motion, without WebGL or on low-end devices,
+ * and what sits under the three.js scene until its first frame.
+ */
+
+// A runway seen from its threshold, in perspective: a point `z` units away (1 is the bottom edge)
+// lands at y = HORIZON + DROP / z, and its x closes in on the vanishing point at the same rate.
+const HORIZON = 170;
+const DROP = 310;
+const VANISH_X = 380;
+const project = (x: number, z: number) => ({ x: VANISH_X + (x - VANISH_X) / z, y: HORIZON + DROP / z });
+
+const LEFT = 60;
+const RIGHT = 620;
+const FAR = 10;
+const near = { l: project(LEFT, 1), r: project(RIGHT, 1) };
+const far = { l: project(LEFT, FAR), r: project(RIGHT, FAR) };
+const runway = `M${near.l.x} ${near.l.y} L${far.l.x} ${far.l.y} L${far.r.x} ${far.r.y} L${near.r.x} ${near.r.y} Z`;
+
+const lightDepths = [1.08, 1.3, 1.6, 2, 2.5, 3.15, 4, 5.1, 6.6, 8.6];
+const lights = lightDepths.flatMap((z) => [
+  { ...project(LEFT, z), r: 5 / z },
+  { ...project(RIGHT, z), r: 5 / z },
+]);
+
+const center = (LEFT + RIGHT) / 2;
+const dashes = [1.15, 1.6, 2.25, 3.2, 4.6, 6.6].map((z) => {
+  const a = project(center, z);
+  const b = project(center, z * 1.22);
+  return { a, b, width: 9 / z };
+});
+
+const end = project(center, FAR);
+const star = { x: 488, y: 92 };
+const trail = `M${end.x} ${end.y} C${end.x + 52} ${end.y - 4} ${star.x - 30} ${star.y + 70} ${star.x - 2} ${star.y + 26}`;
+const starPath = (cx: number, cy: number, r: number) => {
+  const k = r * 0.12;
+  return `M${cx} ${cy - r} Q${cx + k} ${cy - k} ${cx + r} ${cy} Q${cx + k} ${cy + k} ${cx} ${cy + r} Q${cx - k} ${cy + k} ${cx - r} ${cy} Q${cx - k} ${cy - k} ${cx} ${cy - r} Z`;
+};
+const round = (value: string) => value.replace(/\d+\.\d+/g, (n) => String(Math.round(Number(n) * 10) / 10));
+---
+
+<svg
+  data-hero-fallback
+  role="img"
+  aria-label="A runway at night with its edge lights running to the horizon, and a green star taking off from its far end, as in the Runova logo"
+  viewBox="0 0 640 480"
+  width="640"
+  height="480"
+  class="hero-art absolute inset-0 h-full w-full"
+>
+  <defs>
+    <linearGradient id="hero-runway" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" style="stop-color: hsl(var(--foreground)); stop-opacity: 0.14" />
+      <stop offset="1" style="stop-color: hsl(var(--foreground)); stop-opacity: 0.02" />
+    </linearGradient>
+    <radialGradient id="hero-glow">
+      <stop offset="0" style="stop-color: hsl(var(--glow)); stop-opacity: 0.55" />
+      <stop offset="0.35" style="stop-color: hsl(var(--glow)); stop-opacity: 0.16" />
+      <stop offset="1" style="stop-color: hsl(var(--glow)); stop-opacity: 0" />
+    </radialGradient>
+  </defs>
+  <path d={round(runway)} fill="url(#hero-runway)" />
+  {
+    dashes.map(({ a, b, width }) => (
+      <line
+        x1={round(String(a.x))}
+        y1={round(String(a.y))}
+        x2={round(String(b.x))}
+        y2={round(String(b.y))}
+        stroke-width={round(String(width))}
+        style="stroke: hsl(var(--foreground)); stroke-opacity: 0.35"
+      />
+    ))
+  }
+  {
+    lights.map(({ x, y, r }) => (
+      <circle
+        cx={round(String(x))}
+        cy={round(String(y))}
+        r={round(String(r))}
+        style="fill: hsl(var(--foreground)); fill-opacity: 0.85"
+      />
+    ))
+  }
+  <circle cx={star.x} cy={star.y} r="120" fill="url(#hero-glow)" />
+  <path
+    d={round(trail)}
+    fill="none"
+    stroke-width="3"
+    stroke-linecap="round"
+    style="stroke: hsl(var(--primary))"
+  />
+  <path d={round(starPath(star.x, star.y, 34))} style="fill: hsl(var(--primary))" />
+</svg>

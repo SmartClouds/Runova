@@ -1,0 +1,10 @@
+---
+import InviteForm from '../../../components/admin/InviteForm';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Invite a user">
+  <InviteForm client:only="react" />
+</AdminLayout>

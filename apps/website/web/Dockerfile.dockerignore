@@ -1,0 +1,15 @@
+# The web image builds from the repository root (see Dockerfile). Send only the site and the parts
+# of the desktop app its build reads.
+*
+!apps/website/web
+!apps/desktop/package.json
+!apps/desktop/src/shared/help
+
+apps/website/web/node_modules
+apps/website/web/dist
+apps/website/web/.astro
+apps/website/web/.lighthouseci
+apps/website/web/test-results
+apps/website/web/playwright-report
+apps/website/web/Dockerfile*
+apps/desktop/src/shared/help/**/*.test.ts

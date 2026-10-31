@@ -9,10 +9,27 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 let cached: { value: IpGeoInfo; at: number } | null = null;
 let inFlight: Promise<IpGeoInfo> | null = null;
 
+/**
+ * A fixed answer for e2e runs that set one (the website screenshots), so the real public IP of
+ * the machine taking them never shows. Read on every lookup, not at load, so tests can stub it.
+ */
+function e2eDemoIpGeo(): IpGeoInfo | null {
+  const raw = process.env.RUNOVA_E2E === '1' ? process.env.RUNOVA_E2E_IP_GEO : undefined;
+  if (!raw) return null;
+  const record = JSON.parse(raw) as Partial<IpGeoInfo>;
+  return {
+    ip: record.ip ?? '',
+    country: record.country ?? 'Unknown',
+    countryCode: record.countryCode ?? '',
+  };
+}
+
 // Uses geojs.io's free JSON endpoint (no API key, no rate-limit signup) to
 // resolve the machine's public IP and country. Same "no setup required"
 // tradeoff as the translate handler; treat failures as recoverable.
 async function lookupIpGeo(): Promise<IpGeoInfo> {
+  const demo = e2eDemoIpGeo();
+  if (demo) return demo;
   // Without a signal a stalled connection (captive portal, dropped packets) leaves
   // the IPC promise pending forever and the dashboard card stuck loading.
   const response = await fetch('https://get.geojs.io/v1/ip/geo.json', {

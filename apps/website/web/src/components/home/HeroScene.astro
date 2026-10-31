@@ -1,0 +1,20 @@
+---
+// The hero's scene island, without a framework: the host covers the static image, and the script
+// mounts the scene only once the host scrolls into view (what client:visible does for a framework
+// component). A React island here would put React's runtime on the critical path of the page.
+---
+
+<div data-hero-scene class="absolute inset-0" aria-hidden="true"></div>
+
+<script>
+  import { mountHeroScene } from './heroIsland';
+
+  for (const host of document.querySelectorAll<HTMLElement>('[data-hero-scene]')) {
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      mountHeroScene(host);
+    });
+    observer.observe(host);
+  }
+</script>

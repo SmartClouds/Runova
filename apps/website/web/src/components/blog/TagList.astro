@@ -1,0 +1,27 @@
+---
+import type { PostTag } from '../../lib/blog/api';
+
+interface Props {
+  tags: PostTag[];
+  class?: string;
+}
+
+const { tags, class: className } = Astro.props;
+---
+
+{
+  tags.length > 0 && (
+    <ul aria-label="Tags" class:list={['flex flex-wrap gap-2', className]}>
+      {tags.map((tag) => (
+        <li>
+          <a
+            href={`/blog/tags/${tag.slug}`}
+            class="inline-block rounded-full border px-3 py-1 text-muted-foreground text-xs transition-colors duration-[120ms] hover:border-primary/60 hover:text-foreground"
+          >
+            {tag.name}
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}

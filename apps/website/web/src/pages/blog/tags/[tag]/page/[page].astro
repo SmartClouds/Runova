@@ -1,0 +1,14 @@
+---
+import BlogList from '../../../../../components/blog/BlogList.astro';
+import { blogApi } from '../../../../../lib/blog/api';
+import { applyState, CACHE, loadList } from '../../../../../lib/blog/page';
+
+// Rendered per request from the API; the proxy caches it by its Cache-Control.
+export const prerender = false;
+
+const result = await loadList(blogApi(), { tag: Astro.params.tag, page: Astro.params.page });
+if (result.state === 'redirect') return Astro.redirect(result.location, 301);
+applyState(Astro.response, result.state, CACHE.list);
+---
+
+<BlogList result={result} />

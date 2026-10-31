@@ -43,6 +43,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('IP geolocation', () => {
@@ -125,5 +126,29 @@ describe('IP geolocation', () => {
     // The in-flight promise has to be cleared on failure, or the app never asks again.
     await expect(invoke(IPC.ipGeo.lookup)).resolves.toMatchObject({ ip: '203.0.113.7' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers with the fixed demo address in an e2e run that sets one', async () => {
+    // The website screenshots must never show the real public IP of the machine that took them.
+    vi.stubEnv('RUNOVA_E2E', '1');
+    vi.stubEnv(
+      'RUNOVA_E2E_IP_GEO',
+      JSON.stringify({ ip: '203.0.113.24', country: 'Netherlands', countryCode: 'NL' }),
+    );
+
+    await expect(invoke(IPC.ipGeo.lookup, true)).resolves.toEqual({
+      ip: '203.0.113.24',
+      country: 'Netherlands',
+      countryCode: 'NL',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores the demo address outside an e2e run', async () => {
+    vi.stubEnv('RUNOVA_E2E', '');
+    vi.stubEnv('RUNOVA_E2E_IP_GEO', JSON.stringify({ ip: '203.0.113.24' }));
+
+    await expect(invoke(IPC.ipGeo.lookup, true)).resolves.toMatchObject({ ip: '203.0.113.7' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

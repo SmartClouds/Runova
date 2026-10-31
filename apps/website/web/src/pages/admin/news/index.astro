@@ -1,0 +1,10 @@
+---
+import ItemList from '../../../components/admin/ItemList';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="News">
+  <ItemList kind="news" client:only="react" />
+</AdminLayout>

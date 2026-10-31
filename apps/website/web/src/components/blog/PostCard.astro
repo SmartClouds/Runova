@@ -1,0 +1,37 @@
+---
+import type { PostListItem } from '../../lib/blog/api';
+import PostMeta from './PostMeta.astro';
+import TagList from './TagList.astro';
+
+interface Props {
+  post: PostListItem;
+  /** h2 on a list page, h3 under a post's related heading. */
+  level?: 'h2' | 'h3';
+  /** The first card on a list loads its cover at once; the rest wait until they are near. */
+  eager?: boolean;
+}
+
+const { post, level: Heading = 'h2', eager = false } = Astro.props;
+---
+
+<article data-post-card={post.slug} class="flex flex-col gap-3 rounded-lg border bg-card p-6">
+  {
+    post.coverImage && (
+      <img
+        src={post.coverImage.url}
+        alt={post.coverImage.alt}
+        width={post.coverImage.width}
+        height={post.coverImage.height}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+        class="aspect-[16/9] w-full rounded-md object-cover"
+      />
+    )
+  }
+  <Heading class="text-balance font-semibold text-xl leading-snug">
+    <a href={`/blog/${post.slug}`} class="hover:text-primary">{post.title}</a>
+  </Heading>
+  <p class="text-muted-foreground">{post.excerpt}</p>
+  <PostMeta post={post} />
+  <TagList tags={post.tags} />
+</article>

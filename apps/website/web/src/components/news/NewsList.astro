@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { hasFilters, type ListResult, listMeta } from '../../lib/news/page';
+import NotFound from '../NotFound.astro';
+import NewsCard from './NewsCard.astro';
+import NewsFilters from './NewsFilters.astro';
+import NewsPager from './NewsPager.astro';
+import NewsUnavailable from './NewsUnavailable.astro';
+
+interface Props {
+  result: ListResult;
+}
+
+const { result } = Astro.props;
+const ok = result.state === 'ok' ? result : undefined;
+const meta = ok ? listMeta(ok.filters, ok.page.page, ok.page.totalPages) : undefined;
+const filtered = ok ? hasFilters(ok.filters) : false;
+// Filtered views are the same news cut another way, so they all point search engines at /news.
+const canonicalPath = filtered ? '/news' : undefined;
+const total = ok?.page.totalItems ?? 0;
+const countText = filtered
+  ? `${total} ${total === 1 ? 'item matches' : 'items match'} these filters`
+  : `${total} ${total === 1 ? 'item' : 'items'}`;
+---
+
+{
+  ok && meta ? (
+    <BaseLayout title={meta.title} description={meta.description} canonicalPath={canonicalPath}>
+      <link slot="head" rel="alternate" type="application/rss+xml" title="Runova news" href="/news/rss.xml" />
+      <header class="max-w-[70ch] pt-12 md:pt-20">
+        <h1 class="font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">Technology news</h1>
+        <p class="mt-4 text-lg text-muted-foreground">
+          Security advisories, releases and end-of-life dates for the tools you build with. Security items say which
+          versions are affected and what to update to.
+        </p>
+        <p class="mt-4 text-sm">
+          <a href="/news/rss.xml" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Follow with RSS
+          </a>
+        </p>
+      </header>
+      <div class="pt-8">
+        <NewsFilters filters={ok.filters} />
+      </div>
+      <p data-news-count role="status" class="mt-6 text-muted-foreground text-sm">{countText}</p>
+      <div data-news-results class="pt-4 pb-16 md:pb-24">
+        {ok.page.items.length > 0 ? (
+          <div class="grid gap-6 md:grid-cols-2">
+            {ok.page.items.map((item) => (
+              <NewsCard item={item} />
+            ))}
+          </div>
+        ) : filtered ? (
+          <p class="text-muted-foreground">
+            No news matches these filters.
+            <a href="/news" class="text-primary underline underline-offset-4">Show all news</a>
+          </p>
+        ) : (
+          <p class="text-muted-foreground">No news yet. The first items are on their way.</p>
+        )}
+        <NewsPager filters={ok.filters} page={ok.page.page} totalPages={ok.page.totalPages} />
+      </div>
+    </BaseLayout>
+  ) : result.state === 'not-found' ? (
+    <NotFound />
+  ) : (
+    <NewsUnavailable />
+  )
+}

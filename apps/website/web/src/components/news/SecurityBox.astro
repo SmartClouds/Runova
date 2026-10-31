@@ -1,0 +1,54 @@
+---
+import type { NewsListItem } from '../../lib/news/api';
+import { cveUrl, updateSteps } from '../../lib/news/page';
+import AffectedList from './AffectedList.astro';
+
+// What a reader of a security item does about it: the steps, the versions affected and the CVE ids.
+
+interface Props {
+  item: NewsListItem;
+  /** h3 inside a card, h2 on the item's own page. */
+  level?: 'h2' | 'h3';
+  class?: string;
+}
+
+const { item, level: Heading = 'h3', class: className } = Astro.props;
+const id = `${item.slug}-what-to-do`;
+---
+
+<section
+  data-security-box
+  aria-labelledby={id}
+  class:list={['rounded-md border bg-background p-4', className]}
+>
+  <Heading id={id} class="font-semibold text-base">What to do</Heading>
+  <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm">
+    {updateSteps(item).map((step) => <li>{step}</li>)}
+  </ol>
+  <dl class="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
+    <dt class="text-muted-foreground">Affected versions</dt>
+    <dd><AffectedList technologies={item.technologies} /></dd>
+    {
+      item.cveIds.length > 0 && (
+        <>
+          <dt class="text-muted-foreground">CVE</dt>
+          <dd class="flex flex-wrap gap-x-3">
+            {item.cveIds.map((cve) => (
+              <a href={cveUrl(cve)} class="font-mono text-primary underline underline-offset-4" rel="noopener noreferrer">
+                {cve}
+              </a>
+            ))}
+          </dd>
+        </>
+      )
+    }
+    {
+      item.cvssScore !== null && (
+        <>
+          <dt class="text-muted-foreground">Score</dt>
+          <dd>CVSS {item.cvssScore.toFixed(1)}</dd>
+        </>
+      )
+    }
+  </dl>
+</section>

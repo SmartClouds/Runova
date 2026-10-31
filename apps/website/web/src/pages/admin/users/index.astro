@@ -1,0 +1,10 @@
+---
+import UserList from '../../../components/admin/UserList';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Users">
+  <UserList client:only="react" />
+</AdminLayout>

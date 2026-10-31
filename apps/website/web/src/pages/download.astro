@@ -1,0 +1,227 @@
+---
+import { buttonVariants } from '../components/ui/button';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  assetSystemLabel,
+  formatSize,
+  kindLabel,
+  osName,
+  primaryAssets,
+  sortAssets,
+} from '../lib/download/assets';
+import { CLIENT_HINTS, detectSystem, signalsFromHeaders } from '../lib/download/detect';
+import {
+  BUILD_VERSION,
+  GITHUB_RELEASES_URL,
+  type ReleaseAsset,
+  releaseSource,
+} from '../lib/download/release';
+import { softwareApplication } from '../lib/seo';
+
+// Rendered per request: the release comes from the API and the main button from the visitor's system.
+export const prerender = false;
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const release = await releaseSource.latest(process.env.WEBSITE_API_INTERNAL_URL);
+const system = detectSystem(signalsFromHeaders(Astro.request.headers));
+const assets = release ? sortAssets(release.assets) : [];
+const primary = release ? primaryAssets(release.assets, system) : [];
+const version = release?.version ?? BUILD_VERSION;
+const published = release
+  ? new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(
+      new Date(release.publishedAt),
+    )
+  : '';
+
+// Without the API the page is a fallback, so caches keep it for a minute, not five.
+Astro.response.headers.set(
+  'Cache-Control',
+  release ? 'public, max-age=300, stale-while-revalidate=600' : 'public, max-age=60',
+);
+Astro.response.headers.set('Vary', ['User-Agent', ...CLIENT_HINTS].join(', '));
+Astro.response.headers.set('Accept-CH', CLIENT_HINTS.join(', '));
+// Chromium sends the arch only when asked, so the first visit is retried with it (Apple silicon).
+Astro.response.headers.set('Critical-CH', 'Sec-CH-UA-Arch');
+
+const app = softwareApplication(site, {
+  softwareVersion: version,
+  downloadUrl: release ? assets.map((asset) => asset.downloadUrl) : GITHUB_RELEASES_URL,
+  releaseNotes: release?.notesUrl,
+});
+
+const description =
+  'Download Runova for Windows, macOS or Linux. The build for your system comes first, and every other one is listed with its size and SHA-256 checksum.';
+
+const buttonLabel = (asset: ReleaseAsset) =>
+  `Download for ${asset.platform === 'windows' ? osName(asset) : assetSystemLabel(asset)}`;
+
+const primaryButton = `${buttonVariants({ size: 'lg' })} h-auto flex-col items-start gap-0.5 py-3`;
+const link = 'text-primary underline underline-offset-4';
+const code = 'rounded bg-secondary px-1.5 py-0.5 font-mono text-secondary-foreground text-sm';
+---
+
+<BaseLayout title="Download" description={description} jsonLd={[app]}>
+  <section id="get" aria-labelledby="download-title" class="pt-12 pb-12 md:pt-20 md:pb-16">
+    <h1 id="download-title" class="font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">
+      Download Runova
+    </h1>
+    <p class="mt-4 text-lg text-muted-foreground">
+      Version <span data-version>{version}</span>{
+        release && (
+          <>
+            , released {published}.{' '}
+            <a href={release.notesUrl} class={link} rel="noopener">
+              Read the release notes
+            </a>
+          </>
+        )
+      }
+    </p>
+
+    {
+      release ? (
+        primary.length > 0 ? (
+          <div class="mt-8">
+            <div class="flex flex-wrap gap-3">
+              {primary.map((asset) => (
+                <a
+                  href={asset.downloadUrl}
+                  class={primaryButton}
+                  data-primary-download
+                  data-asset={asset.name}
+                >
+                  <span class="text-base">{buttonLabel(asset)}</span>
+                  <span class="font-normal text-xs opacity-80">
+                    {kindLabel(asset.kind)}, {formatSize(asset.size)}
+                  </span>
+                </a>
+              ))}
+            </div>
+            <p class="mt-4 text-muted-foreground text-sm">
+              Not your system? <a href="#all-downloads" class={link}>See every build</a>.
+            </p>
+          </div>
+        ) : (
+          <p class="mt-8 max-w-[60ch]">
+            Pick the build for your system from the list below. Runova runs on Windows, macOS and
+            Linux.
+          </p>
+        )
+      ) : (
+        <div class="mt-8 max-w-[60ch]">
+          <p>
+            The list of downloads could not be loaded just now. Every installer for Windows, macOS
+            and Linux is on the GitHub Releases page.
+          </p>
+          <a
+            href={GITHUB_RELEASES_URL}
+            class:list={[buttonVariants({ size: 'lg' }), 'mt-6']}
+            rel="noopener"
+            data-releases-link
+          >
+            Open GitHub Releases
+          </a>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    release && (
+      <section
+        id="all-downloads"
+        aria-labelledby="all-downloads-title"
+        class="border-t py-12 md:py-16"
+      >
+        <h2 id="all-downloads-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+          All downloads
+        </h2>
+        {/* Phones get each build as a stacked block, so names and checksums keep the full width. */}
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full border-collapse text-left text-sm max-md:block">
+            <thead class="text-muted-foreground max-md:sr-only">
+              <tr class="border-b">
+                <th scope="col" class="py-2 pr-4 font-medium">System</th>
+                <th scope="col" class="py-2 pr-4 font-medium">File and SHA-256</th>
+                <th scope="col" class="py-2 pr-4 font-medium">Type</th>
+                <th scope="col" class="py-2 font-medium">Size</th>
+              </tr>
+            </thead>
+            <tbody class="max-md:block">
+              {assets.map((asset) => (
+                <tr
+                  class="border-b align-top max-md:grid max-md:grid-cols-[1fr_auto] max-md:gap-x-4 max-md:gap-y-1 max-md:py-3"
+                  data-asset={asset.name}
+                >
+                  <td class="py-3 pr-4 max-md:p-0 max-md:font-medium">{assetSystemLabel(asset)}</td>
+                  <td class="py-3 pr-4 max-md:col-span-2 max-md:row-start-2 max-md:p-0">
+                    <a href={asset.downloadUrl} class={`${link} break-all font-medium`}>
+                      {asset.name}
+                    </a>
+                    {asset.sha256 && (
+                      <code class="mt-1 block break-all font-mono text-muted-foreground text-xs">
+                        {asset.sha256}
+                      </code>
+                    )}
+                  </td>
+                  <td class="py-3 pr-4 max-md:col-span-2 max-md:p-0 max-md:text-muted-foreground">
+                    {kindLabel(asset.kind)}
+                  </td>
+                  <td class="whitespace-nowrap py-3 max-md:col-start-2 max-md:row-start-1 max-md:p-0">
+                    {formatSize(asset.size)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-6 max-w-[70ch] text-muted-foreground text-sm">
+          To check a download, compare its SHA-256 with the one above: run
+          <code class={code}>Get-FileHash</code> in PowerShell on Windows,
+          <code class={code}>shasum -a 256</code> on macOS or <code class={code}>sha256sum</code> on
+          Linux, followed by the file name.
+        </p>
+      </section>
+    )
+  }
+
+  <section id="winget" aria-labelledby="winget-title" class="border-t py-12 md:py-16">
+    <h2 id="winget-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+      Install with winget
+    </h2>
+    <p class="mt-4 max-w-[70ch] text-muted-foreground">
+      On Windows you can also install Runova from a terminal with the Windows Package Manager:
+    </p>
+    <pre
+      class="mt-4 overflow-x-auto rounded-lg border bg-card p-4 font-mono text-sm"><code>winget install SmartClouds.Runova</code></pre>
+  </section>
+
+  <section id="requirements" aria-labelledby="requirements-title" class="border-t py-12 md:py-16">
+    <h2 id="requirements-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+      System requirements
+    </h2>
+    <ul class="mt-6 grid gap-4 md:grid-cols-3">
+      <li class="rounded-lg border bg-card p-6">
+        <h3 class="font-semibold text-lg">Windows</h3>
+        <p class="mt-2 text-muted-foreground">Windows 10 or Windows 11, 64-bit (x64).</p>
+      </li>
+      <li class="rounded-lg border bg-card p-6">
+        <h3 class="font-semibold text-lg">macOS</h3>
+        <p class="mt-2 text-muted-foreground">
+          macOS 12 Monterey or later, on Apple silicon or an Intel Mac.
+        </p>
+      </li>
+      <li class="rounded-lg border bg-card p-6">
+        <h3 class="font-semibold text-lg">Linux</h3>
+        <p class="mt-2 text-muted-foreground">
+          A 64-bit (x64) distribution with a desktop. The AppImage runs on most of them, and the
+          .deb package is for Debian, Ubuntu and their derivatives.
+        </p>
+      </li>
+    </ul>
+    <p class="mt-6 max-w-[70ch] text-muted-foreground">
+      The AI coding CLIs you work with, such as Claude Code or Codex, are installed on their own.
+      The AI CLI Manager in Runova finds them and installs the missing ones for you.
+    </p>
+  </section>
+</BaseLayout>

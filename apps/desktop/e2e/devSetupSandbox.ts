@@ -58,8 +58,9 @@ function writeTool(bin: string, name: string, windows: string[], posix: string[]
   chmodSync(file, 0o755);
 }
 
-export function createDevSetupSandbox(): DevSetupSandbox {
-  const folder = mkdtempSync(join(tmpdir(), 'runova-devsetup-'));
+/** `parent` is where the folder goes, the temp folder unless a test needs a path it chose. */
+export function createDevSetupSandbox(parent = tmpdir()): DevSetupSandbox {
+  const folder = mkdtempSync(join(parent, 'runova-devsetup-'));
   const bin = join(folder, 'bin');
   mkdirSync(bin, { recursive: true });
 

@@ -1,0 +1,112 @@
+---
+import { getImage } from 'astro:assets';
+import AppScreenshot from '../components/AppScreenshot.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Prose from '../components/Prose.astro';
+import type { HelpArticleData } from '../lib/help/articles';
+import { helpCrumbs, helpMetaDescription, helpPageTitle, helpTechArticle } from '../lib/help/page';
+import { screenshot } from '../lib/screenshots';
+import { breadcrumbList } from '../lib/seo';
+import BaseLayout from './BaseLayout.astro';
+
+interface ArticleLink {
+  slug: string;
+  title: string;
+}
+
+interface Props {
+  slug: string;
+  data: HelpArticleData;
+  /** The article body, rendered and filtered by the help loader. */
+  html: string;
+  previous?: ArticleLink;
+  next?: ArticleLink;
+  /** The features page for the article's in-app route. */
+  feature?: ArticleLink;
+  /** The screenshot name for the article's route. */
+  shot?: string;
+}
+
+const { slug, data, html, previous, next, feature, shot } = Astro.props;
+const site = Astro.site ?? new URL('https://runovahq.com');
+const crumbs = helpCrumbs({ slug, title: data.title });
+const description = helpMetaDescription(data.summary);
+const image = shot
+  ? (await getImage({ src: screenshot(shot).image, format: 'webp', width: 1600 })).src
+  : undefined;
+const jsonLd = [
+  helpTechArticle(site, {
+    slug,
+    title: data.title,
+    description,
+    category: data.category,
+    keywords: data.keywords,
+    ...(image ? { image } : {}),
+  }),
+  breadcrumbList(site, crumbs),
+];
+const link = 'text-primary underline underline-offset-4';
+---
+
+<BaseLayout title={helpPageTitle(data.title)} description={description} type="article" jsonLd={jsonLd}>
+  <Breadcrumbs crumbs={crumbs} />
+  <div class="pb-16 md:pb-24 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-12">
+    <article data-pagefind-body class="min-w-0">
+      <header class="max-w-[70ch] pt-6">
+        <p class="font-medium text-primary text-sm" data-pagefind-meta="category">{data.category}</p>
+        <h1 class="mt-2 text-balance font-bold text-[clamp(2rem,5vw,3rem)] leading-[1.1]">{data.title}</h1>
+        <p class="mt-5 text-lg text-muted-foreground">{data.summary}</p>
+        <div hidden data-pagefind-index-attrs="data-keywords" data-keywords={data.keywords.join(', ')}></div>
+        {
+          feature && (
+            <p class="mt-4 text-sm" data-pagefind-ignore>
+              Read about this part of Runova on the <a href={`/features/${feature.slug}`} class={link}>{feature.title}</a> page.
+            </p>
+          )
+        }
+      </header>
+
+      {shot && <AppScreenshot name={shot} loading="eager" sizes="(min-width: 1200px) 800px, (min-width: 1024px) 66vw, 100vw" class="mt-8 max-w-[800px]" />}
+
+      <Prose html={html} class="mt-8 max-w-[800px]" />
+    </article>
+
+    {
+      data.toc.length > 0 && (
+        <aside class="hidden lg:block" data-pagefind-ignore>
+          <nav aria-label="On this page" class="sticky top-20 pt-6 text-sm">
+            <p class="font-semibold">On this page</p>
+            <ul class="mt-3 flex flex-col gap-2 border-l">
+              {data.toc.map((item) => (
+                <li class:list={[item.level === 3 ? 'pl-6' : 'pl-3']}>
+                  <a href={`#${item.id}`} class="text-muted-foreground hover:text-foreground">{item.heading}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
+      )
+    }
+  </div>
+
+  <nav aria-label="More articles" class="mb-16 grid max-w-[800px] gap-4 border-t pt-8 sm:grid-cols-2" data-pagefind-ignore>
+    {
+      previous ? (
+        <a href={`/help/${previous.slug}`} rel="prev" class="rounded-lg border p-4 hover:border-primary/60">
+          <span class="block text-muted-foreground text-sm">Previous</span>
+          <span class="font-medium">{previous.title}</span>
+        </a>
+      ) : (
+        <span />
+      )
+    }
+    {
+      next && (
+        <a href={`/help/${next.slug}`} rel="next" class="rounded-lg border p-4 text-right hover:border-primary/60">
+          <span class="block text-muted-foreground text-sm">Next</span>
+          <span class="font-medium">{next.title}</span>
+        </a>
+      )
+    }
+  </nav>
+</BaseLayout>

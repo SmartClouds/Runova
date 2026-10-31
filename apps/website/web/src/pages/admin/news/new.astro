@@ -1,0 +1,10 @@
+---
+import NewsEditor from '../../../components/admin/NewsEditor';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="New news item">
+  <NewsEditor client:only="react" />
+</AdminLayout>

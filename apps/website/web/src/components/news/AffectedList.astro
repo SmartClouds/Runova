@@ -1,0 +1,30 @@
+---
+import type { AffectedTechnology } from '../../lib/news/api';
+
+interface Props {
+  technologies: AffectedTechnology[];
+  /** Security items list affected versions; other items just name what they are about. */
+  label?: string;
+  class?: string;
+}
+
+const { technologies, label = 'Affected technologies', class: className } = Astro.props;
+---
+
+{
+  technologies.length > 0 && (
+    <ul aria-label={label} class:list={['flex flex-col gap-1 text-sm', className]}>
+      {technologies.map(({ name, versionRange, fixedIn }) => (
+        <li class="flex flex-wrap items-baseline gap-x-2">
+          <span class="font-medium">{name}</span>
+          {versionRange !== '*' && <code class="font-mono text-[0.8125rem]">{versionRange}</code>}
+          {fixedIn && (
+            <span class="text-muted-foreground">
+              fixed in <code class="font-mono text-[0.8125rem] text-foreground">{fixedIn}</code>
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}

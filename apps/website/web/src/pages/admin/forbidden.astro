@@ -1,0 +1,20 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+// The guard rewrites an Editor's request for an Admin page here and answers 403 itself; this
+// sets it too for anyone who opens the page directly.
+Astro.response.status = 403;
+---
+
+<AdminLayout title="For Admins only">
+  <h1 class="font-display font-extrabold text-3xl tracking-tight">This page is for Admins only</h1>
+  <p class="mt-4 max-w-prose text-muted-foreground">
+    Your account can write the news and the blog, but API clients and staff accounts are managed by
+    an Admin. Ask one if you need a change there.
+  </p>
+  <p class="mt-6">
+    <a href="/admin" class="font-medium underline underline-offset-4">Back to the overview</a>
+  </p>
+</AdminLayout>

@@ -1,0 +1,33 @@
+---
+import { buttonVariants } from '../components/ui/button';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { CACHE } from '../lib/blog/page';
+
+// Astro renders this page when another page throws. It gets the error as a prop and never shows it:
+// the message can name internal hosts. The server has already logged it (and Sentry, when enabled).
+export const prerender = false;
+
+Astro.response.status = 500;
+Astro.response.headers.set('Cache-Control', CACHE.none);
+const link = 'text-primary underline underline-offset-4';
+---
+
+<BaseLayout
+  title="Something went wrong"
+  description="The Runova site could not build this page just now. Wait a moment and try again, or go back to the home page and start from there."
+  noindex
+>
+  <section aria-labelledby="server-error-title" class="max-w-[60ch] py-16 md:py-24">
+    <p class="font-medium text-primary text-sm">500</p>
+    <h1 id="server-error-title" class="mt-2 font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">
+      Something went wrong
+    </h1>
+    <p class="mt-4 text-lg text-muted-foreground">
+      The site could not build this page just now. Wait a moment and try again.
+    </p>
+    <a href="/" class:list={[buttonVariants({ size: 'lg' }), 'mt-8']}>Go to the home page</a>
+    <p class="mt-6 text-muted-foreground">
+      If it keeps happening, the <a href="https://github.com/SmartClouds/Runova/issues" class={link}>issue tracker</a> is the place to tell us.
+    </p>
+  </section>
+</BaseLayout>

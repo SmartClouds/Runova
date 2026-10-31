@@ -1,0 +1,28 @@
+---
+import type { Crumb } from '../lib/seo';
+
+interface Props {
+  /** From the home page down to the current page, which is shown as text. */
+  crumbs: Crumb[];
+}
+
+const { crumbs } = Astro.props;
+const last = crumbs.length - 1;
+---
+
+<nav aria-label="Breadcrumb" class="pt-8 text-muted-foreground text-sm">
+  <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+    {
+      crumbs.map((crumb, index) => (
+        <li class="flex items-center gap-2">
+          {index > 0 && <span aria-hidden="true">/</span>}
+          {index < last ? (
+            <a href={crumb.path} class="underline-offset-4 hover:text-foreground hover:underline">{crumb.name}</a>
+          ) : (
+            <span aria-current="page" class="text-foreground">{crumb.name}</span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</nav>

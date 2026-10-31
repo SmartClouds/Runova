@@ -40,6 +40,9 @@ function regQueryPath(hive: string): Promise<string[]> {
  */
 export async function refreshWindowsPath({ force = false } = {}): Promise<void> {
   if (process.platform !== 'win32') return;
+  // An e2e run that brings its own home (the website screenshots) brings its own PATH too, and
+  // the registry would add this machine's real CLIs back. See testMode.ts.
+  if (process.env.RUNOVA_E2E === '1' && process.env.RUNOVA_E2E_HOME?.trim()) return;
   // A sweep for any usable CLI can miss a dozen in a row, and each miss asks for a refresh.
   if (refreshing) return refreshing;
   if (!force && Date.now() - lastRefreshAt < REFRESH_THROTTLE_MS) return;

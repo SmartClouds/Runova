@@ -1,0 +1,62 @@
+---
+import { getCollection } from 'astro:content';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import HelpSearch from '../../components/help/HelpSearch.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { helpByCategory, sortHelpArticles } from '../../lib/help/articles';
+import { helpCrumbs } from '../../lib/help/page';
+import { breadcrumbList } from '../../lib/seo';
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const crumbs = helpCrumbs();
+const groups = helpByCategory(sortHelpArticles(await getCollection('help')));
+const count = groups.reduce((total, group) => total + group.articles.length, 0);
+const description =
+  'Guides for every part of Runova, the same ones the app ships with: the workspace, agents, Build, Ship, Deploy, Connect, settings and troubleshooting.';
+---
+
+<BaseLayout title="Help center" description={description} jsonLd={[breadcrumbList(site, crumbs)]}>
+  <Breadcrumbs crumbs={crumbs} />
+  <div class="pb-16 md:pb-24">
+    <header class="max-w-[70ch] pt-6">
+      <h1 class="text-balance font-bold text-[clamp(2.25rem,6vw,3.5rem)] leading-[1.1]">Help center</h1>
+      <p class="mt-5 text-lg text-muted-foreground">
+        These are the guides from the Help page in the app, {count} of them, grouped the same way. Each one
+        walks through a screen of Runova: where to find it, what every control does, and what to do when
+        something goes wrong.
+      </p>
+    </header>
+
+    <HelpSearch />
+
+    <div class="mt-12 flex flex-col gap-12">
+      {
+        groups.map((group) => (
+          <section aria-labelledby={`category-${group.category.toLowerCase().replace(/\s+/g, '-')}`}>
+            <h2
+              id={`category-${group.category.toLowerCase().replace(/\s+/g, '-')}`}
+              class="font-display font-semibold text-2xl"
+            >
+              {group.category}
+            </h2>
+            <ul class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-help-category={group.category}>
+              {group.articles.map((article) => (
+                <li class="relative rounded-lg border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60">
+                  <h3 class="font-semibold">
+                    <a
+                      href={`/help/${article.id}`}
+                      class="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:underline"
+                    >
+                      {article.data.title}
+                    </a>
+                  </h3>
+                  <p class="mt-2 line-clamp-3 text-muted-foreground text-sm">{article.data.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+  </div>
+</BaseLayout>

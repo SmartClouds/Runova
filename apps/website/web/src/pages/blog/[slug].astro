@@ -1,0 +1,81 @@
+---
+import BlogUnavailable from '../../components/blog/BlogUnavailable.astro';
+import PostCard from '../../components/blog/PostCard.astro';
+import PostMeta from '../../components/blog/PostMeta.astro';
+import TagList from '../../components/blog/TagList.astro';
+import NotFound from '../../components/NotFound.astro';
+import Prose from '../../components/Prose.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { blogApi, POST_SLUG, type Post, type PostListItem } from '../../lib/blog/api';
+import { applyState, blogPosting, CACHE, postImage, relatedPosts } from '../../lib/blog/page';
+import { fitMetaDescription } from '../../lib/seo';
+
+// Rendered per request from the API; the proxy caches it by its Cache-Control.
+export const prerender = false;
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const slug = Astro.params.slug ?? '';
+const api = blogApi();
+// A slug the API's route would refuse is never a post, so the API is not asked.
+const result = POST_SLUG.test(slug)
+  ? await api.getPost(slug)
+  : ({ ok: false, reason: 'not-found' } as const);
+const post: Post | undefined = result.ok ? result.value : undefined;
+const related: PostListItem[] = post ? await relatedPosts(api, post) : [];
+applyState(Astro.response, result.ok ? 'ok' : result.reason, CACHE.post);
+
+const image = post ? postImage(post) : undefined;
+const description = post
+  ? fitMetaDescription(post.excerpt, `A post from the Runova blog by ${post.author.displayName}.`)
+  : '';
+const jsonLd = post && image ? [blogPosting(site, post, image.src)] : [];
+---
+
+{
+  post && image ? (
+    <BaseLayout title={post.title} description={description} type="article" image={image} jsonLd={jsonLd}>
+      <link slot="head" rel="alternate" type="application/rss+xml" title="Runova blog" href="/blog/rss.xml" />
+      <article class="pt-12 pb-16 md:pt-20 md:pb-24">
+        <header class="max-w-[800px]">
+          <p class="text-sm">
+            <a href="/blog" class="text-primary underline underline-offset-4">Blog</a>
+          </p>
+          <h1 class="mt-2 text-balance font-bold text-[clamp(2rem,5vw,3rem)] leading-[1.1]">{post.title}</h1>
+          <p class="mt-5 text-lg text-muted-foreground">{post.excerpt}</p>
+          <PostMeta post={post} class="mt-5" />
+          <TagList tags={post.tags} class="mt-4" />
+        </header>
+        {post.coverImage && (
+          <img
+            src={post.coverImage.url}
+            alt={post.coverImage.alt}
+            width={post.coverImage.width}
+            height={post.coverImage.height}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            class="mt-8 w-full max-w-[800px] rounded-lg border"
+          />
+        )}
+        <Prose html={post.bodyHtml} class="mt-8 max-w-[800px]" />
+      </article>
+
+      {related.length > 0 && (
+        <section aria-labelledby="related-heading" class="border-t pt-10 pb-16 md:pb-24">
+          <h2 id="related-heading" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+            Related posts
+          </h2>
+          <div class="mt-6 grid gap-6 md:grid-cols-3">
+            {related.map((item) => (
+              <PostCard post={item} level="h3" />
+            ))}
+          </div>
+        </section>
+      )}
+    </BaseLayout>
+  ) : !result.ok && result.reason === 'not-found' ? (
+    <NotFound />
+  ) : (
+    <BlogUnavailable />
+  )
+}
