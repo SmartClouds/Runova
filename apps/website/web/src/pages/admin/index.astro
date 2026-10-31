@@ -1,0 +1,21 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+
+const user = Astro.locals.adminUser;
+---
+
+<AdminLayout title="Overview">
+  <h1 class="font-display font-extrabold text-3xl tracking-tight">Hello, {user?.displayName}</h1>
+  <ul class="mt-6 grid gap-4 sm:grid-cols-2">
+    <li class="rounded-lg border p-5">
+      <a href="/admin/news" class="font-semibold text-lg underline-offset-4 hover:underline">News</a>
+      <p class="mt-2 text-muted-foreground text-sm">Security advisories, releases and the rest of the news feed.</p>
+    </li>
+    <li class="rounded-lg border p-5">
+      <a href="/admin/blog" class="font-semibold text-lg underline-offset-4 hover:underline">Blog</a>
+      <p class="mt-2 text-muted-foreground text-sm">Posts with a cover, tags and a publish time.</p>
+    </li>
+  </ul>
+</AdminLayout>

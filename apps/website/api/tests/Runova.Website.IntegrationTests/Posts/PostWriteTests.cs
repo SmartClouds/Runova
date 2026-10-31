@@ -67,6 +67,26 @@ public sealed class PostWriteTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Posts_saved_at_once_with_the_same_new_tags_all_get_them()
+    {
+        var editors = new List<ApiClient>();
+        for (var i = 0; i < 8; i++)
+        {
+            editors.Add(await TestUsers.SignedInClientAsync(_factory, await TestUsers.CreateAsync(_factory.Services, Roles.Editor)));
+        }
+
+        // Each write looks the tags up before it saves, so all of them find none and try to add them.
+        var responses = await Task.WhenAll(editors.Select((editor, i) =>
+            editor.SendAsync(HttpMethod.Post, Posts, Body($"same-new-tags-{i}", tags: ["Performance", "Workspaces"]))));
+
+        foreach (var response in responses)
+        {
+            var created = await ApiClient.ReadJsonAsync(response, HttpStatusCode.Created);
+            Assert.Equal(["performance", "workspaces"], created.GetProperty("tags").EnumerateArray().Select(t => t.GetProperty("slug").GetString()).Order());
+        }
+    }
+
+    [Fact]
     public async Task Put_replaces_patch_merges_and_delete_archives()
     {
         var editor = await EditorAsync();

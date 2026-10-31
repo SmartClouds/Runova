@@ -1,0 +1,13 @@
+---
+import SignInForm from '../../components/admin/SignInForm';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Sign in">
+  <div class="mx-auto grid max-w-sm gap-6">
+    <h1 class="font-display font-extrabold text-3xl tracking-tight">Sign in</h1>
+    <SignInForm client:only="react" />
+  </div>
+</AdminLayout>

@@ -282,7 +282,23 @@ internal static class PostWriteEndpoints
         if (!slugs.Order(StringComparer.Ordinal).SequenceEqual(post.Tags.Select(t => t.Slug).Order(StringComparer.Ordinal)))
         {
             var known = await db.Tags.Where(t => slugs.Contains(t.Slug)).ToDictionaryAsync(t => t.Slug);
-            post.Tags = [.. names.Select(name => known.GetValueOrDefault(Tag.SlugFor(name)) ?? new Tag { Slug = Tag.SlugFor(name), Name = name })];
+            var missing = names.Where(name => !known.ContainsKey(Tag.SlugFor(name))).ToList();
+            if (missing.Count > 0)
+            {
+                // Another write can add the same new tag at the same moment, so a new tag goes in on its
+                // own and is skipped when that write won. A tag left on no post stays off the public list.
+                string[] newSlugs = [.. missing.Select(Tag.SlugFor)];
+                string[] newNames = [.. missing];
+                await db.Database.ExecuteSqlAsync(
+                    $"""
+                    INSERT INTO "Tags" ("Slug", "Name")
+                    SELECT * FROM unnest({newSlugs}, {newNames})
+                    ON CONFLICT ("Slug") DO NOTHING
+                    """);
+                known = await db.Tags.Where(t => slugs.Contains(t.Slug)).ToDictionaryAsync(t => t.Slug);
+            }
+
+            post.Tags = [.. slugs.Select(slug => known[slug])];
         }
     }
 

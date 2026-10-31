@@ -19,6 +19,9 @@ Run these here, or `pnpm website:dev | website:build | website:test | website:e2
 | `bun run start`                 | Serves `dist/` with `bun ./dist/server/entry.mjs` (`HOST`, `PORT`)                        |
 | `bun run e2e`                   | Builds, starts the server under bun and runs Playwright                                   |
 
+`bun run e2e` needs Docker and the .NET SDK: the `admin` Playwright project (`e2e/admin/`) runs
+against the real API, which it builds and starts on a PostgreSQL container (`e2e/admin/stack.ts`).
+
 ## Environment
 
 An empty value turns the feature off and breaks nothing.

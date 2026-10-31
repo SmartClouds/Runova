@@ -8,3 +8,10 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare namespace App {
+  interface Locals {
+    /** The staff user of an admin request, set by the middleware once the API knows the session. */
+    adminUser?: import('./lib/admin/guard').AdminUser;
+  }
+}

@@ -1,0 +1,21 @@
+---
+import NewsEditor from '../../../components/admin/NewsEditor';
+import NotFound from '../../../components/NotFound.astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { itemId } from '../../../lib/admin/routes';
+
+export const prerender = false;
+
+const id = itemId(Astro.params.id);
+if (id === null) Astro.response.status = 404;
+---
+
+{
+  id === null ? (
+    <NotFound />
+  ) : (
+    <AdminLayout title="Edit news item">
+      <NewsEditor id={id} client:only="react" />
+    </AdminLayout>
+  )
+}

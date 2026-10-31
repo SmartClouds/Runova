@@ -19,7 +19,8 @@ export default defineConfig({
   integrations: [
     react(),
     mdx(),
-    sitemap(),
+    // The admin pages are private, so they stay out of the sitemap even when Astro lists them.
+    sitemap({ filter: (page) => !/^\/admin(?:\/|$)/.test(new URL(page).pathname) }),
     // An empty DSN leaves Sentry out of both bundles. Source maps upload only with an auth token.
     sentry({
       enabled: Boolean(sentryDsn),

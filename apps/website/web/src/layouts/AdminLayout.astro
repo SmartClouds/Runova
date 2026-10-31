@@ -1,0 +1,73 @@
+---
+import '@fontsource-variable/inter/wght.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '../styles/global.css';
+import SignOutButton from '../components/admin/SignOutButton';
+import SeoHead from '../components/SeoHead.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import { themeInitScript } from '../lib/theme';
+
+interface Props {
+  title: string;
+}
+
+// The middleware has already sent noindex and no-store and turned away anyone signed out.
+const { title } = Astro.props;
+const user = Astro.locals.adminUser;
+const section = Astro.url.pathname.split('/')[2] ?? '';
+const links = [
+  { href: '/admin/news', label: 'News', section: 'news' },
+  { href: '/admin/blog', label: 'Blog', section: 'blog' },
+];
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <script is:inline set:html={themeInitScript} />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <SeoHead title={`${title} (admin)`} description="The Runova site admin, where staff write the news and the blog." noindex />
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <a
+      href="#main"
+      class="sr-only rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
+    >
+      Skip to content
+    </a>
+    <header class="border-b">
+      <div class="mx-auto flex min-h-14 max-w-[1200px] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 md:px-6">
+        <a href="/admin" class="flex items-center gap-2 font-display font-semibold text-lg tracking-tight">
+          <img src="/favicon-32.png" alt="" width="24" height="24" class="rounded-[6px]" />
+          Runova admin
+        </a>
+        {
+          user && (
+            <nav aria-label="Admin" class="flex items-center gap-1">
+              {links.map((link) => (
+                <a
+                  href={link.href}
+                  aria-current={section === link.section ? 'page' : undefined}
+                  class="rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:text-foreground"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          )
+        }
+        <div class="flex items-center gap-3">
+          {user && <span class="text-muted-foreground text-sm max-sm:sr-only">{user.displayName}</span>}
+          {user && <SignOutButton client:only="react" />}
+          <ThemeToggle />
+        </div>
+      </div>
+    </header>
+    <main id="main" tabindex="-1" class="mx-auto w-full max-w-[1200px] flex-1 px-4 py-8 md:px-6">
+      <slot />
+    </main>
+  </body>
+</html>

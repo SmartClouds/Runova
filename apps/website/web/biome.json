@@ -35,6 +35,12 @@
       }
     },
     {
+      "includes": ["tests/**"],
+      "linter": {
+        "rules": { "suspicious": { "noDocumentCookie": "off" } }
+      }
+    },
+    {
       "includes": ["**/*.astro"],
       "linter": {
         "rules": {

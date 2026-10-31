@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Net;
+using System.Text.RegularExpressions;
 using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc.Testing.Handlers;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -72,14 +75,41 @@ public sealed class WebsiteApiFactory(
 
     /// <summary>
     /// A client on https, since the session and antiforgery cookies are Secure, that keeps cookies
-    /// and never follows a redirect.
+    /// by the API's clock and never follows a redirect.
     /// </summary>
     internal ApiClient CreateApiClient() =>
-        new(CreateClient(new WebApplicationFactoryClientOptions
+        new(time is null
+            ? CreateDefaultClient(new Uri("https://localhost"), new CookieContainerHandler())
+            : CreateDefaultClient(new Uri("https://localhost"), new CookieContainerHandler(), new CookieExpiryOnRealClock(time)));
+
+    /// <summary>
+    /// Moves each cookie's expiry from the API's clock to the real one. The cookie jar only knows
+    /// real time, so a session cookie set under a fake clock in the past would be dropped at once.
+    /// A cookie the API sends already expired, as a sign-out does, is left as it is.
+    /// </summary>
+    private sealed class CookieExpiryOnRealClock(TimeProvider time) : DelegatingHandler
+    {
+        private static readonly Regex _expires = new("expires=([^;]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            BaseAddress = new Uri("https://localhost"),
-            AllowAutoRedirect = false,
-        }));
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+            {
+                var now = time.GetUtcNow();
+                var shift = DateTimeOffset.UtcNow - now;
+                var moved = cookies.Select(cookie => _expires.Replace(cookie, match =>
+                {
+                    var expires = DateTimeOffset.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                    return expires <= now ? match.Value : "expires=" + (expires + shift).ToString("R", CultureInfo.InvariantCulture);
+                })).ToList();
+                response.Headers.Remove("Set-Cookie");
+                response.Headers.TryAddWithoutValidation("Set-Cookie", moved);
+            }
+
+            return response;
+        }
+    }
 
     /// <summary>
     /// The test server sends no caller address, so a test that needs one names it in
