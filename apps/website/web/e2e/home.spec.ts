@@ -1,6 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { scanHtml } from '../tests/helpers/textScan';
-import { canvas, fallback, hero, settle, watchScripts, watchThree } from './heroHelpers';
+import {
+  canvas,
+  capableDevice,
+  fallback,
+  hero,
+  settle,
+  watchScripts,
+  watchThree,
+} from './heroHelpers';
+
+test.beforeEach(({ page }) => capableDevice(page));
 
 test.describe('home page hero', () => {
   test('loads three.js only once the hero is visible, then runs the scene', async ({ page }) => {

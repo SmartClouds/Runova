@@ -21,6 +21,19 @@ export function watchScripts(page: Page, marker: string) {
  */
 export const watchThree = (page: Page) => watchScripts(page, 'THREE.WebGLRenderer');
 
+/**
+ * Makes the page report 8 cores and 8 GB, so whether the hero counts the device as low-end does
+ * not depend on the machine running the tests (a 4-core CI runner is low-end to it). Configurable,
+ * so a test can still make the device low-end after this.
+ */
+export async function capableDevice(page: Page) {
+  await page.addInitScript(() => {
+    for (const name of ['hardwareConcurrency', 'deviceMemory']) {
+      Object.defineProperty(Navigator.prototype, name, { get: () => 8, configurable: true });
+    }
+  });
+}
+
 /** Lets the island hydrate and any scene start, so a test that expects nothing waits long enough. */
 export async function settle(page: Page) {
   await page.waitForLoadState('networkidle');

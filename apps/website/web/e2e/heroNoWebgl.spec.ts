@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { canvas, fallback, hero, settle, watchThree } from './heroHelpers';
+import { canvas, capableDevice, fallback, hero, settle, watchThree } from './heroHelpers';
 
 // The scene's WebGL context lives in a worker, where an init script cannot reach, so this takes
 // the GPU away from the whole browser, like a machine whose GPU Chrome blocks. --disable-webgl
@@ -9,6 +9,8 @@ test.use({ launchOptions: { args: ['--disable-gpu', '--disable-software-rasteriz
 test('without WebGL, the hero shows the static image and never loads three.js', async ({
   page,
 }) => {
+  // Otherwise a low-end machine stops at that check, before WebGL is looked at.
+  await capableDevice(page);
   const three = watchThree(page);
   await page.goto('/');
   await settle(page);
