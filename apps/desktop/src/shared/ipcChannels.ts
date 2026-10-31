@@ -1872,6 +1872,10 @@ export const IPC = {
     query: 'database:query',
     // (sessionId, queryId) -> boolean
     cancelQuery: 'database:cancelQuery',
+    // (sessionId) -> DbSetting[]
+    settings: 'database:settings',
+    // (sessionId) -> DbUser[]
+    users: 'database:users',
   },
   apiClient: {
     listCollections: 'apiClient:listCollections',

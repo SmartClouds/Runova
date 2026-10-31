@@ -18,6 +18,7 @@ export * from './cli/launchCommand.js';
 export * from './cli/launchDefaults.js';
 export * from './cli/liveSwitch.js';
 export * from './cli/registry.js';
+export * from './database/admin.js';
 export * from './database/classify.js';
 export * from './database/connectionUrl.js';
 export * from './database/ddl.js';

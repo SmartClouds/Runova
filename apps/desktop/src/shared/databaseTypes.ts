@@ -1,4 +1,4 @@
-import type { DbEngine, DbObjectRef, StatementClass } from '@runova/core';
+import type { AccessLevel, DbEngine, DbObjectRef, StatementClass } from '@runova/core';
 
 /**
  * Plain data the Database section passes between main and the renderer. Passwords never come
@@ -247,4 +247,32 @@ export interface DbRowsPage {
   total: number | null;
   /** The columns that pick out one row, so rows can be edited. Empty when there are none. */
   keyColumns: string[];
+}
+
+/** One server setting, for the Settings tab. */
+export interface DbSetting {
+  name: string;
+  value: string;
+  unit: string | null;
+  description: string | null;
+  category: string | null;
+  /** The server has to restart before a change counts. */
+  restartRequired: boolean;
+  /** Whether Runova can change it from here. */
+  editable: boolean;
+  /** The values it accepts, when the server lists them. */
+  options: string[] | null;
+}
+
+/** One user (or role) and what it can reach, for the Users tab. */
+export interface DbUser {
+  name: string;
+  /** MySQL and MariaDB: where the user may connect from. */
+  host: string | null;
+  superuser: boolean;
+  canLogin: boolean;
+  /** Access per database, when the engine can say it in these terms. */
+  access: { database: string; level: AccessLevel }[] | null;
+  /** Anything else worth showing: roles, flags. */
+  detail: string | null;
 }

@@ -35,6 +35,8 @@ export interface DatabaseHandlerDeps {
     | 'readRows'
     | 'query'
     | 'cancelQuery'
+    | 'settings'
+    | 'users'
   >;
   guard: (event: IpcMainInvokeEvent) => boolean;
 }
@@ -280,6 +282,8 @@ export function registerDatabaseHandlers({ ipc, service, guard }: DatabaseHandle
   );
   handle(IPC.database.readRows, (value) => service.readRows(rowsInput(value)));
   handle(IPC.database.query, (value) => service.query(queryInput(value)));
+  handle(IPC.database.settings, (sessionId) => service.settings(id(sessionId, 'connection')));
+  handle(IPC.database.users, (sessionId) => service.users(id(sessionId, 'connection')));
   handle(IPC.database.cancelQuery, (sessionId, queryId) =>
     service.cancelQuery(id(sessionId, 'connection'), id(queryId, 'query id')),
   );

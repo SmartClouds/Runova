@@ -14,7 +14,9 @@ import type {
   DbReadRowsInput,
   DbResultSet,
   DbRowsPage,
+  DbSetting,
   DbTableDescription,
+  DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
@@ -326,8 +328,75 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
       }
     },
 
+    async settings(): Promise<DbSetting[]> {
+      const [rows] = await connection.query<mysql.RowDataPacket[]>('SHOW GLOBAL VARIABLES');
+      return rows.map((row) => ({
+        name: String(row.Variable_name),
+        value: String(row.Value ?? ''),
+        unit: null,
+        description: null,
+        category: String(row.Variable_name).split('_')[0] ?? null,
+        restartRequired: false,
+        editable: true,
+        options: null,
+      }));
+    },
+
+    async users(): Promise<DbUser[]> {
+      const [rows] = await connection.query<mysql.RowDataPacket[]>(
+        'SELECT User AS user, Host AS host, Super_priv AS super FROM mysql.user ORDER BY User, Host',
+      );
+      const users: DbUser[] = [];
+      for (const row of rows) {
+        const user = String(row.user);
+        const host = String(row.host);
+        let grants: string[] = [];
+        try {
+          const [shown] = await connection.query<mysql.RowDataPacket[]>('SHOW GRANTS FOR ?@?', [
+            user,
+            host,
+          ]);
+          grants = shown.map((one) => String(Object.values(one)[0] ?? ''));
+        } catch {
+          // Not allowed to see another user's grants; the name and host are still worth listing.
+        }
+        users.push({
+          name: user,
+          host,
+          superuser: row.super === 'Y',
+          canLogin: true,
+          access: accessFromGrants(grants),
+          detail: user.startsWith('mysql.') ? 'built in' : null,
+        });
+      }
+      return users;
+    },
+
     async close() {
       await connection.end().catch(() => connection.destroy());
     },
   };
+}
+
+/** "GRANT SELECT, INSERT ON `shop`.* TO ..." lines read as a level per database ("*" is all). */
+export function accessFromGrants(grants: readonly string[]): DbUser['access'] {
+  const levels = new Map<string, 'read' | 'write' | 'admin'>();
+  const rank = { read: 1, write: 2, admin: 3 } as const;
+  for (const grant of grants) {
+    const match = /^GRANT (.+?) ON [`"]?([^`".]+|\*)[`"]?\.\* TO/i.exec(grant);
+    if (!match) continue;
+    const privileges = (match[1] ?? '').toUpperCase();
+    const database = match[2] ?? '';
+    const level = privileges.includes('ALL PRIVILEGES')
+      ? 'admin'
+      : /\b(INSERT|UPDATE|DELETE)\b/.test(privileges)
+        ? 'write'
+        : /\bSELECT\b/.test(privileges)
+          ? 'read'
+          : null;
+    if (!level) continue;
+    const current = levels.get(database);
+    if (!current || rank[level] > rank[current]) levels.set(database, level);
+  }
+  return [...levels.entries()].map(([database, level]) => ({ database, level }));
 }

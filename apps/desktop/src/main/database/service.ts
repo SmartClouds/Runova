@@ -17,7 +17,9 @@ import type {
   DbQueryOutcome,
   DbReadRowsInput,
   DbRowsPage,
+  DbSetting,
   DbTableDescription,
+  DbUser,
 } from '../../shared/databaseTypes';
 import type {
   ContainerDetails,
@@ -404,6 +406,18 @@ export class DatabaseService {
 
   describe(sessionId: string, ref: DbObjectRef): Promise<DbTableDescription> {
     return this.withSession(sessionId, (session) => session.driver.describe(ref));
+  }
+
+  /** The server's settings, or none where the engine has none to show. */
+  settings(sessionId: string): Promise<DbSetting[]> {
+    return this.withSession(
+      sessionId,
+      async (session) => (await session.driver.settings?.()) ?? [],
+    );
+  }
+
+  users(sessionId: string): Promise<DbUser[]> {
+    return this.withSession(sessionId, async (session) => (await session.driver.users?.()) ?? []);
   }
 
   readRows(input: DbReadRowsInput): Promise<DbRowsPage> {

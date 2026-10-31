@@ -1,4 +1,4 @@
-import { buildRowEdits } from '@runova/core';
+import { buildRowEdits, createUserStatements, dropUserStatement } from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import {
@@ -243,6 +243,49 @@ for (const engine of CASES) {
       await run(
         driver,
         "UPDATE items SET name = 'apple' WHERE id = 1; DELETE FROM items WHERE name = 'kiwi'",
+      );
+    });
+
+    it('lists the server settings and the users, and creates a user with read access', async () => {
+      const settings = (await driver.settings?.()) ?? [];
+      expect(settings.length).toBeGreaterThan(50);
+      expect(settings.some((setting) => /max_connections/.test(setting.name))).toBe(true);
+
+      const engineName = engine.options(db).engine;
+      const statements = createUserStatements(engineName, {
+        user: 'reporter',
+        password: 'Rep0rter!',
+        database: 'shop',
+        level: 'read',
+      });
+      const created = await run(driver, statements.join('\n'));
+      expect(created.error).toBeUndefined();
+      const users = (await driver.users?.()) ?? [];
+      const reporter = users.find((user) => user.name === 'reporter');
+      expect(reporter).toBeDefined();
+      expect(reporter?.superuser).toBe(false);
+      if (engineName !== 'postgres') {
+        expect(reporter?.access).toEqual([{ database: 'shop', level: 'read' }]);
+      }
+
+      const reporterDriver = await openDriver({
+        ...engine.options(db),
+        user: 'reporter',
+        password: 'Rep0rter!',
+      });
+      try {
+        expect(
+          (await run(reporterDriver, 'SELECT name FROM items WHERE id = 1')).error,
+        ).toBeUndefined();
+        expect(
+          (await run(reporterDriver, "UPDATE items SET name = 'x' WHERE id = 1")).error,
+        ).toBeDefined();
+      } finally {
+        await reporterDriver.close();
+      }
+      await run(
+        driver,
+        dropUserStatement(engineName, { user: 'reporter' }) + (engineName === 'postgres' ? '' : ''),
       );
     });
 

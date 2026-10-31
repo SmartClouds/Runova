@@ -6,7 +6,9 @@ import type {
   DbReadRowsInput,
   DbResultSet,
   DbRowsPage,
+  DbSetting,
   DbTableDescription,
+  DbUser,
 } from '../../../shared/databaseTypes';
 
 /** What a driver needs to sign in. The host and port are where main reaches it (maybe a forward). */
@@ -57,6 +59,10 @@ export interface DbDriver {
   describe(ref: DbObjectRef): Promise<DbTableDescription>;
   readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage>;
   query(text: string, options: DriverQueryOptions): Promise<DriverQueryResult>;
+  /** The server's settings. Left out where the engine has none to show. */
+  settings?(): Promise<DbSetting[]>;
+  /** The users or roles. Left out where the engine has none. */
+  users?(): Promise<DbUser[]>;
   close(): Promise<void>;
 }
 

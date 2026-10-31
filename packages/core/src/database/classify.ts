@@ -350,8 +350,6 @@ const MONGO_DB_READ = new Set([
   'getprofilingstatus',
   'getlogcomponents',
   'printcollectionstats',
-  'getsiblingdb',
-  'getmongo',
   'serverbuildinfo',
   'serverCmdLineOpts'.toLowerCase(),
   'getreplicationinfo',
@@ -440,7 +438,8 @@ const MONGO_DDL_DESTRUCTIVE = new Set(['dropindex', 'dropindexes', 'drop', 'drop
 const WRITE_UNKNOWN: StatementClass = { kind: 'write', destructive: false };
 
 function classifyMongo(statement: ScannedStatement): StatementClass {
-  const code = statement.code;
+  // db.getSiblingDB("x").something is db.something run in another database.
+  const code = statement.code.replace(/^db\s*\.\s*getSiblingDB\s*\([^)]*\)/, 'db');
   if (/^show\s+\w+\s*;?\s*$/i.test(code)) return READ;
   if (/^use\s+\S+\s*;?\s*$/i.test(code)) return READ;
 

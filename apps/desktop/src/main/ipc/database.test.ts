@@ -123,6 +123,11 @@ describe('registerDatabaseHandlers', () => {
     await call(C.connect, 'conn-1', 'typed');
     await call(C.disconnect, SESSION);
     await call(C.cancelQuery, SESSION, 'q-1');
+    await call(C.settings, SESSION);
+    await call(C.users, SESSION);
+    expect(service.settings).toHaveBeenCalledWith(SESSION);
+    expect(service.users).toHaveBeenCalledWith(SESSION);
+    await expect(call(C.users, '../x')).rejects.toThrow();
     expect(service.discover).toHaveBeenCalledWith(null);
     expect(service.discover).toHaveBeenCalledWith('s1');
     expect(service.connect).toHaveBeenCalledWith('conn-1', undefined);

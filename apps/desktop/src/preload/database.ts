@@ -12,7 +12,9 @@ import type {
   DbQueryOutcome,
   DbReadRowsInput,
   DbRowsPage,
+  DbSetting,
   DbTableDescription,
+  DbUser,
 } from '../shared/databaseTypes';
 import { IPC } from '../shared/ipcChannels';
 
@@ -46,6 +48,10 @@ export function createDatabase() {
       ipcRenderer.invoke(IPC.database.readRows, input),
     query: (input: DbQueryInput): Promise<DbQueryOutcome> =>
       ipcRenderer.invoke(IPC.database.query, input),
+    settings: (sessionId: string): Promise<DbSetting[]> =>
+      ipcRenderer.invoke(IPC.database.settings, sessionId),
+    users: (sessionId: string): Promise<DbUser[]> =>
+      ipcRenderer.invoke(IPC.database.users, sessionId),
     cancelQuery: (sessionId: string, queryId: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC.database.cancelQuery, sessionId, queryId),
   };

@@ -9,7 +9,9 @@ import type {
   DbReadRowsInput,
   DbResultSet,
   DbRowsPage,
+  DbSetting,
   DbTableDescription,
+  DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
@@ -350,6 +352,62 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
           await client.query('SET default_transaction_read_only = off').catch(() => undefined);
         }
       }
+    },
+
+    async settings(): Promise<DbSetting[]> {
+      const result = await main.query<{
+        name: string;
+        setting: string;
+        unit: string | null;
+        category: string;
+        short_desc: string;
+        context: string;
+        enumvals: string[] | null;
+      }>(
+        `SELECT name, setting, unit, category, short_desc, context, enumvals
+           FROM pg_settings ORDER BY category, name`,
+      );
+      return result.rows.map((row) => ({
+        name: row.name,
+        value: row.setting,
+        unit: row.unit,
+        description: row.short_desc,
+        category: row.category,
+        restartRequired: row.context === 'postmaster',
+        editable: row.context !== 'internal',
+        options: row.enumvals,
+      }));
+    },
+
+    async users(): Promise<DbUser[]> {
+      const result = await main.query<{
+        rolname: string;
+        rolsuper: boolean;
+        rolcanlogin: boolean;
+        rolcreatedb: boolean;
+        rolcreaterole: boolean;
+        member_of: string[];
+      }>(
+        `SELECT r.rolname, r.rolsuper, r.rolcanlogin, r.rolcreatedb, r.rolcreaterole,
+                ARRAY(SELECT b.rolname::text FROM pg_auth_members m JOIN pg_roles b ON b.oid = m.roleid
+                       WHERE m.member = r.oid ORDER BY 1) AS member_of
+           FROM pg_roles r WHERE left(r.rolname, 3) <> 'pg_' ORDER BY r.rolname`,
+      );
+      return result.rows.map((row) => {
+        const flags = [
+          row.rolcreatedb ? 'can create databases' : null,
+          row.rolcreaterole ? 'can create roles' : null,
+          row.member_of.length > 0 ? `member of ${row.member_of.join(', ')}` : null,
+        ].filter(Boolean);
+        return {
+          name: row.rolname,
+          host: null,
+          superuser: row.rolsuper,
+          canLogin: row.rolcanlogin,
+          access: null,
+          detail: flags.length > 0 ? flags.join(' · ') : null,
+        };
+      });
     },
 
     async close() {

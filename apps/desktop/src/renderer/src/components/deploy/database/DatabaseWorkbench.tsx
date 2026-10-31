@@ -2,7 +2,18 @@ import { engineInfo, qualifiedName } from '@runova/core';
 import type { DbObjectNode, DbObjectRef, DbTableDescription } from '@shared/databaseTypes';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Code, Layers, Lock, Plug, Plus, RefreshCw, Table, X } from '@/components/icons';
+import {
+  Code,
+  Layers,
+  Lock,
+  Plug,
+  Plus,
+  RefreshCw,
+  Sliders,
+  Table,
+  Users,
+  X,
+} from '@/components/icons';
 import { EmptyState, GLASS_PANEL } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
@@ -17,15 +28,23 @@ import { DataTab } from './DataTab';
 import { EngineMark } from './EngineMark';
 import { ObjectTree } from './ObjectTree';
 import { QueryTab } from './QueryTab';
+import { SettingsTab } from './SettingsTab';
 import { StructureTab } from './StructureTab';
 import { type DesignerTarget, TableDesigner } from './TableDesigner';
+import { UsersTab } from './UsersTab';
 
 /**
  * An open connection: the object tree on the left, tabs for rows, structure and queries in the
  * middle. Tabs stay while the app runs, so coming back to the section finds them as they were.
  */
 
-const TAB_ICONS = { data: Table, query: Code, structure: Layers } as const;
+const TAB_ICONS = {
+  data: Table,
+  query: Code,
+  structure: Layers,
+  settings: Sliders,
+  users: Users,
+} as const;
 
 function starterQuery(
   engine: WorkbenchScope['session']['connection']['engine'],
@@ -136,6 +155,28 @@ export function DatabaseWorkbench({
         <Button size="sm" shape="pill" variant="tint" onClick={() => openQuery()}>
           <Plus /> New query
         </Button>
+        {info.capabilities.users ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Users and access"
+            title="Users and access"
+            onClick={() => store.openTab(scope, { kind: 'users', title: 'Users' })}
+          >
+            <Users />
+          </Button>
+        ) : null}
+        {info.capabilities.settings ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Server settings"
+            title="Server settings"
+            onClick={() => store.openTab(scope, { kind: 'settings', title: 'Settings' })}
+          >
+            <Sliders />
+          </Button>
+        ) : null}
         <Button
           size="icon-sm"
           variant="ghost"
@@ -297,6 +338,18 @@ function TabBody({
         engine={session.connection.engine}
         readOnly={session.connection.readOnly}
         objectRef={tab.ref}
+      />
+    );
+  }
+  if (tab.kind === 'settings') {
+    return <SettingsTab sessionId={session.sessionId} engine={session.connection.engine} />;
+  }
+  if (tab.kind === 'users') {
+    return (
+      <UsersTab
+        sessionId={session.sessionId}
+        engine={session.connection.engine}
+        defaultDatabase={session.connection.database}
       />
     );
   }

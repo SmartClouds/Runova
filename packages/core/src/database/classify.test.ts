@@ -236,6 +236,20 @@ describe('classifyStatement for Mongo', () => {
     );
   });
 
+  it('reads through getSiblingDB to the call that matters', () => {
+    expect(classifyStatement('mongodb', 'db.getSiblingDB("admin").dropUser("x")').kind).toBe(
+      'admin',
+    );
+    expect(classifyStatement('mongodb', 'db.getSiblingDB("shop").dropDatabase()')).toEqual({
+      kind: 'ddl',
+      destructive: true,
+    });
+    expect(classifyStatement('mongodb', 'db.getSiblingDB("shop").orders.find({})').kind).toBe(
+      'read',
+    );
+    expect(classifyStatement('mongodb', 'db.getMongo().getDBNames()').kind).toBe('write');
+  });
+
   it('allows getCollection with an awkward name', () => {
     expect(classifyStatement('mongodb', 'db.getCollection("a.b").find({})').kind).toBe('read');
     expect(classifyStatement('mongodb', "db['a-b'].insertOne({})").kind).toBe('write');

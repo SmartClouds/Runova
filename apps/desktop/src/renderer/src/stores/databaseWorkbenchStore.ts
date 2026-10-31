@@ -7,7 +7,7 @@ import { create } from 'zustand';
  * finds the same tabs. Not saved: sessions end when the app quits.
  */
 
-export type WorkbenchTabKind = 'data' | 'query' | 'structure';
+export type WorkbenchTabKind = 'data' | 'query' | 'structure' | 'settings' | 'users';
 
 export interface WorkbenchTab {
   id: string;
@@ -45,9 +45,12 @@ function sameObject(a: WorkbenchTab, b: Omit<WorkbenchTab, 'id'>): boolean {
   return (
     a.kind === b.kind &&
     a.kind !== 'query' &&
-    a.ref?.name === b.ref?.name &&
-    a.ref?.schema === b.ref?.schema &&
-    a.ref?.database === b.ref?.database
+    // Settings and Users have one tab each.
+    (a.kind === 'settings' ||
+      a.kind === 'users' ||
+      (a.ref?.name === b.ref?.name &&
+        a.ref?.schema === b.ref?.schema &&
+        a.ref?.database === b.ref?.database))
   );
 }
 
