@@ -168,6 +168,7 @@ export function AppsPanel({ server }: { server: DeployServer }): React.JSX.Eleme
     return (
       <AppDetail
         serverId={serverId}
+        serverHost={server.host}
         stackId={appId}
         access={access}
         onBack={() => show({})}

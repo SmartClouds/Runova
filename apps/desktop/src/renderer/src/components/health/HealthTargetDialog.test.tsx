@@ -197,4 +197,61 @@ describe('HealthTargetDialog', () => {
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
+
+  it('starts from the fields another page sent, keeps the app link, and can drop it', async () => {
+    const seed = {
+      name: 'shop',
+      url: 'https://shop.example.com/_runova/health',
+      projectId: 'p1',
+      serverLink: 'ssh:s1',
+      appLink: { serverId: 's1', stackId: 'shop' },
+      appName: 'shop',
+    };
+    const { user, bridge: fake } = renderWithProviders(
+      <HealthTargetDialog
+        open
+        onOpenChange={vi.fn()}
+        projects={projects}
+        defaultProjectId="p2"
+        initialDraft={seed}
+      />,
+      { bridge },
+    );
+    expect(screen.getByLabelText('Name')).toHaveValue('shop');
+    expect(screen.getByLabelText('Endpoint URL')).toHaveValue(seed.url);
+    expect(screen.getByText('Linked to the app shop on Deploy.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Add target' }));
+    await waitFor(() => expect(fake.$fn('health.create')).toHaveBeenCalled());
+    expect(fake.$fn('health.create').mock.calls[0][0]).toMatchObject({
+      projectId: 'p1',
+      name: 'shop',
+      url: seed.url,
+      serverLink: { kind: 'ssh', id: 's1' },
+      appLink: { serverId: 's1', stackId: 'shop' },
+    });
+  });
+
+  it('saves no app link once it is unlinked', async () => {
+    const { user, bridge: fake } = renderWithProviders(
+      <HealthTargetDialog
+        open
+        onOpenChange={vi.fn()}
+        projects={projects}
+        initialDraft={{
+          projectId: 'p1',
+          name: 'shop',
+          url: 'https://shop.example.com/_runova/health',
+          appLink: { serverId: 's1', stackId: 'shop' },
+        }}
+      />,
+      { bridge },
+    );
+    expect(screen.getByText('Linked to an app on Deploy.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Unlink' }));
+    expect(screen.queryByText('Linked to an app on Deploy.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add target' }));
+    await waitFor(() => expect(fake.$fn('health.create')).toHaveBeenCalled());
+    expect(fake.$fn('health.create').mock.calls[0][0].appLink).toBeNull();
+  });
 });

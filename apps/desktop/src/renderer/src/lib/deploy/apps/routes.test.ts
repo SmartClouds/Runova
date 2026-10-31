@@ -1,10 +1,11 @@
 import type {
+  CertificateInfo,
   SiteInfo,
   StackPortBinding,
   UpstreamTarget,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import { describe, expect, it } from 'vitest';
-import { domainsForPort, proxyBlockReason, publishedPort } from './routes';
+import { appHealthUrl, domainsForPort, proxyBlockReason, publishedPort } from './routes';
 
 /** Which domains lead to a published port, and whether nginx can put one on a domain. */
 
@@ -84,5 +85,58 @@ describe('proxyBlockReason', () => {
     expect(proxyBlockReason(binding({ protocol: 'udp' }))).toMatch(/UDP/);
     expect(proxyBlockReason(binding({ published: undefined }))).toMatch(/fixed port/);
     expect(proxyBlockReason(binding({ hostIp: '10.0.0.5' }))).toMatch(/10\.0\.0\.5/);
+  });
+});
+
+describe('appHealthUrl', () => {
+  const app = (...ports: StackPortBinding[]) => ({
+    services: [{ name: 'api', containers: [], ports }],
+  });
+  const certified = (site: SiteInfo): SiteInfo => ({
+    ...site,
+    certificate: { siteId: site.settings.id, state: 'valid' } as CertificateInfo,
+  });
+
+  it('uses the domain of a site with a certificate over https', () => {
+    const sites = [
+      siteTo(['plain.example.com'], { port: 8091 }),
+      certified(siteTo(['api.example.com'], { port: 8091 })),
+    ];
+    expect(appHealthUrl(app(binding()), sites, '203.0.113.7')).toEqual({
+      url: 'https://api.example.com/_runova/health',
+      insecure: false,
+    });
+  });
+
+  it('falls back to plain http on a domain with no certificate', () => {
+    const sites = [siteTo(['*.example.com', 'api.example.com'], { port: 8091 })];
+    expect(appHealthUrl(app(binding()), sites, '203.0.113.7')).toEqual({
+      url: 'http://api.example.com/_runova/health',
+      insecure: true,
+    });
+  });
+
+  it('uses the server address for a port open to every address', () => {
+    expect(appHealthUrl(app(binding({ hostIp: '0.0.0.0' })), [], '203.0.113.7')).toEqual({
+      url: 'http://203.0.113.7:8091/_runova/health',
+      insecure: true,
+    });
+    expect(appHealthUrl(app(binding({ hostIp: '2001:db8::1' })), undefined, 'web-1')).toEqual({
+      url: 'http://[2001:db8::1]:8091/_runova/health',
+      insecure: true,
+    });
+  });
+
+  it('needs no insecure switch for a server on this computer', () => {
+    expect(appHealthUrl(app(binding({ hostIp: undefined })), [], 'localhost')).toEqual({
+      url: 'http://localhost:8091/_runova/health',
+      insecure: false,
+    });
+  });
+
+  it('has nothing to call when every port stays on the server', () => {
+    expect(appHealthUrl(app(binding()), [], '203.0.113.7')).toBeNull();
+    expect(appHealthUrl(app(binding({ hostIp: '0.0.0.0', protocol: 'udp' })), [], 'h')).toBeNull();
+    expect(appHealthUrl(app(), [], '203.0.113.7')).toBeNull();
   });
 });

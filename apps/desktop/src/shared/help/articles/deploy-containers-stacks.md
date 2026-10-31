@@ -181,6 +181,7 @@ Click an app card to see its page. The header shows the name, status, which revi
 - **Start**, **Stop**, **Restart** and **Take down**. **Take down** removes the containers and networks but keeps volumes and revisions, so a deploy brings the app back.
 - **Delete**, which removes the containers and revisions but keeps the volumes.
 - **Delete with its data** (Admins only), which also deletes the volumes. You must type the app's name to confirm.
+- **Add health check**, which opens Monitoring with a new target filled in from the app (its name, project, server and address). Once the app has one, the button becomes **Health check** with the target's state and opens it. See [Monitoring](monitoring.md).
 - **Logs** and **Console** (Admins only), which open the app's logs and consoles (see below).
 
 The lifecycle buttons need the Operator role and are disabled while a job works on the app. Start, stop, restart, take down and delete open a job log window.

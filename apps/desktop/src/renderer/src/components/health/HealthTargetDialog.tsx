@@ -8,7 +8,7 @@ import {
 import type { HealthSecretReveal, HealthTargetSummary } from '@shared/healthTypes';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
-import { HeartPulse, Pencil, Server, Sparkles, Spinner } from '@/components/icons';
+import { HeartPulse, Package, Pencil, Server, Sparkles, Spinner } from '@/components/icons';
 import {
   FOOTER_HAIRLINE,
   Notice,
@@ -109,6 +109,7 @@ export function HealthTargetDialog({
   defaultProjectId,
   lockProject = false,
   target,
+  initialDraft,
   onConnect,
 }: {
   open: boolean;
@@ -119,6 +120,8 @@ export function HealthTargetDialog({
   lockProject?: boolean;
   /** Set to edit this target; left out to add one. */
   target?: HealthTargetSummary;
+  /** Fields to start a new target with, such as a deployed app's name and address. */
+  initialDraft?: Partial<HealthDraft>;
   /** Offered after the key step, to go straight on to the setup prompt. */
   onConnect?: (targetId: string) => void;
 }): React.JSX.Element {
@@ -129,7 +132,10 @@ export function HealthTargetDialog({
   const initial = (): HealthDraft =>
     target
       ? healthDraftFromTarget(target)
-      : emptyHealthDraft(defaultProjectId ?? (projects.length === 1 ? projects[0].id : ''));
+      : {
+          ...emptyHealthDraft(defaultProjectId ?? (projects.length === 1 ? projects[0].id : '')),
+          ...initialDraft,
+        };
   const [draft, setDraft] = useState<HealthDraft>(initial);
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -355,6 +361,28 @@ export function HealthTargetDialog({
                     ]}
                   />
                 </Field>
+                {draft.appLink ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2">
+                    <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                      <Package className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {draft.appName
+                          ? `Linked to the app ${draft.appName} on Deploy.`
+                          : 'Linked to an app on Deploy.'}
+                      </span>
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setDraft((current) => ({ ...current, appLink: null, appName: '' }))
+                      }
+                    >
+                      Unlink
+                    </Button>
+                  </div>
+                ) : null}
               </FormSection>
 
               <FormSection title="Endpoint">
@@ -536,6 +564,13 @@ export function HealthTargetDialog({
                   onCheckedChange={(checked) => set('autoDiagnose', checked)}
                 />
                 <SwitchRow
+                  id={id('version')}
+                  label="Show app version"
+                  description="Shows the version the endpoint reports, when it gives one, on the Health page."
+                  checked={draft.showVersion}
+                  onCheckedChange={(checked) => set('showVersion', checked)}
+                />
+                <SwitchRow
                   id={id('insecure')}
                   label="Allow insecure HTTP"
                   description="Lets Runova call a plain http:// address on another machine."
@@ -563,13 +598,6 @@ export function HealthTargetDialog({
                 {busy && <Spinner className="h-3.5 w-3.5 animate-spin" />}
                 {editing ? 'Save changes' : 'Add target'}
               </Button>
-                <SwitchRow
-                  id={id('version')}
-                  label="Show app version"
-                  description="Shows the version the endpoint reports, when it gives one, on the Health page."
-                  checked={draft.showVersion}
-                  onCheckedChange={(checked) => set('showVersion', checked)}
-                />
             </DialogFooter>
           </form>
         )}

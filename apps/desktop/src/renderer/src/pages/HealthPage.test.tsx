@@ -1,5 +1,6 @@
 import { healthDays } from '@runova/core';
 import { screen, waitFor, within } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { usePageHeaderStore } from '@/stores/pageHeaderStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
@@ -244,5 +245,55 @@ describe('HealthBoard on a project tab', () => {
     expect(screen.queryByRole('article', { name: 'Dashboard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'All projects' })).toBeNull();
     expect(screen.getByRole('region', { name: 'Production' })).toBeInTheDocument();
+  });
+
+  describe('add intent from Deploy', () => {
+    function Where() {
+      const location = useLocation();
+      return <output aria-label="Address">{location.search}</output>;
+    }
+
+    function renderIntent(search: string) {
+      return renderWithProviders(
+        <>
+          <HealthPage />
+          <Where />
+        </>,
+        {
+          route: `/monitoring?${search}`,
+          path: 'monitoring',
+          bridge: {
+            'projects.list': projects,
+            'environments.list': environments,
+            'health.list': targets,
+            'ssh.listServers': [],
+            'deployWordPress.listSites': [],
+          },
+        },
+      );
+    }
+
+    it('opens the add dialog filled in, then takes the params out of the address', async () => {
+      const url = encodeURIComponent('https://shop.example.com/_runova/health');
+      renderIntent(`add=1&name=shop&url=${url}&project=p2&appServer=s1&appStack=shop&appName=shop`);
+      const dialog = await screen.findByRole('dialog', { name: 'Add a health check' });
+      expect(within(dialog).getByLabelText('Name')).toHaveValue('shop');
+      expect(within(dialog).getByLabelText('Endpoint URL')).toHaveValue(
+        'https://shop.example.com/_runova/health',
+      );
+      expect(within(dialog).getByRole('combobox', { name: 'Project' })).toHaveTextContent('Admin');
+      expect(within(dialog).getByText('Linked to the app shop on Deploy.')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole('status', { name: 'Address', hidden: true })).toBeEmptyDOMElement(),
+      );
+    });
+
+    it('leaves the project to pick when the app came from one this computer lacks', async () => {
+      renderIntent('add=1&name=shop&project=gone&env=env-x');
+      const dialog = await screen.findByRole('dialog', { name: 'Add a health check' });
+      expect(within(dialog).getByRole('combobox', { name: 'Project' })).toHaveTextContent(
+        'Pick a project',
+      );
+    });
   });
 });

@@ -12,7 +12,12 @@ import {
   type Project,
 } from '@runova/core';
 import type { ProjectEnvironment } from '@shared/apiTypes';
-import type { HealthServerLink, HealthTargetInput, HealthTargetSummary } from '@shared/healthTypes';
+import type {
+  HealthAppLink,
+  HealthServerLink,
+  HealthTargetInput,
+  HealthTargetSummary,
+} from '@shared/healthTypes';
 import type { ChipTone } from '@/components/pageKit';
 
 /**
@@ -145,17 +150,17 @@ export function targetHost(url: string): string {
   }
 }
 
-export function formatUptime(share: number | null): string {
-  if (share === null) return 'No data';
-  const percent = share * 100;
-  if (percent === 100) return '100%';
-  return `${percent >= 99 ? percent.toFixed(2) : percent.toFixed(1)}%`;
 /** A reported version as a label: "1.4.2" reads as "v1.4.2", anything else stays as it is. */
 export function formatVersion(version: string): string {
   const text = version.trim();
   return /^\d/.test(text) ? `v${text}` : text;
 }
 
+export function formatUptime(share: number | null): string {
+  if (share === null) return 'No data';
+  const percent = share * 100;
+  if (percent === 100) return '100%';
+  return `${percent >= 99 ? percent.toFixed(2) : percent.toFixed(1)}%`;
 }
 
 export function formatLatency(ms: number | null): string {
@@ -274,6 +279,10 @@ export interface HealthDraft {
   serverLabel: string;
   /** "ssh:<id>" or "wordpress:<id>", or empty for no link. */
   serverLink: string;
+  /** The deployed app this check was added from, kept as a link back to it. */
+  appLink: HealthAppLink | null;
+  /** The app's name, only to show the link. It is not saved. */
+  appName: string;
   url: string;
   intervalChoice: IntervalChoice;
   customInterval: string;
@@ -282,6 +291,7 @@ export interface HealthDraft {
   basicUser: string;
   allowInsecure: boolean;
   autoDiagnose: boolean;
+  showVersion: boolean;
 }
 
 export type HealthDraftErrors = Partial<
@@ -291,13 +301,14 @@ export type HealthDraftErrors = Partial<
 const PRESET_SET = new Set<number>(HEALTH_INTERVAL_PRESETS);
 
 export function emptyHealthDraft(projectId: string): HealthDraft {
-  showVersion: boolean;
   return {
     projectId,
     environmentId: '',
     name: '',
     serverLabel: '',
     serverLink: '',
+    appLink: null,
+    appName: '',
     url: '',
     intervalChoice: `${HEALTH_INTERVAL_DEFAULT_SEC}` as IntervalChoice,
     customInterval: '',
@@ -306,6 +317,7 @@ export function emptyHealthDraft(projectId: string): HealthDraft {
     basicUser: '',
     allowInsecure: false,
     autoDiagnose: true,
+    showVersion: true,
   };
 }
 
@@ -317,7 +329,6 @@ function parseServerLink(value: string): HealthServerLink | null {
   const match = /^(ssh|wordpress):(.+)$/.exec(value);
   return match ? { kind: match[1] as HealthServerLink['kind'], id: match[2] } : null;
 }
-    showVersion: true,
 
 export function healthDraftFromTarget(one: HealthTargetSummary): HealthDraft {
   const preset = PRESET_SET.has(one.intervalSec);
@@ -327,6 +338,8 @@ export function healthDraftFromTarget(one: HealthTargetSummary): HealthDraft {
     name: one.name,
     serverLabel: one.serverLabel ?? '',
     serverLink: serverLinkValue(one.serverLink),
+    appLink: one.appLink ?? null,
+    appName: '',
     url: one.url,
     intervalChoice: preset ? (`${one.intervalSec}` as IntervalChoice) : 'custom',
     customInterval: preset ? '' : String(one.intervalSec),
@@ -335,6 +348,7 @@ export function healthDraftFromTarget(one: HealthTargetSummary): HealthDraft {
     basicUser: one.basicUser ?? '',
     allowInsecure: one.allowInsecure,
     autoDiagnose: one.autoDiagnose,
+    showVersion: one.showVersion !== false,
   };
 }
 
@@ -348,9 +362,9 @@ export function healthDraftToInput(draft: HealthDraft): HealthTargetInput {
     projectId: draft.projectId,
     environmentId: draft.environmentId || null,
     name: draft.name.trim(),
-    showVersion: one.showVersion !== false,
     serverLabel: serverLabel || null,
     serverLink: parseServerLink(draft.serverLink),
+    appLink: draft.appLink,
     url: draft.url.trim(),
     intervalSec: draftInterval(draft),
     timeoutSec: Number(draft.timeout),
@@ -358,6 +372,7 @@ export function healthDraftToInput(draft: HealthDraft): HealthTargetInput {
     basicUser: draft.authMode === 'basic' ? draft.basicUser.trim() : null,
     allowInsecure: draft.allowInsecure,
     autoDiagnose: draft.autoDiagnose,
+    showVersion: draft.showVersion,
   };
 }
 
@@ -372,7 +387,6 @@ export function isInsecureRemote(url: string): boolean {
   try {
     const parsed = new URL(url.trim());
     return parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname);
-    showVersion: draft.showVersion,
   } catch {
     return false;
   }

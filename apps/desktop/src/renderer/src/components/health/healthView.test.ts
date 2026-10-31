@@ -200,6 +200,14 @@ describe('health drafts', () => {
     });
   });
 
+  it('keeps the link to the deployed app it was added from', () => {
+    const link = { serverId: 's1', stackId: 'shop' };
+    expect(healthDraftToInput(healthDraftFromTarget(target({ appLink: link }))).appLink).toEqual(
+      link,
+    );
+    expect(healthDraftToInput(healthDraftFromTarget(target())).appLink).toBeNull();
+  });
+
   it('keeps the version option, on unless it was turned off', () => {
     expect(healthDraftToInput(healthDraftFromTarget(target())).showVersion).toBe(true);
     const hidden = healthDraftFromTarget(target({ showVersion: false }));
@@ -209,6 +217,7 @@ describe('health drafts', () => {
   it('starts a new target on the defaults with auto-diagnose on', () => {
     const draft = emptyHealthDraft('p1');
     expect(draft.autoDiagnose).toBe(true);
+    expect(draft.showVersion).toBe(true);
     expect(draft.authMode).toBe('bearer');
     expect(healthDraftToInput({ ...draft, name: ' API ', serverLabel: ' ' })).toMatchObject({
       name: 'API',
@@ -217,7 +226,6 @@ describe('health drafts', () => {
     });
   });
 });
-    expect(draft.showVersion).toBe(true);
 
 describe('formatVersion', () => {
   it('puts a v before a numbered version and leaves anything else alone', () => {

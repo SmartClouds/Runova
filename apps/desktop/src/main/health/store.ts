@@ -105,6 +105,11 @@ const targetSchema = z.object({
   serverLink: z
     .object({ kind: z.enum(['ssh', 'wordpress']), id: z.string().min(1).max(128) })
     .nullable(),
+  // Older files have no app link, so it reads as none.
+  appLink: z
+    .object({ serverId: z.string().min(1).max(128), stackId: z.string().min(1).max(128) })
+    .nullable()
+    .default(null),
   url: z.string().max(MAX_URL),
   intervalSec: z.number(),
   timeoutSec: z.number(),
@@ -112,13 +117,13 @@ const targetSchema = z.object({
   basicUser: nullableText,
   allowInsecure: z.boolean(),
   autoDiagnose: z.boolean(),
+  // Older files have no version option, so it reads as on.
+  showVersion: z.boolean().default(true),
   createdAt: time,
   updatedAt: time,
   paused: z.boolean(),
   secretEnvelope: envelopeSchema.nullable(),
   secretRotatedAt: time.nullable(),
-  // Older files have no version option, so it reads as on.
-  showVersion: z.boolean().default(true),
 });
 
 const probeState = z.enum(['pass', 'warn', 'fail', 'unreachable', 'unauthorized', 'invalid']);
@@ -345,6 +350,9 @@ export async function cleanHealthTargetInput(input: HealthTargetInput): Promise<
     name,
     serverLabel: cleanOptional(input.serverLabel, MAX_LABEL, 'server name'),
     serverLink: input.serverLink ? { kind: input.serverLink.kind, id: input.serverLink.id } : null,
+    appLink: input.appLink
+      ? { serverId: input.appLink.serverId, stackId: input.appLink.stackId }
+      : null,
     url,
     intervalSec: normalizeHealthInterval(input.intervalSec),
     timeoutSec: normalizeHealthTimeout(input.timeoutSec),
@@ -352,6 +360,7 @@ export async function cleanHealthTargetInput(input: HealthTargetInput): Promise<
     basicUser,
     allowInsecure: input.allowInsecure === true,
     autoDiagnose: input.autoDiagnose === true,
+    showVersion: input.showVersion !== false,
   };
 }
 
@@ -360,7 +369,6 @@ export async function cleanHealthTargetInput(input: HealthTargetInput): Promise<
  * while keeping the target. Takes the ids just removed, and also sweeps against what is saved,
  * which is how it catches what a restored backup left behind at startup. Never throws: a disk
  * error leaves the orphans for the next sweep.
-    showVersion: input.showVersion !== false,
  */
 export async function pruneOrphanHealthTargets(
   removed: { projectIds?: string[]; environmentIds?: string[] } = {},

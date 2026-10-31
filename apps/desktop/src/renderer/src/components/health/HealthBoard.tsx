@@ -2,7 +2,7 @@ import type { Project } from '@runova/core';
 import type { ProjectEnvironment } from '@shared/apiTypes';
 import type { HealthTargetSummary } from '@shared/healthTypes';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { HeartPulse, Plus, Sparkles } from '@/components/icons';
 import {
@@ -30,8 +30,10 @@ import { HealthSetupDialog } from './HealthSetupDialog';
 import { HealthTargetCard, HealthTargetCardSkeleton } from './HealthTargetCard';
 import { HealthTargetDetail } from './HealthTargetDetail';
 import { HealthTargetDialog } from './HealthTargetDialog';
+import { HEALTH_ADD_PARAMS, readHealthAddIntent } from './healthIntent';
 import {
   groupHealthTargets,
+  type HealthDraft,
   type HealthEnvironmentGroup,
   type HealthStatusFilter,
   healthBucket,
@@ -197,6 +199,8 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [editing, setEditing] = useState<HealthTargetSummary | null>(null);
+  /** Fields another page asked the add dialog to start with (an app on Deploy). */
+  const [addSeed, setAddSeed] = useState<Partial<HealthDraft> | null>(null);
   /** The target the setup dialog is for. An id, so a just-created one shows once the list has it. */
   const [setupId, setSetupId] = useState<string | null>(null);
 
@@ -207,6 +211,31 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
     meta: QUIET,
   });
   const projects = projectsQuery.data ?? [];
+
+  // Deploy links here to add a check for one of its apps: open the add dialog with what it sent,
+  // then take the params out so Back or a reload does not open it again.
+  const addQuery = !scoped && searchParams.get('add') === '1' ? searchParams.toString() : null;
+  useEffect(() => {
+    // Waits for the projects, so an app deployed from a project this computer lacks starts
+    // with no project picked instead of one the dialog cannot show.
+    if (addQuery === null || projectsQuery.isPending) return;
+    const seed = readHealthAddIntent(new URLSearchParams(addQuery));
+    if (seed?.projectId && !projectsQuery.data?.some((one) => one.id === seed.projectId)) {
+      delete seed.projectId;
+      delete seed.environmentId;
+    }
+    setEditing(null);
+    setAddSeed(seed);
+    setAdding(true);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const key of HEALTH_ADD_PARAMS) next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [addQuery, projectsQuery.isPending, projectsQuery.data, setSearchParams]);
 
   // Only this project's targets, even if the list ever answers with more.
   const all = useMemo(
@@ -448,12 +477,14 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
           if (open) return;
           setAdding(false);
           setAddingFor(null);
+          setAddSeed(null);
           setEditing(null);
         }}
         projects={projects}
         defaultProjectId={projectId ?? addingFor ?? projectFilter ?? undefined}
         lockProject={scoped}
         target={editing ?? undefined}
+        initialDraft={addSeed ?? undefined}
         onConnect={setSetupId}
       />
 

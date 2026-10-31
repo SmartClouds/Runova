@@ -21,6 +21,12 @@ export interface HealthServerLink {
   id: string;
 }
 
+/** A deployed app (a stack on a Deploy server) the target watches, for a link back to it. */
+export interface HealthAppLink {
+  serverId: string;
+  stackId: string;
+}
+
 /** What the user edits in the target dialog. */
 export interface HealthTargetInput {
   projectId: string;
@@ -31,6 +37,8 @@ export interface HealthTargetInput {
   /** The server it runs on, as the user names it ("web-1"). */
   serverLabel: string | null;
   serverLink: HealthServerLink | null;
+  /** The deployed app it was added from, if any. Missing means none. */
+  appLink?: HealthAppLink | null;
   url: string;
   intervalSec: number;
   timeoutSec: number;
@@ -41,6 +49,8 @@ export interface HealthTargetInput {
   allowInsecure: boolean;
   /** Runs the read-only AI analysis when an incident opens. */
   autoDiagnose: boolean;
+  /** Shows the app version the endpoint reports on the Health page. Missing means on. */
+  showVersion?: boolean;
 }
 
 /** One target as the page lists it. */
@@ -49,14 +59,14 @@ export interface HealthTargetSummary extends HealthTargetInput {
   createdAt: number;
   updatedAt: number;
   paused: boolean;
-  /** Shows the app version the endpoint reports on the Health page. Missing means on. */
-  showVersion?: boolean;
   hasSecret: boolean;
   secretRotatedAt: number | null;
   state: HealthState;
   lastCheckedAt: number | null;
   nextCheckAt: number | null;
   latencyMs: number | null;
+  /** The app version from the last report, or null when it gave none or the option is off. */
+  version: string | null;
   /** Share of good checks over the last 24 hours (0 to 1), or null with no checks yet. */
   uptime24h: number | null;
   /** The last 30 calendar days, oldest first, for the availability chart. */
@@ -65,8 +75,6 @@ export interface HealthTargetSummary extends HealthTargetInput {
   samples: HealthSample[];
   servicesTotal: number;
   servicesFailing: number;
-  /** The app version from the last report, or null when it gave none or the option is off. */
-  version: string | null;
   /** A short line for the card: the problem, or the first failing service's error. */
   headline: string | null;
   openIncident: HealthIncident | null;

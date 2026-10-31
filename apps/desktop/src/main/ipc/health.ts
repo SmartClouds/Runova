@@ -48,6 +48,7 @@ const inputSchema = z.object({
   name: z.string().max(500),
   serverLabel: z.string().max(500).nullable(),
   serverLink: z.object({ kind: z.enum(['ssh', 'wordpress']), id }).nullable(),
+  appLink: z.object({ serverId: id, stackId: id }).nullable().optional(),
   url: z.string().max(4096),
   intervalSec: z.number(),
   timeoutSec: z.number(),
@@ -55,8 +56,8 @@ const inputSchema = z.object({
   basicUser: z.string().max(500).nullable(),
   allowInsecure: z.boolean(),
   autoDiagnose: z.boolean(),
-});
   showVersion: z.boolean().optional(),
+});
 
 const patchSchema = inputSchema.partial();
 const filterSchema = z.object({ projectId: id.optional() }).optional();
@@ -77,6 +78,7 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
     name: target.name,
     serverLabel: target.serverLabel,
     serverLink: target.serverLink,
+    appLink: target.appLink ?? null,
     url: target.url,
     intervalSec: target.intervalSec,
     timeoutSec: target.timeoutSec,
@@ -84,9 +86,9 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
     basicUser: target.basicUser,
     allowInsecure: target.allowInsecure,
     autoDiagnose: target.autoDiagnose,
+    showVersion: target.showVersion,
   };
 }
-    showVersion: target.showVersion,
 
 function context(target: StoredHealthTarget) {
   return { now: Date.now(), locked: isLockedEnvelope(target.secretEnvelope ?? undefined) };

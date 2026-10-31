@@ -66,6 +66,7 @@ import {
   StackToolsSheet,
   stackContainers,
 } from '../stackTools/StackToolsSheet';
+import { AppHealthButton } from './AppHealthButton';
 import { OPERATOR_ONLY } from './AppsList';
 import { DeployTimeline } from './DeployTimeline';
 import { EditSourceDialog } from './EditSourceDialog';
@@ -573,6 +574,7 @@ function RevisionsList({
 
 export function AppDetail({
   serverId,
+  serverHost,
   stackId,
   access,
   onBack,
@@ -583,6 +585,8 @@ export function AppDetail({
   onOpenWebsites,
 }: {
   serverId: string;
+  /** The server's address, for the health check of an app reached on a port. */
+  serverHost?: string;
   stackId: string;
   access: AppsAccess;
   onBack: () => void;
@@ -875,6 +879,12 @@ export function AppDetail({
             </Button>
           </Gate>
           <span className="flex-1" aria-hidden />
+          <AppHealthButton
+            serverId={serverId}
+            serverHost={serverHost ?? ''}
+            details={data}
+            signedIn={access.signedIn}
+          />
           <Gate allowed={containers.length > 0} reason={NO_CONTAINERS}>
             <Button
               size="sm"

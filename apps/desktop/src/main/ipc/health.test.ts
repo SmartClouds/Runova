@@ -221,6 +221,23 @@ describe('editing targets', () => {
     expect(sent).toEqual([`Bearer ${secret.secret}`]);
   });
 
+  it('keeps the app a target was added from, until an edit unlinks it', async () => {
+    const link = { serverId: 'srv-1', stackId: 'shop' };
+    const { target } = await create({ appLink: link });
+    expect(target.appLink).toEqual(link);
+    const renamed = await invoke<HealthTargetSummary>(IPC.health.update, target.id, {
+      name: 'Shop',
+    });
+    expect(renamed.appLink).toEqual(link);
+    const unlinked = await invoke<HealthTargetSummary>(IPC.health.update, target.id, {
+      appLink: null,
+    });
+    expect(unlinked.appLink).toBeNull();
+    await expect(
+      invoke(IPC.health.update, target.id, { appLink: { serverId: '', stackId: 'x' } }),
+    ).rejects.toThrow(/appLink/);
+  });
+
   it('shows the version the endpoint reports, until an edit turns it off', async () => {
     respond = { status: 200, body: { status: 'pass', version: '1.4.2', releaseId: '3f2a9c1' } };
     const { target } = await create();

@@ -1,6 +1,9 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
+import { readHealthAddIntent } from '@/components/health/healthIntent';
+import { target as healthTarget } from '@/components/health/testing/fixtures';
 import { useDeployAssistantStore } from '@/stores/deployAssistantStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { nginxStatus, site } from '../sites/testing/fixtures';
@@ -591,6 +594,93 @@ describe('AppDetail', () => {
 
       await user.click(within(dialog).getByRole('button', { name: 'Open in Websites' }));
       expect(onOpenWebsites).toHaveBeenCalled();
+    });
+  });
+
+  describe('health check', () => {
+    function Where() {
+      const location = useLocation();
+      return <output aria-label="Address">{`${location.pathname}${location.search}`}</output>;
+    }
+
+    function renderWithHost(bridge: Record<string, unknown> = {}) {
+      return renderWithProviders(
+        <>
+          <AppDetail
+            serverId={SERVER.id}
+            serverHost="203.0.113.7"
+            stackId={STACK_ID}
+            access={access(['owner'])}
+            onBack={vi.fn()}
+            onDeployAgain={vi.fn()}
+            onDeleted={vi.fn()}
+          />
+          <Where />
+        </>,
+        { bridge: { ...appsBridge(['owner']), 'health.list': [], ...bridge } },
+      );
+    }
+
+    function intentIn(address: string) {
+      return readHealthAddIntent(new URLSearchParams(address.split('?')[1] ?? ''));
+    }
+
+    const SHOP_SITE = site(
+      {},
+      {
+        id: 'shop',
+        domains: ['shop.example.com'],
+        upstream: {
+          kind: 'servicePort',
+          port: 8080,
+          verifyCertificate: true,
+          sendUpstreamHost: false,
+        },
+      },
+    );
+
+    it('opens Monitoring to add a check, filled in from the app and its domain', async () => {
+      const { user } = renderWithHost({ 'deploySites.list': [SHOP_SITE] });
+      const add = await screen.findByRole('button', { name: 'Add health check' });
+      await waitFor(() => expect(add).toBeEnabled());
+      await user.click(add);
+      const address = screen.getByRole('status', { name: 'Address' }).textContent ?? '';
+      expect(address.startsWith('/monitoring?')).toBe(true);
+      expect(intentIn(address)).toEqual({
+        name: 'shop',
+        url: 'https://shop.example.com/_runova/health',
+        projectId: 'proj-1',
+        environmentId: 'env-1',
+        serverLink: `ssh:${SERVER.id}`,
+        appLink: { serverId: SERVER.id, stackId: STACK_ID },
+        appName: 'shop',
+      });
+    });
+
+    it('starts with no address when every port stays on the server', async () => {
+      const { user } = renderWithHost({ 'deploySites.list': [] });
+      const add = await screen.findByRole('button', { name: 'Add health check' });
+      await waitFor(() => expect(add).toBeEnabled());
+      await user.click(add);
+      const address = screen.getByRole('status', { name: 'Address' }).textContent ?? '';
+      expect(intentIn(address)?.url).toBeUndefined();
+    });
+
+    it('shows the linked check and its state instead of adding another', async () => {
+      renderWithHost({
+        'health.list': [
+          healthTarget({
+            id: 't9',
+            state: 'fail',
+            appLink: { serverId: SERVER.id, stackId: STACK_ID },
+          }),
+          healthTarget({ id: 't1', appLink: { serverId: SERVER.id, stackId: 'other' } }),
+        ],
+      });
+      const link = await screen.findByRole('link', { name: /Health check/ });
+      expect(link).toHaveTextContent('Down');
+      expect(link).toHaveAttribute('href', '/monitoring?target=t9');
+      expect(screen.queryByRole('button', { name: 'Add health check' })).not.toBeInTheDocument();
     });
   });
 });

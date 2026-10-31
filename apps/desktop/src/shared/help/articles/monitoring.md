@@ -39,6 +39,12 @@ The prompt never contains a key. It only names the server variables, and the key
 4. If the endpoint is not built yet, click **Build the endpoint with AI** right after the key. That prompt is made for this target (its address and sign-in), and it has **Test connection**.
 5. Set the hash variable on your server, deploy, and click **Check now** or **Test connection**.
 
+### Add a check from a deployed app
+
+On **Deploy**, open a server's **Apps** section, open an app, and click **Add health check** in its toolbar. Monitoring opens with the add dialog already filled in: the app's name, its project and environment (when the project is on this computer), the server, and the app's address with `/_runova/health` on the end. The address is the app's domain from Websites (https when the site has a certificate), or the server's address and the app's published port when no domain leads to it. Change anything you like and click **Add target**.
+
+The new target stays linked to the app. The app's page then shows **Health check** with the target's state, and clicking it opens the target here. To drop the link, click **Unlink** in the target's edit dialog. The target keeps working without it.
+
 ## Reading a target
 
 Each card shows the target's state in words and with a colored dot, the app's version when the endpoint reports one (such as `v1.4.2`), how long the last check took, when it ran and when the next one is due, and a strip of the last 50 checks (point at a bar to see when it ran and what it found). To hide the version, turn **Show app version** off in the target's settings. Click a card to open its details: the version and release, every service with its result, the full error of a failing one, the incident history, and the raw report.

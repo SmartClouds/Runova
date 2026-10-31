@@ -161,6 +161,17 @@ describe('reading and writing', () => {
     expect(state.results.t1.lastCheckedAt).toBe(5);
   });
 
+  it('reads a target saved before app links as linked to no app, and keeps a link', async () => {
+    const { appLink: _none, ...old } = await storedTarget();
+    const linked = await storedTarget({ id: 't2', appLink: { serverId: 's1', stackId: 'shop' } });
+    userData.writeData('health-targets.json', [old, linked]);
+    const state = await health.readHealthState();
+    expect(state.targets.map((target) => target.appLink)).toEqual([
+      null,
+      { serverId: 's1', stackId: 'shop' },
+    ]);
+  });
+
   it('reads a target saved before the version option as showing the version', async () => {
     const { showVersion: _none, ...old } = await storedTarget();
     const hidden = await storedTarget({ id: 't2', showVersion: false });
@@ -239,6 +250,18 @@ describe('cleanHealthTargetInput', () => {
     expect(cleaned.serverLink).toEqual({ kind: 'ssh', id: 'srv-1' });
   });
 
+  it('keeps the deployed app link, and reads a missing one as none', async () => {
+    const link = { serverId: 'srv-1', stackId: 'shop' };
+    expect((await health.cleanHealthTargetInput(input({ appLink: link }))).appLink).toEqual(link);
+    expect((await health.cleanHealthTargetInput(input())).appLink).toBeNull();
+  });
+
+  it('shows the version unless it is turned off', async () => {
+    expect((await health.cleanHealthTargetInput(input())).showVersion).toBe(true);
+    const hidden = await health.cleanHealthTargetInput(input({ showVersion: false }));
+    expect(hidden.showVersion).toBe(false);
+  });
+
   it.each([
     ['an empty name', { name: '   ' }, /name/],
     ['a name over 80 characters', { name: 'x'.repeat(81) }, /80/],
@@ -250,12 +273,6 @@ describe('cleanHealthTargetInput', () => {
       /username or password/,
     ],
     ['a username in the address', { url: 'https://user@example.com/h' }, /username or password/],
-  it('shows the version unless it is turned off', async () => {
-    expect((await health.cleanHealthTargetInput(input())).showVersion).toBe(true);
-    const hidden = await health.cleanHealthTargetInput(input({ showVersion: false }));
-    expect(hidden.showVersion).toBe(false);
-  });
-
     ['a very long address', { url: `https://example.com/${'x'.repeat(2050)}` }, /long/],
     ['Basic without a username', { authMode: 'basic', basicUser: null }, /username/],
     ['a username with a colon', { authMode: 'basic', basicUser: 'a:b' }, /colon/],
