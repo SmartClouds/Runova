@@ -26,6 +26,7 @@ export * from './database/ddl.js';
 export * from './database/dump.js';
 export * from './database/detectContainer.js';
 export * from './database/engines.js';
+export * from './database/mongoShell.js';
 export * from './database/sqlBuild.js';
 export type * from './database/types.js';
 export * from './deploy/assistant.js';

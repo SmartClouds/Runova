@@ -1,3 +1,4 @@
+import { openMongo } from './mongodb';
 import { openMysql } from './mysql';
 import { openPostgres } from './postgres';
 import { type DbDriver, type DriverConnectOptions, DriverError } from './types';
@@ -10,6 +11,8 @@ export async function openDriver(options: DriverConnectOptions): Promise<DbDrive
     case 'mysql':
     case 'mariadb':
       return openMysql(options);
+    case 'mongodb':
+      return openMongo(options);
     default:
       throw new DriverError(`Connecting to ${options.engine} is not supported yet.`);
   }

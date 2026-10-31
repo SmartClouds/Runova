@@ -153,12 +153,18 @@ export function DataTab({
           }}
         >
           <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <span className="font-mono text-[11px] text-muted-foreground">WHERE</span>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {engine === 'mongodb' ? 'find' : 'WHERE'}
+          </span>
           <input
             aria-label="Filter rows"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="total > 10 AND status = 'paid'"
+            placeholder={
+              engine === 'mongodb'
+                ? '{ status: "paid", total: { $gt: 10 } }'
+                : "total > 10 AND status = 'paid'"
+            }
             spellCheck={false}
             className="h-8 min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/50"
           />
