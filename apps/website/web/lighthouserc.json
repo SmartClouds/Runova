@@ -3,7 +3,14 @@
     "collect": {
       "startServerCommand": "bun run preview",
       "startServerReadyPattern": "Server listening",
-      "url": ["http://localhost:4321/"],
+      "url": [
+        "http://localhost:4321/",
+        "http://localhost:4321/features/relay",
+        "http://localhost:4321/help/relay",
+        "http://localhost:4321/download",
+        "http://localhost:4321/blog/release-notes-2-19-0",
+        "http://localhost:4321/news/openssh-10-3-fixes-a-pre-auth-crash"
+      ],
       "numberOfRuns": 3,
       "settings": {
         "formFactor": "mobile",

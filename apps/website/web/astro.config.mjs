@@ -6,21 +6,35 @@ import sitemap from '@astrojs/sitemap';
 import sentry from '@sentry/astro';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import { contentSecurityPolicy } from './src/lib/security';
 
 const env = process.env;
 const apiUrl = env.WEBSITE_API_URL || 'http://localhost:5180';
 const sentryDsn = env.PUBLIC_SENTRY_DSN || '';
+const site = env.SITE_URL || 'https://runovahq.com';
+
+/** @type {NonNullable<import('@astrojs/sitemap').SitemapOptions>} */
+export const sitemapOptions = {
+  // The admin pages are private, so they stay out of the sitemap even when Astro lists them.
+  filter: (page) => !/^\/admin(?:\/|$)/.test(new URL(page).pathname),
+  // The blog and news pages come from the API, so their sitemaps are rendered on demand.
+  customSitemaps: [
+    new URL('/sitemap-dynamic.xml', site).href,
+    new URL('/news-sitemap.xml', site).href,
+  ],
+};
 
 export default defineConfig({
-  site: env.SITE_URL || 'https://runovahq.com',
+  site,
   trailingSlash: 'never',
   output: 'static',
-  adapter: node({ mode: 'standalone' }),
+  // staticHeaders: the adapter sends the CSP of prerendered pages as a header too, not a <meta>.
+  adapter: node({ mode: 'standalone', staticHeaders: true }),
+  security: { csp: contentSecurityPolicy({ site, sentryDsn }) },
   integrations: [
     react(),
     mdx(),
-    // The admin pages are private, so they stay out of the sitemap even when Astro lists them.
-    sitemap({ filter: (page) => !/^\/admin(?:\/|$)/.test(new URL(page).pathname) }),
+    sitemap(sitemapOptions),
     // An empty DSN leaves Sentry out of both bundles. Source maps upload only with an auth token.
     sentry({
       enabled: Boolean(sentryDsn),

@@ -9,6 +9,14 @@ export function helpMetaDescription(summary: string): string {
   );
 }
 
+/**
+ * The page title of an article. Some articles share a name with a feature page or the help index,
+ * so the title says it is the guide.
+ */
+export function helpPageTitle(title: string): string {
+  return `${title} guide`;
+}
+
 /** Home, Help, and the article when there is one. */
 export function helpCrumbs(page?: { slug: string; title: string }): Crumb[] {
   const crumbs: Crumb[] = [

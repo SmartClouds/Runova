@@ -142,6 +142,22 @@ export function parsePostPage(value: unknown): PostPage | null {
   return { items, page, pageSize, totalItems, totalPages };
 }
 
+/** A tag with the number of published posts that carry it (`GET /api/v1/tags`). */
+export interface TagCount extends PostTag {
+  postCount: number;
+}
+
+/** The tag list. Entries that lack a field are dropped. */
+export function parseTags(value: unknown): TagCount[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.flatMap((entry) => {
+    const tag = parseTag(entry);
+    return tag && isObject(entry) && isCount(entry.postCount)
+      ? [{ ...tag, postCount: entry.postCount }]
+      : [];
+  });
+}
+
 export interface ListPostsQuery {
   page?: number;
   pageSize?: number;
@@ -152,6 +168,7 @@ export interface ListPostsQuery {
 export interface BlogApi {
   listPosts(query: ListPostsQuery): Promise<ApiResult<PostPage>>;
   getPost(slug: string): Promise<ApiResult<Post>>;
+  listTags(): Promise<ApiResult<TagCount[]>>;
 }
 
 export function createBlogApi(
@@ -170,6 +187,9 @@ export function createBlogApi(
     },
     getPost(slug) {
       return get(`/api/v1/posts/${encodeURIComponent(slug)}`, parsePost);
+    },
+    listTags() {
+      return get('/api/v1/tags', parseTags);
     },
   };
 }

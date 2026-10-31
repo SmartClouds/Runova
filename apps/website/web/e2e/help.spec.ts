@@ -22,7 +22,7 @@ test.describe('help pages', () => {
     expect([...hrefs].sort()).toEqual(slugs.map((slug) => `/help/${slug}`));
   });
 
-  test('every article page answers with its title as the heading', async ({ request }) => {
+  test('every article page answers with its heading in the title', async ({ request }) => {
     for (const slug of slugs) {
       const response = await request.get(`/help/${slug}`);
       expect(response.status(), slug).toBe(200);
@@ -30,7 +30,7 @@ test.describe('help pages', () => {
       const title = /<title>([^<]*?)(?: \| Runova)?<\/title>/.exec(html)?.[1];
       const heading = /<h1[^>]*>([^<]*)<\/h1>/.exec(html)?.[1];
       expect(heading, slug).toBeTruthy();
-      expect(title, slug).toBe(heading);
+      expect(title, slug).toBe(`${heading} guide`);
     }
   });
 

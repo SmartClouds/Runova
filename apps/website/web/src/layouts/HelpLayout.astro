@@ -4,7 +4,7 @@ import AppScreenshot from '../components/AppScreenshot.astro';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
 import Prose from '../components/Prose.astro';
 import type { HelpArticleData } from '../lib/help/articles';
-import { helpCrumbs, helpMetaDescription, helpTechArticle } from '../lib/help/page';
+import { helpCrumbs, helpMetaDescription, helpPageTitle, helpTechArticle } from '../lib/help/page';
 import { screenshot } from '../lib/screenshots';
 import { breadcrumbList } from '../lib/seo';
 import BaseLayout from './BaseLayout.astro';
@@ -48,7 +48,7 @@ const jsonLd = [
 const link = 'text-primary underline underline-offset-4';
 ---
 
-<BaseLayout title={data.title} description={description} type="article" jsonLd={jsonLd}>
+<BaseLayout title={helpPageTitle(data.title)} description={description} type="article" jsonLd={jsonLd}>
   <Breadcrumbs crumbs={crumbs} />
   <div class="pb-16 md:pb-24 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-12">
     <article data-pagefind-body class="min-w-0">

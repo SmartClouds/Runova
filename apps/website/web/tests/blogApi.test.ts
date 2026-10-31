@@ -88,6 +88,20 @@ describe('createBlogApi', () => {
     expect(result).toEqual({ ok: true, value: FIXTURE_POSTS[0] });
   });
 
+  it('reads the tags with their post counts', async () => {
+    const result = await createBlogApi(api.url).listTags();
+    expect(result.ok && result.value).toContainEqual({
+      slug: 'relay',
+      name: 'Relay',
+      postCount: 2,
+    });
+    expect(api.requests).toContain('/api/v1/tags');
+    expect(await createBlogApi(unavailable.url).listTags()).toEqual({
+      ok: false,
+      reason: 'unavailable',
+    });
+  });
+
   it('tells a missing post from an API that is down', async () => {
     expect(await createBlogApi(api.url).getPost('no-such-post')).toEqual({
       ok: false,

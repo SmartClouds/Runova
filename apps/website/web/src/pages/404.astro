@@ -1,5 +1,12 @@
 ---
 import NotFound from '../components/NotFound.astro';
+import { CACHE } from '../lib/blog/page';
+
+// On demand, so a missing page answers 404 with no-store instead of a cacheable static file.
+export const prerender = false;
+
+Astro.response.status = 404;
+Astro.response.headers.set('Cache-Control', CACHE.none);
 ---
 
 <NotFound />

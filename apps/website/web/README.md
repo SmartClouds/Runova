@@ -15,8 +15,8 @@ Run these here, or `pnpm website:dev | website:build | website:test | website:e2
 | `bun run lint`                  | Biome                                                                                     |
 | `bun run check`                 | `astro check` (types in `.astro`, `.ts` and `.tsx`)                                       |
 | `bun run test`                  | Vitest, with the Astro container API for components                                       |
-| `bun run build`                 | Static pages plus the Node adapter server in `dist/`                                      |
-| `bun run start`                 | Serves `dist/` with `bun ./dist/server/entry.mjs` (`HOST`, `PORT`)                        |
+| `bun run build`                 | Static pages and the server in `dist/`, then `scripts/seoCheck.ts`                        |
+| `bun run start`                 | Serves `dist/` with the security headers, `bun scripts/server.ts` (`HOST`, `PORT`)        |
 | `bun run e2e`                   | Builds, starts the server under bun and runs Playwright                                   |
 
 `bun run e2e` needs Docker and the .NET SDK: the `admin` Playwright project (`e2e/admin/`) runs

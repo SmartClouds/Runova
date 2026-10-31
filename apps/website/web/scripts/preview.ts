@@ -1,28 +1,18 @@
-// Serves the build the way production does: the Astro server behind a proxy that compresses text,
-// as Caddy does in front of it. Lighthouse audits this, so an uncompressed preview would count
+// Serves the build the way production does: the site server (scripts/server.ts) behind a proxy
+// that compresses text, as Caddy does in front of it. Lighthouse audits this, so an uncompressed preview would count
 // hundreds of kilobytes the real site never sends. HOST and PORT pick the public address.
 import { once } from 'node:events';
-import { createServer, type Server } from 'node:http';
+import { createServer } from 'node:http';
 import { compressResponse } from './compress';
+import { startSite } from './server';
 
 const host = process.env.HOST || 'localhost';
 const port = Number(process.env.PORT || 4321);
 const upstream = { host: '127.0.0.1', port: port + 1 };
 
-// The entry reads these when startServer runs. Its own "Server listening" line is turned off, so
-// the line below (which lighthouserc waits for) only shows once both servers are up.
-Object.assign(process.env, {
-  ASTRO_NODE_AUTOSTART: 'disabled',
-  ASTRO_NODE_LOGGING: 'disabled',
-  HOST: upstream.host,
-  PORT: String(upstream.port),
-});
-const entry = '../dist/server/entry.mjs';
-const { startServer } = (await import(entry)) as {
-  startServer: () => { server: { server: Server } };
-};
-const astro = startServer().server.server;
-if (!astro.listening) await once(astro, 'listening');
+// The site server prints nothing, so the line below (which lighthouserc waits for) only shows once
+// both servers are up.
+await startSite(upstream.host, upstream.port);
 
 // Hop-by-hop headers belong to the connection to this proxy, and fetch refuses some of them.
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade']);

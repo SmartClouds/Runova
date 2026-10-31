@@ -1,5 +1,6 @@
 import { escapeXml } from '../blog/rss';
 import { SITE_NAME } from '../seo';
+import { w3cTime } from '../sitemap';
 import type { ApiResult } from '../websiteApi';
 import type { NewsApi, NewsListItem } from './api';
 
@@ -13,11 +14,6 @@ export const MAX_URLS = 1_000;
 
 /** The API's largest page. */
 const API_PAGE_SIZE = 100;
-
-/** A W3C datetime without milliseconds, such as "2026-10-29T08:00:00Z". */
-function w3cTime(iso: string): string {
-  return new Date(iso).toISOString().replace(/\.\d{3}Z$/, 'Z');
-}
 
 function url(site: string | URL, item: NewsListItem): string {
   return [

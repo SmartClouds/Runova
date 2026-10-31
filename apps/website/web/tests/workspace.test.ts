@@ -19,6 +19,6 @@ describe('the site stays outside the pnpm workspace', () => {
 
 describe('bun runs the built server', () => {
   it('starts the Node adapter entry with bun', () => {
-    expect(site.scripts.start).toBe('bun ./dist/server/entry.mjs');
+    expect(site.scripts.start).toBe('bun scripts/server.ts');
   });
 });

@@ -180,7 +180,7 @@ try {
     300_000,
   );
   if (!existsSync(join(web, 'dist/server/entry.mjs'))) throw new Error('No site build in dist.');
-  start('bun', ['./dist/server/entry.mjs'], web, {
+  start('bun', ['scripts/server.ts'], web, {
     ...process.env,
     HOST: '127.0.0.1',
     PORT: String(STACK.sitePort),

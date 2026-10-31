@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && pagefind --site dist/client",
+    "build": "astro build && pagefind --site dist/client && bun scripts/seoCheck.ts",
     "preview": "bun scripts/preview.ts",
-    "start": "bun ./dist/server/entry.mjs",
+    "start": "bun scripts/server.ts",
     "check": "astro check",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

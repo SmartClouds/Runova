@@ -5,10 +5,22 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, describe, expect, it } from 'vitest';
 import HelpLayout from '../src/layouts/HelpLayout.astro';
 import { readHelpArticles } from '../src/lib/help/articles';
-import { helpCrumbs, helpMetaDescription, helpTechArticle } from '../src/lib/help/page';
+import {
+  helpCrumbs,
+  helpMetaDescription,
+  helpPageTitle,
+  helpTechArticle,
+} from '../src/lib/help/page';
 import { scanHtml } from './helpers/textScan';
 
 const site = 'https://runovahq.com';
+
+describe('helpPageTitle', () => {
+  it('sets the article apart from the feature page and the help index of the same name', () => {
+    expect(helpPageTitle('Studio')).toBe('Studio guide');
+    expect(helpPageTitle('Help center')).toBe('Help center guide');
+  });
+});
 
 describe('helpMetaDescription', () => {
   it('keeps a summary of 70 to 160 characters', () => {
@@ -125,7 +137,7 @@ describe('the help article layout', () => {
   }
 
   it('has the head of a help page', () => {
-    expect(/<title>([^<]*)<\/title>/.exec(html)?.[1]).toBe('Remote | Runova');
+    expect(/<title>([^<]*)<\/title>/.exec(html)?.[1]).toBe('Remote guide | Runova');
     expect(html).toContain('<link rel="canonical" href="https://runovahq.com/help/remote">');
     expect(html).toMatch(/<meta property="og:type" content="article"/);
   });
