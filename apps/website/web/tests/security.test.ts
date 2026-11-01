@@ -1,11 +1,9 @@
-import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import config from '../astro.config.mjs';
 import { contentSecurityPolicy, SECURITY_HEADERS, withSecurityHeaders } from '../src/lib/security';
-import { themeInitScript } from '../src/lib/theme';
 
 const site = 'https://runovahq.com';
 
@@ -52,11 +50,6 @@ describe('contentSecurityPolicy', () => {
 
   it('allows the small font files Vite inlines as data URLs', () => {
     expect(directive('font-src')).toBe("font-src 'self' data:");
-  });
-
-  it('allows the theme script, which Astro does not hash because it is inline', () => {
-    const hash = createHash('sha256').update(themeInitScript).digest('base64');
-    expect(csp.scriptDirective.hashes).toContain(`sha256-${hash}`);
   });
 
   it("allows Pagefind's WebAssembly but no other eval", () => {

@@ -62,6 +62,21 @@ test.describe('help pages', () => {
     await entry.click();
     await expect(page).toHaveURL(new RegExp(`${target}$`));
     await expect(page.locator(target)).toBeInViewport();
+    await expect(entry).toHaveAttribute('aria-current', 'location');
+  });
+
+  test('the table of contents follows the section being read', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/help/relay');
+    const toc = page.locator('[data-toc][data-ready]');
+    const links = toc.getByRole('link');
+    const last = links.last();
+    const target = (await last.getAttribute('href')) ?? '';
+    await page.locator(target).evaluate((heading) => heading.scrollIntoView());
+    await expect(last).toHaveAttribute('aria-current', 'location');
+    await expect(toc.locator('[aria-current]')).toHaveCount(1);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(toc.locator('[aria-current]')).toHaveCount(0);
   });
 });
 

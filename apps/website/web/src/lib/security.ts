@@ -2,10 +2,8 @@
 // hashes its own scripts and has the Node adapter send the policy as a header, prerendered pages
 // included. The other headers are the same on every response, so scripts/server.ts adds them
 // around the adapter's handler: prerendered files never pass through Astro middleware.
-import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AstroUserConfig } from 'astro';
-import { themeInitScript } from './theme';
 
 /** Sent with every response, HTML or not. */
 export const SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
@@ -18,7 +16,6 @@ export const SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ],
 ];
 
-type Hash = `sha256-${string}`;
 type CspConfig = Exclude<NonNullable<NonNullable<AstroUserConfig['security']>['csp']>, boolean>;
 
 export interface CspOptions {
@@ -32,7 +29,6 @@ export interface CspOptions {
 export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
   const connect = ["'self'"];
   if (sentryDsn) connect.push(new URL(sentryDsn).origin);
-  const themeHash: Hash = `sha256-${createHash('sha256').update(themeInitScript).digest('base64')}`;
   return {
     directives: [
       "default-src 'self'",
@@ -46,7 +42,7 @@ export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
       "frame-ancestors 'none'",
     ],
     // Pagefind runs its search index as WebAssembly.
-    scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"], hashes: [themeHash] },
+    scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] },
     // React and Radix set `style` attributes, which only 'unsafe-inline' allows. Astro then leaves
     // the style hashes out, as browsers would ignore 'unsafe-inline' next to them.
     styleDirective: { resources: ["'self'", "'unsafe-inline'"] },

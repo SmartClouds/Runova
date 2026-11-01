@@ -85,13 +85,12 @@ test.describe('under the CSP', () => {
     await page.route('https://runovahq.com/media/**', (route) => route.fulfill({ status: 404 }));
   });
 
-  test('the home page runs the hero and the theme toggle', async ({ page }) => {
+  test('the home page runs the hero', async ({ page }) => {
     const violations = await watchCsp(page);
     await page.goto('/');
     await expect(page.locator('[data-hero]')).toHaveAttribute('data-state', 'done', {
       timeout: 15_000,
     });
-    await page.getByRole('button', { name: /theme/i }).first().click();
     await page.waitForLoadState('networkidle');
     expect(violations).toEqual([]);
   });

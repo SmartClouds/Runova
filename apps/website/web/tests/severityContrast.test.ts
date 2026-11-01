@@ -10,16 +10,8 @@ const LEVELS = ['info', 'low', 'medium', 'high', 'critical'];
 // WCAG 2.2 AA for normal text, which the severity labels are.
 const AA = 4.5;
 
-const themes = [
-  { name: 'Light', tokens: readTokenBlock(css, [':root', '.theme-light']) },
-  {
-    name: 'Dark',
-    tokens: new Map([
-      ...readTokenBlock(css, [':root', '.theme-light']),
-      ...readTokenBlock(css, ['.dark']),
-    ]),
-  },
-];
+// The site is Dark only, declared on :root.
+const themes = [{ name: 'Dark', tokens: readTokenBlock(css, [':root']) }];
 
 function color(tokens: Map<string, string>, name: string) {
   const value = tokens.get(name);
@@ -57,14 +49,13 @@ describe('severity colors', () => {
   }
 
   it('matches the lowest ratios design.md gives for the plain colors', () => {
-    // A sanity check of the math against the spec table (info, Dark 5.93 and Light 5.85).
+    // A sanity check of the math against the spec table (info, Dark 5.93).
     const lowest = (tokens: Map<string, string>) =>
       Math.min(
         ...['--background', '--card', '--muted'].map((surface) =>
           contrastRatio(color(tokens, '--severity-info'), color(tokens, surface)),
         ),
       );
-    expect(lowest(themes[1].tokens)).toBeCloseTo(5.93, 2);
-    expect(lowest(themes[0].tokens)).toBeCloseTo(5.85, 2);
+    expect(lowest(themes[0].tokens)).toBeCloseTo(5.93, 2);
   });
 });

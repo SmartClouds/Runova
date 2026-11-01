@@ -8,7 +8,6 @@ import type { ComponentProps } from 'astro/types';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
 import SeoHead from '../components/SeoHead.astro';
-import { themeInitScript } from '../lib/theme';
 
 type Props = ComponentProps<typeof SeoHead>;
 ---
@@ -17,9 +16,8 @@ type Props = ComponentProps<typeof SeoHead>;
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
-    <script is:inline set:html={themeInitScript} />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin />

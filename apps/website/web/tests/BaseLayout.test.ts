@@ -25,12 +25,9 @@ describe('BaseLayout', () => {
     expect(html).toMatch(/<html[^>]* class="dark"/);
   });
 
-  it('sets the theme in an inline head script before any stylesheet', () => {
-    const head = html.slice(0, html.indexOf('</head>'));
-    const script = head.indexOf('runova-theme');
-    expect(script).toBeGreaterThan(-1);
-    const stylesheet = head.search(/<link rel="stylesheet"|<style/);
-    if (stylesheet !== -1) expect(script).toBeLessThan(stylesheet);
+  it('is Dark only, with no theme script for the browser to run first', () => {
+    expect(html).toMatch(/<meta name="color-scheme" content="dark"/);
+    expect(html).not.toContain('runova-theme');
   });
 
   it('puts a skip link first in the body that targets the main content', () => {
@@ -52,16 +49,9 @@ describe('BaseLayout', () => {
     expect(footer).toBeGreaterThan(content);
   });
 
-  it('has a labelled theme toggle in the header', () => {
+  it('has no theme toggle in the header', () => {
     const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
-    expect(header).toMatch(/<button[^>]*aria-label="Switch to (light|dark) theme"/);
-  });
-
-  it('renders the theme toggle without a framework island, with both icons for CSS to pick', () => {
-    const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
-    expect(header).not.toContain('<astro-island');
-    expect(header).toMatch(/<button[^>]* data-theme-toggle/);
-    expect(header.match(/<svg[^>]* data-theme-icon="(sun|moon)"/g)).toHaveLength(2);
+    expect(header).not.toMatch(/data-theme-toggle|aria-label="Switch to/);
   });
 
   it('includes the SEO head', () => {

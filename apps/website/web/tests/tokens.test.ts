@@ -16,8 +16,9 @@ const siteCss = readFileSync(
 // app declares them, the comparison below covers them too.
 const siteOnly = (name: string) => name === '--glow' || name.startsWith('--severity-');
 
-// In Dark the site lifts its surfaces to a lighter charcoal than the app's near black (design.md,
-// Themes). Accents, text and status colors still match the app exactly.
+// The site is Dark only (design.md, Themes): its :root holds the app's Dark tokens, so it is compared
+// with the app's :root plus .dark. It lifts its surfaces to a lighter charcoal than the app's near
+// black. Accents, text and status colors still match the app exactly.
 const DARK_SURFACES = new Set([
   '--background',
   '--card',
@@ -32,43 +33,39 @@ const DARK_SURFACES = new Set([
 
 const lightness = (value: string) => Number(/(\d+(?:\.\d+)?)%\s*$/.exec(value)?.[1]);
 
-const themes = [
-  { name: 'Light', selector: [':root', '.theme-light'], own: new Set<string>() },
-  { name: 'Dark', selector: ['.dark'], own: DARK_SURFACES },
-];
-
 describe('design tokens match the desktop app', () => {
-  const appLight = readTokenBlock(appCss, [':root', '.theme-light']);
+  const app = new Map([
+    ...readTokenBlock(appCss, [':root', '.theme-light']),
+    ...readTokenBlock(appCss, ['.dark']),
+  ]);
+  const site = readTokenBlock(siteCss, [':root']);
 
-  for (const theme of themes) {
-    it(`declares every ${theme.name} token of the app with the same value`, () => {
-      const app = new Map([...appLight, ...readTokenBlock(appCss, theme.selector)]);
-      const site = new Map([
-        ...readTokenBlock(siteCss, [':root', '.theme-light']),
-        ...readTokenBlock(siteCss, theme.selector),
-      ]);
-      expect(app.size).toBeGreaterThan(20);
-      for (const [name, value] of app) {
-        if (theme.own.has(name)) continue;
-        expect(site.get(name), `${theme.name} ${name}`).toBe(value);
-      }
-    });
+  it('declares every Dark token of the app with the same value', () => {
+    expect(app.size).toBeGreaterThan(20);
+    for (const [name, value] of app) {
+      if (DARK_SURFACES.has(name)) continue;
+      expect(site.get(name), name).toBe(value);
+    }
+  });
 
-    it(`adds no ${theme.name} token the app does not have, except the site's own`, () => {
-      const app = new Map([...appLight, ...readTokenBlock(appCss, theme.selector)]);
-      const extra = [...readTokenBlock(siteCss, theme.selector).keys()].filter(
-        (name) => !app.has(name) && !siteOnly(name),
-      );
-      expect(extra).toEqual([]);
-    });
-  }
+  it("adds no token the app does not have, except the site's own", () => {
+    const extra = [...site.keys()].filter((name) => !app.has(name) && !siteOnly(name));
+    expect(extra).toEqual([]);
+  });
+
+  it('declares no Light tokens and no separate Dark block', () => {
+    expect(readTokenBlock(siteCss, [':root', '.theme-light']).size).toBe(0);
+    expect(readTokenBlock(siteCss, ['.theme-light']).size).toBe(0);
+    expect(readTokenBlock(siteCss, ['.dark']).size).toBe(0);
+  });
 
   it('lifts every Dark surface above the app, keeping the order from page to raised surface', () => {
-    const app = readTokenBlock(appCss, ['.dark']);
-    const site = readTokenBlock(siteCss, ['.dark']);
+    const appDark = readTokenBlock(appCss, ['.dark']);
     for (const name of DARK_SURFACES) {
-      expect(app.has(name), `the app declares ${name}`).toBe(true);
-      expect(lightness(site.get(name) ?? ''), name).toBeGreaterThan(lightness(app.get(name) ?? ''));
+      expect(appDark.has(name), `the app declares ${name}`).toBe(true);
+      expect(lightness(site.get(name) ?? ''), name).toBeGreaterThan(
+        lightness(appDark.get(name) ?? ''),
+      );
     }
     const l = (name: string) => lightness(site.get(name) ?? '');
     expect(l('--background')).toBeLessThan(l('--card'));
@@ -77,10 +74,10 @@ describe('design tokens match the desktop app', () => {
   });
 
   it('exposes the same Tailwind colors and radii as the app', () => {
-    const app = readTokenBlock(appCss, ['@theme inline']);
-    const site = readTokenBlock(siteCss, ['@theme inline']);
-    for (const [name, value] of app) {
-      expect(site.get(name), name).toBe(value);
+    const appTheme = readTokenBlock(appCss, ['@theme inline']);
+    const siteTheme = readTokenBlock(siteCss, ['@theme inline']);
+    for (const [name, value] of appTheme) {
+      expect(siteTheme.get(name), name).toBe(value);
     }
   });
 });

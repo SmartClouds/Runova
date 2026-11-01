@@ -1,28 +1,27 @@
 # Website design
 
 How the site at runovahq.com looks and moves. It should feel like the app: same accent and status
-colors, same body font, same calm surfaces (a little lighter in Dark), with more room and a few
+colors, same body font, same calm surfaces (a little lighter than the app's Dark), with more room and a few
 moments of motion that the app itself does not need. Specs: [E40W Website](../epics/40-website.md), [E42 Dashboard news](../epics/42-dashboard-news.md)
 (the severity colors and badges are shared with the dashboard card).
 
 ## Themes
 
-Dark is the default. Light is the other theme. The site follows `prefers-color-scheme` on the first
-visit, and the header toggle remembers the visitor's choice in `localStorage` (key
-`runova-theme`, values `dark` and `light`). An inline script in `<head>` sets the class before first
-paint so there is never a flash of the wrong theme. The app's VS Code Dark and VS 2026 themes are
-not offered on the site; they only appear in screenshots.
+The site is Dark only. There is no theme toggle, no theme script and no Light palette; it ignores
+`prefers-color-scheme`. `<html>` always carries the `dark` class (so any `dark:` utility applies)
+and the page declares `color-scheme: dark`. The app's other themes (Light, VS Code Dark and VS 2026)
+only appear in screenshots.
 
 The tokens are HSL triplets, used as `hsl(var(--primary))` and exposed to Tailwind CSS 4 through an
 `@theme inline` block exactly like `apps/desktop/src/renderer/src/index.css` does. The site defines
-Light on `:root, .theme-light` and Dark on `.dark`, with the same names as the app. A unit test
-(T011) reads the app's `index.css` and fails when any value differs, except the Dark surfaces
-below, so the site can never drift from the app by accident.
+its one palette on `:root`, with the same names and values as the app's Dark. A unit test (T011)
+reads the app's `index.css` and fails when any value differs, except the Dark surfaces below, so the
+site can never drift from the app by accident.
 
-In Dark the site uses a lighter, slightly cool charcoal for its surfaces than the app's near black,
+The site uses a lighter, slightly cool charcoal for its surfaces than the app's near black,
 because a page made for reading is heavy on `0 0% 4%`. The test checks that each site value stays
 lighter than the app's and that page, card, raised surface and border keep that order. Everything
-else in Dark (foreground, accents, status colors) is the app's.
+else (foreground, accents, status colors) is the app's Dark.
 
 | Surface token | Site Dark | App Dark |
 |---|---|---|
@@ -34,60 +33,61 @@ else in Dark (foreground, accents, status colors) is the app's.
 | `--accent` | `220 8% 19%` | `0 0% 18%` |
 | `--border`, `--input` | `220 8% 21%` | `0 0% 17%` |
 
-The app's tokens:
+The app's Dark tokens:
 
-| Token | Dark | Light |
-|---|---|---|
-| `--background` | `0 0% 4%` | `0 0% 96%` |
-| `--foreground` | `0 0% 95%` | `0 0% 9%` |
-| `--card` | `0 0% 11%` | `0 0% 91%` |
-| `--card-foreground` | `0 0% 95%` | `0 0% 9%` |
-| `--popover` | `0 0% 10%` | `0 0% 94%` |
-| `--popover-foreground` | `0 0% 95%` | `0 0% 9%` |
-| `--primary` | `150 100% 45%` | `150 100% 23%` |
-| `--primary-foreground` | `0 0% 4%` | `0 0% 100%` |
-| `--secondary` | `0 0% 15%` | `0 0% 88%` |
-| `--secondary-foreground` | `0 0% 95%` | `0 0% 12%` |
-| `--muted` | `0 0% 15%` | `0 0% 88%` |
-| `--muted-foreground` | `0 0% 62%` | `0 0% 40%` |
-| `--accent` | `0 0% 18%` | `0 0% 84%` |
-| `--accent-foreground` | `0 0% 95%` | `0 0% 12%` |
-| `--destructive` | `4 72% 60%` | `4 78% 41%` |
-| `--destructive-foreground` | `0 0% 4%` | `0 0% 100%` |
-| `--success` | `150 100% 42%` | `150 100% 22%` |
-| `--success-foreground` | `0 0% 4%` | `0 0% 100%` |
-| `--warning` | `38 92% 50%` | `38 92% 27%` |
-| `--warning-foreground` | `30 40% 10%` | `0 0% 100%` |
-| `--border` | `0 0% 17%` | `0 0% 83%` |
-| `--input` | `0 0% 17%` | `0 0% 83%` |
-| `--ring` | `150 100% 45%` | `150 100% 23%` |
-| `--radius` | `0.625rem` | `0.625rem` |
+| Token | Dark |
+|---|---|
+| `--background` | `0 0% 4%` |
+| `--foreground` | `0 0% 95%` |
+| `--card` | `0 0% 11%` |
+| `--card-foreground` | `0 0% 95%` |
+| `--popover` | `0 0% 10%` |
+| `--popover-foreground` | `0 0% 95%` |
+| `--primary` | `150 100% 45%` |
+| `--primary-foreground` | `0 0% 4%` |
+| `--secondary` | `0 0% 15%` |
+| `--secondary-foreground` | `0 0% 95%` |
+| `--muted` | `0 0% 15%` |
+| `--muted-foreground` | `0 0% 62%` |
+| `--accent` | `0 0% 18%` |
+| `--accent-foreground` | `0 0% 95%` |
+| `--destructive` | `4 72% 60%` |
+| `--destructive-foreground` | `0 0% 4%` |
+| `--success` | `150 100% 42%` |
+| `--success-foreground` | `0 0% 4%` |
+| `--warning` | `38 92% 50%` |
+| `--warning-foreground` | `30 40% 10%` |
+| `--border` | `0 0% 17%` |
+| `--input` | `0 0% 17%` |
+| `--ring` | `150 100% 45%` |
+| `--radius` | `0.625rem` |
 
-`--radius` is declared once in the app (on `:root`), so Dark inherits it. Derived radii follow the
+`--radius` is declared once in the app (on `:root`), so Dark inherits it; the site declares it on
+its `:root` with the rest. Derived radii follow the
 app: `--radius-lg` is `var(--radius)`, `--radius-md` is 2px less and `--radius-sm` is 4px less.
 
 The site adds tokens of its own only for things the app does not have, and only these:
 
-| Token | Dark | Light | Use |
-|---|---|---|---|
-| `--glow` | `150 100% 45%` | `150 100% 23%` | The hero beam, the light behind the hero workspace, the download card and the card spotlight (same as primary, kept separate so effects can be tuned without touching UI) |
+| Token | Value | Use |
+|---|---|---|
+| `--glow` | `150 100% 45%` | The hero beam, the light behind the hero workspace, the download card and the card spotlight (same as primary, kept separate so effects can be tuned without touching UI) |
 
 ### Severity colors
 
 Used for news severity on the site (T019) and on the dashboard card (T024). Severity is never shown
 by color alone: every level has its own icon (lucide) and its label in text. Each color below meets
-WCAG AA (4.5:1 or more) as text and icon color on `--background`, `--card` and `--muted` in its
-theme; the lowest ratio is given, measured on the site's surfaces (the app's darker Dark surfaces
+WCAG AA (4.5:1 or more) as text and icon color on `--background`, `--card` and `--muted`; the
+lowest ratio is given, measured on the site's surfaces (the app's darker Dark surfaces
 only raise it). The badge is the color as text and icon on a 12% tint of the same
 color, with a 1px border at 30%.
 
-| Level | Icon | Label | Dark | Light | Lowest contrast (Dark / Light) |
-|---|---|---|---|---|---|
-| `info` | `Info` | Info | `210 90% 66%` | `212 85% 34%` | 5.93 / 5.85 |
-| `low` | `ShieldCheck` | Low | `185 70% 48%` | `190 90% 24%` | 6.84 / 5.31 |
-| `medium` | `ShieldAlert` | Medium | `38 92% 50%` | `38 92% 27%` | 6.93 / 4.83 |
-| `high` | `TriangleAlert` | High | `24 95% 58%` | `22 90% 32%` | 5.76 / 5.17 |
-| `critical` | `OctagonAlert` | Critical | `4 90% 67%` | `4 78% 38%` | 5.04 / 5.37 |
+| Level | Icon | Label | Color | Lowest contrast |
+|---|---|---|---|---|
+| `info` | `Info` | Info | `210 90% 66%` | 5.93 |
+| `low` | `ShieldCheck` | Low | `185 70% 48%` | 6.84 |
+| `medium` | `ShieldAlert` | Medium | `38 92% 50%` | 6.93 |
+| `high` | `TriangleAlert` | High | `24 95% 58%` | 5.76 |
+| `critical` | `OctagonAlert` | Critical | `4 90% 67%` | 5.04 |
 
 Tokens: `--severity-info`, `--severity-low`, `--severity-medium`, `--severity-high`,
 `--severity-critical`. The site's token parity test skips these (the app gains the same values in
@@ -169,7 +169,7 @@ the hero is first on screen. Its states on `[data-hero]` are `idle`, `playing` a
 
 | Source | What it is | Used for |
 |---|---|---|
-| [shadcn/ui](https://ui.shadcn.com) | Radix-based React components | Every interactive control: admin forms, dialogs, the theme toggle, filters, tooltips, toasts |
+| [shadcn/ui](https://ui.shadcn.com) | Radix-based React components | Every interactive control: admin forms, dialogs, filters, tooltips, toasts |
 | [React Bits](https://reactbits.dev) (David Haz) | Animated React components | The idea for the hero's rising headline, the one-time scroll reveals and the token count-up |
 | [transitions.dev](https://transitions.dev) (Jakub Antalik) | Plain CSS transition snippets | Hover and press states (the header's hover pill, arrow nudges, the copy button), view transitions between pages |
 | [beUI](https://github.com/starc007/ui-components) (Saurabh Chauhan) | shadcn registry components | The hover spotlight on the home page's "Why an ADE" cards; allowed for the features index cards and the download page platform picker too |
@@ -193,15 +193,13 @@ flat line. The source sits in the sticky header, so the beam follows it while
 the page scrolls. At the top of the home page the header is see-through (`data-clear`), so the light
 shows behind it.
 
-The beam runs in both themes. In Dark it is light added to the page. Added light disappears on a
-light page, so in Light the shader draws the same shapes in Light's deeper `--glow` laid over the
-page, with less haze. Every part of it changes smoothly across the page (no `step()` or cut at a
+The beam is light added to the dark page. Every part of it changes smoothly across the page (no `step()` or cut at a
 line outside the window), because a seam shows wherever the window does not cover it. The state is
 on `#hero` as `data-beam`:
 
 | State | When | What shows |
 |---|---|---|
-| `on` | Either theme | The shader, live |
+| `on` | WebGL2 and no reduced motion | The shader, live |
 | `still` | Reduced motion | One still frame of the settled light |
 | `fallback` | No WebGL2, software rendering only, or a lost context | A CSS line of light from the header button to the window |
 
@@ -214,7 +212,7 @@ drawn while the hero is off screen or the tab is hidden.
 
 The header (`src/components/Header.astro`, behavior in `src/components/header/menu.ts`, styles in
 `header.css`) is a glass bar: the logo, the menu labels on the bar itself, then Download (the filled
-pill the hero beam falls from), a glass GitHub button and the theme toggle. The glass is a layer
+pill the hero beam falls from), and a glass GitHub button. The glass is a layer
 behind the bar, not a backdrop filter on the header itself, so the phone sheet can cover the window
 and the menu can blur the page under it. At the top of the home page that layer is hidden
 (`data-clear`).
@@ -250,8 +248,7 @@ Runova" linking to /download; the browser then names the visitor's system ("Down
 and links it to `/download/<os>/latest`, which redirects to that system's file in the latest
 release (the same pick as the main button on /download, or /download itself for a Mac of unknown
 arch). Picking a system in the menu downloads it and makes it the main link. The menu works with
-arrows, Home, End and Escape, and closes on a click outside. In Dark the pill is white with dark
-text, in Light the other way round.
+arrows, Home, End and Escape, and closes on a click outside. The pill is white with dark text.
 
 Not allowed anywhere: scroll hijacking, parallax on text, cursor followers, autoplaying video with
 sound, effects inside the admin area (it uses shadcn/ui only), and anything that moves while the
@@ -266,6 +263,14 @@ visitor reads body text.
   properties. One exception: the header menu's surface changes its width and height as it moves
   between panels (it is empty and absolutely placed, so nothing else reflows), over 460ms, and its
   panels blur in and out.
+- A help article's "On this page" list follows the reader (`src/components/help/HelpToc.astro`
+  and `toc.ts`). The entry for the section on screen gets a soft green highlight with a lit
+  segment on the rail beside it, and the rail fills for the part already read. The highlight is a
+  `clip-path` whose four edges are registered custom properties, so it moves without reflowing
+  anything. Moving down, its bottom edge leads (260ms) and the top follows (440ms), so it stretches
+  toward the next entry and settles; going up it is the other way round. It wipes in from the left
+  the first time a section is reached, and a clicked entry is picked at once rather than stepping
+  through the sections on the way. The active link has `aria-current="location"`.
 - Entrances run once, when the element first scrolls into view, and never again on the same page.
 - The hero's run plays once, for about six seconds, and never again on the same page.
 - Nothing loops forever except the agent CLI marquee, which pauses under the pointer or keyboard

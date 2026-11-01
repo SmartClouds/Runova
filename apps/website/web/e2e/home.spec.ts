@@ -253,7 +253,7 @@ test.describe('home page download button', () => {
   });
 
   for (const colorScheme of ['dark', 'light'] as const) {
-    test(`lights up in the ${colorScheme} theme`, async ({ page }) => {
+    test(`lights up when the system prefers ${colorScheme}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await page.goto('/');
       await expect(page.locator('#hero')).toHaveAttribute('data-beam', /^(on|still|fallback)$/);
@@ -264,17 +264,6 @@ test.describe('home page download button', () => {
       );
     });
   }
-
-  test('keeps the light on across a theme switch', async ({ page }) => {
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await page.goto('/');
-    const source = page.locator('header [data-beam-source]');
-    await expect(source).toHaveAttribute('data-beam-struck', '', { timeout: 5_000 });
-    await page.locator('header button[aria-label*="theme"]').click();
-    await expect(page.locator('html')).not.toHaveClass(/dark/);
-    await expect(page.locator('#hero')).toHaveAttribute('data-beam', /^(on|still|fallback)$/);
-    await expect(source).toHaveAttribute('data-beam-struck', '', { timeout: 5_000 });
-  });
 
   test('shows the light through the header at the top of the page only', async ({ page }) => {
     await page.goto('/');

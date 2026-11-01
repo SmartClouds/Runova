@@ -1,0 +1,196 @@
+---
+import type { HelpTocItem } from '../../lib/help/articles';
+
+/**
+ * "On this page" for a help article. The script in toc.ts follows the reader: the entry for the
+ * section on screen gets a highlight that slides along the list, a lit segment on the rail and a
+ * fill for the part already read. Without JavaScript it is a plain list of links.
+ */
+
+interface Props {
+  toc: HelpTocItem[];
+}
+
+const { toc } = Astro.props;
+---
+
+<nav aria-label="On this page" class="toc sticky top-20 flex flex-col pt-6 text-sm" data-toc>
+  <p class="font-semibold">On this page</p>
+  <div class="toc-scroll mt-3" data-toc-scroll>
+    <div class="toc-track" data-toc-track>
+      <span class="toc-fill" aria-hidden="true"></span>
+      <span class="toc-pill" aria-hidden="true"></span>
+      <span class="toc-bar" aria-hidden="true"></span>
+      <ul class="relative flex flex-col border-l">
+        {
+          toc.map((item) => (
+            <li class:list={[item.level === 3 ? 'pl-4' : 'pl-1.5']}>
+              <a href={`#${item.id}`} class="toc-link" data-toc-link data-level={item.level}>
+                {item.heading}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<script>
+  import { setUpToc } from './toc';
+
+  const nav = document.querySelector<HTMLElement>('[data-toc]');
+  if (nav) setUpToc(nav);
+</script>
+
+<style>
+  /* Registered so the edges can transition (they are read by clip-path, so nothing reflows). */
+  @property --toc-top {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @property --toc-right {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @property --toc-bottom {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @property --toc-left {
+    syntax: "<length>";
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  .toc {
+    max-height: calc(100dvh - 5rem);
+  }
+
+  /* Long articles scroll inside the list. The extra inline padding keeps the rail's glow from
+     being clipped by the scroll box. */
+  .toc-scroll {
+    min-height: 0;
+    margin-inline: -0.5rem;
+    padding: 0.25rem 0.5rem 1.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    --fade-top: 0px;
+    --fade-bottom: 0px;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--fade-top),
+      #000 calc(100% - var(--fade-bottom)),
+      transparent
+    );
+  }
+
+  .toc-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toc-scroll[data-fade-top] {
+    --fade-top: 1.5rem;
+  }
+
+  .toc-scroll[data-fade-bottom] {
+    --fade-bottom: 2.5rem;
+  }
+
+  .toc-track {
+    position: relative;
+    /* Going down the bottom edge leads and the top follows, so the highlight stretches toward the
+       next entry and then settles. Going up it is the other way round. */
+    transition:
+      --toc-top 440ms var(--ease-enter),
+      --toc-bottom 260ms var(--ease-enter),
+      --toc-left 320ms var(--ease-enter),
+      --toc-right 320ms var(--ease-enter);
+  }
+
+  .toc-track[data-direction="up"] {
+    transition-duration: 260ms, 440ms, 320ms, 320ms;
+  }
+
+  .toc-track[data-instant] {
+    transition: none;
+  }
+
+  .toc-link {
+    display: block;
+    position: relative;
+    border-radius: var(--radius-inner);
+    padding: 0.3125rem 0.625rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.35;
+    text-decoration: none;
+    transition: color 200ms var(--ease-enter);
+  }
+
+  .toc-link:hover,
+  .toc-link[aria-current] {
+    color: hsl(var(--foreground));
+  }
+
+  .toc-link[data-toc-parent] {
+    color: hsl(var(--foreground) / 0.8);
+  }
+
+  .toc-fill,
+  .toc-pill,
+  .toc-bar {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 300ms var(--ease-enter);
+  }
+
+  /* The part of the rail already read. */
+  .toc-fill {
+    inset: 0 auto 0 0;
+    width: 1px;
+    background: linear-gradient(to bottom, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.6));
+    clip-path: inset(0 0 var(--toc-bottom) 0);
+  }
+
+  /* The highlight that hugs the active entry. */
+  .toc-pill {
+    inset: 0;
+    background:
+      radial-gradient(120% 160% at 0% 50%, hsl(var(--primary) / 0.16), transparent 70%),
+      hsl(var(--primary) / 0.07);
+    clip-path: inset(var(--toc-top) var(--toc-right) var(--toc-bottom) var(--toc-left) round var(--radius-inner));
+  }
+
+  /* The lit segment of the rail beside it: a 2px line with a soft glow either side. */
+  .toc-bar {
+    top: 0;
+    bottom: 0;
+    left: calc(0.5px - 0.375rem);
+    width: 0.75rem;
+    background: linear-gradient(
+      to right,
+      transparent,
+      hsl(var(--glow) / 0.28) 35%,
+      hsl(var(--primary)) calc(50% - 1px),
+      hsl(var(--primary)) calc(50% + 1px),
+      hsl(var(--glow) / 0.28) 65%,
+      transparent
+    );
+    clip-path: inset(calc(var(--toc-top) + 3px) 0 calc(var(--toc-bottom) + 3px) 0 round 999px);
+  }
+
+  [data-active] > .toc-fill,
+  [data-active] > .toc-pill,
+  [data-active] > .toc-bar {
+    opacity: 1;
+  }
+</style>

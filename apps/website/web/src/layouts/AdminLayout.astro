@@ -4,9 +4,7 @@ import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles/global.css';
 import SignOutButton from '../components/admin/SignOutButton';
 import SeoHead from '../components/SeoHead.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
 import { isAdmin } from '../lib/admin/guard';
-import { themeInitScript } from '../lib/theme';
 
 interface Props {
   title: string;
@@ -34,9 +32,8 @@ const links = [
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
-    <script is:inline set:html={themeInitScript} />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <SeoHead title={`${title} (admin)`} description="The Runova site admin, where staff write the news and the blog." noindex />
   </head>
@@ -71,7 +68,6 @@ const links = [
         <div class="flex items-center gap-3">
           {user && <span class="text-muted-foreground text-sm max-sm:sr-only">{user.displayName}</span>}
           {user && <SignOutButton client:only="react" />}
-          <ThemeToggle />
         </div>
       </div>
     </header>

@@ -17,7 +17,7 @@ const TITLE_LINE_HEIGHT = 80;
 const SMALL_SIZE = 30;
 const MAX_LINES = 3;
 
-// The dark theme's tokens from global.css.
+// The site's tokens from global.css (Dark only).
 const BACKGROUND = '#0a0a0a';
 const FOREGROUND = '#f2f2f2';
 const PRIMARY = '#00e673';

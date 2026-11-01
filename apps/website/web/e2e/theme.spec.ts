@@ -1,63 +1,17 @@
 import { expect, type Page, test } from '@playwright/test';
 
-const html = (page: Page) => page.locator('html');
-const toggle = (page: Page) => page.getByRole('button', { name: /Switch to (light|dark) theme/ });
-
-/** Opens the home page with a system color scheme and waits until the toggle's script has run. */
-async function open(page: Page, colorScheme: 'dark' | 'light') {
-  await page.emulateMedia({ colorScheme });
-  await page.goto('/');
-  await page.locator('[data-theme-toggle][data-ready]').waitFor({ state: 'attached' });
-}
-
 test.describe('theme', () => {
-  test('starts in Dark when the system prefers dark', async ({ page }) => {
-    await open(page, 'dark');
-    await expect(html(page)).toHaveClass(/\bdark\b/);
-  });
-
-  test('follows a light system preference on the first visit', async ({ page }) => {
-    await open(page, 'light');
-    await expect(html(page)).not.toHaveClass(/\bdark\b/);
-    await expect(toggle(page)).toHaveAccessibleName('Switch to dark theme');
-  });
-
-  test('the toggle switches the theme and remembers the choice', async ({ page }) => {
-    await open(page, 'dark');
-    await expect(toggle(page)).toHaveAccessibleName('Switch to light theme');
-
-    await toggle(page).click();
-    await expect(html(page)).not.toHaveClass(/\bdark\b/);
-    expect(await page.evaluate(() => localStorage.getItem('runova-theme'))).toBe('light');
-
-    await page.reload();
-    await page.locator('[data-theme-toggle][data-ready]').waitFor({ state: 'attached' });
-    await expect(html(page)).not.toHaveClass(/\bdark\b/);
-    await expect(toggle(page)).toHaveAccessibleName('Switch to dark theme');
-
-    await toggle(page).click();
-    await expect(html(page)).toHaveClass(/\bdark\b/);
-    expect(await page.evaluate(() => localStorage.getItem('runova-theme'))).toBe('dark');
-  });
-
-  test('the background follows the theme tokens', async ({ page }) => {
-    await open(page, 'dark');
-    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(await background()).toBe('rgb(21, 22, 25)');
-    await toggle(page).click();
-    await expect.poll(background).toBe('rgb(245, 245, 245)');
-  });
-});
-
-// Chromium reports a light scheme when emulating `no-preference`, so the default shows where no
-// script runs: the server render is Dark.
-test.describe('without JavaScript', () => {
-  test.use({ javaScriptEnabled: false, colorScheme: 'light' });
-
-  test('the page is Dark by default', async ({ page }) => {
-    await page.goto('/');
-    await expect(html(page)).toHaveClass(/\bdark\b/);
-  });
+  for (const colorScheme of ['dark', 'light'] as const) {
+    test(`is Dark when the system prefers ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/');
+      await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+      expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+        'rgb(21, 22, 25)',
+      );
+      await expect(page.getByRole('button', { name: /theme/i })).toHaveCount(0);
+    });
+  }
 });
 
 /** Every element and pseudo-element whose computed style still animates or transitions. */

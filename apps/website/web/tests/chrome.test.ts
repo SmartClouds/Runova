@@ -8,7 +8,7 @@ import Header from '../src/components/Header.astro';
 let container: AstroContainer;
 
 beforeAll(async () => {
-  // The theme toggle in the header renders lucide-react icons on the server.
+  // The header's icons (effects/Icon.astro) render lucide-react on the server.
   const renderers = await loadRenderers([reactRenderer()]);
   container = await AstroContainer.create({
     renderers,

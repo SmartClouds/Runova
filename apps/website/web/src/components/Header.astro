@@ -2,7 +2,6 @@
 import { DOWNLOAD_SECTION, GITHUB_URL, NAV_LINKS, NAV_SECTIONS } from '../lib/nav';
 import Icon from './effects/Icon.astro';
 import NavPanel from './header/NavPanel.astro';
-import ThemeToggle from './ThemeToggle.astro';
 import './header/header.css';
 
 // A glass bar with a menu: Features, News, Blog and Resources open panels (News and Blog with the
@@ -109,7 +108,6 @@ const SHEET_SECTIONS = [DOWNLOAD_SECTION, ...NAV_SECTIONS];
       >
         <Icon name="github" size={18} />
       </a>
-      <ThemeToggle />
       <button
         type="button"
         class="menu-button"

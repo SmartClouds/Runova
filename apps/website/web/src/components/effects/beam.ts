@@ -9,11 +9,10 @@
  * fragment shader on a full-screen triangle, no library. No code is copied (openbot.run is
  * PolyForm Noncommercial).
  *
- * It runs in both themes. Added light disappears on a light page, so in Light the shader draws the
- * same light as the theme's deeper green laid over the page. With reduced motion, without WebGL2
- * or after a lost context it never loops: reduced motion gets one still frame of the settled light,
- * and the others get a CSS line in the same place (`data-beam` on the hero tells the CSS which). Cost limits follow the webgl-components skill: the pixel ratio is
- * capped, idle frames run at 30fps, and nothing draws off screen or in a hidden tab.
+ * With reduced motion, without WebGL2 or after a lost context it never loops: reduced motion gets
+ * one still frame of the settled light, and the others get a CSS line in the same place
+ * (`data-beam` on the hero tells the CSS which). Cost limits follow the webgl-components skill: the
+ * pixel ratio is capped, idle frames run at 30fps, and nothing draws off screen or in a hidden tab.
  */
 
 /** The source lights up, then the tip falls, then the light spreads over the window. */
@@ -51,9 +50,7 @@ uniform float uHead;     // y of the falling tip
 uniform float uLand;     // 0 until the tip lands, then up to 1
 uniform float uFlash;    // 1 at the moment it lands, then fades
 uniform float uRun;      // how far the light has flowed from where it landed, in CSS px
-uniform vec3 uColor;     // the light's color, always the bright Dark glow
-uniform vec3 uInk;       // the theme's own --glow, used to draw the light in Light
-uniform float uLight;    // 1 in the Light theme
+uniform vec3 uColor;     // the light's color, the site's --glow
 
 out vec4 fragColor;
 
@@ -187,10 +184,10 @@ void main() {
   float falling = smoothstep(top + uSurfaceRadius * 0.3, top + uSurfaceRadius + 18.0, p.y) * exp(-down / 520.0);
   float water = (0.35 + smoothstep(0.35, 0.85, flow) * thread * 1.4) * sheet * falling;
   vec3 waterColor = mix(hot, cool, laneSeed * 0.8);
-  col += waterColor * water * reached * mix(2.6, 1.0, uLight) * land;
+  col += waterColor * water * reached * 2.6 * land;
   // The lip where it pours over the corner.
   vec2 lip = vec2(sideX + toward * 2.0, top + uSurfaceRadius * 0.6);
-  col += hot * exp(-length(p - lip) / 22.0) * reached * mix(1.4, 0.6, uLight) * land;
+  col += hot * exp(-length(p - lip) / 22.0) * reached * 1.4 * land;
 
   // A wide soft fan of light over the window. Beside the window it fades out below the top edge
   // instead of stopping at it.
@@ -203,7 +200,7 @@ void main() {
   float smoke = smoothstep(0.38, 0.9, fbm(p / 190.0 + warp * 1.6 + drift * 1.4));
   float lit = exp(-adx / (180.0 + 260.0 * uLand)) * smoothstep(start, start + 160.0, p.y);
   lit *= exp(-below / 140.0);
-  col += mix(uColor, cool, 0.3) * smoke * lit * (0.1 + 0.5 * uLand) * mix(1.0, 0.35, uLight);
+  col += mix(uColor, cool, 0.3) * smoke * lit * (0.1 + 0.5 * uLand);
 
   // Dust: specks that sink slowly and twinkle where the light is.
   vec2 grid = vec2(p.x, p.y - uTime * 9.0) / 9.0;
@@ -215,15 +212,6 @@ void main() {
 
   // Nothing is drawn inside the window: it covers that part anyway.
   col *= smoothstep(-1.0, 1.0, edge);
-  if (uLight > 0.5) {
-    // Added light vanishes on a light page, so in Light the same amounts are drawn as the theme's
-    // deeper green (uInk) laid over the page. The strongest parts are the deepest green, so the
-    // beam's core reads as its center and not as a pale stripe.
-    float amount = 1.0 - exp(-dot(col, vec3(0.25, 0.6, 0.15)) * 1.2);
-    float alpha = amount * 0.9;
-    fragColor = vec4(uInk * alpha, alpha);
-    return;
-  }
   col = 1.0 - exp(-col * 1.15);
   fragColor = vec4(col, clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0));
 }`;
@@ -280,10 +268,7 @@ export function runLength(elapsed: number, longest: number): number {
 
 type BeamState = 'on' | 'still' | 'fallback';
 
-/**
- * The Dark theme's --glow (design.md). The light keeps this color in both themes; in Light the
- * shader draws it with the theme's own deeper --glow as ink.
- */
+/** The site's --glow (design.md). */
 const BEAM_COLOR = hslTripletToRgb('150 100% 45%');
 
 interface Program {
@@ -304,8 +289,6 @@ const UNIFORMS = [
   'uFlash',
   'uRun',
   'uColor',
-  'uInk',
-  'uLight',
 ];
 
 function compile(gl: WebGL2RenderingContext): Program | null {
@@ -349,7 +332,6 @@ interface Parts {
 export function setUpBeam({ host, stage, source, surface }: Parts) {
   const canvas = stage.querySelector('canvas');
   if (!canvas) return;
-  const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
   let program: Program | null = null;
@@ -427,7 +409,6 @@ export function setUpBeam({ host, stage, source, surface }: Parts) {
     }
     const layout = measure();
     const elapsed = settled ? INTRO_MS * 3 : now - started;
-    const glow = getComputedStyle(root).getPropertyValue('--glow');
     const sinceLanding = elapsed - LIGHT_MS - FALL_MS;
 
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -445,8 +426,6 @@ export function setUpBeam({ host, stage, source, surface }: Parts) {
     gl.uniform1f(uniforms.uFlash, sinceLanding < 0 ? 0 : Math.exp(-sinceLanding / 260));
     gl.uniform1f(uniforms.uRun, runLength(elapsed, layout.longest));
     gl.uniform3fv(uniforms.uColor, BEAM_COLOR);
-    gl.uniform3fv(uniforms.uInk, hslTripletToRgb(glow));
-    gl.uniform1f(uniforms.uLight, root.classList.contains('dark') ? 0 : 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     strike(elapsed >= LIGHT_MS / 2);
   };
@@ -473,7 +452,7 @@ export function setUpBeam({ host, stage, source, surface }: Parts) {
     }
   };
 
-  /** Picks the state for the current theme and motion setting, and starts or stops the loop. */
+  /** Picks the state for the motion setting, and starts or stops the loop. */
   const update = () => {
     stop();
     if (!ensureProgram()) {
@@ -521,13 +500,6 @@ export function setUpBeam({ host, stage, source, surface }: Parts) {
   );
 
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : resume()));
-  // Only a theme switch restarts the beam, not any other class on <html>.
-  let dark = root.classList.contains('dark');
-  new MutationObserver(() => {
-    if (root.classList.contains('dark') === dark) return;
-    dark = !dark;
-    update();
-  }).observe(root, { attributes: true, attributeFilter: ['class'] });
   reduced.addEventListener('change', update);
   new ResizeObserver(() => {
     const state = host.dataset.beam;

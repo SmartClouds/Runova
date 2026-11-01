@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* <html> always carries the dark class, so `dark:` utilities (shadcn uses some) always apply. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Same names and values as apps/desktop/src/renderer/src/index.css; tests/tokens.test.ts fails
@@ -84,45 +85,11 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Light, as in the app. */
-:root,
-.theme-light {
-  --background: 0 0% 96%;
-  --foreground: 0 0% 9%;
-  --card: 0 0% 91%;
-  --card-foreground: 0 0% 9%;
-  --popover: 0 0% 94%;
-  --popover-foreground: 0 0% 9%;
-  --primary: 150 100% 23%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 88%;
-  --secondary-foreground: 0 0% 12%;
-  --muted: 0 0% 88%;
-  --muted-foreground: 0 0% 40%;
-  --accent: 0 0% 84%;
-  --accent-foreground: 0 0% 12%;
-  --destructive: 4 78% 41%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 150 100% 22%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 92% 27%;
-  --warning-foreground: 0 0% 100%;
-  --border: 0 0% 83%;
-  --input: 0 0% 83%;
-  --ring: 150 100% 23%;
-  --radius: 0.625rem;
-  --glow: 150 100% 23%;
-  --severity-info: 212 85% 34%;
-  --severity-low: 190 90% 24%;
-  --severity-medium: 38 92% 27%;
-  --severity-high: 22 90% 32%;
-  --severity-critical: 4 78% 38%;
-}
-
-/* Dark, the default. Accents, text and status colors are the app's; the surfaces (background,
-   cards, borders, muted text) are a lighter charcoal than the app's near black, so a page reads
-   softer than a tool window (design.md, Themes). tests/tokens.test.ts holds the list. */
-.dark {
+/* The site is Dark only (design.md, Themes). Accents, text and status colors are the app's Dark
+   ones; the surfaces (background, cards, borders, muted text) are a lighter charcoal than the app's
+   near black, so a page reads softer than a tool window. tests/tokens.test.ts holds the list. */
+:root {
+  color-scheme: dark;
   --background: 220 10% 9%;
   --foreground: 0 0% 95%;
   --card: 220 9% 13%;
@@ -146,6 +113,7 @@
   --border: 220 8% 21%;
   --input: 220 8% 21%;
   --ring: 150 100% 45%;
+  --radius: 0.625rem;
   --glow: 150 100% 45%;
   --severity-info: 210 90% 66%;
   --severity-low: 185 70% 48%;
