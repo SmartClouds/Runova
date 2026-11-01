@@ -47,7 +47,11 @@ describe('Footer', () => {
   it('ends with a status bar that names the license, the systems and the year', () => {
     expect(html).toContain('Open source, MIT');
     expect(html).toContain('Windows · macOS · Linux');
-    expect(html).toMatch(new RegExp(`(©|&copy;) ${new Date().getFullYear()} SmartClouds`));
+    expect(html).toMatch(
+      new RegExp(
+        `(©|&copy;) ${new Date().getFullYear()} <a href="https://smartclouds\\.co"[^>]*>SmartClouds</a>`,
+      ),
+    );
   });
 
   it('opens external links with rel="noopener"', () => {

@@ -318,4 +318,39 @@ public sealed class ErrorReportingManagerTests : IDisposable
 
         Assert.Contains("a plain string was thrown", _ingest.AllBodies, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void The_crash_hooks_never_throw_when_the_loggers_are_already_disposed()
+    {
+        // A host shutting down disposes its loggers, and the finalizer can still be inside the hook.
+        // On Windows the event log logger then throws, and a throw on the finalizer thread ends the process.
+        var (_, logs) = Create();
+        using var factory = LoggerFactory.Create(builder => builder.AddProvider(new DisposedLoggerProvider()));
+        var hooks = new ErrorReportingHooks(factory.CreateLogger("Runova.ServerCore.Crash"), logs);
+
+        hooks.OnUnobservedTaskException(this, new UnobservedTaskExceptionEventArgs(new AggregateException(new InvalidOperationException("a task nobody awaited"))));
+        hooks.OnUnhandledException(this, new UnhandledExceptionEventArgs(new InvalidOperationException("the core is dying"), isTerminating: false));
+        hooks.OnUnhandledException(this, new UnhandledExceptionEventArgs("a plain string was thrown", isTerminating: false));
+    }
+
+    /// <summary>Behaves like the Windows event log logger after its host is gone: every write throws.</summary>
+    private sealed class DisposedLoggerProvider : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => new DisposedLogger();
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class DisposedLogger : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                throw new ObjectDisposedException("EventLogInternal");
+        }
+    }
 }
