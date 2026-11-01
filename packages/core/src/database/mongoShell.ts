@@ -259,7 +259,7 @@ class Reader {
 
 /** One value as mongosh would read it, with Extended JSON for the shell's helpers. */
 export function parseMongoValue(text: string): unknown {
-  const reader = new Reader(text);
+  const reader: Reader = new Reader(text);
   const value = reader.value();
   if (reader.peek() !== undefined) reader.fail(`What follows the value ${NOT_RUNNABLE}`);
   return value;
@@ -275,7 +275,7 @@ const SHOW: Record<string, 'databases' | 'collections' | 'users' | 'roles'> = {
 };
 
 export function parseMongoShell(text: string): MongoCommand {
-  const reader = new Reader(text.trim());
+  const reader: Reader = new Reader(text.trim());
   const start = reader.identifier();
   if (start === 'show') {
     const what = reader.identifier() ?? '';
