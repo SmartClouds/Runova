@@ -1,9 +1,8 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { type LaunchedApp, launchApp } from './app';
-import { E2E_OUT_DIR } from './paths';
+import { appMainEntry } from './paths';
 
 /**
  * The whole suite leans on one thing: a Runova started with its own profile never touches
@@ -41,7 +40,7 @@ function startOnProfile(userDataDir: string): ChildProcess {
   return spawn(
     electronPath,
     [
-      join(E2E_OUT_DIR, 'main', 'index.mjs'),
+      appMainEntry(),
       `--user-data-dir=${userDataDir}`,
       ...(process.env.RUNOVA_E2E_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
     ],

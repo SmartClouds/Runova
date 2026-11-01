@@ -8,7 +8,7 @@ import {
   test,
 } from '@playwright/test';
 import { closeApp, type LaunchedApp, launchApp, OS_COLOR_SCHEME } from './app';
-import { E2E_OUT_DIR } from './paths';
+import { appMainEntry } from './paths';
 
 /**
  * The Vault in the real app: a master password, entries saved through the UI, the clipboard
@@ -114,7 +114,7 @@ async function relaunch(current: LaunchedApp): Promise<Page> {
   relaunched = await electron.launch({
     ...OS_COLOR_SCHEME,
     args: [
-      join(E2E_OUT_DIR, 'main', 'index.mjs'),
+      appMainEntry(),
       `--user-data-dir=${current.userDataDir}`,
       ...(process.env.RUNOVA_E2E_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
     ],

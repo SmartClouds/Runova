@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { type ElectronApplication, _electron as electron, type Page, test } from '@playwright/test';
 import { workerDisplay } from './displays';
-import { E2E_OUT_DIR, MAIN_LOG_DIR } from './paths';
+import { appMainEntry, MAIN_LOG_DIR } from './paths';
 
 // On Linux every worker can have an X display of its own (see displays.ts). It goes on
 // process.env, so the specs' own relaunches, which pass process.env along, land on it too.
@@ -184,7 +184,7 @@ export async function launchApp(seed: {
   const app = await electron.launch({
     ...OS_COLOR_SCHEME,
     args: [
-      join(E2E_OUT_DIR, 'main', 'index.mjs'),
+      appMainEntry(),
       `--user-data-dir=${userDataDir}`,
       // Ubuntu runners block the unprivileged user namespaces Chromium's sandbox needs.
       ...(process.env.RUNOVA_E2E_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),

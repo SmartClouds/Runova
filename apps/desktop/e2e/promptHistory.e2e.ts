@@ -8,7 +8,7 @@ import {
   test,
 } from '@playwright/test';
 import { type LaunchedApp, launchApp, OS_COLOR_SCHEME } from './app';
-import { E2E_OUT_DIR } from './paths';
+import { appMainEntry } from './paths';
 
 /**
  * Prompt History is the only feature in the suite that goes through better-sqlite3, whose native
@@ -96,7 +96,7 @@ async function relaunch(current: LaunchedApp): Promise<Page> {
   relaunched = await electron.launch({
     ...OS_COLOR_SCHEME,
     args: [
-      join(E2E_OUT_DIR, 'main', 'index.mjs'),
+      appMainEntry(),
       `--user-data-dir=${current.userDataDir}`,
       ...(process.env.RUNOVA_E2E_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
     ],

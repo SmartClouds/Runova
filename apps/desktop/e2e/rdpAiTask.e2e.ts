@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { type LaunchedApp, launchApp } from './app';
-import { type FakeOllama, startFakeOllama } from './fakeOllama';
+import { type FakeOllama, type FakeReply, startFakeOllama } from './fakeOllama';
 import {
   buildRdpServerImage,
   dockerAvailable,
@@ -83,7 +83,7 @@ test.afterEach(async () => {
 });
 
 /** Opens a session on the test server and returns its window once the desktop is connected. */
-async function openSession(replies: string[]): Promise<{ page: Page; sessionId: string }> {
+async function openSession(replies: FakeReply[]): Promise<{ page: Page; sessionId: string }> {
   if (!server) throw new Error('RDP server did not start');
   ollama = await startFakeOllama(replies);
   launched = await launchApp({
@@ -170,11 +170,33 @@ function pngSize(base64: string): { width: number; height: number } | null {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
+/**
+ * Resolves once the session's autostart terminal is on screen with a shell prompt. xfce4-terminal
+ * only shows "Terminal - user@host: ~" once bash's prompt has set the title. How long the desktop
+ * takes to start after sign-in depends on the machine's load, so no fixed WAIT can promise this.
+ */
+async function terminalReady(): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    if (!server) throw new Error('RDP server did not start');
+    try {
+      rdpExec(server, "xdotool search --onlyvisible --name '^Terminal - '");
+      return;
+    } catch (error) {
+      if (Date.now() > deadline) throw new Error(`the terminal never opened: ${error}`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+
 test('signs in, types a command into a terminal and drags its window', async () => {
   const { page, sessionId } = await openSession([
     ...SIGN_IN,
     // The terminal starts from the session's autostart, at the top left; a click gives it focus.
-    'CLICK 400 300',
+    async () => {
+      await terminalReady();
+      return 'CLICK 400 300';
+    },
     'TYPE "echo rdp-ok > /tmp/rdp-e2e.txt\\n"',
     'WAIT 1500',
     'DRAG 300 45 500 145',
