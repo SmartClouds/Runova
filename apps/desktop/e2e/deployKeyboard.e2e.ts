@@ -23,6 +23,7 @@ const SECTIONS = [
   'Websites',
   'Firewall',
   'Logs',
+  'Database',
   'Backups',
   'Security',
   'Notifications',

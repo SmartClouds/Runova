@@ -33,6 +33,15 @@ const forcedExternals = [
   // `require('tough-cookie')`), which only resolve from its own folder in pnpm's store, not
   // from out/main. Bundled, the first hub call fails with "Cannot find module 'eventsource'".
   '@microsoft/signalr',
+  // The Database section's drivers (E45). They load optional parts of themselves at runtime,
+  // and bundled, mssql drags in @azure/identity, whose doc comment holds an `import` line the
+  // CommonJS shim then lands inside, which leaves __dirname undefined for all of main.
+  'pg',
+  'mysql2',
+  'mongodb',
+  'ioredis',
+  'cassandra-driver',
+  'mssql',
   /^node:/,
 ];
 
