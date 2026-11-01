@@ -287,10 +287,7 @@ internal static class UserEndpoints
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync();
-        Succeeded(await users.SetTwoFactorEnabledAsync(user, false));
-        await users.GenerateNewTwoFactorRecoveryCodesAsync(user, 0);
-        user.LastTotpTimeStep = null;
-        Succeeded(await users.ResetAuthenticatorKeyAsync(user));
+        await users.ClearTwoFactorAsync(user);
         audit.Add(AuditActions.UserTwoFactorReset, AuditTargetTypes.User, user.Id);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();

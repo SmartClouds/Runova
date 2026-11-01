@@ -80,6 +80,35 @@ public sealed class AuditTests : IDisposable
     }
 
     [Fact]
+    public async Task Changes_to_ones_own_account_write_entries_by_that_user_with_no_secret()
+    {
+        var user = await TestUsers.CreateAsync(_factory.Services);
+        var key = await TestUsers.EnableTwoFactorAsync(_factory.Services, user);
+        // One step for both codes: drift takes the next step's code whichever step the server is in.
+        var step = Totp.TimeStep(DateTimeOffset.UtcNow);
+        var client = _factory.CreateApiClient();
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SignInAsync(user.Email!, TestUsers.Password, Totp.Code(key, step))).StatusCode);
+        const string newPassword = "a brand new passphrase";
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Put, "/api/v1/users/me/password", new { currentPassword = TestUsers.Password, newPassword })).StatusCode);
+        var codes = await ApiClient.ReadJsonAsync(
+            await client.SendAsync(HttpMethod.Post, "/api/v1/users/me/two-factor/recovery-codes", new { code = Totp.Code(key, step + 1) }), HttpStatusCode.Created);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Delete, "/api/v1/users/me/two-factor", new { password = newPassword })).StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var entries = await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditEntries.AsNoTracking()
+            .Where(e => e.TargetType == "user" && e.TargetId == user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .OrderBy(e => e.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["user.update", "user.update", "user.two-factor-reset"], entries.Select(e => e.Action));
+        Assert.All(entries, entry => Assert.Equal(user.Id, entry.ActorId));
+        var all = JsonSerializer.Serialize(entries);
+        Assert.DoesNotContain(newPassword, all, StringComparison.Ordinal);
+        Assert.DoesNotContain(TestUsers.Password, all, StringComparison.Ordinal);
+        Assert.All(codes.GetProperty("recoveryCodes").EnumerateArray(), code => Assert.DoesNotContain(code.GetString()!, all, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_refused_change_writes_no_entry()
     {
         var admin = await TestUsers.SignedInClientAsync(_factory, await TestUsers.CreateAsync(_factory.Services, Roles.Admin));

@@ -1,11 +1,13 @@
 // No secret, cookie or signature leaves the stack in a log line, a Sentry event or an OpenTelemetry
-// span. The spec signs in, invites a user who sets a password, makes an API client, rotates its
-// secret, sends signed requests (and one with a wrong signature), opens an admin page with the
-// session, then looks for every one of those values in `docker compose logs` and in what the API
-// sent to the telemetry sink (compose.test.yaml). It runs alongside the other stack specs, so the
-// output holds their requests too.
+// span. The spec signs in, invites a user who sets a password, changes it, turns two-factor on,
+// gets new recovery codes and turns two-factor off, makes an API client, rotates its secret, sends
+// signed requests (and one with a wrong signature), opens an admin page with the session, then
+// looks for every one of those values in `docker compose logs` and in what the API sent to the
+// telemetry sink (compose.test.yaml). It runs alongside the other stack specs, so the output holds
+// their requests too.
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { signingKey, signRequest } from '../../../../../docs/website/examples/sign-request.ts';
+import { nextCode } from '../admin/totp.ts';
 import { compose, exec } from './compose.ts';
 import { call, newContext, ownerSession, unique } from './stackApi.ts';
 import { OWNER } from './stackConfig.ts';
@@ -81,11 +83,76 @@ function needles(secrets: Record<string, string>) {
   });
 }
 
+/**
+ * Recovery codes are short (`XXXXX-XXXXX`), so each is looked for whole. Ten random characters
+ * still never turn up in the output by chance.
+ */
+function recoveryCodeNeedles(codes: string[]) {
+  return codes.map((value, index) => {
+    expect(value, 'a recovery code').toMatch(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/);
+    return { name: `recovery code ${index + 1}`, value };
+  });
+}
+
+/**
+ * The invited user's own account: a password change, two-factor on, new recovery codes, and
+ * two-factor off again. Adds the new password and the authenticator key to `secrets` and returns
+ * every recovery code the API handed out.
+ */
+async function ownAccountChanges(
+  email: string,
+  secrets: Record<string, string>,
+  id: string,
+): Promise<string[]> {
+  const session = await newContext();
+  try {
+    await call(session, '/sessions', {
+      email,
+      password: secrets['invited user password'],
+      twoFactorCode: null,
+      recoveryCode: null,
+    });
+    secrets['changed password'] = `changed-password-${id}-only-here`;
+    await call(
+      session,
+      '/users/me/password',
+      {
+        currentPassword: secrets['invited user password'],
+        newPassword: secrets['changed password'],
+      },
+      'PUT',
+    );
+
+    const setup = await (await call(session, '/users/me/two-factor', undefined)).json();
+    secrets['authenticator key'] = setup.sharedKey;
+    const authenticator = { secret: setup.sharedKey, lastStep: 0 };
+    const first = await (
+      await call(session, '/users/me/two-factor', { code: await nextCode(authenticator) }, 'PUT')
+    ).json();
+    const renewed = await (
+      await call(session, '/users/me/two-factor/recovery-codes', {
+        code: await nextCode(authenticator),
+      })
+    ).json();
+    expect(renewed.recoveryCodes).toHaveLength(10);
+    await call(
+      session,
+      '/users/me/two-factor',
+      { password: secrets['changed password'] },
+      'DELETE',
+    );
+    return [...first.recoveryCodes, ...renewed.recoveryCodes];
+  } finally {
+    await session.dispose();
+  }
+}
+
 test('no secret, cookie or signature appears in logs, Sentry events or spans', async ({ page }) => {
   test.setTimeout(120_000);
   clearTelemetry();
   const id = unique();
   const secrets: Record<string, string> = { 'owner password': OWNER.password };
+  let recoveryCodes: string[] = [];
 
   // A staff session: the password goes in, cookies and the antiforgery token come back.
   const owner = await ownerSession();
@@ -99,9 +166,10 @@ test('no secret, cookie or signature appears in logs, Sentry events or spans', a
     expect(Object.keys(secrets)).toContain('cookie __Host-runova-session');
 
     // An invitation: its setup token, then the password the invited user sets with it.
+    const invitedEmail = `secrets-${id}@stack.runovahq.test`;
     const invited = await (
       await call(owner, '/users', {
-        email: `secrets-${id}@stack.runovahq.test`,
+        email: invitedEmail,
         displayName: `Secrets ${id}`,
         roles: ['Editor'],
       })
@@ -118,6 +186,7 @@ test('no secret, cookie or signature appears in logs, Sentry events or spans', a
     } finally {
       await visitor.dispose();
     }
+    recoveryCodes = await ownAccountChanges(invitedEmail, secrets, id);
 
     // An API client: the secret it is created with, its signing key, and the rotated secret.
     const created = await (
@@ -207,10 +276,11 @@ test('no secret, cookie or signature appears in logs, Sentry events or spans', a
   expect(logs.stdout).toContain(marker);
 
   const outputs = { 'container logs': logs.stdout + logs.stderr, ...sent };
-  const leaks = needles(secrets).flatMap(({ name, value }) =>
-    Object.entries(outputs)
-      .filter(([, text]) => text.includes(value))
-      .map(([where]) => `${name} in ${where}`),
+  const leaks = [...needles(secrets), ...recoveryCodeNeedles(recoveryCodes)].flatMap(
+    ({ name, value }) =>
+      Object.entries(outputs)
+        .filter(([, text]) => text.includes(value))
+        .map(([where]) => `${name} in ${where}`),
   );
   expect(leaks).toEqual([]);
 });

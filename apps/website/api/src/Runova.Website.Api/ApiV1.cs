@@ -1,4 +1,5 @@
 using Runova.Website.Api.ApiClients;
+using Runova.Website.Api.Audit;
 using Runova.Website.Api.Media;
 using Runova.Website.Api.News;
 using Runova.Website.Api.Posts;
@@ -25,6 +26,7 @@ internal static class ApiV1
         api.MapTechnologies();
         api.MapPosts();
         api.MapMedia();
+        api.MapAuditEntries();
         api.MapApiClients();
         api.MapReleases();
         return api;

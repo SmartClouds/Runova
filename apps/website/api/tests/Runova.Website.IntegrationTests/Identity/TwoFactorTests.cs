@@ -11,6 +11,7 @@ public sealed class TwoFactorTests : IDisposable
 {
     private const string Sessions = "/api/v1/sessions";
     private const string TwoFactor = "/api/v1/users/me/two-factor";
+    private const string RecoveryCodes = "/api/v1/users/me/two-factor/recovery-codes";
 
     // Five seconds into a time step, so a test knows which step "now" is.
     private readonly FakeTimeProvider _time = new(
@@ -135,6 +136,119 @@ public sealed class TwoFactorTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
         await ProblemAssert.IsProblemAsync(second, HttpStatusCode.Unauthorized, ProblemAssert.Type("two-factor-required"), Sessions);
     }
+
+    [Fact]
+    public async Task The_password_turns_two_factor_off_and_the_recovery_codes_stop_working()
+    {
+        var (user, _, client) = await SignedInWithTwoFactorAsync();
+        await TestUsers.GenerateRecoveryCodesAsync(_factory.Services, user);
+
+        var response = await client.SendAsync(HttpMethod.Delete, TwoFactor, new { password = TestUsers.Password });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var status = await ReadJsonAsync(await client.GetAsync(TwoFactor));
+        Assert.False(status.GetProperty("enabled").GetBoolean());
+        Assert.Equal(0, status.GetProperty("recoveryCodesLeft").GetInt32());
+        Assert.Equal(HttpStatusCode.NoContent, (await _factory.CreateApiClient().SignInAsync(user.Email!, TestUsers.Password)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("not the password at all")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task A_wrong_or_missing_password_leaves_two_factor_on(string? password)
+    {
+        var (_, _, client) = await SignedInWithTwoFactorAsync();
+
+        var response = await client.SendAsync(HttpMethod.Delete, TwoFactor, new { password });
+
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), TwoFactor);
+        Assert.Equal(["password"], problem.GetProperty("errors").EnumerateObject().Select(p => p.Name));
+        Assert.True((await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Turning_two_factor_off_with_no_body_gets_400()
+    {
+        var (_, _, client) = await SignedInWithTwoFactorAsync();
+
+        var response = await client.SendAsync(HttpMethod.Delete, TwoFactor);
+
+        await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), TwoFactor);
+        Assert.True((await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_code_makes_ten_new_recovery_codes_once_and_the_old_ones_stop_working()
+    {
+        var (user, key, client) = await SignedInWithTwoFactorAsync();
+        var old = await TestUsers.GenerateRecoveryCodesAsync(_factory.Services, user);
+
+        // The sign-in used this step's code; drift lets the next step's code in now.
+        var response = await client.SendAsync(HttpMethod.Post, RecoveryCodes, new { code = CodeAt(key, 1) });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("private, no-store", response.Headers.NonValidated["Cache-Control"].ToString());
+        var codes = (await ReadJsonAsync(response)).GetProperty("recoveryCodes").EnumerateArray().Select(c => c.GetString()!).ToList();
+        Assert.Equal(10, codes.Distinct().Count());
+        Assert.Empty(codes.Intersect(old));
+        Assert.Equal(10, (await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("recoveryCodesLeft").GetInt32());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(user.Email!, TestUsers.Password, recoveryCode: old[0])).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _factory.CreateApiClient().SignInAsync(user.Email!, TestUsers.Password, recoveryCode: codes[0])).StatusCode);
+
+        var again = await client.SendAsync(HttpMethod.Post, RecoveryCodes, new { code = CodeAt(key, 1) });
+        await ProblemAssert.IsProblemAsync(again, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), RecoveryCodes);
+    }
+
+    [Theory]
+    [InlineData("wrong")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task A_wrong_or_missing_code_makes_no_recovery_codes(string? which)
+    {
+        var (user, key, client) = await SignedInWithTwoFactorAsync();
+        var old = await TestUsers.GenerateRecoveryCodesAsync(_factory.Services, user);
+        var code = which == "wrong" ? CodeAt(key, 5) : which;
+
+        var response = await client.SendAsync(HttpMethod.Post, RecoveryCodes, new { code });
+
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), RecoveryCodes);
+        Assert.Equal(["code"], problem.GetProperty("errors").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(HttpStatusCode.NoContent, (await _factory.CreateApiClient().SignInAsync(user.Email!, TestUsers.Password, recoveryCode: old[0])).StatusCode);
+    }
+
+    [Fact]
+    public async Task With_two_factor_off_there_are_no_recovery_codes_to_make()
+    {
+        var client = await SignedInClientAsync(await TestUsers.CreateAsync(_factory.Services));
+
+        var response = await client.SendAsync(HttpMethod.Post, RecoveryCodes, new { code = "123456" });
+
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), RecoveryCodes);
+        Assert.Equal(["code"], problem.GetProperty("errors").EnumerateObject().Select(p => p.Name));
+    }
+
+    [Theory]
+    [InlineData("DELETE", TwoFactor)]
+    [InlineData("POST", RecoveryCodes)]
+    public async Task Without_a_session_turning_off_or_new_codes_answer_401(string method, string path)
+    {
+        var response = await _factory.CreateApiClient().SendAsync(new HttpMethod(method), path, new { password = TestUsers.Password, code = "123456" });
+
+        await ProblemAssert.IsProblemAsync(response, HttpStatusCode.Unauthorized, ProblemAssert.Type("unauthorized"), path);
+    }
+
+    /// <summary>A user with two-factor on, signed in with this step's code.</summary>
+    private async Task<(Runova.Website.Data.Identity.AppUser User, byte[] Key, ApiClient Client)> SignedInWithTwoFactorAsync()
+    {
+        var user = await TestUsers.CreateAsync(_factory.Services);
+        var key = await TestUsers.EnableTwoFactorAsync(_factory.Services, user);
+        var client = _factory.CreateApiClient();
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SignInAsync(user.Email!, TestUsers.Password, CodeNow(key))).StatusCode);
+        return (user, key, client);
+    }
+
+    private string CodeAt(byte[] key, int stepsAhead) => Totp.Code(key, Totp.TimeStep(_time.GetUtcNow()) + stepsAhead);
 
     private string CodeNow(byte[] key) => Totp.Code(key, Totp.TimeStep(_time.GetUtcNow()));
 

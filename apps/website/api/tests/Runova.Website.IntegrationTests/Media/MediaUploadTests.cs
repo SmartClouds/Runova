@@ -201,7 +201,7 @@ public sealed class MediaUploadTests(PostgresFixture postgres) : IAsyncLifetime
         Path.Combine(_folder, new Uri(media.GetProperty("url").GetString()!).AbsolutePath["/media/".Length..]);
 
     /// <summary>A multipart upload, with the antiforgery token of a signed-in client.</summary>
-    private static HttpRequestMessage Upload(ApiClient? client, byte[] bytes, string fileName, string contentType, string? alt = "A cover image")
+    internal static HttpRequestMessage Upload(ApiClient? client, byte[] bytes, string fileName, string contentType, string? alt = "A cover image")
     {
         var file = new ByteArrayContent(bytes);
         file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
@@ -233,7 +233,7 @@ public sealed class MediaUploadTests(PostgresFixture postgres) : IAsyncLifetime
         return bitmap;
     }
 
-    private static byte[] Png(int width, int height) => Encode(Blank(width, height), SKEncodedImageFormat.Png);
+    internal static byte[] Png(int width, int height) => Encode(Blank(width, height), SKEncodedImageFormat.Png);
 
     /// <summary>A JPEG with an EXIF segment naming a camera, built by hand since Skia writes no EXIF.</summary>
     private static byte[] JpegWithExif()

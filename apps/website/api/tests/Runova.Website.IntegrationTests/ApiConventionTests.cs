@@ -40,6 +40,15 @@ public sealed class ApiConventionTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Every_contract_row_is_an_operation_in_the_document()
+    {
+        var document = await OpenApiDocumentAsync();
+        var contract = ApiConventions.ReadContract(await File.ReadAllTextAsync(_contractPath, TestContext.Current.CancellationToken));
+
+        Assert.Empty(ApiConventions.MissingOperations(document, contract));
+    }
+
+    [Fact]
     public async Task The_contract_tables_are_read_in_full()
     {
         var contract = ApiConventions.ReadContract(await File.ReadAllTextAsync(_contractPath, TestContext.Current.CancellationToken));
@@ -54,6 +63,7 @@ public sealed class ApiConventionTests(PostgresFixture postgres)
     [InlineData("/api/v1/news")]
     [InlineData("/api/v1/news/{id}")]
     [InlineData("/api/v1/users/me/two-factor")]
+    [InlineData("/api/v1/users/me/password")]
     [InlineData("/api/v1/api-clients/{id}/secrets")]
     [InlineData("/api/v1/releases/latest/downloads/{platform}")]
     [InlineData("/api/v1/csrf-tokens/current")]
@@ -108,6 +118,24 @@ public sealed class ApiConventionTests(PostgresFixture postgres)
         Assert.Equal(
             ["GET /api/v1/news documents 302, which the contract does not list", "POST /api/v1/news is not in the contract"],
             ApiConventions.ContractProblems(document.RootElement, contract));
+    }
+
+    [Fact]
+    public void A_contract_row_with_no_operation_in_the_document_fails()
+    {
+        var contract = new Dictionary<string, IReadOnlySet<int>>
+        {
+            ["GET /api/v1/news"] = new HashSet<int> { 200 },
+            ["DELETE /api/v1/news/{id}"] = new HashSet<int> { 204 },
+            ["GET /api/v1/audit-entries"] = new HashSet<int> { 200 },
+        };
+        using var document = JsonDocument.Parse("""
+            { "paths": { "/api/v1/news": { "get": { "responses": { "200": { } } } }, "/api/v1/news/{id}": { "parameters": [], "get": { "responses": { } } } } }
+            """);
+
+        Assert.Equal(
+            ["DELETE /api/v1/news/{id} is in the contract but not in the document", "GET /api/v1/audit-entries is in the contract but not in the document"],
+            ApiConventions.MissingOperations(document.RootElement, contract));
     }
 
     private async Task<JsonElement> OpenApiDocumentAsync()

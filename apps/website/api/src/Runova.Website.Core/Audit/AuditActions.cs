@@ -17,10 +17,20 @@ public static class AuditActions
     public const string PostArchive = "post.archive";
     public const string PostPublish = "post.publish";
     public const string MediaUpload = "media.upload";
+    public const string MediaDelete = "media.delete";
     public const string ApiClientCreate = "api-client.create";
     public const string ApiClientUpdate = "api-client.update";
     public const string ApiClientRevoke = "api-client.revoke";
     public const string ApiClientRotate = "api-client.rotate";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        UserInvite, UserUpdate, UserDelete, UserPasswordReset, UserTwoFactorReset,
+        NewsCreate, NewsUpdate, NewsArchive, NewsPublish,
+        PostCreate, PostUpdate, PostArchive, PostPublish,
+        MediaUpload, MediaDelete,
+        ApiClientCreate, ApiClientUpdate, ApiClientRevoke, ApiClientRotate,
+    };
 }
 
 /// <summary>Who made a change.</summary>
@@ -29,6 +39,8 @@ public static class AuditActorKinds
     public const string User = "user";
     public const string ApiClient = "api-client";
     public const string System = "system";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { User, ApiClient, System };
 }
 
 /// <summary>What kind of thing a change was made to.</summary>
@@ -39,4 +51,6 @@ public static class AuditTargetTypes
     public const string Post = "post";
     public const string Media = "media";
     public const string ApiClient = "api-client";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { User, News, Post, Media, ApiClient };
 }

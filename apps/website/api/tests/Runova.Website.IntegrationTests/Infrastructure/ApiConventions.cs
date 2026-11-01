@@ -5,8 +5,8 @@ namespace Runova.Website.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// The conventions in docs/website/api-contract.md that an OpenAPI document can show: every path a
-/// plural noun under <c>/api/v1</c>, every error response problem details, and every operation and
-/// status code one the contract lists. Each check returns what breaks the rule, so a test can name it.
+/// plural noun under <c>/api/v1</c>, every error response problem details, every operation and
+/// status code one the contract lists, and every contract row an operation. Each check returns what breaks the rule, so a test can name it.
 /// </summary>
 internal static partial class ApiConventions
 {
@@ -15,7 +15,7 @@ internal static partial class ApiConventions
     /// <summary>The fixed sub-resources and mass nouns that the contract allows in the singular.</summary>
     public static readonly IReadOnlySet<string> SingularSegments = new HashSet<string>(StringComparer.Ordinal)
     {
-        "me", "current", "latest", "two-factor", "downloads", "news", "media",
+        "me", "current", "latest", "two-factor", "password", "downloads", "news", "media",
     };
 
     private static readonly HashSet<string> _problemSchemas = new(StringComparer.Ordinal)
@@ -109,6 +109,13 @@ internal static partial class ApiConventions
                 yield return $"{key} documents {status}, which the contract does not list";
             }
         }
+    }
+
+    /// <summary>Every contract row the document has no operation for: listed, but never built.</summary>
+    public static IEnumerable<string> MissingOperations(JsonElement document, IReadOnlyDictionary<string, IReadOnlySet<int>> contract)
+    {
+        var documented = Operations(document).Select(o => $"{o.Method} {o.Path}").ToHashSet(StringComparer.Ordinal);
+        return contract.Keys.Where(row => !documented.Contains(row)).Order(StringComparer.Ordinal).Select(row => $"{row} is in the contract but not in the document");
     }
 
     /// <summary>

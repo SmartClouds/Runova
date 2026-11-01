@@ -12,8 +12,8 @@ the same commit.
 
 - **Base path.** Every resource lives under `/api/v1`. Path segments are plural nouns
   (`/news`, `/posts`, `/users`, `/api-clients`). The only non-plural segments are the fixed
-  sub-resources `me`, `current`, `latest`, `two-factor` and `downloads`, and the mass nouns `news`
-  and `media`. Verbs never appear in a path.
+  sub-resources `me`, `current`, `latest`, `two-factor`, `password` and `downloads`, and the mass
+  nouns `news` and `media`. Verbs never appear in a path.
 - **Outside `/api/v1`.** `GET /health/live` (200 while the process runs), `GET /health/ready` (200
   when PostgreSQL answers, 503 problem details when it does not), `GET /openapi/v1.json` (the
   built-in OpenAPI document), `GET /scalar` (the reference page, development and staging only),

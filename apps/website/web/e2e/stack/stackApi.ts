@@ -16,15 +16,21 @@ export const newContext = () => request.newContext({ baseURL: STACK_URL, ignoreH
 export const unique = () =>
   `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 
-/** An API call with the antiforgery header; anything but a 2xx throws. */
-export async function call(context: APIRequestContext, path: string, data: unknown) {
+/** An API call (a POST unless told otherwise) with the antiforgery header; anything but a 2xx throws. */
+export async function call(
+  context: APIRequestContext,
+  path: string,
+  data: unknown,
+  method: 'POST' | 'PUT' | 'DELETE' = 'POST',
+) {
   const token = (await (await context.get('/api/v1/csrf-tokens/current')).json()).token;
-  const response = await context.post(`/api/v1${path}`, {
+  const response = await context.fetch(`/api/v1${path}`, {
+    method,
     data,
     headers: { 'X-XSRF-TOKEN': token },
   });
   if (!response.ok()) {
-    throw new Error(`POST ${path} answered ${response.status()}: ${await response.text()}`);
+    throw new Error(`${method} ${path} answered ${response.status()}: ${await response.text()}`);
   }
   return response;
 }

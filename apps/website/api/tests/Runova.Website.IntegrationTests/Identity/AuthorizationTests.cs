@@ -24,6 +24,12 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
             .ToList();
         Assert.Contains(("GET", "/api/v1/users/me"), protectedEndpoints);
         Assert.Contains(("DELETE", "/api/v1/sessions/current"), protectedEndpoints);
+        Assert.Contains(("PUT", "/api/v1/users/me/password"), protectedEndpoints);
+        Assert.Contains(("DELETE", "/api/v1/users/me/two-factor"), protectedEndpoints);
+        Assert.Contains(("POST", "/api/v1/users/me/two-factor/recovery-codes"), protectedEndpoints);
+        Assert.Contains(("GET", "/api/v1/audit-entries"), protectedEndpoints);
+        Assert.Contains(("GET", "/api/v1/media"), protectedEndpoints);
+        Assert.Contains(("DELETE", "/api/v1/media/1"), protectedEndpoints);
         var client = _factory.CreateApiClient();
 
         foreach (var (method, path) in protectedEndpoints)
@@ -68,6 +74,10 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
     [Theory]
     [InlineData("DELETE", "/api/v1/sessions/current")]
     [InlineData("POST", "/api/v1/users/me/two-factor")]
+    [InlineData("PUT", "/api/v1/users/me/password")]
+    [InlineData("DELETE", "/api/v1/users/me/two-factor")]
+    [InlineData("POST", "/api/v1/users/me/two-factor/recovery-codes")]
+    [InlineData("DELETE", "/api/v1/media/1")]
     public async Task An_unsafe_request_with_the_cookie_but_no_antiforgery_token_answers_400(string method, string path)
     {
         var client = await SignedInClientAsync();

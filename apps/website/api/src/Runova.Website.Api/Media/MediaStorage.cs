@@ -33,7 +33,15 @@ internal sealed class MediaStorage(IConfiguration configuration, IWebHostEnviron
         return path;
     }
 
-    public void Delete(string path) => File.Delete(Path.Combine(Folder, path));
+    /// <summary>Removes a stored file. One that is gone already, folder and all, is no error.</summary>
+    public void Delete(string path)
+    {
+        var full = Path.Combine(Folder, path);
+        if (File.Exists(full))
+        {
+            File.Delete(full);
+        }
+    }
 
     /// <summary>Serves the folder at <c>/media/</c> in development, where no reverse proxy does.</summary>
     public static WebApplication UseMediaFiles(WebApplication app)

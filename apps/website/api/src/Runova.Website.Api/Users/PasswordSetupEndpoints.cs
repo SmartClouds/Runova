@@ -41,16 +41,9 @@ internal static class PasswordSetupEndpoints
             return UnknownLink();
         }
 
-        var problems = new List<string>();
-        foreach (var validator in users.PasswordValidators)
+        if (await PasswordRules.ProblemsAsync(users, user, request.Password) is { Length: > 0 } problems)
         {
-            var result = await validator.ValidateAsync(users, user, request.Password);
-            problems.AddRange(result.Errors.Select(e => e.Description));
-        }
-
-        if (problems.Count > 0)
-        {
-            return ApiProblems.Invalid("password", string.Join(" ", problems));
+            return ApiProblems.Invalid("password", problems);
         }
 
         if (!await links.UseAsync(link))
