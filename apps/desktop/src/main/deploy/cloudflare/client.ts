@@ -1,3 +1,4 @@
+import { BaseAccounts } from 'cloudflare/resources/accounts/accounts';
 import { BaseCache } from 'cloudflare/resources/cache/cache';
 import { BaseRecords } from 'cloudflare/resources/dns/records';
 import { BaseAccessRules } from 'cloudflare/resources/firewall/access-rules';
@@ -8,6 +9,7 @@ import { BaseRulesets } from 'cloudflare/resources/rulesets/rulesets';
 import { BaseWidgets } from 'cloudflare/resources/turnstile/widgets';
 import { BasePermissionGroups } from 'cloudflare/resources/user/tokens/permission-groups';
 import { BaseTokens } from 'cloudflare/resources/user/tokens/tokens';
+import { BaseActivationCheck } from 'cloudflare/resources/zones/activation-check';
 import { BaseSettings } from 'cloudflare/resources/zones/settings';
 import { BaseZones } from 'cloudflare/resources/zones/zones';
 import { createClient } from 'cloudflare/tree-shakable';
@@ -50,6 +52,7 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
     resources: [
       BaseTokens,
       BaseZones,
+      BaseActivationCheck,
       BaseSettings,
       BaseRecords,
       BaseCache,
@@ -60,6 +63,7 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
       BaseOriginCACertificates,
       BasePermissionGroups,
       BaseWidgets,
+      BaseAccounts,
     ],
     apiToken: token,
     apiKey: null,

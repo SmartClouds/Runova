@@ -85,8 +85,8 @@ export const CLOUDFLARE_PERMISSIONS: readonly CloudflarePermission[] = [
 /**
  * Asked for only when a feature needs it, so the main token can stay without them: Origin CA
  * certificates need SSL and Certificates, making a server its own zone-scoped DNS token needs
- * API Tokens (a user permission, which is why pasting a token made by hand is offered too), and
- * Turnstile widgets need Turnstile, an account permission.
+ * API Tokens (a user permission, which is why pasting a token made by hand is offered too),
+ * Turnstile widgets need Turnstile, an account permission, and adding a domain needs Zone Edit.
  */
 export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<CloudflareExtraPermissionId>[] =
   [
@@ -112,6 +112,14 @@ export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<Cloudfl
       purpose: 'Turnstile widgets (captcha) for your forms',
       action: 'manage Turnstile widgets',
       apiNames: ['Turnstile Write', 'Turnstile Sites Write'],
+    },
+    {
+      id: 'zoneEdit',
+      label: 'Zone > Zone > Edit',
+      purpose: 'Add new domains to Cloudflare',
+      action: 'add domains',
+      template: { key: 'zone', type: 'edit' },
+      apiNames: ['Zone Write'],
     },
   ];
 

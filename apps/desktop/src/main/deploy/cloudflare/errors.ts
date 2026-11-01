@@ -82,3 +82,16 @@ export function isUnauthorized(error: unknown): boolean {
 export function isNotFound(error: unknown): boolean {
   return error instanceof APIError && error.status === 404;
 }
+
+/** Whether Cloudflare's answer carries any of these error codes. */
+export function hasCloudflareCode(error: unknown, ...codes: number[]): boolean {
+  return (
+    error instanceof APIError &&
+    error.errors.some((entry) => typeof entry.code === 'number' && codes.includes(entry.code))
+  );
+}
+
+/** Whether Cloudflare said the call came too often. */
+export function isRateLimited(error: unknown): boolean {
+  return error instanceof APIError && error.status === 429;
+}

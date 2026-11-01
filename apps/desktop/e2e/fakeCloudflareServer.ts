@@ -4,6 +4,7 @@ import {
   ALL_GRANTS,
   createFakeCloudflare,
   type FakeCloudflare,
+  type FakeToken,
 } from '../src/main/deploy/cloudflare/testing/fakeCloudflare';
 
 /**
@@ -22,11 +23,22 @@ export interface FakeCloudflareServer {
   close: () => Promise<void>;
 }
 
-export async function startFakeCloudflare(): Promise<FakeCloudflareServer> {
+export async function startFakeCloudflare(
+  options: {
+    /** Grants on top of the default ones, such as Zone Edit for adding a domain. */
+    grants?: FakeToken['grants'];
+  } = {},
+): Promise<FakeCloudflareServer> {
   const fake = createFakeCloudflare({
     tokens: {
       [E2E_CLOUDFLARE_TOKEN]: {
-        grants: { ...ALL_GRANTS, sslCertificates: 'edit', apiTokens: 'edit', turnstile: 'edit' },
+        grants: {
+          ...ALL_GRANTS,
+          sslCertificates: 'edit',
+          apiTokens: 'edit',
+          turnstile: 'edit',
+          ...options.grants,
+        },
       },
     },
   });

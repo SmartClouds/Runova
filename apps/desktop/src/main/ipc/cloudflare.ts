@@ -4,6 +4,7 @@ import {
   isCloudflareId,
   recordProblem,
 } from '../../shared/cloudflare/dns';
+import { checkNewDomain } from '../../shared/cloudflare/newDomain';
 import { accessRuleTarget, buildRule } from '../../shared/cloudflare/rules';
 import {
   isTurnstileSitekey,
@@ -15,6 +16,7 @@ import type {
   CloudflareAccessMode,
   CloudflareAccessRuleInput,
   CloudflareCustomRuleInput,
+  CloudflareNewZoneInput,
   CloudflarePointDomainInput,
   CloudflarePurgeRequest,
   CloudflareRecordInput,
@@ -122,6 +124,16 @@ function accountId(value: unknown): string {
     throw new Error('That is not a connected Cloudflare account.');
   }
   return value;
+}
+
+function newZoneInput(value: unknown): CloudflareNewZoneInput {
+  const input = object(value, 'a domain to add');
+  const check = checkNewDomain(text(input.name, MAX_TEXT, 'domain'));
+  if (!check.ok) throw new Error(check.problem);
+  return {
+    name: check.name,
+    cloudflareAccountId: itemId(input.cloudflareAccountId, 'account'),
+  };
 }
 
 function saveInput(value: unknown): CloudflareSaveTokenInput {
@@ -308,6 +320,11 @@ export function registerCloudflareHandlers({ ipc, service, guard }: CloudflareHa
   handle(IPC.cloudflare.checkToken, (id) => service.checkToken(accountId(id)));
   handle(IPC.cloudflare.removeToken, (id) => service.removeToken(accountId(id)));
   handle(IPC.cloudflare.listZones, (id) => service.listZones(accountId(id)));
+  handle(IPC.cloudflare.cloudflareAccounts, (id) => service.cloudflareAccounts(accountId(id)));
+  handle(IPC.cloudflare.createZone, (id, input) =>
+    service.createZone(accountId(id), newZoneInput(input)),
+  );
+  handle(IPC.cloudflare.checkActivation, (zone) => service.checkActivation(zoneId(zone)));
   handle(IPC.cloudflare.listRecords, (zone) => service.listRecords(zoneId(zone)));
   handle(IPC.cloudflare.createRecord, (zone, record) =>
     service.createRecord(zoneId(zone), recordInput(record)),

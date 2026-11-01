@@ -3,19 +3,20 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Lock, Plus } from '@/components/icons';
-import { FOOTER_HAIRLINE, GLASS_CARD, GLASS_PANEL } from '@/components/pageKit';
+import { GLASS_CARD, GLASS_PANEL } from '@/components/pageKit';
 import { SshVaultUnlockDialog } from '@/components/remote/SshVaultUnlockDialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCloudflareErrors } from '@/lib/cloudflare/feedback';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { AddDomainCard } from './AddDomainCard';
 import { CloudflareMark } from './CloudflareMark';
 import { Notice, Problem } from './fields';
 import { TokenSetupCard } from './TokenSetupCard';
 import { TokenStatusCard } from './TokenStatusCard';
 import { ZonePanel, zoneTab } from './ZonePanel';
-import { PICKER_ATTRIBUTE, ZonePicker } from './ZonePicker';
+import { PICKER_ATTRIBUTE, ZoneListFooter, ZonePicker } from './ZonePicker';
 import { type ZoneGroup, ZoneRail } from './ZoneRail';
 
 /** The page's first card, drawn like a server's header, with the domain picker on the right. */
@@ -77,6 +78,8 @@ export function CloudflareView(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
   // The account whose token is being replaced, or `true` while another account is being added.
   const [setup, setSetup] = useState<string | true | null>(null);
+  // Adding a domain, drawn in place of the zone like the connect steps.
+  const [adding, setAdding] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -247,6 +250,7 @@ export function CloudflareView(): React.JSX.Element {
             searchRef={searchRef}
             onSelect={(zone) => {
               setSetup(null);
+              setAdding(false);
               setPickerOpen(false);
               updateAddress((query) => {
                 query.set('zone', zone.id);
@@ -256,6 +260,7 @@ export function CloudflareView(): React.JSX.Element {
             }}
             onManageAccount={(accountId) => {
               setSetup(null);
+              setAdding(false);
               setPickerOpen(false);
               updateAddress((query) => {
                 query.set('zone', selected.id);
@@ -265,13 +270,36 @@ export function CloudflareView(): React.JSX.Element {
             }}
             onAddAccount={() => {
               setPickerOpen(false);
+              setAdding(false);
               setSetup(true);
+            }}
+            onAddDomain={() => {
+              setPickerOpen(false);
+              setSetup(null);
+              setAdding(true);
             }}
           />
         )}
       </CloudflareHeader>
       {connecting ? (
         steps
+      ) : adding ? (
+        <div className={cn(GLASS_CARD, 'p-4')}>
+          <AddDomainCard
+            accounts={current.accounts.filter((account) => !account.locked)}
+            zones={allZones}
+            defaultAccountId={managed?.id}
+            onCancel={() => setAdding(false)}
+            onOpen={(zone) => {
+              setAdding(false);
+              updateAddress((query) => {
+                query.set('zone', zone.id);
+                query.set('tab', 'dns');
+                query.delete('account');
+              });
+            }}
+          />
+        </div>
       ) : (
         <>
           {managed && (
@@ -310,11 +338,10 @@ export function CloudflareView(): React.JSX.Element {
                   })
                 }
               />
-              <div className={cn(FOOTER_HAIRLINE, 'shrink-0 p-2')}>
-                <Button variant="soft" size="sm" className="w-full" onClick={() => setSetup(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Add account
-                </Button>
-              </div>
+              <ZoneListFooter
+                onAddDomain={() => setAdding(true)}
+                onAddAccount={() => setSetup(true)}
+              />
             </div>
           )}
         </>

@@ -26,6 +26,8 @@ settings, and wire domains to servers without visiting the dashboard.
   encrypted) for wildcard certificates.
 - [x] T8 UI at `/deploy/cloudflare` plus entry points from the site editor.
 - [x] T9 Fixture: recorded Cloudflare API responses for the SDK's fetch.
+- [x] T10 Add a domain from the page: create a zone in a chosen Cloudflare account, walk the user
+  through switching name servers at the registrar, and ask Cloudflare to check them again.
 
 ## Acceptance criteria
 
@@ -120,7 +122,34 @@ Server side and the rest of the desktop (this commit): T5 to T7.
   unpackaged build. It saves the token, sends the DevHost a DNS token and locks the DevHost to
   Cloudflare with the firewall countdown.
 
+Adding a domain (T10):
+
+- The domain picker's footer (and the empty list) has **Add domain** next to **Add account**. It
+  opens `AddDomainCard` in place of the zone, the same way connecting an account does, never a
+  dialog on top. The box takes a domain or a pasted address (`shared/cloudflare/newDomain.ts`
+  cuts it down to the host and says what is wrong in words), offers the main domain for a `www.`
+  name, and offers to open a domain that is already listed rather than add it twice.
+- Which Cloudflare account: `cloudflareAccounts` merges `GET /accounts` with the accounts the
+  token's zones are in (a token limited to zones may not list accounts). A picker shows only when
+  there is more than one choice across the connected accounts.
+- `createZone` posts `/zones` with `type: full` and remembers the zone's owner at once, so the page
+  opens it without listing the zones again. Codes 1061 (already on Cloudflare) and 1049/1099 (not
+  a registered domain) are said in words; anything else goes through the usual error text.
+- After it is made, the card shows the registrar steps with each name server and a **Copy both**
+  button, then **Open** goes to the new zone's DNS tab. A pending zone's notice now has the same
+  copyable list and **Check name servers now** (`PUT /zones/:id/activation_check`). Cloudflare's
+  rate limit on that check is said in words.
+- Both need `Zone > Zone > Edit`, a new optional permission (`zoneEdit`), named only when
+  Cloudflare refuses, so the main token stays read-only on zones.
+- Tests: `newDomain.test.ts`, `service.zones.test.ts` (the fake now makes zones, lists accounts
+  and answers the activation check), the IPC test, `AddDomainCard`, `PendingZoneNotice`,
+  `NameServers`, `CloudflareView`, and `e2e/cloudflareDomains.e2e.ts`.
+
 What is left or unverified:
+
+- Adding a domain is tested against the recorded fake only. The activation check's rate limit
+  code (1224) and whether `GET /accounts` answers a zone-only token are from Cloudflare's docs,
+  not tried against the real API.
 
 - The DNS-01 hook waits a fixed 20 seconds rather than asking Cloudflare's authoritative name
   servers; no test reaches Cloudflare's live DNS.

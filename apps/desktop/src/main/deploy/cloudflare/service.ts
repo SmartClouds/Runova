@@ -8,8 +8,10 @@ import type { AccessRuleCreateParams } from 'cloudflare/resources/firewall/acces
 import type { RuleCreateParams, RuleEditParams } from 'cloudflare/resources/rulesets/rules';
 import type { RulesetCreateParams } from 'cloudflare/resources/rulesets/rulesets';
 import type { Widget, WidgetListResponse } from 'cloudflare/resources/turnstile/widgets';
+import type { Zone as ApiZone } from 'cloudflare/resources/zones/zones';
 import type { SecretEnvelope } from '../../../shared/apiTypes';
 import { PROXIABLE_TYPES } from '../../../shared/cloudflare/dns';
+import { checkNewDomain } from '../../../shared/cloudflare/newDomain';
 import { CLOUDFLARE_PERMISSIONS, tokenProblem } from '../../../shared/cloudflare/permissions';
 import { accessRuleTarget, type BuiltRule, buildRule } from '../../../shared/cloudflare/rules';
 import { isTurnstileSitekey, validateTurnstileInput } from '../../../shared/cloudflare/turnstile';
@@ -19,12 +21,14 @@ import type {
   CloudflareAccessRule,
   CloudflareAccessRuleInput,
   CloudflareAccessTarget,
+  CloudflareAccountChoice,
   CloudflareAnyPermissionId,
   CloudflareCacheLevel,
   CloudflareCustomRule,
   CloudflareCustomRuleInput,
   CloudflareDnsRecord,
   CloudflareMinTlsVersion,
+  CloudflareNewZoneInput,
   CloudflarePermissionId,
   CloudflarePointDomainInput,
   CloudflarePointDomainPlan,
@@ -43,7 +47,14 @@ import type {
   TurnstileWithSecret,
 } from '../../../shared/cloudflareTypes';
 import { type CloudflareApi, type CloudflareFetch, createCloudflareApi } from './client';
-import { cloudflareFailure, isNotFound, isPermissionDenied, isUnauthorized } from './errors';
+import {
+  cloudflareFailure,
+  hasCloudflareCode,
+  isNotFound,
+  isPermissionDenied,
+  isRateLimited,
+  isUnauthorized,
+} from './errors';
 import { planChanges, pointedNames, type ServerAddresses } from './pointDomain';
 import type { CloudflareState } from './state';
 import { checkToken } from './tokenCheck';
@@ -113,6 +124,15 @@ const WIDGET_GONE = 'That widget is not in this Cloudflare account any more. Ref
 const NO_CLOUDFLARE_ACCOUNT =
   'Cloudflare did not say which account this domain is in, so its Turnstile widgets cannot be found.';
 const BAD_SITEKEY = 'That is not a Turnstile site key.';
+const NO_ACCOUNT_FOR_DOMAINS =
+  'Cloudflare did not name an account this token can add domains to. On Cloudflare, edit the token so its zone resources include all zones from your account, then try again.';
+const CHECKED_TOO_SOON =
+  'Cloudflare was asked to check recently and allows only a few checks an hour. It keeps checking on its own, so try again later.';
+/** Cloudflare's codes for a zone it already has, and for a name nobody has registered. */
+const ZONE_EXISTS = [1061];
+const NOT_REGISTERED = [1049, 1099];
+/** Cloudflare's code for an activation check asked for too soon after the last one. */
+const ACTIVATION_TOO_SOON = [1224];
 
 /** The fields of a DNS record the page reads, whatever its type. */
 interface ApiRecord {
@@ -425,22 +445,94 @@ export class CloudflareService {
   listZones(accountId: string): Promise<CloudflareZone[]> {
     return this.withAccount(accountId, 'zone', async (api) => {
       const zones = await allPages((page) => api.zones.list({ page, per_page: 50 }));
-      return zones.map((zone) => {
-        const cloudflareAccountId = zone.account?.id ?? '';
-        this.zoneOwners.set(zone.id, accountId);
-        this.zoneCloudflareAccounts.set(zone.id, cloudflareAccountId);
-        return {
-          id: zone.id,
-          accountId,
-          cloudflareAccountId,
-          name: zone.name,
-          status: zone.status ?? 'active',
-          paused: zone.paused ?? false,
-          plan: zone.plan?.name ?? '',
-          nameServers: zone.name_servers ?? [],
-        };
-      });
+      return zones.map((zone) => this.rememberZone(accountId, zone));
     });
+  }
+
+  /**
+   * The Cloudflare accounts a new domain can go into: those the token may list, and those its
+   * zones are in, since a token limited to zones may not list accounts at all.
+   */
+  cloudflareAccounts(accountId: string): Promise<CloudflareAccountChoice[]> {
+    return this.withAccount(accountId, 'zone', async (api) => {
+      const found = new Map<string, string>();
+      try {
+        const listed = await allPages((page) => api.accounts.list({ page, per_page: 50 }));
+        for (const account of listed) found.set(account.id, account.name);
+      } catch (error) {
+        if (!isPermissionDenied(error)) throw error;
+      }
+      const zones = await allPages((page) => api.zones.list({ page, per_page: 50 }));
+      for (const zone of zones) {
+        const owner = zone.account;
+        if (owner?.id && !found.has(owner.id)) found.set(owner.id, owner.name ?? '');
+      }
+      if (found.size === 0) throw new Error(NO_ACCOUNT_FOR_DOMAINS);
+      return [...found].map(([id, name]) => ({ id, name }));
+    });
+  }
+
+  /**
+   * Adds a domain to a Cloudflare account. The new zone waits for the registrar to use the name
+   * servers it comes back with; it is remembered at once, so the page can open it straight away.
+   */
+  async createZone(accountId: string, input: CloudflareNewZoneInput): Promise<CloudflareZone> {
+    const check = checkNewDomain(input.name);
+    if (!check.ok) throw new Error(check.problem);
+    const name = check.name;
+    return this.withAccount(accountId, 'zoneEdit', async (api) => {
+      try {
+        const zone = await api.zones.create({
+          account: { id: input.cloudflareAccountId },
+          name,
+          type: 'full',
+        });
+        return this.rememberZone(accountId, zone);
+      } catch (error) {
+        if (hasCloudflareCode(error, ...ZONE_EXISTS)) {
+          throw new Error(
+            `${name} is already on Cloudflare, in this account or another one. If it is in another account, remove it there first.`,
+          );
+        }
+        if (hasCloudflareCode(error, ...NOT_REGISTERED)) {
+          throw new Error(
+            `Cloudflare could not find ${name} as a registered domain. Check the spelling, and if you just bought it, try again in a few minutes.`,
+          );
+        }
+        throw error;
+      }
+    });
+  }
+
+  /** Asks Cloudflare to look at a pending zone's name servers now rather than later. */
+  checkActivation(zoneId: string): Promise<void> {
+    return this.withZone(zoneId, 'zoneEdit', async (api) => {
+      try {
+        await api.zones.activationCheck.trigger({ zone_id: zoneId });
+      } catch (error) {
+        if (isRateLimited(error) || hasCloudflareCode(error, ...ACTIVATION_TOO_SOON)) {
+          throw new Error(CHECKED_TOO_SOON);
+        }
+        throw error;
+      }
+    });
+  }
+
+  /** A zone as the page shows it, with its account remembered for the calls that follow. */
+  private rememberZone(accountId: string, zone: ApiZone): CloudflareZone {
+    const cloudflareAccountId = zone.account?.id ?? '';
+    this.zoneOwners.set(zone.id, accountId);
+    this.zoneCloudflareAccounts.set(zone.id, cloudflareAccountId);
+    return {
+      id: zone.id,
+      accountId,
+      cloudflareAccountId,
+      name: zone.name,
+      status: zone.status ?? 'active',
+      paused: zone.paused ?? false,
+      plan: zone.plan?.name ?? '',
+      nameServers: zone.name_servers ?? [],
+    };
   }
 
   /**

@@ -24,6 +24,8 @@ export interface FakeToken {
   canReadSelf?: boolean;
   /** Limited to these zones, as a zone-scoped token is; every zone when left out. */
   zoneIds?: string[];
+  /** Whether GET /accounts answers; true when left out. */
+  canListAccounts?: boolean;
 }
 
 /** Everything Runova's token template asks for. */
@@ -89,7 +91,10 @@ const PERMISSION_NAMES: Record<CloudflareAnyPermissionId, Record<Access, string>
   sslCertificates: { read: 'SSL and Certificates Read', edit: 'SSL and Certificates Write' },
   apiTokens: { read: 'API Tokens Read', edit: 'API Tokens Write' },
   turnstile: { read: 'Turnstile Read', edit: 'Turnstile Write' },
+  zoneEdit: { read: 'Zone Read', edit: 'Zone Write' },
 };
+/** The two name servers Cloudflare hands every zone the fake makes. */
+export const NEW_ZONE_NAME_SERVERS = ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'];
 const SETTING_VALUES: Record<string, readonly string[]> = {
   development_mode: ['on', 'off'],
   security_level: ['off', 'essentially_off', 'low', 'medium', 'high', 'under_attack'],
@@ -146,6 +151,8 @@ export function createFakeCloudflare(options: {
   zones?: FakeZoneSeed[];
   /** Turnstile widgets already in an account, keyed by its Cloudflare id. */
   widgets?: Record<string, Json[]>;
+  /** What GET /accounts lists; the recorded zone's account when left out. */
+  accounts?: Json[];
 }): FakeCloudflare {
   let counter = 0;
   const nextId = () => {
@@ -168,6 +175,12 @@ export function createFakeCloudflare(options: {
       purges: [],
     });
   }
+
+  const accounts = copy(
+    options.accounts ?? [
+      { ...recorded.zone.account, type: 'standard', created_on: recorded.zone.created_on },
+    ],
+  );
 
   const widgets = new Map<string, Json[]>(
     Object.entries(options.widgets ?? {}).map(([id, list]) => [id, copy(list)]),
@@ -473,6 +486,45 @@ export function createFakeCloudflare(options: {
     return ok(list[index]);
   }
 
+  /**
+   * POST /zones. A zone-scoped token cannot make zones, and Cloudflare will not make one it has
+   * already got. Names under `.invalid` stand for domains nobody has registered.
+   */
+  function createZone(token: FakeToken, body: Json) {
+    const accountId = (body.account as Json | undefined)?.id;
+    const account = accounts.find((candidate) => candidate.id === accountId);
+    if (!allowed(token, 'zone', 'edit') || token.zoneIds || !account) {
+      return { status: 403, body: copy(recorded.permissionDenied) };
+    }
+    const name = String(body.name ?? '');
+    if (!name || (body.type !== undefined && body.type !== 'full')) {
+      return fail(400, 1001, 'Invalid zone');
+    }
+    if ([...zones.values()].some((state) => state.zone.name === name)) {
+      return fail(400, 1061, `${name} already exists`);
+    }
+    if (name.endsWith('.invalid')) return fail(400, 1049, `${name} is not a registered domain`);
+    const id = nextId();
+    const zone = {
+      ...copy(recorded.zone),
+      id,
+      name,
+      status: 'pending',
+      activated_on: null,
+      account: { id: account.id, name: account.name },
+      name_servers: [...NEW_ZONE_NAME_SERVERS],
+    };
+    zones.set(id, {
+      zone,
+      records: [],
+      settings: copy(recorded.settings) as Record<string, Json>,
+      ruleset: null,
+      accessRules: [],
+      purges: [],
+    });
+    return ok(zone);
+  }
+
   /** Which permission a zone route needs, as Cloudflare's gateway sees it. */
   function routePermission(method: string, rest: string): [CloudflarePermissionId, Access] {
     const access: Access = method === 'GET' ? 'read' : 'edit';
@@ -510,6 +562,13 @@ export function createFakeCloudflare(options: {
       }));
       return ok(details);
     }
+    if (path === '/accounts' && method === 'GET') {
+      if (token.canListAccounts === false) {
+        return { status: 403, body: copy(recorded.permissionDenied) };
+      }
+      return page(accounts, query, 20);
+    }
+    if (path === '/zones' && method === 'POST') return createZone(token, body);
     if (path === '/zones') {
       const visible = token.grants.zone
         ? [...zones.values()]
@@ -539,6 +598,7 @@ export function createFakeCloudflare(options: {
       );
     }
     if (rest === '') return ok(state.zone);
+    if (rest === '/activation_check' && method === 'PUT') return ok({ id: state.zone.id });
 
     const setting = rest.match(/^\/settings\/([a-z0-9_]+)$/);
     if (setting) {

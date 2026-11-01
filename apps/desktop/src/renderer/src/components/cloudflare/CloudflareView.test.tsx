@@ -538,4 +538,98 @@ describe('CloudflareView', () => {
       expect(await screen.findByText('Connect another Cloudflare account')).toBeInTheDocument();
     });
   });
+
+  describe('adding a domain', () => {
+    const CF_ACCOUNT = { id: ZONE.cloudflareAccountId, name: 'Demo Account' };
+    const CREATED = {
+      ...ZONE,
+      id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+      name: 'new-site.org',
+      status: 'pending',
+      nameServers: ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'],
+    };
+
+    it('adds a domain from the picker, then opens it on its DNS records', async () => {
+      let added = false;
+      const { user, bridge } = renderPage({
+        'cloudflare.listZones': async () =>
+          added ? [ZONE, OTHER_ZONE, CREATED] : [ZONE, OTHER_ZONE],
+        'cloudflare.cloudflareAccounts': async () => [CF_ACCOUNT],
+        'cloudflare.createZone': async () => {
+          added = true;
+          return CREATED;
+        },
+      });
+
+      await openPicker(user);
+      await user.click(screen.getByRole('button', { name: 'Add domain' }));
+      // Drawn on the page in place of the zone, not in a dialog on top.
+      expect(await screen.findByRole('heading', { name: 'Add a domain' })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.queryByRole('heading', { name: 'example.com' })).toBeNull();
+      // The picker closes, and stays closed, with the domain box focused.
+      await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Zones' })).toBeNull());
+      expect(screen.getByRole('textbox', { name: 'Domain' })).toHaveFocus();
+
+      await screen.findByText('Demo Account');
+      await user.type(screen.getByRole('textbox', { name: 'Domain' }), 'new-site.org{Enter}');
+      await screen.findByRole('heading', { name: 'Point new-site.org at Cloudflare' });
+      expect(bridge.$fn('cloudflare.createZone')).toHaveBeenCalledWith('acct-1', {
+        name: 'new-site.org',
+        cloudflareAccountId: CF_ACCOUNT.id,
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Open new-site.org' }));
+      expect(await screen.findByRole('heading', { name: 'new-site.org' })).toBeInTheDocument();
+      expect(address().get('zone')).toBe(CREATED.id);
+      expect(address().get('tab')).toBe('dns');
+      expect(address().get('cloudflare')).toBe('1');
+      // Still waiting for the registrar, so the zone says how to finish.
+      expect(screen.getByRole('button', { name: 'Check name servers now' })).toBeInTheDocument();
+    });
+
+    it('goes back to the open zone on Cancel', async () => {
+      const { user } = renderPage({ 'cloudflare.cloudflareAccounts': async () => [CF_ACCOUNT] });
+      await openPicker(user);
+      await user.click(screen.getByRole('button', { name: 'Add domain' }));
+      await screen.findByRole('heading', { name: 'Add a domain' });
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(await screen.findByRole('heading', { name: 'example.com' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Add a domain' })).toBeNull();
+    });
+
+    it('opens a domain that is already here instead of adding it twice', async () => {
+      const { user } = renderPage({ 'cloudflare.cloudflareAccounts': async () => [CF_ACCOUNT] });
+      await openPicker(user);
+      await user.click(screen.getByRole('button', { name: 'Add domain' }));
+      await user.type(
+        await screen.findByRole('textbox', { name: 'Domain' }),
+        'https://example.org/',
+      );
+      await user.click(screen.getByRole('button', { name: 'Open example.org' }));
+      expect(await screen.findByRole('heading', { name: 'example.org' })).toBeInTheDocument();
+      expect(address().get('zone')).toBe(OTHER_ZONE.id);
+    });
+
+    it('offers to add a domain when the token sees none yet', async () => {
+      const { user } = renderPage({
+        'cloudflare.listZones': async () => [],
+        'cloudflare.cloudflareAccounts': async () => [CF_ACCOUNT],
+      });
+      expect(await screen.findByText(/cannot see any domains yet/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Add domain' }));
+      expect(await screen.findByRole('heading', { name: 'Add a domain' })).toBeInTheDocument();
+    });
+
+    it('leaves the add-domain card when the connect steps are opened', async () => {
+      const { user } = renderPage({ 'cloudflare.cloudflareAccounts': async () => [CF_ACCOUNT] });
+      await openPicker(user);
+      await user.click(screen.getByRole('button', { name: 'Add domain' }));
+      await screen.findByRole('heading', { name: 'Add a domain' });
+      await openPicker(user);
+      await user.click(screen.getByRole('button', { name: 'Add account' }));
+      expect(await screen.findByText('Connect another Cloudflare account')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Add a domain' })).toBeNull();
+    });
+  });
 });

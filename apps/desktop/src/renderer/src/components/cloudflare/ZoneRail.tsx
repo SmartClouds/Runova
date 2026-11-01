@@ -166,7 +166,7 @@ function GroupContent({
         size="sm"
         icon={Globe}
         title="No domains yet"
-        description="This token cannot see any domains yet. Add a domain on Cloudflare, or include it under Zone Resources on the token."
+        description="This token cannot see any domains yet. Add one below, or include your domains under Zone Resources on the token."
       />
     );
   }

@@ -8,7 +8,7 @@ import { AccessRulesCard } from './AccessRulesCard';
 import { CachingCard } from './CachingCard';
 import { CustomRulesCard } from './CustomRulesCard';
 import { DnsRecordsCard } from './DnsRecordsCard';
-import { Notice } from './fields';
+import { PendingZoneNotice } from './PendingZoneNotice';
 import { PurgeCard } from './PurgeCard';
 import { SecurityLevelCard } from './SecurityLevelCard';
 import { SslTlsCard } from './SslTlsCard';
@@ -84,11 +84,7 @@ export function ZonePanel({
         </div>
         {zone.status === 'pending' && (
           <div className="px-4 pb-3">
-            <Notice tone="warning">
-              Cloudflare is waiting for your registrar to use its name servers:{' '}
-              <span className="font-mono">{zone.nameServers.join(', ')}</span>. Until then, changes
-              here do not reach visitors.
-            </Notice>
+            <PendingZoneNotice zone={zone} />
           </div>
         )}
         {/* Radix tabs, drawn as the kit's sliding pill, so arrow keys still move between them. */}

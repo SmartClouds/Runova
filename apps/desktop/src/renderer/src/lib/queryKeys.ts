@@ -346,6 +346,9 @@ export const queryKeys = {
   cloudflareZones: ['cloudflare', 'data', 'zones'] as const,
   cloudflareAccountZones: (accountId: string) =>
     ['cloudflare', 'data', 'zones', accountId] as const,
+  /** The Cloudflare accounts one connected account's token can add a domain to. */
+  cloudflareAccountChoices: (accountId: string) =>
+    ['cloudflare', 'data', 'accountChoices', accountId] as const,
   cloudflareRecords: (zoneId: string) => ['cloudflare', 'data', 'records', zoneId] as const,
   cloudflareSettings: (zoneId: string) => ['cloudflare', 'data', 'settings', zoneId] as const,
   cloudflareCustomRules: (zoneId: string) => ['cloudflare', 'data', 'customRules', zoneId] as const,

@@ -159,6 +159,23 @@ describe('registerCloudflareHandlers', () => {
     expect(service.turnstileSecret).toHaveBeenCalledWith(ZONE, SITEKEY);
     expect(service.rotateTurnstileSecret).toHaveBeenCalledWith(ZONE, SITEKEY, true);
 
+    const cloudflareAccountId = '01a7362d577a6c3019a474fd6f485823';
+    await call(IPC.cloudflare.cloudflareAccounts, ACCOUNT);
+    await call(IPC.cloudflare.createZone, ACCOUNT, {
+      name: ' https://New-Site.org/ ',
+      cloudflareAccountId,
+      extra: 'dropped',
+    });
+    await call(IPC.cloudflare.checkActivation, ZONE);
+
+    expect(service.cloudflareAccounts).toHaveBeenCalledWith(ACCOUNT);
+    // A pasted address reaches the service as the domain alone.
+    expect(service.createZone).toHaveBeenCalledWith(ACCOUNT, {
+      name: 'new-site.org',
+      cloudflareAccountId,
+    });
+    expect(service.checkActivation).toHaveBeenCalledWith(ZONE);
+
     for (const name of Object.keys(IPC.cloudflare)) expect(service[name], name).toHaveBeenCalled();
   });
 
@@ -390,5 +407,34 @@ describe('registerCloudflareHandlers', () => {
     expect(service.listTurnstileWidgets).not.toHaveBeenCalled();
     expect(service.turnstileSecret).not.toHaveBeenCalled();
     expect(service.rotateTurnstileSecret).not.toHaveBeenCalled();
+  });
+
+  it('refuses a domain to add that is not one, or an account that is not a Cloudflare id', async () => {
+    const { service, call } = harness();
+    const cloudflareAccountId = '01a7362d577a6c3019a474fd6f485823';
+    await expect(call(IPC.cloudflare.cloudflareAccounts, '../x')).rejects.toThrow(/account/);
+    await expect(call(IPC.cloudflare.createZone, ACCOUNT, null)).rejects.toThrow(/domain/);
+    await expect(
+      call(IPC.cloudflare.createZone, ACCOUNT, { name: 'example', cloudflareAccountId }),
+    ).rejects.toThrow('Add the ending too, like example.com.');
+    await expect(
+      call(IPC.cloudflare.createZone, ACCOUNT, { name: 42, cloudflareAccountId }),
+    ).rejects.toThrow(/text/);
+    await expect(
+      call(IPC.cloudflare.createZone, ACCOUNT, { name: 'x'.repeat(5000), cloudflareAccountId }),
+    ).rejects.toThrow(/text/);
+    await expect(
+      call(IPC.cloudflare.createZone, ACCOUNT, {
+        name: 'new-site.org',
+        cloudflareAccountId: 'not-an-id',
+      }),
+    ).rejects.toThrow('That is not a Cloudflare account.');
+    await expect(
+      call(IPC.cloudflare.createZone, '', { name: 'new-site.org', cloudflareAccountId }),
+    ).rejects.toThrow(/account/);
+    await expect(call(IPC.cloudflare.checkActivation, 'nope')).rejects.toThrow(/zone/);
+    expect(service.createZone).not.toHaveBeenCalled();
+    expect(service.cloudflareAccounts).not.toHaveBeenCalled();
+    expect(service.checkActivation).not.toHaveBeenCalled();
   });
 });

@@ -357,9 +357,11 @@ import type {
 import type {
   CloudflareAccessRule,
   CloudflareAccessRuleInput,
+  CloudflareAccountChoice,
   CloudflareCustomRule,
   CloudflareCustomRuleInput,
   CloudflareDnsRecord,
+  CloudflareNewZoneInput,
   CloudflarePointDomainInput,
   CloudflarePointDomainPlan,
   CloudflarePointDomainResult,
@@ -2250,6 +2252,15 @@ const cloudflare = {
   /** The domains one account's token can see. */
   listZones: (accountId: string): Promise<CloudflareZone[]> =>
     ipcRenderer.invoke(IPC.cloudflare.listZones, accountId),
+  /** The Cloudflare accounts one connected account's token can add a domain to. */
+  cloudflareAccounts: (accountId: string): Promise<CloudflareAccountChoice[]> =>
+    ipcRenderer.invoke(IPC.cloudflare.cloudflareAccounts, accountId),
+  /** Adds a domain; the new zone waits for the registrar to use its name servers. */
+  createZone: (accountId: string, input: CloudflareNewZoneInput): Promise<CloudflareZone> =>
+    ipcRenderer.invoke(IPC.cloudflare.createZone, accountId, input),
+  /** Asks Cloudflare to look at a pending zone's name servers now. */
+  checkActivation: (zoneId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.cloudflare.checkActivation, zoneId),
   listRecords: (zoneId: string): Promise<CloudflareDnsRecord[]> =>
     ipcRenderer.invoke(IPC.cloudflare.listRecords, zoneId),
   createRecord: (zoneId: string, record: CloudflareRecordInput): Promise<CloudflareDnsRecord> =>

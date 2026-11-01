@@ -2,8 +2,8 @@
 title: Cloudflare
 category: Deploy
 order: 90
-summary: Connect your Cloudflare account with an API token, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates and the Cloudflare-only origin lock.
-keywords: cloudflare, dns, domain, zone, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key
+summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates and the Cloudflare-only origin lock.
+keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key
 route: /deploy?cloudflare=1
 ---
 
@@ -35,7 +35,7 @@ The permissions the token should have:
 | Zone > Zone WAF > Edit | WAF custom rules |
 | Zone > Firewall Services > Edit | IP access rules |
 
-Three more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server) and **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab). Cloudflare's token page can't fill in the Turnstile permission for you, so add it by hand under Account permissions.
+Four more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > Zone > Edit** (adding a domain to Cloudflare), **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server) and **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab). Cloudflare's token page can't fill in the Turnstile permission for you, so add it by hand under Account permissions.
 
 ### The token card
 
@@ -68,7 +68,7 @@ If you used Runova before accounts existed, your saved token shows up as one acc
 
 ## Domains (zones)
 
-At the top right of the page, the domain picker shows the domain you have open, with a dot for its state and how many domains there are. Click it to open the list of every zone your connected tokens can see with its state: **Active**, **Waiting for name servers**, **Setting up**, **Moved away** or **Paused**. Click one to manage it. If an account's list failed to load, the picker says so. If the list is empty, the token cannot see any domains yet: add a domain on Cloudflare, or include it under Zone Resources on the token.
+At the top right of the page, the domain picker shows the domain you have open, with a dot for its state and how many domains there are. Click it to open the list of every zone your connected tokens can see with its state: **Active**, **Waiting for name servers**, **Setting up**, **Moved away** or **Paused**. Click one to manage it. If an account's list failed to load, the picker says so. If the list is empty, the token cannot see any domains yet: add one with **Add domain** under the list, or include your domains under Zone Resources on the token.
 
 With two domains or more, a **Search domains** box sits at the top of the list, ready to type into as soon as it opens. Type part of a name, or paste a whole address such as `https://www.example.com/pricing` (the scheme, `www.` and the path are ignored). The list keeps only the matching domains, marks the matching part of each name, and the count reads like **2 of 14**. With several accounts, an account with no matches is left out while you search, but one whose list failed to load stays so you can see the problem.
 
@@ -77,7 +77,7 @@ With two domains or more, a **Search domains** box sits at the top of the list, 
 - The down arrow moves from the box into the list, and the arrows move along it. Up from the first domain goes back to the box.
 - `Escape` or the **Clear filter** button empties the box, and `Escape` in an empty box closes the list. The domain you have open stays open even when the search hides it.
 
-At the top of a zone you see its name, its plan and a state badge. For a zone waiting for name servers, a notice shows the name servers your registrar must use. Until then, changes here do not reach visitors.
+At the top of a zone you see its name, its plan and a state badge. For a zone waiting for name servers, a notice lists the name servers your registrar must use, each with a copy button and **Copy both** for all of them. Until the registrar uses them, changes here do not reach visitors. **Check name servers now** asks Cloudflare to look again straight away instead of waiting for its own check. Cloudflare allows only a few checks an hour and says so if you ask too often.
 
 Two quick switches sit on the right of the zone's header, so they are one click away from every tab:
 
@@ -85,6 +85,20 @@ Two quick switches sit on the right of the zone's header, so they are one click 
 - **I'm Under Attack** turns Cloudflare's strongest check on for every visitor. Turning it off puts the security level back where it was before (Medium if Runova does not know).
 
 A zone has six tabs: **DNS**, **SSL/TLS**, **Caching**, **Security**, **Servers** and **Turnstile**. An older link to the Settings tab opens SSL/TLS.
+
+### Add a domain
+
+You can add a domain you own to Cloudflare without leaving Runova.
+
+1. Open the domain picker and click **Add domain** at the bottom of the list (it is also under the list when there are no domains yet). The **Add a domain** card opens on the page in place of the open domain.
+2. Type the domain, such as `example.com`. A pasted web address works too: `https://example.com/pricing` becomes `example.com`. Runova says what is wrong before anything reaches Cloudflare, for example a name with no ending, an IP address or a wildcard.
+3. If you type a `www.` name, Runova offers the main domain instead (**Use example.com**), since Cloudflare adds the main domain and `www` comes with it. If the domain is already in your list, it offers **Open** instead of adding it twice.
+4. The card says which Cloudflare account the domain goes into. When your tokens reach more than one, pick it under **Cloudflare account**.
+5. Click **Add domain** (or press `Enter`). `Escape` or **Cancel** goes back without adding anything.
+
+Cloudflare makes the zone and copies the DNS records it can find for the domain. Nothing changes for visitors yet. The card then shows **Point example.com at Cloudflare** with three steps: sign in where you bought the domain (your registrar), replace its name servers with the two Cloudflare gave you (each has a copy button, or click **Copy both**), and wait for Cloudflare to notice, which usually takes a few minutes and can take up to a day. Click **Open example.com** to manage the new domain right away. It shows as **Waiting for name servers** until the registrar change goes through.
+
+Adding a domain needs **Zone > Zone > Edit** on the token. If it is missing, the card says so and offers **Open Cloudflare's token page**. Edit the token there, add the permission, and try again. The token's Zone Resources must also include all zones from the account, not only some domains, or Cloudflare refuses to add new ones. If Cloudflare says the domain is already on Cloudflare (in another account) or is not a registered domain, the card shows that in words.
 
 ## DNS tab
 

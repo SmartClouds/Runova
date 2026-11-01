@@ -149,6 +149,20 @@ export type CloudflareCacheLevel = 'basic' | 'simplified' | 'aggressive';
 
 export type CloudflareMinTlsVersion = '1.0' | '1.1' | '1.2' | '1.3';
 
+/** A Cloudflare account a new domain can go into, by Cloudflare's own id. */
+export interface CloudflareAccountChoice {
+  id: string;
+  name: string;
+}
+
+/** A domain to add to Cloudflare, as the "Add a domain" card sends it. */
+export interface CloudflareNewZoneInput {
+  /** As typed: a pasted web address is cut down to its host, and checked again. */
+  name: string;
+  /** Cloudflare's id for the account to add it to (see `CloudflareAccountChoice`). */
+  cloudflareAccountId: string;
+}
+
 export interface CloudflareZoneSettings {
   developmentMode: { value: 'on' | 'off'; secondsRemaining: number; editable: boolean };
   securityLevel: { value: CloudflareSecurityLevel; editable: boolean };
@@ -268,7 +282,11 @@ export interface CloudflarePointDomainResult {
  * Permissions only some features need, asked for when one of them is used (E14): the setup guide
  * lists them as optional, and a refusal names them like the others.
  */
-export type CloudflareExtraPermissionId = 'sslCertificates' | 'apiTokens' | 'turnstile';
+export type CloudflareExtraPermissionId =
+  | 'sslCertificates'
+  | 'apiTokens'
+  | 'turnstile'
+  | 'zoneEdit';
 
 export type CloudflareAnyPermissionId = CloudflarePermissionId | CloudflareExtraPermissionId;
 

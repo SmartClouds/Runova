@@ -7,6 +7,29 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { type ZoneGroup, ZoneRail, zoneStateText } from './ZoneRail';
 
+/**
+ * Under the list of domains: adding a domain to an account already connected, which is what is
+ * wanted most, then connecting another account.
+ */
+export function ZoneListFooter({
+  onAddDomain,
+  onAddAccount,
+}: {
+  onAddDomain: () => void;
+  onAddAccount: () => void;
+}): React.JSX.Element {
+  return (
+    <div className={cn(FOOTER_HAIRLINE, 'grid shrink-0 grid-cols-2 gap-2 p-2')}>
+      <Button variant="soft" size="sm" onClick={onAddDomain}>
+        <Plus className="h-3.5 w-3.5" /> Add domain
+      </Button>
+      <Button variant="ghost" size="sm" onClick={onAddAccount}>
+        <Plus className="h-3.5 w-3.5" /> Add account
+      </Button>
+    </div>
+  );
+}
+
 /** Marks the list's popover, so the page's Ctrl+F still works from inside it. */
 export const PICKER_ATTRIBUTE = 'data-zone-picker';
 
@@ -33,6 +56,7 @@ export function ZonePicker({
   onSelect,
   onManageAccount,
   onAddAccount,
+  onAddDomain,
   searchRef,
 }: {
   groups: ZoneGroup[];
@@ -42,6 +66,7 @@ export function ZonePicker({
   onSelect: (zone: CloudflareZone) => void;
   onManageAccount: (accountId: string) => void;
   onAddAccount: () => void;
+  onAddDomain: () => void;
   /** The search box, so Ctrl+F lands in it and Escape can clear it before closing the list. */
   searchRef: React.RefObject<HTMLInputElement | null>;
 }): React.JSX.Element {
@@ -107,11 +132,7 @@ export function ZonePicker({
           onSelect={onSelect}
           onManageAccount={onManageAccount}
         />
-        <div className={cn(FOOTER_HAIRLINE, 'shrink-0 p-2')}>
-          <Button variant="soft" size="sm" className="w-full" onClick={onAddAccount}>
-            <Plus className="h-3.5 w-3.5" /> Add account
-          </Button>
-        </div>
+        <ZoneListFooter onAddDomain={onAddDomain} onAddAccount={onAddAccount} />
       </PopoverContent>
     </Popover>
   );

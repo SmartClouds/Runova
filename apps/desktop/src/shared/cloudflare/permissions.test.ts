@@ -34,12 +34,23 @@ describe('the permission catalog', () => {
       'sslCertificates',
       'apiTokens',
       'turnstile',
+      'zoneEdit',
     ]);
     const turnstile = cloudflarePermission('turnstile');
     expect(turnstile.label).toBe('Account > Turnstile > Edit');
     expect(turnstile.apiNames).toContain('Turnstile Write');
     expect(permissionDeniedMessage('turnstile')).toBe(
       'This token is not allowed to manage Turnstile widgets. On Cloudflare, edit the token and add Account > Turnstile > Edit, then check it again here.',
+    );
+  });
+
+  it('asks for Zone Edit only when a domain is added, so the main token can stay read-only', () => {
+    const zoneEdit = cloudflarePermission('zoneEdit');
+    expect(zoneEdit.label).toBe('Zone > Zone > Edit');
+    expect(zoneEdit.apiNames).toEqual(['Zone Write']);
+    expect(zoneEdit.template).toEqual({ key: 'zone', type: 'edit' });
+    expect(permissionDeniedMessage('zoneEdit')).toBe(
+      'This token is not allowed to add domains. On Cloudflare, edit the token and add Zone > Zone > Edit, then check it again here.',
     );
   });
 
