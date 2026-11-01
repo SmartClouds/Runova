@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
 import { type FakeGen, GEN_KEY, startFakeGen } from '../../../packages/studio/src/test/fakeGen';
-import { closeApp, type LaunchedApp, launchApp } from './app';
+import { crashApp, type LaunchedApp, launchApp } from './app';
 
 /**
  * Studio's generated media (E38) in the built app, against OpenAI's and Gemini's APIs faked on
@@ -166,8 +166,7 @@ test('makes a picture after confirming its price, and finishes a clip after a re
       .getByRole('button', { name: /^Generated picture 1\.png, / }),
   ).toBeVisible();
 
-  first.app.process().kill('SIGKILL');
-  await closeApp(first.app).catch(() => undefined);
+  await crashApp(first.app);
   opened.splice(opened.indexOf(first), 1);
   gen.finishClips();
 

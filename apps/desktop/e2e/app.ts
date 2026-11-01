@@ -295,6 +295,31 @@ export async function closeApp(app: ElectronApplication, root?: string): Promise
   await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 5_000))]);
 }
 
+/**
+ * Ends the app the way a crash or a power cut would, with no quit and no cleanup. On Windows
+ * Playwright starts Electron through `cmd.exe /c`, so app.process() is that shell and not the app.
+ * Killing the shell leaves the real main process running for a moment, or for seconds on a busy
+ * machine, still holding and refreshing whatever locks it had. So the main process is killed by
+ * its own pid, and this returns once it is gone.
+ */
+export async function crashApp(app: ElectronApplication): Promise<void> {
+  const pid = await app.evaluate(() => process.pid);
+  process.kill(pid, 'SIGKILL');
+  await closeApp(app).catch(() => undefined);
+  const alive = () => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'EPERM';
+    }
+  };
+  for (const until = Date.now() + 10_000; alive(); ) {
+    if (Date.now() > until) throw new Error(`The app's main process (${pid}) outlived its kill.`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 /** Whether the running test has already failed. False outside a test. */
 function testHasFailed(): boolean {
   try {
