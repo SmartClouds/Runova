@@ -53,6 +53,10 @@ function buildApp(): void {
     return;
   }
   rmSync(E2E_OUT_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  // The app imports core, protocol and studio from their dist folders, so an old build of those
+  // fails the app build on any export added since. The root test:e2e script builds them first,
+  // but running Playwright directly skips that script. It only takes a few seconds.
+  execSync('pnpm run build:packages', { cwd: join(APP_ROOT, '..', '..'), stdio: 'inherit' });
   execSync('pnpm exec electron-vite build --outDir out-e2e', { cwd: APP_ROOT, stdio: 'inherit' });
 
   // The renderer's root is src/renderer, so its outDir resolves under there. Main loads it from

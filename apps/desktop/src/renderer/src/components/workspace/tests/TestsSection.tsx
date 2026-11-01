@@ -1024,13 +1024,16 @@ function RunErrorCard({
       aria-label={`${label} could not run`}
       className={cn(SECTION_WELL, FAILURE_WELL, 'mx-2 mb-1.5 p-2.5')}
     >
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-destructive">
-        <TriangleAlert className="h-3 w-3" />
-        {label} could not run
+      {/* Project paths have no spaces, so they must break anywhere or they widen the card. */}
+      <p className="flex items-start gap-1.5 text-[11px] font-semibold text-destructive">
+        <TriangleAlert className="mt-px h-3 w-3 shrink-0" />
+        <span className="min-w-0 [overflow-wrap:anywhere]">{label} could not run</span>
       </p>
-      <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/80">{error.message}</p>
+      <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/80 [overflow-wrap:anywhere]">
+        {error.message}
+      </p>
       {log ? (
-        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-muted-foreground">
+        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
           {log.slice(-4_000)}
         </pre>
       ) : null}

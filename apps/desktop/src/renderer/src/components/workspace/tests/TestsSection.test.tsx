@@ -584,6 +584,14 @@ describe('TestsSection', () => {
       within(card).getByText('The Go run ended without reporting any results (exit code 1).'),
     ).toBeTruthy();
     expect(within(card).getByText(/calc.go:3:1: syntax error/)).toBeTruthy();
+    // Long project paths have no spaces, so the title, message and log must break anywhere.
+    for (const text of [
+      'Go · svc could not run',
+      'The Go run ended without reporting any results (exit code 1).',
+      'calc.go:3:1: syntax error',
+    ]) {
+      expect(within(card).getByText(text).className).toContain('[overflow-wrap:anywhere]');
+    }
     fireEvent.click(within(card).getByRole('button', { name: 'Copy output' }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(expect.stringContaining('go test -json ./...')),
