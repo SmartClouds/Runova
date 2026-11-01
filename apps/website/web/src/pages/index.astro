@@ -33,9 +33,24 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     <div class="hero-backdrop" aria-hidden="true"></div>
     <div class="hero-beam" aria-hidden="true" data-beam-stage><canvas></canvas></div>
     <div class="mx-auto flex max-w-[56rem] flex-col items-center text-center">
-      <div
-        class="hero-rise platforms inline-flex items-center gap-2.5 rounded-full border bg-card/60 py-1 pr-4 pl-1 text-muted-foreground text-xs backdrop-blur max-[359px]:gap-1.5 max-[359px]:pr-3 max-[359px]:text-[0.7rem] sm:gap-3 sm:text-sm"
+      <h1
+        id="hero-title"
+        class="hero-rise text-balance font-extrabold text-[clamp(2.75rem,8.5vw,6.25rem)] leading-[0.98] tracking-[-0.035em]"
         style="--order: 0"
+      >
+        Run the work, <span class="hero-rise hero-tail" style="--order: 1">not just watch it.</span>
+      </h1>
+      <p
+        class="hero-rise mt-6 max-w-[46rem] text-balance text-lg text-muted-foreground md:text-xl"
+        style="--order: 2"
+      >
+        Put Claude Code, Codex, Cursor, Gemini or a plain shell in every pane of one window. Git,
+        diffs, tests and pipelines sit right next to the agents, so a change goes from prompt to
+        commit without leaving the app.
+      </p>
+      <div
+        class="hero-rise platforms mt-8 inline-flex items-center gap-2.5 rounded-full border bg-card/60 py-1 pr-4 pl-1 text-muted-foreground text-xs backdrop-blur max-[359px]:gap-1.5 max-[359px]:pr-3 max-[359px]:text-[0.7rem] sm:gap-3 sm:text-sm"
+        style="--order: 3"
       >
         <span
           class="rounded-full bg-foreground px-2.5 py-1 font-semibold text-[0.65rem] text-background uppercase tracking-[0.08em]"
@@ -54,22 +69,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
           }
         </ul>
       </div>
-      <h1
-        id="hero-title"
-        class="hero-rise mt-6 text-balance font-extrabold text-[clamp(2.75rem,8.5vw,6.25rem)] leading-[0.98] tracking-[-0.035em]"
-        style="--order: 1"
-      >
-        Run the work, <span class="hero-rise hero-tail" style="--order: 2">not just watch it.</span>
-      </h1>
-      <p
-        class="hero-rise mt-6 max-w-[46rem] text-balance text-lg text-muted-foreground md:text-xl"
-        style="--order: 3"
-      >
-        Put Claude Code, Codex, Cursor, Gemini or a plain shell in every pane of one window. Git,
-        diffs, tests and pipelines sit right next to the agents, so a change goes from prompt to
-        commit without leaving the app.
-      </p>
-      <p class="hero-rise mt-5 text-muted-foreground text-sm" style="--order: 4">
+      <p class="hero-rise mt-4 text-muted-foreground text-sm" style="--order: 4">
         Open source under the MIT license.
       </p>
     </div>
