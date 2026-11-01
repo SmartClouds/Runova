@@ -131,6 +131,23 @@ describe('OmniVoice through its sidecar', () => {
     expect(speaker.host.starts).toBe(0);
   });
 
+  it('gives a piece asked for while the sidecar is stopping to a fresh one', async () => {
+    const { speaker, root } = await setup();
+    await speaker({ voice: 'p1', text: 'سلام', lang: 'fa' });
+    expect(speaker.host.starts).toBe(1);
+    // What the idle timer does when the next piece is slow to arrive: the old sidecar is told to
+    // quit, and has not exited yet when the piece reaches the host.
+    const stopping = speaker.host.stop();
+    expect(speaker.host.running).toBe(false);
+    const next = speaker.host.request(
+      { op: 'speak', text: 'بعدی', out: join(root, 'next.wav') },
+      { timeoutMs: 10_000 },
+    );
+    await expect(next).resolves.toMatchObject({ ok: true });
+    await stopping;
+    expect(speaker.host.starts).toBe(2);
+  });
+
   it('says why the model would not load, stops a piece on request, and stops when idle', async () => {
     process.env.FAKE_SIDECAR = 'fatal';
     const broken = await setup();
@@ -147,10 +164,13 @@ describe('OmniVoice through its sidecar', () => {
     const hanging = speaker({ voice: 'p1', text: 'HANG', lang: 'fa', signal: controller.signal });
     setTimeout(() => controller.abort(), 200);
     await expect(hanging).rejects.toThrow('Stopped.');
+    // The stopped piece took its sidecar with it, so this one starts another. Whether that one is
+    // still up once the piece has been read back depends on how busy the machine is, so the test
+    // only waits for it to go.
+    const starts = speaker.host.starts;
     await speaker({ voice: 'p1', text: 'سلام', lang: 'fa' });
-    expect(speaker.host.running).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(speaker.host.running).toBe(false);
+    expect(speaker.host.starts).toBe(starts + 1);
+    await vi.waitFor(() => expect(speaker.host.running).toBe(false), { timeout: 2000 });
   });
 });
 

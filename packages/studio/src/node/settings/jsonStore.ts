@@ -4,8 +4,8 @@ import type { z } from 'zod';
 import { readJsonFile, writeFileAtomic } from '../fs/atomicWrite.js';
 
 /**
- * A small JSON file Studio owns (its settings, the list of known videos). Changes run one at a
- * time through `mutate`, and the file is only written when something changed. A file that does
+ * A small JSON file Studio owns (its settings, the list of known videos). Reads and changes run
+ * one at a time, in the order they were asked for, and the file is only written when something changed. A file that does
  * not parse is copied aside before anything replaces it, so a bad write never costs the user what
  * was in it.
  */
@@ -19,8 +19,14 @@ export class JsonStore<T> {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async read(): Promise<T> {
-    return (await this.load()).data;
+  /**
+   * Waits for the changes already asked for, so it reads what they saved. It also never has the
+   * file open while a change renames over it, which Windows refuses (EPERM).
+   */
+  read(): Promise<T> {
+    const run = this.queue.then(async () => (await this.load()).data);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   /** Changes the data in place (or returns new data) and saves it. Resolves to the saved data. */

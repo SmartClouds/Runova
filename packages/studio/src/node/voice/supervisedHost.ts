@@ -52,6 +52,8 @@ export class SupervisedHost {
   private queue: Promise<unknown> = Promise.resolve();
   private nextId = 1;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Processes told to quit that have not exited yet. */
+  private readonly quitting = new Set<Promise<void>>();
   /** How many times it has been started, for tests and the log. */
   starts = 0;
 
@@ -69,16 +71,26 @@ export class SupervisedHost {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
     const child = this.child;
-    if (!child) return;
-    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
-    try {
-      child.stdin?.write(`${JSON.stringify({ op: 'quit' })}\n`);
-    } catch {
-      // Already gone.
+    if (child) {
+      // Let go of it now: a job that arrives before it has exited starts a fresh one instead of
+      // being written to a process that is quitting.
+      this.child = null;
+      this.ready = null;
+      const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+      try {
+        child.stdin?.write(`${JSON.stringify({ op: 'quit' })}\n`);
+      } catch {
+        // Already gone.
+      }
+      const killer = setTimeout(() => child.kill(), 2000);
+      const quitting = exited.then(() => {
+        clearTimeout(killer);
+        this.quitting.delete(quitting);
+      });
+      this.quitting.add(quitting);
     }
-    const killer = setTimeout(() => child.kill(), 2000);
-    await exited;
-    clearTimeout(killer);
+    // A second stop (the idle timer, then the app closing) still waits until the process is gone.
+    await Promise.all(this.quitting);
   }
 
   get running(): boolean {

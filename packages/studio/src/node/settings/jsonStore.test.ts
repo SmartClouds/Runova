@@ -35,6 +35,18 @@ describe('JsonStore', () => {
     expect(JSON.parse(await readFile(file, 'utf8')).count).toBe(3);
   });
 
+  it('waits for a change being saved before reading, so a read never holds the file mid-save', async () => {
+    // On Windows a save cannot rename over a file that a read has open, and the job that saved
+    // failed with EPERM when something polled the store while it saved.
+    const { s } = await store();
+    const saving = s.mutate((d) => {
+      d.count = 5;
+    });
+    const reads = await Promise.all([s.read(), s.read(), s.read()]);
+    expect(reads.map((r) => r.count)).toEqual([5, 5, 5]);
+    await saving;
+  });
+
   it('runs changes one after another, so none is lost', async () => {
     const { s } = await store();
     await Promise.all(
