@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { scanHtml } from '../tests/helpers/textScan';
 import { demoSummary, hero, settle, watchScripts } from './heroHelpers';
 
@@ -106,13 +106,6 @@ test.describe('home page', () => {
     expect(react.loaded).toBe(false);
   });
 
-  test('the download buttons lead to /download', async ({ page }) => {
-    await page.goto('/');
-    const links = page.locator('a[href="/download"]');
-    expect(await links.count()).toBeGreaterThanOrEqual(2);
-    await expect(links.first()).toBeVisible();
-  });
-
   test('copies the winget command', async ({ context, page }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/');
@@ -142,5 +135,168 @@ test.describe('home page', () => {
         .map((link) => link.textContent?.trim()),
     );
     expect(underlined).toEqual([]);
+  });
+});
+
+/** Makes the browser present itself as another system, userAgentData included. */
+async function emulate(page: Page, userAgent: string, platform: string) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setUserAgentOverride', {
+    userAgent,
+    userAgentMetadata: {
+      platform,
+      platformVersion: '',
+      architecture: 'x86',
+      bitness: '64',
+      model: '',
+      mobile: platform === 'Android',
+    },
+  });
+}
+
+const SYSTEMS = [
+  {
+    platform: 'Windows',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+    label: 'Download for Windows',
+    href: '/download/windows/latest',
+  },
+  {
+    platform: 'macOS',
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+    label: 'Download for macOS',
+    href: '/download/macos/latest',
+  },
+  {
+    platform: 'Linux',
+    userAgent:
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+    label: 'Download for Linux',
+    href: '/download/linux/latest',
+  },
+  {
+    platform: 'Android',
+    userAgent:
+      'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36',
+    label: 'Download Runova',
+    href: '/download',
+  },
+];
+
+test.describe('home page download button', () => {
+  const primary = (page: Page) => page.locator('#download [data-download-primary]');
+  const trigger = (page: Page) => page.locator('#download [data-download-trigger]');
+  const menu = (page: Page) => page.locator('#cta-download-menu');
+
+  for (const system of SYSTEMS) {
+    test(`names the visitor's system: ${system.platform}`, async ({ page }) => {
+      await emulate(page, system.userAgent, system.platform);
+      await page.goto('/');
+      await expect(primary(page)).toHaveText(system.label);
+      await expect(primary(page)).toHaveAttribute('href', system.href);
+    });
+  }
+
+  test('opens its menu from the keyboard and gives focus back on Escape', async ({ page }) => {
+    await page.goto('/');
+    await expect(menu(page)).toBeHidden();
+    await trigger(page).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(menu(page)).toBeVisible();
+    await expect(trigger(page)).toHaveAttribute('aria-expanded', 'true');
+    const items = menu(page).getByRole('menuitem');
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu(page)).toBeHidden();
+    await expect(trigger(page)).toBeFocused();
+    await expect(trigger(page)).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('closes its menu on a click outside', async ({ page }) => {
+    await page.goto('/');
+    await trigger(page).click();
+    await expect(menu(page)).toBeVisible();
+    await page.locator('#download-title').click();
+    await expect(menu(page)).toBeHidden();
+  });
+
+  test('makes the system picked in the menu the main download', async ({ page }) => {
+    await emulate(page, SYSTEMS[0].userAgent, SYSTEMS[0].platform);
+    await page.goto('/');
+    // Keep the page here instead of following the download.
+    await page.evaluate(() =>
+      document.addEventListener('click', (event) => event.preventDefault(), { capture: true }),
+    );
+    await trigger(page).click();
+    await menu(page).getByRole('menuitem', { name: /Linux/ }).click();
+    await expect(menu(page)).toBeHidden();
+    await expect(primary(page)).toHaveText('Download for Linux');
+    await expect(primary(page)).toHaveAttribute('href', '/download/linux/latest');
+    await trigger(page).click();
+    await expect(menu(page).locator('[data-selected]')).toHaveText(/Linux/);
+  });
+
+  test('links to an installer through /download/<os>/latest', async ({ request }) => {
+    const response = await request.get('/download/windows/latest', { maxRedirects: 0 });
+    expect(response.status()).toBe(302);
+    expect(response.headers().location).toMatch(/\/Runova-Setup-[\d.]+\.exe$/);
+    const unknown = await request.get('/download/android/latest', { maxRedirects: 0 });
+    expect(unknown.status()).toBe(404);
+  });
+
+  for (const colorScheme of ['dark', 'light'] as const) {
+    test(`lights up in the ${colorScheme} theme`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/');
+      await expect(page.locator('#hero')).toHaveAttribute('data-beam', /^(on|still|fallback)$/);
+      await expect(page.locator('header [data-beam-source]')).toHaveAttribute(
+        'data-beam-struck',
+        '',
+        { timeout: 5_000 },
+      );
+    });
+  }
+
+  test('keeps the light on across a theme switch', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/');
+    const source = page.locator('header [data-beam-source]');
+    await expect(source).toHaveAttribute('data-beam-struck', '', { timeout: 5_000 });
+    await page.locator('header button[aria-label*="theme"]').click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
+    await expect(page.locator('#hero')).toHaveAttribute('data-beam', /^(on|still|fallback)$/);
+    await expect(source).toHaveAttribute('data-beam-struck', '', { timeout: 5_000 });
+  });
+
+  test('shows the light through the header at the top of the page only', async ({ page }) => {
+    await page.goto('/');
+    const header = page.locator('body > header');
+    await expect(header).toHaveAttribute('data-clear', '');
+    await expect(header).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await page.mouse.wheel(0, 400);
+    await expect(header).not.toHaveAttribute('data-clear', '');
+  });
+
+  test('keeps the open menu above the rest of the call to action on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto('/');
+    await trigger(page).click();
+    const item = menu(page).getByRole('menuitem').nth(1);
+    await item.scrollIntoViewIfNeeded();
+    const box = await item.boundingBox();
+    if (!box) throw new Error('the menu item has no box');
+    const onTop = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x, y)?.closest('[role="menuitem"]') !== null,
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(onTop).toBe(true);
   });
 });

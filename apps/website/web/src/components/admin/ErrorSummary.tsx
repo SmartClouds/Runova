@@ -25,7 +25,7 @@ export function ErrorSummary({
       ref={summaryRef}
       role="alert"
       tabIndex={-1}
-      className="grid gap-2 rounded-md border border-destructive p-4 text-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
+      className="grid gap-2 rounded-box border border-destructive p-4 text-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
     >
       <p className="font-semibold">{problem.detail || problem.title}</p>
       {unplaced.length > 0 && (

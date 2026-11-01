@@ -9,3 +9,10 @@ export function formatLongDate(iso: string): string {
 export function isoTime(iso: string): string {
   return new Date(iso).toISOString();
 }
+
+const shortDate = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
+
+/** A date in a tight spot such as the header menu, such as "Oct 30, 2026". */
+export function formatShortDate(iso: string): string {
+  return shortDate.format(new Date(iso));
+}

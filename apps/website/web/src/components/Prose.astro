@@ -79,7 +79,7 @@ const { html, class: className } = Astro.props;
   .prose :global(pre) {
     overflow-x: auto;
     border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
+    border-radius: var(--radius-box);
     padding: 1rem;
   }
 
@@ -129,7 +129,7 @@ const { html, class: className } = Astro.props;
   .prose :global(blockquote.callout) {
     border: 1px solid hsl(var(--border));
     border-left-width: 4px;
-    border-radius: var(--radius);
+    border-radius: var(--radius-box);
     background: hsl(var(--card));
     padding: 0.75rem 1rem;
   }

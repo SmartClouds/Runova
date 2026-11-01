@@ -79,6 +79,23 @@ export function detectSystem(signals: SystemSignals): VisitorSystem {
   return { os, arch };
 }
 
+/** What a browser says about itself: `navigator.userAgentData` (Chromium only) and the user agent. */
+export interface NavigatorSignals {
+  userAgent?: string;
+  userAgentData?: { platform?: string } | null;
+}
+
+/**
+ * The same answer as on the server, from the browser's side. The arch hint needs an async call,
+ * so it is left out and a Mac stays of unknown arch (the download link sorts that out).
+ */
+export function systemFromNavigator(nav: NavigatorSignals): VisitorSystem {
+  return detectSystem({
+    userAgent: nav.userAgent ?? null,
+    platform: nav.userAgentData?.platform || null,
+  });
+}
+
 /** A structured header string such as `"macOS"`, without its quotes. */
 function unquote(value: string | null): string | null {
   if (value === null) return null;

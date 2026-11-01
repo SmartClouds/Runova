@@ -9,11 +9,14 @@ interface Props {
   sizes?: string;
   /** Eager for a shot near the top of a page, lazy (the default) below the fold. */
   loading?: 'eager' | 'lazy';
+  /** True when the shot sits inside a card, so it takes the inner radius (design.md, Shapes). */
+  inset?: boolean;
   class?: string;
 }
 
 const {
   name,
+  inset = false,
   sizes = '(min-width: 1200px) 680px, (min-width: 768px) 56vw, 100vw',
   loading = 'lazy',
 } = Astro.props;
@@ -22,7 +25,7 @@ const shot = screenshot(name);
 // rounded corners and the thin border (design.md, Layout and surfaces).
 ---
 
-<div class:list={['overflow-hidden rounded-lg border bg-card', Astro.props.class]}>
+<div class:list={['overflow-hidden border bg-card', inset ? 'rounded-inner' : 'rounded-box', Astro.props.class]}>
   <Picture
     src={shot.image}
     alt={shot.alt}

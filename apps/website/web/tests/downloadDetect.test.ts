@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { detectSystem, type SystemSignals, signalsFromHeaders } from '../src/lib/download/detect';
+import {
+  detectSystem,
+  type SystemSignals,
+  signalsFromHeaders,
+  systemFromNavigator,
+} from '../src/lib/download/detect';
 
 const UA = {
   windowsChrome:
@@ -152,5 +157,42 @@ describe('signalsFromHeaders', () => {
   it('takes a hint value that is not quoted as it is', () => {
     const headers = new Headers({ 'sec-ch-ua-platform': 'Windows' });
     expect(signalsFromHeaders(headers).platform).toBe('Windows');
+  });
+});
+
+describe('systemFromNavigator', () => {
+  it('reads the user agent when there is no userAgentData (Firefox, Safari)', () => {
+    expect(systemFromNavigator({ userAgent: UA.windowsFirefox })).toEqual({
+      os: 'windows',
+      arch: 'x64',
+    });
+    expect(systemFromNavigator({ userAgent: UA.macSafari })).toEqual({ os: 'macos', arch: null });
+    expect(systemFromNavigator({ userAgent: UA.linuxArmFirefox })).toEqual({
+      os: 'linux',
+      arch: 'arm64',
+    });
+  });
+
+  it('trusts the userAgentData platform over the user agent', () => {
+    expect(
+      systemFromNavigator({ userAgent: UA.windowsChrome, userAgentData: { platform: 'Linux' } }),
+    ).toEqual({ os: 'linux', arch: 'x64' });
+  });
+
+  it('falls back to the user agent when the platform is empty', () => {
+    expect(
+      systemFromNavigator({ userAgent: UA.macChrome, userAgentData: { platform: '' } }),
+    ).toEqual({ os: 'macos', arch: null });
+  });
+
+  it('knows no desktop system on a phone, a tablet or ChromeOS', () => {
+    expect(systemFromNavigator({ userAgent: UA.iphone }).os).toBeNull();
+    expect(systemFromNavigator({ userAgent: UA.ipad }).os).toBeNull();
+    expect(
+      systemFromNavigator({ userAgent: UA.android, userAgentData: { platform: 'Android' } }).os,
+    ).toBeNull();
+    expect(
+      systemFromNavigator({ userAgent: UA.chromeOs, userAgentData: { platform: 'Chrome OS' } }).os,
+    ).toBeNull();
   });
 });

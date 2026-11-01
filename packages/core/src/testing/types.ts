@@ -120,6 +120,12 @@ export interface TestRunError {
   command: string;
   message: string;
   log: string;
+  /**
+   * Set when the run broke after it had reported some results: the files and tests it never got
+   * to. Running those again, with the failures, finishes the job without repeating every test
+   * that already passed. Absent when nothing was reported, so the whole test project runs again.
+   */
+  unfinished?: { files: string[]; tests: TestRef[] };
 }
 
 export interface TestRunSummary {

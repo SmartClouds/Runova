@@ -54,7 +54,7 @@ const jsonLd = post && image ? [blogPosting(site, post, image.src)] : [];
             loading="eager"
             fetchpriority="high"
             decoding="async"
-            class="mt-8 w-full max-w-[800px] rounded-lg border"
+            class="mt-8 w-full max-w-[800px] rounded-box border"
           />
         )}
         <Prose html={post.bodyHtml} class="mt-8 max-w-[800px]" />

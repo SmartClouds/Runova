@@ -30,7 +30,7 @@ export function MarkdownField({ id, value, onChange, errors }: MarkdownFieldProp
           Preview
         </h2>
         <div
-          className="prose min-h-80 rounded-md border p-4"
+          className="prose min-h-80 rounded-inner border p-4"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: renderPreview sanitizes with DOMPurify.
           dangerouslySetInnerHTML={{ __html: html }}
         />

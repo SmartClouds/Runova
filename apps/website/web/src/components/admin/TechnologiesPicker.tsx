@@ -85,7 +85,7 @@ export function TechnologiesPicker({ id, value, onChange, errors }: Technologies
           {value.map((row, index) => (
             <li
               key={row.technology}
-              className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+              className="grid gap-3 rounded-box border p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
             >
               <Field
                 id={rowId(index, 'range')}

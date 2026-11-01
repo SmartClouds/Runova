@@ -41,11 +41,11 @@ const description =
             </h2>
             <ul class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-help-category={group.category}>
               {group.articles.map((article) => (
-                <li class="relative rounded-lg border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60">
+                <li class="relative rounded-box border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60">
                   <h3 class="font-semibold">
                     <a
                       href={`/help/${article.id}`}
-                      class="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
+                      class="outline-none after:absolute after:inset-0 after:rounded-box focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
                     >
                       {article.data.title}
                     </a>

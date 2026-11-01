@@ -134,7 +134,7 @@ const finalCounts = statusCounts(DEMO_LENGTH);
     position: relative;
     overflow: hidden;
     border: 1px solid hsl(var(--border));
-    border-radius: calc(var(--radius) + 4px);
+    border-radius: var(--radius-box);
     background: hsl(var(--card));
     box-shadow:
       0 0 0 1px hsl(var(--glow) / 0.06),
@@ -190,7 +190,7 @@ const finalCounts = statusCounts(DEMO_LENGTH);
     flex-direction: column;
     min-width: 0;
     border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
+    border-radius: var(--radius-inner);
     background: hsl(var(--background));
   }
 
@@ -279,7 +279,7 @@ const finalCounts = statusCounts(DEMO_LENGTH);
 
   .demo-ask-yes,
   .demo-ask-no {
-    border-radius: calc(var(--radius) - 4px);
+    border-radius: 999px;
     padding: 0 0.5rem;
     font-family: var(--font-sans);
     font-size: 0.7rem;
@@ -399,7 +399,7 @@ const finalCounts = statusCounts(DEMO_LENGTH);
 
   .demo-commit {
     position: relative;
-    border-radius: calc(var(--radius) - 4px);
+    border-radius: 999px;
     padding: 0.1rem 0.7rem;
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
@@ -413,7 +413,7 @@ const finalCounts = statusCounts(DEMO_LENGTH);
     content: "";
     position: absolute;
     inset: -3px;
-    border-radius: calc(var(--radius) - 2px);
+    border-radius: inherit;
     box-shadow: 0 0 0 2px hsl(var(--primary) / 0.35);
     opacity: 0;
     pointer-events: none;

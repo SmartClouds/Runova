@@ -1,0 +1,256 @@
+---
+/**
+ * The home page's download button: a pill split in two, the main link for the visitor's system and
+ * a chevron that opens a menu of every system. The server sends a plain "Download Runova" link to
+ * /download (the page is static, so it cannot know the system); downloadSplit.ts then names the
+ * visitor's system and points the link at /download/<os>/latest.
+ *
+ * Same idea and look as the hero download selector on openbot.run, written from scratch. No code
+ * is copied (openbot.run is PolyForm Noncommercial).
+ */
+import Icon from '../effects/Icon.astro';
+
+interface Props {
+  /** Unique on the page, for the menu's id. */
+  id: string;
+  class?: string;
+}
+
+const { id, class: className } = Astro.props;
+
+const CHOICES: Array<{ os: string; mark: 'windows' | 'apple' | 'linux'; label: string; note: string }> = [
+  { os: 'windows', mark: 'windows', label: 'Windows', note: 'x64 installer' },
+  { os: 'macos', mark: 'apple', label: 'macOS', note: 'Apple silicon, Intel' },
+  { os: 'linux', mark: 'linux', label: 'Linux', note: 'AppImage' },
+];
+const menuId = `${id}-menu`;
+---
+
+<div
+  class:list={['dl', className]}
+  data-download-split
+  data-platform=""
+  data-open="false"
+>
+  <div class="dl-split">
+    <a class="dl-primary" href="/download" data-download-primary>
+      <span class="dl-logo" aria-hidden="true">
+        <span data-logo=""><Icon name="download" size={16} /></span>
+        {CHOICES.map((choice) => (
+          <span data-logo={choice.os}><Icon name={choice.mark} size={16} /></span>
+        ))}
+      </span>
+      <span data-download-label>Download Runova</span>
+    </a>
+    <button
+      class="dl-trigger"
+      type="button"
+      aria-label="Choose download platform"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      aria-controls={menuId}
+      data-download-trigger
+    >
+      <Icon name="chevron-down" size={13} />
+    </button>
+  </div>
+  <div class="dl-menu" id={menuId} role="menu" aria-label="Download platforms" hidden>
+    {
+      CHOICES.map((choice) => (
+        <a class="dl-item" role="menuitem" href={`/download/${choice.os}/latest`} data-os={choice.os}>
+          <Icon name={choice.mark} size={15} />
+          <span>{choice.label}</span>
+          <small>{choice.note}</small>
+        </a>
+      ))
+    }
+    <hr class="dl-separator" />
+    <a class="dl-item" role="menuitem" href="/download">
+      <Icon name="list-checks" size={15} />
+      <span>All builds and checksums</span>
+      <small></small>
+    </a>
+  </div>
+</div>
+
+<style>
+  .dl {
+    position: relative;
+    z-index: 3;
+    display: inline-flex;
+    justify-content: center;
+    border-radius: 999px;
+  }
+
+  .dl-split {
+    display: inline-flex;
+    align-items: stretch;
+    height: 48px;
+    overflow: hidden;
+    border-radius: inherit;
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+  }
+
+  .dl-primary {
+    display: inline-flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 18px 0 22px;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    transition: opacity 120ms var(--ease-enter);
+  }
+
+  .dl-logo {
+    display: inline-flex;
+  }
+
+  .dl-logo > span {
+    display: none;
+  }
+
+  .dl[data-platform=""] .dl-logo > [data-logo=""],
+  .dl[data-platform="windows"] .dl-logo > [data-logo="windows"],
+  .dl[data-platform="macos"] .dl-logo > [data-logo="macos"],
+  .dl[data-platform="linux"] .dl-logo > [data-logo="linux"] {
+    display: inline-flex;
+  }
+
+  .dl-item :global(svg) {
+    justify-self: center;
+  }
+
+  .dl-trigger {
+    display: grid;
+    place-items: center;
+    width: 45px;
+    min-width: 45px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid hsl(var(--background) / 0.16);
+    background: transparent;
+    color: currentColor;
+    cursor: pointer;
+    transition: opacity 120ms var(--ease-enter);
+  }
+
+  .dl-trigger :global(svg) {
+    transition: transform 200ms var(--ease-enter);
+  }
+
+  .dl-trigger[aria-expanded="true"] :global(svg) {
+    transform: rotate(180deg);
+  }
+
+  .dl-primary:hover,
+  .dl-trigger:hover {
+    opacity: 0.78;
+  }
+
+  /* The pill clips its children, so the focus ring sits just inside its edge. */
+  .dl-primary:focus-visible,
+  .dl-trigger:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -3px;
+  }
+
+  .dl-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: min(288px, 100vw - 32px);
+    padding: 6px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-box);
+    background: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    box-shadow: 0 18px 48px -24px hsl(0 0% 0% / 0.9);
+    transform: translateX(-50%);
+    animation: dl-menu-in 200ms var(--ease-enter) both;
+  }
+
+  .dl-menu[hidden] {
+    display: none;
+  }
+
+  @keyframes dl-menu-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -4px);
+    }
+  }
+
+  .dl-item {
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 11px;
+    border-radius: var(--radius-inner);
+    color: hsl(var(--muted-foreground));
+    font-size: 13px;
+    text-align: left;
+    transition:
+      background-color 120ms var(--ease-enter),
+      color 120ms var(--ease-enter);
+  }
+
+  .dl-item span {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dl-item small {
+    color: hsl(var(--muted-foreground));
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .dl-item:hover,
+  .dl-item[data-selected] {
+    background: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+  }
+
+  .dl-item:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+
+  .dl-separator {
+    height: 1px;
+    margin: 4px 5px;
+    border: 0;
+    background: hsl(var(--border));
+  }
+
+  /* Phones: the button takes the row and the menu its width. */
+  @media (max-width: 639px) {
+    .dl,
+    .dl-split {
+      width: min(100%, 320px);
+    }
+
+    .dl-menu {
+      width: 100%;
+    }
+  }
+</style>

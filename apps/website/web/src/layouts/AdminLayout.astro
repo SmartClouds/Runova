@@ -43,7 +43,7 @@ const links = [
   <body class="flex min-h-dvh flex-col">
     <a
       href="#main"
-      class="sr-only rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
+      class="sr-only rounded-full bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
     >
       Skip to content
     </a>
@@ -60,7 +60,7 @@ const links = [
                 <a
                   href={link.href}
                   aria-current={section === link.section ? 'page' : undefined}
-                  class="rounded-md px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:text-foreground"
+                  class="rounded-full px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:text-foreground"
                 >
                   {link.label}
                 </a>

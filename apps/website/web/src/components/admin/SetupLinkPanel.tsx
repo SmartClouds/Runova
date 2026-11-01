@@ -14,7 +14,7 @@ interface SetupLinkPanelProps {
  */
 export function SetupLinkPanel({ id, label, link }: SetupLinkPanelProps) {
   return (
-    <div className="grid gap-3 rounded-md border p-4">
+    <div className="grid gap-3 rounded-box border p-4">
       <CopyField
         id={id}
         label={label}

@@ -18,7 +18,7 @@ const { command, label } = Astro.props;
 
 <span
   class:list={[
-    'inline-flex max-w-full items-center gap-1 rounded-md border bg-background py-1 pr-1 pl-3 font-mono text-sm',
+    'inline-flex max-w-full items-center gap-1 rounded-full border bg-background py-1 pr-1 pl-3 font-mono text-sm',
     Astro.props.class,
   ]}
   data-copy-command
@@ -32,7 +32,7 @@ const { command, label } = Astro.props;
     data-copy-button
     data-copy-text={command}
     aria-label={`Copy the ${label}`}
-    class="relative inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-[120ms] hover:bg-secondary hover:text-foreground"
+    class="relative inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-[120ms] hover:bg-secondary hover:text-foreground"
   >
     <Icon name="copy" size={16} class="copy-icon" />
     <Icon name="check" size={16} class="copied-icon text-primary" />

@@ -1,88 +1,161 @@
 ---
+import { DOWNLOAD_SECTION, GITHUB_URL, NAV_LINKS, NAV_SECTIONS } from '../lib/nav';
 import Icon from './effects/Icon.astro';
+import NavPanel from './header/NavPanel.astro';
 import ThemeToggle from './ThemeToggle.astro';
+import './header/header.css';
 
-const NAV = [
-  { href: '/features', label: 'Features' },
-  { href: '/help', label: 'Help' },
-  { href: '/download', label: 'Download' },
-];
+// A glass bar with a menu: Features, News, Blog and Resources open panels (News and Blog with the
+// newest entries), Help is a plain link, and the Download button opens a panel of systems the same
+// way. Below 900px the menu moves into a full-screen sheet.
+// Behavior: src/components/header/menu.ts. Styles: src/components/header/header.css.
 
 const path = Astro.url.pathname;
-const isCurrent = (href: string) => path === href || path.startsWith(`${href}/`);
+const isCurrent = (href?: string) =>
+  href !== undefined && (path === href || path.startsWith(`${href}/`));
+const current = (href?: string) => (isCurrent(href) ? 'page' : undefined);
+const SHEET_SECTIONS = [DOWNLOAD_SECTION, ...NAV_SECTIONS];
 ---
 
-<header
-  class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70"
->
-  <div class="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-4 px-4 md:px-6">
-    <a href="/" class="flex items-center gap-2 font-display font-semibold text-lg tracking-tight">
+<header class="site-header sticky top-0 z-40 border-b" data-site-header>
+  <div class="site-header-inner mx-auto max-w-[1200px] px-4 md:px-6" data-mega data-state="closed">
+    <a href="/" class="flex items-center gap-2 justify-self-start font-display font-semibold text-lg tracking-tight">
       <img src="/favicon-32.png" alt="" width="24" height="24" class="rounded-[6px]" />
-      {/* Phones keep the mark alone, or three links and the toggle do not fit in 320px. */}
+      {/* Phones keep the mark alone, so the Download button and the menu fit in 320px. */}
       <span class="max-sm:sr-only">Runova</span>
     </a>
-    <nav aria-label="Main" class="flex items-center gap-1">
-      {
-        NAV.map(({ href, label }) => (
-          <a
-            href={href}
-            aria-current={isCurrent(href) ? 'page' : undefined}
-            class="nav-link relative rounded-md px-2 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:text-foreground sm:px-3"
-          >
-            {label}
-          </a>
-        ))
-      }
+
+    <nav aria-label="Main" class="mega" data-mega-zone>
+      <div class="mega-track" data-mega-track>
+        <span class="mega-pill" aria-hidden="true" data-mega-pill></span>
+        <ul class="mega-list">
+          {
+            NAV_SECTIONS.map((section) => (
+              <li data-mega-item>
+                {section.href ? (
+                  <a
+                    href={section.href}
+                    aria-current={current(section.href)}
+                    aria-expanded="false"
+                    aria-controls={`mega-${section.id}`}
+                    class="mega-trigger"
+                    data-mega-trigger
+                  >
+                    {section.label}
+                    <Icon name="chevron-down" size={12} class="mega-chevron" />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls={`mega-${section.id}`}
+                    class="mega-trigger"
+                    data-mega-trigger
+                  >
+                    {section.label}
+                    <Icon name="chevron-down" size={12} class="mega-chevron" />
+                  </button>
+                )}
+                <div id={`mega-${section.id}`} class="mega-panel" data-state="closed" inert>
+                  <NavPanel section={section} />
+                </div>
+              </li>
+            ))
+          }
+          {
+            NAV_LINKS.map((link) => (
+              <li data-mega-item>
+                <a
+                  href={link.href}
+                  aria-current={current(link.href)}
+                  class="mega-trigger mega-link"
+                  data-mega-trigger
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </nav>
+
+    <div class="site-header-actions">
+      {/* The one filled button in the header. On the home page the hero beam falls from it. */}
+      <div class="header-download-item" data-mega-zone data-mega-item>
+        <a
+          href="/download"
+          aria-current={current('/download')}
+          aria-expanded="false"
+          aria-controls={`mega-${DOWNLOAD_SECTION.id}`}
+          class="header-download inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground pr-2.5 pl-3.5 font-medium text-background text-sm transition-opacity duration-[120ms] hover:opacity-85"
+          data-mega-trigger
+          data-beam-source
+        >
+          <Icon name="download" size={14} class="max-sm:hidden" />
+          Download
+          <Icon name="chevron-down" size={12} class="mega-chevron" />
+        </a>
+        <div id={`mega-${DOWNLOAD_SECTION.id}`} class="mega-panel" data-state="closed" inert>
+          <NavPanel section={DOWNLOAD_SECTION} />
+        </div>
+      </div>
       <a
-        href="https://github.com/SmartClouds/Runova"
+        href={GITHUB_URL}
         rel="noopener"
         aria-label="Runova on GitHub"
         title="Runova on GitHub"
-        class="nav-link relative hidden size-9 items-center justify-center rounded-md text-muted-foreground transition-colors duration-[120ms] hover:text-foreground sm:inline-flex"
+        class="header-github header-glass inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors duration-[120ms] hover:text-foreground"
       >
         <Icon name="github" size={18} />
       </a>
       <ThemeToggle />
-    </nav>
+      <button
+        type="button"
+        class="menu-button"
+        aria-label="Open menu"
+        aria-expanded="false"
+        aria-controls="site-sheet"
+        data-menu-button
+      >
+        <span class="menu-line" aria-hidden="true"></span>
+        <span class="menu-line" aria-hidden="true"></span>
+      </button>
+      <div id="site-sheet" class="sheet" data-state="closed" data-sheet inert>
+        <nav aria-label="Site menu" class="sheet-content">
+          {
+            SHEET_SECTIONS.map((section, index) => (
+              <section class="sheet-section" style={`--i: ${index}`}>
+                <p class="sheet-heading">{section.label}</p>
+                <NavPanel section={section} />
+              </section>
+            ))
+          }
+          {
+            NAV_LINKS.map((link, index) => (
+              <div class="sheet-section" style={`--i: ${SHEET_SECTIONS.length + index}`}>
+                <a href={link.href} class="sheet-link">
+                  {link.label}
+                  <Icon name="arrow-right" size={16} />
+                </a>
+              </div>
+            ))
+          }
+          <div class="sheet-section sheet-actions" style={`--i: ${SHEET_SECTIONS.length + NAV_LINKS.length}`}>
+            <a href={GITHUB_URL} rel="noopener" class="header-glass text-foreground">
+              <Icon name="github" size={16} />
+              GitHub
+            </a>
+          </div>
+        </nav>
+      </div>
+    </div>
+    <div class="mega-surface" aria-hidden="true" data-mega-surface></div>
   </div>
 </header>
 
-<style>
-  /* A pill fades in behind a link on hover (the hover pattern from transitions.dev, Jakub
-     Antalik, written from scratch). The current page gets a small primary dot below it. */
-  .nav-link::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    background: hsl(var(--secondary));
-    opacity: 0;
-    transform: scale(0.92);
-    transition:
-      opacity 120ms var(--ease-exit),
-      transform 120ms var(--ease-exit);
-  }
+<script>
+  import { setUpHeader } from './header/menu';
 
-  .nav-link:hover::before {
-    opacity: 1;
-    transform: none;
-    transition-timing-function: var(--ease-enter);
-  }
-
-  .nav-link[aria-current="page"]::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: -0.3rem;
-    width: 4px;
-    height: 4px;
-    margin-left: -2px;
-    border-radius: 999px;
-    background: hsl(var(--primary));
-  }
-
-  nav {
-    isolation: isolate;
-  }
-</style>
+  setUpHeader(document.querySelector<HTMLElement>('[data-site-header]'));
+</script>

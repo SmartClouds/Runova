@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
+    "webgl-components": {
+      "source": "flornkm/skills",
+      "sourceType": "github",
+      "skillPath": "skills/webgl-components/SKILL.md",
+      "computedHash": "20e8085ec8ec205f2552924586a56dda3658ef3c36ec6ecddbe8b29540f528b9"
     }
   }
 }

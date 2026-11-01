@@ -107,9 +107,41 @@ describe('home page', () => {
     expect(html).not.toContain('<astro-island');
   });
 
-  it('sends visitors to /download from the hero and from the closing call to action', () => {
-    expect(section('hero')).toMatch(/<a[^>]* href="\/download"/);
-    expect(section('download')).toMatch(/<a[^>]* href="\/download"/);
+  it('leaves the download and GitHub buttons to the header, not the hero', () => {
+    const hero = section('hero');
+    expect(hero).not.toContain('data-download-split');
+    expect(hero).not.toMatch(/<a[^>]* href="\/download"/);
+    expect(hero).not.toContain('github.com');
+  });
+
+  describe('split download button', () => {
+    it('is in the closing call to action', () => {
+      expect(section('download')).toMatch(/<a[^>]* href="\/download"/);
+      expect(section('download')).toContain('data-download-split');
+    });
+
+    it('offers every desktop system in a menu that starts closed', () => {
+      const cta = section('download');
+      expect(cta).toMatch(
+        /<button[^>]* aria-haspopup="menu" aria-expanded="false" aria-controls="cta-download-menu"/,
+      );
+      expect(cta).toMatch(/<div[^>]* id="cta-download-menu" role="menu"[^>]* hidden/);
+      for (const os of ['windows', 'macos', 'linux']) {
+        expect(cta).toMatch(new RegExp(`role="menuitem" href="/download/${os}/latest"`));
+      }
+    });
+  });
+
+  it("lets the beam fall from the header's Download button", () => {
+    const header = /<header[\s\S]*?<\/header>/.exec(html)?.[0] ?? '';
+    expect(header).toMatch(/<a[^>]* href="\/download"[^>]* data-beam-source/);
+    expect(html.match(/data-beam-source/g)).toHaveLength(1);
+  });
+
+  it('has a canvas for the beam that screen readers skip', () => {
+    expect(section('hero')).toMatch(
+      /<div class="hero-beam[^"]*" aria-hidden="true" data-beam-stage[^>]*><canvas/,
+    );
   });
 
   it('explains what an ADE is, point by point', () => {

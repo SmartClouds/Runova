@@ -70,7 +70,7 @@ The site adds tokens of its own only for things the app does not have, and only 
 
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `--glow` | `150 100% 45%` | `150 100% 23%` | The light behind the hero workspace, the download card and the card spotlight (same as primary, kept separate so effects can be tuned without touching UI) |
+| `--glow` | `150 100% 45%` | `150 100% 23%` | The hero beam, the light behind the hero workspace, the download card and the card spotlight (same as primary, kept separate so effects can be tuned without touching UI) |
 
 ### Severity colors
 
@@ -122,9 +122,11 @@ All fonts are self-hosted through Fontsource packages (no request to a font CDN,
 
 - Content width 1200px with a 16px side gutter on phones and 24px from 768px up. No horizontal
   scroll at 320px wide.
-- Surfaces are flat: `--card` on `--background` with a 1px `--border`, `--radius` corners, and no
-  drop shadows except on popovers, the sticky header (a 1px border plus a backdrop blur), and the
-  soft `--glow` light under the hero workspace and the home page screenshots.
+- Surfaces are flat: `--card` on `--background` with a 1px `--border`, box corners (see Shapes), and no
+  drop shadows except on popovers, the sticky header and its menu (glass: a backdrop blur, a hairline
+  and, on the menu, a soft shadow), and the
+  soft `--glow` light under the hero workspace and the home page screenshots, and the open download
+  menu.
 - Screenshots sit in a frame that matches the app window (rounded corners, a thin border, the title
   bar visible), always with width and height set and real alt text from the manifest.
 - Links are never underlined. A link in running text is `--primary` at weight 500 (the `link`
@@ -134,6 +136,19 @@ All fonts are self-hosted through Fontsource packages (no request to a font CDN,
   `tests/noUnderline.test.ts` fails on any underline class or rule in `src/`. Buttons follow
   shadcn/ui's default and outline variants restyled with the tokens above.
 - Focus is always visible: a 2px `--ring` outline with a 2px offset, never removed.
+
+### Shapes
+
+Every button and box on the site has one of three shapes, set in `global.css`:
+
+| Shape | Radius | Used for |
+| --- | --- | --- |
+| Pill | `rounded-full` (999px in plain CSS) | Every button (the `Button` component and anything styled like one), chips, tags, badges, filters, pagers, the copy command and the header's menu labels |
+| Box | `rounded-box` / `--radius-box` (1rem) | Cards, panels, the header menu surface and the phone sheet, the download menu, dialogs, code blocks, callouts, screenshot frames and the hero workspace window |
+| Inner | `rounded-inner` / `--radius-inner` (0.625rem) | Anything inside a box (menu rows, icon tiles, images in a card, the panes of the hero workspace) and form fields |
+
+Text keeps its own small radius (inline code chips, the focus outline of a link), and the favicon
+keeps the rounding of the app icon. `tests/shapes.test.ts` fails on any other radius in `src/`.
 
 ## Effects
 
@@ -159,7 +174,84 @@ the hero is first on screen. Its states on `[data-hero]` are `idle`, `playing` a
 | [transitions.dev](https://transitions.dev) (Jakub Antalik) | Plain CSS transition snippets | Hover and press states (the header's hover pill, arrow nudges, the copy button), view transitions between pages |
 | [beUI](https://github.com/starc007/ui-components) (Saurabh Chauhan) | shadcn registry components | The hover spotlight on the home page's "Why an ADE" cards; allowed for the features index cards and the download page platform picker too |
 | [RareUI](https://rareui.in) (Codewithswappy) | React effect components | The one marquee of the supported AI CLIs on the home page |
+| [openbot.run](https://openbot.run) | Landing page (PolyForm Noncommercial, so nothing is copied) | The idea and look of the hero beam, the split download button and the header menu, all written from scratch |
 | [Beautiful UI](https://beautifului.dev) | Component site | Not used until a task checks its author and license against the working rules |
+
+### Hero beam
+
+The header's Download button (a filled pill on every page) is where the home page's light comes
+from (`src/components/effects/beam.ts`, a WebGL2 fragment shader on one canvas, no library). The
+pill lights up first (its `::after` ring, switched on by `data-beam-struck`; the rule is in
+`global.css`), then a thin line of `--glow` light drops from it down the right side of the hero and
+lands on the top edge of the workspace window with a short flash. From there the light flows like
+poured water: it spreads along the top edge both ways, fast at first and then slower, stops short of
+the far corner and pours over the nearer corner. There it leaves the edge as a sheet of thin streaks
+that widens as it falls, the way water drifts out off a ledge. After that it keeps moving: a slow
+pulse, ripples along the edge, streaks flowing down, haze drifting around the beam and a few specks
+of dust. The falling tip is rounded (the wider the glow, the earlier it fades), so it never ends in a
+flat line. The source sits in the sticky header, so the beam follows it while
+the page scrolls. At the top of the home page the header is see-through (`data-clear`), so the light
+shows behind it.
+
+The beam runs in both themes. In Dark it is light added to the page. Added light disappears on a
+light page, so in Light the shader draws the same shapes in Light's deeper `--glow` laid over the
+page, with less haze. Every part of it changes smoothly across the page (no `step()` or cut at a
+line outside the window), because a seam shows wherever the window does not cover it. The state is
+on `#hero` as `data-beam`:
+
+| State | When | What shows |
+|---|---|---|
+| `on` | Either theme | The shader, live |
+| `still` | Reduced motion | One still frame of the settled light |
+| `fallback` | No WebGL2, software rendering only, or a lost context | A CSS line of light from the header button to the window |
+
+It starts when the browser is idle, so it never delays the first paint. The pixel ratio is capped at
+1.5 and the canvas at 2000 device pixels on its long side. Frames after the intro run at about
+30fps, except for a moment after each scroll (so the beam keeps up with the header), and nothing is
+drawn while the hero is off screen or the tab is hidden.
+
+### Header menu
+
+The header (`src/components/Header.astro`, behavior in `src/components/header/menu.ts`, styles in
+`header.css`) is a glass bar: the logo, the menu labels on the bar itself, then Download (the filled
+pill the hero beam falls from), a glass GitHub button and the theme toggle. The glass is a layer
+behind the bar, not a backdrop filter on the header itself, so the phone sheet can cover the window
+and the menu can blur the page under it. At the top of the home page that layer is hidden
+(`data-clear`).
+
+The menu has Features, News, Blog and Resources, which open panels, and Help, a plain link. News
+and Blog show the three newest entries: the newest as a tall "Latest" card with a tinted art
+background (a post's cover when it has one) and the other two as rows with a summary line. The
+pages around the header are mostly prerendered, so the panels start as placeholders the size of
+the real cards and the browser reads `/nav/latest.json` (rendered per request, cached for a
+minute) the first time the visitor reaches for the menu. When the API is down a panel says so and
+still links to the section. Features and Resources are fixed tiles from `src/lib/nav.ts`.
+
+The Download button opens a panel the same way, on the same surface, so moving from Help to Download
+slides the glass across: Windows, macOS for Apple silicon, macOS for Intel and Linux, each through
+`/download/<os>/latest` (with the Mac's arch), plus "All builds and checksums". Clicking the button
+itself still goes to /download. On a phone the systems are the first section of the sheet instead.
+
+Hovering a label slides a pill behind it and opens its panel on one shared glass surface that grows
+out of the label. Moving to another label slides the surface over and resizes it, while the old
+panel slides out with a blur to one side and the new one slides in from the other, and on a fresh
+open the cards rise in one after another. Clicking a label with a page still goes to that page.
+From the keyboard, ArrowDown opens a panel and moves into it, Escape closes it and returns to the
+label, and the panels are out of the tab order while closed. Below 900px the menu becomes a round
+button that opens a full-screen glass sheet with the same panels stacked, each dropping in a moment
+after the one above.
+
+### Download button
+
+The home page's closing call to action has a download button that is one pill split in two
+(`src/components/home/DownloadSplit.astro`): the main link and a chevron that opens a menu of
+Windows, macOS and Linux, plus "All builds and checksums" for /download. The server sends "Download
+Runova" linking to /download; the browser then names the visitor's system ("Download for macOS")
+and links it to `/download/<os>/latest`, which redirects to that system's file in the latest
+release (the same pick as the main button on /download, or /download itself for a Mac of unknown
+arch). Picking a system in the menu downloads it and makes it the main link. The menu works with
+arrows, Home, End and Escape, and closes on a click outside. In Dark the pill is white with dark
+text, in Light the other way round.
 
 Not allowed anywhere: scroll hijacking, parallax on text, cursor followers, autoplaying video with
 sound, effects inside the admin area (it uses shadcn/ui only), and anything that moves while the
@@ -171,11 +263,14 @@ visitor reads body text.
   transitions, up to 800ms for a one-time entrance on the home page. Easing
   `cubic-bezier(0.2, 0, 0, 1)` for entrances and `cubic-bezier(0.4, 0, 1, 1)` for exits.
 - Animate only `transform` and `opacity` (and `filter` for the hero glow). Never animate layout
-  properties.
+  properties. One exception: the header menu's surface changes its width and height as it moves
+  between panels (it is empty and absolutely placed, so nothing else reflows), over 460ms, and its
+  panels blur in and out.
 - Entrances run once, when the element first scrolls into view, and never again on the same page.
 - The hero's run plays once, for about six seconds, and never again on the same page.
 - Nothing loops forever except the agent CLI marquee, which pauses under the pointer or keyboard
-  focus, and the shimmer of a loading state.
+  focus, the hero beam, which pauses off screen and in a hidden tab, and the shimmer of a loading
+  state.
 
 ### Reduced motion
 
@@ -184,7 +279,8 @@ With `prefers-reduced-motion: reduce`:
 - One global rule sets `animation: none` and `transition: none` on every element and pseudo-element,
   and turns off view transitions (`@view-transition { navigation: none; }`). T011 checks computed
   styles with Playwright.
-- The hero shows the finished run at once (`data-state="done"`) and nothing in it moves.
+- The hero shows the finished run at once (`data-state="done"`) and nothing in it moves. The beam is
+  one still frame of the settled light.
 - Count-ups show their final number, text reveals show the full text, the marquee is a static
   wrapped list.
 - Smooth scrolling is off (`scroll-behavior: auto`).

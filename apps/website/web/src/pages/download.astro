@@ -57,7 +57,7 @@ const buttonLabel = (asset: ReleaseAsset) =>
 
 const primaryButton = `${buttonVariants({ size: 'lg' })} h-auto flex-col items-start gap-0.5 py-3`;
 const link = 'link';
-const code = 'rounded bg-secondary px-1.5 py-0.5 font-mono text-secondary-foreground text-sm';
+const code = 'rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-secondary-foreground text-sm';
 ---
 
 <BaseLayout title="Download" description={description} jsonLd={[app]}>
@@ -193,7 +193,7 @@ const code = 'rounded bg-secondary px-1.5 py-0.5 font-mono text-secondary-foregr
       On Windows you can also install Runova from a terminal with the Windows Package Manager:
     </p>
     <pre
-      class="mt-4 overflow-x-auto rounded-lg border bg-card p-4 font-mono text-sm"><code>winget install SmartClouds.Runova</code></pre>
+      class="mt-4 overflow-x-auto rounded-box border bg-card p-4 font-mono text-sm"><code>winget install SmartClouds.Runova</code></pre>
   </section>
 
   <section id="requirements" aria-labelledby="requirements-title" class="border-t py-12 md:py-16">
@@ -201,17 +201,17 @@ const code = 'rounded bg-secondary px-1.5 py-0.5 font-mono text-secondary-foregr
       System requirements
     </h2>
     <ul class="mt-6 grid gap-4 md:grid-cols-3">
-      <li class="rounded-lg border bg-card p-6">
+      <li class="rounded-box border bg-card p-6">
         <h3 class="font-semibold text-lg">Windows</h3>
         <p class="mt-2 text-muted-foreground">Windows 10 or Windows 11, 64-bit (x64).</p>
       </li>
-      <li class="rounded-lg border bg-card p-6">
+      <li class="rounded-box border bg-card p-6">
         <h3 class="font-semibold text-lg">macOS</h3>
         <p class="mt-2 text-muted-foreground">
           macOS 12 Monterey or later, on Apple silicon or an Intel Mac.
         </p>
       </li>
-      <li class="rounded-lg border bg-card p-6">
+      <li class="rounded-box border bg-card p-6">
         <h3 class="font-semibold text-lg">Linux</h3>
         <p class="mt-2 text-muted-foreground">
           A 64-bit (x64) distribution with a desktop. The AppImage runs on most of them, and the

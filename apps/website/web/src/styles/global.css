@@ -47,6 +47,16 @@
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
+/* The site has three shapes (design.md, Shapes): buttons, chips and badges are pills
+   (rounded-full), boxes (cards, panels, menus, frames, dialogs) use --radius-box, and anything
+   that sits inside a box (a menu row, an icon tile, an image in a card) or is a form field uses
+   --radius-inner. Static, so plain CSS in components can use them too. tests/shapes.test.ts keeps
+   other radii out. */
+@theme static {
+  --radius-box: 1rem;
+  --radius-inner: 0.625rem;
+}
+
 /* The display face uses font-display: optional (design.md), so a slow font never moves the hero
    text. Fontsource's own CSS uses swap, so these two faces are declared here instead. */
 @font-face {
@@ -247,6 +257,29 @@
 [data-spotlight]:hover::before {
   opacity: 1;
   transition-timing-function: var(--ease-enter);
+}
+
+/* The element the home page beam falls from (src/components/effects/beam.ts) glows around its
+   rim once the light reaches it. */
+[data-beam-source] {
+  position: relative;
+}
+
+[data-beam-source]::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow:
+    0 0 12px 2px hsl(var(--glow) / 0.6),
+    0 0 0 1px hsl(var(--glow) / 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms var(--ease-enter);
+}
+
+[data-beam-source][data-beam-struck]::after {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {

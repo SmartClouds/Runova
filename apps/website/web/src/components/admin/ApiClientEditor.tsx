@@ -226,7 +226,7 @@ export default function ApiClientEditor({ id, navigate = goTo }: ApiClientEditor
         <p
           ref={revokedNote}
           tabIndex={-1}
-          className="rounded-md border p-4 text-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
+          className="rounded-box border p-4 text-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
         >
           This client was revoked on {formatTime(client.revokedAt)}. Its keys no longer sign
           anything, and it can not be used again.

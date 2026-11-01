@@ -2,8 +2,8 @@
 import AppScreenshot from '../components/AppScreenshot.astro';
 import CopyCommand from '../components/CopyCommand.astro';
 import Icon from '../components/effects/Icon.astro';
+import DownloadSplit from '../components/home/DownloadSplit.astro';
 import HeroDemo from '../components/home/HeroDemo.astro';
-import { buttonVariants } from '../components/ui/button';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../lib/home';
 import { softwareApplication } from '../lib/seo';
@@ -14,8 +14,13 @@ const description =
 
 const app = softwareApplication(site);
 
-const primaryButton = buttonVariants({ size: 'lg' });
-const outlineButton = buttonVariants({ variant: 'outline', size: 'lg' });
+// The systems the desktop app ships for, in the order the download menu lists them.
+const PLATFORMS: Array<{ label: string; mark: 'apple' | 'windows' | 'linux' }> = [
+  { label: 'macOS', mark: 'apple' },
+  { label: 'Windows', mark: 'windows' },
+  { label: 'Linux', mark: 'linux' },
+];
+
 const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03em]';
 ---
 
@@ -26,14 +31,29 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     class="hero relative -mx-4 px-4 pt-12 pb-16 md:-mx-6 md:px-6 md:pt-16 md:pb-24"
   >
     <div class="hero-backdrop" aria-hidden="true"></div>
+    <div class="hero-beam" aria-hidden="true" data-beam-stage><canvas></canvas></div>
     <div class="mx-auto flex max-w-[56rem] flex-col items-center text-center">
-      <p
-        class="hero-rise inline-flex items-center gap-2 rounded-full border bg-card/60 px-3 py-1 font-mono text-muted-foreground text-xs"
+      <div
+        class="hero-rise platforms inline-flex items-center gap-2.5 rounded-full border bg-card/60 py-1 pr-4 pl-1 text-muted-foreground text-xs backdrop-blur max-[359px]:gap-1.5 max-[359px]:pr-3 max-[359px]:text-[0.7rem] sm:gap-3 sm:text-sm"
         style="--order: 0"
       >
-        <span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
-        <span><span class="max-sm:hidden">Runova, the </span>Agentic Development Environment</span>
-      </p>
+        <span
+          class="rounded-full bg-foreground px-2.5 py-1 font-semibold text-[0.65rem] text-background uppercase tracking-[0.08em]"
+        >
+          Free
+        </span>
+        <span class="max-sm:hidden">Available on</span>
+        <ul class="flex items-center">
+          {
+            PLATFORMS.map((platform) => (
+              <li class="flex items-center gap-1.5 font-semibold text-foreground">
+                <Icon name={platform.mark} size={14} />
+                {platform.label}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
       <h1
         id="hero-title"
         class="hero-rise mt-6 text-balance font-extrabold text-[clamp(2.75rem,8.5vw,6.25rem)] leading-[0.98] tracking-[-0.035em]"
@@ -49,18 +69,8 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
         diffs, tests and pipelines sit right next to the agents, so a change goes from prompt to
         commit without leaving the app.
       </p>
-      <div class="hero-rise mt-9 flex flex-wrap items-center justify-center gap-3" style="--order: 4">
-        <a href="/download" class:list={[primaryButton, 'group']}>
-          Download Runova
-          <Icon name="arrow-right" size={16} class="nudge" />
-        </a>
-        <a href="https://github.com/SmartClouds/Runova" class={outlineButton} rel="noopener">
-          <Icon name="github" size={16} />
-          Source on GitHub
-        </a>
-      </div>
-      <p class="hero-rise mt-4 text-muted-foreground text-sm" style="--order: 5">
-        Free and open source (MIT), for Windows, macOS and Linux.
+      <p class="hero-rise mt-5 text-muted-foreground text-sm" style="--order: 4">
+        Open source under the MIT license.
       </p>
     </div>
     <HeroDemo class="hero-rise mt-12 md:mt-14" />
@@ -85,11 +95,11 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
             data-spotlight
             style={`--reveal-order: ${index}`}
             class:list={[
-              'ade-card rounded-xl border bg-card p-6 transition-colors duration-[120ms] hover:border-primary/40 md:p-7',
+              'ade-card rounded-box border bg-card p-6 transition-colors duration-[120ms] hover:border-primary/40 md:p-7',
               index === 0 && 'sm:col-span-2',
             ]}
           >
-            <span class="inline-flex size-10 items-center justify-center rounded-lg border bg-background text-primary">
+            <span class="inline-flex size-10 items-center justify-center rounded-inner border bg-background text-primary">
               <Icon name={point.icon} size={20} />
             </span>
             <h3
@@ -167,7 +177,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
           [false, true].map((copy) => (
             <ul class="marquee-list" aria-hidden={copy ? 'true' : undefined} data-copy={copy ? '' : undefined}>
               {AGENT_CLIS.map((cli) => (
-                <li class="rounded-lg border bg-card px-4 py-2 font-mono text-sm whitespace-nowrap">{cli}</li>
+                <li class="rounded-full border bg-card px-4 py-2 font-mono text-sm whitespace-nowrap">{cli}</li>
               ))}
             </ul>
           ))
@@ -179,7 +189,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
   <section id="download" aria-labelledby="download-title" class="py-16 md:py-24">
     <div
       data-reveal
-      class="cta relative overflow-hidden rounded-2xl border bg-card px-6 py-14 text-center md:px-12 md:py-20"
+      class="cta relative rounded-box border bg-card px-6 py-14 text-center md:px-12 md:py-20"
     >
       <h2 id="download-title" class="font-extrabold text-[clamp(2rem,5vw,3.5rem)] tracking-[-0.035em]">
         Get Runova
@@ -188,10 +198,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
         Installers for Windows, macOS and Linux, with updates from inside the app.
       </p>
       <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <a href="/download" class:list={[primaryButton, 'group']}>
-          Download Runova
-          <Icon name="arrow-right" size={16} class="nudge" />
-        </a>
+        <DownloadSplit id="cta-download" />
       </div>
       <p class="mt-6 text-muted-foreground text-sm">On Windows:</p>
       <CopyCommand class="mt-2" command="winget install SmartClouds.Runova" label="winget command" />
@@ -200,11 +207,29 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
 </BaseLayout>
 
 <script>
+  import { setUpBeamWhenIdle } from '../components/effects/beam';
   import { setUpReveal } from '../components/effects/reveal';
   import { setUpSpotlight } from '../components/effects/spotlight';
+  import { setUpDownloadSplits } from '../components/home/downloadSplit';
 
   setUpReveal();
   setUpSpotlight();
+  setUpDownloadSplits();
+
+  // The beam falls from the header's Download button onto the workspace window.
+  const host = document.querySelector<HTMLElement>('#hero');
+  const stage = host?.querySelector<HTMLElement>('[data-beam-stage]');
+  const surface = host?.querySelector<HTMLElement>('.demo-window');
+  const header = document.querySelector<HTMLElement>('body > header');
+  const source = header?.querySelector<HTMLElement>('[data-beam-source]');
+  if (host && stage && source && surface) setUpBeamWhenIdle({ host, stage, source, surface });
+
+  // At the top of the page the header is see-through, so the light shows behind it.
+  if (header) {
+    const clear = () => header.toggleAttribute('data-clear', scrollY < 8);
+    clear();
+    addEventListener('scroll', clear, { passive: true });
+  }
 </script>
 
 <style>
@@ -223,17 +248,88 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
       radial-gradient(ellipse 70% 50% at 50% 0%, hsl(var(--glow) / 0.07), transparent 70%);
   }
 
+  /* The beam (src/components/effects/beam.ts). It spans the whole window, from the top edge of the
+     window (where the header's Download button sits) down through the hero, and fades out at the
+     bottom. */
+  :global(body) {
+    overflow-x: clip;
+  }
+
+  .hero-beam {
+    position: absolute;
+    top: -3.5rem;
+    bottom: 0;
+    left: 50%;
+    z-index: -1;
+    width: 100vw;
+    pointer-events: none;
+    transform: translateX(-50%);
+    mask-image: linear-gradient(black 75%, transparent);
+  }
+
+  .hero-beam canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* The shader draws its own light, so the soft glow steps back while it runs. */
+  .hero[data-beam="on"] .hero-backdrop,
+  .hero[data-beam="still"] .hero-backdrop {
+    display: none;
+  }
+
+  :global(header[data-clear]) {
+    border-color: transparent;
+    background: transparent;
+    backdrop-filter: none;
+    transition:
+      background-color 200ms var(--ease-enter),
+      border-color 200ms var(--ease-enter);
+  }
+
+  /* No WebGL2 (or a lost context): a still line of light in the same place. */
+  .hero[data-beam="fallback"] .hero-beam::before {
+    content: "";
+    position: absolute;
+    top: var(--beam-from, 0);
+    left: calc(var(--beam-x, 50%) - 40px);
+    width: 80px;
+    height: calc(var(--beam-to, 40%) - var(--beam-from, 0px) + 12px);
+    background:
+      linear-gradient(90deg, transparent 49.4%, hsl(var(--glow) / 0.9) 50%, transparent 50.6%),
+      radial-gradient(ellipse 50% 100% at 50% 100%, hsl(var(--glow) / 0.5), transparent 70%);
+  }
+
   .hero-tail {
     color: hsl(var(--muted-foreground));
   }
 
-  /* The opening sequence: eyebrow, headline, its second half, lead, buttons, note, then the
+  /* A small dot between the systems in the pill above the headline. */
+  .platforms li + li::before {
+    content: "";
+    width: 3px;
+    height: 3px;
+    margin-inline: 0.5rem 0.125rem;
+    border-radius: 9999px;
+    background: hsl(var(--muted-foreground) / 0.6);
+  }
+
+  @media (max-width: 359px) {
+    .platforms li + li::before {
+      margin-inline: 0.3rem 0;
+    }
+  }
+
+  /* The opening sequence: eyebrow, headline, its second half, lead, note, then the
      workspace. It starts at opacity 0.01, never 0, so the headline still counts as the largest
      paint for LCP. */
   @media (prefers-reduced-motion: no-preference) {
     :global(.hero-rise) {
       animation: hero-rise 800ms var(--ease-enter) both;
-      animation-delay: calc(var(--order, 6) * 90ms);
+      animation-delay: calc(var(--order, 5) * 90ms);
     }
 
     .hero-tail {
@@ -326,11 +422,14 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     }
   }
 
+  /* The card does not clip its content, so the download menu can open past its edge; the light
+     keeps to the rounded corners by itself. */
   .cta::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: 0;
+    border-radius: inherit;
     pointer-events: none;
     background:
       radial-gradient(ellipse 60% 55% at 50% 0%, hsl(var(--glow) / 0.18), transparent 70%),

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import type { TestDiscovery, TestRunEvent } from '@runova/core';
+import type { TestDiscovery, TestRunEvent, TestTarget } from '@runova/core';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../toolPaths', () => ({
@@ -374,6 +374,85 @@ describe('TestRunManager', () => {
     });
     await manager.whenIdle('p1');
     expect(asked).toEqual([true]);
+  });
+
+  describe('a run that breaks part way', () => {
+    async function brokenRun(lines: string[]) {
+      await write(
+        join(root, 'web', 'src', 'strings.test.ts'),
+        "it('trims', () => {});\nit('pads', () => {});\n",
+      );
+      const discovery = await discoverWorkspaceTests(root);
+      const events: TestRunEvent[] = [];
+      const manager = new TestRunManager({
+        emit: (event) => events.push(event),
+        spawn: async (options) => {
+          for (const line of lines) options.onLine?.(line);
+          return { code: null, log: '', timedOut: true, cancelled: false, notFound: false };
+        },
+        outputFlushMs: 10,
+      });
+      const start = (targets: TestTarget[]) => {
+        manager.start({ projectId: 'p1', folderPath: root, discovery, targets });
+        return manager.whenIdle('p1');
+      };
+      return { events, start };
+    }
+
+    it('keeps the tests it never got to, so "Run failed" does not run the passed ones again', async () => {
+      const { events, start } = await brokenRun([
+        ' ✓ src/math.test.ts > math > adds 2ms',
+        ' × src/math.test.ts > math > breaks 3ms',
+        ' ✓ src/strings.test.ts > trims 1ms',
+      ]);
+      await start([{ testProjectId: 'vitest:web' }]);
+      const done = events[events.length - 1];
+      if (done.type !== 'done') throw new Error('the run never finished');
+      expect(done.summary.errors).toEqual([
+        expect.objectContaining({
+          kind: 'timedOut',
+          testProjectId: 'vitest:web',
+          unfinished: { files: [], tests: [{ file: 'web/src/strings.test.ts', path: ['pads'] }] },
+        }),
+      ]);
+
+      // What the panel sends back: the failure plus what was left, and only those wait on the run.
+      events.length = 0;
+      await start([
+        {
+          testProjectId: 'vitest:web',
+          tests: [
+            { file: 'web/src/math.test.ts', path: ['math', 'breaks'] },
+            ...(done.summary.errors[0].unfinished?.tests ?? []),
+          ],
+        },
+      ]);
+      expect(events[0]).toMatchObject({
+        type: 'started',
+        queued: [
+          'vitest:web::web/src/math.test.ts::math > breaks',
+          'vitest:web::web/src/strings.test.ts::pads',
+        ],
+      });
+    });
+
+    it('hands back a file none of whose tests ran as the file', async () => {
+      const { events, start } = await brokenRun([' ✓ src/math.test.ts > math > adds 2ms']);
+      await start([{ testProjectId: 'vitest:web' }]);
+      const done = events[events.length - 1];
+      expect(done.type === 'done' && done.summary.errors[0].unfinished).toEqual({
+        files: ['web/src/strings.test.ts'],
+        tests: [{ file: 'web/src/math.test.ts', path: ['math', 'breaks'] }],
+      });
+    });
+
+    it('leaves the list out when nothing was reported, so the whole project runs again', async () => {
+      const { events, start } = await brokenRun([]);
+      await start([{ testProjectId: 'vitest:web' }]);
+      const done = events[events.length - 1];
+      expect(done.type === 'done' && done.summary.errors[0]).toMatchObject({ kind: 'timedOut' });
+      expect(done.type === 'done' && 'unfinished' in done.summary.errors[0]).toBe(false);
+    });
   });
 
   it('describes the command a single test would run with', async () => {

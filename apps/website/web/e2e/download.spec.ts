@@ -149,7 +149,9 @@ test.describe('download page', () => {
 
   test('is reached from the home page', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#hero').getByRole('link', { name: 'Download Runova' }).click();
+    // The main button downloads at once; every build is one step away in its menu.
+    await page.locator('#download [data-download-trigger]').click();
+    await page.getByRole('menuitem', { name: 'All builds and checksums' }).first().click();
     await expect(page).toHaveURL(/\/download$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Download Runova' })).toBeVisible();
   });

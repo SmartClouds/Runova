@@ -1,0 +1,904 @@
+/* The site header: a glass bar with a menu whose panels open in one shared glass surface. The
+   surface grows and slides from one panel to the next, and each panel slides in from the side the
+   pointer came from. The idea and look follow openbot.run (docs/website/design.md, Sources), written
+   from scratch. Global, not scoped, because src/components/header/latest.ts builds part of the
+   panels in the browser. */
+
+/* Closed panels still take up room off to the side; clipping sideways keeps them from widening the
+   page. Open panels are always kept 16px inside the window, so nothing visible is cut. */
+.site-header {
+  overflow-x: clip;
+  --mega-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --mega-gap: 10px;
+  --mega-radius: var(--radius-box);
+  --hairline: hsl(var(--foreground) / 0.09);
+  --surface-shadow:
+    0 10px 20px -12px hsl(220 20% 10% / 0.18), 0 28px 56px -20px hsl(220 20% 10% / 0.22);
+}
+
+.dark .site-header {
+  --surface-shadow: 0 10px 20px -10px hsl(0 0% 0% / 0.5), 0 30px 60px -18px hsl(0 0% 0% / 0.6);
+}
+
+/* The glass sits on a layer behind the bar, not on the header itself. A backdrop filter on the
+   header would make it the box the phone sheet (position: fixed) is sized to, and the dropdown
+   could only blur what is inside the header. */
+.site-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: hsl(var(--background) / 0.62);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  transition: opacity 200ms var(--ease-enter);
+}
+
+/* At the top of the home page the bar is clear, so the hero light shows through. */
+.site-header[data-clear]::before {
+  opacity: 0;
+}
+
+.site-header-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  height: 3.5rem;
+}
+
+.site-header-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A see-through button with a lit top edge, next to the filled Download button. */
+.header-glass {
+  background: linear-gradient(hsl(var(--foreground) / 0.08), hsl(var(--foreground) / 0.02));
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    inset 0 1px 0 hsl(var(--foreground) / 0.12);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .header-glass:hover {
+    background: linear-gradient(hsl(var(--foreground) / 0.12), hsl(var(--foreground) / 0.04));
+  }
+}
+
+/* The menu bar: the labels sit on the bar itself, with a pill that follows the pointer. */
+.mega {
+  position: relative;
+}
+
+.mega-track {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.mega-list {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mega-pill {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: var(--pill-w, 0);
+  height: calc(100% - 8px);
+  border-radius: 999px;
+  background: hsl(var(--foreground) / 0.08);
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.07),
+    0 1px 2px hsl(0 0% 0% / 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--pill-x, 0));
+  transition:
+    transform 300ms var(--mega-ease),
+    width 300ms var(--mega-ease),
+    opacity 160ms ease;
+}
+
+.mega-pill[data-shown] {
+  opacity: 1;
+}
+
+.mega-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: hsl(var(--muted-foreground));
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.mega-link {
+  padding: 0 14px;
+}
+
+.mega-trigger[aria-expanded="true"],
+.mega-trigger[aria-current="page"] {
+  color: hsl(var(--foreground));
+}
+
+.mega-trigger:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.mega-chevron {
+  opacity: 0.55;
+  transition:
+    transform 460ms var(--mega-ease),
+    opacity 160ms ease;
+}
+
+.mega-trigger[aria-expanded="true"] .mega-chevron {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mega-trigger:hover {
+    color: hsl(var(--foreground));
+  }
+}
+
+/* The Download button opens a panel like the menu's labels, so it holds one too. */
+.header-download-item {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The shared glass the open panel sits on, for the menu and the Download button alike. Its size and
+   place come from the script (--sx, --sy, --sw, --sh), and it grows out of the label that opened
+   it (--so). */
+.mega-surface {
+  position: absolute;
+  top: var(--sy, calc(100% + var(--mega-gap)));
+  left: 0;
+  width: var(--sw, 0);
+  height: var(--sh, 0);
+  overflow: hidden;
+  border-radius: var(--mega-radius);
+  background: hsl(var(--popover) / 0.72);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow:
+    0 0 0 1px var(--hairline),
+    inset 0 1px 0 hsl(var(--foreground) / 0.07),
+    var(--surface-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--sx, 0)) translateY(-8px) scale(0.95);
+  transform-origin: var(--so, 50%) top;
+  transition:
+    opacity 180ms ease,
+    transform 220ms var(--mega-ease),
+    width 460ms var(--mega-ease),
+    height 460ms var(--mega-ease);
+}
+
+/* A soft green light at the top edge, right under the label that is open. */
+.mega-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    60% 50% at var(--so, 50%) 0%,
+    hsl(var(--glow) / 0.1),
+    transparent 70%
+  );
+}
+
+[data-mega][data-state="open"] .mega-surface {
+  opacity: 1;
+  transform: translateX(var(--sx, 0));
+  transition:
+    opacity 240ms ease,
+    transform 460ms var(--mega-ease),
+    width 460ms var(--mega-ease),
+    height 460ms var(--mega-ease);
+}
+
+.mega-pill[data-instant],
+.mega-surface[data-instant] {
+  transition: none;
+}
+
+.mega-panel {
+  --shift: 0px;
+  --rise: 0px;
+  position: absolute;
+  top: calc(100% + var(--mega-gap));
+  left: 0;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mega-panel[data-state="open"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Fills the gap between the bar and the panel, so the pointer can cross it. */
+.mega-panel[data-state="open"]::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--mega-gap) + 6px);
+}
+
+.mega-panel[data-motion="from-start"],
+.mega-panel[data-motion="to-start"] {
+  --shift: -36px;
+}
+
+.mega-panel[data-motion="from-end"],
+.mega-panel[data-motion="to-end"] {
+  --shift: 36px;
+}
+
+.mega-panel[data-motion="enter"] {
+  --rise: -6px;
+  animation: mega-in 420ms var(--mega-ease) 30ms both;
+}
+
+.mega-panel[data-motion="exit"] {
+  --rise: -4px;
+  animation: mega-out 180ms var(--ease-exit) both;
+}
+
+.mega-panel[data-motion="from-start"],
+.mega-panel[data-motion="from-end"] {
+  animation: mega-in 460ms var(--mega-ease) both;
+}
+
+.mega-panel[data-motion="to-start"],
+.mega-panel[data-motion="to-end"] {
+  animation: mega-out 300ms var(--mega-ease) both;
+}
+
+/* The newest entries fade in when they replace the placeholders. */
+.mp-latest[data-ready] > * {
+  animation: mp-fresh 360ms var(--mega-ease) both;
+}
+
+.mp-latest[data-ready] > :nth-child(2) {
+  animation-delay: 60ms;
+}
+
+@keyframes mp-fresh {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+/* On a fresh open the cards rise in one after another. */
+.mega-panel[data-motion="enter"] .mp-body > *,
+.mega-panel[data-motion="enter"] .mp-grid > li,
+.mega-panel[data-motion="enter"] .mp-list > li {
+  animation: mp-rise 520ms var(--mega-ease) both;
+}
+
+.mega-panel[data-motion="enter"] .mp-grid > li:nth-child(2),
+.mega-panel[data-motion="enter"] .mp-list > li:nth-child(1) {
+  animation-delay: 70ms;
+}
+
+.mega-panel[data-motion="enter"] .mp-grid > li:nth-child(3),
+.mega-panel[data-motion="enter"] .mp-grid > li:nth-child(4),
+.mega-panel[data-motion="enter"] .mp-list > li:nth-child(2) {
+  animation-delay: 110ms;
+}
+
+.mega-panel[data-motion="enter"] .mp-grid > li:nth-child(5),
+.mega-panel[data-motion="enter"] .mp-grid > li:nth-child(6) {
+  animation-delay: 150ms;
+}
+
+@keyframes mega-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translate(var(--shift), var(--rise));
+  }
+}
+
+@keyframes mega-out {
+  from {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  to {
+    opacity: 0;
+    visibility: hidden;
+    filter: blur(8px);
+    transform: translate(var(--shift), var(--rise));
+  }
+}
+
+@keyframes mp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* A panel: cards or tiles, then a footer row with a summary and a link to the whole section. */
+.mp {
+  display: flex;
+  flex-direction: column;
+  width: 580px;
+  padding: 8px;
+}
+
+.mp[data-kind="links"] {
+  width: 540px;
+}
+
+.mp a:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.mp-list,
+.mp-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-latest {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 6px;
+  min-height: 212px;
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.mp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The tints of the art, from the theme's own colors. */
+[data-tone] {
+  --tone-a: var(--glow);
+  --tone-b: var(--severity-low);
+}
+
+[data-tone="security"] {
+  --tone-a: var(--severity-critical);
+  --tone-b: var(--severity-high);
+}
+
+[data-tone="deprecation"] {
+  --tone-a: var(--severity-medium);
+  --tone-b: var(--severity-high);
+}
+
+[data-tone="end-of-life"] {
+  --tone-a: var(--severity-high);
+  --tone-b: var(--severity-critical);
+}
+
+[data-tone="ai"] {
+  --tone-a: var(--severity-info);
+  --tone-b: var(--glow);
+}
+
+[data-tone="tooling"] {
+  --tone-a: var(--severity-low);
+  --tone-b: var(--severity-info);
+}
+
+[data-tone="industry"] {
+  --tone-a: var(--severity-info);
+  --tone-b: var(--severity-medium);
+}
+
+.mp-art,
+.mp-row-art {
+  background:
+    radial-gradient(circle at 22% 24%, hsl(var(--tone-a) / 0.9), transparent 55%),
+    radial-gradient(circle at 80% 20%, hsl(var(--tone-b) / 0.75), transparent 52%),
+    radial-gradient(circle at 30% 85%, hsl(var(--tone-b) / 0.55), transparent 58%),
+    radial-gradient(circle at 86% 78%, hsl(var(--tone-a) / 0.6), transparent 54%),
+    linear-gradient(135deg, hsl(var(--tone-b) / 0.5), hsl(var(--card)));
+}
+
+/* The newest entry: a tall card with its art behind the title. */
+.mp-feature {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 212px;
+  padding: 14px;
+  overflow: hidden;
+  border-radius: var(--radius-inner);
+  color: hsl(var(--foreground));
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.mp-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  transition: transform 700ms var(--mega-ease);
+}
+
+.mp-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Darkens toward the title so it reads on any art, in either theme. */
+.mp-feature::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(transparent 25%, hsl(var(--popover) / 0.94));
+}
+
+.mp-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: hsl(var(--popover) / 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.14);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.mp-feature-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.mp-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mp-row,
+.mp-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--radius-inner);
+  color: hsl(var(--foreground));
+  transition: background-color 160ms ease;
+}
+
+.mp-row {
+  align-items: flex-start;
+}
+
+.mp-row-art,
+.mp-mark {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: var(--radius-inner);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  transition: transform 300ms var(--mega-ease);
+}
+
+.mp-row-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mp-mark {
+  display: grid;
+  place-items: center;
+  color: hsl(var(--tone-a));
+  background:
+    radial-gradient(circle at 30% 25%, hsl(var(--tone-a) / 0.28), transparent 70%),
+    linear-gradient(135deg, hsl(var(--tone-b) / 0.16), hsl(var(--foreground) / 0.03));
+}
+
+.mp-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.mp-summary {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-meta {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-feature .mp-meta {
+  color: hsl(var(--foreground) / 0.72);
+}
+
+.mp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 8px -8px -8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0 0 var(--mega-radius) var(--mega-radius);
+  background: hsl(var(--foreground) / 0.02);
+}
+
+.mp-footer .mp-summary {
+  white-space: normal;
+}
+
+.mp-index {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin: -6px -10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: hsl(var(--foreground));
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: background-color 160ms ease;
+}
+
+.mp-index svg {
+  transition: transform 300ms var(--mega-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mp-row:hover,
+  .mp-tile:hover,
+  .mp-index:hover {
+    background: hsl(var(--foreground) / 0.06);
+  }
+
+  .mp-feature:hover .mp-art,
+  .mp-row:hover .mp-row-art,
+  .mp-tile:hover .mp-mark {
+    transform: scale(1.06);
+  }
+
+  .mp-index:hover svg {
+    transform: translateX(3px);
+  }
+}
+
+/* Placeholders while the newest entries load, and the note when there are none. */
+.mp-skeleton {
+  border-radius: var(--radius-inner);
+  background:
+    linear-gradient(100deg, transparent 30%, hsl(var(--foreground) / 0.06) 50%, transparent 70%) 0 0
+    / 200% 100%,
+    hsl(var(--foreground) / 0.05);
+  animation: mp-shimmer 1.4s linear infinite;
+}
+
+.mp-feature.mp-skeleton {
+  border-radius: var(--radius-inner);
+}
+
+.mp-skeleton-line {
+  display: block;
+  height: 10px;
+  margin: 4px 0;
+  border-radius: 999px;
+  width: 85%;
+}
+
+.mp-skeleton-short {
+  width: 45%;
+}
+
+@keyframes mp-shimmer {
+  to {
+    background-position:
+      -200% 0,
+      0 0;
+  }
+}
+
+.mp-message {
+  grid-column: 1 / -1;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  min-height: 212px;
+  padding: 24px;
+  border-radius: var(--radius-inner);
+  background: hsl(var(--foreground) / 0.03);
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  text-align: center;
+}
+
+/* The phone menu: a round button and a full-screen glass sheet. */
+.menu-button,
+.sheet {
+  display: none;
+}
+
+@media (width < 900px) {
+  .site-header-inner {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .mega,
+  .header-github {
+    display: none;
+  }
+
+  /* On a phone a tap on Download goes to /download; its systems are in the sheet. */
+  .header-download .mega-chevron {
+    display: none;
+  }
+
+  .menu-button {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: hsl(var(--foreground) / 0.05);
+    box-shadow: 0 0 0 1px var(--hairline);
+    color: hsl(var(--foreground));
+    cursor: pointer;
+  }
+
+  .menu-button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  .menu-line {
+    position: absolute;
+    width: 15px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: translateY(-3.5px);
+    transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .menu-line + .menu-line {
+    transform: translateY(3.5px);
+  }
+
+  .menu-button[aria-expanded="true"] .menu-line {
+    transform: rotate(45deg);
+  }
+
+  .menu-button[aria-expanded="true"] .menu-line + .menu-line {
+    transform: rotate(-45deg);
+  }
+
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    padding: calc(3.5rem + 16px) 16px 32px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: hsl(var(--background) / 0.84);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 220ms ease,
+      visibility 0s linear 220ms;
+  }
+
+  .sheet[data-state="open"] {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 260ms ease;
+  }
+
+  .sheet-content {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  /* Each section drops in a moment after the one above it. */
+  .sheet-section {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(-12px);
+    transition:
+      opacity 200ms ease,
+      filter 200ms ease,
+      transform 200ms ease;
+  }
+
+  .sheet[data-state="open"] .sheet-section {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition:
+      opacity 380ms ease,
+      filter 460ms var(--mega-ease),
+      transform 560ms var(--mega-ease);
+    transition-delay: calc(var(--i, 0) * 50ms + 40ms);
+  }
+
+  .sheet-heading {
+    margin: 0 0 8px 6px;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .sheet .mp {
+    width: auto;
+    padding: 6px;
+    border-radius: var(--radius-box);
+    background: hsl(var(--foreground) / 0.03);
+    box-shadow: 0 0 0 1px var(--hairline);
+  }
+
+  .sheet .mp-latest {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .sheet .mp-feature {
+    min-height: 140px;
+  }
+
+  .sheet .mp-message {
+    min-height: 96px;
+  }
+
+  .sheet .mp-footer {
+    margin: 6px -6px -6px;
+    border-radius: 0 0 var(--radius-box) var(--radius-box);
+  }
+
+  .sheet-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-radius: var(--radius-box);
+    background: hsl(var(--foreground) / 0.03);
+    box-shadow: 0 0 0 1px var(--hairline);
+    color: hsl(var(--foreground));
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .sheet-link svg {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .sheet-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .sheet-actions > a {
+    display: inline-flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+@media (width < 480px) {
+  .sheet .mp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+html.sheet-open {
+  overflow: hidden;
+}
+
+/* Reduced motion: global.css already stops every animation and transition, so the menu opens and
+   closes at once. Only the movement is left out here, so nothing sits mid-way. */
+@media (prefers-reduced-motion: reduce) {
+  .mega-surface,
+  [data-mega][data-state="open"] .mega-surface {
+    transform: translateX(var(--sx, 0));
+  }
+
+  .sheet-section {
+    filter: none;
+    transform: none;
+  }
+}

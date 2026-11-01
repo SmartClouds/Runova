@@ -172,16 +172,29 @@ function failedTargets(results: TestResult[]): TestTarget[] {
 }
 
 /**
- * What "Run failed" reruns: the failed tests and files, plus every test project that could not run.
- * A project that never reported results has nothing finer to target, and one that broke part way is
- * rerun whole so its failed tests do not run twice.
+ * What "Run failed" reruns: the failed tests and files, plus what every test project that could not
+ * run left undone. A project that broke part way reruns its failures and the tests it never got to,
+ * not the ones that already passed. One that never reported anything, or broke with nothing left to
+ * run and nothing failed, has nothing finer to target and runs whole.
  */
 function retryTargets(results: TestResult[], errors: TestRunError[]): TestTarget[] {
-  const broken = new Set(errors.map((error) => error.testProjectId));
-  return [
-    ...failedTargets(results.filter((result) => !broken.has(result.testProjectId))),
-    ...[...broken].map((testProjectId) => ({ testProjectId })),
-  ];
+  const targets = failedTargets(results);
+  for (const error of errors) {
+    const at = targets.findIndex((target) => target.testProjectId === error.testProjectId);
+    const left = error.unfinished;
+    const leftCount = (left?.files.length ?? 0) + (left?.tests.length ?? 0);
+    if (!left || (leftCount === 0 && at < 0)) {
+      if (at >= 0) targets.splice(at, 1);
+      targets.push({ testProjectId: error.testProjectId });
+      continue;
+    }
+    if (leftCount === 0) continue;
+    const target = at >= 0 ? targets[at] : { testProjectId: error.testProjectId };
+    if (left.files.length > 0) target.files = [...(target.files ?? []), ...left.files];
+    if (left.tests.length > 0) target.tests = [...(target.tests ?? []), ...left.tests];
+    if (at < 0) targets.push(target);
+  }
+  return targets;
 }
 
 function absolutePath(folderPath: string, file: string): string {
@@ -404,7 +417,7 @@ function visibleRows(
     if (!passesFilter(node)) return;
     if (!matched && !passesSearch(node)) return;
     rows.push({ node, depth });
-    if (collapsed.has(node.id) && !query && filter === 'all') return;
+    if (collapsed.has(node.id)) return;
     for (const child of node.children) visit(child, depth + 1, matched && Boolean(query));
   };
   for (const project of tree) visit(project, 0, false);
@@ -550,7 +563,10 @@ export function TestsSection({ project }: { project: Project }): React.JSX.Eleme
   const hydrate = useTestsStore((s) => s.hydrate);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [treeCollapsed, setTreeCollapsed] = useState<Set<string>>(new Set());
+  // A filter or a search opens everything so its matches show, even in a big suite whose files
+  // start folded. Folding there is its own choice and starts over when the filter or search changes.
+  const [narrowedCollapsed, setNarrowedCollapsed] = useState<Set<string>>(new Set());
   const [hiddenDetails, setHiddenDetails] = useState<Set<string>>(new Set());
   const [showOutput, setShowOutput] = useState(false);
   const [fixing, setFixing] = useState<{
@@ -582,6 +598,13 @@ export function TestsSection({ project }: { project: Project }): React.JSX.Eleme
   );
   const statuses = useMemo(() => aggregateStatuses(tree, results), [tree, results]);
   const trimmedQuery = query.trim().toLowerCase();
+  const narrowedView = filter === 'all' && !trimmedQuery ? null : `${filter}\n${trimmedQuery}`;
+  const [lastNarrowedView, setLastNarrowedView] = useState(narrowedView);
+  if (lastNarrowedView !== narrowedView) {
+    setLastNarrowedView(narrowedView);
+    setNarrowedCollapsed(new Set());
+  }
+  const collapsed = narrowedView === null ? treeCollapsed : narrowedCollapsed;
   const rows = useMemo(
     () => visibleRows(tree, statuses, run.results, filter, trimmedQuery, collapsed),
     [tree, statuses, run.results, filter, trimmedQuery, collapsed],
@@ -614,7 +637,7 @@ export function TestsSection({ project }: { project: Project }): React.JSX.Eleme
       node.children.forEach(count);
     };
     discovery.data.tree.forEach(count);
-    setCollapsed(tests > FOLD_FILES_OVER ? new Set(files) : new Set());
+    setTreeCollapsed(tests > FOLD_FILES_OVER ? new Set(files) : new Set());
   }, [discovery.data]);
 
   if (discovery.isPending) {
@@ -749,7 +772,8 @@ export function TestsSection({ project }: { project: Project }): React.JSX.Eleme
   }
 
   latestActions.current = {
-    toggleCollapsed: (id) => toggle(id, setCollapsed),
+    toggleCollapsed: (id) =>
+      toggle(id, narrowedView === null ? setTreeCollapsed : setNarrowedCollapsed),
     toggleDetails: (id) => toggle(id, setHiddenDetails),
     open: (file) => openInEditor(project, file),
     run: (node) => void startRun(project.id, [targetFor(node)]),

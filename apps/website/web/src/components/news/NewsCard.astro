@@ -13,7 +13,7 @@ interface Props {
 const { item } = Astro.props;
 ---
 
-<article data-news-card={item.slug} data-severity={item.severity} class="flex flex-col gap-3 rounded-lg border p-5 md:p-6">
+<article data-news-card={item.slug} data-severity={item.severity} class="flex flex-col gap-3 rounded-box border p-5 md:p-6">
   <div class="flex flex-wrap items-center gap-2">
     <CategoryChip category={item.category} />
     <span class="sr-only">Severity:</span>

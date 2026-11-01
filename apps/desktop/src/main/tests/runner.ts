@@ -18,7 +18,9 @@ import {
   resolveTarget,
   TEST_FRAMEWORKS,
   type TestDiscovery,
+  type TestNode,
   type TestProject,
+  type TestRef,
   type TestResult,
   type TestRunError,
   type TestRunEvent,
@@ -347,11 +349,15 @@ export class TestRunManager {
 
         const parser = createStreamParser(project);
         let reported = 0;
+        const reportedIds = new Set<string>();
         const accept = (parsed: ParsedTestResult[]): void => {
           const results = resolveResults(node, project, parsed, input.folderPath).filter(wasPicked);
           reported += results.length;
+          for (const result of results) reportedIds.add(result.id);
           publish(results);
         };
+        const unfinished = () =>
+          reported > 0 ? { unfinished: unfinishedTests(node, resolved, reportedIds) } : {};
         const startedAt = Date.now();
 
         let outcome: Awaited<ReturnType<typeof spawnStreaming>>;
@@ -391,6 +397,7 @@ export class TestRunManager {
               command,
               `Could not start ${label}. Check that it is installed and on your PATH, then run the tests again.`,
               outcome.log,
+              unfinished(),
             ),
           );
         } else if (outcome.timedOut) {
@@ -401,6 +408,7 @@ export class TestRunManager {
               command,
               `The ${label} run printed nothing for ${Math.round(this.deps.timeoutMs / 60_000) || 1} minutes and was stopped.`,
               outcome.log,
+              unfinished(),
             ),
           );
         } else if (reported === 0 && outcome.code !== 0) {
@@ -530,8 +538,61 @@ function runError(
   command: string,
   message: string,
   log: string,
+  extra: Pick<TestRunError, 'unfinished'> = {},
 ): TestRunError {
-  return { kind, testProjectId: project.id, command, message, log };
+  return { kind, testProjectId: project.id, command, message, log, ...extra };
+}
+
+function countTests(node: TestNode): number {
+  if (node.kind === 'test') return 1;
+  let count = 0;
+  for (const child of node.children) count += countTests(child);
+  return count;
+}
+
+/**
+ * The picked tests a run never reported on, for a run that broke part way. A result for a file or
+ * a suite stands for everything under it, and one for a parameter variant stands for the test it
+ * hangs under. A file none of whose tests got to run goes back as the file, so the next command
+ * stays short.
+ */
+function unfinishedTests(
+  projectNode: TestNode,
+  resolved: ResolvedTarget,
+  reported: ReadonlySet<string>,
+): NonNullable<TestRunError['unfinished']> {
+  const reachedBelow = new Set<string>();
+  for (const id of reported) {
+    for (let at = id.lastIndexOf(' > '); at > 0; at = id.lastIndexOf(' > ', at - 1)) {
+      reachedBelow.add(id.slice(0, at));
+    }
+  }
+  const reached = (ref: TestRef): boolean => {
+    const own = testNodeId(projectNode.id, ref.file, ref.path);
+    if (reported.has(own) || reachedBelow.has(own)) return true;
+    for (let depth = ref.path.length - 1; depth >= 0; depth -= 1) {
+      if (reported.has(testNodeId(projectNode.id, ref.file, ref.path.slice(0, depth)))) return true;
+    }
+    return false;
+  };
+
+  const leftByFile = new Map<string, TestRef[]>();
+  for (const ref of resolved.expanded) {
+    if (reached(ref)) continue;
+    const list = leftByFile.get(ref.file);
+    if (list) list.push(ref);
+    else leftByFile.set(ref.file, [ref]);
+  }
+  const files: string[] = [];
+  const tests: TestRef[] = [];
+  for (const [file, refs] of leftByFile) {
+    const fileNode = projectNode.children.find(
+      (child) => child.kind === 'file' && child.file === file,
+    );
+    if (fileNode && countTests(fileNode) === refs.length) files.push(file);
+    else for (const ref of refs) tests.push({ file: ref.file, path: [...ref.path] });
+  }
+  return { files, tests };
 }
 
 function errorMessage(error: unknown): string {

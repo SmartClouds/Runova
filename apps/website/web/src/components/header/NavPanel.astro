@@ -1,0 +1,63 @@
+---
+import { LATEST_COUNT, type Tone } from '../../lib/latest';
+import type { NavSection } from '../../lib/nav';
+import Icon from '../effects/Icon.astro';
+
+// One menu panel. The header shows it in the desktop dropdown and again in the phone sheet. News
+// and Blog start as placeholders the size of the real cards, so the dropdown does not jump when
+// src/components/header/latest.ts swaps the newest entries in. Styles: header.css.
+
+interface Props {
+  section: NavSection;
+}
+
+const { section } = Astro.props;
+
+/** The tints the fixed links rotate through, so a grid of six never repeats a neighbor. */
+const LINK_TONES: Tone[] = ['release', 'ai', 'tooling', 'industry', 'deprecation', 'security'];
+const rel = (external?: boolean) => (external ? 'noopener' : undefined);
+---
+
+<div class="mp" data-kind={section.kind}>
+  {
+    section.kind === 'links' ? (
+      <ul class="mp-body mp-grid">
+        {section.links.map((link, index) => (
+          <li>
+            <a href={link.href} rel={rel(link.external)} class="mp-tile">
+              <span class="mp-mark" data-tone={LINK_TONES[index % LINK_TONES.length]}>
+                <Icon name={link.icon} size={18} />
+              </span>
+              <span class="mp-copy">
+                <span class="mp-title">{link.title}</span>
+                <span class="mp-meta">{link.meta}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <div class="mp-body mp-latest" data-latest={section.source} aria-busy="true">
+        <span class="mp-feature mp-skeleton" aria-hidden="true" />
+        <ul class="mp-list" aria-hidden="true">
+          {Array.from({ length: LATEST_COUNT - 1 }, () => (
+            <li class="mp-row mp-skeleton-row">
+              <span class="mp-row-art mp-skeleton" />
+              <span class="mp-copy">
+                <span class="mp-skeleton mp-skeleton-line" />
+                <span class="mp-skeleton mp-skeleton-line mp-skeleton-short" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+  <div class="mp-footer">
+    <span class="mp-summary">{section.summary}</span>
+    <a href={section.index.href} rel={rel(section.index.external)} class="mp-index">
+      {section.index.label}
+      <Icon name={section.index.external ? 'arrow-up-right' : 'arrow-right'} size={14} />
+    </a>
+  </div>
+</div>

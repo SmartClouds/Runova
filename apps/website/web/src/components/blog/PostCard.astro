@@ -14,7 +14,7 @@ interface Props {
 const { post, level: Heading = 'h2', eager = false } = Astro.props;
 ---
 
-<article data-post-card={post.slug} class="flex flex-col gap-3 rounded-lg border bg-card p-6">
+<article data-post-card={post.slug} class="flex flex-col gap-3 rounded-box border bg-card p-6">
   {
     post.coverImage && (
       <img
@@ -24,7 +24,7 @@ const { post, level: Heading = 'h2', eager = false } = Astro.props;
         height={post.coverImage.height}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
-        class="aspect-[16/9] w-full rounded-md object-cover"
+        class="aspect-[16/9] w-full rounded-inner object-cover"
       />
     )
   }

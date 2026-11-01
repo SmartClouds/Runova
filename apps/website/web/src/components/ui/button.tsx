@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 // shadcn/ui's Button (new-york), restyled with the site tokens. Hover and press transitions are
 // 120ms and only touch colors and transform (design.md, Motion).
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium text-sm transition-[color,background-color,border-color,transform] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium text-sm transition-[color,background-color,border-color,transform] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {

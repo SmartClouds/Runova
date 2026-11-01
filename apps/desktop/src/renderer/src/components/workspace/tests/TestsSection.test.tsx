@@ -384,6 +384,137 @@ describe('TestsSection', () => {
     expect(screen.queryByText('adds', { selector: '[data-test-name]' })).toBeNull();
   });
 
+  describe('folding', () => {
+    const shown = (name: string): boolean =>
+      screen.queryByText(name, { selector: '[data-test-name]' }) !== null;
+
+    it('folds and unfolds a file, a suite and a project', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+
+      expect(row('src/math.test.ts').getAttribute('aria-expanded')).toBe('true');
+      fireEvent.click(row('src/math.test.ts'));
+      expect(row('src/math.test.ts').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('math')).toBe(false);
+      expect(shown('adds')).toBe(false);
+      expect(shown('trims')).toBe(true);
+      fireEvent.click(row('src/math.test.ts'));
+      expect(shown('adds')).toBe(true);
+
+      fireEvent.click(row('math'));
+      expect(shown('adds')).toBe(false);
+      expect(shown('breaks')).toBe(false);
+      fireEvent.click(row('math'));
+      expect(shown('breaks')).toBe(true);
+
+      fireEvent.click(row('Vitest'));
+      expect(shown('src/math.test.ts')).toBe(false);
+      expect(shown('src/strings.test.ts')).toBe(false);
+      expect(shown('Go · svc')).toBe(true);
+      fireEvent.click(row('Vitest'));
+      expect(shown('src/strings.test.ts')).toBe(true);
+    });
+
+    it('folds under a status filter, and opens everything again when the filter changes', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+      startRun();
+      finishWithFailure();
+      fireEvent.click(screen.getByRole('radio', { name: /Failed/ }));
+
+      expect(row('src/math.test.ts').getAttribute('aria-expanded')).toBe('true');
+      fireEvent.click(row('src/math.test.ts'));
+      expect(row('src/math.test.ts').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('breaks')).toBe(false);
+      fireEvent.click(row('src/math.test.ts'));
+      expect(shown('breaks')).toBe(true);
+
+      fireEvent.click(row('src/math.test.ts'));
+      fireEvent.click(screen.getByRole('radio', { name: /All/ }));
+      expect(shown('breaks')).toBe(true);
+      fireEvent.click(screen.getByRole('radio', { name: /Failed/ }));
+      expect(row('src/math.test.ts').getAttribute('aria-expanded')).toBe('true');
+      expect(shown('breaks')).toBe(true);
+    });
+
+    it('folds the matches of a search', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Filter tests' }), {
+        target: { value: 'math' },
+      });
+      expect(shown('adds')).toBe(true);
+
+      fireEvent.click(row('math'));
+      expect(row('math').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('adds')).toBe(false);
+      fireEvent.click(row('math'));
+      expect(shown('adds')).toBe(true);
+    });
+
+    it('opens the failures of a big suite whose files start folded, and folds them on a click', async () => {
+      const files: Record<string, string> = {};
+      for (let f = 0; f < 4; f += 1) {
+        const tests = Array.from({ length: 80 }, (_, t) => `it('t${t}', () => {});`);
+        files[`src/big${f}.test.ts`] = `${tests.join('\n')}\n`;
+      }
+      api.discover.mockResolvedValue({
+        projects: [vitest],
+        tree: buildTestTree([vitest], files),
+        truncated: false,
+      } satisfies TestDiscovery);
+      renderSection();
+      await screen.findByText('src/big0.test.ts', { selector: '[data-test-name]' });
+      // Over the folding limit, so every file starts folded.
+      expect(row('src/big0.test.ts').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('t0')).toBe(false);
+
+      send({
+        type: 'started',
+        runId: 'r1',
+        projectId: 'p1',
+        summary: summary(),
+        queued: [],
+      });
+      send({
+        type: 'results',
+        runId: 'r1',
+        projectId: 'p1',
+        results: [
+          {
+            id: 'vitest:::src/big2.test.ts::t7',
+            testProjectId: 'vitest:',
+            file: 'src/big2.test.ts',
+            path: ['t7'],
+            status: 'failed',
+            message: 'boom',
+          },
+        ],
+      });
+      send({
+        type: 'done',
+        runId: 'r1',
+        projectId: 'p1',
+        summary: summary({ running: false, failed: 1 }),
+      });
+      fireEvent.click(screen.getByRole('radio', { name: /Failed/ }));
+
+      // The chevron has to agree with what is on screen, or a click looks like it does nothing.
+      expect(row('src/big2.test.ts').getAttribute('aria-expanded')).toBe('true');
+      expect(shown('t7')).toBe(true);
+      fireEvent.click(row('src/big2.test.ts'));
+      expect(row('src/big2.test.ts').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('t7')).toBe(false);
+      fireEvent.click(row('src/big2.test.ts'));
+      expect(shown('t7')).toBe(true);
+
+      // Back on All, the files are still folded the way they started.
+      fireEvent.click(screen.getByRole('radio', { name: /All/ }));
+      expect(row('src/big2.test.ts').getAttribute('aria-expanded')).toBe('false');
+      expect(shown('t7')).toBe(false);
+    });
+  });
+
   it('copies an issue with the command that reruns the test', async () => {
     renderSection();
     await screen.findByText('adds', { selector: '[data-test-name]' });
@@ -759,6 +890,79 @@ describe('TestsSection', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Run failed tests' }));
       await waitFor(() =>
         expect(api.run).toHaveBeenLastCalledWith('p1', [{ testProjectId: 'vitest:' }]),
+      );
+    });
+
+    it('reruns only the failures and the tests a broken run never got to, not the whole project', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+      const adds: TestResult = {
+        ...breaks,
+        id: ids.adds,
+        path: ['math', 'adds'],
+        status: 'passed',
+      };
+      finishWith(
+        [
+          {
+            kind: 'timedOut',
+            testProjectId: 'vitest:',
+            command: 'pnpm exec vitest run',
+            message: 'The Vitest run printed nothing for 30 minutes and was stopped.',
+            log: '',
+            unfinished: { files: ['src/strings.test.ts'], tests: [] },
+          },
+        ],
+        [adds, breaks],
+      );
+      expect(screen.getByText('2 failed')).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Run failed tests' }));
+      await waitFor(() =>
+        expect(api.run).toHaveBeenLastCalledWith('p1', [
+          {
+            testProjectId: 'vitest:',
+            tests: [{ file: 'src/math.test.ts', path: ['math', 'breaks'] }],
+            files: ['src/strings.test.ts'],
+          },
+        ]),
+      );
+
+      // Main queues just those, so the test that passed keeps its tick instead of a spinner.
+      startRun([ids.breaks, ids.trims]);
+      expect(screen.getByText('Running 2 tests…')).toBeTruthy();
+      expect(within(row('adds')).getByRole('img', { name: 'Passed' })).toBeTruthy();
+      expect(within(row('breaks')).getByRole('img', { name: 'Running' })).toBeTruthy();
+      expect(within(row('Go · svc')).queryByRole('img', { name: 'Running' })).toBeNull();
+    });
+
+    it('reruns just the failures of a run that broke after reporting every test', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+      finishWith(
+        [{ ...dotnetError, testProjectId: 'vitest:', unfinished: { files: [], tests: [] } }],
+        [breaks],
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Run failed tests' }));
+      await waitFor(() =>
+        expect(api.run).toHaveBeenLastCalledWith('p1', [
+          {
+            testProjectId: 'vitest:',
+            tests: [{ file: 'src/math.test.ts', path: ['math', 'breaks'] }],
+          },
+        ]),
+      );
+    });
+
+    it('reruns a whole project that broke with nothing failed and nothing left over', async () => {
+      renderSection();
+      await screen.findByText('adds', { selector: '[data-test-name]' });
+      finishWith([{ ...dotnetError, unfinished: { files: [], tests: [] } }]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Run failed tests' }));
+      await waitFor(() =>
+        expect(api.run).toHaveBeenLastCalledWith('p1', [{ testProjectId: 'dotnet:srv' }]),
       );
     });
 

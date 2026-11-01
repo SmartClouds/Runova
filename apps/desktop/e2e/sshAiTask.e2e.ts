@@ -103,8 +103,16 @@ async function startTask(page: Page, prompt: string): Promise<void> {
   // The CLI picker's popover is a dialog too, so match the task dialog by name.
   const dialog = page.getByRole('dialog', { name: 'Ask AI to run a task here' });
   await dialog.getByRole('textbox', { name: 'Task for the AI' }).fill(prompt);
+  // The CLI picker stays off until the app's CLI sweep ends. A fresh profile starts that sweep at
+  // launch, and it runs every real CLI on this machine's PATH (up to 20s each, four at a time), so
+  // on a busy machine it can outlast any fixed wait. Joining the sweep waits for exactly that.
+  await page.evaluate(() =>
+    (
+      window as unknown as { runova: { cli: { detectAll(): Promise<unknown> } } }
+    ).runova.cli.detectAll(),
+  );
   const cli = dialog.getByRole('combobox').first();
-  await expect(cli).toBeEnabled({ timeout: 30_000 });
+  await expect(cli).toBeEnabled();
   if (!(await cli.innerText()).includes('AI provider (Settings)')) {
     await cli.click();
     await page.getByRole('option', { name: 'AI provider (Settings)' }).click();

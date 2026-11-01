@@ -40,7 +40,7 @@ const total = features.length;
         data-filter-search
         autocomplete="off"
         placeholder="SSH, Docker, worktrees..."
-        class="h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="h-9 rounded-inner border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       />
     </div>
   </div>
@@ -56,10 +56,11 @@ const total = features.length;
           data-feature-card
           data-group={card.group}
           data-search={[card.title, card.summary, ...card.covers].join(' ')}
-          class="relative flex flex-col gap-4 rounded-lg border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60"
+          class="relative flex flex-col gap-4 rounded-box border bg-card p-4 transition-colors duration-[120ms] focus-within:border-primary hover:border-primary/60"
         >
           <AppScreenshot
             name={card.cover}
+            inset
             sizes="(min-width: 1200px) 360px, (min-width: 1024px) 30vw, (min-width: 640px) 46vw, 100vw"
           />
           <div class="flex flex-1 flex-col gap-2">
@@ -67,7 +68,7 @@ const total = features.length;
             <h2 class="font-semibold text-xl">
               <a
                 href={`/features/${card.slug}`}
-                class="outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
+                class="outline-none after:absolute after:inset-0 after:rounded-box focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
               >
                 {card.title}
               </a>
@@ -79,7 +80,7 @@ const total = features.length;
     }
   </ul>
 
-  <div data-filter-empty hidden class="mt-6 rounded-lg border border-dashed p-8 text-center">
+  <div data-filter-empty hidden class="mt-6 rounded-box border border-dashed p-8 text-center">
     <p class="font-medium">No feature matches that filter.</p>
     <button type="button" data-filter-clear class={`${buttonVariants({ variant: 'outline' })} mt-4`}>
       Clear the filter

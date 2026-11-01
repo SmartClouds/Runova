@@ -71,7 +71,7 @@ export function CoverField({ id, value, onChange, errors }: CoverFieldProps) {
           <img
             src={value.url}
             alt={value.alt}
-            className="aspect-[1200/630] w-64 rounded-md border object-cover"
+            className="aspect-[1200/630] w-64 rounded-box border object-cover"
           />
           <Button type="button" variant="outline" onClick={() => onChange(null)}>
             Remove cover
