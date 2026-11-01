@@ -1,7 +1,7 @@
 ---
 id: T026
 title: Package the website and add it to CI
-status: blocked
+status: done
 epic: E40
 depends: [T010, T022]
 estimate: 190000

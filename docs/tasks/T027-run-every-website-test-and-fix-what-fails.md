@@ -1,7 +1,7 @@
 ---
 id: T027
 title: Run every website test and fix what fails
-status: todo
+status: done
 epic: E40
 depends: [T021, T025, T026]
 estimate: 220000

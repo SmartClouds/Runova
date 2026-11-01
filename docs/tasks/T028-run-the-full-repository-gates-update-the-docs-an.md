@@ -1,7 +1,7 @@
 ---
 id: T028
 title: Run the full repository gates, update the docs and merge the worktree
-status: todo
+status: done
 epic: E40
 depends: [T027]
 estimate: 230000
