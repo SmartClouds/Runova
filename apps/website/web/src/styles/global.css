@@ -3,7 +3,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Same names and values as apps/desktop/src/renderer/src/index.css; tests/tokens.test.ts fails
-   when they drift. Site-only tokens (glow, grid line, severity) follow docs/website/design.md. */
+   when they drift. Site-only tokens (glow, severity) follow docs/website/design.md. */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -32,7 +32,6 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
   --color-glow: hsl(var(--glow));
-  --color-grid-line: hsl(var(--grid-line));
   --color-severity-info: hsl(var(--severity-info));
   --color-severity-low: hsl(var(--severity-low));
   --color-severity-medium: hsl(var(--severity-medium));
@@ -103,7 +102,6 @@
   --ring: 150 100% 23%;
   --radius: 0.625rem;
   --glow: 150 100% 23%;
-  --grid-line: 0 0% 0% / 0.05;
   --severity-info: 212 85% 34%;
   --severity-low: 190 90% 24%;
   --severity-medium: 38 92% 27%;
@@ -111,21 +109,23 @@
   --severity-critical: 4 78% 38%;
 }
 
-/* Dark, the default, as in the app. */
+/* Dark, the default. Accents, text and status colors are the app's; the surfaces (background,
+   cards, borders, muted text) are a lighter charcoal than the app's near black, so a page reads
+   softer than a tool window (design.md, Themes). tests/tokens.test.ts holds the list. */
 .dark {
-  --background: 0 0% 4%;
+  --background: 220 10% 9%;
   --foreground: 0 0% 95%;
-  --card: 0 0% 11%;
+  --card: 220 9% 13%;
   --card-foreground: 0 0% 95%;
-  --popover: 0 0% 10%;
+  --popover: 220 9% 13%;
   --popover-foreground: 0 0% 95%;
   --primary: 150 100% 45%;
   --primary-foreground: 0 0% 4%;
-  --secondary: 0 0% 15%;
+  --secondary: 220 8% 16%;
   --secondary-foreground: 0 0% 95%;
-  --muted: 0 0% 15%;
-  --muted-foreground: 0 0% 62%;
-  --accent: 0 0% 18%;
+  --muted: 220 8% 16%;
+  --muted-foreground: 220 6% 68%;
+  --accent: 220 8% 19%;
   --accent-foreground: 0 0% 95%;
   --destructive: 4 72% 60%;
   --destructive-foreground: 0 0% 4%;
@@ -133,11 +133,10 @@
   --success-foreground: 0 0% 4%;
   --warning: 38 92% 50%;
   --warning-foreground: 30 40% 10%;
-  --border: 0 0% 17%;
-  --input: 0 0% 17%;
+  --border: 220 8% 21%;
+  --input: 220 8% 21%;
   --ring: 150 100% 45%;
   --glow: 150 100% 45%;
-  --grid-line: 0 0% 100% / 0.04;
   --severity-info: 210 90% 66%;
   --severity-low: 185 70% 48%;
   --severity-medium: 38 92% 50%;
@@ -180,6 +179,74 @@
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
   }
+}
+
+/* Links are never underlined (design.md, Layout and surfaces). A link in running text is primary
+   and medium weight, so the weight tells it apart from the words around it without relying on
+   color alone. tests/noUnderline.test.ts keeps underlines from coming back. */
+@utility link {
+  color: hsl(var(--primary));
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: calc(var(--radius) - 6px);
+  transition: color 120ms var(--ease-enter);
+
+  &:hover {
+    color: hsl(var(--foreground));
+  }
+}
+
+/* For secondary links (feeds, "clear filters", the footer columns): quiet until hovered. */
+@utility link-muted {
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+  border-radius: calc(var(--radius) - 6px);
+  transition: color 120ms var(--ease-enter);
+
+  &:hover {
+    color: hsl(var(--foreground));
+  }
+}
+
+/* One-time entrances, driven by src/components/effects/reveal.ts. Without the script the
+   attribute stays empty and the element simply shows. */
+[data-reveal="waiting"] {
+  opacity: 0;
+  transform: translateY(1.25rem);
+}
+
+[data-reveal="shown"] {
+  transition:
+    opacity 700ms var(--ease-enter),
+    transform 700ms var(--ease-enter);
+  transition-delay: calc(var(--reveal-order, 0) * 80ms);
+}
+
+/* The light that follows the mouse in a card (src/components/effects/spotlight.ts). */
+[data-spotlight] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-spotlight]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    22rem circle at var(--spot-x, 50%) var(--spot-y, 0%),
+    hsl(var(--glow) / 0.1),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 200ms var(--ease-exit);
+  pointer-events: none;
+}
+
+[data-spotlight]:hover::before {
+  opacity: 1;
+  transition-timing-function: var(--ease-enter);
 }
 
 @media (prefers-reduced-motion: no-preference) {

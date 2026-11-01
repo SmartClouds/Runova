@@ -88,10 +88,17 @@ const { html, class: className } = Astro.props;
     padding: 0;
   }
 
+  /* Never underlined (design.md): primary and medium weight, so the weight sets a link apart
+     from the words around it without relying on color alone. */
   .prose :global(a) {
     color: hsl(var(--primary));
-    text-decoration: underline;
-    text-underline-offset: 4px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 120ms var(--ease-enter);
+  }
+
+  .prose :global(a:hover) {
+    color: hsl(var(--foreground));
   }
 
   .prose :global(table) {

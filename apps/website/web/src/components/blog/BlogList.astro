@@ -22,7 +22,7 @@ const meta = result.state === 'ok' ? listMeta(result.page.page, result.page.tota
       <header class="max-w-[70ch] pt-12 md:pt-20">
         {result.tagName && (
           <p class="text-sm">
-            <a href="/blog" class="text-primary underline underline-offset-4">All posts</a>
+            <a href="/blog" class="link">All posts</a>
           </p>
         )}
         <h1 class="mt-2 font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">{meta.heading}</h1>
@@ -32,7 +32,7 @@ const meta = result.state === 'ok' ? listMeta(result.page.page, result.page.tota
           </p>
         )}
         <p class="mt-4 text-sm">
-          <a href="/blog/rss.xml" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          <a href="/blog/rss.xml" class="link-muted">
             Follow with RSS
           </a>
         </p>

@@ -206,7 +206,10 @@ export default function ApiClientEditor({ id, navigate = goTo }: ApiClientEditor
   return (
     <div className="grid gap-6">
       <div className="grid gap-2">
-        <a href="/admin/api-clients" className="text-muted-foreground text-sm hover:underline">
+        <a
+          href="/admin/api-clients"
+          className="text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        >
           All API clients
         </a>
         <h1 className="font-display font-extrabold text-3xl tracking-tight">

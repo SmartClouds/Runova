@@ -1,5 +1,15 @@
 ---
+import Icon from './effects/Icon.astro';
 import ThemeToggle from './ThemeToggle.astro';
+
+const NAV = [
+  { href: '/features', label: 'Features' },
+  { href: '/help', label: 'Help' },
+  { href: '/download', label: 'Download' },
+];
+
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => path === href || path.startsWith(`${href}/`);
 ---
 
 <header
@@ -12,25 +22,67 @@ import ThemeToggle from './ThemeToggle.astro';
       <span class="max-sm:sr-only">Runova</span>
     </a>
     <nav aria-label="Main" class="flex items-center gap-1">
+      {
+        NAV.map(({ href, label }) => (
+          <a
+            href={href}
+            aria-current={isCurrent(href) ? 'page' : undefined}
+            class="nav-link relative rounded-md px-2 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:text-foreground sm:px-3"
+          >
+            {label}
+          </a>
+        ))
+      }
       <a
-        href="/features"
-        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        href="https://github.com/SmartClouds/Runova"
+        rel="noopener"
+        aria-label="Runova on GitHub"
+        title="Runova on GitHub"
+        class="nav-link relative hidden size-9 items-center justify-center rounded-md text-muted-foreground transition-colors duration-[120ms] hover:text-foreground sm:inline-flex"
       >
-        Features
-      </a>
-      <a
-        href="/help"
-        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
-      >
-        Help
-      </a>
-      <a
-        href="/download"
-        class="rounded-md px-2 py-2 sm:px-3 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
-      >
-        Download
+        <Icon name="github" size={18} />
       </a>
       <ThemeToggle />
     </nav>
   </div>
 </header>
+
+<style>
+  /* A pill fades in behind a link on hover (the hover pattern from transitions.dev, Jakub
+     Antalik, written from scratch). The current page gets a small primary dot below it. */
+  .nav-link::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: hsl(var(--secondary));
+    opacity: 0;
+    transform: scale(0.92);
+    transition:
+      opacity 120ms var(--ease-exit),
+      transform 120ms var(--ease-exit);
+  }
+
+  .nav-link:hover::before {
+    opacity: 1;
+    transform: none;
+    transition-timing-function: var(--ease-enter);
+  }
+
+  .nav-link[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -0.3rem;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+  }
+
+  nav {
+    isolation: isolate;
+  }
+</style>

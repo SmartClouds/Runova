@@ -39,13 +39,13 @@ const crumbs = featureCrumbs({ slug, title: data.title });
         {
           data.help.map((name) => (
             <li>
-              <a href={`/help/${name}`} class="text-primary underline underline-offset-4">{helpArticleTitle(name)}</a>
+              <a href={`/help/${name}`} class="link">{helpArticleTitle(name)}</a>
             </li>
           ))
         }
       </ul>
       <p class="mt-10">
-        <a href="/features" class="text-primary underline underline-offset-4">See all features</a>
+        <a href="/features" class="link">See all features</a>
       </p>
     </section>
   </article>
@@ -101,9 +101,16 @@ const crumbs = featureCrumbs({ slug, title: data.title });
     font-size: 0.875em;
   }
 
+  /* Never underlined (design.md): primary and medium weight, so the weight sets a link apart
+     from the words around it without relying on color alone. */
   .feature-prose :global(a) {
     color: hsl(var(--primary));
-    text-decoration: underline;
-    text-underline-offset: 4px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 120ms var(--ease-enter);
+  }
+
+  .feature-prose :global(a:hover) {
+    color: hsl(var(--foreground));
   }
 </style>

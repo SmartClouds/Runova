@@ -1,0 +1,510 @@
+---
+/**
+ * The home page hero: one Runova workspace with four panes, playing a short scripted run. The
+ * server renders the finished run, which is what visitors see without JavaScript or with reduced
+ * motion. `heroDemo.ts` replays it once when the hero is first on screen: lines fade in at their
+ * second, chips change from Working to Done or Waiting on you, and the status bar counts up. Only
+ * opacity and transform move, and every line always takes its space, so nothing shifts.
+ */
+import {
+  DEMO_COST_CENTS,
+  DEMO_LENGTH,
+  DEMO_PANES,
+  DEMO_TOKENS,
+  formatCost,
+  formatTokens,
+  STATUS_LABEL,
+  statusCounts,
+  statusSummary,
+} from '../../lib/heroDemo';
+
+interface Props {
+  class?: string;
+}
+
+const finalCounts = statusCounts(DEMO_LENGTH);
+---
+
+<figure
+  data-hero
+  data-state="idle"
+  class:list={['hero-demo', Astro.props.class]}
+  style={`--length: ${DEMO_LENGTH}`}
+>
+  <figcaption class="sr-only">
+    A Runova workspace with four panes side by side. Claude Code adds discount codes to a cart and
+    its tests pass, Codex edits the checkout form and waits for approval to run a migration, Gemini
+    updates the README, and a shell reruns the tests. The status bar shows 2 agents done and 1
+    waiting, 4 files changed, and the tokens and cost so far.
+  </figcaption>
+
+  <div class="demo-window" aria-hidden="true">
+    <div class="demo-titlebar">
+      <img src="/favicon-32.png" alt="" width="16" height="16" class="rounded-[4px]" />
+      <span class="font-medium text-foreground">Workspace</span>
+      <span class="text-muted-foreground">storefront</span>
+      <span class="demo-branch">main</span>
+    </div>
+
+    <div class="demo-panes">
+      {
+        DEMO_PANES.map((pane, index) => (
+          <div
+            class="demo-pane"
+            data-desktop-only={pane.onPhones ? undefined : ''}
+            data-focused={index === 0 ? '' : undefined}
+            data-end={pane.status?.end}
+            style={pane.status ? `--end-at: ${pane.status.endAt}` : undefined}
+          >
+            <div class="demo-pane-head">
+              <span class="truncate font-medium text-foreground">{pane.cli}</span>
+              <span class="truncate text-muted-foreground">{pane.place}</span>
+              {pane.status ? (
+                <span class="demo-chips">
+                  <span class="demo-chip demo-chip-start" data-status="working">
+                    <span class="demo-dot" />
+                    {STATUS_LABEL.working}
+                  </span>
+                  <span class="demo-chip demo-chip-end" data-status={pane.status.end}>
+                    <span class="demo-dot" />
+                    {STATUS_LABEL[pane.status.end]}
+                  </span>
+                </span>
+              ) : (
+                <span class="demo-chip" data-status="idle">
+                  pwsh
+                </span>
+              )}
+            </div>
+            <div class="demo-pane-body">
+              {pane.lines.map((line) =>
+                line.tone === 'ask' ? (
+                  <p class="demo-line demo-ask" data-tone="ask" style={`--at: ${line.at}`}>
+                    <span>{line.text}</span>
+                    <span class="demo-ask-buttons">
+                      <span class="demo-ask-yes">Approve</span>
+                      <span class="demo-ask-no">Deny</span>
+                    </span>
+                  </p>
+                ) : (
+                  <p class="demo-line" data-tone={line.tone} style={`--at: ${line.at}`}>
+                    {line.text}
+                  </p>
+                ),
+              )}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="demo-statusbar">
+      <span class="demo-summary">
+        <span class:list={['demo-dot', finalCounts.waiting > 0 ? 'demo-dot-waiting' : '']} data-demo-dot />
+        <span data-demo-summary>{statusSummary(DEMO_LENGTH)}</span>
+      </span>
+      <span class="max-sm:hidden">
+        4 files changed <span class="text-primary">+43</span> <span class="text-destructive">-3</span>
+      </span>
+      <span class="demo-meter">
+        <span data-demo-tokens>{formatTokens(DEMO_TOKENS)}</span>
+        <span class="text-muted-foreground/60">·</span>
+        <span data-demo-cost>{formatCost(DEMO_COST_CENTS)}</span>
+      </span>
+      <span class="demo-commit">Commit</span>
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { playHeroDemo } from './heroDemo';
+
+  const hero = document.querySelector<HTMLElement>('[data-hero]');
+  if (hero) playHeroDemo(hero);
+</script>
+
+<style>
+  .hero-demo {
+    /* The run starts once the headline has landed. */
+    --lead: 0.7s;
+    position: relative;
+  }
+
+  .demo-window {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 4px);
+    background: hsl(var(--card));
+    box-shadow:
+      0 0 0 1px hsl(var(--glow) / 0.06),
+      0 40px 120px -48px hsl(var(--glow) / 0.45);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.7;
+    text-align: left;
+  }
+
+  .demo-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid hsl(var(--border));
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+  }
+
+  .demo-branch {
+    margin-left: auto;
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    padding: 0 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .demo-panes {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @media (min-width: 768px) {
+    .demo-panes {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .demo-panes {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .demo-pane {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    background: hsl(var(--background));
+  }
+
+  /* Phones show the first two panes only. */
+  @media (max-width: 767.98px) {
+    .demo-pane[data-desktop-only] {
+      display: none;
+    }
+  }
+
+  /* The focused pane wears the primary border, as in the app. */
+  .demo-pane[data-focused] {
+    border-color: hsl(var(--primary) / 0.7);
+  }
+
+  /* A pane that ends up waiting on you gets an amber ring. It is a layer of its own so only its
+     opacity has to change. */
+  .demo-pane[data-end="waiting"]::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border: 1px solid hsl(var(--warning));
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .demo-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid hsl(var(--border));
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+  }
+
+  .demo-pane-body {
+    flex: 1;
+    padding: 0.55rem 0.7rem 0.8rem;
+  }
+
+  .demo-line {
+    position: relative;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: hsl(var(--foreground) / 0.85);
+  }
+
+  .demo-line[data-tone="prompt"] {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+  }
+
+  .demo-line[data-tone="muted"] {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .demo-line[data-tone="add"],
+  .demo-line[data-tone="ok"] {
+    color: hsl(var(--success));
+  }
+
+  .demo-line[data-tone="remove"] {
+    color: hsl(var(--destructive));
+  }
+
+  .demo-line[data-tone="text"] {
+    margin-top: 0.35rem;
+  }
+
+  .demo-ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+    margin-top: 0.4rem;
+    color: hsl(var(--warning));
+  }
+
+  .demo-ask-buttons {
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+
+  .demo-ask-yes,
+  .demo-ask-no {
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .demo-ask-yes {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .demo-ask-no {
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+  }
+
+  .demo-chips {
+    display: grid;
+    margin-left: auto;
+  }
+
+  .demo-chips > * {
+    grid-area: 1 / 1;
+    justify-self: end;
+  }
+
+  .demo-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+
+  .demo-chip[data-status="idle"] {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-weight: 400;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .demo-chip[data-status="working"] {
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.12);
+  }
+
+  .demo-chip[data-status="done"] {
+    color: hsl(var(--success));
+    background: hsl(var(--success) / 0.12);
+  }
+
+  .demo-chip[data-status="waiting"] {
+    color: hsl(var(--warning));
+    background: hsl(var(--warning) / 0.14);
+  }
+
+  .demo-dot {
+    display: inline-block;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  /* The finished run: the start chip sits hidden under the end chip. */
+  .demo-chip-start {
+    transform: scale(0);
+  }
+
+  /* Each line is revealed by a cover in the pane's color sliding off it, like text being typed.
+     The text itself never fades, so it keeps full contrast at every moment of the run. */
+  .demo-line::after {
+    content: "";
+    position: absolute;
+    inset: 0 -1px;
+    background: hsl(var(--background));
+    transform: scaleX(0);
+    transform-origin: 100% 50%;
+    pointer-events: none;
+  }
+
+  .demo-statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 1.1rem;
+    padding: 0.45rem 0.9rem;
+    border-top: 1px solid hsl(var(--border));
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .demo-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: hsl(var(--foreground));
+  }
+
+  .demo-summary .demo-dot {
+    color: hsl(var(--primary));
+  }
+
+  .demo-summary .demo-dot-waiting {
+    color: hsl(var(--warning));
+  }
+
+  .demo-meter {
+    display: inline-flex;
+    gap: 0.4rem;
+    margin-left: auto;
+  }
+
+  .demo-commit {
+    position: relative;
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0.1rem 0.7rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-family: var(--font-sans);
+    font-weight: 600;
+  }
+
+  /* A ring that lights up when the run is ready to commit. The button itself never fades, so its
+     text keeps full contrast throughout. */
+  .demo-commit::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: calc(var(--radius) - 2px);
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.35);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* The replay. Before its moment each piece holds its first frame (fill mode both), and once
+     the run is done the animations come off and the finished state above is what stays. */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-demo[data-state="playing"] .demo-line::after {
+      animation: demo-wipe 420ms cubic-bezier(0.4, 0, 0.6, 1) both;
+      animation-delay: calc(var(--lead) + var(--at) * 1s);
+    }
+
+    .hero-demo[data-state="playing"] .demo-chip-start {
+      animation: demo-chip-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+      animation-delay: calc(var(--lead) + var(--end-at) * 1s);
+    }
+
+    .hero-demo[data-state="playing"] .demo-chip-start .demo-dot {
+      animation: demo-pulse 900ms ease-in-out infinite;
+    }
+
+    .hero-demo[data-state="playing"] .demo-chip-end {
+      animation: demo-chip-in 280ms cubic-bezier(0.2, 0, 0, 1) both;
+      animation-delay: calc(var(--lead) + var(--end-at) * 1s + 160ms);
+    }
+
+    .hero-demo[data-state="playing"] .demo-pane[data-end="waiting"]::after {
+      animation: demo-fade-in 400ms cubic-bezier(0.2, 0, 0, 1) both;
+      animation-delay: calc(var(--lead) + var(--end-at) * 1s);
+    }
+
+    .hero-demo[data-state="playing"] .demo-commit {
+      animation: demo-commit-ready 500ms cubic-bezier(0.2, 0, 0, 1) both;
+      animation-delay: calc(var(--lead) + var(--length) * 1s + 200ms);
+    }
+
+    .hero-demo[data-state="playing"] .demo-commit::after {
+      animation: demo-ring 1200ms cubic-bezier(0.2, 0, 0, 1) both;
+      animation-delay: calc(var(--lead) + var(--length) * 1s + 200ms);
+    }
+  }
+
+  @keyframes demo-wipe {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes demo-chip-in {
+    from {
+      transform: scale(0);
+    }
+  }
+
+  @keyframes demo-chip-out {
+    from {
+      transform: none;
+    }
+    to {
+      transform: scale(0);
+    }
+  }
+
+  @keyframes demo-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes demo-pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  @keyframes demo-commit-ready {
+    from {
+      transform: scale(0.94);
+    }
+  }
+
+  @keyframes demo-ring {
+    40% {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+</style>

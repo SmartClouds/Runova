@@ -88,7 +88,7 @@ test.describe('under the CSP', () => {
   test('the home page runs the hero and the theme toggle', async ({ page }) => {
     const violations = await watchCsp(page);
     await page.goto('/');
-    await expect(page.locator('[data-hero]')).toHaveAttribute('data-state', /running|static/, {
+    await expect(page.locator('[data-hero]')).toHaveAttribute('data-state', 'done', {
       timeout: 15_000,
     });
     await page.getByRole('button', { name: /theme/i }).first().click();

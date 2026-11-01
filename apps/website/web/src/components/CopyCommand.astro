@@ -1,0 +1,92 @@
+---
+/**
+ * A shell command in a chip with a Copy button. The button says "Copied" for two seconds after a
+ * successful copy. Without JavaScript or clipboard access the button stays hidden and the command
+ * can still be selected by hand.
+ */
+import Icon from './effects/Icon.astro';
+
+interface Props {
+  command: string;
+  /** What the command is for, used in the button's accessible name. */
+  label: string;
+  class?: string;
+}
+
+const { command, label } = Astro.props;
+---
+
+<span
+  class:list={[
+    'inline-flex max-w-full items-center gap-1 rounded-md border bg-background py-1 pr-1 pl-3 font-mono text-sm',
+    Astro.props.class,
+  ]}
+  data-copy-command
+>
+  <span class="min-w-0 select-all break-all text-left text-muted-foreground">
+    <span class="text-primary" aria-hidden="true">$ </span><code>{command}</code>
+  </span>
+  <button
+    type="button"
+    hidden
+    data-copy-button
+    data-copy-text={command}
+    aria-label={`Copy the ${label}`}
+    class="relative inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors duration-[120ms] hover:bg-secondary hover:text-foreground"
+  >
+    <Icon name="copy" size={16} class="copy-icon" />
+    <Icon name="check" size={16} class="copied-icon text-primary" />
+  </button>
+  <span class="sr-only" role="status" data-copy-status></span>
+</span>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-button]')) {
+    if (!navigator.clipboard) continue;
+    const status = button.parentElement?.querySelector<HTMLElement>('[data-copy-status]');
+    let timer: number | undefined;
+    button.hidden = false;
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copyText ?? '');
+      } catch {
+        if (status) status.textContent = 'Copy failed. Select the command and copy it by hand.';
+        return;
+      }
+      button.dataset.copied = '';
+      if (status) status.textContent = 'Copied';
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        delete button.dataset.copied;
+        if (status) status.textContent = '';
+      }, 2000);
+    });
+  }
+</script>
+
+<style>
+  button :global(.copied-icon) {
+    position: absolute;
+    opacity: 0;
+    transform: scale(0.6);
+    transition:
+      opacity 120ms var(--ease-enter),
+      transform 120ms var(--ease-enter);
+  }
+
+  button :global(.copy-icon) {
+    transition:
+      opacity 120ms var(--ease-enter),
+      transform 120ms var(--ease-enter);
+  }
+
+  button[data-copied] :global(.copied-icon) {
+    opacity: 1;
+    transform: none;
+  }
+
+  button[data-copied] :global(.copy-icon) {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+</style>

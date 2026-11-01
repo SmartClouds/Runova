@@ -62,12 +62,15 @@ export default function InviteForm() {
         <SetupLinkPanel id="invite-link" label="Invitation link" link={invited.setupLink} />
         <div className="flex flex-wrap gap-4 text-sm">
           <a
-            className="font-medium underline-offset-4 hover:underline"
+            className="font-medium transition-colors duration-[120ms] hover:text-primary"
             href={`/admin/users/${invited.user.id}`}
           >
             Open {invited.user.displayName}
           </a>
-          <a className="font-medium underline-offset-4 hover:underline" href="/admin/users/new">
+          <a
+            className="font-medium transition-colors duration-[120ms] hover:text-primary"
+            href="/admin/users/new"
+          >
             Invite someone else
           </a>
         </div>
@@ -78,7 +81,10 @@ export default function InviteForm() {
   return (
     <div className="grid max-w-2xl gap-6">
       <div className="grid gap-2">
-        <a href="/admin/users" className="text-muted-foreground text-sm hover:underline">
+        <a
+          href="/admin/users"
+          className="text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        >
           All users
         </a>
         <h1 className="font-display font-extrabold text-3xl tracking-tight">Invite a user</h1>

@@ -44,8 +44,6 @@ export default defineConfig({
   ],
   vite: {
     plugins: [tailwindcss()],
-    // The hero worker fetches three.js only after it has checked WebGL, which needs code splitting.
-    worker: { format: 'es' },
     define: {
       'import.meta.env.SENTRY_ENVIRONMENT': JSON.stringify(env.SENTRY_ENVIRONMENT || ''),
       'import.meta.env.SENTRY_RELEASE': JSON.stringify(env.SENTRY_RELEASE || ''),

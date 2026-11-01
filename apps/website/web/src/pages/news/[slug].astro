@@ -38,7 +38,7 @@ const edited = item && isoTime(item.updatedAt) !== isoTime(item.publishedAt);
       <article class="max-w-[800px] pt-12 pb-16 md:pt-20 md:pb-24">
         <header>
           <p class="text-sm">
-            <a href="/news" class="text-primary underline underline-offset-4">News</a>
+            <a href="/news" class="link">News</a>
           </p>
           <div class="mt-4 flex flex-wrap items-center gap-2">
             <CategoryChip category={item.category} />
@@ -73,7 +73,7 @@ const edited = item && isoTime(item.updatedAt) !== isoTime(item.publishedAt);
             <ul class="mt-3 flex flex-col gap-2">
               {item.sourceLinks.map((source) => (
                 <li>
-                  <a href={source.url} class="text-primary underline underline-offset-4" rel="noopener noreferrer">
+                  <a href={source.url} class="link" rel="noopener noreferrer">
                     {source.title}
                   </a>
                 </li>

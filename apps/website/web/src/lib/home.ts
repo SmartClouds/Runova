@@ -3,26 +3,33 @@
 export interface AdePoint {
   title: string;
   body: string;
+  /** An icon name from src/components/effects/Icon.astro. */
+  icon: 'layout-grid' | 'git-commit' | 'gauge' | 'list-checks' | 'shield-check';
 }
 
 export const ADE_POINTS: AdePoint[] = [
   {
+    icon: 'layout-grid',
     title: 'Several agents in view at once',
     body: 'A workspace is a tree of panes, not a single editor. Each pane holds a CLI or a shell with its own folder, and Runova shows whether every agent is working, waiting on you or done.',
   },
   {
+    icon: 'git-commit',
     title: 'The loop closes in one place',
     body: 'Read the diff, stage hunks, run the tests, send the failure back to the agent, commit, tag and watch the pipeline, all in the window where the code was written.',
   },
   {
+    icon: 'gauge',
     title: 'Tokens and quotas up front',
     body: 'Agents cost money and burn through limits, so tokens, cost and rate limits are always on screen, and an agent tab can wait out a limit and continue by itself.',
   },
   {
+    icon: 'list-checks',
     title: 'Long jobs outgrow one session',
     body: 'Relay cuts the work into tasks that each fit an agent’s context, runs them one after another in fresh sessions, and passes what each session learned to the next.',
   },
   {
+    icon: 'shield-check',
     title: 'Agents run what they read',
     body: 'Skills are scanned before an agent reads them, secrets live in an encrypted vault instead of a .env in the repo, and risky SSH commands stop for your approval.',
   },

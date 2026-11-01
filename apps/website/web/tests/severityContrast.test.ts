@@ -57,14 +57,14 @@ describe('severity colors', () => {
   }
 
   it('matches the lowest ratios design.md gives for the plain colors', () => {
-    // A sanity check of the math against the spec table (info, Dark 6.03 and Light 5.85).
+    // A sanity check of the math against the spec table (info, Dark 5.93 and Light 5.85).
     const lowest = (tokens: Map<string, string>) =>
       Math.min(
         ...['--background', '--card', '--muted'].map((surface) =>
           contrastRatio(color(tokens, '--severity-info'), color(tokens, surface)),
         ),
       );
-    expect(lowest(themes[1].tokens)).toBeCloseTo(6.03, 2);
+    expect(lowest(themes[1].tokens)).toBeCloseTo(5.93, 2);
     expect(lowest(themes[0].tokens)).toBeCloseTo(5.85, 2);
   });
 });

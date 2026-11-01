@@ -14,12 +14,27 @@ const siteCss = readFileSync(
 
 // Tokens the site adds on its own (design.md). The severity colors join the app in T024; once the
 // app declares them, the comparison below covers them too.
-const siteOnly = (name: string) =>
-  name === '--glow' || name === '--grid-line' || name.startsWith('--severity-');
+const siteOnly = (name: string) => name === '--glow' || name.startsWith('--severity-');
+
+// In Dark the site lifts its surfaces to a lighter charcoal than the app's near black (design.md,
+// Themes). Accents, text and status colors still match the app exactly.
+const DARK_SURFACES = new Set([
+  '--background',
+  '--card',
+  '--popover',
+  '--secondary',
+  '--muted',
+  '--muted-foreground',
+  '--accent',
+  '--border',
+  '--input',
+]);
+
+const lightness = (value: string) => Number(/(\d+(?:\.\d+)?)%\s*$/.exec(value)?.[1]);
 
 const themes = [
-  { name: 'Light', selector: [':root', '.theme-light'] },
-  { name: 'Dark', selector: ['.dark'] },
+  { name: 'Light', selector: [':root', '.theme-light'], own: new Set<string>() },
+  { name: 'Dark', selector: ['.dark'], own: DARK_SURFACES },
 ];
 
 describe('design tokens match the desktop app', () => {
@@ -34,6 +49,7 @@ describe('design tokens match the desktop app', () => {
       ]);
       expect(app.size).toBeGreaterThan(20);
       for (const [name, value] of app) {
+        if (theme.own.has(name)) continue;
         expect(site.get(name), `${theme.name} ${name}`).toBe(value);
       }
     });
@@ -46,6 +62,19 @@ describe('design tokens match the desktop app', () => {
       expect(extra).toEqual([]);
     });
   }
+
+  it('lifts every Dark surface above the app, keeping the order from page to raised surface', () => {
+    const app = readTokenBlock(appCss, ['.dark']);
+    const site = readTokenBlock(siteCss, ['.dark']);
+    for (const name of DARK_SURFACES) {
+      expect(app.has(name), `the app declares ${name}`).toBe(true);
+      expect(lightness(site.get(name) ?? ''), name).toBeGreaterThan(lightness(app.get(name) ?? ''));
+    }
+    const l = (name: string) => lightness(site.get(name) ?? '');
+    expect(l('--background')).toBeLessThan(l('--card'));
+    expect(l('--card')).toBeLessThan(l('--secondary'));
+    expect(l('--secondary')).toBeLessThan(l('--border'));
+  });
 
   it('exposes the same Tailwind colors and radii as the app', () => {
     const app = readTokenBlock(appCss, ['@theme inline']);

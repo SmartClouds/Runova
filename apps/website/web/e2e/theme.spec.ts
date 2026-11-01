@@ -43,7 +43,7 @@ test.describe('theme', () => {
   test('the background follows the theme tokens', async ({ page }) => {
     await open(page, 'dark');
     const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(await background()).toBe('rgb(10, 10, 10)');
+    expect(await background()).toBe('rgb(21, 22, 25)');
     await toggle(page).click();
     await expect.poll(background).toBe('rgb(245, 245, 245)');
   });

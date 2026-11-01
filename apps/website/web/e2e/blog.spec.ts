@@ -108,7 +108,7 @@ test.describe('blog', () => {
     await page.goto('/');
     await page
       .getByRole('navigation', { name: 'Footer' })
-      .getByRole('link', { name: 'Blog' })
+      .getByRole('link', { name: 'Blog', exact: true })
       .click();
     await expect(page).toHaveURL('/blog');
   });

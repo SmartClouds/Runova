@@ -34,7 +34,7 @@ const id = `${item.slug}-what-to-do`;
           <dt class="text-muted-foreground">CVE</dt>
           <dd class="flex flex-wrap gap-x-3">
             {item.cveIds.map((cve) => (
-              <a href={cveUrl(cve)} class="font-mono text-primary underline underline-offset-4" rel="noopener noreferrer">
+              <a href={cveUrl(cve)} class="link font-mono" rel="noopener noreferrer">
                 {cve}
               </a>
             ))}

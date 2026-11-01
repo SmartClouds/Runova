@@ -37,10 +37,7 @@ export function ErrorSummary({
       )}
       {offerSignIn && problem.status === 401 && (
         <p>
-          <a
-            className="font-medium text-primary underline underline-offset-4"
-            href={`/admin/sign-in?next=${encodeURIComponent(next)}`}
-          >
+          <a className="link" href={`/admin/sign-in?next=${encodeURIComponent(next)}`}>
             Sign in again
           </a>{' '}
           and save once more. Copy what you wrote first, because signing in leaves this page.

@@ -45,11 +45,12 @@ function onDemandPages(): Set<string> {
   return new Set(
     readdirSync(pagesDir, { recursive: true, encoding: 'utf8' })
       .map((name) => name.replace(/\\/g, '/'))
-      .filter((name) => name.endsWith('.astro') && !name.includes('['))
+      // Pages and endpoints (such as blog/rss.xml.ts) that the server renders on each request.
+      .filter((name) => /\.(astro|ts)$/.test(name) && !name.includes('['))
       .filter((name) =>
         /export const prerender = false/.test(readFileSync(new URL(name, pagesDir), 'utf8')),
       )
-      .map((name) => `/${name.slice(0, -'.astro'.length)}`.replace(/\/index$/, '')),
+      .map((name) => `/${name.replace(/\.(astro|ts)$/, '')}`.replace(/\/index$/, '')),
   );
 }
 

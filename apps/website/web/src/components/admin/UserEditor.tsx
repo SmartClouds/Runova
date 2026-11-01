@@ -114,7 +114,10 @@ export default function UserEditor({ id }: { id: number }) {
   return (
     <div className="grid max-w-2xl gap-6">
       <div className="grid gap-2">
-        <a href="/admin/users" className="text-muted-foreground text-sm hover:underline">
+        <a
+          href="/admin/users"
+          className="text-muted-foreground text-sm transition-colors duration-[120ms] hover:text-foreground"
+        >
           All users
         </a>
         <h1 className="font-display font-extrabold text-3xl tracking-tight">

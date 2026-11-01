@@ -179,7 +179,7 @@ export default function ItemList({ kind }: { kind: keyof typeof KINDS }) {
                 <tr key={item.id} className="border-b">
                   <th scope="row" className="py-3 pe-4 font-medium">
                     <a
-                      className="underline-offset-4 hover:underline"
+                      className="transition-colors duration-[120ms] hover:text-primary"
                       href={`${adminPath}/${item.id}`}
                     >
                       {item.title}

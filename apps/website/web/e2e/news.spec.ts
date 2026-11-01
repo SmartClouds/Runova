@@ -97,7 +97,7 @@ test.describe('news with JavaScript', () => {
     await page.goto('/');
     await page
       .getByRole('navigation', { name: 'Footer' })
-      .getByRole('link', { name: 'News' })
+      .getByRole('link', { name: 'News', exact: true })
       .click();
     await expect(page).toHaveURL('/news');
   });

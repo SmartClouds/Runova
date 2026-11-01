@@ -65,7 +65,7 @@
             const link = document.createElement('a');
             // Pagefind lists the built folders with a trailing slash; the site's URLs have none.
             link.href = result.url.replace(/\/(index\.html)?$/, '') || '/';
-            link.className = 'font-semibold text-primary underline-offset-4 hover:underline';
+            link.className = 'font-semibold text-primary transition-colors duration-[120ms] hover:text-foreground';
             link.textContent = result.meta.title ?? link.href;
             const excerpt = document.createElement('p');
             excerpt.className = 'mt-1 text-muted-foreground text-sm';

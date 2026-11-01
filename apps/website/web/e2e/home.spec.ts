@@ -1,113 +1,84 @@
 import { expect, test } from '@playwright/test';
 import { scanHtml } from '../tests/helpers/textScan';
-import {
-  canvas,
-  capableDevice,
-  fallback,
-  hero,
-  settle,
-  watchScripts,
-  watchThree,
-} from './heroHelpers';
-
-test.beforeEach(({ page }) => capableDevice(page));
+import { demoSummary, hero, settle, watchScripts } from './heroHelpers';
 
 test.describe('home page hero', () => {
-  test('loads three.js only once the hero is visible, then runs the scene', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 600 });
-    const three = watchThree(page);
+  test('plays the workspace run once, from working to done', async ({ page }) => {
+    await page.goto('/');
+    await expect(hero(page)).toHaveAttribute('data-state', 'playing');
+    await expect(demoSummary(page)).toHaveText('3 working');
+    await expect(hero(page)).toHaveAttribute('data-state', 'done', { timeout: 15_000 });
+    await expect(demoSummary(page)).toHaveText('1 waiting on you · 2 done');
+    await expect(page.locator('[data-demo-tokens]')).toHaveText('184.2k tokens');
 
-    // Open the page scrolled to the closing call to action, with the hero out of view.
+    // Once done it stays done: scrolling away and back does not replay it.
+    await page.locator('#download').scrollIntoViewIfNeeded();
+    await hero(page).scrollIntoViewIfNeeded();
+    await settle(page);
+    await expect(hero(page)).toHaveAttribute('data-state', 'done');
+  });
+
+  test('waits until the hero is on screen before it starts', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 600 });
     await page.goto('/#download');
     await settle(page);
     await expect(hero(page)).not.toBeInViewport();
-    expect(three.loaded).toBe(false);
-    await expect(canvas(page)).toHaveCount(0);
+    await expect(hero(page)).toHaveAttribute('data-state', 'idle');
 
     await hero(page).scrollIntoViewIfNeeded();
-    await expect(hero(page)).toHaveAttribute('data-state', 'running', { timeout: 15_000 });
-    // The response handler reads the chunk's body asynchronously, so it can finish after the scene
-    // reports running.
-    await expect.poll(() => three.loaded).toBe(true);
-    await expect(canvas(page)).toBeVisible();
-    await expect(fallback(page)).toHaveCSS('opacity', '0');
+    await expect(hero(page)).toHaveAttribute('data-state', /playing|done/);
   });
 
-  test('draws the scene in a worker, off the main thread', async ({ page }) => {
+  test('ends on the same picture the server sends', async ({ browser, page }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const still = await context.newPage();
+    await still.goto('/');
+    const before = await still.locator('.demo-window').textContent();
+    await context.close();
+
     await page.goto('/');
-    await expect(hero(page)).toHaveAttribute('data-state', 'running', { timeout: 15_000 });
-    // A canvas handed to a worker with transferControlToOffscreen refuses getContext.
-    const transferred = await canvas(page).evaluate((element) => {
-      try {
-        (element as HTMLCanvasElement).getContext('2d');
-        return false;
-      } catch {
-        return true;
-      }
-    });
-    expect(transferred).toBe(true);
+    await expect(hero(page)).toHaveAttribute('data-state', 'done', { timeout: 15_000 });
+    expect(await page.locator('.demo-window').textContent()).toBe(before);
   });
 
-  test('starts the hero worker only after the first contentful paint', async ({ page }) => {
-    await page.goto('/');
-    await expect(hero(page)).toHaveAttribute('data-state', 'running', { timeout: 15_000 });
-    const times = await page.evaluate(() => ({
-      paint: performance.getEntriesByName('first-contentful-paint')[0]?.startTime,
-      worker: performance
-        .getEntriesByType('resource')
-        .find((entry) => entry.name.includes('/heroWorker'))?.startTime,
-    }));
-    expect(times.paint).toBeGreaterThan(0);
-    expect(times.worker).toBeGreaterThan(times.paint ?? Infinity);
-  });
-
-  test('pauses the scene when the hero leaves the viewport and resumes when it returns', async ({
+  test('with reduced motion, shows the finished run at once and nothing moves', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 600 });
-    await page.goto('/');
-    await expect(hero(page)).toHaveAttribute('data-state', 'running', { timeout: 15_000 });
-
-    await page.locator('#download').scrollIntoViewIfNeeded();
-    await expect(hero(page)).toHaveAttribute('data-state', 'paused');
-
-    await hero(page).scrollIntoViewIfNeeded();
-    await expect(hero(page)).toHaveAttribute('data-state', 'running');
-  });
-
-  test('with reduced motion, shows the static image and never loads three.js', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    const three = watchThree(page);
     await page.goto('/');
-    await settle(page);
-
-    await expect(hero(page)).toHaveAttribute('data-state', 'static');
-    await expect(hero(page)).toHaveAttribute('data-reason', 'reduced-motion');
-    await expect(fallback(page)).toBeVisible();
-    await expect(fallback(page)).toHaveCSS('opacity', '1');
-    await expect(canvas(page)).toHaveCount(0);
-    expect(three.loaded).toBe(false);
+    await expect(hero(page)).toHaveAttribute('data-state', 'done');
+    await expect(demoSummary(page)).toHaveText('1 waiting on you · 2 done');
+    const animated = await page.evaluate(() => document.getAnimations().length);
+    expect(animated).toBe(0);
   });
 
-  test('on a low-end device, shows the static image and never loads three.js', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 4 });
-    });
-    const three = watchThree(page);
-    await page.goto('/');
-    await settle(page);
-
-    await expect(hero(page)).toHaveAttribute('data-reason', 'low-end');
-    await expect(fallback(page)).toBeVisible();
-    expect(three.loaded).toBe(false);
-  });
-
-  test('without JavaScript, the static image is there', async ({ browser }) => {
+  test('without JavaScript, the finished run is there', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
     await page.goto('/');
-    await expect(fallback(page)).toBeVisible();
+    await expect(hero(page)).toBeVisible();
+    await expect(page.getByText('Discount codes are in. All 21 tests pass.')).toBeVisible();
+    await expect(demoSummary(page)).toHaveText('1 waiting on you · 2 done');
     await context.close();
+  });
+
+  test('loads no WebGL library and starts no worker', async ({ page }) => {
+    const three = watchScripts(page, 'THREE.WebGLRenderer');
+    const workers: string[] = [];
+    page.on('worker', (worker) => workers.push(worker.url()));
+    await page.goto('/');
+    await settle(page);
+    expect(three.loaded).toBe(false);
+    expect(workers).toEqual([]);
+  });
+
+  test('shows two panes on a phone and all four on a desktop', async ({ page }) => {
+    const panes = page.locator('.demo-pane');
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto('/');
+    await expect(panes.filter({ visible: true })).toHaveCount(2);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(panes.filter({ visible: true })).toHaveCount(4);
   });
 });
 
@@ -130,7 +101,7 @@ test.describe('home page', () => {
   test('never downloads React', async ({ page }) => {
     const react = watchScripts(page, 'https://react.dev/errors/');
     await page.goto('/');
-    await expect(hero(page)).toHaveAttribute('data-state', 'running', { timeout: 15_000 });
+    await expect(hero(page)).toHaveAttribute('data-state', /playing|done/, { timeout: 15_000 });
     await settle(page);
     expect(react.loaded).toBe(false);
   });
@@ -140,5 +111,36 @@ test.describe('home page', () => {
     const links = page.locator('a[href="/download"]');
     expect(await links.count()).toBeGreaterThanOrEqual(2);
     await expect(links.first()).toBeVisible();
+  });
+
+  test('copies the winget command', async ({ context, page }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/');
+    const button = page.getByRole('button', { name: 'Copy the winget command' });
+    await button.click();
+    await expect(page.locator('[data-copy-status]')).toHaveText('Copied');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      'winget install SmartClouds.Runova',
+    );
+  });
+
+  test('later sections fade in as they scroll into view', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    const cta = page.locator('#download [data-reveal]');
+    await expect(cta).toHaveAttribute('data-reveal', 'waiting');
+    await cta.scrollIntoViewIfNeeded();
+    await expect(cta).toHaveAttribute('data-reveal', 'shown');
+    await expect(cta).toHaveCSS('opacity', '1');
+  });
+
+  test('no link on the page is underlined', async ({ page }) => {
+    await page.goto('/');
+    const underlined = await page.evaluate(() =>
+      [...document.querySelectorAll('a')]
+        .filter((link) => getComputedStyle(link).textDecorationLine.includes('underline'))
+        .map((link) => link.textContent?.trim()),
+    );
+    expect(underlined).toEqual([]);
   });
 });

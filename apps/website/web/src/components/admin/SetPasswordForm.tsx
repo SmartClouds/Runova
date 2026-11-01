@@ -55,7 +55,7 @@ export default function SetPasswordForm() {
           Your password is set.
         </p>
         <p>
-          <a className="font-medium text-primary underline underline-offset-4" href={SIGN_IN_PATH}>
+          <a className="link" href={SIGN_IN_PATH}>
             Sign in
           </a>{' '}
           with your email and the new password.

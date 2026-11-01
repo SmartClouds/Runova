@@ -1,22 +1,110 @@
 ---
+import Icon from './effects/Icon.astro';
+
 const year = new Date().getFullYear();
+const GITHUB = 'https://github.com/SmartClouds/Runova';
+
+interface FooterLink {
+  href: string;
+  label: string;
+  external?: boolean;
+}
+
+const COLUMNS: { title: string; links: FooterLink[] }[] = [
+  {
+    title: 'Product',
+    links: [
+      { href: '/features', label: 'Features' },
+      { href: '/download', label: 'Download' },
+      { href: '/help', label: 'Help' },
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      { href: '/blog', label: 'Blog' },
+      { href: '/news', label: 'News' },
+      { href: '/blog/rss.xml', label: 'Blog RSS' },
+      { href: '/news/rss.xml', label: 'News RSS' },
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
+      { href: GITHUB, label: 'Source on GitHub', external: true },
+      { href: `${GITHUB}/blob/master/LICENSE`, label: 'MIT license', external: true },
+    ],
+  },
+];
 ---
 
-<footer class="mt-auto border-t">
+<footer class="mt-auto border-t bg-card/40">
   <div
-    class="mx-auto flex max-w-[1200px] flex-col gap-2 px-4 py-8 text-muted-foreground text-sm md:flex-row md:items-center md:justify-between md:px-6"
+    class="mx-auto grid max-w-[1200px] gap-10 px-4 pt-14 pb-10 md:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)] md:px-6"
   >
-    <p>&copy; {year} SmartClouds. Runova is open source.</p>
-    <nav aria-label="Footer" class="flex flex-wrap gap-x-6 gap-y-2">
-      <a href="/blog" class="text-primary underline underline-offset-4">Blog</a>
-      <a href="/news" class="text-primary underline underline-offset-4">News</a>
-      <a
-        href="https://github.com/SmartClouds/Runova"
-        class="text-primary underline underline-offset-4"
-        rel="noopener"
-      >
-        Source on GitHub
+    <div class="max-w-[22rem]">
+      <a href="/" class="inline-flex items-center gap-2 font-display font-semibold text-lg tracking-tight">
+        <img src="/favicon-32.png" alt="" width="24" height="24" class="rounded-[6px]" />
+        Runova
       </a>
+      <p class="mt-3 text-muted-foreground text-sm">
+        The Agentic Development Environment. Run your coding agents side by side, then review, test
+        and ship from the same window.
+      </p>
+      <a
+        href={GITHUB}
+        rel="noopener"
+        class="mt-5 inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 font-medium text-sm transition-colors duration-[120ms] hover:border-primary/50"
+      >
+        <Icon name="github" size={16} />
+        Star on GitHub
+      </a>
+    </div>
+
+    <nav aria-label="Footer" class="grid grid-cols-2 gap-8 sm:grid-cols-3">
+      {
+        COLUMNS.map((column) => (
+          <div>
+            <p class="font-mono text-muted-foreground text-xs uppercase tracking-[0.14em]">
+              {column.title}
+            </p>
+            <ul class="mt-4 flex flex-col gap-2.5 text-sm">
+              {column.links.map((link) => (
+                <li>
+                  <a
+                    href={link.href}
+                    rel={link.external ? 'noopener' : undefined}
+                    class="link-muted group inline-flex items-center gap-1"
+                  >
+                    {link.label}
+                    {link.external && (
+                      <Icon
+                        name="arrow-right"
+                        size={12}
+                        class="-rotate-45 opacity-60 transition-transform duration-[120ms] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                      />
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
     </nav>
+  </div>
+
+  {/* A status bar like the one at the bottom of the app window. */}
+  <div class="border-t">
+    <div
+      class="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3 font-mono text-muted-foreground text-xs md:px-6"
+    >
+      <span class="inline-flex items-center gap-2">
+        <span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
+        Open source, MIT
+      </span>
+      <span>Windows · macOS · Linux</span>
+      <span class="sm:ml-auto">&copy; {year} SmartClouds</span>
+    </div>
   </div>
 </footer>

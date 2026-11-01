@@ -28,7 +28,7 @@ const cards = [
     {
       cards.map((card) => (
         <li class="rounded-lg border p-5">
-          <a href={card.href} class="font-semibold text-lg underline-offset-4 hover:underline">
+          <a href={card.href} class="font-semibold text-lg transition-colors duration-[120ms] hover:text-primary">
             {card.label}
           </a>
           <p class="mt-2 text-muted-foreground text-sm">{card.text}</p>

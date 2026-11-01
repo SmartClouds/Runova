@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { getContainerRenderer as reactRenderer } from '@astrojs/react/container-renderer';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { DEMO_LENGTH, DEMO_PANES, statusSummary } from '../src/lib/heroDemo';
 import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../src/lib/home';
 import { HOME_TITLE } from '../src/lib/seo';
 import Home from '../src/pages/index.astro';
@@ -41,6 +42,8 @@ function decodeAttribute(value: string): string {
   return value
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
     .replace(/&amp;/g, '&');
 }
 
@@ -62,12 +65,42 @@ describe('home page', () => {
     expect(section('hero')).toMatch(/<h1[^>]*>[^<]*Run the work/);
   });
 
-  it('shows the static hero image in the server render, with a host for the scene', () => {
-    const hero = section('hero');
-    expect(hero).toMatch(
-      /<svg[^>]* data-hero-fallback[^>]* role="img"[^>]* aria-label="[^"]{10,}"/,
-    );
-    expect(hero).toMatch(/<div[^>]* data-hero-scene[^>]* aria-hidden="true"/);
+  describe('hero workspace demo', () => {
+    it('is a figure that describes itself to screen readers and hides the visual', () => {
+      const hero = section('hero');
+      expect(hero).toMatch(/<figure[^>]* data-hero[\s>]/);
+      expect(hero).toMatch(/<figure[^>]* data-state="idle"/);
+      const caption = /<figcaption class="sr-only"[^>]*>([\s\S]*?)<\/figcaption>/.exec(hero)?.[1];
+      expect(caption?.trim().length).toBeGreaterThanOrEqual(10);
+      expect(hero).toMatch(/<div class="demo-window"[^>]* aria-hidden="true"/);
+    });
+
+    it('renders the finished run, so it reads right without JavaScript', () => {
+      const hero = decodeAttribute(section('hero'));
+      for (const pane of DEMO_PANES) {
+        expect(hero).toContain(`>${pane.cli}<`);
+        for (const line of pane.lines) expect(hero).toContain(line.text);
+        if (pane.status) {
+          expect(hero).toContain(`data-status="${pane.status.end}"`);
+          expect(hero).toContain(`--end-at: ${pane.status.endAt}`);
+        }
+      }
+      expect(hero).toContain(`>${statusSummary(DEMO_LENGTH)}<`);
+    });
+
+    it('gives every line its moment in the run', () => {
+      const lines = section('hero').match(/<p class="demo-line[^"]*"[^>]*>/g) ?? [];
+      expect(lines).toHaveLength(DEMO_PANES.flatMap((pane) => pane.lines).length);
+      for (const line of lines) expect(line).toMatch(/style="--at: [\d.]+"/);
+    });
+  });
+
+  describe('hero demo status bar', () => {
+    it('counts agents by status as the run goes', () => {
+      expect(statusSummary(0)).toBe('3 working');
+      expect(statusSummary(3)).toBe('2 working · 1 waiting on you');
+      expect(statusSummary(DEMO_LENGTH)).toBe('1 waiting on you · 2 done');
+    });
   });
 
   it('hydrates no framework island, so React stays off the page', () => {
