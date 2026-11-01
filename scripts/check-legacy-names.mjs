@@ -9,7 +9,9 @@
  * - it carries the marker `legacy-name`, or
  * - it also says Runova (prose like "Runova used to be called ..."), or
  * - its file is one of the legacy names modules (`legacyNames.ts`, `LegacyNames.cs`,
- *   `Legacy.php` and the like), lives under `rebrand/`, or under a folder called `legacy/`.
+ *   `Legacy.php` and the like), lives under `rebrand/`, or under a folder called `legacy/`, or
+ * - its file is a response recorded from an outside service (see RECORDED), which can't carry a
+ *   marker and has to stay as the service sent it.
  *
  * Everything else is a slip, usually code written before the rename and merged after it.
  *
@@ -26,11 +28,16 @@ const MARKER = 'legacy-name';
 const BINARY =
   /\.(png|jpe?g|gif|webp|ico|icns|zip|gz|tgz|woff2?|ttf|otf|eot|pdf|mp[34]|wav|ogg|webm|onnx|bin|db|sqlite|jar|exe|dll|so|dylib|wasm|pfx|p12|der)$/i;
 const LEGACY_FILE = /legacy[A-Za-z]*\.[A-Za-z]+$|\/rebrand\/|(^|\/)legacy\//i;
+// A real release from GitHub. It lists the core and connector under their old names too,
+// because installs from before the rename still download them.
+const RECORDED = new Set([
+  'apps/website/api/tests/Runova.Website.Tests/Releases/Fixtures/github-release-v2.2.0.json',
+]);
 
 const files = execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, maxBuffer: 1 << 28 })
   .toString('utf8')
   .split('\0')
-  .filter((path) => path && !BINARY.test(path) && !LEGACY_FILE.test(path));
+  .filter((path) => path && !BINARY.test(path) && !LEGACY_FILE.test(path) && !RECORDED.has(path));
 
 const problems = [];
 for (const path of files) {

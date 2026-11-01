@@ -3,19 +3,22 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { type LaunchedApp, launchApp } from './app';
+import { dockerAvailable } from './sshServer';
 
 /**
  * The Database section end to end (E45), against a real PostgreSQL in this computer's Docker:
  * the container shows as a card, one click connects with the password read from its environment,
  * and then a table is made, filled, read in the grid and queried.
  *
- * Needs Docker and the postgres:17-alpine image. RUNOVA_E2E_SCREENSHOTS names a folder to save
- * screenshots of each step into, for looking at the screens.
+ * Needs Docker and the postgres:17-alpine image. On CI the image is pulled when missing, and the
+ * test skips where the runner has no Docker (the macOS runner). RUNOVA_E2E_SCREENSHOTS names a
+ * folder to save screenshots of each step into, for looking at the screens.
  */
 
 const IMAGE = 'postgres:17-alpine';
 
 function dockerHasImage(): boolean {
+  if (!dockerAvailable()) return false;
   try {
     execFileSync('docker', ['image', 'inspect', IMAGE], { stdio: 'ignore', windowsHide: true });
     return true;

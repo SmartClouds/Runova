@@ -42,6 +42,19 @@ describe('settingStatement', () => {
     expect(() => settingStatement('redis', 'maxmemory', 'a"\nFLUSHALL')).toThrow(/value/i);
   });
 
+  it('keeps a Mongo setting that is not a number or a flag as text', () => {
+    expect(settingStatement('mongodb', 'redactClientLogData', 'false')).toBe(
+      'db.adminCommand({"setParameter":1,"redactClientLogData":false})',
+    );
+    expect(settingStatement('mongodb', 'traceExceptions', 'all')).toBe(
+      'db.adminCommand({"setParameter":1,"traceExceptions":"all"})',
+    );
+  });
+
+  it('turns down a SQL Server setting that is not a number', () => {
+    expect(() => settingStatement('mssql', 'max degree of parallelism', 'four')).toThrow(/number/i);
+  });
+
   it('says where settings cannot be changed', () => {
     expect(() => settingStatement('cassandra', 'x', '1')).toThrow(/cassandra\.yaml/i);
     expect(() => settingStatement('sqlite', 'x', '1')).toThrow(/pragma/i);
@@ -134,6 +147,32 @@ describe('createUserStatements', () => {
     expect(createUserStatements('postgres', { user: 'u', password: 'pw' })).toEqual([
       `CREATE ROLE "u" WITH LOGIN PASSWORD 'pw';`,
     ]);
+    expect(createUserStatements('mysql', { user: 'u', password: 'pw', level: 'read' })).toEqual([
+      "CREATE USER 'u'@'%' IDENTIFIED BY 'pw';",
+    ]);
+    expect(createUserStatements('mssql', { user: 'u', password: 'pw', level: 'read' })).toEqual([
+      "CREATE LOGIN [u] WITH PASSWORD = N'pw';",
+    ]);
+    expect(createUserStatements('cassandra', { user: 'u', password: 'pw', level: 'read' })).toEqual(
+      [`CREATE ROLE "u" WITH PASSWORD = 'pw' AND LOGIN = true;`],
+    );
+    expect(
+      createUserStatements('mongodb', { user: 'u', password: 'pw', database: 'shop' }),
+    ).toEqual(['db.getSiblingDB("admin").createUser({"user":"u","pwd":"pw","roles":[]})']);
+    expect(createUserStatements('redis', { user: 'u', password: 'pw' })).toEqual([
+      'ACL SETUSER u on >pw ~* -@all',
+    ]);
+  });
+
+  it('gives a Postgres user access to every table without naming a database', () => {
+    expect(createUserStatements('postgres', { user: 'u', password: 'pw', level: 'admin' })).toEqual(
+      [
+        `CREATE ROLE "u" WITH LOGIN PASSWORD 'pw';`,
+        'GRANT USAGE ON SCHEMA public TO "u";',
+        'GRANT ALL ON ALL TABLES IN SCHEMA public TO "u";',
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "u";',
+      ],
+    );
   });
 
   it('turns down a name or password it cannot write safely', () => {
@@ -167,6 +206,68 @@ describe('accessStatements', () => {
       'ACL SETUSER app resetkeys ~* -@all +@read +@write',
     ]);
   });
+
+  it('grants the chosen level after revoking in Postgres, MariaDB and Cassandra', () => {
+    expect(accessStatements('postgres', { user: 'app', database: 'shop', level: 'write' })).toEqual(
+      [
+        'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM "app";',
+        'GRANT CONNECT ON DATABASE "shop" TO "app";',
+        'GRANT USAGE ON SCHEMA public TO "app";',
+        'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "app";',
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "app";',
+      ],
+    );
+    expect(
+      accessStatements('mariadb', {
+        user: 'app',
+        host: 'localhost',
+        database: 'shop',
+        level: 'none',
+      }),
+    ).toEqual(["REVOKE ALL PRIVILEGES ON `shop`.* FROM 'app'@'localhost';"]);
+    expect(accessStatements('cassandra', { user: 'app', database: 'ks', level: 'admin' })).toEqual([
+      'REVOKE ALL PERMISSIONS ON KEYSPACE "ks" FROM "app";',
+      'GRANT ALL PERMISSIONS ON KEYSPACE "ks" TO "app";',
+    ]);
+  });
+
+  it('drops every SQL Server role before adding the ones for the level', () => {
+    const drops = [
+      'ALTER ROLE [db_datareader] DROP MEMBER [app];',
+      'ALTER ROLE [db_datawriter] DROP MEMBER [app];',
+      'ALTER ROLE [db_owner] DROP MEMBER [app];',
+    ];
+    const head = ['USE [shop];', "IF USER_ID(N'app') IS NULL CREATE USER [app] FOR LOGIN [app];"];
+    expect(accessStatements('mssql', { user: 'app', database: 'shop', level: 'admin' })).toEqual([
+      ...head,
+      ...drops,
+      'ALTER ROLE [db_owner] ADD MEMBER [app];',
+    ]);
+    expect(accessStatements('mssql', { user: 'app', database: 'shop', level: 'none' })).toEqual([
+      ...head,
+      ...drops,
+    ]);
+  });
+
+  it('only revokes when the level is none', () => {
+    expect(
+      accessStatements('mongodb', { user: 'app', database: 'shop', level: 'none' }),
+    ).toHaveLength(1);
+    expect(accessStatements('redis', { user: 'app', level: 'none' })).toEqual([
+      'ACL SETUSER app resetkeys ~* -@all',
+    ]);
+  });
+
+  it.each(['mysql', 'mssql', 'cassandra', 'mongodb'] as const)(
+    'asks which database to change in %s',
+    (engine) => {
+      expect(() => accessStatements(engine, { user: 'app', level: 'read' })).toThrow(/pick the/i);
+    },
+  );
+
+  it('turns down an engine without users', () => {
+    expect(() => accessStatements('sqlite', { user: 'app', level: 'read' })).toThrow(/no users/i);
+  });
 });
 
 describe('dropUserStatement and changePasswordStatement', () => {
@@ -184,6 +285,13 @@ describe('dropUserStatement and changePasswordStatement', () => {
   ] as const)('drops and re-keys a %s user', (engine, drop, change) => {
     expect(dropUserStatement(engine, { user: 'app' })).toBe(drop);
     expect(changePasswordStatement(engine, { user: 'app' }, 'new')).toBe(change);
+  });
+
+  it('turns down a missing or unsafe new password and an engine without users', () => {
+    expect(() => changePasswordStatement('postgres', { user: 'app' }, '')).toThrow(/password/i);
+    expect(() => changePasswordStatement('redis', { user: 'app' }, 'p w')).toThrow(/spaces/i);
+    expect(() => changePasswordStatement('sqlite', { user: 'app' }, 'new')).toThrow(/no users/i);
+    expect(() => dropUserStatement('sqlite', { user: 'app' })).toThrow(/no users/i);
   });
 });
 

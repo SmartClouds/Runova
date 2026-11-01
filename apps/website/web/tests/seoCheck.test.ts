@@ -1,8 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { jsonLdProblems } from '../scripts/jsonLdCheck';
 import { builtPages, pageMeta, seoProblems } from '../scripts/seoCheck';
+
+// The JSON-LD check runs the TypeScript compiler over schema.org's types, which takes seconds on a
+// busy CI runner. jsonLdCheck.test.ts covers it once for all its cases. Here a stand-in shows that
+// every block reaches it with its page, without paying for a compile in every test.
+vi.mock('../scripts/jsonLdCheck', () => ({ jsonLdProblems: vi.fn(() => []) }));
 
 const pkg = await import('../package.json', { with: { type: 'json' } });
 
@@ -89,16 +95,24 @@ describe('seoProblems', () => {
     ]);
   });
 
-  it('fails a JSON-LD block that does not parse', () => {
-    const problems = seoProblems([{ path: '/a', html: html({ jsonLd: ['{"@type": }'] }) }]);
-    expect(problems).toEqual([expect.stringMatching(/^\/a: the JSON-LD does not parse: /)]);
-  });
-
-  it('fails a JSON-LD block that does not match its schema.org type', () => {
-    const block =
-      '{"@context":"https://schema.org","@graph":[{"@type":"WebSite","nmae":"Runova"}]}';
-    const problems = seoProblems([{ path: '/a', html: html({ jsonLd: [block] }) }]);
-    expect(problems).toEqual([expect.stringMatching(/^\/a: .*nmae/)]);
+  it('checks every JSON-LD block with the page it is on, and keeps its problems', () => {
+    vi.mocked(jsonLdProblems).mockReturnValueOnce(['/b: nmae is not a property of WebSite']);
+    const problems = seoProblems([
+      {
+        path: '/a',
+        html: html({ title: 'A | Runova', description: `A. ${DESCRIPTION}`, jsonLd: ['1', '2'] }),
+      },
+      {
+        path: '/b',
+        html: html({ title: 'B | Runova', description: `B. ${DESCRIPTION}`, jsonLd: ['3'] }),
+      },
+    ]);
+    expect(jsonLdProblems).toHaveBeenLastCalledWith([
+      { path: '/a', json: '1' },
+      { path: '/a', json: '2' },
+      { path: '/b', json: '3' },
+    ]);
+    expect(problems).toEqual(['/b: nmae is not a property of WebSite']);
   });
 });
 

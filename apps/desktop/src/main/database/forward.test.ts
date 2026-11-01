@@ -18,7 +18,12 @@ afterEach(async () => {
 });
 
 async function startEcho(): Promise<number> {
-  echo = createServer((socket) => socket.pipe(socket));
+  echo = createServer((socket) => {
+    // Closing the forward can reset a connection that is still opening, so the echo's end may
+    // see ECONNRESET. Left unhandled, that fails the whole run.
+    socket.on('error', () => socket.destroy());
+    socket.pipe(socket);
+  });
   await new Promise<void>((resolve) => echo?.listen(0, '127.0.0.1', resolve));
   const address = echo.address();
   if (!address || typeof address === 'string') throw new Error('no port');
@@ -77,6 +82,8 @@ describe('openLocalForward', () => {
     const target = await startEcho();
     const forward = await openLocalForward(async () => connect(target, '127.0.0.1'));
     const socket = connect(forward.port, '127.0.0.1');
+    // The forward destroys its end, which can reach this side as a reset.
+    socket.on('error', () => undefined);
     await new Promise((resolve) => socket.once('connect', resolve));
     const ended = new Promise((resolve) => socket.once('close', resolve));
 
