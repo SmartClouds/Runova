@@ -44,6 +44,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Builds core, protocol and studio first if their dist is out of date.
+    globalSetup: ['src/test/buildPackages.ts'],
     reporters: process.env.CI
       ? ['default', 'github-actions', ['junit', { outputFile: 'test-results/unit-junit.xml' }]]
       : ['default'],

@@ -70,7 +70,8 @@ function fakeSpawn(run: FakeRun, chunkTimes: number[]) {
 /**
  * What keeping the output the old way costs on this machine, right now: trimming the whole kept
  * tail on every line. Timing against this rather than a fixed number of milliseconds keeps the
- * check fair on a slow machine, or with other test files competing for the CPU.
+ * check fair on a slow machine, or with other test files competing for the CPU. Both sides are
+ * wall time, so the test takes the fastest of a few rounds of each (see below).
  */
 function trimEveryLineMs(lines: string[]): number {
   let tail = '';
@@ -150,15 +151,19 @@ describe('TestRunManager under a big suite', () => {
         assertionResults,
       })),
     };
-    const chunkTimes: number[] = [];
-    const events: TestRunEvent[] = [];
-    const manager = new TestRunManager({
-      emit: (event) => events.push(event),
-      spawn: fakeSpawn({ lines, report }, chunkTimes),
-    });
+    const runSuite = async () => {
+      const chunkTimes: number[] = [];
+      const events: TestRunEvent[] = [];
+      const manager = new TestRunManager({
+        emit: (event) => events.push(event),
+        spawn: fakeSpawn({ lines, report }, chunkTimes),
+      });
+      manager.start({ projectId: 'p1', folderPath: root, discovery, targets: [] });
+      await manager.whenIdle('p1');
+      return { events, manager, busy: chunkTimes.reduce((sum, ms) => sum + ms, 0) };
+    };
 
-    manager.start({ projectId: 'p1', folderPath: root, discovery, targets: [] });
-    await manager.whenIdle('p1');
+    const { events, manager, busy: firstBusy } = await runSuite();
 
     const done = events[events.length - 1];
     expect(done).toMatchObject({ type: 'done', summary: { passed: FILES * TESTS, failed: 0 } });
@@ -177,13 +182,23 @@ describe('TestRunManager under a big suite', () => {
 
     // About 14,000 lines. Handling them used to cost at least the trim on every line (60 to 100 ms
     // per chunk on a fast machine, during which no click in the window went anywhere). Now it is
-    // around a tenth of that.
-    const busy = chunkTimes.reduce((sum, ms) => sum + ms, 0);
-    const oldWay = trimEveryLineMs(lines);
+    // around a quarter of that.
+    //
+    // Both are wall time. In a full parallel run the other workers take the CPU away at random,
+    // and a GC pause lands on whichever side happens to be running, so one round of each can come
+    // out at twice the true ratio. The fastest of three rounds, taken in turn, is the cost with
+    // the least of that in it, for both sides alike.
+    const busy = [firstBusy];
+    const oldWay = [trimEveryLineMs(lines)];
+    for (let round = 1; round < 3; round += 1) {
+      busy.push((await runSuite()).busy);
+      oldWay.push(trimEveryLineMs(lines));
+    }
+    const fastestOldWay = Math.min(...oldWay);
     expect(
-      busy,
-      `ms spent on the output, against ${Math.round(oldWay)} ms the old way`,
-    ).toBeLessThan(oldWay / 2);
+      Math.min(...busy),
+      `fastest ms spent on the output, against ${Math.round(fastestOldWay)} ms the old way`,
+    ).toBeLessThan(fastestOldWay / 2);
   }, 60_000);
 
   it('only keeps skipped results that sit under a picked test', async () => {
