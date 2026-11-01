@@ -91,6 +91,7 @@ export function AiPanel({
   });
   const choice = settings.data ? promptProviderModel(settings.data) : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scrolls to the newest message each time one arrives
   useEffect(() => {
     const element = scroller.current;
     if (element) element.scrollTop = element.scrollHeight;

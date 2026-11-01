@@ -1,7 +1,7 @@
 import type { DockerContainer } from '@shared/apiTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Docker, RefreshCw, Search, StopCircle } from '@/components/icons';
 import {
@@ -71,6 +71,7 @@ export function ContainerListSkeleton(): React.JSX.Element {
  */
 export function DockerContainersView(): React.JSX.Element {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   /** A container asked for by a deep link (the status bar popover), waiting for the list to load. */
@@ -254,6 +255,9 @@ export function DockerContainersView(): React.JSX.Element {
                     onRestart={() => actions.restart(container.id)}
                     onRemove={() => actions.openRemoveDialog(container)}
                     onLogs={() => setLogsTarget(container)}
+                    onOpenDatabase={() =>
+                      navigate(`/deploy?databases=1&connect=${encodeURIComponent(container.name)}`)
+                    }
                   />
                 ))}
               </div>

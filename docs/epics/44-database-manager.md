@@ -54,3 +54,27 @@ Engines: PostgreSQL, MySQL, MariaDB, MongoDB, Redis, SQLite, Cassandra (and Scyl
 11. Redis and SQLite.
 12. Cassandra and SQL Server.
 13. "Open database" from containers and the local Docker page, the help article, e2e.
+
+## Verified
+
+- Core rules (`packages/core/src/database/`) have unit tests with a 95% line and 90% branch
+  threshold: container detection, connection URLs, the query classifier, SQL building, table and
+  row-edit SQL, user and setting statements, backup scripts, the AI prompt, the mongosh parser and
+  Redis argument splitting.
+- Drivers ran against real PostgreSQL 17, MariaDB 11 and Redis 8 containers and a real SQLite
+  file: browsing, structure, paging, multi-statement queries, row caps, read-only runs, cancel,
+  all-or-nothing row edits, users with read access, and backup and restore round trips with
+  pg_dump and mariadb-dump.
+- The e2e test (`apps/desktop/e2e/database.e2e.ts`) connects to a real Postgres container in one
+  click, creates and fills a table from the editor, browses and filters it, and confirms a
+  destructive query.
+
+## Known limits
+
+- MySQL 8, MongoDB, SQL Server and Cassandra integration tests are written but were not run on
+  the development machine, which could not pull their images; they run where Docker can pull.
+- Cassandra connects with the local data center `datacenter1`, which the official Cassandra and
+  Scylla images use. A cluster with another data center name is not reachable yet.
+- SQLite queries run in the main process, so a very slow query holds the app until it ends.
+- A local container with no published port on Docker Desktop needs the `alpine/socat` image.
+- SQLite and Redis restores are done by hand (the Backups tab says how).

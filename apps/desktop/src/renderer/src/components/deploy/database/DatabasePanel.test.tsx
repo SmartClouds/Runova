@@ -314,6 +314,18 @@ describe('DatabasePanel', () => {
     expect(await screen.findByText(/relation "nope" does not exist/)).toBeInTheDocument();
   });
 
+  it('connects on its own to the container an Open database link names', async () => {
+    const view = renderWithProviders(<DatabasePanel server={server} />, {
+      bridge: bridge(),
+      route: '/deploy?server=s1&view=database&connect=shop-db',
+    });
+    expect(await screen.findByRole('heading', { name: 'shop-db' })).toBeInTheDocument();
+    expect(view.bridge.$fn('database.connectCandidate')).toHaveBeenCalledWith({
+      serverId: 's1',
+      containerId: 'c-pg',
+    });
+  });
+
   it('disconnects and goes back to the cards', async () => {
     const view = await connect();
     await view.user.click(await screen.findByRole('button', { name: /disconnect/i }));

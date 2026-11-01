@@ -1,5 +1,7 @@
+import { engineFromImage } from '@runova/core';
 import type { DockerContainer } from '@shared/apiTypes';
 import {
+  Database,
   Docker as DockerIcon,
   FileText,
   Play,
@@ -64,6 +66,7 @@ export function DockerContainerRow({
   onRestart,
   onRemove,
   onLogs,
+  onOpenDatabase,
 }: {
   container: DockerContainer;
   pending: boolean;
@@ -77,6 +80,8 @@ export function DockerContainerRow({
   onRemove: () => void;
   /** Opens the container's log. Left out where there is nowhere to show it. */
   onLogs?: () => void;
+  /** Opens a database container in Deploy's Database section (E44). Shown only for databases. */
+  onOpenDatabase?: () => void;
 }): React.JSX.Element {
   const running = container.state === 'running';
   const memPercent =
@@ -139,6 +144,18 @@ export function DockerContainerRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {onOpenDatabase && engineFromImage(container.image) ? (
+          <SimpleTooltip label="Open the database">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Open the database in ${container.name}`}
+              onClick={onOpenDatabase}
+            >
+              <Database className="h-3.5 w-3.5" />
+            </Button>
+          </SimpleTooltip>
+        ) : null}
         {/* Reading the log changes nothing, so it stays open while an action is under way. */}
         {onLogs && (
           <SimpleTooltip label="Logs">

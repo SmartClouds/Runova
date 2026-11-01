@@ -7,6 +7,7 @@ import type { DeployContainerAction } from '@shared/deployDockerTypes';
 import type { DeployServer } from '@shared/deployTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { GLASS_CARD, LoadFailure } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -116,6 +117,7 @@ export function ContainersPanel({ server }: { server: DeployServer }): React.JSX
   const roles = access.data?.user?.roles;
   const canOperate = hasRole(roles, 'operator');
   const canAdmin = hasRole(roles, 'admin');
+  const navigate = useNavigate();
   const connection = useDeployConnection(serverId, signedIn);
   const stale = connection?.state === 'reconnecting';
 
@@ -196,6 +198,13 @@ export function ContainersPanel({ server }: { server: DeployServer }): React.JSX
   }
 
   const actions: ContainerActions = {
+    // Connecting reads the container's environment, which only Admins may see.
+    openDatabase: canAdmin
+      ? (container) =>
+          navigate(
+            `/deploy?server=${encodeURIComponent(server.id)}&view=database&connect=${encodeURIComponent(container.name)}`,
+          )
+      : undefined,
     open: (container) => {
       setDrawerTab('overview');
       setOpenId(container.id);

@@ -2,7 +2,8 @@ import { engineInfo, formatConnectionUrl } from '@runova/core';
 import type { DatabaseCandidate, DatabaseConnection, DatabaseSession } from '@shared/databaseTypes';
 import type { DeployServer } from '@shared/deployTypes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Docker, Plug, Plus, RefreshCw, Spinner, Trash2 } from '@/components/icons';
 import { CARD_GRID, EmptyState, Notice, SectionCard } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,28 @@ export function DatabaseHome({
   });
 
   const candidates = discovery.data?.candidates ?? [];
+
+  // "Open database" from a container list lands here with ?connect=<name>: connect to it once.
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get('connect');
+  const handled = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the list arrives; connect reads the latest state
+  useEffect(() => {
+    if (!wanted || !discovery.data || handled.current === wanted) return;
+    handled.current = wanted;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('connect');
+        return next;
+      },
+      { replace: true },
+    );
+    const found = candidates.find(
+      (one) => one.containerName === wanted || one.containerId === wanted,
+    );
+    if (found) void connect(found);
+  }, [wanted, discovery.data]);
   const fromCards = new Set(candidates.map((one) => one.connectionId).filter(Boolean));
   // Saved connections that belong here and are not already a card above.
   const saved = (connections.data ?? []).filter((connection) => {

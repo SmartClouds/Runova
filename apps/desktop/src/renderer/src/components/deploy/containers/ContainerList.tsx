@@ -1,3 +1,4 @@
+import { engineFromImage } from '@runova/core';
 import type {
   ContainerList as ContainerListData,
   ContainerSummary,
@@ -63,6 +64,8 @@ export interface ContainerActions {
   busyId?: string | null;
   /** Every service's log of a compose project together. */
   openStackLogs?: (project: string) => void;
+  /** Opens a database container in the Database section, connected (E44). */
+  openDatabase?: (container: ContainerSummary) => void;
 }
 
 const ACTION_LABEL: Record<DeployContainerAction, string> = {
@@ -97,8 +100,9 @@ export function ActionMenu({
   actions: ContainerActions;
   align?: 'start' | 'end';
 }): React.JSX.Element | null {
-  const { act, remove } = actions;
-  if (!act && !remove) return null;
+  const { act, remove, openDatabase } = actions;
+  const isDatabase = openDatabase !== undefined && engineFromImage(container.image) !== null;
+  if (!act && !remove && !isDatabase) return null;
   const busy = actions.busyId === container.id;
   return (
     <DropdownMenu>
@@ -115,6 +119,14 @@ export function ActionMenu({
         </DropdownMenuTrigger>
       </SimpleTooltip>
       <DropdownMenuContent align={align}>
+        {isDatabase && (
+          <>
+            <DropdownMenuItem onSelect={() => openDatabase?.(container)}>
+              Open database
+            </DropdownMenuItem>
+            {(act || remove) && <DropdownMenuSeparator />}
+          </>
+        )}
         {act &&
           actionsFor(container).map((action) => (
             <DropdownMenuItem key={action} onSelect={() => act(container, action)}>

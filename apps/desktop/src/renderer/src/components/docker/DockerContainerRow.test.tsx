@@ -86,4 +86,37 @@ describe('DockerContainerRow', () => {
 
     expect(screen.queryByRole('button', { name: 'Show logs of web' })).toBeNull();
   });
+
+  it('offers to open the database in a database container, and only there', () => {
+    const onOpenDatabase = vi.fn();
+    const { rerender } = render(
+      <TooltipProvider>
+        <DockerContainerRow
+          container={{ ...container, name: 'dev-pg', image: 'postgres:17' }}
+          pending={false}
+          onStart={vi.fn()}
+          onStop={vi.fn()}
+          onRestart={vi.fn()}
+          onRemove={vi.fn()}
+          onOpenDatabase={onOpenDatabase}
+        />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open the database in dev-pg' }));
+    expect(onOpenDatabase).toHaveBeenCalled();
+    rerender(
+      <TooltipProvider>
+        <DockerContainerRow
+          container={container}
+          pending={false}
+          onStart={vi.fn()}
+          onStop={vi.fn()}
+          onRestart={vi.fn()}
+          onRemove={vi.fn()}
+          onOpenDatabase={onOpenDatabase}
+        />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /open the database/i })).not.toBeInTheDocument();
+  });
 });
