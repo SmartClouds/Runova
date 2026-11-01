@@ -1,4 +1,4 @@
-# E44 Database manager
+# E45 Database manager
 
 Milestone: standalone (Deploy). Depends on: E05 (servers and the SSH pool), the Deploy containers
 section, the App Store catalog (database templates), the local Docker page, and the AI providers in

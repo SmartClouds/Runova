@@ -1846,7 +1846,7 @@ export const IPC = {
     // main -> renderer: ChatAppend with the lines the CLI added since
     onAppend: 'agentChat:onAppend',
   },
-  // The Database section (E44). Passwords go in, never come back out.
+  // The Database section (E45). Passwords go in, never come back out.
   database: {
     // () -> DatabaseConnection[]
     listConnections: 'database:listConnections',

@@ -15,7 +15,7 @@ import type { DatabaseService } from '../database/service';
 import { type DeployIpcRegistry, object, optionalText, serverId, text } from './deploy';
 
 /**
- * The Database section's channels (E44). They answer only the main window, and every argument
+ * The Database section's channels (E45). They answer only the main window, and every argument
  * is checked here, so nothing malformed reaches a driver or a server.
  */
 

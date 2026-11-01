@@ -64,7 +64,7 @@ export interface ContainerActions {
   busyId?: string | null;
   /** Every service's log of a compose project together. */
   openStackLogs?: (project: string) => void;
-  /** Opens a database container in the Database section, connected (E44). */
+  /** Opens a database container in the Database section, connected (E45). */
   openDatabase?: (container: ContainerSummary) => void;
 }
 

@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { type LaunchedApp, launchApp } from './app';
 
 /**
- * The Database section end to end (E44), against a real PostgreSQL in this computer's Docker:
+ * The Database section end to end (E45), against a real PostgreSQL in this computer's Docker:
  * the container shows as a card, one click connects with the password read from its environment,
  * and then a table is made, filled, read in the grid and queried.
  *

@@ -589,7 +589,7 @@ function registerDeployDockerIpc(
     guard,
     owner: (event) => ownerOf(event.sender),
   });
-  // The Database section (E44) finds and reads database containers with the same calls.
+  // The Database section (E45) finds and reads database containers with the same calls.
   registerDatabaseIpc(docker, guard);
   app.on('will-quit', () => links.closeAll());
 }

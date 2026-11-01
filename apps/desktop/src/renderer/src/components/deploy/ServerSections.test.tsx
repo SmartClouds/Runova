@@ -38,7 +38,7 @@ describe('ServerSections backups', () => {
 });
 
 describe('ServerSections database', () => {
-  it('lists Database right before Backups and switches to it (E44)', async () => {
+  it('lists Database right before Backups and switches to it (E45)', async () => {
     const onChange = vi.fn();
     const { user } = renderWithProviders(<ServerSections value="overview" onChange={onChange} />);
     const names = within(screen.getByRole('navigation', { name: 'Server sections' }))

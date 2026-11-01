@@ -5,7 +5,7 @@ import type { DeployWordPressSite } from '@shared/deployWordPressTypes';
 /**
  * What the Deploy page shows, read from its address (E23): `?cloudflare=1` the Cloudflare page,
  * `?recaptcha=1` the reCAPTCHA page (E40), `?databases=1` the databases on this computer
- * (E44), `?files=` an FTP or SFTP site, `?site=` a WordPress
+ * (E45), `?files=` an FTP or SFTP site, `?site=` a WordPress
  * site and `?server=` a server, in that order.
  * A link to something that is gone falls back to the first server, and with no servers to the
  * first site of either kind.
@@ -37,7 +37,7 @@ export function isRecaptcha(params: ParamReader): boolean {
   return params.get('recaptcha') !== null;
 }
 
-/** The databases on this computer and the connections saved by hand (E44). */
+/** The databases on this computer and the connections saved by hand (E45). */
 export function isDatabases(params: ParamReader): boolean {
   return params.get('databases') !== null;
 }

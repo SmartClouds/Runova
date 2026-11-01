@@ -22,7 +22,7 @@ import { createLocalDocker } from './localDocker';
 import { DatabaseService } from './service';
 
 /**
- * The Database section (E44) in main: saved connections sealed with the Servers vault, server
+ * The Database section (E45) in main: saved connections sealed with the Servers vault, server
  * containers through the Containers screen's calls, databases on a server reached over its SSH
  * connection, and every session closed when the app quits.
  */

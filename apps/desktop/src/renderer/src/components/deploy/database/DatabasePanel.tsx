@@ -7,7 +7,7 @@ import { DatabaseWorkbench } from './DatabaseWorkbench';
 import { useDatabaseConnect } from './useDatabaseConnect';
 
 /**
- * A server's Database section (E44), or this computer's for null: the database containers as
+ * A server's Database section (E45), or this computer's for null: the database containers as
  * one-click cards until a connection is open, then the workbench.
  */
 export function DatabasePanel({ server }: { server: DeployServer | null }): React.JSX.Element {

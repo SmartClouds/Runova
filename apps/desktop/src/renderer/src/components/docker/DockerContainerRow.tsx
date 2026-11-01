@@ -80,7 +80,7 @@ export function DockerContainerRow({
   onRemove: () => void;
   /** Opens the container's log. Left out where there is nowhere to show it. */
   onLogs?: () => void;
-  /** Opens a database container in Deploy's Database section (E44). Shown only for databases. */
+  /** Opens a database container in Deploy's Database section (E45). Shown only for databases. */
   onOpenDatabase?: () => void;
 }): React.JSX.Element {
   const running = container.state === 'running';

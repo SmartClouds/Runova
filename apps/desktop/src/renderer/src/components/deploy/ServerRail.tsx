@@ -438,7 +438,7 @@ export function ServerRail({
   onOpenRecaptcha?: () => void;
   /** Whether the reCAPTCHA page is the one on screen. */
   recaptchaSelected?: boolean;
-  /** Opens the databases on this computer (E44). Left out, the rail has no row for it. */
+  /** Opens the databases on this computer (E45). Left out, the rail has no row for it. */
   onOpenDatabases?: () => void;
   /** Whether the databases page is the one on screen. */
   databasesSelected?: boolean;

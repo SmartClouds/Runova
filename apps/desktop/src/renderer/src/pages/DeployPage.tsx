@@ -578,7 +578,7 @@ export default function DeployPage(): React.JSX.Element {
   }
 
   if (selection.kind === 'databases') {
-    // The databases in this computer's Docker, and the ones saved by hand (E44).
+    // The databases in this computer's Docker, and the ones saved by hand (E45).
     return (
       <DeployLayout rail={<ServerRail {...railProps} selectedId={null} databasesSelected />}>
         <DatabasePanel server={null} />

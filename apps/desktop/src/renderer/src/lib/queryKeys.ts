@@ -217,7 +217,7 @@ export const queryKeys = {
   deployCoreRelease: ['deploy', 'coreRelease'] as const,
   /** Whether this computer is signed in to a server's core, or what it needs first. */
   deployAccess: (serverId: string) => ['deploy', 'access', serverId] as const,
-  /** Database containers on a server, or on this computer for 'local' (E44). */
+  /** Database containers on a server, or on this computer for 'local' (E45). */
   databaseDiscovery: (scope: string) => ['database', 'discovery', scope] as const,
   databaseConnections: () => ['database', 'connections'] as const,
   /** Everything read through one open connection, so a disconnect can drop it all. */

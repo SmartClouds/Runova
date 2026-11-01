@@ -23,7 +23,7 @@ import type {
 import { IPC } from '../shared/ipcChannels';
 
 /**
- * The Database section (E44). A container on a server needs a step-up before its environment is
+ * The Database section (E45). A container on a server needs a step-up before its environment is
  * read: `connectCandidate` then fails with `[core:stepUpRequired]`, and is called again with the
  * password or a code.
  */

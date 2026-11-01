@@ -47,7 +47,7 @@ describe('resolveSelection', () => {
     });
   });
 
-  it('opens the databases on this computer ahead of a server or site (E44)', () => {
+  it('opens the databases on this computer ahead of a server or site (E45)', () => {
     expect(
       resolveSelection(params('databases=1&server=srv-1&site=wp-1'), [SERVER], [WP], [FILES]),
     ).toEqual({ kind: 'databases' });
