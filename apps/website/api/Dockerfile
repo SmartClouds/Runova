@@ -5,7 +5,7 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-ARG VERSION=3.1.0
+ARG VERSION=3.2.0
 
 # Restore first, from the project and lock files only, so a code change keeps the restore layer.
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
@@ -23,7 +23,7 @@ RUN dotnet publish src/Runova.Website.Api/Runova.Website.Api.csproj --no-restore
 RUN mkdir -p /data/media
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
-ARG VERSION=3.1.0
+ARG VERSION=3.2.0
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /data /var/lib/runova
 COPY --from=build /app ./
