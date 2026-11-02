@@ -76,7 +76,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     <HeroDemo class="hero-rise mt-12 md:mt-14" />
   </section>
 
-  <section id="ade" aria-labelledby="ade-title" class="py-20 md:py-28">
+  <section id="ade" aria-labelledby="ade-title" class="below-fold py-20 md:py-28">
     <div data-reveal class="max-w-[44rem]">
       <p class="font-mono text-primary text-xs uppercase tracking-[0.14em]">Why an ADE</p>
       <h2 id="ade-title" class:list={[sectionTitle, 'mt-3']}>
@@ -119,7 +119,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     </ul>
   </section>
 
-  <section id="features" aria-labelledby="features-title" class="border-t py-20 md:py-28">
+  <section id="features" aria-labelledby="features-title" class="below-fold border-t py-20 md:py-28">
     <div data-reveal class="max-w-[44rem]">
       <p class="font-mono text-primary text-xs uppercase tracking-[0.14em]">Inside the app</p>
       <h2 id="features-title" class:list={[sectionTitle, 'mt-3']}>
@@ -161,7 +161,7 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     </div>
   </section>
 
-  <section id="agents" aria-labelledby="agents-title" class="border-t py-20 md:py-24">
+  <section id="agents" aria-labelledby="agents-title" class="below-fold border-t py-20 md:py-24">
     <div data-reveal class="mx-auto max-w-[44rem] text-center">
       <h2 id="agents-title" class="font-bold text-[clamp(1.6rem,3.2vw,2.4rem)] tracking-[-0.03em]">
         Works with the agents you already use
@@ -326,6 +326,48 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
   /* The opening sequence: eyebrow, headline, its second half, lead, note, then the
      workspace. It starts at opacity 0.01, never 0, so the headline still counts as the largest
      paint for LCP. */
+  /* Sections below the hero skip style, layout and paint until they come near the screen, which
+     takes a large share off the first frame on a phone and stops the marquee while it is out of
+     sight. The sizes are their measured heights, so the scrollbar barely moves when they render,
+     and `auto` keeps the real height once they have. The download section is left out: its menu
+     opens past the section's edge, and the paint containment this brings would clip it. */
+  .below-fold {
+    content-visibility: auto;
+    contain-intrinsic-size: auto var(--fold-height);
+  }
+
+  #ade {
+    --fold-height: 1820px;
+  }
+
+  #features {
+    --fold-height: 3910px;
+  }
+
+  #agents {
+    --fold-height: 390px;
+  }
+
+  @media (min-width: 768px) {
+    #ade {
+      --fold-height: 1240px;
+    }
+
+    #features {
+      --fold-height: 2720px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    #ade {
+      --fold-height: 960px;
+    }
+
+    #features {
+      --fold-height: 3130px;
+    }
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.hero-rise) {
       animation: hero-rise 800ms var(--ease-enter) both;

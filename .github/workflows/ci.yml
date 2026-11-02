@@ -303,6 +303,9 @@ jobs:
           path: |
             apps/website/web/test-results
             apps/website/web/.lighthouseci
+          # upload-artifact leaves out dot directories unless told, which dropped the Lighthouse
+          # reports.
+          include-hidden-files: true
           if-no-files-found: ignore
 
   # One status to require in branch protection: the matrix job names change whenever the OS list
