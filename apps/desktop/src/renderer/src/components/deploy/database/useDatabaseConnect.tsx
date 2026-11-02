@@ -4,7 +4,10 @@ import type {
   DatabaseCandidate,
   DatabaseConnectResult,
   DatabaseNeedsPassword,
+  DatabaseRevealedSignIn,
   DatabaseSession,
+  DatabaseSignIn,
+  DatabaseSignIns,
 } from '@shared/databaseTypes';
 import type { DeployServer } from '@shared/deployTypes';
 import { useQueryClient } from '@tanstack/react-query';
@@ -48,8 +51,25 @@ export interface DatabaseConnector {
   failure: { key: string; message: string } | null;
   connectCandidate: (candidate: DatabaseCandidate) => Promise<DatabaseSession | null>;
   connectSaved: (connectionId: string, name: string) => Promise<DatabaseSession | null>;
+  /**
+   * Every sign-in the container's project writes down, without passwords. Null when the user
+   * closed the step-up. Throws what went wrong otherwise.
+   */
+  listSignIns: (candidate: DatabaseCandidate) => Promise<DatabaseSignIns | null>;
+  /** Connects with one sign-in. Pending and failure use the key `signIn:<id>`. */
+  connectSignIn: (
+    candidate: DatabaseCandidate,
+    signIn: DatabaseSignIn,
+  ) => Promise<DatabaseSession | null>;
+  /** The one call that shows a password, made only when the user presses Show. */
+  revealSignIn: (
+    candidate: DatabaseCandidate,
+    signIn: DatabaseSignIn,
+  ) => Promise<DatabaseRevealedSignIn | null>;
   dialogs: React.ReactNode;
 }
+
+export const signInKey = (signIn: DatabaseSignIn): string => `signIn:${signIn.id}`;
 
 export function useDatabaseConnect(server: DeployServer | null): DatabaseConnector {
   const stepUp = useProofStepUp(server ?? THIS_COMPUTER);
@@ -113,6 +133,74 @@ export function useDatabaseConnect(server: DeployServer | null): DatabaseConnect
     [run, settle, stepUp],
   );
 
+  /** A call for a container: as it is on this computer, behind the step-up on a server. */
+  const forContainer = useCallback(
+    async <T,>(
+      candidate: DatabaseCandidate,
+      work: (proof?: Proof) => Promise<T>,
+      what: string,
+    ): Promise<T | null> => {
+      if (candidate.serverId === null) return work();
+      return (await stepUp.run(work, what)) ?? null;
+    },
+    [stepUp],
+  );
+
+  const listSignIns = useCallback(
+    (candidate: DatabaseCandidate) =>
+      forContainer(
+        candidate,
+        (proof?: Proof) =>
+          window.runova.database.listSignIns({
+            serverId: candidate.serverId,
+            containerId: candidate.containerId,
+            ...proof,
+          }),
+        `Reading the sign-ins of ${candidate.containerName}`,
+      ),
+    [forContainer],
+  );
+
+  const revealSignIn = useCallback(
+    (candidate: DatabaseCandidate, signIn: DatabaseSignIn) =>
+      forContainer(
+        candidate,
+        (proof?: Proof) =>
+          window.runova.database.revealSignIn({
+            serverId: candidate.serverId,
+            containerId: candidate.containerId,
+            signInId: signIn.id,
+            ...proof,
+          }),
+        `Showing the password of ${signIn.user ?? candidate.containerName}`,
+      ),
+    [forContainer],
+  );
+
+  const connectSignIn = useCallback(
+    (candidate: DatabaseCandidate, signIn: DatabaseSignIn) =>
+      run(signInKey(signIn), async () => {
+        const base = {
+          serverId: candidate.serverId,
+          containerId: candidate.containerId,
+          signInId: signIn.id,
+        };
+        const first = await forContainer(
+          candidate,
+          (proof?: Proof) => window.runova.database.connectSignIn({ ...base, ...proof }),
+          `Reading the sign-in of ${candidate.containerName}`,
+        );
+        if (!first) return null;
+        const name = signIn.user
+          ? `${candidate.containerName} (${signIn.user})`
+          : candidate.containerName;
+        return settle(first, name, (databasePassword) =>
+          window.runova.database.connectSignIn({ ...base, databasePassword }),
+        );
+      }),
+    [run, settle, forContainer],
+  );
+
   const connectSaved = useCallback(
     (connectionId: string, name: string) =>
       run(connectionId, async () => {
@@ -129,6 +217,9 @@ export function useDatabaseConnect(server: DeployServer | null): DatabaseConnect
     failure,
     connectCandidate,
     connectSaved,
+    listSignIns,
+    connectSignIn,
+    revealSignIn,
     dialogs: (
       <>
         {stepUp.dialog}

@@ -1,10 +1,16 @@
 import { engineInfo, formatConnectionUrl } from '@runova/core';
-import type { DatabaseCandidate, DatabaseConnection, DatabaseSession } from '@shared/databaseTypes';
+import { coreErrorMessage } from '@shared/coreErrors';
+import type {
+  DatabaseCandidate,
+  DatabaseConnection,
+  DatabaseSession,
+  DatabaseSignIns,
+} from '@shared/databaseTypes';
 import type { DeployServer } from '@shared/deployTypes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Docker, Plug, Plus, RefreshCw, Spinner, Trash2 } from '@/components/icons';
+import { Docker, Key, Plug, Plus, RefreshCw, Spinner, Trash2 } from '@/components/icons';
 import { CARD_GRID, EmptyState, Notice, SectionCard } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { GLASS_EDGE, LIST_ROW, LIST_WELL } from '../deployKit';
 import { ConnectionDialog } from './ConnectionDialog';
 import { EngineMark } from './EngineMark';
+import { SignInsDialog } from './SignInsDialog';
 import type { DatabaseConnector } from './useDatabaseConnect';
 
 /**
@@ -31,6 +38,11 @@ export function DatabaseHome({
   const scope = server?.id ?? 'local';
   const where = server?.nickname ?? 'this computer';
   const [adding, setAdding] = useState(false);
+  const [signIns, setSignIns] = useState<{
+    candidate: DatabaseCandidate;
+    found: DatabaseSignIns;
+  } | null>(null);
+  const [looking, setLooking] = useState<{ key: string; problem: string | null } | null>(null);
   const discovery = useQuery({
     queryKey: queryKeys.databaseDiscovery(scope),
     queryFn: () => window.runova.database.discover(server?.id ?? null),
@@ -78,6 +90,16 @@ export function DatabaseHome({
     const session = await connector.connectCandidate(candidate);
     if (session) onConnected(session);
   };
+  const openSignIns = async (candidate: DatabaseCandidate) => {
+    setLooking({ key: candidate.key, problem: null });
+    try {
+      const found = await connector.listSignIns(candidate);
+      setLooking(null);
+      if (found) setSignIns({ candidate, found });
+    } catch (error) {
+      setLooking({ key: candidate.key, problem: coreErrorMessage(error) });
+    }
+  };
   const connectSaved = async (connection: DatabaseConnection) => {
     const session = await connector.connectSaved(connection.id, connection.name);
     if (session) onConnected(session);
@@ -88,7 +110,7 @@ export function DatabaseHome({
       <SectionCard
         icon={<Docker />}
         title={`Databases on ${where}`}
-        description="Runova finds the database containers, reads how to sign in from them, and connects in one click."
+        description="Runova finds the database containers, reads how to sign in from them and from the project's .env, and connects in one click."
         actions={
           <>
             <Button
@@ -127,7 +149,7 @@ export function DatabaseHome({
             title={`No database containers on ${where} yet`}
             description={
               server
-                ? 'Install PostgreSQL, MySQL, MongoDB or Redis from the App Store, or add a connection to a database somewhere else.'
+                ? 'Runova looks for database images and for containers that listen on a database port. Install PostgreSQL, MySQL, MongoDB or Redis from the App Store, or add a connection to a database somewhere else.'
                 : 'Start a database container in Docker, or add a connection to a database somewhere else.'
             }
           />
@@ -140,10 +162,16 @@ export function DatabaseHome({
                   candidate={candidate}
                   busy={connector.pending === candidate.key}
                   disabled={connector.pending !== null}
+                  looking={looking?.key === candidate.key && looking.problem === null}
                   failure={
-                    connector.failure?.key === candidate.key ? connector.failure.message : null
+                    connector.failure?.key === candidate.key
+                      ? connector.failure.message
+                      : looking?.key === candidate.key
+                        ? looking.problem
+                        : null
                   }
                   onConnect={() => void connect(candidate)}
+                  onSignIns={() => void openSignIns(candidate)}
                 />
               ))}
             </div>
@@ -179,6 +207,14 @@ export function DatabaseHome({
           void connectSaved(connection);
         }}
       />
+      <SignInsDialog
+        candidate={signIns?.candidate ?? null}
+        found={signIns?.found ?? null}
+        connector={connector}
+        onClose={() => setSignIns(null)}
+        onFound={(found) => setSignIns((current) => (current ? { ...current, found } : current))}
+        onConnected={onConnected}
+      />
       {connector.dialogs}
     </div>
   );
@@ -188,14 +224,18 @@ function CandidateCard({
   candidate,
   busy,
   disabled,
+  looking,
   failure,
   onConnect,
+  onSignIns,
 }: {
   candidate: DatabaseCandidate;
   busy: boolean;
   disabled: boolean;
+  looking: boolean;
   failure: string | null;
   onConnect: () => void;
+  onSignIns: () => void;
 }): React.JSX.Element {
   const info = engineInfo(candidate.engine);
   return (
@@ -247,17 +287,29 @@ function CandidateCard({
           {failure}
         </p>
       ) : null}
-      <Button
-        size="sm"
-        shape="pill"
-        variant="tint"
-        className="mt-auto w-full"
-        disabled={disabled || !candidate.running}
-        onClick={onConnect}
-      >
-        {busy ? <Spinner className="animate-spin" /> : <Plug />}
-        {busy ? 'Connecting' : 'Connect'}
-      </Button>
+      <div className="mt-auto flex gap-2">
+        <Button
+          size="sm"
+          shape="pill"
+          variant="tint"
+          className="flex-1"
+          disabled={disabled || !candidate.running}
+          onClick={onConnect}
+        >
+          {busy ? <Spinner className="animate-spin" /> : <Plug />}
+          {busy ? 'Connecting' : 'Connect'}
+        </Button>
+        <Button
+          size="sm"
+          shape="pill"
+          variant="soft"
+          disabled={disabled || looking}
+          onClick={onSignIns}
+          aria-label={`Sign-ins for ${candidate.containerName}`}
+        >
+          {looking ? <Spinner className="animate-spin" /> : <Key />} Sign-ins
+        </Button>
+      </div>
     </div>
   );
 }

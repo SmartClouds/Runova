@@ -37,14 +37,42 @@ describe('parseInspect', () => {
         image: 'postgres:17-alpine',
         running: true,
         project: 'shop',
+        service: null,
+        workingDir: null,
         env: { POSTGRES_PASSWORD: 'pw', PATH: '/usr/bin', EMPTY: '', WITH_EQUALS: 'a=b' },
         ports: [
           { containerPort: 5432, hostPort: 15432 },
           { containerPort: 9187, hostPort: null },
         ],
+        exposedPorts: [],
         networks: [{ name: 'shop_default', ip: '172.18.0.2' }],
       },
     ]);
+  });
+
+  it('reads the compose service, the project folder and the exposed ports', () => {
+    const [entry] = parseInspect(
+      JSON.stringify([
+        inspectEntry({
+          Config: {
+            Image: 'shop-db:dev',
+            Env: [],
+            Labels: {
+              'com.docker.compose.project': 'shop',
+              'com.docker.compose.service': 'db',
+              'com.docker.compose.project.working_dir': '/home/me/shop',
+            },
+            ExposedPorts: { '5432/tcp': {}, '53/udp': {} },
+          },
+        }),
+      ]),
+    );
+    expect(entry).toMatchObject({
+      project: 'shop',
+      service: 'db',
+      workingDir: '/home/me/shop',
+      exposedPorts: [5432],
+    });
   });
 
   it('copes with missing parts', () => {
@@ -72,14 +100,29 @@ describe('createLocalDocker', () => {
       if (args[0] === 'ps') return 'abc123\ndef456\n';
       return JSON.stringify([
         inspectEntry(),
-        inspectEntry({ Id: 'def456', Name: '/web', Config: { Image: 'nginx', Env: [] } }),
+        inspectEntry({
+          Id: 'def456',
+          Name: '/web',
+          Config: { Image: 'nginx', Env: [], Labels: { 'com.docker.compose.project': 'shop' } },
+          NetworkSettings: { Ports: { '80/tcp': null }, Networks: {} },
+        }),
+        inspectEntry({
+          Id: 'ghi789',
+          Name: '/built-db',
+          Config: { Image: 'shop-db:dev', Env: [], ExposedPorts: { '3306/tcp': {} } },
+          State: { Running: false },
+          NetworkSettings: {},
+        }),
       ]);
     });
     const docker = createLocalDocker(run);
     const list = await docker.listDatabases();
-    expect(list.map((one) => one.name)).toEqual(['shop-db-1']);
+    // A built image counts by the database port it exposes, even while it is stopped.
+    expect(list.map((one) => one.name)).toEqual(['shop-db-1', 'built-db']);
     expect(run).toHaveBeenCalledWith(['ps', '-a', '-q', '--no-trunc']);
     expect(run).toHaveBeenCalledWith(['inspect', 'abc123', 'def456']);
+    // A project lists every container in it, database or not.
+    expect((await docker.listProject('shop')).map((one) => one.name)).toEqual(['shop-db-1', 'web']);
   });
 
   it('answers an empty list without calling inspect when there are no containers', async () => {

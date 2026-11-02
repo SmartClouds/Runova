@@ -148,4 +148,42 @@ describe('formatConnectionUrl', () => {
       formatConnectionUrl({ engine: 'mysql', host: 'h', port: 3306, user: 'a@b', tls: false }),
     ).toBe('mysql://a%40b@h:3306');
   });
+
+  it('writes the password only when asked, quoted, and reads back the same', () => {
+    const connection = {
+      engine: 'postgres' as const,
+      host: 'postgres',
+      port: 5432,
+      user: 'curalink_app',
+      password: 'p@ss/w:rd',
+      database: 'curalink',
+      tls: false,
+    };
+    const url = formatConnectionUrl(connection, { withPassword: true });
+    expect(url).toBe('postgres://curalink_app:p%40ss%2Fw%3Ard@postgres:5432/curalink');
+    expect(parseConnectionUrl(url)).toEqual(connection);
+  });
+
+  it('writes a Redis password with no user, and the Mongo auth database', () => {
+    expect(
+      formatConnectionUrl(
+        { engine: 'redis', host: 'redis', port: 6379, password: 'pw', tls: false },
+        { withPassword: true },
+      ),
+    ).toBe('redis://:pw@redis:6379');
+    expect(
+      formatConnectionUrl(
+        {
+          engine: 'mongodb',
+          host: 'mongo',
+          port: 27017,
+          user: 'root',
+          password: 'pw',
+          authDatabase: 'admin',
+          tls: false,
+        },
+        { withPassword: true },
+      ),
+    ).toBe('mongodb://root:pw@mongo:27017?authSource=admin');
+  });
 });

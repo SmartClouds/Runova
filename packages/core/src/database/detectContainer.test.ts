@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CATALOG_IMAGES } from '../deploy/catalog/images.js';
-import { credentialsFromEnv, detectContainer, engineFromImage } from './detectContainer.js';
+import {
+  credentialsFromEnv,
+  detectContainer,
+  engineFromContainer,
+  engineFromImage,
+} from './detectContainer.js';
 
 /**
  * One click on a container card has to be enough to connect, so the engine, the port and the
@@ -16,6 +21,10 @@ describe('engineFromImage', () => {
     ['postgis/postgis:16-3.4', 'postgres'],
     ['timescale/timescaledb:latest-pg16', 'postgres'],
     ['supabase/postgres:15.1', 'postgres'],
+    ['pgvector/pgvector:pg17', 'postgres'],
+    ['ankane/pgvector', 'postgres'],
+    ['tensorchord/pgvecto-rs:pg16-v0.2.0', 'postgres'],
+    ['paradedb/paradedb:latest', 'postgres'],
     ['mysql:8.4', 'mysql'],
     ['bitnami/mysql', 'mysql'],
     ['percona/percona-server:8.0', 'mysql'],
@@ -57,6 +66,43 @@ describe('engineFromImage', () => {
     expect(engineFromImage(`${CATALOG_IMAGES.postgres18.repository}:18`)).toBe('postgres');
     expect(engineFromImage(`${CATALOG_IMAGES.mysql84.repository}:8.4`)).toBe('mysql');
     expect(engineFromImage(`${CATALOG_IMAGES.mariadb114.repository}:11.4`)).toBe('mariadb');
+  });
+});
+
+describe('engineFromContainer', () => {
+  it('reads the image name first', () => {
+    expect(engineFromContainer({ image: 'redis:7-alpine', privatePorts: [5432] })).toBe('redis');
+  });
+
+  it('reads the configured image when the list shows only an image id', () => {
+    expect(
+      engineFromContainer({ image: 'sha256:0123456789abcdef', configImage: 'postgres:17' }),
+    ).toBe('postgres');
+  });
+
+  it.each([
+    [[5432], 'postgres'],
+    [[3306, 33060], 'mysql'],
+    [[27017], 'mongodb'],
+    [[6379], 'redis'],
+    [[1433], 'mssql'],
+    [[9042], 'cassandra'],
+  ] as const)('guesses from the database port %j when the image says nothing', (ports, engine) => {
+    expect(engineFromContainer({ image: 'shop-db', privatePorts: ports })).toBe(engine);
+    expect(engineFromContainer({ image: 'sha256:0123456789abcdef', privatePorts: ports })).toBe(
+      engine,
+    );
+  });
+
+  it('does not guess for an admin tool on a database port', () => {
+    expect(engineFromContainer({ image: 'dpage/pgadmin4', privatePorts: [5432] })).toBeNull();
+    expect(engineFromContainer({ image: 'adminer:4', privatePorts: [3306] })).toBeNull();
+  });
+
+  it('does not guess when the ports point at two engines, or at none', () => {
+    expect(engineFromContainer({ image: 'app', privatePorts: [5432, 6379] })).toBeNull();
+    expect(engineFromContainer({ image: 'app', privatePorts: [8080] })).toBeNull();
+    expect(engineFromContainer({ image: 'app' })).toBeNull();
   });
 });
 
@@ -192,6 +238,21 @@ describe('detectContainer', () => {
       hostPort: 15432,
       credentials: { user: 'postgres', password: 'pw', database: 'postgres' },
       needsPassword: false,
+    });
+  });
+
+  it('reads a pgvector container listed by image id through its configured image', () => {
+    expect(
+      detectContainer({
+        image: 'sha256:5f1e2d3c4b5a69788796a5b4c3d2e1f0',
+        configImage: 'pgvector/pgvector:pg17',
+        env: { POSTGRES_USER: 'curalink', POSTGRES_PASSWORD: 'pw', POSTGRES_DB: 'curalink' },
+        ports: [{ containerPort: 5432, hostPort: null }],
+      }),
+    ).toMatchObject({
+      engine: 'postgres',
+      containerPort: 5432,
+      credentials: { user: 'curalink', password: 'pw', database: 'curalink' },
     });
   });
 

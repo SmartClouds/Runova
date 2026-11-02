@@ -1851,7 +1851,7 @@ export const IPC = {
     // main -> renderer: ChatAppend with the lines the CLI added since
     onAppend: 'agentChat:onAppend',
   },
-  // The Database section (E45). Passwords go in, never come back out.
+  // The Database section (E45). Passwords go in, and come back out only through revealSignIn.
   database: {
     // () -> DatabaseConnection[]
     listConnections: 'database:listConnections',
@@ -1863,6 +1863,14 @@ export const IPC = {
     discover: 'database:discover',
     // (DatabaseConnectCandidateInput) -> DatabaseConnectResult: one-click connect to a container
     connectCandidate: 'database:connectCandidate',
+    // (DatabaseConnectCandidateInput) -> DatabaseSignIns: every sign-in the container's project
+    // writes down (its owner, the project's .env, the apps' URLs), without passwords
+    listSignIns: 'database:listSignIns',
+    // (DatabaseSignInInput) -> DatabaseConnectResult
+    connectSignIn: 'database:connectSignIn',
+    // (DatabaseSignInInput) -> DatabaseRevealedSignIn: the one call a password comes back from,
+    // made only when the user presses Show
+    revealSignIn: 'database:revealSignIn',
     // (connectionId, password?) -> DatabaseConnectResult
     connect: 'database:connect',
     // (sessionId) -> void

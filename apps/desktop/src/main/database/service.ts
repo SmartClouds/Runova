@@ -1,10 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import {
   classifyStatement,
   type DbEngine,
+  type DetectedDatabase,
   detectContainer,
-  engineFromImage,
+  engineFromContainer,
+  engineInfo,
+  type FoundSignIn,
+  findSignIns,
+  formatConnectionUrl,
+  MAX_ENV_FILE_BYTES,
+  parseDotenv,
   type SchemaTable,
 } from '@runova/core';
 import type {
@@ -13,8 +21,12 @@ import type {
   DatabaseConnection,
   DatabaseConnectResult,
   DatabaseDiscovery,
+  DatabaseRevealedSignIn,
   DatabaseSaveInput,
   DatabaseSession,
+  DatabaseSignIn,
+  DatabaseSignInInput,
+  DatabaseSignIns,
   DatabaseTarget,
   DbAiContext,
   DbAiContextInput,
@@ -40,7 +52,7 @@ import type { OpenDriver } from './drivers';
 import { describeError } from './drivers/shared';
 import type { DbDriver, DriverConnectOptions, DriverError } from './drivers/types';
 import { openLocalForward } from './forward';
-import type { LocalContainer, LocalDocker } from './localDocker';
+import { type LocalContainer, type LocalDocker, localEngine } from './localDocker';
 
 /**
  * The Database section in main: finds database containers, connects in one click, and holds the
@@ -70,6 +82,11 @@ export interface DatabaseServiceDeps {
   /** A stream to a host and port as the server sees it, inside the server's SSH connection. */
   serverStream: (serverId: string, host: string, port: number) => Promise<Duplex>;
   localDocker: LocalDocker;
+  /**
+   * A compose project's .env: over the server's SSH connection, or from this computer's disk for
+   * null. Null when there is no such file or it cannot be read.
+   */
+  readEnvFile: (serverId: string | null, path: string) => Promise<string | null>;
   /** Docker Desktop (Windows, macOS) cannot reach container addresses from this computer. */
   containerAddressesReachable: boolean;
   now?: () => number;
@@ -94,9 +111,14 @@ function serverCandidates(
   serverId: string,
   list: ContainerList,
 ): Omit<DatabaseCandidate, 'connectionId'>[] {
-  return list.groups.flatMap((group) =>
-    group.containers.flatMap((container) => {
-      const engine = engineFromImage(container.image);
+  return list.groups.flatMap((group) => {
+    const found = group.containers.flatMap((container) => {
+      const engine = engineFromContainer({
+        image: container.image,
+        privatePorts: container.ports
+          .filter((port) => port.protocol === 'tcp')
+          .map((port) => port.privatePort),
+      });
       if (!engine) return [];
       return [
         {
@@ -111,8 +133,66 @@ function serverCandidates(
           project: container.composeProject ?? group.project ?? null,
         },
       ];
-    }),
+    });
+    return withoutOneShots(found);
+  });
+}
+
+/**
+ * Drops a stopped container that runs the same image as a running database in its project: a
+ * one-shot that ran against it (an init or a migration step), not a database of its own.
+ */
+function withoutOneShots<
+  T extends { running: boolean; engine: DbEngine; image: string; project: string | null },
+>(found: T[]): T[] {
+  return found.filter(
+    (candidate) =>
+      candidate.running ||
+      candidate.project === null ||
+      !found.some(
+        (other) =>
+          other.running &&
+          other.project === candidate.project &&
+          other.engine === candidate.engine &&
+          other.image === candidate.image,
+      ),
   );
+}
+
+/** The .env Compose reads for a project, next to the folder it was started from. */
+function envFilePath(serverId: string | null, workingDir: string): string {
+  if (serverId) return `${workingDir.replace(/\/+$/, '')}/.env`;
+  return join(workingDir, '.env');
+}
+
+const WORKING_DIR_LABEL = 'com.docker.compose.project.working_dir';
+
+function envRecord(variables: ContainerEnvVariable[]): Record<string, string> {
+  return Object.fromEntries(variables.map((variable) => [variable.name, variable.value]));
+}
+
+/** Every port a database listens on, inside the container and on its host. */
+function portsOf(pairs: [number, number | null | undefined][]): number[] {
+  return [...new Set(pairs.flatMap(([inside, host]) => (host ? [inside, host] : [inside])))];
+}
+
+/** A database container read in full: what it runs, how to reach it, and its project. */
+interface ReadContainer {
+  containerId: string;
+  containerName: string;
+  project: string | null;
+  service: string | null;
+  workingDir: string | null;
+  env: Record<string, string>;
+  detected: DetectedDatabase;
+  target: DatabaseTarget;
+  /** The ports it listens on inside the container and on the host. */
+  ports: number[];
+  /** The environments of the other containers in its project. */
+  siblings: () => Promise<{
+    list: { name: string; env: Record<string, string> }[];
+    unread: string[];
+  }>;
 }
 
 /** How a database in a server container is reached from the server: its address, or its port. */
@@ -156,17 +236,19 @@ export class DatabaseService {
       if (serverId) {
         found = serverCandidates(serverId, await this.deps.serverDocker.listContainers(serverId));
       } else {
-        found = (await this.deps.localDocker.listDatabases()).map((container) => ({
-          key: sourceKey(null, container.name),
-          source: 'local' as const,
-          serverId: null,
-          containerId: container.id,
-          containerName: container.name,
-          image: container.image,
-          engine: engineFromImage(container.image) as DbEngine,
-          running: container.running,
-          project: container.project,
-        }));
+        found = withoutOneShots(
+          (await this.deps.localDocker.listDatabases()).map((container) => ({
+            key: sourceKey(null, container.name),
+            source: 'local' as const,
+            serverId: null,
+            containerId: container.id,
+            containerName: container.name,
+            image: container.image,
+            engine: localEngine(container) as DbEngine,
+            running: container.running,
+            project: container.project,
+          })),
+        );
       }
     } catch (error) {
       problems.push({
@@ -189,62 +271,146 @@ export class DatabaseService {
   }
 
   /**
+   * Reads a database container: its engine, sign-in and address, and how to read the rest of its
+   * project. A server asks for a step-up before it shows an environment; the proof goes with the
+   * first read only, and the step-up it opens covers the others.
+   */
+  private async readContainer(input: DatabaseConnectCandidateInput): Promise<ReadContainer> {
+    if (input.serverId) return this.readServerContainer(input.serverId, input);
+    const container = await this.deps.localDocker.inspect(input.containerId);
+    const detected = detectContainer(container);
+    if (!detected) throw new Error(`${container.name} does not run a database Runova knows.`);
+    return {
+      containerId: container.id,
+      containerName: container.name,
+      project: container.project,
+      service: container.service ?? null,
+      workingDir: container.workingDir ?? null,
+      env: container.env,
+      detected,
+      target: {
+        kind: 'localContainer',
+        containerId: container.id,
+        containerName: container.name,
+        port: detected.containerPort,
+      },
+      ports: portsOf(container.ports.map((port) => [port.containerPort, port.hostPort])),
+      siblings: async () => {
+        if (!container.project) return { list: [], unread: [] };
+        const all = await this.deps.localDocker.listProject(container.project);
+        return {
+          list: all
+            .filter((one) => one.id !== container.id)
+            .map((one) => ({ name: one.name, env: one.env })),
+          unread: [],
+        };
+      },
+    };
+  }
+
+  private async readServerContainer(
+    serverId: string,
+    input: DatabaseConnectCandidateInput,
+  ): Promise<ReadContainer> {
+    const details = await this.deps.serverDocker.inspect(serverId, input.containerId);
+    const variables = await this.deps.serverDocker.revealEnv({
+      serverId,
+      containerId: input.containerId,
+      ...(input.password ? { password: input.password } : {}),
+      ...(input.totpCode ? { totpCode: input.totpCode } : {}),
+    });
+    const env = envRecord(variables);
+    const { summary } = details;
+    const tcp = summary.ports.filter((port) => port.protocol === 'tcp');
+    const detected = detectContainer({
+      image: summary.image,
+      env,
+      ports: tcp.map((port) => ({
+        containerPort: port.privatePort,
+        hostPort: port.hostPort ?? null,
+      })),
+    });
+    if (!detected) throw new Error(`${summary.name} does not run a database Runova knows.`);
+    const project = summary.composeProject ?? null;
+    const workingDir = details.labels.find((one) => one.name === WORKING_DIR_LABEL)?.value;
+    return {
+      containerId: summary.id,
+      containerName: summary.name,
+      project,
+      service: summary.composeService ?? null,
+      workingDir: workingDir || null,
+      env,
+      detected,
+      target: {
+        kind: 'server',
+        serverId,
+        ...serverAddress(details, detected.containerPort, detected.hostPort),
+        containerId: summary.id,
+        containerName: summary.name,
+      },
+      ports: portsOf(tcp.map((port) => [port.privatePort, port.hostPort])),
+      siblings: async () => {
+        if (!project) return { list: [], unread: [] };
+        const list = await this.deps.serverDocker.listContainers(serverId);
+        const others = list.groups
+          .flatMap((group) => group.containers)
+          .filter((one) => one.composeProject === project && one.id !== summary.id);
+        const read = await Promise.allSettled(
+          others.map((one) => this.deps.serverDocker.revealEnv({ serverId, containerId: one.id })),
+        );
+        const out: Awaited<ReturnType<ReadContainer['siblings']>> = { list: [], unread: [] };
+        read.forEach((result, index) => {
+          const name = others[index]?.name ?? '';
+          if (result.status === 'fulfilled') out.list.push({ name, env: envRecord(result.value) });
+          else out.unread.push(name);
+        });
+        return out;
+      },
+    };
+  }
+
+  /** Saves the connection for one sign-in to a container, then opens it. */
+  private async saveAndConnect(
+    read: ReadContainer,
+    credentials: {
+      user: string | null;
+      password?: string;
+      database: string | null;
+      authDatabase: string | null;
+    },
+    key: string,
+    /** Named in the connection, for a sign-in other than the one a card's Connect uses. */
+    nameUser: string | null,
+  ): Promise<DatabaseConnectResult> {
+    const existing = await this.deps.connections.bySource(key);
+    const { project, containerName } = read;
+    const base =
+      project && !containerName.includes(project) ? `${project} / ${containerName}` : containerName;
+    const saved = await this.deps.connections.save(
+      {
+        ...(existing ? { id: existing.id } : {}),
+        name: nameUser ? `${base} (${nameUser})` : base,
+        engine: read.detected.engine,
+        target: read.target,
+        user: credentials.user,
+        database: credentials.database,
+        authDatabase: credentials.authDatabase,
+        readOnly: existing?.readOnly ?? false,
+        ...(credentials.password === undefined ? {} : { password: credentials.password }),
+      },
+      { sourceKey: key },
+    );
+    return this.connect(saved.id);
+  }
+
+  /**
    * One click on a container card: reads the engine and sign-in from the container, saves the
    * connection and opens it. A server asks for a step-up before it shows the environment; that
    * refusal reaches the renderer, which asks and calls again with the proof.
    */
   async connectCandidate(input: DatabaseConnectCandidateInput): Promise<DatabaseConnectResult> {
-    let image: string;
-    let containerName: string;
-    let project: string | null;
-    let env: Record<string, string>;
-    let target: DatabaseTarget;
-    let detected: ReturnType<typeof detectContainer>;
-
-    if (input.serverId) {
-      const details = await this.deps.serverDocker.inspect(input.serverId, input.containerId);
-      const variables = await this.deps.serverDocker.revealEnv({
-        serverId: input.serverId,
-        containerId: input.containerId,
-        ...(input.password ? { password: input.password } : {}),
-        ...(input.totpCode ? { totpCode: input.totpCode } : {}),
-      });
-      env = Object.fromEntries(variables.map((variable) => [variable.name, variable.value]));
-      image = details.summary.image;
-      containerName = details.summary.name;
-      project = details.summary.composeProject ?? null;
-      detected = detectContainer({
-        image,
-        env,
-        ports: details.summary.ports
-          .filter((port) => port.protocol === 'tcp')
-          .map((port) => ({ containerPort: port.privatePort, hostPort: port.hostPort ?? null })),
-      });
-      if (!detected) throw new Error(`${containerName} does not run a database Runova knows.`);
-      const address = serverAddress(details, detected.containerPort, detected.hostPort);
-      target = {
-        kind: 'server',
-        serverId: input.serverId,
-        ...address,
-        containerId: details.summary.id,
-        containerName,
-      };
-    } else {
-      const container = await this.deps.localDocker.inspect(input.containerId);
-      image = container.image;
-      containerName = container.name;
-      project = container.project;
-      env = container.env;
-      detected = detectContainer(container);
-      if (!detected) throw new Error(`${containerName} does not run a database Runova knows.`);
-      target = {
-        kind: 'localContainer',
-        containerId: container.id,
-        containerName,
-        port: detected.containerPort,
-      };
-    }
-
+    const read = await this.readContainer(input);
+    const { detected } = read;
     const password = detected.credentials.password ?? input.databasePassword;
     if (detected.needsPassword && password === undefined) {
       return {
@@ -254,26 +420,125 @@ export class DatabaseService {
         user: detected.credentials.user ?? null,
       };
     }
-    const key = sourceKey(input.serverId, containerName);
-    const existing = await this.deps.connections.bySource(key);
-    const saved = await this.deps.connections.save(
+    return this.saveAndConnect(
+      read,
       {
-        ...(existing ? { id: existing.id } : {}),
-        name:
-          project && !containerName.includes(project)
-            ? `${project} / ${containerName}`
-            : containerName,
-        engine: detected.engine,
-        target,
         user: detected.credentials.user ?? null,
         database: detected.credentials.database ?? null,
         authDatabase: detected.credentials.authDatabase ?? null,
-        readOnly: existing?.readOnly ?? false,
         ...(password === undefined ? {} : { password }),
       },
-      { sourceKey: key },
+      sourceKey(input.serverId, read.containerName),
+      null,
     );
-    return this.connect(saved.id);
+  }
+
+  /** Every sign-in a container's project writes down: its owner, the .env, the apps' URLs. */
+  private async gatherSignIns(input: DatabaseConnectCandidateInput) {
+    const read = await this.readContainer(input);
+    const envPath = read.workingDir ? envFilePath(input.serverId, read.workingDir) : null;
+    const [envText, siblings] = await Promise.all([
+      envPath ? this.deps.readEnvFile(input.serverId, envPath).catch(() => null) : null,
+      read.siblings(),
+    ]);
+    const envEntries =
+      envText !== null && Buffer.byteLength(envText) <= MAX_ENV_FILE_BYTES
+        ? parseDotenv(envText)
+        : null;
+    const signIns = findSignIns({
+      engine: read.detected.engine,
+      database: {
+        name: read.containerName,
+        service: read.service,
+        env: read.env,
+        ports: read.ports,
+      },
+      envFile: envPath && envEntries ? { path: envPath, entries: envEntries } : null,
+      siblings: siblings.list,
+    });
+    const base = sourceKey(input.serverId, read.containerName);
+    // The first owner keeps the key a card's Connect saves under, so the two stay one connection.
+    const keyOf = (signIn: FoundSignIn) =>
+      signIn.owner && signIn.id === signIns[0]?.id ? base : `${base}:${signIn.id}`;
+    return {
+      read,
+      signIns,
+      keyOf,
+      envFile: envPath ? { path: envPath, found: envEntries !== null } : null,
+      unread: siblings.unread,
+    };
+  }
+
+  /** The sign-ins for a container, without their passwords. */
+  async listSignIns(input: DatabaseConnectCandidateInput): Promise<DatabaseSignIns> {
+    const gathered = await this.gatherSignIns(input);
+    const signIns: DatabaseSignIn[] = [];
+    for (const signIn of gathered.signIns) {
+      const saved = await this.deps.connections.bySource(gathered.keyOf(signIn));
+      signIns.push({
+        id: signIn.id,
+        user: signIn.user,
+        database: signIn.database,
+        hasPassword: signIn.password !== undefined,
+        owner: signIn.owner,
+        origin: signIn.origin,
+        alsoIn: signIn.alsoIn,
+        connectionId: saved?.id ?? null,
+      });
+    }
+    return { signIns, envFile: gathered.envFile, unread: gathered.unread };
+  }
+
+  private async findSignIn(input: DatabaseSignInInput) {
+    const gathered = await this.gatherSignIns(input);
+    const signIn = gathered.signIns.find((one) => one.id === input.signInId);
+    if (!signIn) throw new Error('That sign-in is gone. Look again for the current ones.');
+    return { ...gathered, signIn };
+  }
+
+  /** Connects with one of the sign-ins `listSignIns` found. */
+  async connectSignIn(input: DatabaseSignInInput): Promise<DatabaseConnectResult> {
+    const { read, signIn, keyOf } = await this.findSignIn(input);
+    const password = signIn.password ?? input.databasePassword;
+    const passwordless = signIn.owner && !read.detected.needsPassword;
+    if (password === undefined && !passwordless && engineInfo(signIn.engine).passwordRequired) {
+      return { needsPassword: true, reason: 'missing', engine: signIn.engine, user: signIn.user };
+    }
+    const key = keyOf(signIn);
+    return this.saveAndConnect(
+      read,
+      {
+        user: signIn.user,
+        database: signIn.database,
+        authDatabase: signIn.authDatabase ?? null,
+        ...(password === undefined ? {} : { password }),
+      },
+      key,
+      key === sourceKey(input.serverId, read.containerName) ? null : signIn.user,
+    );
+  }
+
+  /**
+   * Shows one sign-in on purpose: the URL as the project's containers reach the database (by its
+   * service name), with the password. Read again each time and never kept.
+   */
+  async revealSignIn(input: DatabaseSignInInput): Promise<DatabaseRevealedSignIn> {
+    const { read, signIn } = await this.findSignIn(input);
+    if (signIn.engine === 'sqlite') throw new Error('A SQLite file has no sign-in to show.');
+    const url = formatConnectionUrl(
+      {
+        engine: signIn.engine,
+        host: read.service ?? read.containerName,
+        port: read.detected.containerPort,
+        ...(signIn.user ? { user: signIn.user } : {}),
+        ...(signIn.password !== undefined ? { password: signIn.password } : {}),
+        ...(signIn.database ? { database: signIn.database } : {}),
+        ...(signIn.authDatabase ? { authDatabase: signIn.authDatabase } : {}),
+        tls: false,
+      },
+      { withPassword: true },
+    );
+    return { url, password: signIn.password ?? null };
   }
 
   /** Opens a saved connection. Answers `needsPassword` when the server refused the sign-in. */

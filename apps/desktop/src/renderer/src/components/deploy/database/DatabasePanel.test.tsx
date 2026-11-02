@@ -2,6 +2,7 @@ import type {
   DatabaseCandidate,
   DatabaseConnection,
   DatabaseSession,
+  DatabaseSignIns,
   DbObjectNode,
   DbRowsPage,
 } from '@shared/databaseTypes';
@@ -312,6 +313,100 @@ describe('DatabasePanel', () => {
     await view.user.click(await screen.findByRole('button', { name: /new query/i }));
     await view.user.click(screen.getByRole('button', { name: 'Run query' }));
     expect(await screen.findByText(/relation "nope" does not exist/)).toBeInTheDocument();
+  });
+
+  it('lists the sign-ins a project writes down, shows one on purpose, and connects with another', async () => {
+    const signIns: DatabaseSignIns = {
+      envFile: { path: '/opt/shop/.env', found: true },
+      unread: ['shop-worker'],
+      signIns: [
+        {
+          id: 'ownerid000001',
+          user: 'postgres',
+          database: 'shop',
+          hasPassword: true,
+          owner: true,
+          origin: { kind: 'container', where: 'shop-db', key: 'POSTGRES_PASSWORD' },
+          alsoIn: [{ kind: 'envFile', where: '/opt/shop/.env', key: 'POSTGRES_PASSWORD' }],
+          connectionId: 'conn-1',
+        },
+        {
+          id: 'appuserid0002',
+          user: 'shop_app',
+          database: 'shop',
+          hasPassword: true,
+          owner: false,
+          origin: { kind: 'app', where: 'shop-api', key: 'DATABASE_URL_APP' },
+          alsoIn: [],
+          connectionId: null,
+        },
+      ],
+    };
+    const view = renderWithProviders(<DatabasePanel server={server} />, {
+      bridge: bridge({
+        'database.listSignIns': signIns,
+        'database.revealSignIn': {
+          url: 'postgres://shop_app:app-pw@db:5432/shop',
+          password: 'app-pw',
+        },
+        'database.connectSignIn': session,
+      }),
+    });
+    await view.user.click(await screen.findByRole('button', { name: 'Sign-ins for shop-db' }));
+    expect(view.bridge.$fn('database.listSignIns')).toHaveBeenCalledWith({
+      serverId: 's1',
+      containerId: 'c-pg',
+    });
+    const dialog = await screen.findByRole('dialog', { name: /sign-ins for shop-db/i });
+    expect(within(dialog).getByText(/It read \/opt\/shop\/\.env/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/could not read shop-worker/i)).toBeInTheDocument();
+    const owner = within(dialog).getByRole('listitem', { name: 'postgres on shop' });
+    expect(within(owner).getByText('Owner')).toBeInTheDocument();
+    expect(within(owner).getByText('Saved')).toBeInTheDocument();
+    expect(within(owner).getByText(/and 1 more place/)).toBeInTheDocument();
+    const app = within(dialog).getByRole('listitem', { name: 'shop_app on shop' });
+    expect(within(app).getByText('DATABASE_URL_APP in shop-api')).toBeInTheDocument();
+    // Nothing secret is on screen until Show is pressed.
+    expect(within(dialog).queryByText(/app-pw/)).toBeNull();
+
+    await view.user.click(
+      within(app).getByRole('button', { name: 'Show the sign-in for shop_app' }),
+    );
+    expect(view.bridge.$fn('database.revealSignIn')).toHaveBeenCalledWith({
+      serverId: 's1',
+      containerId: 'c-pg',
+      signInId: 'appuserid0002',
+    });
+    expect(
+      await within(app).findByText('postgres://shop_app:app-pw@db:5432/shop'),
+    ).toBeInTheDocument();
+    expect(within(app).getByText('app-pw')).toBeInTheDocument();
+    await view.user.click(
+      within(app).getByRole('button', { name: 'Hide the sign-in for shop_app' }),
+    );
+    expect(within(dialog).queryByText(/app-pw/)).toBeNull();
+
+    await view.user.click(within(app).getByRole('button', { name: 'Connect' }));
+    expect(view.bridge.$fn('database.connectSignIn')).toHaveBeenCalledWith({
+      serverId: 's1',
+      containerId: 'c-pg',
+      signInId: 'appuserid0002',
+    });
+    expect(await screen.findByRole('heading', { name: 'shop-db' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /sign-ins/i })).toBeNull();
+  });
+
+  it('shows on the card why the sign-ins could not be read', async () => {
+    const view = renderWithProviders(<DatabasePanel server={server} />, {
+      bridge: bridge({
+        'database.listSignIns': async () => {
+          throw new Error('The server could not be reached.');
+        },
+      }),
+    });
+    const card = await screen.findByRole('group', { name: /shop-db/ });
+    await view.user.click(within(card).getByRole('button', { name: 'Sign-ins for shop-db' }));
+    expect(await within(card).findByText(/could not be reached/)).toBeInTheDocument();
   });
 
   it('connects on its own to the container an Open database link names', async () => {

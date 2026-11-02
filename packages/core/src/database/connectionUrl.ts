@@ -99,16 +99,32 @@ function orderKeys(parsed: Extract<ParsedConnectionUrl, { host: string }>): Pars
   return out as ParsedConnectionUrl;
 }
 
-/** Writes a connection back as a URL for display. The password is always left out. */
-export function formatConnectionUrl(connection: ParsedConnectionUrl): string {
+/**
+ * Writes a connection back as a URL. The password is left out unless `withPassword` asks for
+ * it, which only an explicit reveal does; that URL also names the Mongo auth database, so it
+ * can be pasted into an app as it is.
+ */
+export function formatConnectionUrl(
+  connection: ParsedConnectionUrl,
+  options: { withPassword?: boolean } = {},
+): string {
   if (connection.engine === 'sqlite') return `sqlite://${connection.file}`;
   const scheme = connection.srv
     ? 'mongodb+srv'
     : connection.tls && connection.engine === 'redis'
       ? 'rediss'
       : connection.engine;
-  const user = connection.user ? `${encodeURIComponent(connection.user)}@` : '';
+  const secret =
+    options.withPassword && connection.password !== undefined
+      ? `:${encodeURIComponent(connection.password)}`
+      : '';
+  const name = connection.user ? encodeURIComponent(connection.user) : '';
+  const user = name || secret ? `${name}${secret}@` : '';
   const port = connection.port === null ? '' : `:${connection.port}`;
   const database = connection.database ? `/${encodeURIComponent(connection.database)}` : '';
-  return `${scheme}://${user}${connection.host}${port}${database}`;
+  const auth =
+    options.withPassword && connection.authDatabase
+      ? `?authSource=${encodeURIComponent(connection.authDatabase)}`
+      : '';
+  return `${scheme}://${user}${connection.host}${port}${database}${auth}`;
 }

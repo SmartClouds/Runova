@@ -9,7 +9,17 @@ import type { ContainerPortMapping, DbCredentials, DbEngine, DetectedDatabase } 
 const IMAGE_NAMES: ReadonlyArray<[DbEngine, readonly string[]]> = [
   [
     'postgres',
-    ['postgres', 'postgresql', 'postgis', 'timescaledb', 'timescaledb-ha', 'supabase/postgres'],
+    [
+      'postgres',
+      'postgresql',
+      'postgis',
+      'timescaledb',
+      'timescaledb-ha',
+      'supabase/postgres',
+      'pgvector',
+      'pgvecto-rs',
+      'paradedb',
+    ],
   ],
   ['mariadb', ['mariadb']],
   ['mysql', ['mysql', 'mysql-server', 'percona-server', 'percona']],
@@ -47,6 +57,65 @@ export function engineFromImage(image: string): DbEngine | null {
     }
   }
   return null;
+}
+
+/**
+ * Images that listen on a database port but are not the database: admin tools and proxies a
+ * port guess would otherwise take for one.
+ */
+const NOT_DATABASES = [
+  'adminer',
+  'pgadmin4',
+  'pgadmin',
+  'phpmyadmin',
+  'mongo-express',
+  'redis-commander',
+  'redisinsight',
+];
+
+/** The default ports, each answered by one engine. MySQL stands in for MariaDB, which speaks it. */
+const PORT_ENGINES: ReadonlyMap<number, DbEngine> = new Map([
+  [5432, 'postgres'],
+  [3306, 'mysql'],
+  [27017, 'mongodb'],
+  [6379, 'redis'],
+  [1433, 'mssql'],
+  [9042, 'cassandra'],
+]);
+
+function isAdminTool(image: string): boolean {
+  const path = repositoryPath(image);
+  return NOT_DATABASES.some((name) => path === name || path.endsWith(`/${name}`));
+}
+
+/**
+ * Which engine a container runs: by its image name first, then by the image it was configured
+ * with, then by the one database port it exposes. The port guess finds databases in images
+ * built by compose or listed by id, and is never made for a known admin tool.
+ */
+export function engineFromContainer(container: {
+  image: string;
+  configImage?: string | null;
+  /** Ports the container exposes, as seen inside it. */
+  privatePorts?: readonly number[];
+}): DbEngine | null {
+  const byName =
+    engineFromImage(container.image) ??
+    (container.configImage ? engineFromImage(container.configImage) : null);
+  if (byName) return byName;
+  if (
+    isAdminTool(container.image) ||
+    (container.configImage && isAdminTool(container.configImage))
+  ) {
+    return null;
+  }
+  const engines = new Set<DbEngine>();
+  for (const port of container.privatePorts ?? []) {
+    const engine = PORT_ENGINES.get(port);
+    if (engine) engines.add(engine);
+  }
+  if (engines.size !== 1) return null;
+  return [...engines][0] ?? null;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -159,10 +228,15 @@ function passwordless(engine: DbEngine, env: Env): boolean {
  */
 export function detectContainer(container: {
   image: string;
+  configImage?: string | null;
   env?: Env;
   ports?: readonly ContainerPortMapping[];
 }): DetectedDatabase | null {
-  const engine = engineFromImage(container.image);
+  const engine = engineFromContainer({
+    image: container.image,
+    configImage: container.configImage ?? null,
+    privatePorts: (container.ports ?? []).map((port) => port.containerPort),
+  });
   if (!engine || engine === 'sqlite') return null;
   const env = container.env ?? {};
   const wanted = listenPort(engine, env);

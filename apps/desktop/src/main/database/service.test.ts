@@ -63,13 +63,21 @@ const serverList: ContainerList = {
   ],
 };
 
-const details = (env = true): ContainerDetails =>
+const details = (
+  list: ContainerList = serverList,
+  idOrName?: string,
+  labels: { name: string; value: string }[] = [],
+): ContainerDetails =>
   ({
-    summary: serverList.groups[0]?.containers[0],
+    summary:
+      list.groups
+        .flatMap((group) => group.containers)
+        .find((one) => one.id === idOrName || one.name === idOrName) ??
+      list.groups[0]?.containers[0],
     command: [],
     entrypoint: [],
-    envKeys: env ? ['POSTGRES_PASSWORD'] : [],
-    labels: [],
+    envKeys: [],
+    labels,
     mounts: [],
     networks: [{ network: 'shop_default', ipAddress: '172.20.0.5' }],
     restartPolicy: 'always',
@@ -110,20 +118,29 @@ function harness(
     open?: (options: DriverConnectOptions) => Promise<DbDriver>;
     local?: LocalContainer[];
     reachable?: boolean;
+    list?: ContainerList;
+    /** Per container id, in place of `env`. */
+    envs?: Record<string, Record<string, string>>;
+    labels?: { name: string; value: string }[];
+    envFile?: string | null;
   } = {},
 ): Harness {
   const opened: DriverConnectOptions[] = [];
   const driver = fakeDriver();
   const streams: Harness['streams'] = [];
   const env = options.env ?? { POSTGRES_PASSWORD: 'secret-pw', POSTGRES_DB: 'shop' };
+  const list = options.list ?? serverList;
   const serverDocker: ServerDocker = {
-    listContainers: vi.fn(async () => serverList),
-    inspect: vi.fn(async () => details()),
-    revealEnv: vi.fn(async () => Object.entries(env).map(([name, value]) => ({ name, value }))),
+    listContainers: vi.fn(async () => list),
+    inspect: vi.fn(async (_serverId: string, id: string) => details(list, id, options.labels)),
+    revealEnv: vi.fn(async ({ containerId }) =>
+      Object.entries(options.envs?.[containerId] ?? env).map(([name, value]) => ({ name, value })),
+    ),
   };
   const local = options.local ?? [];
   const localDocker: LocalDocker = {
     listDatabases: vi.fn(async () => local),
+    listProject: vi.fn(async (project: string) => local.filter((one) => one.project === project)),
     inspect: vi.fn(async (idOrName: string) => {
       const found = local.find((one) => one.id === idOrName || one.name === idOrName);
       if (!found) throw new Error('no such container');
@@ -143,6 +160,7 @@ function harness(
       return new PassThrough();
     },
     localDocker,
+    readEnvFile: vi.fn(async () => options.envFile ?? null),
     containerAddressesReachable: options.reachable ?? false,
   };
   return {
@@ -322,10 +340,223 @@ describe('one-click connect', () => {
   });
 
   it('turns down a container that is not a database', async () => {
-    const { service } = harness({ local: [localPg({ image: 'nginx' })] });
+    const { service } = harness({
+      local: [localPg({ image: 'nginx', ports: [{ containerPort: 80, hostPort: 8080 }] })],
+    });
     await expect(
       service.connectCandidate({ serverId: null, containerId: 'local-1' }),
     ).rejects.toThrow(/does not run a database/);
+  });
+});
+
+const summary = (fields: Record<string, unknown>) => ({
+  imageId: 'i',
+  status: 'Up',
+  health: 'none',
+  createdAtUnixMs: 1,
+  ports: [],
+  composeProject: 'curalink',
+  state: 'running',
+  ...fields,
+});
+
+/** A compose project like the ones on real servers: pgvector Postgres, an api, a one-shot init. */
+const curaList: ContainerList = {
+  groups: [
+    {
+      project: 'curalink',
+      workingDirectory: '/opt/curalink',
+      containers: [
+        summary({
+          id: 'c-pg',
+          name: 'curalink-postgres',
+          image: 'pgvector/pgvector:pg17',
+          ports: [{ privatePort: 5432, protocol: 'tcp' }],
+          composeService: 'postgres',
+        }),
+        summary({
+          id: 'c-init',
+          name: 'curalink-keycloak-db-init',
+          image: 'pgvector/pgvector:pg17',
+          state: 'exited',
+          ports: [{ privatePort: 5432, protocol: 'tcp' }],
+          composeService: 'keycloak-db-init',
+        }),
+        summary({
+          id: 'c-pulled',
+          name: 'curalink-analytics-db',
+          image: 'sha256:5f1e2d3c4b5a6978',
+          ports: [{ privatePort: 5432, protocol: 'tcp' }],
+          composeService: 'analytics-db',
+        }),
+        summary({
+          id: 'c-api',
+          name: 'curalink-api',
+          image: 'ghcr.io/smartclouds/curalink-api:1.4.0',
+          ports: [{ privatePort: 3000, protocol: 'tcp' }],
+          composeService: 'api',
+        }),
+      ] as never,
+    },
+  ],
+};
+
+const curaEnvs: Record<string, Record<string, string>> = {
+  'c-pg': { POSTGRES_USER: 'curalink', POSTGRES_PASSWORD: 'owner-pw', POSTGRES_DB: 'curalink' },
+  'c-init': { PGUSER: 'curalink' },
+  'c-pulled': {},
+  'c-api': {
+    DATABASE_URL: 'postgresql://curalink:owner-pw@postgres:5432/curalink?schema=public',
+    DATABASE_URL_APP: 'postgresql://curalink_app:app-pw@postgres:5432/curalink?schema=public',
+    KEYCLOAK_DATABASE_URL: 'postgresql://keycloak:kc-pw@postgres:5432/keycloak',
+  },
+};
+
+const curaLabels = [{ name: 'com.docker.compose.project.working_dir', value: '/opt/curalink' }];
+
+function cura(envFile: string | null = 'POSTGRES_PASSWORD=owner-pw\nAPP_DB_PASSWORD=app-pw\n') {
+  return harness({ list: curaList, envs: curaEnvs, labels: curaLabels, envFile });
+}
+
+describe('finding every database', () => {
+  it('finds pgvector and image-id Postgres containers and drops the one-shot that ran against one', async () => {
+    const { service } = cura();
+    const found = await service.discover('s1');
+    expect(found.candidates.map((one) => [one.containerName, one.engine])).toEqual([
+      ['curalink-analytics-db', 'postgres'],
+      ['curalink-postgres', 'postgres'],
+    ]);
+  });
+
+  it('finds a local database by the port its image exposes', async () => {
+    const { service } = harness({
+      local: [localPg({ image: 'shop-db:dev', ports: [], exposedPorts: [5432], running: false })],
+    });
+    expect((await service.discover(null)).candidates.map((one) => one.engine)).toEqual([
+      'postgres',
+    ]);
+  });
+});
+
+describe('sign-ins', () => {
+  it('lists the owner and every app sign-in, without passwords, after one step-up', async () => {
+    const { service, serverDocker } = cura();
+    const result = await service.listSignIns({
+      serverId: 's1',
+      containerId: 'c-pg',
+      password: 'acct',
+    });
+    expect(result.envFile).toEqual({ path: '/opt/curalink/.env', found: true });
+    expect(result.unread).toEqual([]);
+    expect(
+      result.signIns.map((one) => [one.user, one.database, one.owner, one.origin.key]),
+    ).toEqual([
+      ['curalink', 'curalink', true, 'POSTGRES_PASSWORD'],
+      ['curalink_app', 'curalink', false, 'DATABASE_URL_APP'],
+      ['keycloak', 'keycloak', false, 'KEYCLOAK_DATABASE_URL'],
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(/owner-pw|app-pw|kc-pw/);
+    // The proof goes with the first read only; the step-up it opens covers the rest.
+    const calls = vi.mocked(serverDocker.revealEnv).mock.calls.map(([input]) => input);
+    expect(calls[0]).toEqual({ serverId: 's1', containerId: 'c-pg', password: 'acct' });
+    expect(calls.slice(1).every((input) => !('password' in input))).toBe(true);
+  });
+
+  it('says when there is no .env, and which containers could not be read', async () => {
+    const { service, serverDocker } = cura(null);
+    vi.mocked(serverDocker.revealEnv).mockImplementation(async ({ containerId }) => {
+      if (containerId === 'c-api') throw new Error('gone');
+      return Object.entries(curaEnvs[containerId] ?? {}).map(([name, value]) => ({ name, value }));
+    });
+    const result = await service.listSignIns({ serverId: 's1', containerId: 'c-pg' });
+    expect(result.envFile).toEqual({ path: '/opt/curalink/.env', found: false });
+    expect(result.unread).toEqual(['curalink-api']);
+    expect(result.signIns.map((one) => one.user)).toEqual(['curalink']);
+  });
+
+  it('connects as an app user under its own saved connection', async () => {
+    const { service, opened } = cura();
+    const { signIns } = await service.listSignIns({ serverId: 's1', containerId: 'c-pg' });
+    const app = signIns.find((one) => one.user === 'curalink_app');
+    const result = await service.connectSignIn({
+      serverId: 's1',
+      containerId: 'c-pg',
+      signInId: app?.id ?? '',
+    });
+    expect('sessionId' in result && result.connection).toMatchObject({
+      name: 'curalink-postgres (curalink_app)',
+      user: 'curalink_app',
+      database: 'curalink',
+    });
+    expect(opened[0]).toMatchObject({ user: 'curalink_app', password: 'app-pw' });
+
+    // The owner sign-in is the same connection a card's Connect makes.
+    const owner = signIns[0];
+    await service.connectSignIn({ serverId: 's1', containerId: 'c-pg', signInId: owner?.id ?? '' });
+    await service.connectCandidate({ serverId: 's1', containerId: 'c-pg' });
+    expect((await service.listConnections()).map((one) => one.name).sort()).toEqual([
+      'curalink-postgres',
+      'curalink-postgres (curalink_app)',
+    ]);
+    const again = await service.listSignIns({ serverId: 's1', containerId: 'c-pg' });
+    expect(again.signIns.filter((one) => one.connectionId).map((one) => one.user)).toEqual([
+      'curalink',
+      'curalink_app',
+    ]);
+  });
+
+  it('reveals a sign-in as the URL the project would use', async () => {
+    const { service } = cura();
+    const { signIns } = await service.listSignIns({ serverId: 's1', containerId: 'c-pg' });
+    const keycloak = signIns.find((one) => one.user === 'keycloak');
+    expect(
+      await service.revealSignIn({
+        serverId: 's1',
+        containerId: 'c-pg',
+        signInId: keycloak?.id ?? '',
+      }),
+    ).toEqual({ url: 'postgres://keycloak:kc-pw@postgres:5432/keycloak', password: 'kc-pw' });
+  });
+
+  it('turns down a sign-in that is no longer there', async () => {
+    const { service } = cura();
+    await expect(
+      service.revealSignIn({ serverId: 's1', containerId: 'c-pg', signInId: 'abcdefgh1234' }),
+    ).rejects.toThrow(/look again/i);
+  });
+
+  it('reads a local project: its siblings and its .env', async () => {
+    const pg = localPg({
+      project: 'shop',
+      service: 'db',
+      workingDir: '/home/me/shop',
+      env: { POSTGRES_PASSWORD: 'local-pw' },
+    });
+    const web = localPg({
+      id: 'local-2',
+      name: 'shop-web',
+      image: 'shop-web',
+      project: 'shop',
+      env: { DATABASE_URL: 'postgres://web:web-pw@db:5432/shop' },
+    });
+    const { service, opened } = harness({ local: [pg, web], envFile: null });
+    const { signIns, envFile } = await service.listSignIns({
+      serverId: null,
+      containerId: 'local-1',
+    });
+    expect(envFile?.found).toBe(false);
+    expect(signIns.map((one) => one.user)).toEqual(['postgres', 'web']);
+    await service.connectSignIn({
+      serverId: null,
+      containerId: 'local-1',
+      signInId: signIns[1]?.id ?? '',
+    });
+    expect(opened[0]).toMatchObject({
+      host: '127.0.0.1',
+      port: 55432,
+      user: 'web',
+      password: 'web-pw',
+    });
   });
 });
 

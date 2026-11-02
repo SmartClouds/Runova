@@ -125,6 +125,42 @@ describe('registerDatabaseHandlers', () => {
     ).rejects.toThrow();
   });
 
+  it('checks the sign-in channels, refusing an id that is not one', async () => {
+    const { call, service } = harness();
+    await call(C.listSignIns, { serverId: 's1', containerId: 'abc', totpCode: '123456' });
+    expect(service.listSignIns).toHaveBeenCalledWith({
+      serverId: 's1',
+      containerId: 'abc',
+      totpCode: '123456',
+    });
+    for (const channel of [C.connectSignIn, C.revealSignIn]) {
+      await call(channel, { serverId: null, containerId: 'dev-pg', signInId: 'abc123def4567' });
+    }
+    expect(service.connectSignIn).toHaveBeenCalledWith({
+      serverId: null,
+      containerId: 'dev-pg',
+      signInId: 'abc123def4567',
+    });
+    expect(service.revealSignIn).toHaveBeenCalledWith({
+      serverId: null,
+      containerId: 'dev-pg',
+      signInId: 'abc123def4567',
+    });
+    for (const signInId of [
+      undefined,
+      '',
+      'short',
+      'UPPER1234567',
+      '../../etc/passwd',
+      'a'.repeat(33),
+    ]) {
+      await expect(
+        call(C.revealSignIn, { serverId: null, containerId: 'dev-pg', signInId }),
+      ).rejects.toThrow(/sign-in/);
+    }
+    await expect(call(C.listSignIns, { serverId: null, containerId: '-it' })).rejects.toThrow();
+  });
+
   it('checks the discover, connect, disconnect and cancel arguments', async () => {
     const { call, service } = harness();
     await call(C.discover, { serverId: null });

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ContainerPortMapping } from '@runova/core';
-import { engineFromImage } from '@runova/core';
+import type { ContainerPortMapping, DbEngine } from '@runova/core';
+import { engineFromContainer } from '@runova/core';
 
 /**
  * This computer's Docker, read for database containers. The environment comes along because
@@ -14,9 +14,26 @@ export interface LocalContainer {
   image: string;
   running: boolean;
   project: string | null;
+  /** The compose service, which the project's other containers use as its host name. */
+  service?: string | null;
+  /** The folder the compose project was started from, where its .env is. */
+  workingDir?: string | null;
   env: Record<string, string>;
   ports: ContainerPortMapping[];
+  /** Ports the image exposes, published or not, which a stopped container still lists. */
+  exposedPorts?: number[];
   networks: { name: string; ip: string | null }[];
+}
+
+/** Which engine a container on this computer runs, by its image or the one database port it exposes. */
+export function localEngine(container: LocalContainer): DbEngine | null {
+  return engineFromContainer({
+    image: container.image,
+    privatePorts: [
+      ...container.ports.map((port) => port.containerPort),
+      ...(container.exposedPorts ?? []),
+    ],
+  });
 }
 
 export interface LocalHelper {
@@ -26,6 +43,8 @@ export interface LocalHelper {
 
 export interface LocalDocker {
   listDatabases: () => Promise<LocalContainer[]>;
+  /** Every container in a compose project, with its environment. */
+  listProject: (project: string) => Promise<LocalContainer[]>;
   inspect: (idOrName: string) => Promise<LocalContainer>;
   /**
    * A short-lived socat container on the database's network, publishing its port on 127.0.0.1.
@@ -44,7 +63,12 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$/;
 interface RawInspect {
   Id?: string;
   Name?: string;
-  Config?: { Image?: string; Env?: string[] | null; Labels?: Record<string, string> | null };
+  Config?: {
+    Image?: string;
+    Env?: string[] | null;
+    Labels?: Record<string, string> | null;
+    ExposedPorts?: Record<string, unknown> | null;
+  };
   State?: { Running?: boolean };
   NetworkSettings?: {
     Ports?: Record<string, { HostIp?: string; HostPort?: string }[] | null> | null;
@@ -60,6 +84,7 @@ export function parseInspect(output: string): LocalContainer[] {
       const equals = line.indexOf('=');
       if (equals > 0) env[line.slice(0, equals)] = line.slice(equals + 1);
     }
+    const labels = raw.Config?.Labels ?? {};
     const ports: ContainerPortMapping[] = [];
     for (const [key, bindings] of Object.entries(raw.NetworkSettings?.Ports ?? {})) {
       const [portText, protocol] = key.split('/');
@@ -75,9 +100,15 @@ export function parseInspect(output: string): LocalContainer[] {
       name: (raw.Name ?? '').replace(/^\//, ''),
       image: raw.Config?.Image ?? '',
       running: raw.State?.Running === true,
-      project: raw.Config?.Labels?.['com.docker.compose.project'] ?? null,
+      project: labels['com.docker.compose.project'] ?? null,
+      service: labels['com.docker.compose.service'] ?? null,
+      workingDir: labels['com.docker.compose.project.working_dir'] ?? null,
       env,
       ports,
+      exposedPorts: Object.keys(raw.Config?.ExposedPorts ?? {})
+        .filter((key) => key.endsWith('/tcp'))
+        .map((key) => Number(key.split('/')[0]))
+        .filter((port) => Number.isInteger(port) && port > 0),
       networks: Object.entries(raw.NetworkSettings?.Networks ?? {}).map(([name, network]) => ({
         name,
         ip: network.IPAddress || null,
@@ -98,13 +129,18 @@ export const runDocker: DockerRunner = async (args) => {
 };
 
 export function createLocalDocker(run: DockerRunner = runDocker): LocalDocker {
+  const listAll = async (): Promise<LocalContainer[]> => {
+    const ids = (await run(['ps', '-a', '-q', '--no-trunc'])).split(/\s+/).filter(Boolean);
+    if (ids.length === 0) return [];
+    return parseInspect(await run(['inspect', ...ids]));
+  };
   return {
     async listDatabases() {
-      const ids = (await run(['ps', '-a', '-q', '--no-trunc'])).split(/\s+/).filter(Boolean);
-      if (ids.length === 0) return [];
-      return parseInspect(await run(['inspect', ...ids])).filter(
-        (container) => engineFromImage(container.image) !== null,
-      );
+      return (await listAll()).filter((container) => localEngine(container) !== null);
+    },
+
+    async listProject(project) {
+      return (await listAll()).filter((container) => container.project === project);
     },
 
     async inspect(idOrName) {

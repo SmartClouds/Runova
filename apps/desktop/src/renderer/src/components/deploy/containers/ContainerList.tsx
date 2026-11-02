@@ -1,4 +1,4 @@
-import { engineFromImage } from '@runova/core';
+import { engineFromContainer } from '@runova/core';
 import type {
   ContainerList as ContainerListData,
   ContainerSummary,
@@ -101,7 +101,14 @@ export function ActionMenu({
   align?: 'start' | 'end';
 }): React.JSX.Element | null {
   const { act, remove, openDatabase } = actions;
-  const isDatabase = openDatabase !== undefined && engineFromImage(container.image) !== null;
+  const isDatabase =
+    openDatabase !== undefined &&
+    engineFromContainer({
+      image: container.image,
+      privatePorts: container.ports
+        .filter((port) => port.protocol === 'tcp')
+        .map((port) => port.privatePort),
+    }) !== null;
   if (!act && !remove && !isDatabase) return null;
   const busy = actions.busyId === container.id;
   return (

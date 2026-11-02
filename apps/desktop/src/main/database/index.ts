@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
+import { MAX_ENV_FILE_BYTES } from '@runova/core';
 import Database from 'better-sqlite3';
 import { app, dialog, type IpcMainInvokeEvent, ipcMain, shell } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
@@ -18,6 +19,7 @@ import {
 } from './backup';
 import { DatabaseConnectionStore } from './connectionStore';
 import { openDriver } from './drivers';
+import { readLocalEnvFile, serverEnvCommand } from './envFile';
 import { createLocalDocker } from './localDocker';
 import { DatabaseService } from './service';
 
@@ -52,6 +54,22 @@ export function registerDatabaseIpc(
       }
     },
     localDocker: createLocalDocker(),
+    readEnvFile: async (serverId, path) => {
+      if (!serverId) return readLocalEnvFile(path);
+      const lease = await pool.acquire(serverId);
+      try {
+        const result = await lease.connection.exec(serverEnvCommand(path), {
+          timeoutMs: 15_000,
+          maxOutputBytes: MAX_ENV_FILE_BYTES + 1,
+        });
+        if (result.exitCode !== 0 || Buffer.byteLength(result.stdout) > MAX_ENV_FILE_BYTES) {
+          return null;
+        }
+        return result.stdout;
+      } finally {
+        lease.release();
+      }
+    },
     // Docker Desktop on Windows and macOS runs containers in a VM this computer cannot route to.
     containerAddressesReachable: process.platform === 'linux',
   });

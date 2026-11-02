@@ -6,7 +6,10 @@ import type {
   DatabaseConnection,
   DatabaseConnectResult,
   DatabaseDiscovery,
+  DatabaseRevealedSignIn,
   DatabaseSaveInput,
+  DatabaseSignInInput,
+  DatabaseSignIns,
   DbAiContext,
   DbAiContextInput,
   DbListObjectsInput,
@@ -42,6 +45,12 @@ export function createDatabase(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.database.discover, { serverId }),
     connectCandidate: (input: DatabaseConnectCandidateInput): Promise<DatabaseConnectResult> =>
       ipcRenderer.invoke(IPC.database.connectCandidate, input),
+    listSignIns: (input: DatabaseConnectCandidateInput): Promise<DatabaseSignIns> =>
+      ipcRenderer.invoke(IPC.database.listSignIns, input),
+    connectSignIn: (input: DatabaseSignInInput): Promise<DatabaseConnectResult> =>
+      ipcRenderer.invoke(IPC.database.connectSignIn, input),
+    revealSignIn: (input: DatabaseSignInInput): Promise<DatabaseRevealedSignIn> =>
+      ipcRenderer.invoke(IPC.database.revealSignIn, input),
     connect: (connectionId: string, password?: string): Promise<DatabaseConnectResult> =>
       ipcRenderer.invoke(IPC.database.connect, connectionId, password),
     disconnect: (sessionId: string): Promise<void> =>

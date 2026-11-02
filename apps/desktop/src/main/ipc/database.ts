@@ -3,6 +3,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import type {
   DatabaseConnectCandidateInput,
   DatabaseSaveInput,
+  DatabaseSignInInput,
   DatabaseTarget,
   DbListObjectsInput,
   DbObjectKind,
@@ -39,6 +40,9 @@ export interface DatabaseHandlerDeps {
     | 'removeConnection'
     | 'discover'
     | 'connectCandidate'
+    | 'listSignIns'
+    | 'connectSignIn'
+    | 'revealSignIn'
     | 'connect'
     | 'disconnect'
     | 'listObjects'
@@ -187,6 +191,16 @@ function candidateInput(value: unknown): DatabaseConnectCandidateInput {
   return out;
 }
 
+const SIGN_IN_ID = /^[a-z0-9]{8,32}$/;
+
+function signInInput(value: unknown): DatabaseSignInInput {
+  const input = object(value, 'a sign-in');
+  if (typeof input.signInId !== 'string' || !SIGN_IN_ID.test(input.signInId)) {
+    throw new Error('That is not a sign-in.');
+  }
+  return { ...candidateInput(value), signInId: input.signInId };
+}
+
 function ref(value: unknown): DbObjectRef {
   const input = object(value, 'a table');
   const out: DbObjectRef = { name: text(input.name, MAX_NAME, 'name') };
@@ -298,6 +312,9 @@ export function registerDatabaseHandlers({
     service.discover(nullableServer(object(value, 'where to look').serverId)),
   );
   handle(IPC.database.connectCandidate, (value) => service.connectCandidate(candidateInput(value)));
+  handle(IPC.database.listSignIns, (value) => service.listSignIns(candidateInput(value)));
+  handle(IPC.database.connectSignIn, (value) => service.connectSignIn(signInInput(value)));
+  handle(IPC.database.revealSignIn, (value) => service.revealSignIn(signInInput(value)));
   handle(IPC.database.connect, (connectionId, secret) =>
     service.connect(id(connectionId, 'saved connection'), password(secret)),
   );

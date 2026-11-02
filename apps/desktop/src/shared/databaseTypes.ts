@@ -1,9 +1,10 @@
 import type { AccessLevel, DbEngine, DbObjectRef, SchemaTable, StatementClass } from '@runova/core';
 
 /**
- * Plain data the Database section passes between main and the renderer. Passwords never come
- * back to the renderer: they go in once (typed, or read from a container's environment in main)
- * and stay sealed in main from then on.
+ * Plain data the Database section passes between main and the renderer. Passwords go in once
+ * (typed, or read from a container's environment or its project's .env in main) and stay sealed
+ * in main. The one way back out is `revealSignIn`, which the user asks for by pressing Show and
+ * which a server guards with a step-up.
  */
 
 export type { DbObjectRef };
@@ -88,6 +89,48 @@ export interface DatabaseConnectCandidateInput {
   totpCode?: string;
   /** The database's own password, when the environment did not have it. */
   databasePassword?: string;
+}
+
+/** Where a sign-in was written down: a container's environment or the project's .env. */
+export interface DatabaseSignInOrigin {
+  kind: 'container' | 'envFile' | 'app';
+  /** The container name, or the path of the .env file. */
+  where: string;
+  /** The variable, such as POSTGRES_PASSWORD or DATABASE_URL_APP. */
+  key: string;
+}
+
+/** One way to sign in to a database container, as the renderer sees it: no password. */
+export interface DatabaseSignIn {
+  /** Stable across scans, and carries no secret. */
+  id: string;
+  user: string | null;
+  database: string | null;
+  hasPassword: boolean;
+  /** The account the container was started with. */
+  owner: boolean;
+  origin: DatabaseSignInOrigin;
+  alsoIn: DatabaseSignInOrigin[];
+  /** The saved connection already made from this sign-in, if any. */
+  connectionId: string | null;
+}
+
+export interface DatabaseSignIns {
+  signIns: DatabaseSignIn[];
+  /** The project's .env Runova looked for, or null when the container is in no compose project. */
+  envFile: { path: string; found: boolean } | null;
+  /** Containers in the project whose environment could not be read. */
+  unread: string[];
+}
+
+export interface DatabaseSignInInput extends DatabaseConnectCandidateInput {
+  signInId: string;
+}
+
+/** A sign-in shown on purpose: the URL as the project's own containers would use it. */
+export interface DatabaseRevealedSignIn {
+  url: string;
+  password: string | null;
 }
 
 export interface DatabaseSaveInput {
