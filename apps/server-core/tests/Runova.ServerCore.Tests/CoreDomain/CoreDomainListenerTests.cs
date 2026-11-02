@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,8 @@ namespace Runova.ServerCore.Tests.CoreDomainTests;
 /// The core domain's loopback port on a real Kestrel, standing in for nginx: nothing listens until
 /// the mode is on, a request needs nginx's key and the certificate of an enrolled, unrevoked
 /// device, the request is then tied to that device like one over direct TLS, and the same headers
-/// carry no weight on the core's own listener.
+/// carry no weight on the core's own listener. Behind Cloudflare the certificate gives way to a
+/// header signed with the device key, good for one request on one path, once.
 /// </summary>
 public sealed class CoreDomainListenerTests : IAsyncLifetime
 {
@@ -158,9 +160,115 @@ public sealed class CoreDomainListenerTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, theirs.StatusCode);
     }
 
-    private async Task OpenAsync()
+    [Fact]
+    public async Task Through_cloudflare_a_signed_request_reaches_the_core_tied_to_its_device()
     {
-        App.Services.GetRequiredService<CoreDomainStore>().Write(new CoreDomainSettings(true, "core.example.com", _proxyPort, _key, []));
+        await OpenAsync(CoreDomainMode.Cloudflare);
+        using var otherKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var otherDevice = await AddDeviceAsync(otherKey);
+        using var client = Proxied(device: null);
+
+        var health = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health"), Cancel);
+        var own = await client.SendAsync(Signed(HttpMethod.Post, "/api/v1/auth/challenge", body: new ChallengeRequest(_deviceId, AuthPurpose.Login)), Cancel);
+        var theirs = await client.SendAsync(Signed(HttpMethod.Post, "/api/v1/auth/challenge", body: new ChallengeRequest(otherDevice, AuthPurpose.Login)), Cancel);
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, theirs.StatusCode);
+    }
+
+    [Fact]
+    public async Task Through_cloudflare_a_proof_is_checked_against_the_request_and_spent_once()
+    {
+        await OpenAsync(CoreDomainMode.Cloudflare);
+        using var stranger = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var client = Proxied(device: null);
+        using var noKey = Proxied(device: null, key: null);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var refused = new Dictionary<string, HttpRequestMessage>
+        {
+            ["no proof"] = new(HttpMethod.Get, "/api/v1/health"),
+            ["garbage"] = WithProof(new(HttpMethod.Get, "/api/v1/health"), "v1.not-a-proof"),
+            ["another key"] = Signed(HttpMethod.Get, "/api/v1/health", key: stranger),
+            ["unknown device"] = Signed(HttpMethod.Get, "/api/v1/health", key: stranger, device: Guid.NewGuid()),
+            ["another path"] = WithProof(new(HttpMethod.Get, "/api/v1/health"), Proof(_deviceKey, _deviceId, "GET", "/api/v1/other", "core.example.com", now)),
+            ["another method"] = WithProof(new(HttpMethod.Get, "/api/v1/health"), Proof(_deviceKey, _deviceId, "POST", "/api/v1/health", "core.example.com", now)),
+            ["another domain"] = WithProof(new(HttpMethod.Get, "/api/v1/health"), Proof(_deviceKey, _deviceId, "GET", "/api/v1/health", "other.example.com", now)),
+            ["the certificate instead"] = WithCertificate(new(HttpMethod.Get, "/api/v1/health"), EscapedPem(_deviceKey)),
+        };
+        foreach (var (name, request) in refused)
+        {
+            using (request)
+            {
+                Assert.True(HttpStatusCode.Forbidden == (await client.SendAsync(request, Cancel)).StatusCode, name);
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await noKey.SendAsync(Signed(HttpMethod.Get, "/api/v1/health"), Cancel)).StatusCode);
+
+        var proof = Proof(_deviceKey, _deviceId, "GET", "/api/v1/health", "core.example.com", now);
+        var first = await client.SendAsync(WithProof(new(HttpMethod.Get, "/api/v1/health"), proof), Cancel);
+        var replayed = await client.SendAsync(WithProof(new(HttpMethod.Get, "/api/v1/health"), proof), Cancel);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, replayed.StatusCode);
+        Assert.Equal("deviceProofInvalid", (await replayed.Content.ReadFromJsonAsync<ProofRefusal>(Cancel))!.Code);
+    }
+
+    [Fact]
+    public async Task Through_cloudflare_a_clock_far_off_is_named_as_such()
+    {
+        await OpenAsync(CoreDomainMode.Cloudflare);
+        using var client = Proxied(device: null);
+        var now = DateTimeOffset.UtcNow;
+
+        var stale = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health", at: now.AddMinutes(-10)), Cancel);
+        var ahead = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health", at: now.AddMinutes(10)), Cancel);
+        var close = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health", at: now.AddMinutes(-2)), Cancel);
+
+        Assert.Equal(HttpStatusCode.Forbidden, stale.StatusCode);
+        Assert.Equal("deviceProofClockSkew", (await stale.Content.ReadFromJsonAsync<ProofRefusal>(Cancel))!.Code);
+        Assert.Equal("deviceProofClockSkew", Assert.Single(stale.Headers.GetValues(CoreDomainSettings.RefusalHeader)));
+        Assert.Equal(HttpStatusCode.Forbidden, ahead.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, close.StatusCode);
+    }
+
+    [Fact]
+    public async Task Through_cloudflare_the_path_is_compared_however_it_was_percent_encoded()
+    {
+        await OpenAsync(CoreDomainMode.Cloudflare);
+        using var client = Proxied(device: null);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        // Cloudflare may change how a URL is encoded on the way through; both sides compare it decoded.
+        using var request = WithProof(new(HttpMethod.Get, "/api/v1/%68ealth?note=a%20b"), Proof(_deviceKey, _deviceId, "GET", "/api/v1/health?note=a b", "core.example.com", now));
+
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(request, Cancel)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_revoked_device_is_refused_through_cloudflare_and_a_proof_means_nothing_straight_to_the_server()
+    {
+        await OpenAsync(CoreDomainMode.Cloudflare);
+        using var client = Proxied(device: null);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health"), Cancel)).StatusCode);
+
+        await RevokeAsync(_deviceId);
+        var revoked = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health"), Cancel);
+
+        using var other = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var otherDevice = await AddDeviceAsync(other);
+        await OpenAsync(CoreDomainMode.Direct);
+        var direct = await client.SendAsync(Signed(HttpMethod.Get, "/api/v1/health", key: other, device: otherDevice), Cancel);
+
+        Assert.Equal(HttpStatusCode.Forbidden, revoked.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, direct.StatusCode);
+    }
+
+    private async Task OpenAsync(CoreDomainMode mode = CoreDomainMode.Direct)
+    {
+        App.Services.GetRequiredService<CoreDomainStore>().Write(new CoreDomainSettings(true, "core.example.com", _proxyPort, _key, [], Mode: mode));
         App.Services.GetRequiredService<CoreDomainEndpoint>().Open(_proxyPort);
         await WaitAsync(() => App.Services.GetRequiredService<ICoreDomainBinding>().IsListening(_proxyPort));
     }
@@ -183,6 +291,41 @@ public sealed class CoreDomainListenerTests : IAsyncLifetime
 
         return client;
     }
+
+    /// <summary>A request with a fresh proof, as the app signs it in Cloudflare mode.</summary>
+    private HttpRequestMessage Signed(HttpMethod method, string path, ECDsa? key = null, Guid? device = null, DateTimeOffset? at = null, object? body = null)
+    {
+        var request = new HttpRequestMessage(method, path);
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body, options: CoreJson.Options);
+        }
+
+        var unixMs = (at ?? DateTimeOffset.UtcNow).ToUnixTimeMilliseconds();
+        return WithProof(request, Proof(key ?? _deviceKey, device ?? _deviceId, method.Method, path, "core.example.com", unixMs));
+    }
+
+    private static HttpRequestMessage WithProof(HttpRequestMessage request, string proof)
+    {
+        request.Headers.Add(CoreDomainSettings.ProofHeader, proof);
+        return request;
+    }
+
+    private static HttpRequestMessage WithCertificate(HttpRequestMessage request, string escapedPem)
+    {
+        request.Headers.Add(CoreDomainSettings.CertificateHeader, escapedPem);
+        return request;
+    }
+
+    private static string Proof(ECDsa key, Guid device, string method, string path, string domain, long unixMs)
+    {
+        var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var message = DeviceProof.Message(device, method, path, domain, unixMs, nonce);
+        var signature = key.SignData(Encoding.UTF8.GetBytes(message), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        return $"v1.{device:D}.{unixMs}.{nonce}.{Convert.ToBase64String(signature)}";
+    }
+
+    private sealed record ProofRefusal(string Code, string Message);
 
     /// <summary>What nginx puts in $ssl_client_escaped_cert: the PEM, URL-escaped.</summary>
     private static string EscapedPem(ECDsa key)

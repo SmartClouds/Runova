@@ -4,6 +4,7 @@ import type { SecretEnvelope, SshAuthMethod, StoredSshServer } from '../../share
 import { coreErrorCode, coreErrorMessage } from '../../shared/coreErrors';
 import type {
   AccountInfo,
+  CoreDomainMode,
   HealthResponse,
   RecoveryCodes,
   SignedInUser,
@@ -49,7 +50,7 @@ import { type InstallerConnection, installCore, uninstallCore } from './bootstra
 import { runPreflight } from './bootstrap/preflight';
 import type { ReleaseSource } from './bootstrap/releaseSource';
 import { type RestoredCore, restoreCore } from './bootstrap/restore';
-import { CoreHttpClient } from './connection/coreHttp';
+import { CoreHttpClient, CoreRequestTooLargeError } from './connection/coreHttp';
 import { coreHub, createCoreHubConnection } from './connection/coreHub';
 import { hubMessage } from './connection/hubErrors';
 import { HubStartError, type LiveHubSession, startLiveHub } from './connection/liveHub';
@@ -59,14 +60,14 @@ import {
   devTcpTransport,
   streamLocalTransport,
 } from './connection/transport';
-import { coreDomainTransport } from './coreDomain/transport';
+import { cloudflareCoreDomainTransport, coreDomainTransport } from './coreDomain/transport';
 import { coreNames, LEGACY_CORE, RUNOVA_CORE } from './coreLayout';
 import { updateCoreLive } from './coreUpdate';
 import { clientCertificate } from './directTls/clientCertificate';
 import { directTlsTransport, PinMismatchError, type TlsConnect } from './directTls/transport';
 import { CoreLinks } from './live/coreLinks';
 import { LinkBlockedError } from './live/linkFailures';
-import type { DeployState } from './state';
+import type { DeployState, DeviceCredentials } from './state';
 
 /**
  * The Deploy section's main-process side: saved servers with the core each one runs, a preflight,
@@ -878,7 +879,20 @@ export class DeployService {
   ): Promise<T> {
     if (!known && !options.sshOnly) {
       const direct = await this.directRoute(serverId, { probe: true });
-      if (direct) return work(direct);
+      if (direct) {
+        try {
+          return await work(direct);
+        } catch (error) {
+          // An upload over Cloudflare's limit was refused before a byte went out: direct TLS or
+          // SSH carries any size, so it goes that way instead.
+          if (!(error instanceof CoreRequestTooLargeError)) throw error;
+          const larger = await this.directRoute(serverId, {
+            probe: true,
+            except: 'core-domain',
+          });
+          if (larger) return work(larger);
+        }
+      }
     }
     if (this.isDevHost(serverId) && this.deps.devCorePort !== null) {
       return work(devTcpTransport(this.deps.devCorePort));
@@ -965,9 +979,37 @@ export class DeployService {
   }
 
   /** A transport through the core domain, signed with this computer's device key; null without a device. */
-  async coreDomainTransport(serverId: string, domain: string): Promise<CoreTransport | null> {
+  async coreDomainTransport(
+    serverId: string,
+    domain: string,
+    mode: CoreDomainMode = 'direct',
+  ): Promise<CoreTransport | null> {
     const device = await this.deps.state.device(serverId);
     if (!device) return null;
+    return this.domainTransport(device, domain, mode);
+  }
+
+  /**
+   * Straight to the server the device key is the TLS client certificate; through Cloudflare it
+   * signs each request instead, since Cloudflare ends TLS at its edge.
+   */
+  private domainTransport(
+    device: DeviceCredentials,
+    domain: string,
+    mode: CoreDomainMode,
+  ): CoreTransport {
+    if (mode === 'cloudflare') {
+      return cloudflareCoreDomainTransport(
+        domain,
+        async () => ({
+          deviceId: device.deviceId,
+          privateKeyPem: await this.deps.unseal(device.privateKey),
+        }),
+        this.deps.tlsConnect,
+        undefined,
+        this.now,
+      );
+    }
     return coreDomainTransport(
       domain,
       async () => clientCertificate(await this.deps.unseal(device.privateKey)),
@@ -1162,9 +1204,10 @@ export class DeployService {
    */
   private async directRoute(
     serverId: string,
-    options: { probe: boolean },
+    options: { probe: boolean; except?: OffSshKind },
   ): Promise<CoreTransport | null> {
     for (const route of await this.offSshRoutes(serverId)) {
+      if (route.kind === options.except) continue;
       if (!options.probe || (this.directUp.get(routeKey(serverId, route.kind)) ?? 0) > this.now()) {
         return route.transport;
       }
@@ -1198,7 +1241,7 @@ export class DeployService {
     if (domain?.enabled && !down('core-domain')) {
       routes.push({
         kind: 'core-domain',
-        transport: coreDomainTransport(domain.domain, credentials, this.deps.tlsConnect),
+        transport: this.domainTransport(device, domain.domain, domain.mode ?? 'direct'),
       });
     }
     const pinned = await this.deps.state.directTls(serverId);

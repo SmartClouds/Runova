@@ -258,11 +258,13 @@ Admins can click **Lock to Cloudflare** (or **Bring up to date** when it is alre
 
 1. Click **Lock to Cloudflare**. A dialog explains that ports 80 and 443 will only answer Cloudflare's published addresses and that nginx will log each visitor's own address.
 2. Optionally tick **Also require Cloudflare's client certificate on HTTPS (Authenticated Origin Pulls)**. It is turned on for the zones of this server's sites first.
-3. Check **Site domains on this server**. Any domain that is not proxied (DNS only, no record, or not in your Cloudflare account) is flagged, because it would stop answering once the lock is on. Turn the proxy on for those names first.
+3. Check **Site domains on this server**. Any domain that is not proxied (DNS only, no record, or not in your Cloudflare account) is flagged, because it would stop answering once the lock is on. Turn the proxy on for those names first. The server core's own domain is listed too when it is on.
 4. Read the exact firewall commands. If the safety guard blocks the change, it says why and the button stays disabled.
 5. Click **Lock to Cloudflare** to apply. A firewall countdown starts, and you must keep the change from the banner over a new SSH connection or it is undone. See [Firewall and security](deploy-firewall-security.md).
 
 If the firewall changed but nginx did not take its part, a warning points you to the Websites section.
+
+The lock works with the server core's own domain when that domain is set to **Through Cloudflare** (Security, Connection tab): the app keeps reaching the core through Cloudflare, with each request signed by your computer's device key. A core domain set to **Straight to the server** would be cut off, so the lock refuses until you switch it to Through Cloudflare or turn it off. See [Core domain](deploy-websites-certificates.md#core-domain).
 
 ## Tips
 

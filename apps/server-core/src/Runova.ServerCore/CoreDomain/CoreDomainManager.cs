@@ -48,6 +48,13 @@ internal sealed partial class CoreDomainManager(
     TimeProvider time,
     ILogger<CoreDomainManager> logger) : IDisposable
 {
+    /// <summary>
+    /// Without the origin lock nginx sees Cloudflare's address on every request, not the visitor's,
+    /// so sources would be checked against the wrong address.
+    /// </summary>
+    private const string SourcesNeedLock =
+        "Through Cloudflare, nginx only learns the visitor's address while the Cloudflare origin lock is on. Turn the lock on under Firewall, or clear the allowed sources.";
+
     private static readonly TimeSpan _bindWait = TimeSpan.FromSeconds(5);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -89,8 +96,10 @@ internal sealed partial class CoreDomainManager(
     }
 
     /// <summary>
-    /// Turns the mode on, or changes the domain or sources while it is on. nginx has to be
-    /// installed and running first, and the Cloudflare origin lock off.
+    /// Turns the mode on, or changes the domain, sources or mode while it is on. nginx has to be
+    /// installed and running first. Direct mode also needs the Cloudflare origin lock off; Cloudflare
+    /// mode works with it, and needs it for sources, since only then does nginx learn the visitor's
+    /// address from Cloudflare.
     /// </summary>
     public async Task<CoreDomainStatus> EnableAsync(CoreDomainRequest request, Requester who, CancellationToken cancellationToken)
     {
@@ -111,6 +120,13 @@ internal sealed partial class CoreDomainManager(
             throw new CoreDomainRefusedException(sourceProblem);
         }
 
+        if (!Enum.IsDefined(request.Mode))
+        {
+            throw new CoreDomainRefusedException("Choose how the app reaches the domain: straight to the server or through Cloudflare.");
+        }
+
+        var throughCloudflare = request.Mode == CoreDomainMode.Cloudflare;
+
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -125,10 +141,16 @@ internal sealed partial class CoreDomainManager(
                 throw new CoreDomainRefusedException("nginx is installed but not running. Start it (Websites shows how) and try again.");
             }
 
-            if (await OriginLockedAsync(cancellationToken))
+            var originLocked = await OriginLockedAsync(cancellationToken);
+            if (!throughCloudflare && originLocked)
             {
                 throw new CoreDomainRefusedException(
-                    "The Cloudflare origin lock lets only Cloudflare reach ports 80 and 443, and the core domain has to be reached directly. Turn the origin lock off under Websites first.");
+                    "The Cloudflare origin lock lets only Cloudflare reach ports 80 and 443, so the domain cannot point straight at the server. Choose Through Cloudflare, or turn the origin lock off under Firewall first.");
+            }
+
+            if (throughCloudflare && sources.Length > 0 && !originLocked)
+            {
+                throw new CoreDomainRefusedException(SourcesNeedLock);
             }
 
             var current = store.Read();
@@ -146,7 +168,8 @@ internal sealed partial class CoreDomainManager(
                 current.Key ?? CoreDomainSettings.NewKey(),
                 sources,
                 time.GetUtcNow().ToUnixTimeMilliseconds(),
-                who.UserName);
+                who.UserName,
+                request.Mode);
             store.Write(settings);
             endpoint.Open(port);
             _error = await WaitAsync(() => binding.IsListening(port), cancellationToken)
@@ -218,10 +241,18 @@ internal sealed partial class CoreDomainManager(
         var listening = settings.Enabled && binding.IsListening(settings.Port);
         var originLocked = await OriginLockedAsync(cancellationToken);
         var certificate = site?.Certificate;
+        var throughCloudflare = settings.ThroughCloudflare;
+
+        // Only Cloudflare trusts its Origin CA, so a certificate from it is good behind the proxy
+        // and nowhere else.
         var usable = certificate is { State: CertificateState.Valid or CertificateState.ExpiringSoon, Staging: false }
-            && certificate.Source != CertificateSource.CloudflareOrigin;
+            && (throughCloudflare || certificate.Source != CertificateSource.CloudflareOrigin);
+        var sourcesBlind = settings.Enabled && throughCloudflare && settings.Sources.Length > 0 && !originLocked;
         var ready = settings.Enabled && listening && site is { Applied: true } && usable
-            && inspection.Running && !originLocked;
+            && inspection.Running && (throughCloudflare ? !sourcesBlind : !originLocked);
+        var error = settings.Enabled && !listening ? _error ?? "The core's port for nginx is not open yet."
+            : sourcesBlind ? _error ?? SourcesNeedLock
+            : _error;
         return new CoreDomainStatus(
             settings.Enabled,
             settings.Domain,
@@ -236,8 +267,10 @@ internal sealed partial class CoreDomainManager(
             certificate,
             settings.ChangedAt,
             settings.ChangedBy,
-            settings.Enabled && !listening ? _error ?? "The core's port for nginx is not open yet." : _error);
+            error,
+            settings.Mode);
     }
+
 
     private async Task<bool> OriginLockedAsync(CancellationToken cancellationToken)
     {
@@ -314,6 +347,7 @@ internal static class CoreDomainServices
         ((IConfigurationBuilder)builder.Configuration).Add(endpoint);
         builder.Services.AddSingleton(endpoint);
         builder.Services.TryAddSingleton<ICoreDomainBinding, KestrelCoreDomainBinding>();
+        builder.Services.TryAddSingleton<DeviceProofNonces>();
         builder.Services.AddSingleton<CoreDomainManager>();
         builder.Services.AddHostedService<CoreDomainStartup>();
         builder.WebHost.ConfigureKestrel(kestrel =>

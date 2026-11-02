@@ -30,7 +30,15 @@ export function enableInput(value: unknown): DeployCoreDomainEnableInput {
   }
   const sources = checkSources(input.sources as string[]);
   if (!sources.ok) throw new Error(sources.reason);
-  return { ...proof, domain: domain.value, sources: sources.value };
+  if (input.mode !== undefined && input.mode !== 'direct' && input.mode !== 'cloudflare') {
+    throw new Error('The core domain is reached straight to the server or through Cloudflare.');
+  }
+  return {
+    ...proof,
+    domain: domain.value,
+    sources: sources.value,
+    ...(input.mode === 'cloudflare' ? { mode: 'cloudflare' as const } : {}),
+  };
 }
 
 export function registerDeployCoreDomainHandlers(deps: DeployCoreDomainHandlerDeps): void {

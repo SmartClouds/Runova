@@ -1,9 +1,16 @@
 import type { AddressInfo } from 'node:net';
 import { createServer, type Server, type TLSSocket, connect as tlsConnect } from 'node:tls';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeviceKey } from '../auth/deviceKey';
 import { clientCertificate } from '../directTls/clientCertificate';
-import { CoreDomainUnreachableError, coreDomainTransport, isCertificateError } from './transport';
+import { PROOF_HEADER } from './proof';
+import {
+  CLOUDFLARE_MAX_REQUEST_BYTES,
+  CoreDomainUnreachableError,
+  cloudflareCoreDomainTransport,
+  coreDomainTransport,
+  isCertificateError,
+} from './transport';
 
 /**
  * A loopback TLS server standing in for nginx. Its certificate is self-signed, so the tests that
@@ -123,5 +130,45 @@ describe('coreDomainTransport', () => {
     expect(error).toBeInstanceOf(CoreDomainUnreachableError);
     expect((error as CoreDomainUnreachableError).certificate).toBe(false);
     expect((error as Error).message).toMatch(/Could not reach core\.example\.com/);
+  });
+});
+
+describe('cloudflareCoreDomainTransport', () => {
+  it('sends no client certificate and signs the request the stream carries', async () => {
+    const nginx = await startServer();
+    servers.push(nginx.server);
+    const received: string[] = [];
+    nginx.server.on('secureConnection', (socket: TLSSocket) =>
+      socket.on('data', (chunk: Buffer) => received.push(chunk.toString('latin1'))),
+    );
+    const device = createDeviceKey();
+    const transport = cloudflareCoreDomainTransport(
+      'core.example.com',
+      async () => ({
+        deviceId: '0F8FAD5B-D9CB-469F-A165-70867728950E',
+        privateKeyPem: device.privateKeyPem,
+      }),
+      (options) =>
+        tlsConnect({ ...options, host: '127.0.0.1', port: nginx.port, rejectUnauthorized: false }),
+      undefined,
+      () => 1_767_225_600_000,
+    );
+
+    const stream = await transport.openStream();
+    stream.write('GET /api/v1/health HTTP/1.1\r\nHost: core.example.com\r\n\r\n');
+    await vi.waitFor(() => expect(received.join('')).toContain('\r\n\r\n'));
+    stream.destroy();
+
+    const head = received.join('');
+    const proof = new RegExp(`${PROOF_HEADER}: (\\S+)\r\n\r\n$`).exec(head)?.[1] ?? '';
+    expect(transport.kind).toBe('core-domain');
+    expect(transport.host?.()).toBe('core.example.com');
+    expect(transport.maxRequestBytes).toBe(CLOUDFLARE_MAX_REQUEST_BYTES);
+    expect(nginx.seen).toEqual([{ servername: 'core.example.com', peer: false }]);
+    expect(proof.split('.').slice(0, 3)).toEqual([
+      'v1',
+      '0f8fad5b-d9cb-469f-a165-70867728950e',
+      '1767225600000',
+    ]);
   });
 });

@@ -39,8 +39,9 @@ export async function startLiveHub(
   // SignalR replaces a failed stream with its own generic text; the cause is kept here instead,
   // so a refused tunnel still reads as one.
   let openError: unknown = null;
+  // The rest of the transport (its Host above all) goes along as it is.
   const recorded: CoreTransport = {
-    kind: transport.kind,
+    ...transport,
     openStream: () =>
       transport.openStream().catch((error: unknown) => {
         openError = error;

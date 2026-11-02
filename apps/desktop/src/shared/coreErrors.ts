@@ -4,15 +4,18 @@ import { sshErrorMessage } from './sshErrors';
 /**
  * A server core's reasons for refusing a sign-in, plus the app's own: "this computer has no
  * device on that core yet", "confirm your password first" (a step-up), "your role cannot do
- * that" and "the direct TLS certificate is not the pinned one". Electron only carries an error's message across IPC, so the code rides inside it, as
- * with the SSH and Vault errors.
+ * that", "the direct TLS certificate is not the pinned one" and, through Cloudflare, "the signed
+ * request was refused" or "this computer's clock is off". Electron only carries an error's
+ * message across IPC, so the code rides inside it, as with the SSH and Vault errors.
  */
 export type CoreErrorCode =
   | AuthErrorCode
   | 'notEnrolled'
   | 'stepUpRequired'
   | 'forbidden'
-  | 'tlsPinMismatch';
+  | 'tlsPinMismatch'
+  | 'deviceProofInvalid'
+  | 'deviceProofClockSkew';
 
 const CODES: ReadonlySet<string> = new Set<CoreErrorCode>([
   'challengeInvalid',
@@ -31,6 +34,8 @@ const CODES: ReadonlySet<string> = new Set<CoreErrorCode>([
   'stepUpRequired',
   'forbidden',
   'tlsPinMismatch',
+  'deviceProofInvalid',
+  'deviceProofClockSkew',
 ]);
 const CODE = /\[core:([A-Za-z]+)\]\s*/;
 

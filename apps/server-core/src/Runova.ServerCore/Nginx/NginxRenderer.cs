@@ -62,7 +62,7 @@ internal static class NginxRenderer
         {
             if (site.Upstream is NginxCoreUpstream core)
             {
-                files.Add(new NginxReleaseFile(SitePath(site), RenderCoreSite(site, core, layout, configuration.CoreKey), site.Id, Private: true));
+                files.Add(new NginxReleaseFile(SitePath(site), RenderCoreSite(site, core, layout, directory, configuration), site.Id, Private: true));
                 continue;
             }
 
@@ -248,14 +248,20 @@ internal static class NginxRenderer
 
     /// <summary>
     /// The server core behind its own domain (E44). Plain HTTP only answers ACME challenges, so the
-    /// core is never reached without TLS. Over HTTPS nginx asks for a client certificate without
-    /// asking a CA to vouch for it (the desktop signs its own with its device key); the handshake
-    /// proves the caller holds that key, and nginx hands the certificate to the core, which checks it
-    /// against its enrolled devices. The key header proves to the core the request came through here.
-    /// Nothing the visitor sends can stand in for either header: proxy_set_header replaces them.
+    /// core is never reached without TLS. Straight to the server, nginx asks for a client certificate
+    /// without asking a CA to vouch for it (the desktop signs its own with its device key); the
+    /// handshake proves the caller holds that key, and nginx hands the certificate to the core, which
+    /// checks it against its enrolled devices. Through Cloudflare there is no certificate to ask for:
+    /// the app's signed header passes through untouched and the core checks it, and the site takes
+    /// the origin lock's real-IP and Authenticated Origin Pulls like any other. The key header proves
+    /// to the core the request came through here. Nothing the visitor sends can stand in for the key
+    /// or the certificate header: proxy_set_header replaces them.
     /// </summary>
-    private static string RenderCoreSite(NginxSite site, NginxCoreUpstream core, NginxLayout layout, string? key)
+    private static string RenderCoreSite(NginxSite site, NginxCoreUpstream core, NginxLayout layout, string directory, NginxConfiguration configuration)
     {
+        var key = configuration.CoreKey;
+        var cloudflare = configuration.CoreThroughCloudflare;
+        var originLock = cloudflare ? configuration.OriginLock : null;
         if (!CoreDomain.CoreDomainSettings.IsKey(key))
         {
             throw new NginxConfigurationException([new NginxProblem($"sites[{site.Id}].upstream", "The server core's domain has lost its key. Turn the core domain off and on again under Security, Connection.")]);
@@ -267,6 +273,11 @@ internal static class NginxRenderer
 
         writer.Open("server", "# Plain HTTP answers ACME challenges and nothing else; the core is only reached over HTTPS.");
         writer.Section(Listen(layout, "80").Concat([$"server_name {domain};", "server_tokens off;"]).Concat(Logs(site, layout)));
+        if (originLock is not null)
+        {
+            writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
+        }
+
         WriteAcmeLocation(writer, layout);
         writer.Open("location /");
         writer.Section(site.Certificate is null ? "return 404;" : "return 301 https://$host$request_uri;");
@@ -289,10 +300,26 @@ internal static class NginxRenderer
             "ssl_session_timeout 1d;",
             "ssl_session_tickets off;",
             "ssl_stapling off;");
-        writer.Section(
-            "# The device certificate is self-signed, so no CA is asked to vouch for it. The handshake",
-            "# still proves the caller holds its key, and the core checks the key on every request.",
-            "ssl_verify_client optional_no_ca;");
+        if (originLock is not null)
+        {
+            writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
+        }
+
+        if (originLock is { AuthenticatedOriginPulls: true })
+        {
+            writer.Section(
+                "# Authenticated Origin Pulls: HTTPS only for Cloudflare's client certificate.",
+                $"ssl_client_certificate {directory}/{NginxCloudflare.OriginPullCaFile};",
+                "ssl_verify_client on;");
+        }
+        else if (!cloudflare)
+        {
+            writer.Section(
+                "# The device certificate is self-signed, so no CA is asked to vouch for it. The handshake",
+                "# still proves the caller holds its key, and the core checks the key on every request.",
+                "ssl_verify_client optional_no_ca;");
+        }
+
         if (site.IpRules is { } rules)
         {
             writer.Section(
@@ -303,9 +330,13 @@ internal static class NginxRenderer
 
         writer.Section("# Uploads and downloads stream through; the core sets its own limits.", "client_max_body_size 0;");
         writer.Open("location /");
-        writer.Open("if ($ssl_client_escaped_cert = \"\")");
-        writer.Section("return 403;");
-        writer.Close();
+        if (!cloudflare)
+        {
+            writer.Open("if ($ssl_client_escaped_cert = \"\")");
+            writer.Section("return 403;");
+            writer.Close();
+        }
+
         var timeouts = site.Timeouts ?? new NginxTimeouts();
         writer.Section(
         [
@@ -313,7 +344,8 @@ internal static class NginxRenderer
             "proxy_http_version 1.1;",
             $"proxy_set_header Host {CoreHostName};",
             $"proxy_set_header {CoreDomain.CoreDomainSettings.KeyHeader} {Quote(key!)};",
-            $"proxy_set_header {CoreDomain.CoreDomainSettings.CertificateHeader} $ssl_client_escaped_cert;",
+            // Through Cloudflare a client certificate, if any, is Cloudflare's own: never a device's.
+            $"proxy_set_header {CoreDomain.CoreDomainSettings.CertificateHeader} {(cloudflare ? "\"\"" : "$ssl_client_escaped_cert")};",
             "proxy_set_header X-Forwarded-For $remote_addr;",
             "proxy_set_header Upgrade $http_upgrade;",
             $"proxy_set_header Connection {ConnectionUpgradeVariable(layout)};",
@@ -324,6 +356,14 @@ internal static class NginxRenderer
             $"proxy_read_timeout {Number(timeouts.ReadSeconds ?? 3600)}s;",
             $"proxy_send_timeout {Number(timeouts.SendSeconds ?? 3600)}s;",
         ]);
+        if (cloudflare)
+        {
+            writer.Section(
+                "# Nothing the core answers may be kept in Cloudflare's cache, whatever a cache rule says.",
+                "proxy_hide_header Cache-Control;",
+                "add_header Cache-Control \"no-store\" always;");
+        }
+
         writer.Close();
         writer.Close();
         return writer.ToString();

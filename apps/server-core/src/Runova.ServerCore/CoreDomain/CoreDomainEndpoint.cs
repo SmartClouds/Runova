@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.AspNetCore.Connections.Features;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Runova.ServerCore.DirectTls;
@@ -91,22 +92,25 @@ internal sealed class CoreDomainEndpoint : ConfigurationProvider, IConfiguration
 }
 
 /// <summary>
-/// Every request on the core domain's port has to carry the key (so it came through nginx) and the
-/// client certificate nginx saw in the TLS handshake, whose key has to belong to an enrolled device
-/// that is not revoked. nginx asked for that certificate and the handshake proved the caller holds
-/// its private key; nginx cannot check it against the devices, so the core does, on every request.
-/// The request then goes on exactly as one over direct TLS: tied to that device.
+/// Every request on the core domain's port has to carry the key (so it came through nginx) and a
+/// proof of an enrolled device that is not revoked. In Direct mode the proof is the client
+/// certificate nginx saw in the TLS handshake: the handshake proved the caller holds its private
+/// key, nginx cannot check it against the devices, so the core does. In Cloudflare mode the proof
+/// is a header the app signed with the device key (<see cref="DeviceProof"/>), checked here with
+/// its time and nonce. Each mode takes only its own proof. The request then goes on exactly as one
+/// over direct TLS: tied to that device.
 /// </summary>
 internal sealed class CoreDomainGuard(RequestDelegate next)
 {
     /// <summary>A P-256 certificate the desktop makes is well under 1 KB; escaped PEM roughly doubles it.</summary>
     private const int MaxCertificateHeader = 8 * 1024;
 
-    public async Task InvokeAsync(HttpContext context, CoreDomainStore store, DirectTlsDevices devices)
+    public async Task InvokeAsync(HttpContext context, CoreDomainStore store, DirectTlsDevices devices, DeviceProofNonces nonces)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(devices);
+        ArgumentNullException.ThrowIfNull(nonces);
         if (!CoreDomainEndpoint.IsProxied(context))
         {
             await next(context);
@@ -116,8 +120,30 @@ internal sealed class CoreDomainGuard(RequestDelegate next)
         var settings = store.Read();
         var headers = context.Request.Headers;
         var sent = headers[CoreDomainSettings.KeyHeader].ToString();
-        if (!settings.Enabled || settings.Key is not { } key || !SameKey(sent, key)
-            || DeviceOf(headers[CoreDomainSettings.CertificateHeader].ToString(), devices) is not Guid device)
+        if (!settings.Enabled || settings.Key is not { } key || !SameKey(sent, key))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        Guid? device;
+        if (settings.ThroughCloudflare)
+        {
+            var (found, refusal) = ProvenDevice(context, settings.Domain ?? string.Empty, devices, nonces);
+            if (found is null)
+            {
+                await RefuseProofAsync(context, refusal);
+                return;
+            }
+
+            device = found;
+        }
+        else
+        {
+            device = DeviceOf(headers[CoreDomainSettings.CertificateHeader].ToString(), devices);
+        }
+
+        if (device is not Guid proven)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
@@ -125,8 +151,65 @@ internal sealed class CoreDomainGuard(RequestDelegate next)
 
         headers.Remove(CoreDomainSettings.KeyHeader);
         headers.Remove(CoreDomainSettings.CertificateHeader);
-        DirectTlsDevices.Remember(context, device);
+        headers.Remove(CoreDomainSettings.ProofHeader);
+        DirectTlsDevices.Remember(context, proven);
         await next(context);
+    }
+
+    /// <summary>
+    /// The device a Cloudflare-mode request proved with its signed header, or why not. The path is
+    /// compared percent-decoded on both sides, since Cloudflare may normalize how a URL is encoded
+    /// on the way through. The nonce is spent only once the signature is good, so nobody without
+    /// the key can use up another device's nonces.
+    /// </summary>
+    internal static (Guid? Device, DeviceProofRefusal Refusal) ProvenDevice(HttpContext context, string domain, DirectTlsDevices devices, DeviceProofNonces nonces)
+    {
+        var proof = DeviceProof.Parse(context.Request.Headers[CoreDomainSettings.ProofHeader].ToString());
+        if (proof is null)
+        {
+            return (null, DeviceProofRefusal.Invalid);
+        }
+
+        if (!nonces.Fresh(proof.UnixMs))
+        {
+            return (null, DeviceProofRefusal.ClockSkew);
+        }
+
+        var target = context.Features.Get<IHttpRequestFeature>()?.RawTarget;
+        if (string.IsNullOrEmpty(target))
+        {
+            target = context.Request.Path.ToUriComponent() + context.Request.QueryString.ToUriComponent();
+        }
+
+        if (devices.PublicKeyOf(proof.DeviceId) is not { } publicKey
+            || !DeviceProof.Verify(publicKey, proof, context.Request.Method, Uri.UnescapeDataString(target), domain))
+        {
+            return (null, DeviceProofRefusal.Invalid);
+        }
+
+        return nonces.TryUse(proof.DeviceId, proof.Nonce)
+            ? (proof.DeviceId, DeviceProofRefusal.None)
+            : (null, DeviceProofRefusal.Replayed);
+    }
+
+    /// <summary>403 with a reason the app can act on: above all, a clock that is off.</summary>
+    private static Task RefuseProofAsync(HttpContext context, DeviceProofRefusal refusal)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        var (code, message) = refusal switch
+        {
+            DeviceProofRefusal.ClockSkew => (
+                "deviceProofClockSkew",
+                "This computer's clock is more than five minutes off the server's, so the server cannot tell a fresh request from an old one. Set the clock to update automatically and try again."),
+            DeviceProofRefusal.Replayed => (
+                "deviceProofInvalid",
+                "The server saw this request before and refused it again."),
+            _ => (
+                "deviceProofInvalid",
+                "The server could not tie this request to an enrolled device of this computer."),
+        };
+        context.Response.Headers[CoreDomainSettings.RefusalHeader] = code;
+        return context.Response.WriteAsJsonAsync(new { code, message }, context.RequestAborted);
     }
 
     private static bool SameKey(string sent, string key) =>

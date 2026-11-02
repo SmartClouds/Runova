@@ -53,6 +53,56 @@ public sealed class NginxCoreSiteTests
     }
 
     [Fact]
+    public void Through_cloudflare_no_certificate_is_asked_for_and_none_is_passed_on()
+    {
+        var release = NginxRenderer.Render(
+            new NginxConfiguration([CoreSite()], []) { CoreKey = _key, CoreThroughCloudflare = true },
+            _layout,
+            UpstreamPolicy.Default,
+            release: 3);
+        var file = File(release).Content;
+
+        Assert.DoesNotContain("ssl_verify_client", file, StringComparison.Ordinal);
+        Assert.DoesNotContain("$ssl_client_escaped_cert", file, StringComparison.Ordinal);
+        Assert.Contains("proxy_set_header X-Runova-Client-Certificate \"\";", file, StringComparison.Ordinal);
+        Assert.Contains($"proxy_set_header X-Runova-Proxy-Key \"{_key}\";", file, StringComparison.Ordinal);
+        Assert.Contains("add_header Cache-Control \"no-store\" always;", file, StringComparison.Ordinal);
+        Assert.DoesNotContain("real-ip.conf", file, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Through_cloudflare_with_the_origin_lock_the_site_restores_the_visitor_and_checks_origin_pulls()
+    {
+        var originLock = new NginxOriginLock(["173.245.48.0/20"], AuthenticatedOriginPulls: true);
+        var release = NginxRenderer.Render(
+            new NginxConfiguration([CoreSite() with { IpRules = new NginxIpRules(["203.0.113.0/24"], []) }], [], originLock) { CoreKey = _key, CoreThroughCloudflare = true },
+            _layout,
+            UpstreamPolicy.Default,
+            release: 3);
+        var file = File(release).Content;
+        var https = file[file.IndexOf("listen 443 ssl;", StringComparison.Ordinal)..];
+
+        Assert.Contains("cloudflare/real-ip.conf;", https, StringComparison.Ordinal);
+        Assert.Contains("cloudflare/real-ip.conf;", file[..file.IndexOf("listen 443 ssl;", StringComparison.Ordinal)], StringComparison.Ordinal);
+        Assert.Contains("ssl_verify_client on;", https, StringComparison.Ordinal);
+        Assert.Contains("origin-pull-ca.pem;", https, StringComparison.Ordinal);
+        Assert.Contains("allow 203.0.113.0/24;", https, StringComparison.Ordinal);
+        Assert.Contains(release.Files, f => f.Path == NginxCloudflare.RealIpFile);
+    }
+
+    [Fact]
+    public void Straight_to_the_server_the_origin_lock_leaves_the_core_site_alone()
+    {
+        var originLock = new NginxOriginLock(["173.245.48.0/20"], AuthenticatedOriginPulls: true);
+        var file = File(NginxRenderer.Render(new NginxConfiguration([CoreSite()], [], originLock) { CoreKey = _key }, _layout, UpstreamPolicy.Default, release: 3)).Content;
+
+        Assert.Contains("ssl_verify_client optional_no_ca;", file, StringComparison.Ordinal);
+        Assert.DoesNotContain("ssl_verify_client on;", file, StringComparison.Ordinal);
+        Assert.DoesNotContain("real-ip.conf", file, StringComparison.Ordinal);
+        Assert.DoesNotContain("no-store", file, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Plain_http_only_answers_acme_and_redirects_and_never_reaches_the_core()
     {
         var withCertificate = File(Render(CoreSite())).Content;

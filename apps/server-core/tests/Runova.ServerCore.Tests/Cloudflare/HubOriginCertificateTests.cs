@@ -22,7 +22,7 @@ public sealed class HubOriginCertificateTests
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
     /// <summary>Signs a request the way Cloudflare's Origin CA does: the leaf alone, under its own root.</summary>
-    private static string Sign(string csrPem, DateTimeOffset? notAfter = null)
+    internal static string Sign(string csrPem, DateTimeOffset? notAfter = null)
     {
         using var rootKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var rootRequest = new CertificateRequest("CN=CloudFlare Origin SSL ECC Certificate Authority, O=\"CloudFlare, Inc.\"", rootKey, HashAlgorithmName.SHA256);

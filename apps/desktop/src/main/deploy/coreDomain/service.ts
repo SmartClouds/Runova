@@ -1,4 +1,7 @@
-import type { CoreDomainStatus } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type {
+  CoreDomainMode,
+  CoreDomainStatus,
+} from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import type {
   DeployCoreDomainCheck,
@@ -15,27 +18,44 @@ import { checkCoreDomain } from './probe';
  * The core domain (E44) from the app's side: what the core says about it, and whether this
  * computer connects through it. This computer only tries the domain once the core says it is
  * ready (nginx runs the site with a certificate, the core's port for nginx is open) and a check
- * from here got through to the core with the device certificate. A domain behind Cloudflare's
- * proxy fails that check with its own explanation instead of failing the link over and over.
+ * from here got through to the core with the device proof (the certificate straight to the
+ * server, a signed header through Cloudflare). A domain set up one way and reached the other fails
+ * that check with its own explanation instead of failing the link over and over.
  */
+
+/** A core from before modes sends none: that core only knows Direct. */
+function modeOf(status: CoreDomainStatus): CoreDomainMode {
+  return status.mode ?? 'direct';
+}
 
 export interface DeployCoreDomainDeps {
   service: {
     withHub: <T>(serverId: string, work: (hub: ICoreHub) => Promise<T>) => Promise<T>;
     coreDomainChanged: (serverId: string) => void;
-    coreDomainTransport: (serverId: string, domain: string) => Promise<CoreTransport | null>;
+    coreDomainTransport: (
+      serverId: string,
+      domain: string,
+      mode: CoreDomainMode,
+    ) => Promise<CoreTransport | null>;
   };
   state: Pick<DeployState, 'coreDomain' | 'setCoreDomain'>;
   /** The signed-in user's roles on a server, when this run of the app knows them. */
   roles: (serverId: string) => string[] | null;
-  check?: (transport: CoreTransport, domain: string) => Promise<DeployCoreDomainCheck>;
+  check?: (
+    transport: CoreTransport,
+    domain: string,
+    mode: CoreDomainMode,
+  ) => Promise<DeployCoreDomainCheck>;
   now?: () => number;
 }
 
 export class DeployCoreDomain {
   private readonly now: () => number;
-  /** The last check per server, for the domain it checked. */
-  private readonly checks = new Map<string, { domain: string; check: DeployCoreDomainCheck }>();
+  /** The last check per server, for the domain and mode it checked. */
+  private readonly checks = new Map<
+    string,
+    { domain: string; mode: CoreDomainMode; check: DeployCoreDomainCheck }
+  >();
 
   constructor(private readonly deps: DeployCoreDomainDeps) {
     this.now = deps.now ?? Date.now;
@@ -45,7 +65,10 @@ export class DeployCoreDomain {
   async status(serverId: string): Promise<DeployCoreDomainInfo> {
     const status = await this.call(serverId, false, (hub) => hub.getCoreDomain());
     const known = this.checks.get(serverId);
-    const fresh = status.ready && status.domain && known?.domain !== status.domain;
+    const fresh =
+      status.ready &&
+      status.domain &&
+      (known?.domain !== status.domain || known.mode !== modeOf(status));
     return this.settle(serverId, status, fresh ? 'check' : 'keep');
   }
 
@@ -57,7 +80,11 @@ export class DeployCoreDomain {
           ...(input.totpCode ? { totpCode: input.totpCode } : {}),
         });
       }
-      return hub.enableCoreDomain({ domain: input.domain, sources: input.sources });
+      return hub.enableCoreDomain({
+        domain: input.domain,
+        sources: input.sources,
+        mode: input.mode ?? 'direct',
+      });
     });
     return this.settle(input.serverId, status, status.ready ? 'check' : 'keep');
   }
@@ -89,32 +116,37 @@ export class DeployCoreDomain {
     check: 'check' | 'keep',
   ): Promise<DeployCoreDomainInfo> {
     const domain = status.domain;
+    const mode = modeOf(status);
     if (!status.ready || !domain) {
       this.checks.delete(serverId);
     } else if (check === 'check') {
-      const transport = await this.deps.service.coreDomainTransport(serverId, domain);
+      const transport = await this.deps.service.coreDomainTransport(serverId, domain, mode);
       if (transport) {
-        const result = await (this.deps.check ?? ((t, d) => checkCoreDomain(t, d, this.now)))(
-          transport,
-          domain,
-        );
-        this.checks.set(serverId, { domain, check: result });
+        const run = this.deps.check ?? ((t, d, m) => checkCoreDomain(t, d, this.now, m));
+        const result = await run(transport, domain, mode);
+        this.checks.set(serverId, { domain, mode, check: result });
       }
     }
 
     const known = this.checks.get(serverId);
-    const last = known && known.domain === domain ? known.check : undefined;
+    const last = known && known.domain === domain && known.mode === mode ? known.check : undefined;
     const saved = await this.deps.state.coreDomain(serverId);
     let route: DeployCoreDomainRoute | null = saved;
     if (domain) {
       // A core that is not ready, or a failed check, stops this computer trying the domain; a
-      // passing check starts it. With no check in this run of the app the saved choice stands.
+      // passing check starts it. With no check in this run of the app the saved choice stands,
+      // as long as it was for the same domain and mode.
+      const savedMode = saved?.mode ?? 'direct';
       let enabled: boolean;
       if (!status.ready) enabled = false;
       else if (last) enabled = last.ok;
-      else enabled = saved?.domain === domain && saved.enabled;
-      route = { enabled, domain };
-      if (saved?.enabled !== route.enabled || saved?.domain !== route.domain) {
+      else enabled = saved?.domain === domain && savedMode === mode && saved.enabled;
+      route = { enabled, domain, mode };
+      if (
+        saved?.enabled !== route.enabled ||
+        saved?.domain !== route.domain ||
+        savedMode !== mode
+      ) {
         await this.deps.state.setCoreDomain(serverId, route);
         this.deps.service.coreDomainChanged(serverId);
       }

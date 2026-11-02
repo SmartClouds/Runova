@@ -2,7 +2,13 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { Readable, Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CoreHttpAbortError, CoreHttpClient, CoreHttpError, CoreHttpStallError } from './coreHttp';
+import {
+  CoreHttpAbortError,
+  CoreHttpClient,
+  CoreHttpError,
+  CoreHttpStallError,
+  CoreRequestTooLargeError,
+} from './coreHttp';
 import { devTcpTransport } from './transport';
 
 /**
@@ -152,6 +158,26 @@ describe('CoreHttpClient.download for file transfers', () => {
 });
 
 describe('CoreHttpClient.putStream for file transfers', () => {
+  it('refuses an upload larger than the way in carries before sending or reading a byte', async () => {
+    const client = await serve((_request, response) => response.end('{}'));
+    const limited = new CoreHttpClient({ ...client.transport, maxRequestBytes: 1000 });
+    const body = Readable.from([Buffer.alloc(2000)]);
+
+    const failure = await limited
+      .putStream('/big', body, { contentType: 'application/octet-stream', contentLength: 2000 })
+      .catch((error: unknown) => error);
+    const fits = await limited.putStream('/small', Readable.from([Buffer.alloc(10)]), {
+      contentType: 'application/octet-stream',
+      contentLength: 10,
+    });
+
+    expect(failure).toBeInstanceOf(CoreRequestTooLargeError);
+    expect((failure as Error).message).toMatch(/Cloudflare passes at most 1 MB/);
+    expect(body.readableDidRead).toBe(false);
+    expect(fits).toEqual({});
+    expect(seen.map((request) => request.url)).toEqual(['/small']);
+  });
+
   it('stops sending when its signal aborts, and the core sees the body cut off', async () => {
     let cutOff = false;
     const controller = new AbortController();

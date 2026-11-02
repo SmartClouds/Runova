@@ -22,6 +22,9 @@ app off from the server.
 - [x] T4 Desktop: a transport through the domain, tried before direct TLS and SSH, and a check
   from this computer that names the usual mistakes (Cloudflare's proxy above all).
 - [x] T5 Desktop: a Core domain card on the Security area's Connection tab, help.
+- [x] T6 Through Cloudflare: a second mode where the domain is proxied by Cloudflare and works
+  with the origin lock on. The device proof moves from the TLS handshake to a header signed with
+  the device key; the origin lock refuses while a domain is in Direct mode.
 
 ## Acceptance criteria
 
@@ -32,6 +35,9 @@ app off from the server.
 3. Plain HTTP on the domain never reaches the core.
 4. The app connects through the domain first when it is ready and passed a check from this
    computer, then direct TLS, then SSH.
+5. Through Cloudflare, with the origin lock on, a request reaches the core only with a proof
+   signed by an enrolled, unrevoked device for that method, target and domain, within five
+   minutes of the server's clock, and only once.
 
 ## Implementation notes
 
@@ -60,11 +66,42 @@ app off from the server.
   `Private` flag for this). A Unix socket with group permissions was the other option; it was left
   out because nginx connecting to a socket of a process outside its SELinux domain needs a policy
   module, and loopback works with the `httpd_can_network_connect` boolean Runova already sets.
-- **DNS only.** Cloudflare's proxy ends TLS at its edge and never passes the device certificate on,
-  so the domain has to point straight at the server. The core refuses the mode while the origin lock
-  is on (it would keep everyone but Cloudflare off 80 and 443). The desktop's check reads the answer's
-  headers: a `cf-ray` or `server: cloudflare` names the proxy, a 403 without them names a refused
-  certificate. This computer only uses the domain after a check passes.
+- **Two modes.** `CoreDomainSettings.Mode` (in `core-domain.json`; a file from before reads as
+  Direct) is `Direct` or `Cloudflare`. Direct: the record is DNS only and the device certificate
+  proves the caller, as above; the core refuses it while the origin lock is on (it would keep
+  everyone but Cloudflare off 80 and 443), and the origin lock refuses while it is on
+  (`OriginLockService.PlanAsync`). The desktop's check reads the answer's headers: a `cf-ray` or
+  `server: cloudflare` names the proxy, a 403 without them names a refused certificate. This
+  computer only uses the domain after a check passes.
+- **Through Cloudflare.** Cloudflare ends TLS at its edge and never passes a client certificate
+  on, so in Cloudflare mode the proof rides in `X-Runova-Device-Proof` instead:
+  `v1.<device id>.<unix ms>.<nonce>.<signature>`, an ECDSA P-256 signature with the device key over
+  `runova-core/core-domain-request`, `v1`, the device id, the method, the target percent-decoded
+  (Cloudflare may normalize how a URL is encoded), the domain, the time and the nonce, one per line
+  (`CoreDomain/DeviceProof.cs`, `main/deploy/coreDomain/proof.ts`; a shared vector is checked on
+  both sides). `CoreDomainGuard` still wants nginx's key, then looks the device up by id (not
+  revoked), checks the signature, the time (within five minutes) and the nonce (kept ten minutes
+  per device in memory, bounded, refusing when full). Each mode takes only its own proof. A refusal
+  is a 403 with a JSON code and the same code in `X-Runova-Refusal`, so the desktop's check can name
+  a clock that is off from the head alone.
+- **Where the signing happens.** Every stream from a transport carries one request (REST runs
+  without keep-alive, the hub is one WebSocket upgrade), so `cloudflareCoreDomainTransport` adds
+  the proof to the first request head written on the stream (`signFirstRequest`) and passes the
+  rest through. REST, the hub and the check get it without knowing. `startLiveHub` now passes the
+  whole transport through, which also keeps the domain as Host on the live link.
+- **nginx through Cloudflare.** The core site asks for no client certificate and blanks the
+  certificate header; with the origin lock it includes `cloudflare/real-ip.conf` and, with
+  Authenticated Origin Pulls, `ssl_verify_client on` against Cloudflare's CA, like any other site.
+  Every answer is `Cache-Control: no-store`. A Cloudflare Origin CA certificate counts as usable in
+  this mode only. Sources need the origin lock here, since only then does nginx learn the visitor's
+  address; the core refuses them without it and reports the domain not ready if the lock goes off.
+- **Trust.** Cloudflare sees the app's traffic in the clear at its edge, the sign-in password
+  included, as for any proxied site. It cannot sign as a device and a proof is single use, but it
+  could change what a signed request carries. The card and the help say so.
+- **Limits.** Cloudflare refuses request bodies over 100 MB on Free and Pro, so the transport says
+  `maxRequestBytes` (95 MB) and `CoreHttpClient.putStream` refuses a larger upload before reading a
+  byte; `DeployService.withTransport` then sends it through direct TLS or SSH. Cloudflare closes an
+  idle WebSocket after 100 seconds; SignalR's 15-second keep-alive keeps the hub open.
 - **The reserved site.** It is a normal row in the sites table, so certificates (issue, upload,
   renew, remove) work through the usual calls with site id `runova-core`. The Websites calls refuse to
   save, delete or add snippets to it, and leave it out of the list. Its upstream kind (`RunovaCore`)
@@ -91,6 +128,11 @@ app off from the server.
   `service.coreDomain.test.ts` (10), IPC, state, validation and the card.
 
 ## Known limits
+
+- Through Cloudflare has not been tried against a real Cloudflare zone yet; the proof, the guard,
+  nginx's output and the desktop's transport are tested on their own and together on loopback.
+- The Origin lock dialog lists the core domain among the domains it checks; it does not create the
+  DNS record for it.
 
 - Not yet tried against a real server with nginx and a real certificate; the nginx side is checked
   by the simulated machine and the renderer tests, not by `nginx -t` in a system test.

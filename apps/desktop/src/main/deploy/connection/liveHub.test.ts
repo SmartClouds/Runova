@@ -30,6 +30,18 @@ describe('startLiveHub', () => {
     await session.closed;
   });
 
+  it("keeps the transport's own Host, which nginx picks the core domain's site by", async () => {
+    server = await startFakeHubServer();
+    const session = await startLiveHub(
+      { ...devTcpTransport(server.port), host: () => 'core.example.com' },
+      't0k',
+      null,
+    );
+
+    expect(server.upgrades[0].headers.host).toBe('core.example.com');
+    await session.stop();
+  });
+
   it('settles `closed` when stopped', async () => {
     server = await startFakeHubServer();
     const session = await startLiveHub(devTcpTransport(server.port), 't0k', null);

@@ -11,9 +11,10 @@ import { SERVER, signedIn } from '../testing/fixtures';
 
 /**
  * The core domain through its states: shimmer, a read that failed, nginx missing (form held back,
- * a way to Websites), the origin lock, off for a Viewer (read only), on for an Owner after a
- * step-up, waiting for a certificate (the issue dialog), ready with a check from this computer
- * (a Cloudflare proxy explained), a problem the core reports, and turning it off.
+ * a way to Websites), the origin lock (only Through Cloudflare then), off for a Viewer (read
+ * only), on for an Owner after a step-up, through Cloudflare with an Origin CA certificate,
+ * waiting for a certificate (the issue dialog), ready with a check from this computer (a
+ * Cloudflare proxy explained), a problem the core reports, and turning it off.
  */
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
@@ -47,6 +48,7 @@ function domain(fields: Partial<CoreDomainStatus> = {}): CoreDomainStatus {
     siteApplied: false,
     ready: false,
     siteId: 'runova-core',
+    mode: 'direct',
     ...fields,
   };
 }
@@ -138,14 +140,112 @@ describe('CoreDomainCard', () => {
     expect(await screen.findByText('nginx is not running')).toBeTruthy();
   });
 
-  it('explains that the Cloudflare origin lock has to go first', async () => {
-    renderCard({ 'deployCoreDomain.status': async () => info({ originLocked: true }) });
+  it('with the Cloudflare origin lock on, offers only Through Cloudflare', async () => {
+    const { user } = renderCard({
+      'deployCoreDomain.status': async () => info({ originLocked: true }),
+    });
 
     expect(await screen.findByText('The Cloudflare origin lock is on')).toBeTruthy();
+    expect(
+      screen.getByRole('radio', { name: 'Through Cloudflare' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    const submit = screen.getByRole('button', { name: /Turn on the core domain/ });
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(screen.getByRole('radio', { name: 'Straight to the server' }));
+
+    expect(
+      screen.getByText(/only Cloudflare reaches ports 80 and 443\. Choose Through/),
+    ).toBeTruthy();
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('through Cloudflare without the origin lock, asks to leave the sources empty', async () => {
+    const { user } = renderCard();
+
+    await user.click(await screen.findByRole('radio', { name: 'Through Cloudflare' }));
+    await user.type(screen.getByLabelText('Allowed from'), '10.0.0.0/8');
+
+    expect(screen.getByText(/nginx only learns the visitor's address while/)).toBeTruthy();
     expect(
       (screen.getByRole('button', { name: /Turn on the core domain/ }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
+  });
+
+  it('turns it on through Cloudflare and installs an Origin CA certificate', async () => {
+    let installed = false;
+    const { user, bridge } = renderCard(
+      {
+        'deployCoreDomain.status': async () =>
+          installed
+            ? info({
+                ...ON,
+                mode: 'cloudflare',
+                ready: true,
+                certificate: {
+                  ...CERTIFICATE,
+                  source: 'cloudflareOrigin',
+                  issuer: 'CloudFlare Origin SSL ECC Certificate Authority',
+                },
+              })
+            : info({ originLocked: true }),
+        'deployCoreDomain.enable': async () =>
+          info({ ...ON, mode: 'cloudflare', originLocked: true }),
+        'cloudflareServer.originCertificate': async () => {
+          installed = true;
+          return { problems: [] };
+        },
+      },
+      'owner',
+    );
+
+    await user.type(await screen.findByLabelText('Domain'), 'core.example.com');
+    await user.click(screen.getByRole('button', { name: /Turn on the core domain/ }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('deployCoreDomain.enable')).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        domain: 'core.example.com',
+        sources: [],
+        mode: 'cloudflare',
+      }),
+    );
+    const details = await screen.findByLabelText('Core domain details');
+    expect(within(details).getByText(/Through Cloudflare \(proxied\)/)).toBeTruthy();
+    expect(screen.queryByText('The Cloudflare origin lock is on')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Cloudflare Origin CA/ }));
+
+    expect(bridge.$fn('cloudflareServer.originCertificate')).toHaveBeenCalledWith({
+      serverId: SERVER.id,
+      siteId: 'runova-core',
+    });
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Origin CA certificate installed and live.'),
+    );
+    expect(await within(details).findByText('On, answering at core.example.com')).toBeTruthy();
+    expect(within(details).queryByText(/only trusted by Cloudflare's proxy/)).toBeNull();
+  });
+
+  it('explains a domain that answers without Cloudflare in front', async () => {
+    renderCard({
+      'deployCoreDomain.status': async () =>
+        info(
+          { ...ON, mode: 'cloudflare', ready: true, certificate: CERTIFICATE },
+          {
+            check: {
+              ok: false,
+              checkedAt: Date.now(),
+              problem: 'not-proxied',
+              message: 'No Cloudflare.',
+            },
+          },
+        ),
+    });
+
+    const details = await screen.findByLabelText('Core domain details');
+    expect(within(details).getByText(/turn the proxy on for this record/)).toBeTruthy();
   });
 
   it('shows a Viewer how it stands and nothing to change', async () => {
@@ -199,6 +299,7 @@ describe('CoreDomainCard', () => {
       serverId: SERVER.id,
       domain: 'core.example.com',
       sources: ['10.0.0.0/8'],
+      mode: 'direct',
       password: 'secret',
     });
     expect(await screen.findByText('On, waiting for a certificate')).toBeTruthy();
@@ -335,7 +436,7 @@ describe('CoreDomainCard', () => {
       'deployCoreDomain.enable': async () => info({ ...ON, domain: 'api.example.com' }),
     });
 
-    await user.click(await screen.findByRole('button', { name: /Change domain or sources/ }));
+    await user.click(await screen.findByRole('button', { name: /Change domain, mode or sources/ }));
     const field = screen.getByLabelText('Domain');
     await user.clear(field);
     await user.type(field, 'api.example.com');
@@ -346,6 +447,7 @@ describe('CoreDomainCard', () => {
         serverId: SERVER.id,
         domain: 'api.example.com',
         sources: [],
+        mode: 'direct',
       }),
     );
   });

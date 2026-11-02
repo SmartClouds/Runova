@@ -9,9 +9,10 @@ import type {
 import { FAKE_CORE_TLS_PIN, FakeCore } from '../../shared/deploy/testing/fakeCore';
 import type { DeployCoreRecord } from '../../shared/deployTypes';
 import { createDeviceKey } from './auth/deviceKey';
+import { CoreRequestTooLargeError } from './connection/coreHttp';
 import type { LiveHubSession } from './connection/liveHub';
 import type { CoreTransport, CoreTransportKind } from './connection/transport';
-import { CoreDomainUnreachableError } from './coreDomain/transport';
+import { CLOUDFLARE_MAX_REQUEST_BYTES, CoreDomainUnreachableError } from './coreDomain/transport';
 import { DirectTlsUnreachableError, PinMismatchError } from './directTls/transport';
 import { DeployService, type DeployServiceDeps } from './service';
 import { DeployState } from './state';
@@ -67,6 +68,8 @@ interface Setup {
   direct?: boolean;
   /** Whether this computer connects through the core domain first. */
   domain?: boolean;
+  /** How the domain is reached; straight to the server unless said. */
+  domainMode?: 'direct' | 'cloudflare';
   /** Fails the next lasting opens, in order. */
   refusals?: Outcome[];
   /** What a health check over each transport kind throws, if anything. */
@@ -98,7 +101,11 @@ async function setup(options: Setup = {}) {
     sessionId: 'session-1',
   });
   if (options.domain !== false) {
-    await state.setCoreDomain('srv-1', { enabled: true, domain: 'core.example.com' });
+    await state.setCoreDomain('srv-1', {
+      enabled: true,
+      domain: 'core.example.com',
+      ...(options.domainMode ? { mode: options.domainMode } : {}),
+    });
   }
   if (options.direct !== false) {
     await state.setDirectTls('srv-1', {
@@ -245,6 +252,44 @@ describe('DeployService with the core domain', () => {
     await service.links.call('srv-1', (hub) => hub.ping());
 
     expect(opened).toEqual(['direct-tls']);
+  });
+
+  it('reaches a domain through Cloudflare with the transport that signs each request', async () => {
+    const seen: { host: string | undefined; limit: number | undefined }[] = [];
+    const { service } = await setup({
+      domainMode: 'cloudflare',
+      refusals: [
+        (transport: CoreTransport) => {
+          seen.push({ host: transport.host?.(), limit: transport.maxRequestBytes });
+          return null;
+        },
+      ],
+    });
+
+    await service.links.call('srv-1', (hub) => hub.ping());
+
+    expect(seen).toEqual([{ host: 'core.example.com', limit: CLOUDFLARE_MAX_REQUEST_BYTES }]);
+    expect(service.connection('srv-1')).toMatchObject({ transport: 'core-domain' });
+  });
+
+  it("sends an upload over Cloudflare's limit through direct TLS, or SSH without it", async () => {
+    const tooLarge = async (kinds: CoreTransportKind[], direct: boolean) => {
+      const { service } = await setup({ domainMode: 'cloudflare', direct });
+      return service.withCoreHttp('srv-1', async (client) => {
+        kinds.push(client.transport.kind);
+        if (client.transport.maxRequestBytes !== undefined) {
+          throw new CoreRequestTooLargeError('Over the limit.', client.transport.maxRequestBytes);
+        }
+        return 'sent';
+      });
+    };
+    const withDirect: CoreTransportKind[] = [];
+    const sshOnly: CoreTransportKind[] = [];
+
+    expect(await tooLarge(withDirect, true)).toBe('sent');
+    expect(await tooLarge(sshOnly, false)).toBe('sent');
+    expect(withDirect).toEqual(['core-domain', 'direct-tls']);
+    expect(sshOnly).toEqual(['core-domain', 'streamlocal']);
   });
 
   it('still stops on a pin mismatch behind a domain that did not answer', async () => {

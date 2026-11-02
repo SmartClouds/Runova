@@ -89,4 +89,40 @@ describe('registerDeployCoreDomainHandlers', () => {
     await expect(badSources).rejects.toThrow();
     expect(coreDomain.enable).toHaveBeenCalledTimes(1);
   });
+
+  it('passes Through Cloudflare on, and refuses a mode it does not know', async () => {
+    const { call, coreDomain } = harness();
+
+    await call(IPC.deployCoreDomain.enable, {
+      serverId: 'srv-1',
+      domain: 'core.example.com',
+      sources: [],
+      mode: 'cloudflare',
+    });
+    await call(IPC.deployCoreDomain.enable, {
+      serverId: 'srv-1',
+      domain: 'core.example.com',
+      sources: [],
+      mode: 'direct',
+    });
+    const unknown = call(IPC.deployCoreDomain.enable, {
+      serverId: 'srv-1',
+      domain: 'core.example.com',
+      sources: [],
+      mode: 'tunnel',
+    });
+
+    expect(coreDomain.enable).toHaveBeenNthCalledWith(1, {
+      serverId: 'srv-1',
+      domain: 'core.example.com',
+      sources: [],
+      mode: 'cloudflare',
+    });
+    expect(coreDomain.enable).toHaveBeenNthCalledWith(2, {
+      serverId: 'srv-1',
+      domain: 'core.example.com',
+      sources: [],
+    });
+    await expect(unknown).rejects.toThrow(/straight to the server or through Cloudflare/);
+  });
 });

@@ -151,6 +151,7 @@ export class FakeCore {
     siteApplied: false,
     ready: false,
     siteId: 'runova-core',
+    mode: 'direct',
   };
 
   /** Error reporting (E29): where the core sends its warnings and errors. Off until an Owner sets it up. */

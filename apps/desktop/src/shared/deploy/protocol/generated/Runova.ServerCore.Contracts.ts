@@ -1091,6 +1091,9 @@ export type DnsCredentialSaveResult = {
     credential?: DnsCredentialInfo;
 }
 
+/** Transpiled from Runova.ServerCore.Contracts.CoreDomainMode */
+export type CoreDomainMode = "direct" | "cloudflare";
+
 /** Transpiled from Runova.ServerCore.Contracts.CoreDomainStatus */
 export type CoreDomainStatus = {
     /** Transpiled from bool */
@@ -1121,6 +1124,8 @@ export type CoreDomainStatus = {
     changedBy?: string;
     /** Transpiled from string? */
     error?: string;
+    /** Transpiled from Runova.ServerCore.Contracts.CoreDomainMode */
+    mode: CoreDomainMode;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.CoreDomainRequest */
@@ -1129,6 +1134,8 @@ export type CoreDomainRequest = {
     domain: string;
     /** Transpiled from string[]? */
     sources?: string[];
+    /** Transpiled from Runova.ServerCore.Contracts.CoreDomainMode */
+    mode: CoreDomainMode;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.CoreUpdateRequest */

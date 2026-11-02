@@ -127,7 +127,8 @@ function isRoute(value: unknown): value is DeployCoreDomainRoute {
   return (
     typeof route.enabled === 'boolean' &&
     typeof route.domain === 'string' &&
-    DOMAIN.test(route.domain)
+    DOMAIN.test(route.domain) &&
+    (route.mode === undefined || route.mode === 'direct' || route.mode === 'cloudflare')
   );
 }
 

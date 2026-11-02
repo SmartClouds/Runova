@@ -25,6 +25,7 @@ internal sealed partial class CoreHub
         {
             ["domain"] = request?.Domain is { } domain ? domain[..Math.Min(domain.Length, 253)] : null,
             ["sources"] = request?.Sources is { Length: > 0 } sources ? string.Join(' ', sources.Take(DirectTls.DirectTlsSettings.MaxSources)) : "any",
+            ["mode"] = request?.Mode == CoreDomainMode.Cloudflare ? "cloudflare" : "direct",
         };
         try
         {

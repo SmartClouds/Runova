@@ -97,6 +97,9 @@ Server side and the rest of the desktop (this commit): T5 to T7.
   the core and audited. Note: planning a refresh also removes any rule a person added later that
   opens 80 or 443 to everyone; that is the lock doing its job, but it happens unattended. A failure
   raises the new alert `originLockRefreshFailed`.
+- The server core's own domain (E44): the lock refuses while it is in Direct mode, which the lock
+  would cut off, and works with it in Cloudflare mode, where the core site takes the real-IP file
+  and Authenticated Origin Pulls like any other. The review dialog checks it with the site domains.
 - Authenticated Origin Pulls: the desktop turns `tls_client_auth` on for every zone that holds one
   of the server's site domains before the core makes nginx ask for the certificate, and refuses
   when a site domain is in no zone of the account. The review dialog also flags site domains that

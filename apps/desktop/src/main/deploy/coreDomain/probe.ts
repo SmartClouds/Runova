@@ -1,4 +1,5 @@
 import type { Duplex } from 'node:stream';
+import type { CoreDomainMode } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployCoreDomainCheck } from '../../../shared/deployCoreDomainTypes';
 import type { CoreTransport } from '../connection/transport';
 import { CoreDomainUnreachableError } from './transport';
@@ -8,6 +9,9 @@ import { CoreDomainUnreachableError } from './transport';
  * the device certificate, then the core's health. The answer's headers tell the usual mistakes
  * apart: Cloudflare's proxy answers with a cf-ray header (it ends TLS itself, so the device
  * certificate never reaches nginx), and nginx turns a request without a certificate down with 403.
+ * Through Cloudflare it is the other way round: the answer has to come through Cloudflare, the
+ * request is signed rather than the handshake, and Cloudflare's own 52x pages name an origin it
+ * could not reach or did not trust.
  */
 
 const HEALTH_PATH = '/api/v1/health';
@@ -64,17 +68,29 @@ export async function readHead(stream: Duplex, host: string, path: string): Prom
   });
 }
 
+/** What the core names a refused proof with (its RefusalHeader), so the head alone tells a clock that is off. */
+const REFUSAL_HEADER = 'x-runova-refusal';
+
+function viaCloudflare(answer: ProbeAnswer): boolean {
+  return (
+    answer.headers['cf-ray'] !== undefined || answer.headers.server?.toLowerCase() === 'cloudflare'
+  );
+}
+
 /** What an answer means for the core domain. */
-export function judge(answer: ProbeAnswer, domain: string, now: number): DeployCoreDomainCheck {
-  if (
-    answer.headers['cf-ray'] !== undefined ||
-    answer.headers.server?.toLowerCase() === 'cloudflare'
-  ) {
+export function judge(
+  answer: ProbeAnswer,
+  domain: string,
+  now: number,
+  mode: CoreDomainMode = 'direct',
+): DeployCoreDomainCheck {
+  if (mode === 'cloudflare') return judgeCloudflare(answer, domain, now);
+  if (viaCloudflare(answer)) {
     return {
       ok: false,
       checkedAt: now,
       problem: 'cloudflare-proxy',
-      message: `Cloudflare answers for ${domain}, so this computer's device certificate never reaches the server. Turn the proxy off for this record in Cloudflare (DNS only, the grey cloud).`,
+      message: `Cloudflare answers for ${domain}, so this computer's device certificate never reaches the server. Choose Through Cloudflare for the core domain, or turn the proxy off for this record (DNS only, the grey cloud).`,
     };
   }
   if (answer.status === 200) return { ok: true, checkedAt: now };
@@ -94,14 +110,64 @@ export function judge(answer: ProbeAnswer, domain: string, now: number): DeployC
   };
 }
 
+function judgeCloudflare(answer: ProbeAnswer, domain: string, now: number): DeployCoreDomainCheck {
+  const fail = (
+    problem: Exclude<DeployCoreDomainCheck, { ok: true }>['problem'],
+    message: string,
+  ) => ({ ok: false, checkedAt: now, problem, message }) as const;
+  const proxied = viaCloudflare(answer);
+  if (answer.status === 200) {
+    if (proxied) return { ok: true, checkedAt: now };
+    return fail(
+      'not-proxied',
+      `${domain} answered without Cloudflare in front. Turn the proxy on for this record in Cloudflare (Proxied, the orange cloud), or choose Straight to the server.`,
+    );
+  }
+  if (answer.status === 403 && answer.headers[REFUSAL_HEADER] === 'deviceProofClockSkew') {
+    return fail(
+      'clock',
+      "This computer's clock is more than five minutes off the server's, so the server cannot tell a fresh request from an old one. Set the clock to update automatically and check again.",
+    );
+  }
+  if (answer.status === 403 && answer.headers[REFUSAL_HEADER] !== undefined) {
+    return fail(
+      'device-proof',
+      `The server core turned this computer's signed request down. This device may have been revoked on the core.`,
+    );
+  }
+  if (proxied && [521, 522, 523].includes(answer.status)) {
+    return fail(
+      'cloudflare-origin',
+      `Cloudflare could not reach the server behind ${domain} (${answer.status}). Check that the record points at this server and that the firewall lets Cloudflare in on port 443.`,
+    );
+  }
+  if (proxied && [525, 526].includes(answer.status)) {
+    return fail(
+      'cloudflare-origin',
+      `Cloudflare did not accept the server's certificate for ${domain} (${answer.status}). Set the zone's SSL mode to Full (strict) and give the domain a certificate Cloudflare trusts, such as a Cloudflare Origin certificate.`,
+    );
+  }
+  if (answer.status === 403) {
+    return fail(
+      'device-proof',
+      `${domain} refused the request before it reached the server core. A Cloudflare rule (WAF, Access, Bot Fight Mode) may be blocking it, or the server's sources leave this computer out.`,
+    );
+  }
+  return fail(
+    'unreachable',
+    `${domain} answered ${answer.status} instead of the server core. Check that its DNS record points at this server.`,
+  );
+}
+
 export async function checkCoreDomain(
   transport: CoreTransport,
   domain: string,
   now: () => number,
+  mode: CoreDomainMode = 'direct',
 ): Promise<DeployCoreDomainCheck> {
   try {
     const stream = await transport.openStream();
-    return judge(await readHead(stream, domain, HEALTH_PATH), domain, now());
+    return judge(await readHead(stream, domain, HEALTH_PATH), domain, now(), mode);
   } catch (error) {
     const certificate = error instanceof CoreDomainUnreachableError && error.certificate;
     return {

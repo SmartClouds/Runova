@@ -169,6 +169,34 @@ describe('the origin lock', () => {
     ]);
   });
 
+  it('checks the core domain with the site domains, since the lock reaches it too', async () => {
+    const { ops, core } = await setup();
+    core.coreDomain = {
+      ...core.coreDomain,
+      enabled: true,
+      domain: 'core.example.com',
+      mode: 'cloudflare',
+    };
+
+    const plan = await ops.previewOriginLock({
+      serverId: 'srv-1',
+      enabled: true,
+      authenticatedOriginPulls: false,
+    });
+
+    expect(plan.domains.map((check) => check.domain)).toEqual([
+      'blog.example.com',
+      'www.example.com',
+      'core.example.com',
+    ]);
+    expect(plan.domains.at(-1)).toEqual({
+      domain: 'core.example.com',
+      zoneId: ZONE_ID,
+      zoneName: 'example.com',
+      proxied: null,
+    });
+  });
+
   it('turns client certificates on at Cloudflare before the core asks for them', async () => {
     const { ops, fake, core } = await setup();
 

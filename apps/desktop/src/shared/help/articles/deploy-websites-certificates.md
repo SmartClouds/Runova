@@ -189,25 +189,39 @@ These switches work once the site has a certificate and take effect with the nex
 
 ## Core domain
 
-Normally your computer talks to the server core through SSH, so closing the SSH port in a firewall cuts the app off. The **core domain** puts the core behind a domain of its own, such as `core.example.com`, served by nginx over HTTPS. nginx asks each computer for a client certificate made from its device key, and the core checks it against the enrolled devices on every request. The usual sign-in, sessions and roles apply on top.
+Normally your computer talks to the server core through SSH, so closing the SSH port in a firewall cuts the app off. The **core domain** puts the core behind a domain or subdomain of your own, such as `core.example.com`, served by nginx over HTTPS. Every request has to prove it comes from an enrolled computer, with the device key that computer made when it was enrolled, and the core checks it against the enrolled devices each time. The usual sign-in, sessions and roles apply on top.
+
+It can be reached in one of two ways, chosen under **How the app reaches it**:
+
+| Mode | DNS record | How your computer proves itself | Origin lock |
+|---|---|---|---|
+| **Straight to the server** | Points straight at the server (on Cloudflare, the grey cloud, DNS only) | nginx asks for a client certificate made from the device key | Has to be off |
+| **Through Cloudflare** | Proxied by Cloudflare (the orange cloud) | Each request carries a header signed with the device key | Can stay on |
+
+Through Cloudflare works like any other site behind Cloudflare: the server can keep answering only Cloudflare on ports 80 and 443 (see [Cloudflare-only origin](cloudflare.md#cloudflare-only-origin)). Cloudflare ends HTTPS at its edge, so it sees the traffic between the app and the core in the clear, as it does for every proxied site, the sign-in password included. It still cannot act as your computer: it never has the device key, and each signed request is good for that one request, once, within five minutes.
 
 Open **Deploy**, pick the server, click **Security**, then the **Connection** tab. Everyone signed in can see how it stands. Only an Owner can change it, and an Admin can get its certificate.
 
 ### Before you start
 
 - **nginx installed and running.** The core domain is an nginx site, so install nginx under **Websites** first. Until it runs, the card says so and keeps its form disabled.
-- **DNS only.** Point an A record (and AAAA, if the server has IPv6) for the domain straight at the server. On Cloudflare, keep the proxy off for that record (the grey cloud). A proxy ends HTTPS itself and never passes your computer's device certificate on, so the core would refuse every request.
-- **Ports 80 and 443 open** in the firewall. Port 80 is only used for Let's Encrypt and to send visitors to HTTPS.
-- **The Cloudflare origin lock off.** It lets only Cloudflare reach ports 80 and 443.
+- **An A record** (and AAAA, if the server has IPv6) for the domain, pointing at the server.
+  - Straight to the server: keep Cloudflare's proxy off for that record (the grey cloud). A proxy ends HTTPS itself and never passes your computer's device certificate on, so the core would refuse every request.
+  - Through Cloudflare: turn the proxy on (the orange cloud) and set the zone's **SSL/TLS** mode to **Full (strict)**.
+- **Ports 80 and 443 open** in the firewall. Port 80 is only used for Let's Encrypt and to send visitors to HTTPS. With the origin lock on they are open to Cloudflare alone, which is all Through Cloudflare needs.
+- **A clock that keeps time** on your computer, for Through Cloudflare. A signed request more than five minutes off the server's clock is refused, and the check says so.
 
 ### Turn it on
 
-1. As an Owner, enter the **Domain** and, if you like, **Allowed from** (addresses or networks, one per line, empty for any address).
-2. Click **Turn on the core domain**. You may be asked for your password again if you have not confirmed it in the last 10 minutes.
-3. Click **Get a certificate** and issue one from Let's Encrypt. Until the domain has a certificate it only answers Let's Encrypt over port 80, never the core.
-4. Once the card says "On, answering at" the domain, click **Check from this computer**. When the check passes, this computer connects through the domain first, then Direct TLS, then SSH. If Cloudflare answers for the domain, the check says so and explains how to turn the proxy off.
+1. As an Owner, choose **Straight to the server** or **Through Cloudflare**. With the origin lock on, only Through Cloudflare can be chosen.
+2. Enter the **Domain** and, if you like, **Allowed from** (addresses or networks, one per line, empty for any address). Through Cloudflare, nginx only learns the visitor's address while the origin lock is on, so sources need the lock.
+3. Click **Turn on the core domain**. You may be asked for your password again if you have not confirmed it in the last 10 minutes.
+4. Get a certificate. Straight to the server, click **Get a certificate** and issue one from Let's Encrypt. Through Cloudflare, an Admin can click **Cloudflare Origin CA** instead: Cloudflare signs a certificate for a key the server makes, and it never needs renewing. Until the domain has a certificate it only answers Let's Encrypt over port 80, never the core.
+5. Once the card says "On, answering at" the domain, click **Check from this computer**. When the check passes, this computer connects through the domain first, then Direct TLS, then SSH. A failed check names the usual mistakes: Cloudflare in front of a domain set to Straight to the server, a domain set to Through Cloudflare that is not proxied, Cloudflare unable to reach the server or trust its certificate, or this computer's clock.
 
-The domain's site is managed here, not in the Websites list. **Change domain or sources** edits it (a new domain needs a new certificate), and **Turn off** takes the site out of nginx and sends every computer back to Direct TLS or SSH.
+The domain's site is managed here, not in the Websites list. **Change domain, mode or sources** edits it (a new domain needs a new certificate), and **Turn off** takes the site out of nginx and sends every computer back to Direct TLS or SSH.
+
+Through Cloudflare, Cloudflare refuses a request body over 100 MB. A larger upload (a file or a build context) goes through Direct TLS or SSH instead, and if neither is available the app says so.
 
 ## Direct TLS
 

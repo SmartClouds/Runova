@@ -33,6 +33,7 @@ internal sealed partial class OriginLockService(
     FirewallManager firewall,
     IFirewallBackendSource backends,
     WebSites sites,
+    CoreDomain.CoreDomainStore coreDomain,
     AlertCenter alerts,
     OriginLockOptions options,
     TimeProvider time,
@@ -270,6 +271,14 @@ internal sealed partial class OriginLockService(
     /// <summary>The plan against the firewall as it is, with ranges fetched now unless the stored ones are fresh.</summary>
     private async Task<(OriginLockPlan Plan, CloudflareRanges Ranges)> PlanAsync(OriginLockRequest request, CancellationToken cancellationToken)
     {
+        // A core domain that points straight at the server would be cut off, and with it the app's
+        // way in when SSH is closed. Through Cloudflare it keeps working.
+        if (request.Enabled && coreDomain.Read() is { Enabled: true, ThroughCloudflare: false } direct)
+        {
+            throw new FirewallRefusedException(
+                $"The core domain {direct.Domain} points straight at the server, and the lock would keep it out. Under Security, Connection, switch the core domain to Through Cloudflare or turn it off, then lock to Cloudflare.");
+        }
+
         var row = await LoadAsync(cancellationToken);
         var stored = OriginLockRows.Ranges(row);
         var ranges = stored;

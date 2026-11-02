@@ -9,7 +9,8 @@ namespace Runova.ServerCore.CoreDomain;
 /// reach the core without SSH. Port is the loopback port the core opens for nginx alone; Key is
 /// the secret nginx sends with every request, which proves a request on that port came through
 /// nginx (and so through its client certificate check). Sources limit who nginx lets in; empty
-/// lets everyone reach the certificate check.
+/// lets everyone reach the device check. Mode says how a device proves itself: its TLS client
+/// certificate (Direct) or a signed header that passes through Cloudflare's proxy (Cloudflare).
 /// </summary>
 internal sealed record CoreDomainSettings(
     bool Enabled,
@@ -18,7 +19,8 @@ internal sealed record CoreDomainSettings(
     string? Key,
     string[] Sources,
     long? ChangedAt = null,
-    string? ChangedBy = null)
+    string? ChangedBy = null,
+    Contracts.CoreDomainMode Mode = Contracts.CoreDomainMode.Direct)
 {
     /// <summary>The reserved site that serves the domain. The Websites calls refuse to touch it.</summary>
     public const string SiteId = "runova-core";
@@ -28,6 +30,14 @@ internal sealed record CoreDomainSettings(
 
     /// <summary>The header nginx sends the client certificate in, as nginx's $ssl_client_escaped_cert.</summary>
     public const string CertificateHeader = "X-Runova-Client-Certificate";
+
+    /// <summary>The header the app signs each request in, in Cloudflare mode (<see cref="DeviceProof"/>).</summary>
+    public const string ProofHeader = "X-Runova-Device-Proof";
+
+    /// <summary>The header a refused proof names its reason in, so a check that reads only the head can tell a clock that is off.</summary>
+    public const string RefusalHeader = "X-Runova-Refusal";
+
+    public bool ThroughCloudflare => Mode == Contracts.CoreDomainMode.Cloudflare;
 
     public static CoreDomainSettings Off { get; } = new(false, null, 0, null, []);
 
@@ -41,7 +51,8 @@ internal sealed record CoreDomainSettings(
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    internal sealed record Stored(bool Enabled, string? Domain, int Port, string? Key, string[]? Sources, long? ChangedAt, string? ChangedBy);
+    /// <summary>Mode is null in a file written before modes existed, which read as Direct.</summary>
+    internal sealed record Stored(bool Enabled, string? Domain, int Port, string? Key, string[]? Sources, long? ChangedAt, string? ChangedBy, Contracts.CoreDomainMode? Mode = null);
 }
 
 /// <summary>
@@ -75,7 +86,7 @@ internal sealed class CoreDomainStore(CoreDirectories directories)
             var path = Path;
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
             var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
-            var stored = new CoreDomainSettings.Stored(settings.Enabled, settings.Domain, settings.Port, settings.Key, settings.Sources, settings.ChangedAt, settings.ChangedBy);
+            var stored = new CoreDomainSettings.Stored(settings.Enabled, settings.Domain, settings.Port, settings.Key, settings.Sources, settings.ChangedAt, settings.ChangedBy, settings.Mode);
             File.WriteAllText(temporary, JsonSerializer.Serialize(stored, CoreJson.Options));
             if (!OperatingSystem.IsWindows())
             {
@@ -98,6 +109,7 @@ internal sealed class CoreDomainStore(CoreDirectories directories)
         {
             var stored = JsonSerializer.Deserialize<CoreDomainSettings.Stored>(File.ReadAllText(path), CoreJson.Options);
             if (stored is null || stored.Port is < 0 or > 65535 || (stored.Key is not null && !CoreDomainSettings.IsKey(stored.Key))
+                || (stored.Mode is { } mode && !Enum.IsDefined(mode))
                 || DirectTls.DirectTlsSettings.ValidateSources(stored.Sources, out var sources) is not null)
             {
                 return CoreDomainSettings.Off;
@@ -105,7 +117,7 @@ internal sealed class CoreDomainStore(CoreDirectories directories)
 
             // On without a port or a key is not a state the core can serve; it reads as off.
             var enabled = stored.Enabled && stored.Port > 0 && stored.Key is not null && stored.Domain is not null;
-            return new CoreDomainSettings(enabled, stored.Domain, stored.Port, stored.Key, sources, stored.ChangedAt, stored.ChangedBy);
+            return new CoreDomainSettings(enabled, stored.Domain, stored.Port, stored.Key, sources, stored.ChangedAt, stored.ChangedBy, stored.Mode ?? Contracts.CoreDomainMode.Direct);
         }
         catch (JsonException)
         {

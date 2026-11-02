@@ -95,6 +95,20 @@ export class CoreHttpError extends Error {
   }
 }
 
+/**
+ * An upload larger than this way in carries (Cloudflare's limit on the core domain). Nothing was
+ * sent and the body was not read, so the caller can try it another way.
+ */
+export class CoreRequestTooLargeError extends Error {
+  constructor(
+    message: string,
+    readonly limitBytes: number,
+  ) {
+    super(message);
+    this.name = 'CoreRequestTooLargeError';
+  }
+}
+
 /** A request cancelled through its AbortSignal. */
 export class CoreHttpAbortError extends Error {
   constructor(message: string) {
@@ -115,6 +129,10 @@ interface Deadline {
   /** Bytes moved: a stall timeout starts over. */
   touch(): void;
   stop(): void;
+}
+
+function megabytes(bytes: number): string {
+  return `${Math.ceil(bytes / (1024 * 1024))} MB`;
 }
 
 function seconds(ms: number): string {
@@ -195,6 +213,15 @@ export class CoreHttpClient {
 
   /** Streams the body as it reads it, so a large upload is never held in memory. */
   putStream<T>(path: string, body: Readable, options: CoreStreamOptions): Promise<T> {
+    const limit = this.transport.maxRequestBytes;
+    if (limit !== undefined && options.contentLength > limit) {
+      return Promise.reject(
+        new CoreRequestTooLargeError(
+          `This upload is ${megabytes(options.contentLength)}, and Cloudflare passes at most ${megabytes(limit)} in one request. Turn on direct TLS or keep SSH open to send it.`,
+          limit,
+        ),
+      );
+    }
     const headers: Record<string, string> = {
       ...options.headers,
       host: coreHostFor(this.transport),

@@ -11,6 +11,12 @@ internal sealed record NginxConfiguration(IReadOnlyList<NginxSite> Sites, IReadO
     /// applied; validation on save goes without it.
     /// </summary>
     public string? CoreKey { get; init; }
+
+    /// <summary>
+    /// The core domain's site runs behind Cloudflare's proxy (E44, Cloudflare mode): no client
+    /// certificate to ask for, the device proof rides in a header instead.
+    /// </summary>
+    public bool CoreThroughCloudflare { get; init; }
 }
 
 /// <summary>

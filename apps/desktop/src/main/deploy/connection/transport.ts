@@ -30,6 +30,11 @@ export interface CoreTransport {
    * newer. Left out, the old name is used.
    */
   host?: () => string;
+  /**
+   * The largest request body this way in carries, when it has a limit: Cloudflare's proxy refuses
+   * larger ones (the core domain in Cloudflare mode, E44). A larger upload goes another way.
+   */
+  maxRequestBytes?: number;
 }
 
 /** The part of an SSH connection the transports need, so tests can hand in a fake. */

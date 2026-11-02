@@ -31,6 +31,8 @@ function setup(options: { roles?: string[]; check?: DeployCoreDomainCheck } = {}
   const state = memoryState();
   const changed = vi.fn();
   const checked: string[] = [];
+  /** The mode each transport was built for, and each check ran in. */
+  const modes: string[] = [];
   /** Whether this computer still tried the domain when each call went out. */
   const localEnabled: Array<boolean | undefined> = [];
   const coreDomain = new DeployCoreDomain({
@@ -40,18 +42,21 @@ function setup(options: { roles?: string[]; check?: DeployCoreDomainCheck } = {}
         return work(core.connect());
       },
       coreDomainChanged: changed,
-      coreDomainTransport: async (_serverId, domain) =>
-        ({ kind: 'core-domain', host: () => domain }) as unknown as CoreTransport,
+      coreDomainTransport: async (_serverId, domain, mode) => {
+        modes.push(`transport:${mode}`);
+        return { kind: 'core-domain', host: () => domain } as unknown as CoreTransport;
+      },
     },
     state,
     roles: () => core.roles,
-    check: async (_transport, domain) => {
+    check: async (_transport, domain, mode) => {
       checked.push(domain);
+      modes.push(`check:${mode}`);
       return options.check ?? PASSED;
     },
     now: () => 5_000,
   });
-  return { core, state, coreDomain, changed, checked, localEnabled };
+  return { core, state, coreDomain, changed, checked, localEnabled, modes };
 }
 
 /** Gives the fake core a certificate for its domain, as an issued one would. */
@@ -100,7 +105,7 @@ describe('DeployCoreDomain', () => {
 
     expect(core.coreDomain.enabled).toBe(true);
     expect(info.status.ready).toBe(false);
-    expect(info.route).toEqual({ enabled: false, domain: 'core.example.com' });
+    expect(info.route).toEqual({ enabled: false, domain: 'core.example.com', mode: 'direct' });
     expect(checked).toEqual([]);
     expect(await state.coreDomain('srv')).toEqual(info.route);
   });
@@ -120,7 +125,7 @@ describe('DeployCoreDomain', () => {
     const second = await coreDomain.status('srv');
 
     expect(first.check).toEqual(PASSED);
-    expect(first.route).toEqual({ enabled: true, domain: 'core.example.com' });
+    expect(first.route).toEqual({ enabled: true, domain: 'core.example.com', mode: 'direct' });
     expect(second.route?.enabled).toBe(true);
     expect(checked).toEqual(['core.example.com']);
     expect(changed).toHaveBeenCalledTimes(1);
@@ -138,8 +143,53 @@ describe('DeployCoreDomain', () => {
 
     const info = await coreDomain.check('srv');
 
-    expect(info.route).toEqual({ enabled: false, domain: 'core.example.com' });
+    expect(info.route).toEqual({ enabled: false, domain: 'core.example.com', mode: 'direct' });
     expect(info.check).toEqual(PROXIED);
+  });
+
+  it('through Cloudflare, checks and uses the domain in that mode, and checks again after a switch', async () => {
+    const { coreDomain, core, state, modes } = setup();
+    core.coreDomain = { ...core.coreDomain, originLocked: true };
+
+    await coreDomain.enable({
+      serverId: 'srv',
+      domain: 'core.example.com',
+      sources: [],
+      mode: 'cloudflare',
+      password: FAKE_CORE_PASSWORD,
+    });
+    issueCertificate(core);
+    const proxied = await coreDomain.status('srv');
+
+    expect(core.coreDomain.mode).toBe('cloudflare');
+    expect(proxied.route).toEqual({
+      enabled: true,
+      domain: 'core.example.com',
+      mode: 'cloudflare',
+    });
+    expect(await state.coreDomain('srv')).toEqual(proxied.route);
+    expect(modes).toEqual(['transport:cloudflare', 'check:cloudflare']);
+
+    core.coreDomain = { ...core.coreDomain, originLocked: false, mode: 'direct' };
+    const direct = await coreDomain.status('srv');
+
+    expect(direct.route?.mode).toBe('direct');
+    expect(modes.slice(2)).toEqual(['transport:direct', 'check:direct']);
+  });
+
+  it('refuses Straight to the server while the origin lock is on', async () => {
+    const { coreDomain, core } = setup();
+    core.coreDomain = { ...core.coreDomain, originLocked: true };
+
+    await expect(
+      coreDomain.enable({
+        serverId: 'srv',
+        domain: 'core.example.com',
+        sources: [],
+        password: FAKE_CORE_PASSWORD,
+      }),
+    ).rejects.toThrow(/origin lock/);
+    expect(core.coreDomain.enabled).toBe(false);
   });
 
   it('stops using the domain before it asks the core to take it out', async () => {

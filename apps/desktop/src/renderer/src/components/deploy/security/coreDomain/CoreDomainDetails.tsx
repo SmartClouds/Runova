@@ -43,8 +43,8 @@ export function certificateProblem(status: CoreDomainStatus): string | null {
   if (certificate.staging) {
     return "It comes from Let's Encrypt's staging CA, which this computer does not trust. Issue a real one.";
   }
-  if (certificate.source === 'cloudflareOrigin') {
-    return "A Cloudflare origin certificate is only trusted by Cloudflare's proxy, and the core domain is reached directly. Issue one from Let's Encrypt instead.";
+  if (certificate.source === 'cloudflareOrigin' && status.mode !== 'cloudflare') {
+    return "A Cloudflare origin certificate is only trusted by Cloudflare's proxy, and the core domain is reached straight to the server. Issue one from Let's Encrypt, or choose Through Cloudflare.";
   }
   return null;
 }
@@ -53,7 +53,10 @@ export function certificateProblem(status: CoreDomainStatus): string | null {
 export function checkMessage(check: DeployCoreDomainCheck): string {
   if (check.ok) return 'This computer reached the core through the domain.';
   if (check.problem === 'cloudflare-proxy') {
-    return "Cloudflare answers for this domain, so this computer's device certificate never reaches the server. In Cloudflare's DNS settings, turn the proxy off for this record (the grey cloud, DNS only), wait a minute and check again.";
+    return "Cloudflare answers for this domain, so this computer's device certificate never reaches the server. Choose Through Cloudflare for the core domain, or turn the proxy off for this record in Cloudflare's DNS settings (the grey cloud, DNS only), wait a minute and check again.";
+  }
+  if (check.problem === 'not-proxied') {
+    return "The domain answered without Cloudflare in front. In Cloudflare's DNS settings, turn the proxy on for this record (the orange cloud), wait a minute and check again, or choose Straight to the server.";
   }
   return check.message;
 }
@@ -104,9 +107,16 @@ export function CoreDomainDetails({
         </Row>
       )}
       {status.enabled && (
+        <Row term="Reached">
+          {status.mode === 'cloudflare'
+            ? 'Through Cloudflare (proxied); each request is signed with the device key'
+            : 'Straight to the server (DNS only); nginx asks for the device certificate'}
+        </Row>
+      )}
+      {status.enabled && (
         <Row term="Allowed from">
           {status.sources.length === 0 ? (
-            "Any address (this computer's device certificate is still required)"
+            "Any address (this computer's device key is still required)"
           ) : (
             <ul className="space-y-0.5 font-mono text-xs">
               {status.sources.map((source) => (

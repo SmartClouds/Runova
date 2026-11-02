@@ -83,6 +83,45 @@ describe('judge', () => {
   });
 });
 
+describe('judge through Cloudflare', () => {
+  const via = { 'cf-ray': '8a1-FRA', server: 'cloudflare' };
+  const verdict = (status: number, headers: Record<string, string>) =>
+    judge({ status, headers }, 'core.example.com', 7, 'cloudflare');
+
+  it('passes the core answering through Cloudflare, and names an answer without it', () => {
+    expect(verdict(200, via)).toEqual({ ok: true, checkedAt: 7 });
+    expect(verdict(200, {})).toMatchObject({ ok: false, problem: 'not-proxied' });
+  });
+
+  it('names a clock that is off apart from a refused proof', () => {
+    expect(verdict(403, { ...via, 'x-runova-refusal': 'deviceProofClockSkew' })).toMatchObject({
+      ok: false,
+      problem: 'clock',
+    });
+    expect(verdict(403, { ...via, 'x-runova-refusal': 'deviceProofInvalid' })).toMatchObject({
+      ok: false,
+      problem: 'device-proof',
+    });
+  });
+
+  it("explains Cloudflare's own pages for an origin it could not reach or trust", () => {
+    const unreachable = verdict(522, via);
+    const untrusted = verdict(526, via);
+
+    expect(unreachable).toMatchObject({ ok: false, problem: 'cloudflare-origin' });
+    expect(unreachable.ok ? '' : unreachable.message).toMatch(/firewall lets Cloudflare in/);
+    expect(untrusted).toMatchObject({ ok: false, problem: 'cloudflare-origin' });
+    expect(untrusted.ok ? '' : untrusted.message).toMatch(/Full \(strict\)/);
+  });
+
+  it('says a 403 Cloudflare sent itself may be one of its rules', () => {
+    const blocked = verdict(403, via);
+
+    expect(blocked).toMatchObject({ ok: false, problem: 'device-proof' });
+    expect(blocked.ok ? '' : blocked.message).toMatch(/Cloudflare rule/);
+  });
+});
+
 describe('checkCoreDomain', () => {
   it('reports a certificate this computer does not trust apart from a network failure', async () => {
     const untrusted = await checkCoreDomain(

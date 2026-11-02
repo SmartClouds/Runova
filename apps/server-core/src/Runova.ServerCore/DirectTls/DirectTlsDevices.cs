@@ -50,9 +50,21 @@ internal sealed class DirectTlsDevices(IDbContextFactory<CoreDbContext> database
         return device;
     }
 
+    /// <summary>The public key of an enrolled device that is not revoked, or null.</summary>
+    public byte[]? PublicKeyOf(Guid deviceId)
+    {
+        using var db = databases.CreateDbContext();
+        return db.Devices
+            .AsNoTracking()
+            .Where(d => d.Id == deviceId && d.RevokedAt == null)
+            .Select(d => d.PublicKey)
+            .FirstOrDefault();
+    }
+
     /// <summary>
     /// Whether this request came in without SSH behind it: over the direct TLS listener, or through
-    /// nginx on the core domain (E44). Either way a client certificate named its device.
+    /// nginx on the core domain (E44). Either way the request proved its device: by a client
+    /// certificate, or in the core domain's Cloudflare mode by a signed header.
     /// </summary>
     public static bool IsDirect(HttpContext? context) =>
         context?.Features.Get<ITlsConnectionFeature>() is not null || CoreDomain.CoreDomainEndpoint.IsProxied(context);

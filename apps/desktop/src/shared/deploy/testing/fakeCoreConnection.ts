@@ -354,12 +354,20 @@ export class FakeCoreConnection implements ICoreHub {
         'The server core answers for one domain, not a wildcard.',
       );
     }
+    const mode = request.mode ?? 'direct';
+    if (mode === 'direct' && status.originLocked) {
+      throw invocationError(
+        'EnableCoreDomain',
+        'The Cloudflare origin lock lets only Cloudflare reach ports 80 and 443, so the domain cannot point straight at the server. Choose Through Cloudflare, or turn the origin lock off under Firewall first.',
+      );
+    }
     const sameDomain = status.domain === domain;
     this.core.coreDomain = {
       ...status,
       enabled: true,
       domain,
       sources: request.sources ?? [],
+      mode,
       listening: true,
       siteApplied: true,
       certificate: sameDomain ? status.certificate : undefined,

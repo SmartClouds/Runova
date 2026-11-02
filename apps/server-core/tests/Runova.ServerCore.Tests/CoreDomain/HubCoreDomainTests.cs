@@ -36,8 +36,19 @@ public sealed class HubCoreDomainTests
         return hub;
     }
 
-    private static Task<CoreDomainStatus> EnableAsync(HubConnection hub, string domain = Domain, string[]? sources = null) =>
-        hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.EnableCoreDomain), new CoreDomainRequest(domain, sources), Cancel);
+    private static Task<CoreDomainStatus> EnableAsync(HubConnection hub, string domain = Domain, string[]? sources = null, CoreDomainMode mode = CoreDomainMode.Direct) =>
+        hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.EnableCoreDomain), new CoreDomainRequest(domain, sources, mode), Cancel);
+
+    /// <summary>The origin lock as the core keeps it once on; the firewall side is the origin lock tests' business.</summary>
+    private static async Task LockOriginAsync(AuthHarness harness, bool pulls = false)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        var row = new OriginLockSetting { Enabled = true, AuthenticatedOriginPulls = pulls };
+        Runova.ServerCore.Cloudflare.OriginLockRows.SetRanges(row, Runova.ServerCore.Cloudflare.CloudflareRangeList.Parse(["173.245.48.0/20"], ["2400:cb00::/32"], 0));
+        db.OriginLock.Add(row);
+        await db.SaveChangesAsync(Cancel);
+    }
 
     private static async Task<List<string>> AuditAsync(AuthHarness harness)
     {
@@ -198,6 +209,94 @@ public sealed class HubCoreDomainTests
 
         Assert.Contains("origin lock", refused.Message, StringComparison.Ordinal);
         Assert.True((await hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.GetCoreDomain), Cancel)).OriginLocked);
+    }
+
+    [Fact]
+    public async Task Through_cloudflare_it_works_with_the_origin_lock_on_and_an_origin_certificate()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+        await LockOriginAsync(harness, pulls: true);
+        var nginx = harness.Services.GetRequiredService<SimulatedNginxMachine>();
+
+        var status = await EnableAsync(hub, sources: ["203.0.113.0/24"], mode: CoreDomainMode.Cloudflare);
+        var request = await hub.InvokeAsync<OriginCertificateRequestInfo>(nameof(ICoreHub.CreateOriginCertificateRequest), CoreDomainSettings.SiteId, Cancel);
+        var installed = await hub.InvokeAsync<CertificateUploadResult>(
+            nameof(ICoreHub.InstallOriginCertificate), new OriginCertificateInstall(CoreDomainSettings.SiteId, Cloudflare.HubOriginCertificateTests.Sign(request.CsrPem)), Cancel);
+        var ready = await hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.GetCoreDomain), Cancel);
+        var served = nginx.Text(SiteFile)!;
+
+        Assert.True(status.Enabled, status.Error);
+        Assert.Equal(CoreDomainMode.Cloudflare, status.Mode);
+        Assert.True(status.OriginLocked);
+        Assert.Empty(installed.Problems);
+        Assert.True(ready.Ready, ready.Error);
+        Assert.Equal(CertificateSource.CloudflareOrigin, ready.Certificate!.Source);
+        Assert.Contains("cloudflare/real-ip.conf;", served, StringComparison.Ordinal);
+        Assert.Contains("ssl_verify_client on;", served, StringComparison.Ordinal);
+        Assert.DoesNotContain("optional_no_ca", served, StringComparison.Ordinal);
+        Assert.Contains("proxy_set_header X-Runova-Client-Certificate \"\";", served, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Straight_to_the_server_an_origin_certificate_does_not_make_it_ready()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+        await EnableAsync(hub);
+
+        var request = await hub.InvokeAsync<OriginCertificateRequestInfo>(nameof(ICoreHub.CreateOriginCertificateRequest), CoreDomainSettings.SiteId, Cancel);
+        await hub.InvokeAsync<CertificateUploadResult>(
+            nameof(ICoreHub.InstallOriginCertificate), new OriginCertificateInstall(CoreDomainSettings.SiteId, Cloudflare.HubOriginCertificateTests.Sign(request.CsrPem)), Cancel);
+        var direct = await hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.GetCoreDomain), Cancel);
+        var proxied = await EnableAsync(hub, mode: CoreDomainMode.Cloudflare);
+
+        Assert.False(direct.Ready);
+        Assert.True(proxied.Ready, proxied.Error);
+    }
+
+    [Fact]
+    public async Task Through_cloudflare_sources_need_the_origin_lock()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+
+        var refused = await Assert.ThrowsAsync<HubException>(() => EnableAsync(hub, sources: ["203.0.113.0/24"], mode: CoreDomainMode.Cloudflare));
+        var open = await EnableAsync(hub, mode: CoreDomainMode.Cloudflare);
+
+        Assert.Contains("origin lock", refused.Message, StringComparison.Ordinal);
+        Assert.True(open.Enabled, open.Error);
+        Assert.False(open.OriginLocked);
+    }
+
+    [Fact]
+    public async Task Switching_modes_keeps_the_port_and_the_key_and_rewrites_the_site()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+        var store = harness.Services.GetRequiredService<CoreDomainStore>();
+        var nginx = harness.Services.GetRequiredService<SimulatedNginxMachine>();
+        await EnableAsync(hub);
+        var (chain, privateKey) = WebHubTests.SelfSigned(Domain);
+        await hub.InvokeAsync<CertificateUploadResult>(nameof(ICoreHub.UploadCertificate), new CertificateUploadRequest(CoreDomainSettings.SiteId, chain, privateKey), Cancel);
+        var before = store.Read();
+        Assert.Contains("optional_no_ca", nginx.Text(SiteFile), StringComparison.Ordinal);
+
+        var proxied = await EnableAsync(hub, mode: CoreDomainMode.Cloudflare);
+        var proxiedFile = nginx.Text(SiteFile)!;
+        var back = await EnableAsync(hub);
+
+        Assert.True(proxied.SiteApplied);
+        Assert.Equal(CoreDomainMode.Cloudflare, proxied.Mode);
+        Assert.Equal((before.Port, before.Key), (store.Read().Port, store.Read().Key));
+        Assert.DoesNotContain("optional_no_ca", proxiedFile, StringComparison.Ordinal);
+        Assert.Equal(CoreDomainMode.Direct, back.Mode);
+        Assert.Contains("optional_no_ca", nginx.Text(SiteFile), StringComparison.Ordinal);
+        Assert.True(back.SiteApplied);
     }
 
     [Fact]

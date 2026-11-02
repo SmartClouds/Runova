@@ -301,8 +301,14 @@ export class CloudflareServerOps {
     serverId: string,
   ): Promise<{ checks: CloudflareDomainCheck[]; zones: CloudflareZone[] }> {
     const sites = await this.core(serverId, (hub) => hub.listSites());
+    // The core domain (E44) is not in the sites list, but the lock and Authenticated Origin Pulls
+    // reach it all the same. A core from before it has no such call.
+    const coreDomain = await this.core(serverId, (hub) => hub.getCoreDomain()).catch(() => null);
     const domains = [
-      ...new Set(sites.flatMap((site) => site.settings.domains.map((d) => d.toLowerCase()))),
+      ...new Set([
+        ...sites.flatMap((site) => site.settings.domains.map((d) => d.toLowerCase())),
+        ...(coreDomain?.enabled && coreDomain.domain ? [coreDomain.domain.toLowerCase()] : []),
+      ]),
     ];
     if (domains.length === 0) return { checks: [], zones: [] };
     const zones = await this.deps.cloudflare.allZones();

@@ -187,4 +187,24 @@ public sealed class HubOriginLockTests
 
         Assert.Contains("Turn it on in the Firewall section first", refused.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task A_core_domain_straight_to_the_server_holds_the_lock_back_and_one_through_cloudflare_does_not()
+    {
+        var (harness, hub) = await StartAsync();
+        await using var _ = harness;
+        await using var __ = hub;
+        var store = harness.Services.GetRequiredService<Runova.ServerCore.CoreDomain.CoreDomainStore>();
+        store.Write(new Runova.ServerCore.CoreDomain.CoreDomainSettings(true, "core.example.com", 41234, Runova.ServerCore.CoreDomain.CoreDomainSettings.NewKey(), []));
+
+        var refused = await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<OriginLockPreview>(nameof(ICoreHub.PreviewOriginLock), new OriginLockRequest(true), Cancel));
+        var unlocking = await hub.InvokeAsync<OriginLockPreview>(nameof(ICoreHub.PreviewOriginLock), new OriginLockRequest(false), Cancel);
+        store.Write(store.Read() with { Mode = CoreDomainMode.Cloudflare });
+        var preview = await hub.InvokeAsync<OriginLockPreview>(nameof(ICoreHub.PreviewOriginLock), new OriginLockRequest(true), Cancel);
+
+        Assert.Contains("core domain core.example.com points straight at the server", refused.Message, StringComparison.Ordinal);
+        Assert.NotNull(unlocking);
+        Assert.NotEmpty(preview.Changes);
+        Assert.Empty(harness.Services.GetRequiredService<MutationLog>().Entries);
+    }
 }
