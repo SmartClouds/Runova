@@ -483,7 +483,6 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
   }
 
   const sections = scanQuery.data?.sections ?? [];
-  const isRefreshing = scanQuery.isFetching;
   const search = query.trim();
 
   const totals = useMemo(() => {
@@ -504,8 +503,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
   }
 
   const toolbar = (
-    <div className="glass relative overflow-hidden rounded-[calc(var(--radius)+2px)] p-4">
-      {isRefreshing && <Skeleton className="absolute inset-x-0 top-0 h-0.5 rounded-none" />}
+    <div className="glass rounded-[calc(var(--radius)+2px)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -681,7 +679,6 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
             key={sectionKey(section)}
             className="glass relative space-y-3 overflow-hidden rounded-[calc(var(--radius)+2px)] p-4"
           >
-            {isRefreshing && <Skeleton className="absolute inset-x-0 top-0 h-0.5 rounded-none" />}
             {updateMutation.isPending && batchProgress && updatingThisSection && (
               <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden bg-foreground/10">
                 <div

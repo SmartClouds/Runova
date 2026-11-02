@@ -1,5 +1,5 @@
 import { compareVersions } from '@runova/core';
-import type { PackageManagerSection, RuntimeTarget } from '@shared/apiTypes';
+import type { PackageManagerSection, PackageScanResult, RuntimeTarget } from '@shared/apiTypes';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -207,6 +207,33 @@ function runtimeKey(target: RuntimeTarget): string {
   return `${target.manifestPath}::${target.source}::${target.kind}`;
 }
 
+/**
+ * The scan as it will read once `updated` has been rewritten in its file. A rescan covers every
+ * ecosystem in the project and can take a long time, so the row is flipped from this instead of
+ * keeping the old value on screen until the rescan finishes.
+ */
+function withRuntimeUpdated(scan: PackageScanResult, updated: RuntimeTarget): PackageScanResult {
+  const key = runtimeKey(updated);
+  return {
+    ...scan,
+    sections: scan.sections.map((section) => ({
+      ...section,
+      runtimes: section.runtimes.map((runtime) =>
+        runtimeKey(runtime) === key
+          ? {
+              ...runtime,
+              declared: runtime.nextDeclared ?? runtime.declared,
+              currentVersion: runtime.latestVersion ?? runtime.currentVersion,
+              isOutdated: false,
+              nextDeclared: null,
+              requires: null,
+            }
+          : runtime,
+      ),
+    })),
+  };
+}
+
 export function RuntimeBlock({
   projectId,
   section,
@@ -227,9 +254,18 @@ export function RuntimeBlock({
         manifestPath: target.manifestPath,
         targetVersion: target.latestVersion ?? '',
       }),
-    onSuccess: (result) => {
-      if (result.ok) toast.success(result.message);
-      else toast.error(result.message);
+    onSuccess: (result, target) => {
+      if (result.ok) {
+        toast.success(result.message);
+        queryClient.setQueryData<PackageScanResult>(
+          queryKeys.packages(projectId),
+          (scan) => scan && withRuntimeUpdated(scan, target),
+        );
+      } else {
+        toast.error(result.message);
+      }
+      // Also rescan: that restarts one that began before the rewrite, and settles anything the
+      // patch above could not know.
       void queryClient.invalidateQueries({ queryKey: queryKeys.packages(projectId) });
     },
     onError: () => toast.error('The runtime update did not run.'),

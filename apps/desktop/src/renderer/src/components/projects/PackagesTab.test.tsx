@@ -1,5 +1,5 @@
 import type { PackageInfo, PackageManagerSection, RuntimeTarget } from '@shared/apiTypes';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
 import { project } from '../health/testing/fixtures';
@@ -131,5 +131,120 @@ describe('PackagesTab', () => {
     await user.click(screen.getByRole('radio', { name: 'All' }));
     await user.type(screen.getByRole('textbox', { name: 'Search packages' }), 'http');
     expect(screen.queryByText('Dart SDK')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The pnpm pin in a package.json, as a scan reads it before and after the Update button rewrites
+ * it.
+ */
+function pnpmPin(outdated: boolean): RuntimeTarget {
+  return {
+    kind: 'pnpm',
+    source: 'packageManager',
+    declared: outdated ? 'pnpm@12.4.1' : 'pnpm@12.16.1',
+    currentVersion: outdated ? '12.4.1' : '12.16.1',
+    latestVersion: '12.16.1',
+    isOutdated: outdated,
+    nextDeclared: outdated ? 'pnpm@12.16.1' : null,
+    requires: null,
+    manifestPath: 'C:\\work\\runova\\package.json',
+    projectLabel: 'runova',
+  };
+}
+
+function pnpmSection(outdated: boolean): PackageManagerSection {
+  return {
+    ecosystem: 'node',
+    manager: 'pnpm',
+    status: 'ok',
+    message: null,
+    packages: [],
+    runtimes: [pnpmPin(outdated)],
+    toolchain: null,
+  };
+}
+
+describe('updating a pinned runtime', () => {
+  it('shows the pin as current once the rewrite is done', async () => {
+    let onDisk = true;
+    const { user } = renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: {
+        'packages.list': async () => ({ projectId: 'p1', sections: [pnpmSection(onDisk)] }),
+        'packages.updateRuntime': async () => {
+          onDisk = false;
+          return { ok: true, message: 'Updated pnpm@12.4.1 to pnpm@12.16.1.' };
+        },
+      },
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Update pnpm (packageManager)' }));
+
+    await waitFor(() => expect(screen.getByText('pnpm@12.16.1')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Update pnpm (packageManager)' })).toBeNull();
+    expect(screen.queryByText('1 outdated')).toBeNull();
+  });
+
+  it('does not bring back the old pin when a scan that started before the rewrite finishes late', async () => {
+    let onDisk = true;
+    let releaseSlowScan: (() => void) | undefined;
+    let scans = 0;
+    const { user, queryClient } = renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: {
+        'packages.list': async () => {
+          scans += 1;
+          const found = pnpmSection(onDisk);
+          // The second scan is the slow one: it read the file before the update ran.
+          if (scans === 2) await new Promise<void>((resolve) => (releaseSlowScan = resolve));
+          return { projectId: 'p1', sections: [found] };
+        },
+        'packages.updateRuntime': async () => {
+          onDisk = false;
+          return { ok: true, message: 'Updated pnpm@12.4.1 to pnpm@12.16.1.' };
+        },
+      },
+    });
+
+    await screen.findByRole('button', { name: 'Update pnpm (packageManager)' });
+    // Come back to the tab with stale data on screen and a scan running behind it.
+    void queryClient.invalidateQueries({ queryKey: ['packages', 'p1'] });
+    await waitFor(() => expect(scans).toBe(2));
+
+    await user.click(screen.getByRole('button', { name: 'Update pnpm (packageManager)' }));
+    await waitFor(() => expect(scans).toBeGreaterThanOrEqual(3));
+    releaseSlowScan?.();
+
+    await waitFor(() => expect(screen.getByText('pnpm@12.16.1')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Update pnpm (packageManager)' })).toBeNull();
+  });
+
+  it('does not wait for the rescan to show the pin as current', async () => {
+    // A scan covers every ecosystem in the project (pnpm, npm, NuGet) and can take a long time
+    // on a slow network, so the row cannot depend on it to flip.
+    let onDisk = true;
+    let scans = 0;
+    const { user } = renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: {
+        'packages.list': async () => {
+          scans += 1;
+          if (scans > 1) return new Promise<never>(() => undefined);
+          return { projectId: 'p1', sections: [pnpmSection(onDisk)] };
+        },
+        'packages.updateRuntime': async () => {
+          onDisk = false;
+          return { ok: true, message: 'Updated pnpm@12.4.1 to pnpm@12.16.1.' };
+        },
+      },
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Update pnpm (packageManager)' }));
+
+    await waitFor(() => expect(scans).toBe(2));
+    await waitFor(() => expect(screen.getByText('pnpm@12.16.1')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Update pnpm (packageManager)' })).toBeNull();
+    expect(screen.queryByText('1 outdated')).toBeNull();
+    expect(screen.getByText('Up to date')).toBeInTheDocument();
+    // The rescan is still running and will have the last word.
+    expect(screen.getByRole('button', { name: 'Scanning…' })).toBeInTheDocument();
   });
 });
