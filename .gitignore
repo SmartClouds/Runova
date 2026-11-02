@@ -11,6 +11,8 @@ apps/desktop/build/server-core-manifest.json
 .DS_Store
 .env
 .env.local
+# Production secrets for the website (apps/website/docker-compose.production.yaml)
+.env.production
 *.tsbuildinfo
 .vite/
 coverage/

@@ -1,0 +1,148 @@
+# The public website at runovahq.com, deployed as an app on a server Runova manages (Deploy, Apps).
+# The server's nginx (Deploy, Websites) owns ports 80 and 443 and the Let's Encrypt certificate, and
+# passes every request for the domain to the gateway below on 127.0.0.1:WEBSITE_PORT. The gateway
+# splits the paths the way Caddyfile does for the local stack: /api and /hangfire to the API, /media
+# from the uploads volume, everything else to the site.
+#
+# The API and site images are the ones CD pushes to GitHub Container Registry on every release.
+# "latest" is pulled on every deploy, so redeploying the app picks up the newest release. Its
+# settings come from the project's Production environment in Runova (a copy of .env.production),
+# which the deploy writes to the app's .env on the server. Nothing else is uploaded: the gateway's
+# config is inline below, so no file from the project is needed on the server.
+#
+# Make the first Admin from the server once the app is up (the app name is the compose project):
+#   echo "$PASSWORD" | docker compose -p <app name> exec -T api \
+#     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
+name: runova-website
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: runova_website
+      POSTGRES_USER: runova
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment}
+    volumes:
+      # PostgreSQL 18 keeps its data in a versioned folder under /var/lib/postgresql.
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runova -d runova_website"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    image: ${IMAGE_REGISTRY:-ghcr.io/smartclouds}/runova-website-api:${IMAGE_TAG:-latest}
+    pull_policy: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=db;Database=runova_website;Username=runova;Password=${POSTGRES_PASSWORD}
+      Database__MigrateOnStart: "true"
+      Website__SiteUrl: ${SITE_URL:?Set SITE_URL in the environment}
+      # Only the gateway reaches the API, from the Docker network. It passes on the visitor's
+      # address and scheme exactly as the server's nginx set them.
+      Website__KnownProxies: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      Sentry__Dsn: ${SENTRY_DSN:-}
+      Sentry__Environment: ${SENTRY_ENVIRONMENT:-production}
+      GitHub__Token: ${GITHUB_TOKEN:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      RateLimits__ApiClients__TokenLimit: ${API_CLIENT_TOKEN_LIMIT:-20}
+      RateLimits__ApiClients__TokensPerPeriod: ${API_CLIENT_TOKENS_PER_PERIOD:-1}
+      RateLimits__ApiClients__ReplenishmentPeriod: ${API_CLIENT_REPLENISHMENT_PERIOD:-00:00:01}
+    volumes:
+      - media:/var/lib/runova/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    # The site URL, the browser's Sentry DSN and the release are baked into this image by CD.
+    image: ${IMAGE_REGISTRY:-ghcr.io/smartclouds}/runova-website-web:${IMAGE_TAG:-latest}
+    pull_policy: always
+    environment:
+      WEBSITE_API_INTERNAL_URL: http://api:8080
+      SITE_URL: ${SITE_URL}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:4321/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  gateway:
+    image: caddy:2-alpine
+    configs:
+      - source: gateway
+        target: /etc/caddy/Caddyfile
+    ports:
+      # Loopback only: the server's nginx is the one way in from outside.
+      - 127.0.0.1:${WEBSITE_PORT:-8090}:80
+    volumes:
+      - media:/srv/media:ro
+    # The API image has no shell to check itself with, so the gateway waits for both upstreams.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://api:8080/health/ready && wget -q -O /dev/null http://web:4321/"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+configs:
+  gateway:
+    # Plain HTTP behind the server's nginx, which ends TLS. Compose fills in ${SITE_HOST}.
+    content: |
+      {
+      	admin off
+      	auto_https off
+      }
+
+      (from_nginx) {
+      	# nginx already set the visitor's address and scheme. Pass them on as they are, so the API
+      	# and the site see the real request and not the gateway's own hop.
+      	header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+      	header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+      }
+
+      :80 {
+      	encode zstd gzip
+
+      	# One canonical origin: www goes to the bare domain.
+      	@www host www.${SITE_HOST}
+      	redir @www https://${SITE_HOST}{uri} 308
+
+      	# Media files are written once under a name made from their hash, so they never change.
+      	handle_path /media/* {
+      		root * /srv/media
+      		header Cache-Control "public, max-age=31536000, immutable"
+      		header X-Content-Type-Options nosniff
+      		file_server
+      	}
+
+      	@api path /api /api/* /hangfire /hangfire/*
+      	handle @api {
+      		reverse_proxy api:8080 {
+      			import from_nginx
+      		}
+      	}
+
+      	handle {
+      		reverse_proxy web:4321 {
+      			import from_nginx
+      		}
+      	}
+      }
+
+volumes:
+  db:
+  media:

@@ -3,7 +3,8 @@ name: CD
 # Builds the Runova desktop app for Windows, macOS, and Linux plus the
 # Android mobile app (a universal APK and one per CPU architecture), and the
 # server core the desktop installs on users' servers (linux-x64 and
-# linux-arm64), and publishes all of it to a GitHub Release. Once the release
+# linux-arm64), and publishes all of it to a GitHub Release. It also pushes the
+# website's API and site images to GitHub Container Registry. Once the release
 # is out, the Windows installer goes to winget as a PR on microsoft/winget-pkgs
 # (turned off until the installer is code signed, see the winget job).
 #
@@ -439,6 +440,111 @@ jobs:
           name: android-apk
           if-no-files-found: error
           path: apps/mobile/android/app/build/outputs/apk/release/Runova-*.apk
+
+  # The website's API and site images, pushed to GitHub Container Registry as
+  # ghcr.io/<owner>/runova-website-api and ghcr.io/<owner>/runova-website-web, each tagged with the
+  # release version and "latest". apps/website/docker-compose.production.yaml runs "latest", so
+  # redeploying the website app in Runova picks the new release up. Prereleases get their version tag
+  # only and leave "latest" where it was. The site's public settings are baked in at build time:
+  # SITE_URL from the WEBSITE_SITE_URL repository variable (runovahq.com when unset) and its
+  # Sentry DSN from WEBSITE_PUBLIC_SENTRY_DSN. Independent of the desktop release, so a failure
+  # here never holds that back.
+  build-website-images:
+    name: Build website image (${{ matrix.image }})
+    needs: ci-passed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: apps/website/api
+            dockerfile: apps/website/api/Dockerfile
+          - image: web
+            context: .
+            dockerfile: apps/website/web/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Determine version and tags
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/runova-website-${{ matrix.image }}"
+          TAGS="$IMAGE:$VERSION"
+          case "$VERSION" in
+            *-*) ;;
+            *) TAGS="$TAGS"$'\n'"$IMAGE:latest" ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          { echo "tags<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      # The site falls back to the desktop app's version when the API has no release to show.
+      - name: Set app version from release tag
+        if: matrix.image == 'web'
+        env:
+          APP_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = 'apps/desktop/package.json';
+            const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+            pkg.version = process.env.APP_VERSION;
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.title=runova-website-${{ matrix.image }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            SITE_URL=${{ vars.WEBSITE_SITE_URL || 'https://runovahq.com' }}
+            PUBLIC_SENTRY_DSN=${{ vars.WEBSITE_PUBLIC_SENTRY_DSN }}
+            SENTRY_ENVIRONMENT=production
+            SENTRY_RELEASE=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=website-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=website-${{ matrix.image }}
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.meta.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   release:
     name: Publish GitHub Release

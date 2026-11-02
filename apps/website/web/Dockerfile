@@ -9,8 +9,12 @@ FROM oven/bun:1.4.4 AS build
 WORKDIR /repo/apps/website/web
 ARG SITE_URL=https://runovahq.com
 ARG PUBLIC_SENTRY_DSN=
+ARG SENTRY_ENVIRONMENT=
+ARG SENTRY_RELEASE=
 ENV SITE_URL=${SITE_URL} \
-    PUBLIC_SENTRY_DSN=${PUBLIC_SENTRY_DSN}
+    PUBLIC_SENTRY_DSN=${PUBLIC_SENTRY_DSN} \
+    SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT} \
+    SENTRY_RELEASE=${SENTRY_RELEASE}
 
 COPY apps/website/web/package.json apps/website/web/bun.lock ./
 RUN bun install --frozen-lockfile
