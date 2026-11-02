@@ -1145,7 +1145,9 @@ describe('SettingsPage Prompt Builder provider', () => {
       'settings.get': { ...settings, promptBuilderProvider: 'openai', openaiApiKey: null },
     });
     await openProviders(user);
-    expect(screen.getByRole('alert')).toHaveTextContent('Generate Prompt needs an API key for OpenAI');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Generate Prompt needs an API key for OpenAI',
+    );
 
     await user.click(screen.getByRole('tab', { name: /Gemini/ }));
     await user.click(screen.getByRole('button', { name: 'Add OpenAI key' }));
