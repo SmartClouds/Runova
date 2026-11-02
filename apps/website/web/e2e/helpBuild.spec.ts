@@ -38,20 +38,36 @@ function builtFile(path: string): string | undefined {
 }
 
 /**
- * Site paths of the pages without route parameters that are rendered on demand, which have no
- * file in the build. `blog/index.astro` is `/blog`.
+ * Site paths of the pages and endpoints (such as blog/rss.xml.ts) that the server renders on each
+ * request, which have no file in the build. `blog/index.astro` is `/blog`. Routes with
+ * parameters, such as `download/[os]/latest.ts`, come back as patterns in `dynamic`.
  */
-function onDemandPages(): Set<string> {
-  return new Set(
-    readdirSync(pagesDir, { recursive: true, encoding: 'utf8' })
-      .map((name) => name.replace(/\\/g, '/'))
-      // Pages and endpoints (such as blog/rss.xml.ts) that the server renders on each request.
-      .filter((name) => /\.(astro|ts)$/.test(name) && !name.includes('['))
-      .filter((name) =>
-        /export const prerender = false/.test(readFileSync(new URL(name, pagesDir), 'utf8')),
-      )
-      .map((name) => `/${name.replace(/\.(astro|ts)$/, '')}`.replace(/\/index$/, '')),
-  );
+function onDemandPages(): { fixed: Set<string>; dynamic: RegExp[] } {
+  const routes = readdirSync(pagesDir, { recursive: true, encoding: 'utf8' })
+    .map((name) => name.replace(/\\/g, '/'))
+    .filter((name) => /\.(astro|ts)$/.test(name))
+    .filter((name) =>
+      /export const prerender = false/.test(readFileSync(new URL(name, pagesDir), 'utf8')),
+    )
+    .map((name) => `/${name.replace(/\.(astro|ts)$/, '')}`.replace(/\/index$/, ''));
+  return {
+    fixed: new Set(routes.filter((route) => !route.includes('['))),
+    dynamic: routes
+      .filter((route) => route.includes('['))
+      .map((route) => {
+        const source = route
+          .split(/(\[\.\.\.[^\]]+\]|\[[^\]]+\])/)
+          .map((part) =>
+            part.startsWith('[...')
+              ? '.+'
+              : part.startsWith('[')
+                ? '[^/]+'
+                : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+          )
+          .join('');
+        return new RegExp(`^${source}$`);
+      }),
+  };
 }
 
 function article(name: string): string {
@@ -65,9 +81,13 @@ test.describe('built help pages', () => {
     expect(pages.sort()).toEqual(articles.map((name) => `/help/${name.slice(0, -3)}`).sort());
   });
 
-  test('every internal link on every help page resolves', () => {
+  test('every internal link on every help page resolves', async ({ request }) => {
     const broken: string[] = [];
     const onDemand = onDemandPages();
+    // Links to on-demand routes with parameters, such as the installer links in the header's
+    // Download menu. Whether the parameters are right only the server knows, so these few are
+    // requested once each.
+    const dynamic = new Map<string, string>();
     let checked = 0;
     for (const [path, source] of helpPages()) {
       const base = new URL(path, 'https://runovahq.com');
@@ -76,7 +96,11 @@ test.describe('built help pages', () => {
         const url = new URL(href, base);
         if (url.origin !== base.origin) continue;
         checked++;
-        if (onDemand.has(url.pathname) && !url.hash) continue;
+        if (onDemand.fixed.has(url.pathname) && !url.hash) continue;
+        if (!url.hash && onDemand.dynamic.some((route) => route.test(url.pathname))) {
+          dynamic.set(`${url.pathname}${url.search}`, path);
+          continue;
+        }
         const file = builtFile(url.pathname);
         if (!file) {
           broken.push(`${path} -> ${href}`);
@@ -87,6 +111,10 @@ test.describe('built help pages', () => {
           broken.push(`${path} -> ${href} (no #${anchor})`);
         }
       }
+    }
+    for (const [href, path] of dynamic) {
+      const response = await request.get(href, { maxRedirects: 0 });
+      if (response.status() >= 400) broken.push(`${path} -> ${href} (${response.status()})`);
     }
     expect(checked).toBeGreaterThan(helpPages().size * 5);
     expect(broken).toEqual([]);

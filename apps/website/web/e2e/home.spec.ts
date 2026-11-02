@@ -29,6 +29,20 @@ test.describe('home page hero', () => {
     await expect(hero(page)).toHaveAttribute('data-state', /playing|done/);
   });
 
+  test('does not start while only its top edge shows', async ({ page }) => {
+    // At this size the hero's top edge shows under the fold on first paint, which is also the
+    // paint a slow machine makes before it jumps to `/#download`.
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto('/');
+    await settle(page);
+    await expect(hero(page)).toBeInViewport();
+    await expect(hero(page)).not.toBeInViewport({ ratio: 0.2 });
+    await expect(hero(page)).toHaveAttribute('data-state', 'idle');
+
+    await page.mouse.wheel(0, 300);
+    await expect(hero(page)).toHaveAttribute('data-state', /playing|done/);
+  });
+
   test('ends on the same picture the server sends', async ({ browser, page }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const still = await context.newPage();

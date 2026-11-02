@@ -22,6 +22,8 @@ import {
 const LEAD = 0.7;
 /** The extra time after the last line before the run counts as done (the Commit button lands). */
 const TAIL = 0.8;
+/** How much of the hero has to be on screen before the run starts. */
+const VISIBLE = 0.2;
 
 export function playHeroDemo(hero: HTMLElement) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -30,11 +32,19 @@ export function playHeroDemo(hero: HTMLElement) {
     return;
   }
 
-  const observer = new IntersectionObserver((entries) => {
-    if (!entries.some((entry) => entry.isIntersecting)) return;
-    observer.disconnect();
-    start(hero);
-  });
+  // A fifth of the window has to show, not a sliver at the bottom edge. A short screen shows only
+  // its top edge on first paint, and when the page opens at an anchor further down (`/#download`)
+  // that paint can come before the jump, which would play the run where nobody sees it.
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= VISIBLE)) {
+        return;
+      }
+      observer.disconnect();
+      start(hero);
+    },
+    { threshold: VISIBLE },
+  );
   observer.observe(hero);
 }
 
