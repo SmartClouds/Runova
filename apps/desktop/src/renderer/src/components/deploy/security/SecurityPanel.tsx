@@ -9,6 +9,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { ErrorReportingCard } from '../errorReporting/ErrorReportingCard';
 import { SignInGate } from '../SignInGate';
+import { useTabParam } from '../useTabParam';
 import { AuditCard } from './AuditCard';
 import { BackupCard } from './backup/BackupCard';
 import { RestoreDialog } from './backup/RestoreDialog';
@@ -24,6 +25,32 @@ import { UsersCard } from './UsersCard';
 /** One tab, drawn as the main menu's tinted pill when it is the one shown. */
 const TAB =
   'h-7 rounded-full border-none px-3 text-xs data-[state=active]:bg-primary/12 data-[state=active]:text-primary data-[state=active]:shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.2)] data-[state=inactive]:hover:bg-foreground/[0.06] focus-visible:ring-inset';
+
+type SecurityTab =
+  | 'checklist'
+  | 'users'
+  | 'devices'
+  | 'audit'
+  | 'backups'
+  | 'errorReporting'
+  | 'connection';
+
+/**
+ * The tabs a role may open, so an address that names one the role cannot use (an Owner who stepped
+ * down while on Users, or a remembered address from a more privileged sign-in) falls back to the
+ * first tab instead of showing nothing.
+ */
+function tabsFor(owner: boolean, admin: boolean): SecurityTab[] {
+  const tabs: SecurityTab[] = [];
+  if (admin) tabs.push('checklist');
+  if (owner) tabs.push('users');
+  tabs.push('devices');
+  if (admin) tabs.push('audit');
+  if (owner) tabs.push('backups');
+  if (admin) tabs.push('errorReporting');
+  tabs.push('connection');
+  return tabs;
+}
 
 /**
  * A server's Security area: the security checklist (Admins and Owners), who can sign in (Owners),
@@ -49,6 +76,11 @@ export function SecurityPanel({
     retry: false,
     staleTime: 30_000,
   });
+  // Read before the early returns below, since a hook cannot follow them.
+  const signedIn = access.data?.state === 'signed-in' ? access.data : undefined;
+  const owner = hasRole(signedIn?.user?.roles, 'owner');
+  const admin = hasRole(signedIn?.user?.roles, 'admin');
+  const [tab, setTab] = useTabParam(tabsFor(owner, admin), admin ? 'checklist' : 'devices');
 
   if (access.isPending) {
     return (
@@ -79,16 +111,10 @@ export function SecurityPanel({
     );
   }
 
-  const roles = access.data.user?.roles;
-  const owner = hasRole(roles, 'owner');
-  const admin = hasRole(roles, 'admin');
   return (
-    // Keyed by role: an Owner who steps down must not be left on a Users tab that is gone.
-    <Tabs
-      key={owner ? 'owner' : admin ? 'admin' : 'member'}
-      defaultValue={admin ? 'checklist' : 'devices'}
-      className="space-y-2"
-    >
+    // The tab is in the address, so the page remembers it and it is still open when Deploy is
+    // opened again. An Owner who steps down while on Users lands on the first tab they still have.
+    <Tabs value={tab} onValueChange={(next) => setTab(next as SecurityTab)} className="space-y-2">
       {/* Radix tabs drawn as the kit's pill track, so arrow keys and roles stay as they were. */}
       <TabsList
         aria-label="Security"

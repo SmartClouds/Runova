@@ -1,4 +1,5 @@
 import { act, screen, within } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { queryKeys } from '@/lib/queryKeys';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
@@ -16,18 +17,30 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { SecurityPanel } = await import('./SecurityPanel');
 
-function renderPanel(access: unknown) {
-  return renderWithProviders(<SecurityPanel server={SERVER} />, {
-    bridge: {
-      'deploy.access': access,
-      'deploySecurity.listUsers': async () => [MARIA],
-      'deploySecurity.listDevices': async () => [THIS_COMPUTER],
-      'deploySecurity.listSessions': async () => [THIS_SESSION],
-      'deploySecurity.queryAudit': async () => ({ events: [] }),
-      'deployHardening.checklist': async () => CHECKLIST,
-      'deployErrorReporting.status': async () => notSetUp(),
+/** Shows the page's address, which is where the open tab is kept. */
+function Address(): React.JSX.Element {
+  return <output data-testid="address">{useLocation().search}</output>;
+}
+
+function renderPanel(access: unknown, route?: string) {
+  return renderWithProviders(
+    <>
+      <SecurityPanel server={SERVER} />
+      <Address />
+    </>,
+    {
+      route,
+      bridge: {
+        'deploy.access': access,
+        'deploySecurity.listUsers': async () => [MARIA],
+        'deploySecurity.listDevices': async () => [THIS_COMPUTER],
+        'deploySecurity.listSessions': async () => [THIS_SESSION],
+        'deploySecurity.queryAudit': async () => ({ events: [] }),
+        'deployHardening.checklist': async () => CHECKLIST,
+        'deployErrorReporting.status': async () => notSetUp(),
+      },
     },
-  });
+  );
 }
 
 describe('SecurityPanel', () => {
@@ -112,6 +125,44 @@ describe('SecurityPanel', () => {
 
     expect(await screen.findByRole('list', { name: 'Checklist' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Users' })).toBeNull();
+  });
+
+  it('keeps the open tab in the address, with the first tab left out', async () => {
+    const { user } = renderPanel(
+      async () => signedIn(['owner']),
+      '/deploy?server=srv-1&view=security',
+    );
+
+    await user.click(await screen.findByRole('tab', { name: 'Audit trail' }));
+    expect(screen.getByTestId('address').textContent).toBe('?server=srv-1&view=security&tab=audit');
+
+    await user.click(screen.getByRole('tab', { name: 'Checklist' }));
+    expect(screen.getByTestId('address').textContent).toBe('?server=srv-1&view=security');
+  });
+
+  it('opens the tab the address names, as when Deploy is opened again', async () => {
+    renderPanel(async () => signedIn(['owner']), '/deploy?server=srv-1&view=security&tab=backups');
+
+    expect(await screen.findByRole('button', { name: 'Back up now' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Backups' }).getAttribute('data-state')).toBe('active');
+    expect(screen.getByRole('tab', { name: 'Checklist' }).getAttribute('data-state')).toBe(
+      'inactive',
+    );
+  });
+
+  it('starts on the first tab when the address names one the role cannot use, or none it knows', async () => {
+    const admin = renderPanel(
+      async () => signedIn(['admin']),
+      '/deploy?server=srv-1&view=security&tab=users',
+    );
+    expect(await admin.findByRole('list', { name: 'Checklist' })).toBeTruthy();
+    admin.unmount();
+
+    const viewer = renderPanel(
+      async () => signedIn(['viewer']),
+      '/deploy?server=srv-1&view=security&tab=bogus',
+    );
+    expect(await viewer.findByText(/Your computers enrolled on this core/)).toBeTruthy();
   });
 
   it('gives a Viewer their own devices and sessions only', async () => {
