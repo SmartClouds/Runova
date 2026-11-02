@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { BotManagementUpdateParams } from 'cloudflare/resources/bot-management/bot-management';
 import type {
   RecordBatchParams,
   RecordCreateParams,
@@ -22,7 +23,10 @@ import type {
   CloudflareAccessRuleInput,
   CloudflareAccessTarget,
   CloudflareAccountChoice,
+  CloudflareAiBotsProtection,
   CloudflareAnyPermissionId,
+  CloudflareBotChange,
+  CloudflareBotSettings,
   CloudflareCacheLevel,
   CloudflareCustomRule,
   CloudflareCustomRuleInput,
@@ -282,6 +286,44 @@ function settingValue<T extends string>(setting: ApiSetting, fallback: T): T {
 
 function settingNumber(setting: ApiSetting, fallback: number): number {
   return typeof setting.value === 'number' ? setting.value : fallback;
+}
+
+/** The Bot Management fields the page reads; every one may be missing on some plan. */
+interface ApiBotConfig {
+  ai_bots_protection?: string;
+  crawler_protection?: string;
+  bot_preference_sync_enabled?: boolean;
+  fight_mode?: boolean;
+}
+
+const AI_BOTS_VALUES: ReadonlySet<string> = new Set<CloudflareAiBotsProtection>([
+  'disabled',
+  'only_on_ad_pages',
+  'block',
+]);
+
+function toBotSettings(config: ApiBotConfig): CloudflareBotSettings {
+  const aiBots = config.ai_bots_protection ?? 'disabled';
+  return {
+    aiBots: AI_BOTS_VALUES.has(aiBots) ? (aiBots as CloudflareAiBotsProtection) : 'disabled',
+    aiLabyrinth: config.crawler_protection === 'enabled',
+    preferenceSync: config.bot_preference_sync_enabled === true,
+    fightMode: typeof config.fight_mode === 'boolean' ? config.fight_mode : null,
+  };
+}
+
+/** The one field a change sends, so whatever else is set on the dashboard stays as it is. */
+function botBody(change: CloudflareBotChange): ApiBotConfig {
+  switch (change.setting) {
+    case 'aiBots':
+      return { ai_bots_protection: change.value };
+    case 'aiLabyrinth':
+      return { crawler_protection: change.value ? 'enabled' : 'disabled' };
+    case 'preferenceSync':
+      return { bot_preference_sync_enabled: change.value };
+    default:
+      return { fight_mode: change.value };
+  }
 }
 
 /**
@@ -597,6 +639,20 @@ export class CloudflareService {
         value: change.value,
       });
       return this.readSettings(api, zoneId);
+    });
+  }
+
+  botSettings(zoneId: string): Promise<CloudflareBotSettings> {
+    return this.withZone(zoneId, 'botManagement', async (api) =>
+      toBotSettings((await api.botManagement.get({ zone_id: zoneId })) as ApiBotConfig),
+    );
+  }
+
+  /** Cloudflare takes the body as a partial update, so only the changed field is sent. */
+  changeBotSetting(zoneId: string, change: CloudflareBotChange): Promise<CloudflareBotSettings> {
+    return this.withZone(zoneId, 'botManagement', async (api) => {
+      const params = { zone_id: zoneId, ...botBody(change) } as BotManagementUpdateParams;
+      return toBotSettings((await api.botManagement.update(params)) as ApiBotConfig);
     });
   }
 

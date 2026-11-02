@@ -1,11 +1,17 @@
 import type { CloudflareZone } from '@shared/cloudflareTypes';
-import { Bolt, Shield } from '@/components/icons';
+import { Bolt, Robot, Shield } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatRemaining, SECURITY_LEVEL_LABELS } from '@/lib/cloudflare/labels';
 import { cn } from '@/lib/utils';
-import { levelBeforeAttack, useZoneSettings } from './useZoneSettings';
+import { aiBotsWhenOn, type BotSettings, useBotSettings } from './useBotSettings';
+import { levelBeforeAttack, useZoneSettings, type ZoneSettings } from './useZoneSettings';
 
 const TONES = {
+  primary: {
+    pill: 'bg-primary/10 text-primary ring-primary/30 hover:bg-primary/15',
+    icon: 'bg-primary/15 text-primary',
+    dot: 'bg-primary',
+  },
   warning: {
     pill: 'bg-warning/10 text-warning ring-warning/30 hover:bg-warning/15',
     icon: 'bg-warning/15 text-warning',
@@ -28,6 +34,7 @@ function QuickSwitch({
   icon,
   on,
   tone,
+  pulse = true,
   disabled,
   onToggle,
 }: {
@@ -36,6 +43,8 @@ function QuickSwitch({
   icon: React.ReactNode;
   on: boolean;
   tone: keyof typeof TONES;
+  /** Pings the dot while on, for a state meant to be temporary; a lasting one keeps it still. */
+  pulse?: boolean;
   disabled: boolean;
   onToggle: () => void;
 }): React.JSX.Element {
@@ -65,12 +74,14 @@ function QuickSwitch({
         {icon}
         {on && (
           <span className="absolute right-0 top-0 flex h-2 w-2">
-            <span
-              className={cn(
-                'absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping',
-                colours.dot,
-              )}
-            />
+            {pulse && (
+              <span
+                className={cn(
+                  'absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping',
+                  colours.dot,
+                )}
+              />
+            )}
             <span className={cn('relative inline-flex h-2 w-2 rounded-full', colours.dot)} />
           </span>
         )}
@@ -90,23 +101,52 @@ function QuickSwitch({
   );
 }
 
+function PillSkeleton(): React.JSX.Element {
+  return <Skeleton className="h-9 w-36 rounded-full" />;
+}
+
 /**
- * Development mode and I'm Under Attack, in the zone's header so they are one click away from
- * every tab. Both read the same settings as the tabs. Turning an attack off goes back to the
- * security level from before it, not to a guess.
+ * Development mode, I'm Under Attack and Block AI bots, in the zone's header so they are one
+ * click away from every tab. They read the same settings as the tabs. Turning an attack off goes
+ * back to the security level from before it, and turning AI bots back on blocks them where they
+ * were blocked before, not a guess. Bot settings need their own permission, so they load apart:
+ * a token without it keeps the other two switches.
  */
 export function ZoneQuickToggles({ zone }: { zone: CloudflareZone }): React.JSX.Element | null {
-  const { query, saving, change } = useZoneSettings(zone);
+  const settings = useZoneSettings(zone);
+  const bots = useBotSettings(zone);
+  // The open tab shows the problem; the header just leaves the switches out.
+  if (settings.query.isError && bots.query.isError) return null;
+  const loading = settings.query.isPending || bots.query.isPending;
 
+  return (
+    <div
+      role="group"
+      aria-label="Quick switches"
+      aria-busy={loading || undefined}
+      className="flex flex-wrap items-center gap-2"
+    >
+      <SettingSwitches zone={zone} settings={settings} />
+      <AiBotsSwitch zone={zone} bots={bots} />
+    </div>
+  );
+}
+
+function SettingSwitches({
+  zone,
+  settings: { query, saving, change },
+}: {
+  zone: CloudflareZone;
+  settings: ZoneSettings;
+}): React.JSX.Element | null {
   if (query.isPending) {
     return (
-      <div aria-busy="true" className="flex items-center gap-2">
-        <Skeleton className="h-9 w-36 rounded-full" />
-        <Skeleton className="h-9 w-36 rounded-full" />
-      </div>
+      <>
+        <PillSkeleton />
+        <PillSkeleton />
+      </>
     );
   }
-  // The open tab shows the problem; the header just leaves the switches out.
   if (query.isError) return null;
 
   const { developmentMode, securityLevel } = query.data;
@@ -115,7 +155,7 @@ export function ZoneQuickToggles({ zone }: { zone: CloudflareZone }): React.JSX.
   const remaining = formatRemaining(developmentMode.secondsRemaining);
 
   return (
-    <div role="group" aria-label="Quick switches" className="flex flex-wrap items-center gap-2">
+    <>
       <QuickSwitch
         label="Development mode"
         state={developmentOn ? (remaining ? `On, ${remaining}` : 'On') : 'Off'}
@@ -152,6 +192,34 @@ export function ZoneQuickToggles({ zone }: { zone: CloudflareZone }): React.JSX.
           }
         }}
       />
-    </div>
+    </>
+  );
+}
+
+/** Block AI bots. Blocking is a lasting choice, not an emergency, so its dot stays still. */
+function AiBotsSwitch({
+  zone,
+  bots: { query, saving, change },
+}: {
+  zone: CloudflareZone;
+  bots: BotSettings;
+}): React.JSX.Element | null {
+  if (query.isPending) return <PillSkeleton />;
+  if (query.isError) return null;
+  const { aiBots } = query.data;
+  const on = aiBots !== 'disabled';
+  return (
+    <QuickSwitch
+      label="Block AI bots"
+      state={on ? `On, ${aiBots === 'block' ? 'everywhere' : 'ad pages'}` : 'Off'}
+      icon={<Robot />}
+      on={on}
+      tone="primary"
+      pulse={false}
+      disabled={saving === 'aiBots'}
+      onToggle={() =>
+        void change({ setting: 'aiBots', value: on ? 'disabled' : aiBotsWhenOn(zone.id) })
+      }
+    />
   );
 }

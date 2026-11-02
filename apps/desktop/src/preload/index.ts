@@ -358,6 +358,8 @@ import type {
   CloudflareAccessRule,
   CloudflareAccessRuleInput,
   CloudflareAccountChoice,
+  CloudflareBotChange,
+  CloudflareBotSettings,
   CloudflareCustomRule,
   CloudflareCustomRuleInput,
   CloudflareDnsRecord,
@@ -2282,6 +2284,10 @@ const cloudflare = {
     change: CloudflareSettingChange,
   ): Promise<CloudflareZoneSettings> =>
     ipcRenderer.invoke(IPC.cloudflare.changeSetting, zoneId, change),
+  botSettings: (zoneId: string): Promise<CloudflareBotSettings> =>
+    ipcRenderer.invoke(IPC.cloudflare.botSettings, zoneId),
+  changeBotSetting: (zoneId: string, change: CloudflareBotChange): Promise<CloudflareBotSettings> =>
+    ipcRenderer.invoke(IPC.cloudflare.changeBotSetting, zoneId, change),
   purgeCache: (zoneId: string, request: CloudflarePurgeRequest): Promise<void> =>
     ipcRenderer.invoke(IPC.cloudflare.purgeCache, zoneId, request),
   listCustomRules: (zoneId: string): Promise<CloudflareCustomRule[]> =>

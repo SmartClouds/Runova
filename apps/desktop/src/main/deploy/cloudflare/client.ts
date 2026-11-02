@@ -1,4 +1,5 @@
 import { BaseAccounts } from 'cloudflare/resources/accounts/accounts';
+import { BaseBotManagement } from 'cloudflare/resources/bot-management/bot-management';
 import { BaseCache } from 'cloudflare/resources/cache/cache';
 import { BaseRecords } from 'cloudflare/resources/dns/records';
 import { BaseAccessRules } from 'cloudflare/resources/firewall/access-rules';
@@ -64,6 +65,7 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
       BasePermissionGroups,
       BaseWidgets,
       BaseAccounts,
+      BaseBotManagement,
     ],
     apiToken: token,
     apiKey: null,

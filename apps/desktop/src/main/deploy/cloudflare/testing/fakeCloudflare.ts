@@ -53,6 +53,8 @@ export interface FakeZoneState {
   zone: Json;
   records: Json[];
   settings: Record<string, Json>;
+  /** GET/PUT /zones/:id/bot_management. */
+  bots: Json;
   ruleset: Json | null;
   accessRules: Json[];
   purges: Json[];
@@ -92,9 +94,17 @@ const PERMISSION_NAMES: Record<CloudflareAnyPermissionId, Record<Access, string>
   apiTokens: { read: 'API Tokens Read', edit: 'API Tokens Write' },
   turnstile: { read: 'Turnstile Read', edit: 'Turnstile Write' },
   zoneEdit: { read: 'Zone Read', edit: 'Zone Write' },
+  botManagement: { read: 'Bot Management Read', edit: 'Bot Management Write' },
 };
 /** The two name servers Cloudflare hands every zone the fake makes. */
 export const NEW_ZONE_NAME_SERVERS = ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'];
+/** The Bot Management fields the fake takes, with the values Cloudflare accepts for each. */
+const BOT_VALUES: Record<string, readonly unknown[]> = {
+  ai_bots_protection: ['block', 'disabled', 'only_on_ad_pages'],
+  crawler_protection: ['enabled', 'disabled'],
+  bot_preference_sync_enabled: [true, false],
+  fight_mode: [true, false],
+};
 const SETTING_VALUES: Record<string, readonly string[]> = {
   development_mode: ['on', 'off'],
   security_level: ['off', 'essentially_off', 'low', 'medium', 'high', 'under_attack'],
@@ -170,6 +180,7 @@ export function createFakeCloudflare(options: {
       zone: { ...copy(recorded.zone), id: seed.id, name: seed.name, account },
       records: copy(seed.records ?? []),
       settings: copy(recorded.settings) as Record<string, Json>,
+      bots: copy(recorded.botManagement),
       ruleset: seed.ruleset === undefined ? null : copy(seed.ruleset),
       accessRules: copy(seed.accessRules ?? []),
       purges: [],
@@ -518,6 +529,7 @@ export function createFakeCloudflare(options: {
       zone,
       records: [],
       settings: copy(recorded.settings) as Record<string, Json>,
+      bots: copy(recorded.botManagement),
       ruleset: null,
       accessRules: [],
       purges: [],
@@ -526,13 +538,14 @@ export function createFakeCloudflare(options: {
   }
 
   /** Which permission a zone route needs, as Cloudflare's gateway sees it. */
-  function routePermission(method: string, rest: string): [CloudflarePermissionId, Access] {
+  function routePermission(method: string, rest: string): [CloudflareAnyPermissionId, Access] {
     const access: Access = method === 'GET' ? 'read' : 'edit';
     if (rest.startsWith('/dns_records')) return ['dns', access];
     if (rest.startsWith('/settings')) return ['zoneSettings', access];
     if (rest.startsWith('/purge_cache')) return ['cachePurge', 'edit'];
     if (rest.startsWith('/rulesets')) return ['waf', access];
     if (rest.startsWith('/firewall/access_rules')) return ['accessRules', access];
+    if (rest === '/bot_management') return ['botManagement', access];
     return ['zone', access];
   }
 
@@ -618,6 +631,18 @@ export function createFakeCloudflare(options: {
           : {}),
       };
       return ok(state.settings[setting[1]]);
+    }
+    if (rest === '/bot_management') {
+      if (method === 'GET') return ok(state.bots);
+      // Only the fields sent change, as on Cloudflare.
+      for (const [field, value] of Object.entries(body)) {
+        const allowedValues = BOT_VALUES[field];
+        if (!allowedValues || !allowedValues.includes(value as never)) {
+          return fail(400, 1004, `Invalid value for ${field}`);
+        }
+      }
+      state.bots = { ...state.bots, ...body };
+      return ok(state.bots);
     }
     if (rest === '/purge_cache') {
       state.purges.push(body);

@@ -35,7 +35,7 @@ The permissions the token should have:
 | Zone > Zone WAF > Edit | WAF custom rules |
 | Zone > Firewall Services > Edit | IP access rules |
 
-Four more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > Zone > Edit** (adding a domain to Cloudflare), **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server) and **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab). Cloudflare's token page can't fill in the Turnstile permission for you, so add it by hand under Account permissions.
+Five more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > Zone > Edit** (adding a domain to Cloudflare), **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server), **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab) and **Zone > Bot Management > Edit** (the AI bots card and the **Block AI bots** switch). Cloudflare's token page can't fill in the Turnstile permission for you, so add it by hand under Account permissions.
 
 ### The token card
 
@@ -79,10 +79,11 @@ With two domains or more, a **Search domains** box sits at the top of the list, 
 
 At the top of a zone you see its name, its plan and a state badge. For a zone waiting for name servers, a notice lists the name servers your registrar must use, each with a copy button and **Copy both** for all of them. Until the registrar uses them, changes here do not reach visitors. **Check name servers now** asks Cloudflare to look again straight away instead of waiting for its own check. Cloudflare allows only a few checks an hour and says so if you ask too often.
 
-Two quick switches sit on the right of the zone's header, so they are one click away from every tab:
+Three quick switches sit on the right of the zone's header, so they are one click away from every tab:
 
 - **Development mode** shows **Off**, or **On** with the time left.
 - **I'm Under Attack** turns Cloudflare's strongest check on for every visitor. Turning it off puts the security level back where it was before (Medium if Runova does not know).
+- **Block AI bots** shows **Off**, **On, ad pages** or **On, everywhere**. Turning it back on blocks AI bots where they were blocked before (everywhere if Runova does not know). It needs Bot Management on the token; without it, only this switch is left out.
 
 A zone has six tabs: **DNS**, **SSL/TLS**, **Caching**, **Security**, **Servers** and **Turnstile**. An older link to the Settings tab opens SSL/TLS.
 
@@ -155,11 +156,20 @@ The **Purge cache** card below it purges Cloudflare's cached copies.
 
 ## Security tab
 
-Three cards manage who can reach the zone.
+Four cards manage who can reach the zone.
 
 ### Protection
 
 **Security level** sets how suspicious a visitor has to look before Cloudflare checks them: Off, Essentially off, Low, Medium, High or I'm Under Attack. Under Attack shows every visitor a short check, with a reminder to turn it down afterwards. The header's **I'm Under Attack** switch changes the same setting.
+
+### AI bots
+
+The same choices as **Manage AI bot access** on Cloudflare's dashboard. It needs **Zone > Bot Management > Edit** on the token; without it the card says so.
+
+- **Block AI bots**: **Off**, **On ad pages** (only hostnames that show ads) or **Everywhere**. The header's **Block AI bots** switch changes the same setting.
+- **AI Labyrinth** sends AI crawlers that ignore your rules into a maze of decoy pages, which wastes their time instead of yours.
+- **Bot Preference Sync** puts your AI bot choices at the top of the site's robots.txt, ahead of anything already in it. **Learn more** opens Cloudflare's page about it.
+- **Bot Fight Mode** challenges traffic that looks like a known bot. Paid plans have Super Bot Fight Mode instead, which you change on Cloudflare, and the card says so.
 
 ### WAF custom rules
 

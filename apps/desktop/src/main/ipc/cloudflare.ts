@@ -15,6 +15,8 @@ import { BROWSER_CACHE_TTLS, checkPurgeUrls, PURGE_URL_LIMIT } from '../../share
 import type {
   CloudflareAccessMode,
   CloudflareAccessRuleInput,
+  CloudflareAiBotsProtection,
+  CloudflareBotChange,
   CloudflareCustomRuleInput,
   CloudflareNewZoneInput,
   CloudflarePointDomainInput,
@@ -68,6 +70,11 @@ const SETTING_VALUES: Record<CloudflareSettingChange['setting'], readonly (strin
   cacheLevel: ['basic', 'simplified', 'aggressive'],
   browserCacheTtl: BROWSER_CACHE_TTLS,
 };
+const AI_BOTS_VALUES: ReadonlySet<string> = new Set<CloudflareAiBotsProtection>([
+  'disabled',
+  'only_on_ad_pages',
+  'block',
+]);
 const ACCESS_MODES: ReadonlySet<string> = new Set<CloudflareAccessMode>([
   'block',
   'challenge',
@@ -211,6 +218,24 @@ function settingChange(value: unknown): CloudflareSettingChange {
   return { setting: input.setting, value: next } as CloudflareSettingChange;
 }
 
+function botChange(value: unknown): CloudflareBotChange {
+  const input = object(value, 'a bot setting');
+  if (input.setting === 'aiBots') {
+    if (typeof input.value !== 'string' || !AI_BOTS_VALUES.has(input.value)) {
+      throw new Error('AI bots are blocked nowhere, only on pages with ads, or everywhere.');
+    }
+    return { setting: 'aiBots', value: input.value as CloudflareAiBotsProtection };
+  }
+  if (
+    input.setting === 'aiLabyrinth' ||
+    input.setting === 'preferenceSync' ||
+    input.setting === 'fightMode'
+  ) {
+    return { setting: input.setting, value: flag(input.value, 'Say whether it is on or off.') };
+  }
+  throw new Error('That is not a bot setting the page changes.');
+}
+
 function purgeRequest(value: unknown): CloudflarePurgeRequest {
   const input = object(value, 'what to purge');
   if (input.everything === true) return { everything: true };
@@ -338,6 +363,10 @@ export function registerCloudflareHandlers({ ipc, service, guard }: CloudflareHa
   handle(IPC.cloudflare.zoneSettings, (zone) => service.zoneSettings(zoneId(zone)));
   handle(IPC.cloudflare.changeSetting, (zone, change) =>
     service.changeSetting(zoneId(zone), settingChange(change)),
+  );
+  handle(IPC.cloudflare.botSettings, (zone) => service.botSettings(zoneId(zone)));
+  handle(IPC.cloudflare.changeBotSetting, (zone, change) =>
+    service.changeBotSetting(zoneId(zone), botChange(change)),
   );
   handle(IPC.cloudflare.purgeCache, (zone, request) =>
     service.purgeCache(zoneId(zone), purgeRequest(request)),

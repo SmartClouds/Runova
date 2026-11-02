@@ -5,6 +5,7 @@ import { Chip, FOOTER_HAIRLINE, GLASS_CARD } from '@/components/pageKit';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { AccessRulesCard } from './AccessRulesCard';
+import { AiBotsCard } from './AiBotsCard';
 import { CachingCard } from './CachingCard';
 import { CustomRulesCard } from './CustomRulesCard';
 import { DnsRecordsCard } from './DnsRecordsCard';
@@ -41,9 +42,9 @@ export function zoneTab(value: string | null): ZoneTab {
 const CONTENT = 'mt-0 flex flex-col gap-2 focus-visible:ring-offset-0';
 
 /**
- * One zone: its state with the two switches an emergency needs, and by tab its DNS records, its
- * SSL/TLS, its caching, its rules, the DNS tokens its servers hold for DNS-01, and the Turnstile
- * widgets (captcha) that cover it.
+ * One zone: its state with the quick switches (development mode, I'm Under Attack and AI bots),
+ * and by tab its DNS records, its SSL/TLS, its caching, its rules and AI bot access, the DNS
+ * tokens its servers hold for DNS-01, and the Turnstile widgets (captcha) that cover it.
  */
 export function ZonePanel({
   zone,
@@ -139,6 +140,7 @@ export function ZonePanel({
       </TabsContent>
       <TabsContent value="security" className={CONTENT}>
         <SecurityLevelCard zone={zone} />
+        <AiBotsCard zone={zone} />
         <CustomRulesCard zone={zone} />
         <AccessRulesCard zone={zone} />
       </TabsContent>

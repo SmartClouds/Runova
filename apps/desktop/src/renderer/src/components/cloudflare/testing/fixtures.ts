@@ -1,5 +1,6 @@
 import type {
   CloudflareAccountStatus,
+  CloudflareBotSettings,
   CloudflareDnsRecord,
   CloudflareStatus,
   CloudflareZone,
@@ -72,6 +73,14 @@ export const SETTINGS: CloudflareZoneSettings = {
   tls13: { value: 'on', editable: true },
   cacheLevel: { value: 'aggressive', editable: true },
   browserCacheTtl: { value: 14400, editable: true },
+};
+
+/** A Free plan's bot settings: nothing blocked yet, and Bot Fight Mode available. */
+export const BOTS: CloudflareBotSettings = {
+  aiBots: 'disabled',
+  aiLabyrinth: false,
+  preferenceSync: false,
+  fightMode: false,
 };
 
 export const ACCOUNT: CloudflareAccountStatus = {

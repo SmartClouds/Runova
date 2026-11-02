@@ -35,6 +35,7 @@ describe('the permission catalog', () => {
       'apiTokens',
       'turnstile',
       'zoneEdit',
+      'botManagement',
     ]);
     const turnstile = cloudflarePermission('turnstile');
     expect(turnstile.label).toBe('Account > Turnstile > Edit');

@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion';
 import { FOOTER_HAIRLINE, SectionCard } from '@/components/pageKit';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -106,6 +107,69 @@ export function SettingsSkeleton({ rows = 4 }: { rows?: number }): React.JSX.Ele
           <Skeleton className="h-8 w-40 rounded-full" />
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * A short row of exclusive choices drawn as a sliding pill, for a setting with two to four values
+ * that all fit on one line. Picking the current one does nothing.
+ */
+export function SegmentedChoice<T extends string>({
+  labelledBy,
+  layoutId,
+  options,
+  value,
+  disabled,
+  onChange,
+}: {
+  /** The id of the title that names the group. */
+  labelledBy: string;
+  /** Unique on the page, so the pill slides only within its own group. */
+  layoutId: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  disabled: boolean;
+  onChange: (next: T) => void;
+}): React.JSX.Element {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      className="inline-flex flex-wrap items-center gap-0.5 rounded-full bg-foreground/[0.06] p-0.5"
+    >
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => {
+              if (!active) onChange(option.value);
+            }}
+            className={cn(
+              'relative h-7 cursor-pointer rounded-full px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+              active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {active && (
+              <motion.span
+                aria-hidden
+                layoutId={layoutId}
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 32 }
+                }
+                className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-inset ring-primary/25"
+              />
+            )}
+            <span className="relative">{option.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -362,6 +362,7 @@ export const queryKeys = {
     ['cloudflare', 'data', 'accountChoices', accountId] as const,
   cloudflareRecords: (zoneId: string) => ['cloudflare', 'data', 'records', zoneId] as const,
   cloudflareSettings: (zoneId: string) => ['cloudflare', 'data', 'settings', zoneId] as const,
+  cloudflareBots: (zoneId: string) => ['cloudflare', 'data', 'bots', zoneId] as const,
   cloudflareCustomRules: (zoneId: string) => ['cloudflare', 'data', 'customRules', zoneId] as const,
   cloudflareAccessRules: (zoneId: string) => ['cloudflare', 'data', 'accessRules', zoneId] as const,
   /** Turnstile widgets live in the Cloudflare account, so zones of one account share the list. */

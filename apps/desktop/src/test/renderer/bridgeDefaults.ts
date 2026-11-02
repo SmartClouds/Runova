@@ -173,6 +173,12 @@ export function bridgeDefaults(): Record<string, unknown> {
     'ciAutoFix.list': [],
     'deploySystem.services': [],
     'deployRegistry.plan': { sendSignIns: false, entries: [] },
+    'cloudflare.botSettings': {
+      aiBots: 'disabled',
+      aiLabyrinth: false,
+      preferenceSync: false,
+      fightMode: false,
+    },
     'cloudflareServer.dnsTokens': [],
     'cloudflareServer.originLock': {
       enabled: false,

@@ -176,6 +176,19 @@ describe('registerCloudflareHandlers', () => {
     });
     expect(service.checkActivation).toHaveBeenCalledWith(ZONE);
 
+    await call(IPC.cloudflare.botSettings, ZONE);
+    await call(IPC.cloudflare.changeBotSetting, ZONE, {
+      setting: 'aiBots',
+      value: 'block',
+      extra: 'dropped',
+    });
+    expect(service.botSettings).toHaveBeenCalledWith(ZONE);
+    // Only the setting and its value reach the service.
+    expect(service.changeBotSetting).toHaveBeenCalledWith(ZONE, {
+      setting: 'aiBots',
+      value: 'block',
+    });
+
     for (const name of Object.keys(IPC.cloudflare)) expect(service[name], name).toHaveBeenCalled();
   });
 
@@ -191,6 +204,46 @@ describe('registerCloudflareHandlers', () => {
     ];
     for (const change of changes) await call(IPC.cloudflare.changeSetting, ZONE, change);
     expect(service.changeSetting.mock.calls).toEqual(changes.map((change) => [ZONE, change]));
+  });
+
+  it('passes the bot settings through with their values', async () => {
+    const { service, call } = harness();
+    const changes = [
+      { setting: 'aiBots', value: 'block' },
+      { setting: 'aiBots', value: 'only_on_ad_pages' },
+      { setting: 'aiBots', value: 'disabled' },
+      { setting: 'aiLabyrinth', value: true },
+      { setting: 'preferenceSync', value: false },
+      { setting: 'fightMode', value: true },
+    ];
+    for (const change of changes) await call(IPC.cloudflare.changeBotSetting, ZONE, change);
+    expect(service.changeBotSetting.mock.calls).toEqual(changes.map((change) => [ZONE, change]));
+    await call(IPC.cloudflare.botSettings, ZONE);
+    expect(service.botSettings).toHaveBeenCalledWith(ZONE);
+  });
+
+  it('refuses bot settings it does not know, or values of the wrong kind', async () => {
+    const { service, call } = harness();
+    for (const change of [
+      { setting: 'aiBots', value: 'everywhere' },
+      { setting: 'aiBots', value: true },
+      { setting: 'aiLabyrinth', value: 'enabled' },
+      { setting: 'preferenceSync', value: 1 },
+      { setting: 'fightMode', value: 'on' },
+      { setting: 'isRobotsTxtManaged', value: true },
+      { setting: 'aiBots' },
+      'aiBots',
+      null,
+    ]) {
+      await expect(
+        call(IPC.cloudflare.changeBotSetting, ZONE, change),
+        JSON.stringify(change),
+      ).rejects.toThrow();
+    }
+    await expect(
+      call(IPC.cloudflare.changeBotSetting, '../zones', { setting: 'fightMode', value: true }),
+    ).rejects.toThrow(/zone/);
+    expect(service.changeBotSetting).not.toHaveBeenCalled();
   });
 
   it('refuses ids that are not Cloudflare ids', async () => {

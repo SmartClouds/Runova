@@ -28,6 +28,9 @@ settings, and wire domains to servers without visiting the dashboard.
 - [x] T9 Fixture: recorded Cloudflare API responses for the SDK's fetch.
 - [x] T10 Add a domain from the page: create a zone in a chosen Cloudflare account, walk the user
   through switching name servers at the registrar, and ask Cloudflare to check them again.
+- [x] T11 AI bot access: block AI bots (off, on ad pages, everywhere), AI Labyrinth, Bot Preference
+  Sync and Bot Fight Mode on the Security tab, with a Block AI bots switch in the zone header.
+  Uses Bot Management, an extra permission asked for only when used.
 
 ## Acceptance criteria
 

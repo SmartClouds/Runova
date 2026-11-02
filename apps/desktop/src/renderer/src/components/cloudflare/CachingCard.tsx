@@ -1,6 +1,5 @@
 import { BROWSER_CACHE_TTLS } from '@shared/cloudflare/zone';
 import type { CloudflareZone } from '@shared/cloudflareTypes';
-import { motion, useReducedMotion } from 'framer-motion';
 import { useId } from 'react';
 import { Clock } from '@/components/icons';
 import { Chip, FOOTER_HAIRLINE } from '@/components/pageKit';
@@ -14,7 +13,14 @@ import {
   formatRemaining,
 } from '@/lib/cloudflare/labels';
 import { cn } from '@/lib/utils';
-import { CardBody, CloudflareCard, Problem, SettingRow, SettingsSkeleton } from './fields';
+import {
+  CardBody,
+  CloudflareCard,
+  Problem,
+  SegmentedChoice,
+  SettingRow,
+  SettingsSkeleton,
+} from './fields';
 import { useZoneSettings } from './useZoneSettings';
 
 /**
@@ -23,7 +29,6 @@ import { useZoneSettings } from './useZoneSettings';
  */
 export function CachingCard({ zone }: { zone: CloudflareZone }): React.JSX.Element {
   const id = useId();
-  const reduceMotion = useReducedMotion();
   const { query, loadError, saving, change } = useZoneSettings(zone);
 
   let body: React.ReactNode;
@@ -75,49 +80,22 @@ export function CachingCard({ zone }: { zone: CloudflareZone }): React.JSX.Eleme
             </p>
           }
         >
-          <div
-            role="radiogroup"
-            aria-labelledby={`${id}-level`}
-            className="inline-flex flex-wrap items-center gap-0.5 rounded-full bg-foreground/[0.06] p-0.5"
-          >
-            {CACHE_LEVELS.map((level) => {
-              const active = cacheLevel.value === level;
-              return (
-                <button
-                  key={level}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  disabled={levelLocked}
-                  onClick={() => {
-                    if (active) return;
-                    void change(
-                      { setting: 'cacheLevel', value: level },
-                      `Caching level is ${CACHE_LEVEL_LABELS[level]} now.`,
-                    );
-                  }}
-                  className={cn(
-                    'relative h-7 cursor-pointer rounded-full px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
-                    active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {active && (
-                    <motion.span
-                      aria-hidden
-                      layoutId={`${id}-level-active`}
-                      transition={
-                        reduceMotion
-                          ? { duration: 0 }
-                          : { type: 'spring', stiffness: 420, damping: 32 }
-                      }
-                      className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-inset ring-primary/25"
-                    />
-                  )}
-                  <span className="relative">{CACHE_LEVEL_LABELS[level]}</span>
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedChoice
+            labelledBy={`${id}-level`}
+            layoutId={`${id}-level-active`}
+            options={CACHE_LEVELS.map((level) => ({
+              value: level,
+              label: CACHE_LEVEL_LABELS[level],
+            }))}
+            value={cacheLevel.value}
+            disabled={levelLocked}
+            onChange={(level) =>
+              void change(
+                { setting: 'cacheLevel', value: level },
+                `Caching level is ${CACHE_LEVEL_LABELS[level]} now.`,
+              )
+            }
+          />
         </SettingRow>
         <SettingRow
           title="Browser cache TTL"

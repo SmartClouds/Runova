@@ -86,7 +86,8 @@ export const CLOUDFLARE_PERMISSIONS: readonly CloudflarePermission[] = [
  * Asked for only when a feature needs it, so the main token can stay without them: Origin CA
  * certificates need SSL and Certificates, making a server its own zone-scoped DNS token needs
  * API Tokens (a user permission, which is why pasting a token made by hand is offered too),
- * Turnstile widgets need Turnstile, an account permission, and adding a domain needs Zone Edit.
+ * Turnstile widgets need Turnstile, an account permission, adding a domain needs Zone Edit, and
+ * the AI bot and Bot Fight Mode switches need Bot Management.
  */
 export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<CloudflareExtraPermissionId>[] =
   [
@@ -120,6 +121,14 @@ export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<Cloudfl
       action: 'add domains',
       template: { key: 'zone', type: 'edit' },
       apiNames: ['Zone Write'],
+    },
+    {
+      id: 'botManagement',
+      label: 'Zone > Bot Management > Edit',
+      purpose: 'AI bot access and Bot Fight Mode',
+      action: 'change bot settings',
+      template: { key: 'bot_management', type: 'edit' },
+      apiNames: ['Bot Management Write'],
     },
   ];
 

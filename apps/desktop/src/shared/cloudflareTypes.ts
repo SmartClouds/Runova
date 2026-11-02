@@ -188,6 +188,24 @@ export type CloudflareSettingChange =
   | { setting: 'cacheLevel'; value: CloudflareCacheLevel }
   | { setting: 'browserCacheTtl'; value: number };
 
+/** Where Cloudflare blocks AI scrapers and crawlers: nowhere, only on pages with ads, or everywhere. */
+export type CloudflareAiBotsProtection = 'disabled' | 'only_on_ad_pages' | 'block';
+
+/** A zone's bot settings, which live on Bot Management rather than with the zone settings. */
+export interface CloudflareBotSettings {
+  aiBots: CloudflareAiBotsProtection;
+  /** AI Labyrinth: crawlers that ignore the rules get a maze of decoy pages. */
+  aiLabyrinth: boolean;
+  /** Bot Preference Sync: the AI bot choices go at the top of robots.txt. */
+  preferenceSync: boolean;
+  /** Bot Fight Mode, or null on a plan that has Super Bot Fight Mode instead. */
+  fightMode: boolean | null;
+}
+
+export type CloudflareBotChange =
+  | { setting: 'aiBots'; value: CloudflareAiBotsProtection }
+  | { setting: 'aiLabyrinth' | 'preferenceSync' | 'fightMode'; value: boolean };
+
 export type CloudflarePurgeRequest = { everything: true } | { urls: string[] };
 
 /** The custom rule builder's choices; the main process turns each into an expression. */
@@ -286,7 +304,8 @@ export type CloudflareExtraPermissionId =
   | 'sslCertificates'
   | 'apiTokens'
   | 'turnstile'
-  | 'zoneEdit';
+  | 'zoneEdit'
+  | 'botManagement';
 
 export type CloudflareAnyPermissionId = CloudflarePermissionId | CloudflareExtraPermissionId;
 

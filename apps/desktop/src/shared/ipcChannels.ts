@@ -1627,6 +1627,8 @@ export const IPC = {
     deleteRecord: 'cloudflare:deleteRecord',
     zoneSettings: 'cloudflare:zoneSettings',
     changeSetting: 'cloudflare:changeSetting',
+    botSettings: 'cloudflare:botSettings',
+    changeBotSetting: 'cloudflare:changeBotSetting',
     purgeCache: 'cloudflare:purgeCache',
     listCustomRules: 'cloudflare:listCustomRules',
     createCustomRule: 'cloudflare:createCustomRule',

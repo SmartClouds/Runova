@@ -489,6 +489,70 @@ describe('zone settings and the cache (T3)', () => {
     });
   });
 
+  it('reads the bot settings from Bot Management', async () => {
+    const { service, fake } = await connectedService({
+      token: { grants: { ...ALL_GRANTS, botManagement: 'edit' } },
+    });
+    const zone = fake.zones.get(ZONE_ID);
+    if (zone) zone.bots = { ...zone.bots, ai_bots_protection: 'only_on_ad_pages' };
+
+    expect(await service.botSettings(ZONE_ID)).toEqual({
+      aiBots: 'only_on_ad_pages',
+      aiLabyrinth: false,
+      preferenceSync: false,
+      fightMode: false,
+    });
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it('sends only the bot setting that changed, so the rest stays as Cloudflare has it', async () => {
+    const { service, fake } = await connectedService({
+      token: { grants: { ...ALL_GRANTS, botManagement: 'edit' } },
+    });
+
+    await service.changeBotSetting(ZONE_ID, { setting: 'aiBots', value: 'block' });
+    await service.changeBotSetting(ZONE_ID, { setting: 'aiLabyrinth', value: true });
+    await service.changeBotSetting(ZONE_ID, { setting: 'preferenceSync', value: true });
+    const bots = await service.changeBotSetting(ZONE_ID, { setting: 'fightMode', value: true });
+
+    expect(fake.writes().map((request) => [request.method, request.path, request.body])).toEqual([
+      ['PUT', `/zones/${ZONE_ID}/bot_management`, { ai_bots_protection: 'block' }],
+      ['PUT', `/zones/${ZONE_ID}/bot_management`, { crawler_protection: 'enabled' }],
+      ['PUT', `/zones/${ZONE_ID}/bot_management`, { bot_preference_sync_enabled: true }],
+      ['PUT', `/zones/${ZONE_ID}/bot_management`, { fight_mode: true }],
+    ]);
+    expect(bots).toEqual({
+      aiBots: 'block',
+      aiLabyrinth: true,
+      preferenceSync: true,
+      fightMode: true,
+    });
+    // What the page does not manage is left as it was.
+    expect(fake.zones.get(ZONE_ID)?.bots).toMatchObject({
+      enable_js: false,
+      cf_robots_variant: 'off',
+    });
+  });
+
+  it('has no Bot Fight Mode switch on a plan with Super Bot Fight Mode', async () => {
+    const { service, fake } = await connectedService({
+      token: { grants: { ...ALL_GRANTS, botManagement: 'edit' } },
+    });
+    const zone = fake.zones.get(ZONE_ID);
+    if (zone) {
+      const { fight_mode: _gone, ...rest } = zone.bots as Record<string, unknown>;
+      zone.bots = { ...rest, sbfm_definitely_automated: 'block' };
+    }
+    expect((await service.botSettings(ZONE_ID)).fightMode).toBeNull();
+  });
+
+  it('names Bot Management when the token does not have it', async () => {
+    const { service } = await connectedService();
+    const error = await rejection(service.botSettings(ZONE_ID));
+    expect(cloudflareErrorPermission(error)).toBe('botManagement');
+    expect(cloudflareErrorMessage(error)).toContain('Zone > Bot Management > Edit');
+  });
+
   it('purges everything, or just the listed URLs', async () => {
     const { service, fake } = await connectedService();
 

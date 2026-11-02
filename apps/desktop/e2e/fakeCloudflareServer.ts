@@ -37,6 +37,7 @@ export async function startFakeCloudflare(
           sslCertificates: 'edit',
           apiTokens: 'edit',
           turnstile: 'edit',
+          botManagement: 'edit',
           ...options.grants,
         },
       },

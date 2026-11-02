@@ -1,6 +1,8 @@
 import type {
   CloudflareAccessMode,
   CloudflareAccessTarget,
+  CloudflareAiBotsProtection,
+  CloudflareBotChange,
   CloudflareCacheLevel,
   CloudflareMinTlsVersion,
   CloudflareSecurityLevel,
@@ -40,6 +42,44 @@ export const CACHE_LEVEL_DESCRIPTIONS: Record<CloudflareCacheLevel, string> = {
   simplified: 'Caches static files and serves the same copy whatever the query string.',
   basic: 'Caches static files only when the address has no query string.',
 };
+
+/** From the least blocking to the most, so the choices read left to right like a dial. */
+export const AI_BOTS_CHOICES: CloudflareAiBotsProtection[] = [
+  'disabled',
+  'only_on_ad_pages',
+  'block',
+];
+
+export const AI_BOTS_LABELS: Record<CloudflareAiBotsProtection, string> = {
+  disabled: 'Off',
+  only_on_ad_pages: 'On ad pages',
+  block: 'Everywhere',
+};
+
+export const AI_BOTS_DESCRIPTIONS: Record<CloudflareAiBotsProtection, string> = {
+  disabled: 'AI crawlers can reach every page, as long as robots.txt lets them.',
+  only_on_ad_pages: 'AI crawlers are blocked on hostnames that show ads, and can reach the rest.',
+  block: 'Cloudflare blocks known AI scrapers and crawlers on every page.',
+};
+
+/** What a toast says once a bot setting has changed. */
+export function botChangeDone(change: CloudflareBotChange): string {
+  switch (change.setting) {
+    case 'aiBots':
+      if (change.value === 'disabled') return 'AI bots are not blocked any more.';
+      return change.value === 'block'
+        ? 'AI bots are blocked everywhere now.'
+        : 'AI bots are blocked on pages with ads now.';
+    case 'aiLabyrinth':
+      return change.value ? 'AI Labyrinth is on.' : 'AI Labyrinth is off.';
+    case 'preferenceSync':
+      return change.value
+        ? 'Bot Preference Sync is on. robots.txt now starts with your AI bot choices.'
+        : 'Bot Preference Sync is off.';
+    default:
+      return change.value ? 'Bot Fight Mode is on.' : 'Bot Fight Mode is off.';
+  }
+}
 
 export const MIN_TLS_VERSIONS: CloudflareMinTlsVersion[] = ['1.0', '1.1', '1.2', '1.3'];
 

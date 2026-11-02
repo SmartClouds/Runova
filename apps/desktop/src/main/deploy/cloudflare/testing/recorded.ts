@@ -126,6 +126,18 @@ export const settings = {
   browser_cache_ttl: { id: 'browser_cache_ttl', value: 14400, editable: true, modified_on: null },
 };
 
+/** GET /zones/:id/bot_management on a Free plan, where Bot Fight Mode is the bot switch. */
+export const botManagement = {
+  ai_bots_protection: 'disabled',
+  crawler_protection: 'disabled',
+  bot_preference_sync_enabled: false,
+  cf_robots_variant: 'off',
+  enable_js: false,
+  fight_mode: false,
+  is_robots_txt_managed: false,
+  using_latest_model: true,
+};
+
 /** Cloudflare's ids for the permission groups the app names (GET /user/tokens/permission_groups). */
 export const DNS_WRITE_GROUP_ID = '4755a26eedb94da69e1066d98aa820be';
 export const ZONE_READ_GROUP_ID = 'c8fed203ed3043cba015a93ad1616f1f';

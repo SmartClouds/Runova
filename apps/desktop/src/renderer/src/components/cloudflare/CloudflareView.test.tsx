@@ -157,11 +157,14 @@ describe('CloudflareView', () => {
     );
   });
 
-  it("puts development mode and I'm Under Attack in the zone header, on every tab", async () => {
+  it('puts the quick switches in the zone header, on every tab', async () => {
     const { user } = renderPage();
     const quick = await screen.findByRole('group', { name: 'Quick switches' });
-    expect(within(quick).getByRole('switch', { name: 'Development mode' })).toBeInTheDocument();
+    expect(
+      await within(quick).findByRole('switch', { name: 'Development mode' }),
+    ).toBeInTheDocument();
     expect(within(quick).getByRole('switch', { name: "I'm Under Attack" })).toBeInTheDocument();
+    expect(await within(quick).findByRole('switch', { name: 'Block AI bots' })).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Security' }));
     expect(screen.getByRole('group', { name: 'Quick switches' })).toBeInTheDocument();
   });
