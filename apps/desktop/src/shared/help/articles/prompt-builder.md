@@ -9,7 +9,7 @@ route: /prompt-builder
 
 Prompt Builder helps you write good prompts for AI coding agents such as Claude Code, Codex or Gemini. You describe what you want in plain words (in any language, by typing or by voice), pick the kind of task and which agent will receive it, and Runova asks your AI provider (or your default AI CLI) to write a structured prompt. You can then copy it, send it to a terminal, save it as a project draft, or schedule it to run later.
 
-Prompt Builder needs an AI provider (OpenAI, Gemini or Ollama) to write prompts, see [AI providers](ai-providers.md), or an installed AI CLI if you pick **Default CLI** as the Prompt Builder provider (see below). It also has a smaller version, the **Build Prompt** dialog, that works on one project at a time (described below).
+Prompt Builder needs an AI provider (OpenAI, Gemini or Ollama) to write prompts, see [AI providers](ai-providers.md), or an installed AI CLI if you pick the **Default CLI** tile in Settings (see below). It also has a smaller version, the **Build Prompt** dialog, that works on one project at a time (described below).
 
 ## Where to find it
 
@@ -36,7 +36,7 @@ The request box has the writing check, so spelling and grammar issues are underl
 
 First your request is translated to English, whatever language you wrote it in. Then the prompt is written for the type and target you chose. The result appears in the **Generated prompt** editor on the right, and is added to your history.
 
-Who writes it depends on **Settings**, **AI**, **Providers**, **Prompt Builder provider**:
+Who writes it depends on the **Prompt Builder writes with** tiles in **Settings**, **AI**, **Providers**:
 
 - **OpenAI**, **Gemini** or **Ollama** (OpenAI is the default): that provider, with its key and model.
 - **Default CLI**: your default AI CLI (**Settings**, **Agents**, **Default CLI**, or the first installed one) writes it with the model it is set up with. No API key is needed, but the CLI has to be installed and signed in (see [AI CLI Manager](cli-manager.md)). A CLI can take longer than an API call, and it is stopped after 5 minutes.
@@ -138,7 +138,7 @@ The dialog remembers each project's request, type, target and result separately.
 1. Pick the **Type** and **Target** at the top. The target starts as the project's own agent.
 2. Write your request in **Your request**. The counter shows the number of characters. Click **Dictate** to speak it. The small chip next to it (**EN**, **FA** and so on) is the language Dictate listens for; click it to switch.
    - To skip Generate and Translate entirely, click **Speak prompt** above **Generated prompt** instead. Speak in English, and your words go straight into the result box exactly as you said them, ready to copy or run.
-3. Click **Generate prompt**. It is written by your AI provider or your default CLI, whichever **Prompt Builder provider** in Settings says (see [What Generate Prompt does](#what-generate-prompt-does)). If you wrote Persian, the dialog notes that the prompt is still written in English. **Translate** copies your request into English without writing a prompt.
+3. Click **Generate prompt**. It is written by your AI provider or your default CLI, whichever the **Prompt Builder writes with** tiles in Settings say (see [What Generate Prompt does](#what-generate-prompt-does)). If you wrote Persian, the dialog notes that the prompt is still written in English. **Translate** copies your request into English without writing a prompt.
 4. The result appears under **Generated prompt**, where you can still edit it. **Copy** copies it. While a request runs there is a **Cancel** button.
 
 Closing the dialog does not stop a running Generate, Translate or sizing. It carries on in the background and a message such as "Prompt for <project> is ready." tells you when it is done.

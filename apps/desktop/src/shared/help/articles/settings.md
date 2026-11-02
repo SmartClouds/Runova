@@ -159,7 +159,7 @@ The **AI** tab has API keys, local models, voice input, the Help search model an
 
 ### Providers
 
-**Providers** holds the OpenAI key and model, the Gemini key and model, the Ollama server URL, model, context length and keep-alive, and the **Prompt Builder provider** (OpenAI, Gemini or Ollama). Each key shows a **Key set** or **No key** badge. Ollama has a **Test connection** button that shows **Connected** with the version, or **Not reachable**. This card waits for **Save changes**. The step-by-step setup is in [AI providers](ai-providers.md).
+**Providers** starts with **Prompt Builder writes with**, a row of tiles (OpenAI, Gemini, Ollama, Default CLI) that picks what writes your prompts, each with a line saying whether it is ready. Below it, **Connections** has a tab per provider: the OpenAI key and model, the Gemini key and model, and the Ollama server URL and model, with context length and keep-alive under **Advanced**. Ollama has a **Test connection** button that shows **Connected** with the version, or **Not reachable**. This card waits for **Save changes**. The step-by-step setup is in [AI providers](ai-providers.md).
 
 ### Voice input
 

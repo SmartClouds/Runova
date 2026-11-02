@@ -1082,21 +1082,23 @@ describe('SettingsPage help search', () => {
 });
 
 describe('SettingsPage Prompt Builder provider', () => {
-  const picker = () => screen.getByRole('combobox', { name: 'Prompt Builder provider' });
+  const tile = (name: string) => screen.getByRole('radio', { name });
 
   async function openProviders(user: UserEvent): Promise<void> {
     await user.type(screen.getByLabelText('Search settings'), 'prompt builder provider');
-    await waitFor(() => expect(picker()).toBeInTheDocument());
+    await waitFor(() => expect(tile('OpenAI')).toBeInTheDocument());
   }
 
-  it('shows Default CLI in the same picker as the API providers once it was saved', async () => {
+  it('shows Default CLI as one of the tiles, picked once it was saved', async () => {
     const { user } = renderSettings({
       'settings.get': { ...settings, promptBuilderEngine: 'cli' },
     });
 
     await openProviders(user);
 
-    expect(picker()).toHaveTextContent('Default CLI');
+    expect(tile('Default CLI')).toHaveAttribute('aria-checked', 'true');
+    expect(tile('OpenAI')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('button', { name: 'Change default CLI' })).toBeInTheDocument();
   });
 
   it('saves Default CLI and keeps the API provider the other features use', async () => {
@@ -1109,8 +1111,7 @@ describe('SettingsPage Prompt Builder provider', () => {
     });
     await openProviders(user);
 
-    await user.click(picker());
-    await user.click(await screen.findByRole('option', { name: 'Default CLI' }));
+    await user.click(tile('Default CLI'));
     await user.click(await screen.findByRole('button', { name: /Save changes/ }));
 
     await waitFor(() =>
@@ -1126,8 +1127,7 @@ describe('SettingsPage Prompt Builder provider', () => {
     });
     await openProviders(user);
 
-    await user.click(picker());
-    await user.click(await screen.findByRole('option', { name: 'Ollama' }));
+    await user.click(tile('Ollama'));
     await user.click(await screen.findByRole('button', { name: /Save changes/ }));
 
     await waitFor(() =>
@@ -1138,6 +1138,69 @@ describe('SettingsPage Prompt Builder provider', () => {
         }),
       ),
     );
+  });
+
+  it('says a picked provider has no key and takes the user to the key field', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderProvider: 'openai', openaiApiKey: null },
+    });
+    await openProviders(user);
+    expect(screen.getByRole('alert')).toHaveTextContent('Generate Prompt needs an API key for OpenAI');
+
+    await user.click(screen.getByRole('tab', { name: /Gemini/ }));
+    await user.click(screen.getByRole('button', { name: 'Add OpenAI key' }));
+
+    expect(screen.getByRole('tab', { name: /OpenAI/ })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(screen.getByLabelText('API key')).toHaveFocus());
+  });
+
+  it('has no warning once the picked provider has a key', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderProvider: 'openai', openaiApiKey: 'sk-test' },
+    });
+
+    await openProviders(user);
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(tile('OpenAI')).toHaveTextContent('Key set');
+  });
+
+  it('opens on the connection of the provider Prompt Builder uses', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderProvider: 'gemini' },
+    });
+
+    await openProviders(user);
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Gemini/ })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(screen.getByPlaceholderText('AIza…')).toBeInTheDocument();
+  });
+
+  it('keeps the Ollama tuning folded away until it holds something', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderProvider: 'ollama' },
+    });
+    await openProviders(user);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Ollama/ })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(screen.queryByLabelText('Context length')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Advanced/ }));
+
+    expect(screen.getByLabelText('Context length')).toBeInTheDocument();
+  });
+
+  it('shows the Ollama tuning straight away when a context length was saved', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderProvider: 'ollama', ollamaContextLength: 8192 },
+    });
+
+    await openProviders(user);
+
+    expect(await screen.findByLabelText('Context length')).toHaveValue('8192');
   });
 });
 

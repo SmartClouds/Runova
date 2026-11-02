@@ -33,6 +33,7 @@ import { IdleMinutesInput } from '@/components/dashboard/IdleMinutesInput';
 import {
   Bell,
   Blocks,
+  ChevronDown,
   CircleQuestion,
   Clapperboard,
   Clock,
@@ -75,6 +76,15 @@ import { SECTION_HEADING } from '@/components/pageKit';
 import { CompanionSettings } from '@/components/pet/CompanionSettings';
 import { AgentTabViewSettings } from '@/components/settings/AgentTabViewSettings';
 import { AndroidSdkSettings } from '@/components/settings/AndroidSdkSettings';
+import {
+  LabelRow,
+  PROVIDER_LABELS,
+  type PromptWriter,
+  PromptWriterPicker,
+  type ProviderStatus,
+  ProviderTabLabel,
+  WriterNotice,
+} from '@/components/settings/aiProviders';
 import { BackupEnvironmentsPasswordDialog } from '@/components/settings/BackupEnvironmentsPasswordDialog';
 import { BlueprintPresetSettings } from '@/components/settings/BlueprintPresetSettings';
 import { CiAutoFixSettings } from '@/components/settings/CiAutoFixSettings';
@@ -100,6 +110,7 @@ import { Label } from '@/components/ui/label';
 import { SecretInput } from '@/components/ui/secret-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MULTILINE_FIELD_RADIUS } from '@/components/ui/textarea';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { VaultSettings } from '@/components/vault/VaultSettings';
@@ -122,21 +133,8 @@ import { useTerminalAppearanceStore } from '@/stores/terminalAppearanceStore';
 import { type ResolvedTheme, themeClassName, useThemeStore } from '@/stores/themeStore';
 import { openUpdateDialog, useUpdateStore } from '@/stores/updateStore';
 
-/**
- * One picker for two settings: an API provider sets `promptBuilderProvider`, and Default CLI
- * flips `promptBuilderEngine` while leaving the provider as it was, since other AI features still
- * read the provider and need a real one.
- */
-const PROMPT_BUILDER_CLI = 'cli';
-const PROMPT_BUILDER_PROVIDER_OPTIONS: {
-  value: AiProvider | typeof PROMPT_BUILDER_CLI;
-  label: string;
-}[] = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: PROMPT_BUILDER_CLI, label: 'Default CLI' },
-];
+const KEEP_ALIVE_HINT =
+  'How long Ollama holds the model after a request (keep_alive): "5m", "1h", "0" to free it right away, "-1" to keep it loaded.';
 
 // No auto-detect: the local Whisper runtime cannot detect a language and quietly assumes English.
 const SPEECH_LANGUAGE_OPTIONS = SPEECH_LANGUAGES.map((lang) => ({
@@ -1055,6 +1053,8 @@ export default function SettingsPage(): React.JSX.Element {
   const [promptBuilderEngine, setPromptBuilderEngine] =
     useState<AppSettings['promptBuilderEngine']>('provider');
   const [aiDirty, setAiDirty] = useState(false);
+  const [providerTab, setProviderTab] = useState<AiProvider>('openai');
+  const [ollamaAdvancedOpen, setOllamaAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (!aiDirty && settingsQuery.data) {
@@ -1074,6 +1074,20 @@ export default function SettingsPage(): React.JSX.Element {
       setPromptBuilderEngine(settingsQuery.data.promptBuilderEngine ?? 'provider');
     }
   }, [settingsQuery.data, aiDirty]);
+
+  // The card opens on the provider Prompt Builder uses, once, so a later save doesn't yank the
+  // tab away from the one being edited.
+  const openedProviderTab = useRef(false);
+  useEffect(() => {
+    if (openedProviderTab.current || !settingsQuery.data) return;
+    openedProviderTab.current = true;
+    setProviderTab(settingsQuery.data.promptBuilderProvider);
+    // Advanced starts open when it holds something other than the defaults.
+    const keepAlive = settingsQuery.data.ollamaKeepAlive?.trim();
+    if (settingsQuery.data.ollamaContextLength || (keepAlive && keepAlive !== '5m')) {
+      setOllamaAdvancedOpen(true);
+    }
+  }, [settingsQuery.data]);
 
   // Typing in the URL field shouldn't fire a request per keystroke.
   useEffect(() => {
@@ -1098,6 +1112,94 @@ export default function SettingsPage(): React.JSX.Element {
   const parsedContext = Number.parseInt(ollamaContextLength.trim(), 10);
   const parsedOllamaContext =
     Number.isFinite(parsedContext) && parsedContext > 0 ? parsedContext : null;
+
+  const defaultCliName = CLI_REGISTRY.find((cli) => cli.id === defaultCliId)?.name ?? null;
+  const promptWriter: PromptWriter = promptBuilderEngine === 'cli' ? 'cli' : promptBuilderProvider;
+  const ollamaModelCount = ollamaModelsQuery.data?.length;
+  const ollamaUnreachable = ollamaTest ? !ollamaTest.ok : ollamaModelsQuery.isError;
+  // A missing key is only a problem for the provider Prompt Builder is set to, so only that one
+  // turns amber, matching the notice under the tiles.
+  const keyStatus = (provider: AiProvider, key: string): ProviderStatus =>
+    key.trim()
+      ? { tone: 'ready', label: 'Key set' }
+      : { tone: promptWriter === provider ? 'warning' : 'muted', label: 'No key' };
+  const writerStatuses: Record<PromptWriter, ProviderStatus> = {
+    openai: keyStatus('openai', openaiApiKey),
+    gemini: keyStatus('gemini', geminiApiKey),
+    ollama: ollamaUnreachable
+      ? { tone: 'warning', label: 'Not reachable' }
+      : ollamaModelCount === undefined
+        ? ollamaModelsQuery.isFetching
+          ? { tone: 'checking', label: 'Checking…' }
+          : { tone: 'muted', label: 'Not checked' }
+        : ollamaModelCount === 0
+          ? { tone: 'warning', label: 'No models installed' }
+          : ollamaModel.trim()
+            ? { tone: 'ready', label: ollamaModel }
+            : { tone: 'muted', label: 'No model picked' },
+    cli: defaultCliName
+      ? { tone: 'ready', label: defaultCliName }
+      : { tone: 'muted', label: 'First installed CLI' },
+  };
+
+  /** Shows a provider's connection and puts the cursor where it needs input. */
+  function openConnection(provider: AiProvider, focusId?: string): void {
+    setProviderTab(provider);
+    if (focusId) requestAnimationFrame(() => document.getElementById(focusId)?.focus());
+  }
+
+  // What stands between the chosen option and a working Generate, with the fix one click away.
+  let writerNotice: ReactNode = null;
+  if (promptWriter === 'cli') {
+    writerNotice = (
+      <WriterNotice
+        tone="info"
+        action={
+          <Button variant="soft" size="sm" onClick={() => selectTab('agents')}>
+            Change default CLI
+          </Button>
+        }
+      >
+        {defaultCliName ?? 'The first installed AI CLI'} writes the prompt, with the model it is set
+        up with. No API key needed, but the CLI has to be installed and signed in.
+      </WriterNotice>
+    );
+  } else if (promptWriter !== 'ollama' && writerStatuses[promptWriter].tone !== 'ready') {
+    const name = PROVIDER_LABELS[promptWriter];
+    writerNotice = (
+      <WriterNotice
+        tone="warning"
+        action={
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => openConnection(promptWriter, `${promptWriter}-api-key`)}
+          >
+            Add {name} key
+          </Button>
+        }
+      >
+        Generate Prompt needs an API key for {name}. Add one below, or pick another option.
+      </WriterNotice>
+    );
+  } else if (promptWriter === 'ollama' && writerStatuses.ollama.tone !== 'ready') {
+    writerNotice = (
+      <WriterNotice
+        tone="warning"
+        action={
+          <Button variant="soft" size="sm" onClick={() => openConnection('ollama')}>
+            Open Ollama settings
+          </Button>
+        }
+      >
+        {ollamaUnreachable
+          ? `Ollama isn't answering at ${ollamaBaseUrl.trim() || 'http://localhost:11434'}. Start it, or pick another option.`
+          : ollamaModelCount === 0
+            ? 'Ollama has no models yet. Pull one with "ollama pull", then refresh the list below.'
+            : 'Pick an Ollama model below so Generate Prompt knows which one to use.'}
+      </WriterNotice>
+    );
+  }
 
   async function handleTestOllama(): Promise<void> {
     setTestingOllama(true);
@@ -2211,277 +2313,285 @@ export default function SettingsPage(): React.JSX.Element {
                   <SettingsCard
                     icon={MessageSquare}
                     title="Providers"
-                    description="Keys and models used by Ask AI and Prompt Builder."
+                    description="Keys and models for Ask AI, Prompt Builder and the other AI features."
                     dirty={aiDirty}
                   >
-                    <div className="space-y-5">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            OpenAI
+                    <div className="space-y-6">
+                      <section className="space-y-3">
+                        <div>
+                          <p className="text-sm font-medium">Prompt Builder writes with</p>
+                          <p className="text-xs text-muted-foreground">
+                            Generate Prompt sends your request here, on the Prompt Builder page and
+                            in the Build Prompt dialog.
                           </p>
-                          <Badge
-                            variant={openaiApiKey.trim() ? 'success' : 'secondary'}
-                            className="font-normal"
-                          >
-                            {openaiApiKey.trim() ? 'Key set' : 'No key'}
-                          </Badge>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <Field
-                            label="API key"
-                            htmlFor="openai-api-key"
-                            hint={
-                              <>
-                                Create one at{' '}
-                                <ExternalLinkButton href="https://platform.openai.com/api-keys">
-                                  platform.openai.com/api-keys
-                                </ExternalLinkButton>
-                                .
-                              </>
+                        <PromptWriterPicker
+                          value={promptWriter}
+                          onChange={(next) => {
+                            if (next === 'cli') {
+                              setPromptBuilderEngine('cli');
+                            } else {
+                              setPromptBuilderEngine('provider');
+                              setPromptBuilderProvider(next);
+                              setProviderTab(next);
                             }
-                            className="sm:col-span-2"
-                          >
-                            <SecretInput
-                              id="openai-api-key"
-                              value={openaiApiKey}
-                              onChange={(value) => {
-                                setOpenaiApiKey(value);
-                                setAiDirty(true);
-                              }}
-                              placeholder="sk-…"
-                            />
-                          </Field>
-                          <Field label="Default model" htmlFor="openai-model">
-                            <Input
-                              id="openai-model"
-                              value={openaiModel}
-                              onChange={(event) => {
-                                setOpenaiModel(event.target.value);
-                                setAiDirty(true);
-                              }}
-                              placeholder={DEFAULT_OPENAI_API_MODEL}
-                              className="font-mono"
-                              spellCheck={false}
-                            />
-                          </Field>
-                        </div>
-                      </div>
+                            setAiDirty(true);
+                          }}
+                          statuses={writerStatuses}
+                          cliId={defaultCliId}
+                        />
+                        {writerNotice}
+                      </section>
 
-                      <div className="space-y-3 border-t border-border/60 pt-5">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Gemini
+                      <section className="space-y-4 border-t border-border/60 pt-5">
+                        <div>
+                          <p className="text-sm font-medium">Connections</p>
+                          <p className="text-xs text-muted-foreground">
+                            Ask AI, SSH tasks and the other AI features use these too.
                           </p>
-                          <Badge
-                            variant={geminiApiKey.trim() ? 'success' : 'secondary'}
-                            className="font-normal"
-                          >
-                            {geminiApiKey.trim() ? 'Key set' : 'No key'}
-                          </Badge>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <Field
-                            label="API key"
-                            htmlFor="gemini-api-key"
-                            hint={
-                              <>
-                                Create one at{' '}
-                                <ExternalLinkButton href="https://aistudio.google.com/apikey">
-                                  aistudio.google.com/apikey
-                                </ExternalLinkButton>
-                                .
-                              </>
-                            }
-                            className="sm:col-span-2"
-                          >
-                            <SecretInput
-                              id="gemini-api-key"
-                              value={geminiApiKey}
-                              onChange={(value) => {
-                                setGeminiApiKey(value);
-                                setAiDirty(true);
-                              }}
-                              placeholder="AIza…"
-                            />
-                          </Field>
-                          <Field label="Default model" htmlFor="gemini-model">
-                            <Input
-                              id="gemini-model"
-                              value={geminiModel}
-                              onChange={(event) => {
-                                setGeminiModel(event.target.value);
-                                setAiDirty(true);
-                              }}
-                              placeholder={DEFAULT_GEMINI_API_MODEL}
-                              className="font-mono"
-                              spellCheck={false}
-                            />
-                          </Field>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 border-t border-border/60 pt-5">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Ollama
-                          </p>
-                          {ollamaTest ? (
-                            <Badge
-                              variant={ollamaTest.ok ? 'success' : 'destructive'}
-                              className="font-normal"
-                            >
-                              {ollamaTest.ok
-                                ? ollamaTest.version
-                                  ? `Connected · ${ollamaTest.version}`
-                                  : 'Connected'
-                                : 'Not reachable'}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <Field
-                          label="Server URL"
-                          htmlFor="ollama-base-url"
-                          hint={
-                            <>
-                              Address of a running{' '}
-                              <ExternalLinkButton href="https://ollama.com">
-                                Ollama
-                              </ExternalLinkButton>{' '}
-                              instance. Leave the default if it runs on this machine.
-                            </>
-                          }
+                        <Tabs
+                          value={providerTab}
+                          onValueChange={(value) => setProviderTab(value as AiProvider)}
                         >
-                          <div className="flex max-w-xl items-center gap-2">
-                            <Input
-                              id="ollama-base-url"
-                              value={ollamaBaseUrl}
-                              onChange={(event) => {
-                                setOllamaBaseUrl(event.target.value);
-                                setOllamaTest(null);
-                                setAiDirty(true);
-                              }}
-                              placeholder="http://localhost:11434"
-                              className="font-mono"
-                              spellCheck={false}
-                            />
-                            <Button
-                              variant="soft"
-                              className="h-9 shrink-0"
-                              disabled={testingOllama}
-                              onClick={() => void handleTestOllama()}
-                            >
-                              {testingOllama ? 'Testing…' : 'Test connection'}
-                            </Button>
-                          </div>
-                        </Field>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <Field
-                            label="Default model"
-                            hint="Picked first on the Ask AI page and used by Prompt Builder. The list comes from the server above."
-                          >
-                            <div className="flex items-center gap-2">
-                              <Combobox
-                                className="min-w-0 flex-1"
-                                value={ollamaModel}
-                                onChange={(value) => {
-                                  setOllamaModel(value);
-                                  setAiDirty(true);
-                                }}
-                                options={ollamaModelOptions}
-                                placeholder={
-                                  ollamaModelsQuery.isFetching
-                                    ? 'Loading models…'
-                                    : 'Choose a model'
-                                }
-                                emptyText="No models found. Is Ollama running?"
-                                clearable
-                              />
-                              <SimpleTooltip label="Refresh model list" wrapTrigger>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className="shrink-0"
-                                  aria-label="Refresh model list"
-                                  disabled={ollamaModelsQuery.isFetching}
-                                  onClick={() => void ollamaModelsQuery.refetch()}
-                                >
-                                  <RefreshCw className="h-3.5 w-3.5" />
-                                </Button>
-                              </SimpleTooltip>
+                          <TabsList aria-label="Provider connection">
+                            <TabsTrigger value="openai">
+                              <ProviderTabLabel provider="openai" status={writerStatuses.openai} />
+                            </TabsTrigger>
+                            <TabsTrigger value="gemini">
+                              <ProviderTabLabel provider="gemini" status={writerStatuses.gemini} />
+                            </TabsTrigger>
+                            <TabsTrigger value="ollama">
+                              <ProviderTabLabel provider="ollama" status={writerStatuses.ollama} />
+                            </TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="openai" className="pt-4">
+                            <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                              <div className="space-y-1.5">
+                                <LabelRow
+                                  label="API key"
+                                  htmlFor="openai-api-key"
+                                  linkLabel="Get a key"
+                                  href="https://platform.openai.com/api-keys"
+                                />
+                                <SecretInput
+                                  id="openai-api-key"
+                                  value={openaiApiKey}
+                                  onChange={(value) => {
+                                    setOpenaiApiKey(value);
+                                    setAiDirty(true);
+                                  }}
+                                  placeholder="sk-…"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <LabelRow label="Default model" htmlFor="openai-model" />
+                                <Input
+                                  id="openai-model"
+                                  value={openaiModel}
+                                  onChange={(event) => {
+                                    setOpenaiModel(event.target.value);
+                                    setAiDirty(true);
+                                  }}
+                                  placeholder={DEFAULT_OPENAI_API_MODEL}
+                                  className="font-mono"
+                                  spellCheck={false}
+                                />
+                              </div>
                             </div>
-                          </Field>
-                          <Field
-                            label="Context length"
-                            htmlFor="ollama-context-length"
-                            hint="Tokens the model keeps in its window (num_ctx). Leave empty to use whatever the model ships with. Bigger values need more RAM or VRAM."
-                          >
-                            <Input
-                              id="ollama-context-length"
-                              inputMode="numeric"
-                              value={ollamaContextLength}
-                              onChange={(event) => {
-                                setOllamaContextLength(event.target.value.replace(/[^0-9]/g, ''));
-                                setAiDirty(true);
-                              }}
-                              placeholder="Model default (e.g. 8192)"
-                              className="font-mono"
-                              spellCheck={false}
-                            />
-                          </Field>
-                          <Field
-                            label="Keep model in memory"
-                            htmlFor="ollama-keep-alive"
-                            hint='How long Ollama holds the model in RAM after a request (keep_alive). Use "5m", "1h", "0" to free it right away, or "-1" to keep it loaded.'
-                          >
-                            <Input
-                              id="ollama-keep-alive"
-                              value={ollamaKeepAlive}
-                              onChange={(event) => {
-                                setOllamaKeepAlive(event.target.value);
-                                setAiDirty(true);
-                              }}
-                              placeholder="5m"
-                              className="font-mono"
-                              spellCheck={false}
-                            />
-                          </Field>
-                        </div>
-                      </div>
+                            <p className="mt-3 text-xs text-muted-foreground">
+                              The key stays on this machine and is only sent to OpenAI.
+                            </p>
+                          </TabsContent>
 
-                      <div className="border-t border-border/60 pt-5">
-                        <Field
-                          label="Prompt Builder provider"
-                          hint={
-                            promptBuilderEngine === 'cli'
-                              ? `Generate Prompt asks ${
-                                  CLI_REGISTRY.find((cli) => cli.id === defaultCliId)?.name ??
-                                  'the first installed AI CLI'
-                                } to write the prompt, with the model it is set up with. Change it under Agents, Default CLI. No API key needed, but the CLI has to be installed and signed in.`
-                              : 'Used by Generate Prompt. Uses the key and model for that provider above.'
-                          }
-                        >
-                          <Combobox
-                            ariaLabel="Prompt Builder provider"
-                            className="w-40"
-                            value={
-                              promptBuilderEngine === 'cli'
-                                ? PROMPT_BUILDER_CLI
-                                : promptBuilderProvider
-                            }
-                            onChange={(value) => {
-                              if (value === PROMPT_BUILDER_CLI) {
-                                setPromptBuilderEngine('cli');
-                              } else {
-                                setPromptBuilderEngine('provider');
-                                setPromptBuilderProvider(value as AiProvider);
-                              }
-                              setAiDirty(true);
-                            }}
-                            options={PROMPT_BUILDER_PROVIDER_OPTIONS}
-                          />
-                        </Field>
-                      </div>
+                          <TabsContent value="gemini" className="pt-4">
+                            <div className="grid gap-4 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                              <div className="space-y-1.5">
+                                <LabelRow
+                                  label="API key"
+                                  htmlFor="gemini-api-key"
+                                  linkLabel="Get a key"
+                                  href="https://aistudio.google.com/apikey"
+                                />
+                                <SecretInput
+                                  id="gemini-api-key"
+                                  value={geminiApiKey}
+                                  onChange={(value) => {
+                                    setGeminiApiKey(value);
+                                    setAiDirty(true);
+                                  }}
+                                  placeholder="AIza…"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <LabelRow label="Default model" htmlFor="gemini-model" />
+                                <Input
+                                  id="gemini-model"
+                                  value={geminiModel}
+                                  onChange={(event) => {
+                                    setGeminiModel(event.target.value);
+                                    setAiDirty(true);
+                                  }}
+                                  placeholder={DEFAULT_GEMINI_API_MODEL}
+                                  className="font-mono"
+                                  spellCheck={false}
+                                />
+                              </div>
+                            </div>
+                            <p className="mt-3 text-xs text-muted-foreground">
+                              The key stays on this machine and is only sent to Google.
+                            </p>
+                          </TabsContent>
+
+                          <TabsContent value="ollama" className="space-y-4 pt-4">
+                            <div className="space-y-1.5">
+                              <LabelRow
+                                label="Server URL"
+                                htmlFor="ollama-base-url"
+                                linkLabel="Get Ollama"
+                                href="https://ollama.com"
+                              />
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id="ollama-base-url"
+                                  value={ollamaBaseUrl}
+                                  onChange={(event) => {
+                                    setOllamaBaseUrl(event.target.value);
+                                    setOllamaTest(null);
+                                    setAiDirty(true);
+                                  }}
+                                  placeholder="http://localhost:11434"
+                                  className="font-mono"
+                                  spellCheck={false}
+                                />
+                                <Button
+                                  variant="soft"
+                                  className="h-9 shrink-0"
+                                  disabled={testingOllama}
+                                  onClick={() => void handleTestOllama()}
+                                >
+                                  {testingOllama ? 'Testing…' : 'Test connection'}
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {ollamaTest?.ok
+                                  ? `Connected${ollamaTest.version ? ` to Ollama ${ollamaTest.version}` : ''}, ${ollamaTest.modelCount ?? 0} model${ollamaTest.modelCount === 1 ? '' : 's'} installed.`
+                                  : 'Leave the default if Ollama runs on this machine.'}
+                              </p>
+                            </div>
+
+                            <Field
+                              label="Default model"
+                              hint="Picked first on the Ask AI page and used by Prompt Builder."
+                            >
+                              <div className="flex max-w-md items-center gap-2">
+                                <Combobox
+                                  ariaLabel="Ollama model"
+                                  className="min-w-0 flex-1"
+                                  value={ollamaModel}
+                                  onChange={(value) => {
+                                    setOllamaModel(value);
+                                    setAiDirty(true);
+                                  }}
+                                  options={ollamaModelOptions}
+                                  placeholder={
+                                    ollamaModelsQuery.isFetching
+                                      ? 'Loading models…'
+                                      : 'Choose a model'
+                                  }
+                                  emptyText="No models found. Is Ollama running?"
+                                  clearable
+                                />
+                                <SimpleTooltip label="Refresh model list" wrapTrigger>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    className="shrink-0"
+                                    aria-label="Refresh model list"
+                                    disabled={ollamaModelsQuery.isFetching}
+                                    onClick={() => void ollamaModelsQuery.refetch()}
+                                  >
+                                    <RefreshCw
+                                      className={cn(
+                                        'h-3.5 w-3.5',
+                                        ollamaModelsQuery.isFetching && 'animate-spin',
+                                      )}
+                                    />
+                                  </Button>
+                                </SimpleTooltip>
+                              </div>
+                            </Field>
+
+                            <div className="rounded-lg border border-border/60">
+                              <button
+                                type="button"
+                                aria-expanded={ollamaAdvancedOpen}
+                                aria-controls="ollama-advanced"
+                                onClick={() => setOllamaAdvancedOpen((open) => !open)}
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                              >
+                                <span>
+                                  <span className="block text-sm font-medium">Advanced</span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    Context length and how long the model stays in memory.
+                                  </span>
+                                </span>
+                                <ChevronDown
+                                  className={cn(
+                                    'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+                                    ollamaAdvancedOpen && 'rotate-180',
+                                  )}
+                                />
+                              </button>
+                              {ollamaAdvancedOpen ? (
+                                <div
+                                  id="ollama-advanced"
+                                  className="grid gap-4 border-t border-border/60 px-3 py-3 sm:grid-cols-2"
+                                >
+                                  <Field
+                                    label="Context length"
+                                    htmlFor="ollama-context-length"
+                                    hint="Tokens the model keeps in its window (num_ctx). Empty uses the model's own. Bigger needs more RAM or VRAM."
+                                  >
+                                    <Input
+                                      id="ollama-context-length"
+                                      inputMode="numeric"
+                                      value={ollamaContextLength}
+                                      onChange={(event) => {
+                                        setOllamaContextLength(
+                                          event.target.value.replace(/[^0-9]/g, ''),
+                                        );
+                                        setAiDirty(true);
+                                      }}
+                                      placeholder="Model default (e.g. 8192)"
+                                      className="font-mono"
+                                      spellCheck={false}
+                                    />
+                                  </Field>
+                                  <Field
+                                    label="Keep model in memory"
+                                    htmlFor="ollama-keep-alive"
+                                    hint={KEEP_ALIVE_HINT}
+                                  >
+                                    <Input
+                                      id="ollama-keep-alive"
+                                      value={ollamaKeepAlive}
+                                      onChange={(event) => {
+                                        setOllamaKeepAlive(event.target.value);
+                                        setAiDirty(true);
+                                      }}
+                                      placeholder="5m"
+                                      className="font-mono"
+                                      spellCheck={false}
+                                    />
+                                  </Field>
+                                </div>
+                              ) : null}
+                            </div>
+                          </TabsContent>
+                        </Tabs>
+                      </section>
                     </div>
                   </SettingsCard>
                 )}

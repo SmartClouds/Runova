@@ -97,7 +97,7 @@ Some engines have limits:
 
 ## Ask AI
 
-Click **Ask AI** to open a panel beside the tables. Ask in plain words, like "orders over 100 from last week, newest first", and the AI writes the query with a short explanation. It uses the **Prompt Builder provider** from **Settings**, **AI**, **Providers** (see [AI providers](ai-providers.md)).
+Click **Ask AI** to open a panel beside the tables. Ask in plain words, like "orders over 100 from last week, newest first", and the AI writes the query with a short explanation. It uses the API provider picked under **Prompt Builder writes with** in **Settings**, **AI**, **Providers** (see [AI providers](ai-providers.md)).
 
 - The AI sees the tables and columns of the database you are in. It sees rows only when you turn on **Let the AI see a few sample rows**.
 - **Run** runs a query that only reads right away, and shows the rows in the panel. A query that changes the database waits until you click **Review done, run it**.

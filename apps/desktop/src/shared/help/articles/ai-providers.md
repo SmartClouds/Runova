@@ -10,7 +10,7 @@ AI providers are the three services Runova can call directly for a quick answer:
 
 ## Where to find it
 
-Click **Settings** in the sidebar, then open the **AI** tab. The first card is **Providers** ("Keys and models used by Ask AI and Prompt Builder"). The **Voice input**, **Writing check** and **Translation retries** cards sit below it, see [Writing, voice and translation](writing-voice-translation.md). You can also type openai, gemini or ollama in the Settings search box to jump to it.
+Click **Settings** in the sidebar, then open the **AI** tab. The first card is **Providers** ("Keys and models for Ask AI, Prompt Builder and the other AI features"). It has two parts: **Prompt Builder writes with** at the top, a row of tiles that picks what writes your prompts, and **Connections** below it, with a tab for each provider (**OpenAI**, **Gemini**, **Ollama**). A dot on each tab and a line on each tile tell you whether that provider is ready: green when it is set up, amber when the provider Prompt Builder uses still needs something, grey otherwise. The **Voice input**, **Writing check** and **Translation retries** cards sit below it, see [Writing, voice and translation](writing-voice-translation.md). You can also type openai, gemini or ollama in the Settings search box to jump to it.
 
 On Ask AI, the **Add API key** button next to the model picker opens Settings for you when the provider you chose has no key yet.
 
@@ -20,8 +20,8 @@ The **Providers** card does not save as you type. When you change a field, the S
 
 ## Set up OpenAI
 
-1. Create an API key at platform.openai.com/api-keys (the link under the field opens it).
-2. In **Settings**, **AI**, **Providers**, find the **OpenAI** block and paste the key into **API key** (it starts with `sk-`). The small badge next to the heading changes from **No key** to **Key set**.
+1. Create an API key at platform.openai.com/api-keys (**Get a key**, next to the **API key** label, opens it).
+2. In **Settings**, **AI**, **Providers**, open the **OpenAI** tab under **Connections** and paste the key into **API key** (it starts with `sk-`). The OpenAI tile changes from **No key** to **Key set**.
 3. Check **Default model**. It is pre-filled with the app's default OpenAI model. Type another model id if you want a different one.
 4. Click **Save changes**.
 
@@ -29,8 +29,8 @@ The **API key** field hides the key, with a button to show it. An empty key coun
 
 ## Set up Gemini
 
-1. Create a key at aistudio.google.com/apikey (the link under the field opens it).
-2. In the **Gemini** block of **Providers**, paste it into **API key** (it starts with `AIza`). The badge shows **Key set**.
+1. Create a key at aistudio.google.com/apikey (**Get a key**, next to the **API key** label, opens it).
+2. Open the **Gemini** tab under **Connections** and paste it into **API key** (it starts with `AIza`). The Gemini tile shows **Key set**.
 3. Check **Default model**. It is pre-filled with the app's default Gemini model. Type another model id if you prefer.
 4. Click **Save changes**.
 
@@ -40,10 +40,10 @@ Once a Gemini key is saved, the Ask AI page loads the list of Gemini models your
 
 Ollama runs models on your own computer (or on a server you control), so there is no API key and nothing leaves your network. Install Ollama from ollama.com and pull at least one model first (for example with `ollama pull <model>`).
 
-1. In the **Ollama** block of **Providers**, check **Server URL**. The default is `http://localhost:11434`, which is right when Ollama runs on this machine. If it runs elsewhere, type that address.
-2. Click **Test connection**. The badge next to **Ollama** turns to **Connected** (with the Ollama version) or **Not reachable**. A toast tells you how many models are installed. If Ollama answers but has no models, the toast suggests pulling one.
+1. Open the **Ollama** tab under **Connections** and check **Server URL**. The default is `http://localhost:11434`, which is right when Ollama runs on this machine. If it runs elsewhere, type that address.
+2. Click **Test connection**. The line under the address says **Connected** with the Ollama version and the number of installed models, or the Ollama tile turns to **Not reachable**. A toast tells you the same. If Ollama answers but has no models, the toast suggests pulling one.
 3. Open **Default model**. The list comes from the server. Use the refresh button beside it to reload the list after you pull a new model. You can clear the choice with the clear control.
-4. Optionally set **Context length** and **Keep model in memory** (explained below).
+4. Optionally open **Advanced** and set **Context length** and **Keep model in memory** (explained below). **Advanced** starts folded, and opens by itself when either one holds something other than the default.
 5. Click **Save changes**.
 
 ### Context length
@@ -60,9 +60,11 @@ You will see "Could not reach Ollama at <address>. Is it running?" Start Ollama,
 
 ## Choose which provider Prompt Builder uses
 
-At the bottom of the **Providers** card, **Prompt Builder provider** (OpenAI, Gemini, Ollama or Default CLI) decides which provider the other AI features use when they do not ask you. It uses the key and default model of that provider from the blocks above. The default is OpenAI.
+At the top of the **Providers** card, the **Prompt Builder writes with** tiles (OpenAI, Gemini, Ollama or Default CLI) decide what Generate Prompt uses, and the API provider you pick there is also the one the other AI features use when they do not ask you. It uses the key and default model of that provider from **Connections**. The default is OpenAI.
 
-The same picker also offers **Default CLI**. With it, Generate Prompt skips the providers and your default AI CLI writes the prompt instead, so no API key is needed. The other AI features keep using the API provider you picked last. See [Prompt Builder](prompt-builder.md).
+If the provider you pick is not ready, a note under the tiles says what is missing, with a button that takes you to it: **Add OpenAI key** or **Add Gemini key** opens that tab with the cursor in the key field, and for Ollama the note says whether the server is not answering, has no models, or has no model picked.
+
+The tiles also offer **Default CLI**. With it, Generate Prompt skips the providers and your default AI CLI writes the prompt instead, so no API key is needed. The other AI features keep using the API provider you picked last. See [Prompt Builder](prompt-builder.md).
 
 If that provider has no model set, features show "Set a <provider> model in Settings first." Ollama has no pre-filled model, so pick one in **Default model** before using it.
 
@@ -73,7 +75,7 @@ Ask AI is the exception. It has its own provider tabs and model picker, so you c
 | Feature | What it uses |
 | --- | --- |
 | [Ask AI](ask-ai.md) (page and popup) | The provider tab and model you pick in the chat. The first time, the model fields start from your Settings defaults. |
-| [Prompt Builder](prompt-builder.md) **Generate Prompt** (page and the Build Prompt dialog) | The **Prompt Builder provider** and its default model, or your default AI CLI when the picker is set to **Default CLI**. |
+| [Prompt Builder](prompt-builder.md) **Generate Prompt** (page and the Build Prompt dialog) | The **Prompt Builder provider** and its default model, or your default AI CLI when the **Default CLI** tile is picked. |
 | Project **Blueprint** (see [Projects](projects.md)) | The **Written by** choice **AI provider (Settings)**, which is the fallback when no suitable AI CLI is installed. |
 | Deploy **Assistant** | The AI choice **AI provider (Settings)** in its composer (selected by default). See [Deploy: Assistant and logs](deploy-assistant-logs.md). |
 | The **Ask AI** dialog on an SSH terminal and on a Remote Desktop session | The choice **AI provider (Settings)**. Remote Desktop needs a model that can see images, because it sends screenshots. See [Remote](remote.md) and [Remote Desktop](remote-desktop.md). |
