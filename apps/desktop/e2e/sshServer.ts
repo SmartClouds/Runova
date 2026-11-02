@@ -74,24 +74,36 @@ export function serverExec(
   ).trim();
 }
 
-/** Resolves once sshd answers with its version banner, which it only sends when it's ready. */
+/**
+ * Resolves once sshd answers with its version banner, which it only sends when it's ready.
+ *
+ * Before sshd listens in the container, Docker's port proxy still accepts the connection and then
+ * closes it cleanly, with no error and no timeout. A close without the banner is retried too:
+ * without that, one early try left this waiting forever, and a CI run sat out the whole 10 minute
+ * beforeAll timeout while the host was busy and the container slow to start.
+ */
 function waitForBanner(host: string, port: number, deadline: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const attempt = () => {
       const socket = connect({ host, port });
       socket.setTimeout(2000);
+      let settled = false;
       const retry = () => {
+        if (settled) return;
+        settled = true;
         socket.destroy();
         if (Date.now() > deadline) reject(new Error(`sshd on ${host}:${port} never became ready`));
         else setTimeout(attempt, 300);
       };
       socket.once('data', (chunk) => {
+        if (!chunk.toString().startsWith('SSH-')) return retry();
+        settled = true;
         socket.destroy();
-        if (chunk.toString().startsWith('SSH-')) resolve();
-        else retry();
+        resolve();
       });
       socket.once('error', retry);
       socket.once('timeout', retry);
+      socket.once('close', retry);
     };
     attempt();
   });
