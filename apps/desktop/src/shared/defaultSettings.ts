@@ -74,6 +74,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   geminiModel: DEFAULT_GEMINI_API_MODEL,
   helpEmbeddingModels: {},
   promptBuilderProvider: 'openai',
+  // Generate went through the API provider before the CLI option existed, so that stays the default.
+  promptBuilderEngine: 'provider',
   // Sizing right after Generate or Translate is what the dialog always did, so it stays on.
   promptBuilderAutoSize: true,
   dashboardChartOrder: [],

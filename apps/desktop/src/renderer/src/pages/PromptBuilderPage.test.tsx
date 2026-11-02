@@ -202,6 +202,26 @@ describe('PromptBuilderPage generating', () => {
     expect(bridge.ai.ask).not.toHaveBeenCalled();
   });
 
+  it('writes the prompt with the default CLI when that is the Prompt Builder provider', async () => {
+    const askCli = vi.fn(async () => ({ ok: true, text: 'Written by the CLI.', cliName: 'Codex' }));
+    const { user, bridge } = renderPage({
+      // No API model, which would stop the provider path before it starts.
+      'settings.get': { ...settings, openaiModel: '', promptBuilderEngine: 'cli' },
+      'ai.askCli': askCli,
+    });
+    await screen.findByRole('button', { name: /Generate Prompt/ });
+
+    await user.type(request(), 'add a login form');
+    await user.click(screen.getByRole('button', { name: /Generate Prompt/ }));
+
+    await waitFor(() => expect(output()).toHaveValue('Written by the CLI.'));
+    expect(askCli).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: expect.stringContaining('add a login form') }),
+    );
+    expect(bridge.ai.ask).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('shows the provider’s refusal instead of a blank output', async () => {
     const { user } = renderPage({
       'ai.ask': async () => ({ ok: false, error: 'Rate limit reached.' }),

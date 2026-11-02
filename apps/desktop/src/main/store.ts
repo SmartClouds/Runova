@@ -232,6 +232,7 @@ function withSettingsMigrations(settings: AppSettings): AppSettings {
     grammar: normalizeGrammarSettings(settings.grammar),
     proxy: normalizeProxySettings(settings.proxy),
     helpEmbeddingModels: normalizeHelpEmbeddingModels(settings.helpEmbeddingModels),
+    promptBuilderEngine: settings.promptBuilderEngine === 'cli' ? 'cli' : 'provider',
     promptBuilderAutoSize: settings.promptBuilderAutoSize !== false,
     desktopPetCustoms: customs,
     desktopPetCharacterId: normalizeDesktopPetId(

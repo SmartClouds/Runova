@@ -19,6 +19,8 @@ export interface PromptTask {
   id: string;
   /** Lets Clear or Cancel abort the request in the main process. */
   requestId?: string;
+  /** A generate sent to the default AI CLI, which is stopped through its own channel. */
+  viaCli?: boolean;
 }
 
 export type RunAnalysisStatus = 'idle' | 'analyzing' | 'ready' | 'error';
@@ -86,10 +88,12 @@ export function beginPromptTask(
   key: string,
   kind: PromptTaskKind,
   requestId?: string,
+  options: { viaCli?: boolean } = {},
 ): PromptTask | null {
   const { tasks, setTask } = usePromptJobsStore.getState();
   if (tasks[key]) return null;
   const task: PromptTask = { kind, id: crypto.randomUUID(), requestId };
+  if (options.viaCli) task.viaCli = true;
   setTask(key, task);
   return task;
 }
@@ -110,6 +114,7 @@ export function cancelPromptTask(key: string): void {
   usePromptJobsStore.getState().setTask(key, null);
   if (!task.requestId) return;
   if (task.kind === 'translate') void window.runova.translate.cancel(task.requestId);
+  else if (task.viaCli) void window.runova.ai.cancelAskCli(task.requestId);
   else void window.runova.ai.cancel(task.requestId);
 }
 

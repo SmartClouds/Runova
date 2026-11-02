@@ -102,6 +102,19 @@ describe('opening a project from the rail', () => {
     expect(navigate).toHaveBeenLastCalledWith('/workspace/p1');
   });
 
+  // The route changes in a transition, which a running test suite's updates keep restarting, so
+  // the workspace switches in the click instead of once the route lands. navigate is a mock here,
+  // so the route never does.
+  it('switches the workspace in the click, without waiting for the route', () => {
+    useWorkspaceStore.setState({ railProjectIds: ['p1', 'p2'], activeProjectId: 'p1' });
+    renderWithProviders(<ProjectRail projects={[project, other]} activeProjectId="p1" />, {
+      bridge: { 'worktrees.list': [] },
+    });
+
+    pressAndRelease(screen.getByRole('button', { name: 'Open Billing' }));
+    expect(useWorkspaceStore.getState().activeProjectId).toBe('p2');
+  });
+
   it('opens the project that is already showing, too', () => {
     renderRail('p1', []);
     pressAndRelease(screen.getByRole('button', { name: 'Open Runova' }));

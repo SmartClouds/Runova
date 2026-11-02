@@ -171,3 +171,64 @@ describe('Build Prompt dialog with Build Prompt sizing off', () => {
     );
   });
 });
+
+describe('Build Prompt dialog with Default CLI as the Prompt Builder provider', () => {
+  /** No API model at all, so only the CLI can answer. */
+  function renderCliDialog(askCli: (input: { prompt: string; requestId?: string }) => unknown) {
+    const ask = vi.fn(async () => ({ ok: true, text: 'from the API' }));
+    const assessRun = vi.fn(async () => ({ ok: true, assessment, cliName: 'Claude Code' }));
+    const view = renderWithProviders(
+      <ProjectPromptBuildDialog open onOpenChange={vi.fn()} projectId="p1" projectName="Demo" />,
+      {
+        bridge: {
+          'settings.get': {
+            ...settings,
+            openaiModel: '',
+            promptBuilderEngine: 'cli',
+            promptBuilderAutoSize: true,
+          },
+          'projects.list': [project],
+          'cli.detectAll': [],
+          'ai.ask': ask,
+          'ai.askCli': vi.fn(askCli),
+          'ai.cancelAskCli': vi.fn(async () => true),
+          'ai.assessRun': assessRun,
+        },
+      },
+    );
+    return { ...view, ask, assessRun };
+  }
+
+  it('writes the prompt with the default CLI, not the API provider, and sizes it', async () => {
+    const { user, bridge, ask, assessRun } = renderCliDialog(async () => ({
+      ok: true,
+      text: `  ${GENERATED}  `,
+      cliName: 'Claude Code',
+    }));
+    await user.type(requestBox(), 'Add a login form');
+
+    await user.click(generateButton());
+
+    await waitFor(() => expect(output()).toHaveValue(GENERATED));
+    const [input] = bridge.$fn('ai.askCli').mock.calls[0] as [Record<string, unknown>];
+    expect(input.prompt).toEqual(expect.stringContaining('Add a login form'));
+    // No CLI picked here, so the main process falls back to the default one.
+    expect(input.cliId).toBeUndefined();
+    expect(ask).not.toHaveBeenCalled();
+    await waitFor(() => expect(assessRun).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops the CLI run when Cancel is pressed', async () => {
+    const { user, bridge } = renderCliDialog(() => new Promise(() => undefined));
+    await user.type(requestBox(), 'Add a login form');
+    await user.click(generateButton());
+    await waitFor(() => expect(bridge.$fn('ai.askCli')).toHaveBeenCalledTimes(1));
+    const [input] = bridge.$fn('ai.askCli').mock.calls[0] as [{ requestId: string }];
+
+    await user.click(screen.getByRole('button', { name: /^Cancel/ }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('ai.cancelAskCli')).toHaveBeenCalledWith(input.requestId),
+    );
+  });
+});

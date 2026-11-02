@@ -662,6 +662,28 @@ describe('settings migrations', () => {
     expect((await store.getSettings()).promptBuilderAutoSize).toBe(false);
   });
 
+  it('generates prompts with the API provider for a profile that predates the CLI option', async () => {
+    userData.writeData('settings.json', { theme: 'dark' });
+    const { store, DEFAULT_SETTINGS } = await loadStore();
+
+    expect(DEFAULT_SETTINGS.promptBuilderEngine).toBe('provider');
+    expect((await store.getSettings()).promptBuilderEngine).toBe('provider');
+  });
+
+  it('keeps generating prompts with the CLI once that is picked', async () => {
+    userData.writeData('settings.json', { promptBuilderEngine: 'cli' });
+    const { store } = await loadStore();
+
+    expect((await store.getSettings()).promptBuilderEngine).toBe('cli');
+  });
+
+  it('falls back to the API provider for an unknown prompt engine', async () => {
+    userData.writeData('settings.json', { promptBuilderEngine: 'telepathy' });
+    const { store } = await loadStore();
+
+    expect((await store.getSettings()).promptBuilderEngine).toBe('provider');
+  });
+
   it('drops duplicate and non-string entries from the CLI order', async () => {
     userData.writeData('settings.json', { cliOrder: ['claude', 'claude', 7, 'codex'] });
     const { store } = await loadStore();

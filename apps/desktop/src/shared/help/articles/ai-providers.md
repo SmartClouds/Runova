@@ -60,7 +60,9 @@ You will see "Could not reach Ollama at <address>. Is it running?" Start Ollama,
 
 ## Choose which provider Prompt Builder uses
 
-At the bottom of the **Providers** card, **Prompt Builder provider** (OpenAI, Gemini or Ollama) decides which provider the other AI features use when they do not ask you. It uses the key and default model of that provider from the blocks above. The default is OpenAI.
+At the bottom of the **Providers** card, **Prompt Builder provider** (OpenAI, Gemini, Ollama or Default CLI) decides which provider the other AI features use when they do not ask you. It uses the key and default model of that provider from the blocks above. The default is OpenAI.
+
+The same picker also offers **Default CLI**. With it, Generate Prompt skips the providers and your default AI CLI writes the prompt instead, so no API key is needed. The other AI features keep using the API provider you picked last. See [Prompt Builder](prompt-builder.md).
 
 If that provider has no model set, features show "Set a <provider> model in Settings first." Ollama has no pre-filled model, so pick one in **Default model** before using it.
 
@@ -71,7 +73,7 @@ Ask AI is the exception. It has its own provider tabs and model picker, so you c
 | Feature | What it uses |
 | --- | --- |
 | [Ask AI](ask-ai.md) (page and popup) | The provider tab and model you pick in the chat. The first time, the model fields start from your Settings defaults. |
-| [Prompt Builder](prompt-builder.md) **Generate Prompt** (page and the Build Prompt dialog) | The **Prompt Builder provider** and its default model. |
+| [Prompt Builder](prompt-builder.md) **Generate Prompt** (page and the Build Prompt dialog) | The **Prompt Builder provider** and its default model, or your default AI CLI when the picker is set to **Default CLI**. |
 | Project **Blueprint** (see [Projects](projects.md)) | The **Written by** choice **AI provider (Settings)**, which is the fallback when no suitable AI CLI is installed. |
 | Deploy **Assistant** | The AI choice **AI provider (Settings)** in its composer (selected by default). See [Deploy: Assistant and logs](deploy-assistant-logs.md). |
 | The **Ask AI** dialog on an SSH terminal and on a Remote Desktop session | The choice **AI provider (Settings)**. Remote Desktop needs a model that can see images, because it sends screenshots. See [Remote](remote.md) and [Remote Desktop](remote-desktop.md). |

@@ -240,6 +240,21 @@ describe('askCli', () => {
     expect(run.mock.calls[0]?.[2]).toMatchObject({ runArgs: [] });
   });
 
+  it('answers with the default CLI when no CLI was picked', async () => {
+    const run = await headless();
+    run.mockResolvedValue({ ok: true, text: 'x', cliName: 'Codex CLI' });
+    const { askCli } = await import('./ai');
+
+    const result = await askCli({ prompt: 'p', requestId: 'r2' });
+
+    expect(result).toMatchObject({ ok: true, text: 'x', cliName: 'Codex CLI' });
+    const options = run.mock.calls[0]?.[2];
+    expect(options).toMatchObject({ requestId: 'r2' });
+    expect(options?.strictCli).toBeUndefined();
+    expect(options?.preferredCliId).toBeUndefined();
+    expect(options?.runArgs).toBeUndefined();
+  });
+
   it('passes a failure through without any half-written text', async () => {
     const run = await headless();
     run.mockResolvedValue({

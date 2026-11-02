@@ -1210,8 +1210,11 @@ export interface HelpIndexProgress {
 
 export interface AskCliInput {
   prompt: string;
-  /** The agent CLI to answer with. No other CLI is tried when it isn't installed. */
-  cliId: string;
+  /**
+   * The agent CLI to answer with. No other CLI is tried when it isn't installed. Left out, the
+   * default CLI from Settings answers, then any installed CLI with a headless mode.
+   */
+  cliId?: string;
   /** Model id from that CLI's run profile, or null for whatever the CLI is set up with. */
   modelId?: string | null;
   /** Ignored when the model has no effort setting. */

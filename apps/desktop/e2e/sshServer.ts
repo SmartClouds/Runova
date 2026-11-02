@@ -1,9 +1,24 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
-import { APP_ROOT } from './paths';
+import { withBuildLock } from './buildLock';
+import { APP_ROOT, E2E_OUT_DIR } from './paths';
 
-const IMAGE = 'runova-e2e-ssh-server';
+const CONTEXT = join(APP_ROOT, 'e2e', 'ssh-server');
+/** Tagged by the Dockerfile's contents, so an image that exists is one built from this file. */
+const IMAGE = `runova-e2e-ssh-server:${createHash('sha256')
+  .update(readFileSync(join(CONTEXT, 'Dockerfile')))
+  .digest('hex')
+  .slice(0, 12)}`;
+const BUILD_LOCK = join(E2E_OUT_DIR, 'ssh-server-build.lock');
+/**
+ * A first build pulls Ubuntu and installs sshd in a minute or two. This stays under the specs'
+ * beforeAll timeout, so a build that hangs fails with Docker's own output instead of a bare hook
+ * timeout.
+ */
+const BUILD_TIMEOUT_MS = 5 * 60_000;
 
 export const SSH_USER = 'smartvpn';
 export const SSH_PASSWORD = 's3cret-pw';
@@ -82,12 +97,42 @@ function waitForBanner(host: string, port: number, deadline: number): Promise<vo
   });
 }
 
+function imageExists(): boolean {
+  try {
+    docker(['image', 'inspect', IMAGE]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Builds the server image unless it is already there. Every SSH spec used to run `docker build`
+ * in its beforeAll, cached or not, and on the Linux runner a build that overlaps another one on
+ * the same daemon (two workers starting SSH specs together, or a test-server build in the other
+ * runner's job) now and then hangs until it times out. With the image already there nothing is
+ * built, and the workers of a run take turns when one has to be.
+ */
+async function ensureImage(): Promise<void> {
+  if (imageExists()) return;
+  await withBuildLock(BUILD_LOCK, BUILD_TIMEOUT_MS + 60_000, () => {
+    if (imageExists()) return;
+    try {
+      docker(['build', '-q', '-t', IMAGE, CONTEXT], BUILD_TIMEOUT_MS);
+    } catch (error) {
+      const { stderr, stdout } = error as { stderr?: string; stdout?: string };
+      const output = [stdout, stderr].filter(Boolean).join('\n').trim();
+      throw new Error(`docker build of ${IMAGE} failed: ${(error as Error).message}\n${output}`);
+    }
+  });
+}
+
 /**
  * Starts a disposable Ubuntu SSH server (see ssh-server/Dockerfile) on a free local port. The user
  * logs in with a password and has to type it again for sudo, like a typical VPS account.
  */
 export async function startSshServer(): Promise<SshTestServer> {
-  docker(['build', '-q', '-t', IMAGE, join(APP_ROOT, 'e2e', 'ssh-server')], 600_000);
+  await ensureImage();
   const name = `runova-e2e-ssh-${process.pid}-${Date.now()}`;
   docker([
     'run',

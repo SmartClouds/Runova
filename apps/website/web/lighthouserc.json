@@ -14,7 +14,7 @@
       "numberOfRuns": 3,
       "settings": {
         "formFactor": "mobile",
-        "chromeFlags": "--headless=new --no-sandbox"
+        "chromeFlags": "--headless=new --no-sandbox --disable-3d-apis"
       }
     },
     "assert": {

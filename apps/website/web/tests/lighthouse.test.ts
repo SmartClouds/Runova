@@ -50,6 +50,17 @@ describe('lighthouserc', () => {
     expect(settings.screenEmulation?.mobile ?? true).toBe(true);
   });
 
+  it('audits both setups with WebGL off, as a visitor without a GPU gets the page', () => {
+    // Headless Chrome would render the home page beam with SwiftShader, which no visitor's
+    // Chrome does (scripts/lighthouse.ts).
+    const stack = JSON.parse(
+      readFileSync(new URL('../lighthouserc.stack.json', import.meta.url), 'utf8'),
+    );
+    for (const settings of [collect.settings, stack.ci.collect.settings]) {
+      expect(settings.chromeFlags.split(' ')).toContain('--disable-3d-apis');
+    }
+  });
+
   it('asserts the category budgets as errors', () => {
     expect(assert.assertions).toMatchObject({
       'categories:performance': ['error', { minScore: 0.9 }],

@@ -2,6 +2,11 @@
 // then runs Lighthouse CI against `bun run preview` with the budgets in lighthouserc.json. The
 // download page, the blog post and the news item read e2e/fakeApiServer.ts, started here. Uses
 // Playwright's Chromium unless CHROME_PATH is set.
+//
+// Chrome runs with --disable-3d-apis. Headless Chrome has no GPU and renders WebGL with
+// SwiftShader on the CPU, where creating the home page beam's context alone blocks the main thread
+// for about 350ms. A visitor's Chrome without a GPU gets no WebGL at all (it no longer falls back
+// to SwiftShader) and shows the beam's CSS line, so that is the page worth auditing.
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { chromium } from '@playwright/test';
 

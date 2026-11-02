@@ -563,6 +563,11 @@ export interface AppSettings {
   /** AI provider used to generate prompts in Prompt Builder; model comes from that provider's configured model above. */
   promptBuilderProvider: AiProvider;
   /**
+   * Where Generate Prompt sends its request: `provider` uses `promptBuilderProvider` and its API
+   * model, `cli` runs it through the default AI CLI (Settings, then any installed headless CLI).
+   */
+  promptBuilderEngine: 'provider' | 'cli';
+  /**
    * Whether the Build Prompt dialog sizes the model and effort as soon as Generate or Translate
    * finishes. When off, the dialog's Recommended run chip starts the sizing when it is opened.
    */

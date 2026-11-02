@@ -9,11 +9,14 @@
  * fragment shader on a full-screen triangle, no library. No code is copied (openbot.run is
  * PolyForm Noncommercial).
  *
- * With reduced motion, without WebGL2 or after a lost context it never loops: reduced motion gets
- * one still frame of the settled light, and the others get a CSS line in the same place
- * (`data-beam` on the hero tells the CSS which). Cost limits follow the webgl-components skill: the
- * pixel ratio is capped, idle frames run at 30fps, and nothing draws off screen or in a hidden tab.
+ * With reduced motion, without WebGL2, on a software renderer or after a lost context it never
+ * loops: reduced motion gets one still frame of the settled light, and the others get a CSS line
+ * in the same place (`data-beam` on the hero tells the CSS which). Cost limits follow the
+ * webgl-components skill: the pixel ratio is capped, idle frames run at 30fps, and nothing draws
+ * off screen or in a hidden tab.
  */
+
+import { isSoftwareRenderer, rendererName } from './gpu';
 
 /** The source lights up, then the tip falls, then the light spreads over the window. */
 export const LIGHT_MS = 300;
@@ -363,6 +366,13 @@ export function setUpBeam({ host, stage, source, surface }: Parts) {
       powerPreference: 'low-power',
       failIfMajorPerformanceCaveat: true,
     });
+    // A software renderer gets the CSS line (see gpu.ts). The answer will not change, so it is
+    // never asked again.
+    if (gl && isSoftwareRenderer(rendererName(gl))) {
+      lost = true;
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return null;
+    }
     program = gl ? compile(gl) : null;
     return program;
   };

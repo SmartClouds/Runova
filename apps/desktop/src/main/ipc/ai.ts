@@ -343,15 +343,21 @@ const ASK_CLI_TIMEOUT_MS = 5 * 60_000;
 /**
  * Answers a one-off prompt with the CLI, model and effort the user picked. Strict, so a missing
  * CLI fails with a clear message instead of quietly answering with a different one (whose model
- * flags wouldn't fit). Runs from the temp dir for the same reason assessRun() does.
+ * flags wouldn't fit). Without a CLI it answers with the default one, picked the way sizing picks
+ * it, and with that CLI's own model. Runs from the temp dir for the same reason assessRun() does.
  */
 export async function askCli(input: AskCliInput): Promise<AskCliResult> {
+  const { cliId } = input;
   const result = await runHeadlessCliPrompt(input.prompt, tmpdir(), {
     requestId: input.requestId,
-    preferredCliId: input.cliId,
-    strictCli: true,
-    runArgs: runArgsFor(input.cliId, input.modelId, input.effort),
     timeoutMs: ASK_CLI_TIMEOUT_MS,
+    ...(cliId
+      ? {
+          preferredCliId: cliId,
+          strictCli: true,
+          runArgs: runArgsFor(cliId, input.modelId, input.effort),
+        }
+      : {}),
   });
   return {
     ok: result.ok,

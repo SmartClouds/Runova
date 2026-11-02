@@ -142,6 +142,14 @@ describe('cancelPromptTask', () => {
     expect(() => bridge.$fn('ai.cancel')).toThrow();
   });
 
+  it('stops a generate sent to the default CLI through the CLI bridge', () => {
+    beginPromptTask('k', 'generate', 'req-3', { viaCli: true });
+    cancelPromptTask('k');
+    expect(state().tasks.k).toBeUndefined();
+    expect(bridge.$fn('ai.cancelAskCli')).toHaveBeenCalledWith('req-3');
+    expect(() => bridge.$fn('ai.cancel')).toThrow();
+  });
+
   it('drops a job that has nothing to abort', () => {
     beginPromptTask('k', 'translate');
     cancelPromptTask('k');

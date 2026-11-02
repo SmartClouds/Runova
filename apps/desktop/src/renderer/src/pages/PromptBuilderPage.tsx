@@ -71,6 +71,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { cliLaunchCommand } from '@/lib/openCli';
+import { askPromptEngine, promptEngineSetupError } from '@/lib/promptProvider';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { useCliStore } from '@/stores/cliStore';
@@ -411,15 +412,9 @@ export default function PromptBuilderPage(): React.JSX.Element {
     }
 
     const settings = settingsQuery.data ?? (await window.runova.settings.get());
-    const provider = settings.promptBuilderProvider;
-    const model =
-      provider === 'openai'
-        ? settings.openaiModel
-        : provider === 'gemini'
-          ? settings.geminiModel
-          : settings.ollamaModel;
-    if (!model.trim()) {
-      toast.error(`Set a ${provider} model in Settings first.`);
+    const setupError = promptEngineSetupError(settings);
+    if (setupError) {
+      toast.error(setupError);
       return;
     }
 
@@ -438,7 +433,7 @@ export default function PromptBuilderPage(): React.JSX.Element {
         promptType,
         targetAI,
       });
-      const result = await window.runova.ai.ask({ provider, model, prompt: request });
+      const result = await askPromptEngine(settings, request);
       if (!result.ok) {
         toast.error(result.error || 'Prompt generation failed.');
         return;

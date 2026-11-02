@@ -335,12 +335,24 @@ export function ProjectRail({
   const railProjectIds = useWorkspaceStore((s) => s.railProjectIds);
   const closeProject = useWorkspaceStore((s) => s.closeProject);
   const moveRailProject = useWorkspaceStore((s) => s.moveRailProject);
+  const openProject = useWorkspaceStore((s) => s.openProject);
   const [pickerOpen, setPickerOpen] = useState(false);
   // Memoized so a drag keeps its order while the store reports agent status changes.
   const railProjects = useMemo(() => {
     const byId = new Map(projects.map((p) => [p.id, p]));
     return railProjectIds.flatMap((id) => byId.get(id) ?? []);
   }, [projects, railProjectIds]);
+
+  /**
+   * Shows the project's workspace in this click, then points the URL at it. The router changes
+   * location in a transition, which React restarts whenever a more urgent update lands first. A
+   * running test suite updates the Tests panel several times a second, so waiting on the route
+   * (WorkspaceRoute opens the project once it lands) could hold a switch back for over a second.
+   */
+  function openTile(projectId: string): void {
+    openProject(projectId);
+    navigate(`/workspace/${projectId}`);
+  }
 
   /** A tile landed at `to` among the visible tiles. The store counts slots with the tile still in place. */
   function moveTile(from: number, to: number): void {
@@ -395,7 +407,7 @@ export function ProjectRail({
               project={project}
               active={project.id === activeProjectId}
               activeProjectId={activeProjectId}
-              onOpen={() => navigate(`/workspace/${project.id}`)}
+              onOpen={() => openTile(project.id)}
               onClose={() => void requestClose(project)}
               reorder={motion}
             />

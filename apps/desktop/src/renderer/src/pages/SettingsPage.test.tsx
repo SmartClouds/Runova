@@ -2,6 +2,7 @@
 import type { AppSettings } from '@runova/core';
 import { defaultGrammarSettings, defaultProxySettings, isStartupPage } from '@runova/core';
 import { screen, waitFor, within } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NAV_ITEMS } from '@/components/layout/Sidebar';
 import { queryKeys } from '@/lib/queryKeys';
@@ -1077,6 +1078,66 @@ describe('SettingsPage help search', () => {
 
     expect(await screen.findByText('Help search')).toBeInTheDocument();
     expect(screen.queryByText('Appearance')).toBeNull();
+  });
+});
+
+describe('SettingsPage Prompt Builder provider', () => {
+  const picker = () => screen.getByRole('combobox', { name: 'Prompt Builder provider' });
+
+  async function openProviders(user: UserEvent): Promise<void> {
+    await user.type(screen.getByLabelText('Search settings'), 'prompt builder provider');
+    await waitFor(() => expect(picker()).toBeInTheDocument());
+  }
+
+  it('shows Default CLI in the same picker as the API providers once it was saved', async () => {
+    const { user } = renderSettings({
+      'settings.get': { ...settings, promptBuilderEngine: 'cli' },
+    });
+
+    await openProviders(user);
+
+    expect(picker()).toHaveTextContent('Default CLI');
+  });
+
+  it('saves Default CLI and keeps the API provider the other features use', async () => {
+    const { user, bridge } = renderSettings({
+      'settings.get': {
+        ...settings,
+        promptBuilderProvider: 'gemini',
+        promptBuilderEngine: 'provider',
+      },
+    });
+    await openProviders(user);
+
+    await user.click(picker());
+    await user.click(await screen.findByRole('option', { name: 'Default CLI' }));
+    await user.click(await screen.findByRole('button', { name: /Save changes/ }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('settings.update')).toHaveBeenCalledWith(
+        expect.objectContaining({ promptBuilderProvider: 'gemini', promptBuilderEngine: 'cli' }),
+      ),
+    );
+  });
+
+  it('goes back to the API when a provider is picked after Default CLI', async () => {
+    const { user, bridge } = renderSettings({
+      'settings.get': { ...settings, promptBuilderEngine: 'cli' },
+    });
+    await openProviders(user);
+
+    await user.click(picker());
+    await user.click(await screen.findByRole('option', { name: 'Ollama' }));
+    await user.click(await screen.findByRole('button', { name: /Save changes/ }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('settings.update')).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptBuilderProvider: 'ollama',
+          promptBuilderEngine: 'provider',
+        }),
+      ),
+    );
   });
 });
 

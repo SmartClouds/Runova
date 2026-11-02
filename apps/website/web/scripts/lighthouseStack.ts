@@ -1,6 +1,7 @@
 // Runs Lighthouse CI against the compose stack (apps/website/compose.yaml) with the budgets in
 // lighthouserc.stack.json, after seeding the news item and blog post it audits. Start the stack
-// first. Uses Playwright's Chromium unless CHROME_PATH is set.
+// first. Uses Playwright's Chromium unless CHROME_PATH is set. Chrome runs with WebGL off, as in
+// lighthouserc.json (scripts/lighthouse.ts says why).
 import { spawnSync } from 'node:child_process';
 import { chromium } from '@playwright/test';
 import { SEED_NEWS_SLUG, SEED_POST_SLUG, seed } from '../e2e/stack/seed.ts';

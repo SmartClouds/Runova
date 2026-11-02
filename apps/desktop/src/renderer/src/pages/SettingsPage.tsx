@@ -122,10 +122,20 @@ import { useTerminalAppearanceStore } from '@/stores/terminalAppearanceStore';
 import { type ResolvedTheme, themeClassName, useThemeStore } from '@/stores/themeStore';
 import { openUpdateDialog, useUpdateStore } from '@/stores/updateStore';
 
-const PROMPT_BUILDER_PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
+/**
+ * One picker for two settings: an API provider sets `promptBuilderProvider`, and Default CLI
+ * flips `promptBuilderEngine` while leaving the provider as it was, since other AI features still
+ * read the provider and need a real one.
+ */
+const PROMPT_BUILDER_CLI = 'cli';
+const PROMPT_BUILDER_PROVIDER_OPTIONS: {
+  value: AiProvider | typeof PROMPT_BUILDER_CLI;
+  label: string;
+}[] = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
   { value: 'ollama', label: 'Ollama' },
+  { value: PROMPT_BUILDER_CLI, label: 'Default CLI' },
 ];
 
 // No auto-detect: the local Whisper runtime cannot detect a language and quietly assumes English.
@@ -428,7 +438,7 @@ const SECTIONS = {
     tab: 'ai',
     title: 'Providers',
     keywords:
-      'openai gemini ollama api key model prompt builder provider context length num_ctx keep alive test connection',
+      'openai gemini ollama api key model prompt builder provider generate prompt default cli context length num_ctx keep alive test connection',
   },
   voiceInput: {
     tab: 'ai',
@@ -1042,6 +1052,8 @@ export default function SettingsPage(): React.JSX.Element {
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
   const [promptBuilderProvider, setPromptBuilderProvider] = useState<AiProvider>('openai');
+  const [promptBuilderEngine, setPromptBuilderEngine] =
+    useState<AppSettings['promptBuilderEngine']>('provider');
   const [aiDirty, setAiDirty] = useState(false);
 
   useEffect(() => {
@@ -1059,6 +1071,7 @@ export default function SettingsPage(): React.JSX.Element {
       setGeminiApiKey(settingsQuery.data.geminiApiKey ?? '');
       setGeminiModel(settingsQuery.data.geminiModel);
       setPromptBuilderProvider(settingsQuery.data.promptBuilderProvider);
+      setPromptBuilderEngine(settingsQuery.data.promptBuilderEngine ?? 'provider');
     }
   }, [settingsQuery.data, aiDirty]);
 
@@ -1118,6 +1131,7 @@ export default function SettingsPage(): React.JSX.Element {
         geminiApiKey: geminiApiKey.trim() || null,
         geminiModel: geminiModel.trim() || DEFAULT_GEMINI_API_MODEL,
         promptBuilderProvider,
+        promptBuilderEngine,
       }),
     onSuccess: () => {
       toast.success('AI provider settings saved.');
@@ -2438,13 +2452,30 @@ export default function SettingsPage(): React.JSX.Element {
                       <div className="border-t border-border/60 pt-5">
                         <Field
                           label="Prompt Builder provider"
-                          hint="Used by Generate Prompt. Uses the key and model for that provider above."
+                          hint={
+                            promptBuilderEngine === 'cli'
+                              ? `Generate Prompt asks ${
+                                  CLI_REGISTRY.find((cli) => cli.id === defaultCliId)?.name ??
+                                  'the first installed AI CLI'
+                                } to write the prompt, with the model it is set up with. Change it under Agents, Default CLI. No API key needed, but the CLI has to be installed and signed in.`
+                              : 'Used by Generate Prompt. Uses the key and model for that provider above.'
+                          }
                         >
                           <Combobox
+                            ariaLabel="Prompt Builder provider"
                             className="w-40"
-                            value={promptBuilderProvider}
+                            value={
+                              promptBuilderEngine === 'cli'
+                                ? PROMPT_BUILDER_CLI
+                                : promptBuilderProvider
+                            }
                             onChange={(value) => {
-                              setPromptBuilderProvider(value as AiProvider);
+                              if (value === PROMPT_BUILDER_CLI) {
+                                setPromptBuilderEngine('cli');
+                              } else {
+                                setPromptBuilderEngine('provider');
+                                setPromptBuilderProvider(value as AiProvider);
+                              }
                               setAiDirty(true);
                             }}
                             options={PROMPT_BUILDER_PROVIDER_OPTIONS}

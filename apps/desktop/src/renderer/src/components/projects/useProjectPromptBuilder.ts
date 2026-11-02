@@ -8,7 +8,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { promptProviderModel } from '@/lib/promptProvider';
+import { askPromptEngine, promptEngineSetupError, promptEngineUsesCli } from '@/lib/promptProvider';
 import { queryKeys } from '@/lib/queryKeys';
 import { queryClient } from '@/queryClient';
 import { useProjectPromptBuildStore } from '@/stores/projectPromptBuildStore';
@@ -168,13 +168,15 @@ export function useProjectPromptBuilder(
     }
 
     const settings = settingsQuery.data ?? (await window.runova.settings.get());
-    const { provider, model } = promptProviderModel(settings);
-    if (!model.trim()) {
-      toast.error(`Set a ${provider} model in Settings first.`);
+    const setupError = promptEngineSetupError(settings);
+    if (setupError) {
+      toast.error(setupError);
       return;
     }
 
-    const task = beginPromptTask(jobKey, 'generate', crypto.randomUUID());
+    const task = beginPromptTask(jobKey, 'generate', crypto.randomUUID(), {
+      viaCli: promptEngineUsesCli(settings),
+    });
     if (!task) return;
     const request = { rawInput, promptType, targetAI };
     // Drop the previous result immediately so a failed request can't leave
@@ -182,12 +184,11 @@ export function useProjectPromptBuilder(
     cancelRunAssessment(jobKey);
     setGenerated('');
     try {
-      const result = await window.runova.ai.ask({
-        provider,
-        model,
-        prompt: buildPromptGenerationRequest(request),
-        requestId: task.requestId,
-      });
+      const result = await askPromptEngine(
+        settings,
+        buildPromptGenerationRequest(request),
+        task.requestId,
+      );
       if (!isCurrentPromptTask(jobKey, task) || result.cancelled) return;
       if (!result.ok) {
         toast.error(result.error || 'Prompt generation failed.');
