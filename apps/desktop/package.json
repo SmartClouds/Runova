@@ -1,7 +1,7 @@
 {
   "name": "@runova/desktop",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Runova desktop application",
   "homepage": "https://runovahq.com",
   "repository": {
