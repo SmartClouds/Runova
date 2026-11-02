@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countDotenvKeys,
+  diffDotenvKeys,
   guessEnvironmentKind,
   isEnvFileName,
   isEnvTemplateFileName,
@@ -81,5 +82,38 @@ describe('env file names', () => {
     expect(guessEnvironmentKind('.env.stage')).toBe('staging');
     expect(guessEnvironmentKind('.env.test')).toBe('test');
     expect(guessEnvironmentKind('.env.qa')).toBe('custom');
+  });
+});
+
+describe('diffDotenvKeys', () => {
+  it('names the keys added, removed and changed, in the order they appear', () => {
+    const before = 'A=1\nB=2\nC=3\n';
+    const after = 'C=3\nB=two\nD=4\nE=5\n';
+    expect(diffDotenvKeys(before, after)).toEqual({
+      added: ['D', 'E'],
+      removed: ['A'],
+      changed: ['B'],
+    });
+  });
+
+  it('ignores comments, blank lines, quoting and export prefixes', () => {
+    const before = '# old note\nA=1\nB="hello"\n';
+    const after = 'export A=1\n\n# new note\nB=hello\n';
+    expect(diffDotenvKeys(before, after)).toEqual({ added: [], removed: [], changed: [] });
+  });
+
+  it('reads a key set twice the way dotenv does, the last value winning', () => {
+    expect(diffDotenvKeys('A=1\nA=2\n', 'A=2\n')).toEqual({
+      added: [],
+      removed: [],
+      changed: [],
+    });
+    expect(diffDotenvKeys('A=1\n', 'A=1\nA=3\n').changed).toEqual(['A']);
+  });
+
+  it('handles empty files on either side', () => {
+    expect(diffDotenvKeys('', 'A=1\n')).toEqual({ added: ['A'], removed: [], changed: [] });
+    expect(diffDotenvKeys('A=1\n', '')).toEqual({ added: [], removed: ['A'], changed: [] });
+    expect(diffDotenvKeys('', '')).toEqual({ added: [], removed: [], changed: [] });
   });
 });

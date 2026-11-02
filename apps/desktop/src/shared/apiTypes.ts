@@ -2543,13 +2543,35 @@ export interface StoredRdpServer extends Omit<RdpSavedServer, 'hasSecret'> {
   secretEnvelope?: SecretEnvelope;
 }
 
+/**
+ * How a version of an env file came to be. Files saved before history existed have none, and
+ * show as plainly saved.
+ */
+export type EnvFileOrigin = 'created' | 'edited' | 'imported' | 'restored' | 'renamed';
+
 /** An env file saved for one environment. The contents stay in the main process until asked for. */
 export interface EnvFileSummary {
   id: string;
   /** A bare `.env*` name such as `.env.production`, written as is into the project folder. */
   fileName: string;
   keyCount: number;
+  origin?: EnvFileOrigin;
   updatedAt: number;
+  /** How many earlier versions the file's history keeps. */
+  versionCount: number;
+}
+
+/** One earlier version of an env file. Its contents stay in the main process until asked for. */
+export interface EnvFileVersionSummary {
+  id: string;
+  /** The file's name back then, which differs from today's after a rename. */
+  fileName: string;
+  keyCount: number;
+  origin?: EnvFileOrigin;
+  /** When this version was saved. */
+  savedAt: number;
+  /** When a newer save replaced it. */
+  replacedAt: number;
 }
 
 /** A saved login or key that isn't a file: a database, dashboard, server and so on. */
@@ -2636,7 +2658,15 @@ export interface EnvWriteResult {
   notIgnored?: boolean;
 }
 
-export interface StoredEnvFile extends EnvFileSummary {
+export interface StoredEnvFile extends Omit<EnvFileSummary, 'versionCount'> {
+  contentEnvelope: SecretEnvelope;
+}
+
+/** Main-process-only shape of one earlier version, as the history database keeps it. */
+export interface StoredEnvFileVersion extends EnvFileVersionSummary {
+  projectId: string;
+  environmentId: string;
+  fileId: string;
   contentEnvelope: SecretEnvelope;
 }
 

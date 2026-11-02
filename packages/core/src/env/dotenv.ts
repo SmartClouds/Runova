@@ -100,6 +100,37 @@ export function countDotenvKeys(text: string): number {
   return new Set(parseDotenv(text).map((entry) => entry.key)).size;
 }
 
+export interface DotenvKeyDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+function dotenvValues(text: string): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const { key, value } of parseDotenv(text)) values.set(key, value);
+  return values;
+}
+
+/**
+ * Which keys one version of a .env file adds, drops or changes compared to another. Only key
+ * names come back, never values, so the result is safe to show next to a list of versions.
+ * Added and changed keys follow `after`'s order, removed keys follow `before`'s.
+ */
+export function diffDotenvKeys(before: string, after: string): DotenvKeyDiff {
+  const old = dotenvValues(before);
+  const next = dotenvValues(after);
+  const diff: DotenvKeyDiff = { added: [], removed: [], changed: [] };
+  for (const [key, value] of next) {
+    if (!old.has(key)) diff.added.push(key);
+    else if (old.get(key) !== value) diff.changed.push(key);
+  }
+  for (const key of old.keys()) {
+    if (!next.has(key)) diff.removed.push(key);
+  }
+  return diff;
+}
+
 /**
  * A bare file name in the `.env` family: `.env`, `.env.production`, `.env.local`, and so on.
  * No folders, so a stored name can be joined onto a project folder without escaping it.

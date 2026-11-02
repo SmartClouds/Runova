@@ -7,12 +7,15 @@ import {
   MAX_ENV_FILE_BYTES,
 } from '@runova/core';
 import type {
+  EnvFileOrigin,
   SecretEnvelope,
   StoredEnvCredential,
   StoredEnvFile,
+  StoredEnvFileVersion,
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { decryptWithKey, deriveKey, encryptWithKey } from '../crypto/aesGcm';
+import { envFileHistoryDb } from '../envFileHistoryDb';
 import { decryptSecret, encryptSecret } from '../ssh/vault';
 import { store } from '../store';
 
@@ -41,11 +44,24 @@ const SCRYPT = { N: 32768, r: 8, p: 1 };
 /** The most a hostile backup can make scrypt allocate. The default cost above needs about 33 MB. */
 const SCRYPT_MAXMEM = 128 * 1024 * 1024;
 
+/** One earlier version of a file, newest first in its file's `history`. */
+interface PlainEnvFileVersion {
+  id: string;
+  fileName: string;
+  origin?: EnvFileOrigin;
+  savedAt: number;
+  replacedAt: number;
+  content: string;
+}
+
 interface PlainEnvFile {
   id: string;
   fileName: string;
+  origin?: EnvFileOrigin;
   content: string;
   updatedAt: number;
+  /** Missing from backups made before env files kept a history. */
+  history?: PlainEnvFileVersion[];
 }
 
 interface PlainEnvCredential {
@@ -77,6 +93,12 @@ async function openEnvelope(envelope: SecretEnvelope | undefined): Promise<strin
 /** Throws with the vault's own message when it is locked, so the export can show that. */
 export async function sealEnvironments(password: string): Promise<EncryptedEnvironmentsSection> {
   const stored = await store.getProjectEnvironments();
+  const versionsByFile = new Map<string, StoredEnvFileVersion[]>();
+  for (const version of envFileHistoryDb.exportAll()) {
+    const list = versionsByFile.get(version.fileId) ?? [];
+    list.push(version);
+    versionsByFile.set(version.fileId, list);
+  }
   const plain: PlainEnvironment[] = await Promise.all(
     stored.map(async ({ files, credentials, ...environment }) => ({
       ...environment,
@@ -84,6 +106,18 @@ export async function sealEnvironments(password: string): Promise<EncryptedEnvir
         files.map(async ({ contentEnvelope, keyCount: _keyCount, ...file }) => ({
           ...file,
           content: await decryptSecret(contentEnvelope),
+          history: await Promise.all(
+            (versionsByFile.get(file.id) ?? []).map(
+              async ({ id, fileName, origin, savedAt, replacedAt, contentEnvelope: sealed }) => ({
+                id,
+                fileName,
+                origin,
+                savedAt,
+                replacedAt,
+                content: await decryptSecret(sealed),
+              }),
+            ),
+          ),
         })),
       ),
       credentials: await Promise.all(
@@ -186,20 +220,66 @@ function id(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 && value.length <= 100 ? value : null;
 }
 
+const ENV_FILE_ORIGINS: readonly EnvFileOrigin[] = [
+  'created',
+  'edited',
+  'imported',
+  'restored',
+  'renamed',
+];
+
+function origin(value: unknown): EnvFileOrigin | undefined {
+  return (ENV_FILE_ORIGINS as readonly unknown[]).includes(value)
+    ? (value as EnvFileOrigin)
+    : undefined;
+}
+
+/** The name and contents of a file or one of its versions, or null when either won't do. */
+function fileBody(entry: Record_): { fileName: string; content: string } | null {
+  const fileName = typeof entry.fileName === 'string' ? entry.fileName : '';
+  const content = entry.content;
+  if (!isEnvFileName(fileName) || typeof content !== 'string') return null;
+  if (Buffer.byteLength(content, 'utf-8') > MAX_ENV_FILE_BYTES) return null;
+  return { fileName, content };
+}
+
 async function buildFile(entry: unknown): Promise<StoredEnvFile | null> {
   if (!isRecord(entry)) return null;
   const fileId = id(entry.id);
-  const fileName = typeof entry.fileName === 'string' ? entry.fileName : '';
-  const content = entry.content;
-  if (!fileId || !isEnvFileName(fileName) || typeof content !== 'string') return null;
-  if (Buffer.byteLength(content, 'utf-8') > MAX_ENV_FILE_BYTES) return null;
-  return {
+  const body = fileBody(entry);
+  if (!fileId || !body) return null;
+  const file: StoredEnvFile = {
     id: fileId,
-    fileName,
-    keyCount: countDotenvKeys(content),
-    contentEnvelope: await encryptSecret(content),
+    fileName: body.fileName,
+    keyCount: countDotenvKeys(body.content),
+    contentEnvelope: await encryptSecret(body.content),
     updatedAt: time(entry.updatedAt),
   };
+  const fileOrigin = origin(entry.origin);
+  if (fileOrigin) file.origin = fileOrigin;
+  return file;
+}
+
+async function buildVersion(
+  entry: unknown,
+  owner: Pick<StoredEnvFileVersion, 'projectId' | 'environmentId' | 'fileId'>,
+): Promise<StoredEnvFileVersion | null> {
+  if (!isRecord(entry)) return null;
+  const versionId = id(entry.id);
+  const body = fileBody(entry);
+  if (!versionId || !body) return null;
+  const version: StoredEnvFileVersion = {
+    id: versionId,
+    ...owner,
+    fileName: body.fileName,
+    keyCount: countDotenvKeys(body.content),
+    savedAt: time(entry.savedAt),
+    replacedAt: time(entry.replacedAt),
+    contentEnvelope: await encryptSecret(body.content),
+  };
+  const versionOrigin = origin(entry.origin);
+  if (versionOrigin) version.origin = versionOrigin;
+  return version;
 }
 
 async function buildCredential(entry: unknown): Promise<StoredEnvCredential | null> {
@@ -222,13 +302,20 @@ async function buildCredential(entry: unknown): Promise<StoredEnvCredential | nu
 
 /**
  * Checks each decrypted row and encrypts its secrets for this computer. Rows for a project the
- * restore doesn't have are dropped, as are files and credentials that don't hold up.
+ * restore doesn't have are dropped, as are files, versions and credentials that don't hold up.
+ * A dropped file or environment takes its history with it.
  */
 export async function toStoredEnvironments(
   rows: unknown[],
   projectIds: Set<string>,
-): Promise<{ environments: StoredProjectEnvironment[]; skipped: number }> {
+): Promise<{
+  environments: StoredProjectEnvironment[];
+  history: StoredEnvFileVersion[];
+  skipped: number;
+}> {
   const environments: StoredProjectEnvironment[] = [];
+  const history: StoredEnvFileVersion[] = [];
+  const versionIds = new Set<string>();
   let skipped = 0;
 
   for (const row of rows) {
@@ -243,8 +330,23 @@ export async function toStoredEnvironments(
     const files: StoredEnvFile[] = [];
     for (const entry of Array.isArray(row.files) ? row.files : []) {
       const file = await buildFile(entry);
-      if (file && !files.some((f) => f.fileName === file.fileName)) files.push(file);
-      else skipped++;
+      if (!file || files.some((f) => f.fileName === file.fileName)) {
+        skipped++;
+        continue;
+      }
+      files.push(file);
+      const owner = { projectId, environmentId, fileId: file.id };
+      const versions = isRecord(entry) && Array.isArray(entry.history) ? entry.history : [];
+      for (const versionEntry of versions) {
+        const version = await buildVersion(versionEntry, owner);
+        // Ids are the history table's key, so a repeated one would fail the whole restore.
+        if (!version || versionIds.has(version.id)) {
+          skipped++;
+          continue;
+        }
+        versionIds.add(version.id);
+        history.push(version);
+      }
     }
     const credentials: StoredEnvCredential[] = [];
     for (const entry of Array.isArray(row.credentials) ? row.credentials : []) {
@@ -268,5 +370,5 @@ export async function toStoredEnvironments(
     });
   }
 
-  return { environments, skipped };
+  return { environments, history, skipped };
 }

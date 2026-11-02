@@ -74,6 +74,7 @@ import { DEFAULT_SETTINGS, ORIGINAL_CHART_IDS } from '../shared/defaultSettings'
 import { newsSettingsOf } from '../shared/newsSettings';
 import { referencedAttachmentFiles, removeOrphanAttachments } from './blueprintFileStore';
 import { blueprintRevisionDb } from './blueprintRevisionDb';
+import { envFileHistoryDb } from './envFileHistoryDb';
 import {
   DEFAULT_PING_TARGETS_IPV6,
   isPingIpVersion,
@@ -512,7 +513,10 @@ export async function pruneOrphanBlueprints(): Promise<void> {
   }
 }
 
-/** Drops saved environments whose project is gone. Runs at startup and on project delete. */
+/**
+ * Drops saved environments, and their env file history, whose project is gone. Runs at startup
+ * and on project delete.
+ */
 export async function pruneOrphanEnvironments(): Promise<void> {
   try {
     const [projects, environments] = await Promise.all([
@@ -520,6 +524,7 @@ export async function pruneOrphanEnvironments(): Promise<void> {
       store.getProjectEnvironments(),
     ]);
     const live = new Set(projects.map((project) => project.id));
+    envFileHistoryDb.retainProjects([...live]);
     const kept = environments.filter((environment) => live.has(environment.projectId));
     if (kept.length === environments.length) return;
     await store.setProjectEnvironments(kept);

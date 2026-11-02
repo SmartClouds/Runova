@@ -163,6 +163,7 @@ import type {
   DockerLogsOptions,
   DockerRemoveOptions,
   EnvCredentialSecrets,
+  EnvFileVersionSummary,
   EnvFolderFile,
   EnvImportPick,
   EnvImportResult,
@@ -2724,6 +2725,18 @@ const environments = {
     ipcRenderer.invoke(IPC.environments.readFile, environmentId, fileId),
   copyFile: (environmentId: string, fileId: string): Promise<void> =>
     ipcRenderer.invoke(IPC.environments.copyFile, environmentId, fileId),
+  /** Earlier versions of one env file, newest first, without their contents. */
+  fileHistory: (environmentId: string, fileId: string): Promise<EnvFileVersionSummary[]> =>
+    ipcRenderer.invoke(IPC.environments.fileHistory, environmentId, fileId),
+  readFileVersion: (environmentId: string, fileId: string, versionId: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.environments.readFileVersion, environmentId, fileId, versionId),
+  /** Puts a version's contents back; the contents it replaces go into the history. */
+  restoreFileVersion: (
+    environmentId: string,
+    fileId: string,
+    versionId: string,
+  ): Promise<ProjectEnvironment> =>
+    ipcRenderer.invoke(IPC.environments.restoreFileVersion, environmentId, fileId, versionId),
   saveCredential: (input: SaveEnvCredentialInput): Promise<ProjectEnvironment> =>
     ipcRenderer.invoke(IPC.environments.saveCredential, input),
   removeCredential: (environmentId: string, credentialId: string): Promise<void> =>

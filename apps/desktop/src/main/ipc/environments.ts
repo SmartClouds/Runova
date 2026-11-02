@@ -16,6 +16,8 @@ import {
 import { clipboard, ipcMain } from 'electron';
 import type {
   EnvCredentialSecrets,
+  EnvFileOrigin,
+  EnvFileVersionSummary,
   EnvFolderFile,
   EnvImportPick,
   EnvImportResult,
@@ -27,9 +29,11 @@ import type {
   SecretEnvelope,
   StoredEnvCredential,
   StoredEnvFile,
+  StoredEnvFileVersion,
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { envFileHistoryDb } from '../envFileHistoryDb';
 import { gitOrNull, isGitRepo } from '../git/plumbing';
 import { pruneOrphanHealthTargets } from '../health/store';
 import { decryptSecret, encryptSecret } from '../ssh/vault';
@@ -38,9 +42,13 @@ import { store } from '../store';
 const MAX_NAME_LENGTH = 60;
 
 export function toPublicEnvironment(environment: StoredProjectEnvironment): ProjectEnvironment {
+  const versionCounts = envFileHistoryDb.countByFile(environment.files.map((file) => file.id));
   return {
     ...environment,
-    files: environment.files.map(({ contentEnvelope: _content, ...file }) => file),
+    files: environment.files.map(({ contentEnvelope: _content, ...file }) => ({
+      ...file,
+      versionCount: versionCounts.get(file.id) ?? 0,
+    })),
     credentials: environment.credentials.map(
       ({ secretEnvelope, notesEnvelope, ...credential }) => ({
         ...credential,
@@ -154,6 +162,69 @@ function findCredential(
   return credential;
 }
 
+function findVersion(fileId: string, versionId: string): StoredEnvFileVersion {
+  const version = envFileHistoryDb.get(fileId, versionId);
+  if (!version) throw new Error('That version is no longer in the history.');
+  return version;
+}
+
+/** Puts `file` as it is now into its history, just before a save replaces it. */
+function keepVersion(
+  environment: StoredProjectEnvironment,
+  file: StoredEnvFile,
+  replacedAt: number,
+): void {
+  envFileHistoryDb.add({
+    projectId: environment.projectId,
+    environmentId: environment.id,
+    fileId: file.id,
+    fileName: file.fileName,
+    keyCount: file.keyCount,
+    origin: file.origin,
+    savedAt: file.updatedAt,
+    replacedAt,
+    contentEnvelope: file.contentEnvelope,
+  });
+}
+
+/**
+ * Replaces `environment.files[index]` with `content`, or adds a new file when index is -1. The
+ * version it replaces goes into the history first, unless nothing actually changed, in which case
+ * the file is left exactly as it was. A save that only changes the name counts as a rename.
+ * Encrypting happens before the history is touched, so a locked vault leaves no stray version.
+ */
+async function writeFileRecord(
+  environment: StoredProjectEnvironment,
+  index: number,
+  fileName: string,
+  content: string,
+  origin: EnvFileOrigin,
+): Promise<void> {
+  const existing = index >= 0 ? environment.files[index] : undefined;
+  let nextOrigin = origin;
+  if (existing) {
+    const contentChanged = (await decryptSecret(existing.contentEnvelope)) !== content;
+    const renamed = existing.fileName !== fileName;
+    if (!contentChanged && !renamed) return;
+    if (!contentChanged) nextOrigin = 'renamed';
+  }
+  const record: StoredEnvFile = {
+    id: existing?.id ?? randomUUID(),
+    fileName,
+    keyCount: countDotenvKeys(content),
+    origin: nextOrigin,
+    contentEnvelope: await encryptSecret(content),
+    updatedAt: Date.now(),
+  };
+  if (existing) {
+    keepVersion(environment, existing, record.updatedAt);
+    environment.files[index] = record;
+  } else {
+    environment.files.push(record);
+  }
+  environment.updatedAt = record.updatedAt;
+}
+
 async function requireProject(projectId: string): Promise<Project> {
   const project = (await store.getProjects()).find((p) => p.id === projectId);
   if (!project) throw new Error('That project no longer exists.');
@@ -213,17 +284,8 @@ async function upsertFileByName(
   fileName: string,
   content: string,
 ): Promise<void> {
-  const record: StoredEnvFile = {
-    id: environment.files.find((f) => f.fileName === fileName)?.id ?? randomUUID(),
-    fileName,
-    keyCount: countDotenvKeys(content),
-    contentEnvelope: await encryptSecret(content),
-    updatedAt: Date.now(),
-  };
-  const index = environment.files.findIndex((f) => f.id === record.id);
-  if (index >= 0) environment.files[index] = record;
-  else environment.files.push(record);
-  environment.updatedAt = record.updatedAt;
+  const index = environment.files.findIndex((f) => f.fileName === fileName);
+  await writeFileRecord(environment, index, fileName, content, 'imported');
 }
 
 /** undefined keeps the stored value, an empty string removes it, anything else replaces it. */
@@ -268,6 +330,7 @@ export function registerEnvironmentHandlers(): void {
     await mutate((environments) => {
       const index = environments.findIndex((e) => e.id === id);
       if (index >= 0) environments.splice(index, 1);
+      envFileHistoryDb.removeForEnvironment(id);
     });
     // A healthcheck of this environment stays, just no longer tied to it.
     await pruneOrphanHealthTargets({ environmentIds: [id] });
@@ -298,16 +361,13 @@ export function registerEnvironmentHandlers(): void {
         if (clash) throw new Error(`${input.fileName} is already saved in this environment.`);
 
         const index = input.id ? environment.files.findIndex((f) => f.id === input.id) : -1;
-        const record: StoredEnvFile = {
-          id: index >= 0 ? environment.files[index].id : randomUUID(),
-          fileName: input.fileName,
-          keyCount: countDotenvKeys(input.content),
-          contentEnvelope: await encryptSecret(input.content),
-          updatedAt: Date.now(),
-        };
-        if (index >= 0) environment.files[index] = record;
-        else environment.files.push(record);
-        environment.updatedAt = record.updatedAt;
+        await writeFileRecord(
+          environment,
+          index,
+          input.fileName,
+          input.content,
+          index >= 0 ? 'edited' : 'created',
+        );
         return toPublicEnvironment(environment);
       }),
   );
@@ -319,6 +379,7 @@ export function registerEnvironmentHandlers(): void {
         const environment = findEnvironment(environments, environmentId);
         environment.files = environment.files.filter((f) => f.id !== fileId);
         environment.updatedAt = Date.now();
+        envFileHistoryDb.removeForFile(fileId);
       }),
   );
 
@@ -337,6 +398,44 @@ export function registerEnvironmentHandlers(): void {
       const file = findFile(await readEnvironment(environmentId), fileId);
       clipboard.writeText(await decryptSecret(file.contentEnvelope));
     },
+  );
+
+  ipcMain.handle(
+    IPC.environments.fileHistory,
+    async (_event, environmentId: string, fileId: string): Promise<EnvFileVersionSummary[]> => {
+      // Wait for saves already queued, so a version they add is in the list.
+      await updateQueue;
+      findFile(await readEnvironment(environmentId), fileId);
+      return envFileHistoryDb.list(fileId);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.environments.readFileVersion,
+    async (_event, environmentId: string, fileId: string, versionId: string): Promise<string> => {
+      findFile(await readEnvironment(environmentId), fileId);
+      return decryptSecret(findVersion(fileId, versionId).contentEnvelope);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.environments.restoreFileVersion,
+    (
+      _event,
+      environmentId: string,
+      fileId: string,
+      versionId: string,
+    ): Promise<ProjectEnvironment> =>
+      mutate(async (environments) => {
+        const environment = findEnvironment(environments, environmentId);
+        const index = environment.files.findIndex((f) => f.id === fileId);
+        if (index < 0) throw new Error('That env file no longer exists.');
+        const content = await decryptSecret(findVersion(fileId, versionId).contentEnvelope);
+        // The contents come back; the file keeps the name it has today.
+        const { fileName } = environment.files[index];
+        await writeFileRecord(environment, index, fileName, content, 'restored');
+        return toPublicEnvironment(environment);
+      }),
   );
 
   ipcMain.handle(

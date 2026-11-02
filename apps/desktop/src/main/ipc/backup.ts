@@ -9,6 +9,7 @@ import type {
   BackupImportResult,
   BackupOpenResult,
   BackupRestoreOptions,
+  StoredEnvFileVersion,
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
@@ -32,6 +33,7 @@ import {
   referencedAttachmentFiles,
 } from '../blueprintFileStore';
 import { blueprintRevisionDb } from '../blueprintRevisionDb';
+import { envFileHistoryDb } from '../envFileHistoryDb';
 import { applyNewsSettings } from '../news/runtime';
 import { petManager } from '../pet/petWindow';
 import { promptHistoryDb } from '../promptHistoryDb';
@@ -243,6 +245,7 @@ export function registerBackupHandlers(): void {
       // Everything that can fail on the environments happens before anything is written:
       // a wrong password, or a locked vault that can't encrypt them for this computer.
       let environments: StoredProjectEnvironment[] | null = null;
+      let envFileHistory: StoredEnvFileVersion[] = [];
       if (pending.environments && options.environmentsPassword) {
         const rows = await unsealEnvironments(pending.environments, options.environmentsPassword);
         if (!rows) return { ok: false, wrongPassword: true };
@@ -252,6 +255,7 @@ export function registerBackupHandlers(): void {
         try {
           const built = await toStoredEnvironments(rows, projectIds);
           environments = built.environments;
+          envFileHistory = built.history;
           if (built.skipped > 0) {
             warnings.push(`Skipped ${built.skipped} unreadable project environment entries.`);
           }
@@ -265,13 +269,24 @@ export function registerBackupHandlers(): void {
 
       const snapshot = await readCurrentData();
       const environmentsSnapshot = await store.getProjectEnvironments();
+      const historySnapshot = environments ? envFileHistoryDb.exportAll() : null;
       try {
         await writeData(pending.data);
-        if (environments) await store.setProjectEnvironments(environments);
+        if (environments) {
+          await store.setProjectEnvironments(environments);
+          envFileHistoryDb.replaceAll(envFileHistory);
+        }
       } catch (error) {
         // Put back what was there before rather than leaving a half-written store.
         await writeData(snapshot).catch(() => undefined);
         await store.setProjectEnvironments(environmentsSnapshot).catch(() => undefined);
+        if (historySnapshot) {
+          try {
+            envFileHistoryDb.replaceAll(historySnapshot);
+          } catch {
+            // The environments are back; a history that can't be written now stays as it is.
+          }
+        }
         return {
           ok: false,
           error: `Could not restore that backup: ${error instanceof Error ? error.message : 'unknown error'}. Your existing data was left in place.`,

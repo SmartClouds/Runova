@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
   EnvCredentialSecrets,
+  EnvFileVersionSummary,
   EnvFolderFile,
   EnvImportResult,
   EnvWriteResult,
@@ -19,6 +20,7 @@ import {
   loadIpc,
   useTempUserData,
 } from '../../test/main/ipcHarness';
+import { closeSqliteHandlesAfterEach } from '../../test/main/sqliteHandles';
 import { deriveKey, encryptWithKey } from '../crypto/aesGcm';
 import { store } from '../store';
 
@@ -30,6 +32,7 @@ import { store } from '../store';
  */
 
 const userData = useTempUserData();
+closeSqliteHandlesAfterEach();
 const project = { dir: '' };
 let environmentsModule: typeof import('./environments');
 const PROJECT_ID = 'p1';
@@ -316,6 +319,179 @@ describe('environment files', () => {
     });
     await invoke(IPC.environments.copyFile, environment.id, saved.files[0].id);
     expect(electronState.clipboardText).toBe(SECRET);
+  });
+});
+
+describe('env file history', () => {
+  async function saveFile(
+    environmentId: string,
+    fileName: string,
+    content: string,
+    id?: string,
+  ): Promise<ProjectEnvironment> {
+    return invoke<ProjectEnvironment>(IPC.environments.saveFile, {
+      environmentId,
+      id,
+      fileName,
+      content,
+    });
+  }
+
+  function history(environmentId: string, fileId: string): Promise<EnvFileVersionSummary[]> {
+    return invoke<EnvFileVersionSummary[]>(IPC.environments.fileHistory, environmentId, fileId);
+  }
+
+  /** Everything the history database wrote, WAL included, as one string. */
+  function historyOnDisk(): string {
+    return readdirSync(userData.dataFile(''))
+      .filter((name) => name.startsWith('env-file-history.db'))
+      .map((name) => readFileSync(userData.dataFile(name)).toString('latin1'))
+      .join('');
+  }
+
+  it('keeps the version an edit replaces, encrypted, and reads it back on request', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', SECRET);
+    const file = created.files[0];
+    expect(file).toMatchObject({ origin: 'created', versionCount: 0 });
+
+    const edited = await saveFile(environment.id, '.env', 'API_TOKEN=rotated\nB=2\n', file.id);
+    expect(edited.files[0]).toMatchObject({ origin: 'edited', keyCount: 2, versionCount: 1 });
+
+    const versions = await history(environment.id, file.id);
+    expect(versions).toEqual([
+      {
+        id: expect.any(String),
+        fileName: '.env',
+        keyCount: 1,
+        origin: 'created',
+        savedAt: file.updatedAt,
+        replacedAt: edited.files[0].updatedAt,
+      },
+    ]);
+    expect(JSON.stringify(versions)).not.toContain('do-not-log-me');
+    expect(historyOnDisk()).not.toContain('do-not-log-me');
+
+    expect(
+      await invoke<string>(
+        IPC.environments.readFileVersion,
+        environment.id,
+        file.id,
+        versions[0].id,
+      ),
+    ).toBe(SECRET);
+  });
+
+  it('adds nothing when a save changes neither the name nor the contents', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', 'A=1\n');
+    const again = await saveFile(environment.id, '.env', 'A=1\n', created.files[0].id);
+    expect(again.files[0]).toMatchObject({ origin: 'created', versionCount: 0 });
+    expect(await history(environment.id, created.files[0].id)).toEqual([]);
+  });
+
+  it('records a rename on its own, keeping the old name on the version', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', 'A=1\n');
+    const renamed = await saveFile(environment.id, '.env.local', 'A=1\n', created.files[0].id);
+    expect(renamed.files[0]).toMatchObject({ fileName: '.env.local', origin: 'renamed' });
+    expect(await history(environment.id, created.files[0].id)).toEqual([
+      expect.objectContaining({ fileName: '.env', origin: 'created' }),
+    ]);
+  });
+
+  it('keeps the version an import from the folder overwrites', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', 'A=1\n');
+    writeFileSync(join(project.dir, '.env'), 'A=from-folder\n', 'utf-8');
+    writeFileSync(join(project.dir, '.env.local'), 'B=1\n', 'utf-8');
+
+    await invoke(IPC.environments.importFromFolder, PROJECT_ID, [
+      { fileName: '.env', environmentId: environment.id },
+      { fileName: '.env.local', environmentId: environment.id },
+    ]);
+    const [listed] = await invoke<ProjectEnvironment[]>(IPC.environments.list, PROJECT_ID);
+    expect(listed.files).toEqual([
+      expect.objectContaining({ fileName: '.env', origin: 'imported', versionCount: 1 }),
+      expect.objectContaining({ fileName: '.env.local', origin: 'imported', versionCount: 0 }),
+    ]);
+    expect(await history(environment.id, created.files[0].id)).toEqual([
+      expect.objectContaining({ origin: 'created', keyCount: 1 }),
+    ]);
+
+    // Importing the same contents again leaves the history alone.
+    await invoke(IPC.environments.importFromFolder, PROJECT_ID, [
+      { fileName: '.env', environmentId: environment.id },
+    ]);
+    expect(await history(environment.id, created.files[0].id)).toHaveLength(1);
+  });
+
+  it('restores a version and keeps the contents it replaced, so a restore can be undone', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', 'A=first\n');
+    const fileId = created.files[0].id;
+    await saveFile(environment.id, '.env.local', 'A=second\nB=2\n', fileId);
+    const [first] = await history(environment.id, fileId);
+
+    const restored = await invoke<ProjectEnvironment>(
+      IPC.environments.restoreFileVersion,
+      environment.id,
+      fileId,
+      first.id,
+    );
+    // The contents come back; the file keeps the name it has today.
+    expect(restored.files[0]).toMatchObject({
+      id: fileId,
+      fileName: '.env.local',
+      origin: 'restored',
+      keyCount: 1,
+      versionCount: 2,
+    });
+    expect(await invoke<string>(IPC.environments.readFile, environment.id, fileId)).toBe(
+      'A=first\n',
+    );
+    // A save that changes the contents counts as an edit even when it renames the file too.
+    expect((await history(environment.id, fileId)).map((version) => version.origin)).toEqual([
+      'edited',
+      'created',
+    ]);
+  });
+
+  it("refuses another file's version and a version that is gone", async () => {
+    const environment = await newEnvironment();
+    const one = await saveFile(environment.id, '.env', 'A=1\n');
+    await saveFile(environment.id, '.env', 'A=2\n', one.files[0].id);
+    const two = await saveFile(environment.id, '.env.local', 'B=1\n');
+    const otherId = two.files.find((file) => file.fileName === '.env.local')?.id;
+    const [version] = await history(environment.id, one.files[0].id);
+
+    await expect(
+      invoke(IPC.environments.restoreFileVersion, environment.id, otherId, version.id),
+    ).rejects.toThrow('That version is no longer in the history.');
+    await expect(
+      invoke(IPC.environments.readFileVersion, environment.id, otherId, version.id),
+    ).rejects.toThrow('That version is no longer in the history.');
+    await expect(history(environment.id, 'gone')).rejects.toThrow(
+      'That env file no longer exists.',
+    );
+  });
+
+  it('drops the history with its file and with its environment', async () => {
+    const environment = await newEnvironment();
+    const created = await saveFile(environment.id, '.env', 'A=1\n');
+    const fileId = created.files[0].id;
+    await saveFile(environment.id, '.env', 'A=2\n', fileId);
+    const other = await saveFile(environment.id, '.env.local', 'B=1\n');
+    const otherId = other.files.find((file) => file.fileName === '.env.local')?.id ?? '';
+    await saveFile(environment.id, '.env.local', 'B=2\n', otherId);
+
+    const { envFileHistoryDb } = await import('../envFileHistoryDb');
+    await invoke(IPC.environments.removeFile, environment.id, fileId);
+    expect(envFileHistoryDb.list(fileId)).toEqual([]);
+    expect(envFileHistoryDb.list(otherId)).toHaveLength(1);
+
+    await invoke(IPC.environments.remove, environment.id);
+    expect(envFileHistoryDb.list(otherId)).toEqual([]);
   });
 });
 

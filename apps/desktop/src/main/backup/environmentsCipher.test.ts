@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MAX_ENV_FILE_BYTES } from '@runova/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   SecretEnvelope,
   StoredEnvCredential,
+  StoredEnvFileVersion,
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { setElectronPath } from '../../test/main/electronMock';
@@ -27,12 +28,22 @@ import {
  * halves plus the checks on the way back in, since a backup file can come from anywhere.
  */
 
+/**
+ * The env file history database is a module-level singleton, and this file never rebuilds the
+ * module graph, so the real one would stay bound to the first test's folder. A list is enough.
+ */
+const history = vi.hoisted(() => ({ versions: [] as StoredEnvFileVersion[] }));
+vi.mock('../envFileHistoryDb', () => ({
+  envFileHistoryDb: { exportAll: () => history.versions },
+}));
+
 /** scrypt at the real export cost is deliberately slow; crafted sections use this instead. */
 const CHEAP = { N: 1024, r: 8, p: 1 } as const;
 
 const userData = { dir: '' };
 
 beforeEach(() => {
+  history.versions = [];
   userData.dir = tempDir('runova-envcipher-');
   mkdirSync(join(userData.dir, 'data'), { recursive: true });
   setElectronPath('userData', userData.dir);
@@ -212,6 +223,54 @@ describe('sealing and unsealing', () => {
       files: { content: string }[];
     }[];
     expect(rows[0].files[0].content).toContain('API_KEY=abc');
+  });
+
+  it("carries each file's history in the clear inside the sealed section", async () => {
+    const base = environment();
+    writeEnvironments([
+      environment({ files: [{ ...base.files[0], origin: 'edited' }] }),
+      environment({ id: 'env-2', files: [{ ...base.files[0], id: 'f2', fileName: '.env' }] }),
+    ]);
+    const version = (id: string, content: string, replacedAt: number): StoredEnvFileVersion => ({
+      id,
+      projectId: 'p1',
+      environmentId: 'env-1',
+      fileId: 'f1',
+      fileName: '.env.production',
+      keyCount: 1,
+      origin: 'created',
+      savedAt: replacedAt - 10,
+      replacedAt,
+      contentEnvelope: localEnvelope(content),
+    });
+    // Newest first, the way the database hands them out.
+    history.versions = [version('v2', 'OLD_KEY=2\n', 300), version('v1', 'OLD_KEY=1\n', 200)];
+
+    const section = await sealEnvironments('password');
+    expect(section.ciphertext).not.toContain('OLD_KEY');
+    const rows = (await unsealEnvironments(section, 'password')) as {
+      files: { origin?: string; history: Record<string, unknown>[] }[];
+    }[];
+    expect(rows[0].files[0].origin).toBe('edited');
+    expect(rows[0].files[0].history).toEqual([
+      {
+        id: 'v2',
+        fileName: '.env.production',
+        origin: 'created',
+        savedAt: 290,
+        replacedAt: 300,
+        content: 'OLD_KEY=2\n',
+      },
+      {
+        id: 'v1',
+        fileName: '.env.production',
+        origin: 'created',
+        savedAt: 190,
+        replacedAt: 200,
+        content: 'OLD_KEY=1\n',
+      },
+    ]);
+    expect(rows[1].files[0].history).toEqual([]);
   });
 });
 
@@ -567,6 +626,103 @@ describe('toStoredEnvironments', () => {
   });
 
   it('reads nothing from an empty list', async () => {
-    expect(await toStoredEnvironments([], projects)).toEqual({ environments: [], skipped: 0 });
+    expect(await toStoredEnvironments([], projects)).toEqual({
+      environments: [],
+      history: [],
+      skipped: 0,
+    });
+  });
+
+  describe('env file history', () => {
+    const version = {
+      id: 'v1',
+      fileName: '.env',
+      origin: 'imported',
+      savedAt: 3,
+      replacedAt: 4,
+      content: 'OLD=1\nGONE=2\n',
+    };
+    const withHistory = (file: Record<string, unknown>) => ({ ...row, files: [file] });
+
+    it('re-encrypts each version for this computer and ties it to its file', async () => {
+      const {
+        environments,
+        history: versions,
+        skipped,
+      } = await toStoredEnvironments(
+        [withHistory({ ...row.files[0], origin: 'restored', history: [version] })],
+        projects,
+      );
+      expect(skipped).toBe(0);
+      expect(environments[0].files[0].origin).toBe('restored');
+      expect(versions).toEqual([
+        {
+          id: 'v1',
+          projectId: 'p1',
+          environmentId: 'env-1',
+          fileId: 'f1',
+          fileName: '.env',
+          keyCount: 2,
+          origin: 'imported',
+          savedAt: 3,
+          replacedAt: 4,
+          contentEnvelope: expect.objectContaining({ mode: 'safeStorage' }),
+        },
+      ]);
+      expect(await decryptSecret(versions[0].contentEnvelope)).toBe('OLD=1\nGONE=2\n');
+    });
+
+    it('restores a backup made before history existed with none', async () => {
+      const { environments, history: versions } = await toStoredEnvironments([row], projects);
+      expect(environments[0].files[0].origin).toBeUndefined();
+      expect(versions).toEqual([]);
+    });
+
+    it('drops an origin it does not know, keeping the version', async () => {
+      const { environments, history: versions } = await toStoredEnvironments(
+        [withHistory({ ...row.files[0], origin: 'hacked', history: [{ ...version, origin: 7 }] })],
+        projects,
+      );
+      expect(environments[0].files[0].origin).toBeUndefined();
+      expect(versions[0].origin).toBeUndefined();
+    });
+
+    it.each([
+      ['no id', { ...version, id: undefined }],
+      ['a name with a folder', { ...version, fileName: '../.env' }],
+      ['no contents', { ...version, content: undefined }],
+      ['contents past the size cap', { ...version, content: 'x'.repeat(MAX_ENV_FILE_BYTES + 1) }],
+      ['not an object', 'v1'],
+    ])('drops a version with %s and counts it', async (_label, bad) => {
+      const { history: versions, skipped } = await toStoredEnvironments(
+        [withHistory({ ...row.files[0], history: [bad, { ...version, id: 'v2' }] })],
+        projects,
+      );
+      expect(versions.map((one) => one.id)).toEqual(['v2']);
+      expect(skipped).toBe(1);
+    });
+
+    it('keeps the first of two versions with the same id', async () => {
+      const { history: versions, skipped } = await toStoredEnvironments(
+        [
+          withHistory({ ...row.files[0], history: [version] }),
+          { ...withHistory({ ...row.files[0], id: 'f9', history: [version] }), id: 'env-9' },
+        ],
+        projects,
+      );
+      expect(versions.map((one) => one.fileId)).toEqual(['f1']);
+      expect(skipped).toBe(1);
+    });
+
+    it('drops the history of a file or environment it dropped', async () => {
+      const { history: versions } = await toStoredEnvironments(
+        [
+          withHistory({ ...row.files[0], fileName: 'bad name', history: [version] }),
+          { ...withHistory({ ...row.files[0], history: [version] }), projectId: 'nope' },
+        ],
+        projects,
+      );
+      expect(versions).toEqual([]);
+    });
   });
 });

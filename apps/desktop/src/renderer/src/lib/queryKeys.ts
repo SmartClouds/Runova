@@ -178,6 +178,7 @@ export const queryKeys = {
   sshVaultStatus: ['ssh-vault-status'] as const,
   rdpServers: ['rdp-servers'] as const,
   projectEnvironments: (projectId: string) => ['project-environments', projectId] as const,
+  envFileHistory: (fileId: string) => ['env-file-history', fileId] as const,
   /** Local LanguageTool install and server state, for Settings and the Tools card. */
   grammarLocalStatus: ['grammar-local-status'] as const,
   /** Which proxy the app is going through, and what this machine itself is set to. */

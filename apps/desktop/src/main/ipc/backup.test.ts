@@ -7,6 +7,7 @@ import type {
   BackupExportResult,
   BackupImportResult,
   BackupOpenResult,
+  StoredEnvFileVersion,
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
@@ -20,7 +21,7 @@ import {
   useTempUserData,
 } from '../../test/main/ipcHarness';
 import { BACKUP_VERSION, type BackupEnvelope } from '../backup/envelope';
-import { encryptSecret } from '../ssh/vault';
+import { decryptSecret, encryptSecret } from '../ssh/vault';
 import { store } from '../store';
 
 /**
@@ -39,6 +40,24 @@ const dbRows = vi.hoisted(() => ({
   promptHistory: [] as unknown[],
   skillAudits: [] as unknown[],
   blueprintRevisions: [] as unknown[],
+  envFileHistory: [] as StoredEnvFileVersion[],
+  /** Set to make the next history write fail, to check the restore puts everything back. */
+  failNextHistoryWrite: false,
+}));
+
+vi.mock('../envFileHistoryDb', () => ({
+  envFileHistoryDb: {
+    exportAll: () => dbRows.envFileHistory,
+    replaceAll: (rows: StoredEnvFileVersion[]) => {
+      if (dbRows.failNextHistoryWrite) {
+        dbRows.failNextHistoryWrite = false;
+        throw new Error('disk full');
+      }
+      dbRows.envFileHistory = [...rows];
+    },
+    retainProjects: () => 0,
+    countByFile: () => new Map(),
+  },
 }));
 
 vi.mock('../promptHistoryDb', () => ({
@@ -121,6 +140,8 @@ beforeEach(async () => {
   dbRows.promptHistory = [];
   dbRows.skillAudits = [];
   dbRows.blueprintRevisions = [];
+  dbRows.envFileHistory = [];
+  dbRows.failNextHistoryWrite = false;
   await loadIpc(
     () => import('./backup'),
     (module) => module.registerBackupHandlers(),
@@ -481,5 +502,84 @@ describe('backup environments section', () => {
     });
     expect(restored.ok).toBe(true);
     expect(await store.getProjectEnvironments()).toEqual([]);
+  });
+
+  describe('env file history', () => {
+    async function seedHistory(): Promise<void> {
+      dbRows.envFileHistory = [
+        {
+          id: 'v1',
+          projectId: PROJECT_ID,
+          environmentId: 'env-1',
+          fileId: 'file-1',
+          fileName: '.env',
+          keyCount: 1,
+          origin: 'created',
+          savedAt: 1_600_000_000_000,
+          replacedAt: 1_700_000_000_000,
+          contentEnvelope: await encryptSecret('API_TOKEN=older-secret\n'),
+        },
+      ];
+    }
+
+    it('rides along in the sealed section and comes back on restore', async () => {
+      seedProject();
+      await seedEnvironment();
+      await seedHistory();
+
+      const { path } = await exportTo('with-history.json', { environmentsPassword: PASSWORD });
+      expect(readFileSync(path, 'utf-8')).not.toContain('older-secret');
+
+      dbRows.envFileHistory = [];
+      await store.setProjectEnvironments([]);
+      const opened = await open(path);
+      const restored = await invoke<BackupImportResult>(IPC.backup.restore, opened.token, {
+        environmentsPassword: PASSWORD,
+      });
+      expect(restored.ok).toBe(true);
+      expect(dbRows.envFileHistory).toEqual([
+        expect.objectContaining({
+          id: 'v1',
+          environmentId: 'env-1',
+          fileId: 'file-1',
+          fileName: '.env',
+          origin: 'created',
+          replacedAt: 1_700_000_000_000,
+        }),
+      ]);
+      expect(await decryptSecret(dbRows.envFileHistory[0].contentEnvelope)).toBe(
+        'API_TOKEN=older-secret\n',
+      );
+    });
+
+    it('is left alone when the restore skips the environments', async () => {
+      seedProject();
+      await seedEnvironment();
+      await seedHistory();
+      const { path } = await exportTo('skip-history.json', { environmentsPassword: PASSWORD });
+
+      const kept = dbRows.envFileHistory;
+      const opened = await open(path);
+      await invoke(IPC.backup.restore, opened.token, { environmentsPassword: null });
+      expect(dbRows.envFileHistory).toBe(kept);
+    });
+
+    it('puts the environments and their history back when the history cannot be written', async () => {
+      seedProject();
+      await seedEnvironment();
+      await seedHistory();
+      const { path } = await exportTo('broken-history.json', { environmentsPassword: PASSWORD });
+
+      await store.setProjectEnvironments([]);
+      dbRows.envFileHistory = [];
+      dbRows.failNextHistoryWrite = true;
+      const opened = await open(path);
+      const restored = await invoke<BackupImportResult>(IPC.backup.restore, opened.token, {
+        environmentsPassword: PASSWORD,
+      });
+      expect(restored).toMatchObject({ ok: false, error: expect.stringContaining('disk full') });
+      expect(await store.getProjectEnvironments()).toEqual([]);
+      expect(dbRows.envFileHistory).toEqual([]);
+    });
   });
 });

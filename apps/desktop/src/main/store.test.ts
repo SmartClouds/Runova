@@ -1105,6 +1105,31 @@ describe('pruneOrphanEnvironments', () => {
     expect((await store.getProjectEnvironments()).map((one) => one.id)).toEqual(['e1']);
   });
 
+  it('drops the env file history of a project that is gone', async () => {
+    const { store, pruneOrphanEnvironments } = await loadStore();
+    const { envFileHistoryDb } = await import('./envFileHistoryDb');
+    await store.setProjects([project({ id: 'live' })]);
+    await store.setProjectEnvironments([
+      { id: 'e1', projectId: 'live' },
+    ] as unknown as StoredProjectEnvironment[]);
+    const version = {
+      environmentId: 'e1',
+      fileName: '.env',
+      keyCount: 1,
+      savedAt: 1,
+      replacedAt: 2,
+      contentEnvelope: { mode: 'safeStorage', ciphertext: 'sealed' },
+    } as const;
+    envFileHistoryDb.add({ ...version, projectId: 'live', fileId: 'f-live' });
+    // History can outlive its environment row, for example after a crash between the two writes.
+    envFileHistoryDb.add({ ...version, projectId: 'dead', fileId: 'f-dead' });
+
+    await pruneOrphanEnvironments();
+
+    expect(envFileHistoryDb.list('f-live')).toHaveLength(1);
+    expect(envFileHistoryDb.list('f-dead')).toEqual([]);
+  });
+
   it('leaves the file alone when nothing is orphaned', async () => {
     const { store, pruneOrphanEnvironments } = await loadStore();
     await store.setProjects([project({ id: 'live' })]);

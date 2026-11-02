@@ -13,6 +13,7 @@ import {
   Copy,
   Download,
   FileText,
+  History,
   Key,
   Link,
   Pencil,
@@ -41,6 +42,7 @@ import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
 import { EnvCredentialDialog } from './EnvCredentialDialog';
 import { EnvFileDialog } from './EnvFileDialog';
+import { EnvFileHistoryDialog } from './EnvFileHistoryDialog';
 import { EnvironmentFormDialog } from './EnvironmentFormDialog';
 import { EnvironmentKindBadge, EnvironmentKindDot } from './EnvironmentKindBadge';
 import { ImportEnvFilesDialog } from './ImportEnvFilesDialog';
@@ -48,6 +50,17 @@ import { ipcErrorMessage } from './ipcError';
 
 function updatedLabel(updatedAt: number): string {
   return `updated ${timeAgo(new Date(updatedAt).toISOString())}`;
+}
+
+function fileDetails(file: EnvFileSummary): string {
+  const parts = [
+    `${file.keyCount} ${file.keyCount === 1 ? 'key' : 'keys'}`,
+    updatedLabel(file.updatedAt),
+  ];
+  if (file.versionCount > 0) {
+    parts.push(`${file.versionCount} earlier ${file.versionCount === 1 ? 'version' : 'versions'}`);
+  }
+  return parts.join(' · ');
 }
 
 function AddEnvironmentMenu({
@@ -112,6 +125,10 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
   const [fileDialog, setFileDialog] = useState<{ open: boolean; file?: EnvFileSummary }>({
     open: false,
   });
+  // By id, so the dialog sees the file as the latest list has it (after a restore, say).
+  const [historyDialog, setHistoryDialog] = useState<{ open: boolean; fileId?: string }>({
+    open: false,
+  });
   const [credentialDialog, setCredentialDialog] = useState<{
     open: boolean;
     credential?: EnvCredentialSummary;
@@ -127,6 +144,7 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
   });
   const environments = environmentsQuery.data ?? [];
   const selected = environments.find((e) => e.id === selectedId) ?? environments[0];
+  const historyFile = selected?.files.find((file) => file.id === historyDialog.fileId);
 
   function refresh(): void {
     void queryClient.invalidateQueries({ queryKey: queryKeys.projectEnvironments(project.id) });
@@ -385,8 +403,7 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-mono text-sm">{file.fileName}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {file.keyCount} {file.keyCount === 1 ? 'key' : 'keys'} ·{' '}
-                            {updatedLabel(file.updatedAt)}
+                            {fileDetails(file)}
                           </p>
                         </div>
                         <IconAction
@@ -394,6 +411,14 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                           onClick={() => void withVault(() => setFileDialog({ open: true, file }))}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </IconAction>
+                        <IconAction
+                          label="History"
+                          onClick={() =>
+                            void withVault(() => setHistoryDialog({ open: true, fileId: file.id }))
+                          }
+                        >
+                          <History className="h-3.5 w-3.5" />
                         </IconAction>
                         <IconAction label="Copy contents" onClick={() => copyFile(selected, file)}>
                           <Copy className="h-3.5 w-3.5" />
@@ -509,6 +534,15 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
             file={fileDialog.file}
             onSaved={refresh}
           />
+          {historyFile && (
+            <EnvFileHistoryDialog
+              open={historyDialog.open}
+              onOpenChange={(open) => setHistoryDialog((current) => ({ ...current, open }))}
+              environment={selected}
+              file={historyFile}
+              onRestored={refresh}
+            />
+          )}
           <EnvCredentialDialog
             open={credentialDialog.open}
             onOpenChange={(open) => setCredentialDialog((current) => ({ ...current, open }))}
