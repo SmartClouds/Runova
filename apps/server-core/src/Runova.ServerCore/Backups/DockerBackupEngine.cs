@@ -137,7 +137,18 @@ internal sealed class DockerBackupEngine(Uri endpoint) : IBackupDocker, IDisposa
         var containers = new List<BackupContainer>();
         foreach (var summary in listed.Where(c => c.Labels is null || !(c.Labels.ContainsKey(HelperLabel) || c.Labels.ContainsKey(LegacyNames.BackupHelperLabel))))
         {
-            var inspected = await Client.Containers.InspectContainerAsync(summary.ID, cancellationToken);
+            ContainerInspectResponse inspected;
+            try
+            {
+                inspected = await Client.Containers.InspectContainerAsync(summary.ID, cancellationToken);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                // Removed between the list and now (a compose down, a --rm container exiting).
+                // There is nothing left of it to back up.
+                continue;
+            }
+
             var config = inspected.Config;
             var host = inspected.HostConfig;
             var labels = config?.Labels?.ToDictionary(StringComparer.Ordinal) ?? [];

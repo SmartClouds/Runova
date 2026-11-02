@@ -231,6 +231,18 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Takes a container away while it stays in the listing, as when it goes between a client's
+    /// list and its inspect (a compose down, a --rm container exiting).
+    /// </summary>
+    public void Remove(string name)
+    {
+        if (_inspections.Remove(name, out var inspection))
+        {
+            _inspections.Remove(inspection["Id"]!.GetValue<string>());
+        }
+    }
+
     private static bool IsTrue(string? value) => value is "1" or "true" or "True";
 
     private JsonObject? Find(string id)
