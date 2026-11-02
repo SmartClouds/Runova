@@ -134,6 +134,14 @@ interface Ready {
   text: string;
 }
 
+/** What the window keeps while the switches are timed: long tasks and the timed windows. */
+interface Measured {
+  /** Start and duration of every long task, in the window's milliseconds. */
+  longTasks: [number, number][];
+  /** From and to of every window the test timed. */
+  measured: [number, number][];
+}
+
 /** The big project's panel is up once its first test file shows in the tree. */
 const BIG_READY: Ready = { selector: '[data-test-name]', text: 'src/f0.test.ts' };
 /** The other project has no tests, which its panel says. */
@@ -170,7 +178,10 @@ async function switchTo(page: Page, name: string, ready: Ready): Promise<number>
         if (performance.now() > deadline) throw new Error(`"${ready.text}" never showed`);
         await turn();
       }
-      return performance.now() - started;
+      const ended = performance.now();
+      // Kept for the long task count once the observer is on (see the test).
+      (window as unknown as Partial<Measured>).measured?.push([started, ended]);
+      return ended - started;
     },
     { label, ready },
   );
@@ -227,13 +238,17 @@ test('switching workspaces stays quick while a big test suite streams its result
       last = now;
     }, 50);
   });
+  // Every long task is kept with its start, and only the ones inside a timed window count (see
+  // `measured`). Playwright's own checks run on the window's thread too: a `getByText` or role
+  // query walks all 3,200 rows, and a check that misses builds an accessibility snapshot of the
+  // whole page, which took 200ms here and up to a second on a CI runner. Those are not the app.
   await page.evaluate(() => {
-    const state = window as unknown as { longestTaskMs: number };
-    state.longestTaskMs = 0;
+    const state = window as unknown as Measured;
+    state.longTasks = [];
+    state.measured = [];
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        state.longestTaskMs = Math.max(state.longestTaskMs, entry.duration);
-      }
+      for (const entry of list.getEntries())
+        state.longTasks.push([entry.startTime, entry.duration]);
     }).observe({ type: 'longtask', buffered: false });
   });
 
@@ -247,15 +262,26 @@ test('switching workspaces stays quick while a big test suite streams its result
     switches.push(await switchTo(page, 'other project', OTHER_READY));
     switches.push(await switchTo(page, 'big suite', BIG_READY));
   }
+  // The window also has to keep up between switches, while results and output keep coming.
+  await page.evaluate(async () => {
+    const started = performance.now();
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    (window as unknown as Measured).measured.push([started, performance.now()]);
+  });
   // Every switch above has to have happened under load, or the numbers mean nothing.
   await expect(page.getByText(/Running \d+ tests/)).toBeVisible();
 
   const mainLagMs = await app.evaluate(
     () => (globalThis as unknown as { mainLagMs: number }).mainLagMs,
   );
-  const longestTaskMs = await page.evaluate(
-    () => (window as unknown as { longestTaskMs: number }).longestTaskMs,
-  );
+  // The longest task that overlaps a window the test timed, when only the app was running.
+  const longestTaskMs = await page.evaluate(() => {
+    const { longTasks, measured } = window as unknown as Measured;
+    const inside = longTasks.filter(([start, duration]) =>
+      measured.some(([from, to]) => start < to && start + duration > from),
+    );
+    return Math.round(Math.max(0, ...inside.map(([, duration]) => duration)));
+  });
   const metrics = {
     idleSwitches,
     switches,
