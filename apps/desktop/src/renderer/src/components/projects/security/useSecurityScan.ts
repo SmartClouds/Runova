@@ -11,6 +11,7 @@ import type { ActiveScan } from '@shared/apiTypes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 
 /**
@@ -39,7 +40,10 @@ export function useSecurityScan(projectId: string) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, ScannerProgressState>>({});
-  const [selectedScanners, setSelectedScanners] = useState<SecurityScannerId[] | null>(null);
+  const [selectedScanners, setSelectedScanners] = useProjectUiState<SecurityScannerId[] | null>(
+    'security.scanners',
+    null,
+  );
   const runIdRef = useRef<string | null>(null);
 
   const preflightQuery = useQuery({

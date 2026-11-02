@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 import { timeAgo } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -98,7 +99,10 @@ function IconAction({
 
 export function EnvironmentsTab({ project }: { project: Project }): React.JSX.Element {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useProjectUiState<string | null>(
+    'environments.selectedId',
+    null,
+  );
 
   const [environmentDialog, setEnvironmentDialog] = useState<{
     open: boolean;

@@ -42,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { OverflowScroll } from '@/components/ui/overflow-scroll';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 
@@ -396,9 +397,12 @@ function PackagesCopyMenu({
 export function PackagesTab({ project }: { project: Project }): React.JSX.Element {
   const projectId = project.id;
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState<PackageFilter>('all');
-  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useProjectUiState<Set<string>>(
+    'packages.selected',
+    () => new Set(),
+  );
+  const [filter, setFilter] = useProjectUiState<PackageFilter>('packages.filter', 'all');
+  const [query, setQuery] = useProjectUiState('packages.query', '');
   const [progress, setProgress] = useState<Map<string, PackageTick>>(new Map());
   const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(
     null,

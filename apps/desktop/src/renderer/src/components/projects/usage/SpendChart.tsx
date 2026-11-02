@@ -1,7 +1,8 @@
 import type { ProjectUsageDay } from '@shared/apiTypes';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { PillTabs, SECTION_HEADING } from '@/components/pageKit';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import {
   barRangeLabel,
   barValue,
@@ -67,7 +68,7 @@ export function SpendChart({
   days: number | null;
 }): React.JSX.Element {
   const costKnown = hasCost(byDay);
-  const [chosen, setChosen] = useState<ChartMetric>('cost');
+  const [chosen, setChosen] = useProjectUiState<ChartMetric>('usage.metric', 'cost');
   const metric: ChartMetric = costKnown ? chosen : 'tokens';
   const chart = useMemo(() => buildChart(byDay, days, new Date()), [byDay, days]);
   const { bars, grain } = chart;

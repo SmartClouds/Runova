@@ -1,6 +1,5 @@
 import type { ProjectUsageReport } from '@shared/apiTypes';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 import { PROVIDER_LABEL } from '@/components/agentHistory/historyFilters';
 import { ChartColumn, CircleInfo, RefreshCw } from '@/components/icons';
 import { LoadFailure, PillTabs, SECTION_HEADING, SECTION_WELL } from '@/components/pageKit';
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { CountUp } from '@/components/usage/CountUp';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 import { formatTokens } from '@/lib/usageFormat';
 import { cn } from '@/lib/utils';
@@ -171,7 +171,7 @@ function Footnotes({ report }: { report: Report }): React.JSX.Element {
  * Reading a long history takes a few seconds, so each period shimmers in place until it lands.
  */
 export function ProjectUsageTab({ projectId }: { projectId: string }): React.JSX.Element {
-  const [period, setPeriod] = useState<PeriodValue>('all');
+  const [period, setPeriod] = useProjectUiState<PeriodValue>('usage.period', 'all');
   const days = PERIODS.find((entry) => entry.value === period)?.days ?? null;
 
   const usage = useQuery({

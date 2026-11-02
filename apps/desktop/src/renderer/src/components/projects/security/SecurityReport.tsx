@@ -10,12 +10,13 @@ import {
   SECURITY_SEVERITY_LABEL,
   SECURITY_VERDICT_LABEL,
 } from '@runova/core';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { CircleCheck, Filter, Shield, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { cn } from '@/lib/utils';
 import { FindingRow, SEVERITY_BADGE } from './FindingRow';
 import { ScanLogViewer } from './ScanLogViewer';
@@ -49,10 +50,16 @@ const VERDICT_STYLE: Record<SecurityVerdict, { frame: string; blurb: string }> =
 const GROUP_RENDER_CAP = 50;
 
 export function SecurityReport({ record }: { record: SecurityScanRecord }): React.JSX.Element {
-  const [severityFilter, setSeverityFilter] = useState<SecuritySeverity[]>([]);
-  const [scannerFilter, setScannerFilter] = useState<SecurityScannerId[]>([]);
-  const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState<SecuritySeverity[]>([]);
+  const [severityFilter, setSeverityFilter] = useProjectUiState<SecuritySeverity[]>(
+    'security.severity',
+    [],
+  );
+  const [scannerFilter, setScannerFilter] = useProjectUiState<SecurityScannerId[]>(
+    'security.scannerFilter',
+    [],
+  );
+  const [search, setSearch] = useProjectUiState('security.search', '');
+  const [expanded, setExpanded] = useProjectUiState<SecuritySeverity[]>('security.expanded', []);
 
   const style = VERDICT_STYLE[record.verdict];
   const total = record.findings.length;

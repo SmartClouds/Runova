@@ -1012,3 +1012,137 @@ describe('ProjectDetailPage Git tab without a repository', () => {
     );
   });
 });
+
+describe('ProjectDetailPage coming back to it', () => {
+  function renderAt(route: string, projects: Project[] = [project()], bridge: Overrides = {}) {
+    return renderWithProviders(<ProjectDetailPage />, {
+      route,
+      path: 'projects/:projectId',
+      bridge: {
+        ...backgroundTabs,
+        'projects.list': projects,
+        'agents.projectUsage': { status: 'unavailable' },
+        ...bridge,
+      },
+    });
+  }
+
+  function currentSection(): string | undefined {
+    return within(sectionNav())
+      .getAllByRole('button')
+      .find((button) => button.getAttribute('aria-current') === 'page')
+      ?.textContent?.trim();
+  }
+
+  it('opens the tab the project was left on when the address names none', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    first.unmount();
+
+    renderAt('/projects/p1');
+
+    expect(await screen.findByRole('heading', { name: 'Usage and cost' })).toBeTruthy();
+    expect(
+      within(sectionNav()).getByRole('button', { name: /^Usage/, current: 'page' }),
+    ).toBeTruthy();
+  });
+
+  it('brings back the sub-view of a tab along with it', async () => {
+    const first = renderAt('/projects/p1?tab=prompts&view=scheduled', [project()], {
+      'scheduledTasks.listByProject': [],
+    });
+    expect(await screen.findByText('Nothing scheduled')).toBeTruthy();
+    first.unmount();
+
+    renderAt('/projects/p1', [project()], { 'scheduledTasks.listByProject': [] });
+
+    expect(await screen.findByText('Nothing scheduled')).toBeTruthy();
+    const promptViews = screen.getByRole('navigation', { name: 'Prompt views' });
+    expect(
+      within(promptViews).getByRole('button', { name: /^Scheduled/, current: true }),
+    ).toBeTruthy();
+  });
+
+  it('keeps the choice made inside the tab, not only the tab', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await first.user.click(await screen.findByText('30 days'));
+    await waitFor(() =>
+      expect(first.bridge.$fn('agents.projectUsage')).toHaveBeenCalledWith('p1', 30),
+    );
+    first.unmount();
+
+    const second = renderAt('/projects/p1');
+
+    await waitFor(() =>
+      expect(second.bridge.$fn('agents.projectUsage')).toHaveBeenCalledWith('p1', 30),
+    );
+    expect(second.bridge.$fn('agents.projectUsage')).not.toHaveBeenCalledWith('p1', null);
+  });
+
+  it('lets a link to another tab win, and remembers that one instead', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    first.unmount();
+
+    const second = renderAt('/projects/p1?tab=git');
+    expect(await screen.findByText("This folder isn't a git repository yet")).toBeTruthy();
+    expect(currentSection()).toMatch(/^Git/);
+    second.unmount();
+
+    renderAt('/projects/p1');
+    expect(await screen.findByText("This folder isn't a git repository yet")).toBeTruthy();
+    expect(currentSection()).toMatch(/^Git/);
+  });
+
+  it('stays on Overview when that is where the project was left', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    await openSection(first.user, /^Overview/);
+    first.unmount();
+
+    renderAt('/projects/p1');
+
+    await screen.findByRole('heading', { name: 'Apollo' });
+    expect(currentSection()).toMatch(/^Overview/);
+  });
+
+  it('can still be switched to Overview from a restored tab', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    first.unmount();
+
+    const { user } = renderAt('/projects/p1');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    await openSection(user, /^Overview/);
+
+    await waitFor(() => expect(currentSection()).toMatch(/^Overview/));
+    expect(screen.queryByRole('heading', { name: 'Usage and cost' })).toBeNull();
+  });
+
+  it('keeps one project from opening on the tab of another', async () => {
+    const projects = [project(), project({ id: 'p2', name: 'Borealis' })];
+    const first = renderAt('/projects/p1?tab=usage', projects);
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    first.unmount();
+
+    renderAt('/projects/p2', projects);
+
+    await screen.findByRole('heading', { name: 'Borealis' });
+    expect(currentSection()).toMatch(/^Overview/);
+  });
+
+  it('does not take over an address that carries a one-shot link', async () => {
+    const first = renderAt('/projects/p1?tab=usage');
+    await screen.findByRole('heading', { name: 'Usage and cost' });
+    first.unmount();
+
+    renderAt('/projects/p1?edit=run');
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Edit project')).toBeTruthy();
+    const nav = screen.getByRole('navigation', { name: 'Project sections', hidden: true });
+    expect(
+      within(nav).getByRole('button', { name: /^Overview/, current: 'page', hidden: true }),
+    ).toBeTruthy();
+  });
+});

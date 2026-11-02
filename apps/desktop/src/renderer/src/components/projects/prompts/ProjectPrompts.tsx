@@ -13,6 +13,7 @@ import { CalendarDays, FileText, History, Plus, Search, Sparkles } from '@/compo
 import { PillTabs, SearchPill } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 import { runPromptInTerminal } from '@/lib/runScheduledPrompt';
 import { cn } from '@/lib/utils';
@@ -53,11 +54,11 @@ export function ProjectPrompts({ project }: { project: Project }): React.JSX.Ele
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view');
   const view: PromptView = isPromptView(viewParam) ? viewParam : 'all';
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useProjectUiState('prompts.search', '');
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [movingEntry, setMovingEntry] = useState<PromptHistoryEntry | null>(null);
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
-  const [showImplemented, setShowImplemented] = useState(false);
+  const [showImplemented, setShowImplemented] = useProjectUiState('prompts.showImplemented', false);
 
   function setView(next: PromptView): void {
     setSearchParams(

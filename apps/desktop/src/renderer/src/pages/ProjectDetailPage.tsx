@@ -24,7 +24,7 @@ import type {
 } from '@shared/apiTypes';
 import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CliLogo, cliOptionIcon } from '@/components/cliLogos';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
@@ -164,11 +164,14 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { useGitRepoWatch } from '@/hooks/useGitRepoWatch';
+import { ProjectUiScope, useProjectUiState } from '@/hooks/useProjectUiState';
 import { sanitizeCommitMessage, splitGitPath } from '@/lib/git';
+import { rememberable, restoreTarget } from '@/lib/projectDetailTab';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
 import { usePageHeader } from '@/stores/pageHeaderStore';
+import { projectUiKey, useProjectUiStore } from '@/stores/projectUiStore';
 import { useShortcutLabel } from '@/stores/shortcutStore';
 import { useTerminalStore } from '@/stores/terminalStore';
 import {
@@ -177,7 +180,49 @@ import {
   useVersionDialogStore,
 } from '@/stores/versionDialogStore';
 
+/**
+ * The route element. The page is unmounted whenever the user leaves it, so this keeps what they
+ * had open for the way back: the tab is put back when the address names none, and the tabs file
+ * their selections and filters under this project (see `useProjectUiState`).
+ */
 export default function ProjectDetailPage(): React.JSX.Element {
+  const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const remembered = useProjectUiStore((state) =>
+    projectId ? state.values[projectUiKey(projectId, REMEMBERED_TAB_KEY)] : undefined,
+  );
+  // Only on the way in. Later, an empty address is the user choosing Overview.
+  const entering = useRef(true);
+  const target =
+    projectId && entering.current
+      ? restoreTarget(searchParams, typeof remembered === 'string' ? remembered : null)
+      : null;
+  useEffect(() => {
+    entering.current = false;
+  }, []);
+
+  // Skipped while the restore is on its way, so the bare address cannot wipe what comes back.
+  const search = searchParams.toString();
+  useEffect(() => {
+    if (!projectId || target) return;
+    useProjectUiStore
+      .getState()
+      .set(projectId, REMEMBERED_TAB_KEY, rememberable(new URLSearchParams(search)));
+  }, [projectId, target, search]);
+
+  // Replaced before the page renders, so Overview never paints and starts its queries.
+  if (target) return <Navigate replace to={{ search: `?${target.toString()}` }} />;
+  return (
+    <ProjectUiScope.Provider value={projectId ?? null}>
+      <ProjectDetailView />
+    </ProjectUiScope.Provider>
+  );
+}
+
+/** Where the open tab is remembered inside `projectUiStore`. */
+const REMEMBERED_TAB_KEY = 'address';
+
+function ProjectDetailView(): React.JSX.Element {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1211,8 +1256,8 @@ export default function ProjectDetailPage(): React.JSX.Element {
 
           {section === 'git' && (
             <GitTab
-              // The route reuses this page when moving between projects; without a key the tag
-              // dialogs would carry one project's fields and running suggestion into the next.
+              // Keyed so the tag dialogs never carry one project's fields and running
+              // suggestion into another's.
               key={project.id}
               projectId={project.id}
               folderPath={project.folderPath}
@@ -1224,8 +1269,7 @@ export default function ProjectDetailPage(): React.JSX.Element {
           )}
           {section === 'git' && <ProjectWorktreeSetupCard project={project} />}
 
-          {/* Keyed like Git: the route reuses this page between projects, and the period and chart
-              choice should not carry over. */}
+          {/* Keyed like Git, so a running request does not follow the user to another project. */}
           {section === 'usage' && <ProjectUsageTab key={project.id} projectId={project.id} />}
 
           {section === 'review' && (
@@ -2023,9 +2067,9 @@ function GitTab({
   const queryClient = useQueryClient();
 
   const [setupOpen, setSetupOpen] = useState(false);
-  const [branchName, setBranchName] = useState('');
+  const [branchName, setBranchName] = useProjectUiState('git.branchName', '');
   const [defaultBranchPick, setDefaultBranchPick] = useState('');
-  const [commitMessage, setCommitMessage] = useState('');
+  const [commitMessage, setCommitMessage] = useProjectUiState('git.commitMessage', '');
   const [suggestingBranch, setSuggestingBranch] = useState(false);
   const [suggestingCommit, setSuggestingCommit] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
