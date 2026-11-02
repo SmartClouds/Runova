@@ -156,7 +156,7 @@ export function SecurityPanel({
           <ErrorReportingCard server={server} owner={owner} onUpdateCore={onUpdateCore} />
         </TabsContent>
       )}
-      <TabsContent value="connection" className="mt-0">
+      <TabsContent value="connection" className="mt-0 space-y-2">
         <CoreDomainCard server={server} owner={owner} admin={admin} />
         <DirectTlsCard server={server} owner={owner} />
       </TabsContent>
