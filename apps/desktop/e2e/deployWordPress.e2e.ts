@@ -266,7 +266,8 @@ test.describe('WordPress sites in Deploy and Projects', () => {
 
     const deploy = p.getByRole('button', { name: `Deploy to ${SITE_LABEL}` });
     await expect(deploy).toBeVisible({ timeout: MINUTE });
-    await expect(deploy).toHaveText('Deploy');
+    // An icon button: its name says what it does, and a deploy under way or unseen would add to it.
+    await expect(deploy).toHaveAccessibleName(`Deploy to ${SITE_LABEL}`);
     await expect(p.getByRole('button', { name: 'Tag a version' })).toHaveCount(0);
 
     await deploy.click();
@@ -280,7 +281,7 @@ test.describe('WordPress sites in Deploy and Projects', () => {
 
     expect(siteFile(wp(), SITE_SETUP)).toBe(SETUP_V4);
     // The result was seen in the dialog, so the header is back to plain Deploy, with no dot.
-    await expect(deploy).toHaveText('Deploy');
+    await expect(deploy).toHaveAccessibleName(`Deploy to ${SITE_LABEL}`);
     await expect(p.getByTestId('deploy-result-dot')).toHaveCount(0);
 
     // Back to the project's WordPress section, where the next step starts.
