@@ -89,6 +89,15 @@ describe('checkCatalogUpdate', () => {
     ]);
   });
 
+  it('leaves out a role the install does not use, even when it runs no image for it', () => {
+    const result = checkCatalogUpdate(TEMPLATE, {
+      version: '3',
+      images: { app: { tag: '3.0.1', digest: `sha256:${'a'.repeat(64)}` } },
+      roles: ['app'],
+    });
+    expect(result).toMatchObject({ status: 'current', changes: [] });
+  });
+
   it('says when a release line is no longer in the catalog', () => {
     const result = checkCatalogUpdate(TEMPLATE, installed('1', ['1.0', 'e'], ['15', 'f']));
     expect(result.status).toBe('retired');

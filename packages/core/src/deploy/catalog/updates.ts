@@ -17,6 +17,11 @@ export interface InstalledCatalogApp {
   version: string;
   /** What each image role runs now. */
   images: Readonly<Record<string, InstalledCatalogImage>>;
+  /**
+   * The image roles the install's choices use, when known. An app installed without an optional
+   * part (Ollama without Open WebUI) uses fewer than its version pins, and the rest are no update.
+   */
+  roles?: readonly string[];
 }
 
 export interface CatalogImageChange {
@@ -67,6 +72,7 @@ export function checkCatalogUpdate(
   const changes: CatalogImageChange[] = [];
   let ahead = false;
   for (const [role, image] of Object.entries(pinned.images)) {
+    if (installed.roles && !installed.roles.includes(role)) continue;
     const running = installed.images[role];
     if (!running) {
       changes.push({ role, from: null, to: image });

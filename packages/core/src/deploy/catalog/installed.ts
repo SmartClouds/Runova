@@ -76,6 +76,7 @@ export function readCatalogInstall(
   );
   const services = isRecord(document.services) ? document.services : {};
   const images: Record<string, { tag: string; digest: string }> = {};
+  let roles: string[] | undefined;
   // Which service runs which role comes from the template, built again with the same choices.
   const pinned = template.versions.find((candidate) => candidate.id === version);
   const parsed = template.parameters.safeParse(read);
@@ -84,13 +85,14 @@ export function readCatalogInstall(
   }
   if (pinned) {
     const secrets = standIns(template);
-    const roles = template.build({
+    const built = template.build({
       version: pinned,
       params: parsed.data,
       publicUrl: typeof domain === 'string' ? `https://${domain}` : null,
       secret: (key: string) => secrets[key] ?? '',
     }).services;
-    for (const [service, spec] of Object.entries(roles)) {
+    roles = [...new Set(Object.values(built).map((spec) => spec.image))];
+    for (const [service, spec] of Object.entries(built)) {
       const running = services[service];
       const reference = isRecord(running) ? running.image : undefined;
       const split = typeof reference === 'string' ? splitReference(reference) : null;
@@ -104,7 +106,7 @@ export function readCatalogInstall(
       version,
       params: read,
       domain: typeof domain === 'string' && domain !== '' ? domain : null,
-      installed: { version, images },
+      installed: roles ? { version, images, roles } : { version, images },
     },
   };
 }

@@ -12,6 +12,7 @@ import {
 import { CATALOG_EXTENSION_KEY, renderCatalogApp } from './render.js';
 import { generateCatalogSecrets } from './secrets.js';
 import type { AnyCatalogTemplate } from './types.js';
+import { checkCatalogUpdate } from './updates.js';
 
 /**
  * An installed app is known by the block its compose file carries: which template, version,
@@ -80,6 +81,19 @@ describe('readCatalogInstall', () => {
           { tag: image.tag, digest: image.digest },
         ]),
       ),
+      roles: Object.keys(pinned),
+    });
+  });
+
+  it('records only the roles the choices use, so a part left out is never an update', () => {
+    const { render } = install('ollama', { params: { webUi: false } });
+    const read = readCatalogInstall(render.compose);
+    if (!read.ok) throw new Error(read.reason);
+    expect(read.install.installed.roles).toEqual(['ollama']);
+    expect(Object.keys(read.install.installed.images)).toEqual(['ollama']);
+    expect(checkCatalogUpdate(read.install.template, read.install.installed)).toMatchObject({
+      status: 'current',
+      changes: [],
     });
   });
 
