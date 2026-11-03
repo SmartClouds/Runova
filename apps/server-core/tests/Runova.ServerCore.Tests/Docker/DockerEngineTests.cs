@@ -109,7 +109,13 @@ public sealed class DockerEngineTests
         Assert.DoesNotContain(details.EnvKeys, key => key.Contains('=', StringComparison.Ordinal));
         Assert.Contains(new KeyValuePair<string, string>("DB_PASSWORD", "s3cret-db-pass-981"), inspection.Environment);
         Assert.Contains(details.Mounts, mount => mount.Type == "volume" && mount.Name == "shop_data" && mount.Destination == "/data");
-        Assert.Contains(details.Networks, network => network.Network == "shop_default" && network.IpAddress is not null);
+        var shop = Assert.Single(details.Networks, network => network.Network == "shop_default");
+        Assert.Equal("172.27.0.2", shop.IpAddress);
+        Assert.Equal("172.27.0.1", shop.Gateway);
+        Assert.Equal("96:20:5d:4e:f0:7c", shop.MacAddress);
+        Assert.Null(shop.Ipv6Address);
+        Assert.Null(shop.Ipv6Gateway);
+        Assert.Equal(["shop-api-1", "api"], shop.DnsNames!);
         Assert.Equal("shop", details.Summary.ComposeProject);
         Assert.Equal(ContainerState.Running, details.Summary.State);
         Assert.NotNull(details.StartedAtUnixMs);
@@ -278,6 +284,23 @@ public sealed class DockerEngineTests
         Assert.Equal(new DockerDiskUsageEntry(89, 16, 53230593496, 39286478202), usage.Images);
         Assert.Equal(new DockerDiskUsageEntry(25, 9, 1245184, 1138688), usage.Containers);
         Assert.Equal(382, usage.BuildCache.Count);
+    }
+
+    [Fact]
+    public async Task A_container_joins_and_leaves_a_network_and_a_missing_network_is_not_found()
+    {
+        await using var daemon = await FakeDockerDaemon.StartAsync();
+        using var engine = Engine(daemon);
+
+        await engine.ConnectNetworkAsync("shop_default", "toolbox", Cancel);
+        await engine.DisconnectNetworkAsync("bridge", "toolbox", Cancel);
+        var missing = await Assert.ThrowsAsync<DockerNotFoundException>(() => engine.ConnectNetworkAsync("nowhere", "toolbox", Cancel));
+
+        Assert.Contains("POST /networks/shop_default/connect", daemon.Requests);
+        Assert.Contains("POST /networks/bridge/disconnect", daemon.Requests);
+        Assert.Equal(["shop_default", "bridge"], daemon.NetworkBodies.Select(b => b.Network));
+        Assert.All(daemon.NetworkBodies, b => Assert.Equal("toolbox", JsonDocument.Parse(b.Body).RootElement.GetProperty("Container").GetString()));
+        Assert.Contains("nowhere", missing.Message, StringComparison.Ordinal);
     }
 
     [Fact]

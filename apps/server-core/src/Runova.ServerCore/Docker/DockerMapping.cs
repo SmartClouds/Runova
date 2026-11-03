@@ -110,7 +110,10 @@ internal static class DockerMapping
                     network.Key,
                     Blank(network.Value?.IPAddress),
                     Blank(network.Value?.GlobalIPv6Address),
-                    Blank(network.Value?.MacAddress)))],
+                    Blank(network.Value?.MacAddress),
+                    Blank(network.Value?.Gateway),
+                    Blank(network.Value?.IPv6Gateway),
+                    DnsNames(network.Value, inspected.ID)))],
             RestartPolicy(host?.RestartPolicy),
             (int)inspected.RestartCount,
             config?.Tty == true,
@@ -246,4 +249,17 @@ internal static class DockerMapping
     }
 
     private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    /// <summary>
+    /// The names other containers on the network reach this one by (DNSNames from API 1.45, the
+    /// aliases before), without the short container id Docker adds to every network.
+    /// </summary>
+    private static string[]? DnsNames(EndpointSettings? endpoint, string? containerId)
+    {
+        var names = (endpoint?.DNSNames ?? endpoint?.Aliases ?? [])
+            .Where(name => !string.IsNullOrEmpty(name) && !(name.Length >= 12 && (containerId?.StartsWith(name, StringComparison.Ordinal) ?? false)))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return names.Length == 0 ? null : names;
+    }
 }

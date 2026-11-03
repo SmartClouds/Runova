@@ -72,6 +72,9 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
     /// <summary>Request bodies of exec creations, as JSON.</summary>
     public ConcurrentQueue<string> ExecBodies { get; } = new();
 
+    /// <summary>Request bodies of network connects and disconnects, as JSON, with the network they went to.</summary>
+    public ConcurrentQueue<(string Network, string Body)> NetworkBodies { get; } = new();
+
     /// <summary>Lines typed into consoles.</summary>
     public ConcurrentQueue<string> TypedLines { get; } = new();
 
@@ -204,6 +207,9 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
             case ("DELETE", ["networks", _]):
                 context.Response.StatusCode = 204;
                 return;
+            case ("POST", ["networks", var network, "connect" or "disconnect"]):
+                await ConnectNetworkAsync(context, network);
+                return;
             case ("GET", ["system", "df"]):
                 await JsonAsync(context, Read("system-df.json"));
                 return;
@@ -244,6 +250,24 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
     }
 
     private static bool IsTrue(string? value) => value is "1" or "true" or "True";
+
+    private async Task ConnectNetworkAsync(HttpContext context, string network)
+    {
+        string body;
+        using (var reader = new StreamReader(context.Request.Body))
+        {
+            body = await reader.ReadToEndAsync();
+        }
+
+        if (network != "shop_default" && network != "bridge")
+        {
+            await ErrorAsync(context, 404, $"network {network} not found");
+            return;
+        }
+
+        NetworkBodies.Enqueue((network, body));
+        context.Response.StatusCode = 200;
+    }
 
     private JsonObject? Find(string id)
     {

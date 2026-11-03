@@ -11,6 +11,8 @@ export interface ComboboxOption {
   label: string;
   keywords?: string[];
   icon?: React.ReactNode;
+  /** Dim text at the end of the row (a subnet, a size), which the search box also matches. */
+  hint?: string;
 }
 
 export interface ComboboxProps {
@@ -209,6 +211,11 @@ export function Combobox({
                   />
                   {option.icon}
                   <span className="truncate">{option.label}</span>
+                  {option.hint && (
+                    <span className="ml-auto shrink-0 pl-2 font-mono text-[11px] text-muted-foreground">
+                      {option.hint}
+                    </span>
+                  )}
                 </CommandPrimitive.Item>
               ))}
             </CommandPrimitive.List>
@@ -220,7 +227,7 @@ export function Combobox({
 }
 
 function itemValue(option: ComboboxOption): string {
-  return [option.label, ...(option.keywords ?? [])].join(' ');
+  return [option.label, option.hint, ...(option.keywords ?? [])].filter(Boolean).join(' ');
 }
 
 function cmdkFilter(value: string, search: string): number {

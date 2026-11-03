@@ -214,7 +214,7 @@ internal sealed partial class InMemoryDockerEngine
 
         public IReadOnlyList<string> Command { get; init; } = [];
 
-        public IReadOnlyList<string> Networks { get; } = [project is null ? "bridge" : $"{project}_default"];
+        public List<string> Networks { get; } = [project is null ? "bridge" : $"{project}_default"];
 
         public bool Tty { get; init; }
 
@@ -285,14 +285,36 @@ internal sealed partial class InMemoryDockerEngine
             service,
             project is null ? null : 1);
 
-        public ContainerDetails Details(long now) => new(
+        /// <summary>Its endpoint on a network: an address in the network's subnet, its .1 as the gateway.</summary>
+        public ContainerNetwork Endpoint(string network, string? subnet)
+        {
+            var mac = "02:42:ac:14:00:0" + (Id[1] % 9).ToString(CultureInfo.InvariantCulture);
+            if (subnet is null)
+            {
+                return new ContainerNetwork(network, MacAddress: network == "none" ? null : mac);
+            }
+
+            var prefix = subnet[..(subnet.LastIndexOf('.') + 1)];
+            var host = 2 + (Id[0] % 50);
+            string[]? names = network == "bridge" ? null : service is null ? [Name] : [Name, service];
+            return new ContainerNetwork(
+                network,
+                prefix + host.ToString(CultureInfo.InvariantCulture),
+                null,
+                mac,
+                prefix + "1",
+                null,
+                names);
+        }
+
+        public ContainerDetails Details(long now, Func<string, string?> subnetOf) => new(
             Summary(now),
             [.. Command],
             [],
             [.. Environment.Select(entry => entry.Key)],
             [.. Labels.OrderBy(label => label.Key, StringComparer.Ordinal).Select(label => new ContainerLabel(label.Key, label.Value))],
             [.. Mounts],
-            [.. Networks.Select((network, index) => new ContainerNetwork(network, $"172.{(project == "monitoring" ? 21 : project == "shop" ? 20 : 17)}.0.{index + 2 + (int)(Id[0] % 50)}", null, "02:42:ac:14:00:0" + (Id[1] % 9).ToString(CultureInfo.InvariantCulture)))],
+            [.. Networks.Order(StringComparer.Ordinal).Select(network => Endpoint(network, subnetOf(network)))],
             project is null ? "no" : "unless-stopped",
             RestartCount,
             Tty,

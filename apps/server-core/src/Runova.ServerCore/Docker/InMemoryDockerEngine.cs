@@ -88,7 +88,7 @@ internal sealed partial class InMemoryDockerEngine : IDockerEngine, IDisposable
         lock (_gate)
         {
             var found = Find(container);
-            return Task.FromResult(new EngineInspection(found.Details(NowMs), [.. found.Environment]));
+            return Task.FromResult(new EngineInspection(found.Details(NowMs, SubnetOf), [.. found.Environment]));
         }
     }
 

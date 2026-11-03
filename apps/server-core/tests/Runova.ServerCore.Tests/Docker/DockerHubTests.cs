@@ -165,6 +165,85 @@ public sealed class DockerHubTests
     }
 
     [Fact]
+    public async Task An_operator_joins_a_container_to_a_network_and_takes_it_off_another()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Operator);
+        await using var hub = await ConnectAsync(harness);
+
+        var before = await hub.InvokeAsync<NetworkInfo[]>(nameof(ICoreHub.ListNetworks), Cancel);
+        await hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(Web, "monitoring_default"), Cancel);
+        await hub.InvokeAsync(nameof(ICoreHub.DisconnectContainerNetwork), new ContainerNetworkRequest(Web, "shop_default"), Cancel);
+        var details = await hub.InvokeAsync<ContainerDetails>(nameof(ICoreHub.InspectContainer), Web, Cancel);
+        var after = await hub.InvokeAsync<NetworkInfo[]>(nameof(ICoreHub.ListNetworks), Cancel);
+
+        var monitoring = Assert.Single(details.Networks);
+        Assert.Equal("monitoring_default", monitoring.Network);
+        Assert.StartsWith("172.21.0.", monitoring.IpAddress, StringComparison.Ordinal);
+        Assert.Equal("172.21.0.1", monitoring.Gateway);
+        Assert.Contains(Web, monitoring.DnsNames!);
+        int Users(NetworkInfo[] list, string name) => list.Single(n => n.Name == name).Containers;
+        Assert.Equal(Users(before, "monitoring_default") + 1, Users(after, "monitoring_default"));
+        Assert.Equal(Users(before, "shop_default") - 1, Users(after, "shop_default"));
+        Assert.Equal(["connect-network:monitoring_default shop-web-1", "disconnect-network:shop_default shop-web-1"], Engine(harness).Changes);
+        var audit = await AuditAsync(harness);
+        Assert.Contains(audit, e => e.Action == "network.connect" && e.Result == "success" && e.Target == Web && e.Parameters!.Contains("\"network\":\"monitoring_default\"", StringComparison.Ordinal));
+        Assert.Contains(audit, e => e.Action == "network.disconnect" && e.Result == "success" && e.Target == Web && e.Parameters!.Contains("\"network\":\"shop_default\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Joining_and_leaving_networks_is_refused_to_viewers_and_the_engine_s_refusals_come_through()
+    {
+        await using var viewerHarness = await AuthHarness.CreateAsync(CoreRoles.Viewer);
+        await using var viewerHub = await ConnectAsync(viewerHarness);
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Operator);
+        await using var hub = await ConnectAsync(harness);
+
+        await Assert.ThrowsAsync<HubException>(() =>
+            viewerHub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(Web, "bridge"), Cancel));
+        var twice = await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(Web, "shop_default"), Cancel));
+        var notOn = await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.DisconnectContainerNetwork), new ContainerNetworkRequest(Web, "bridge"), Cancel));
+        var missing = await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(Web, "nowhere"), Cancel));
+        var host = await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(Web, "host"), Cancel));
+
+        Assert.Empty(Engine(viewerHarness).Changes);
+        Assert.Empty(Engine(harness).Changes);
+        Assert.Contains("already exists in network shop_default", twice.Message, StringComparison.Ordinal);
+        Assert.Contains("is not connected to network bridge", notOn.Message, StringComparison.Ordinal);
+        Assert.Contains("network nowhere not found", missing.Message, StringComparison.Ordinal);
+        Assert.Contains("host network", host.Message, StringComparison.Ordinal);
+        var audit = await AuditAsync(harness);
+        Assert.Contains(audit, e => e.Action == "network.connect" && e.Result == "failed");
+        Assert.Contains(audit, e => e.Action == "network.disconnect" && e.Result == "failed");
+    }
+
+    [Theory]
+    [InlineData("shop-web-1", "../containers/json")]
+    [InlineData("web?force=1", "bridge")]
+    [InlineData("shop-web-1", "")]
+    [InlineData("", "bridge")]
+    public async Task A_network_or_container_name_that_could_reach_another_endpoint_is_refused_before_the_engine(string container, string network)
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Operator);
+        await using var hub = await ConnectAsync(harness);
+
+        await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), new ContainerNetworkRequest(container, network), Cancel));
+        await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.DisconnectContainerNetwork), new ContainerNetworkRequest(container, network), Cancel));
+        await Assert.ThrowsAsync<HubException>(() =>
+            hub.InvokeAsync(nameof(ICoreHub.ConnectContainerNetwork), null, Cancel));
+
+        Assert.Empty(Engine(harness).Changes);
+        var audit = await AuditAsync(harness);
+        Assert.Contains(audit, e => e.Action == "network.connect" && e.Result == "denied");
+        Assert.Contains(audit, e => e.Action == "network.disconnect" && e.Result == "denied");
+    }
+
+    [Fact]
     public async Task Removing_with_volumes_is_for_admins_and_the_engine_s_refusals_come_through()
     {
         await using var operatorHarness = await AuthHarness.CreateAsync(CoreRoles.Operator);

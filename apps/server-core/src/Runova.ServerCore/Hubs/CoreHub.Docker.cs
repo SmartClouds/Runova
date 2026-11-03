@@ -282,6 +282,29 @@ internal sealed partial class CoreHub
         await DockerChangeAsync("network.remove", network, null, () => docker.RemoveNetworkAsync(network, Context.ConnectionAborted));
     }
 
+    [Authorize(Policy = CorePolicies.Operator)]
+    public Task ConnectContainerNetwork(ContainerNetworkRequest request) =>
+        ContainerNetworkChangeAsync("network.connect", request, (network, container) => docker.ConnectNetworkAsync(network, container, Context.ConnectionAborted));
+
+    [Authorize(Policy = CorePolicies.Operator)]
+    public Task DisconnectContainerNetwork(ContainerNetworkRequest request) =>
+        ContainerNetworkChangeAsync("network.disconnect", request, (network, container) => docker.DisconnectNetworkAsync(network, container, Context.ConnectionAborted));
+
+    /// <summary>Both names are checked before either reaches a request path; the container is the target in the trail.</summary>
+    private async Task ContainerNetworkChangeAsync(string action, ContainerNetworkRequest? request, Func<string, string, Task> change)
+    {
+        var parameters = new Dictionary<string, string?> { ["network"] = Clip(request?.Network) };
+        if (request is null || !DockerNames.IsContainer(request.ContainerId) || !DockerNames.IsNetwork(request.Network))
+        {
+            await AuditAsync(action, AuditResult.Denied, Clip(request?.ContainerId), parameters);
+            throw new HubException(request is not null && DockerNames.IsContainer(request.ContainerId)
+                ? "That is not a network id or name."
+                : "That is not a container id or name.");
+        }
+
+        await DockerChangeAsync(action, request.ContainerId, parameters, () => change(request.Network, request.ContainerId));
+    }
+
     [Authorize(Policy = CorePolicies.Admin)]
     [Authorize(Policy = CorePolicies.StepUp)]
     public async Task<ContainerEnvVariable[]> RevealContainerEnv(string containerId)

@@ -19,6 +19,7 @@ import type { ICoreHub } from '../../shared/deploy/protocol/generated/TypedSigna
 import type {
   DeployContainerActionInput,
   DeployContainerLimitsInput,
+  DeployContainerNetworkInput,
   DeployContainerRemoveInput,
   DeployDockerInstallInput,
   DeployDockerPruneInput,
@@ -182,6 +183,18 @@ export class DeployDocker {
 
   removeNetwork(serverId: string, network: string): Promise<void> {
     return this.run(serverId, (hub) => hub.removeNetwork(network));
+  }
+
+  joinNetwork(input: DeployContainerNetworkInput): Promise<void> {
+    return this.run(input.serverId, (hub) =>
+      hub.connectContainerNetwork({ containerId: input.container, network: input.network }),
+    );
+  }
+
+  leaveNetwork(input: DeployContainerNetworkInput): Promise<void> {
+    return this.run(input.serverId, (hub) =>
+      hub.disconnectContainerNetwork({ containerId: input.container, network: input.network }),
+    );
   }
 
   diskUsage(serverId: string): Promise<DockerDiskUsage> {

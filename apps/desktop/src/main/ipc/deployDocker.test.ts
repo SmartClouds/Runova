@@ -36,6 +36,8 @@ function harness(trusted = true) {
       'removeVolume',
       'listNetworks',
       'removeNetwork',
+      'joinNetwork',
+      'leaveNetwork',
       'diskUsage',
       'prune',
       'setLimits',
@@ -121,6 +123,28 @@ describe('registerDeployDockerHandlers', () => {
     expect(docker.inspect).not.toHaveBeenCalled();
     expect(docker.removeNetwork).not.toHaveBeenCalled();
     expect(docker.removeVolume).not.toHaveBeenCalled();
+  });
+
+  it('passes a network join or leave on with both names checked first', async () => {
+    const { docker, call } = harness();
+    const input = { serverId: 'srv-1', container: 'shop-web-1', network: 'monitoring_default' };
+    await call(C.joinNetwork, input);
+    await call(C.leaveNetwork, { ...input, network: 'bridge' });
+    expect(docker.joinNetwork).toHaveBeenCalledWith(input);
+    expect(docker.leaveNetwork).toHaveBeenCalledWith({ ...input, network: 'bridge' });
+
+    for (const bad of [
+      { ...input, network: '../networks' },
+      { ...input, network: '' },
+      { ...input, container: 'a/b' },
+      { ...input, serverId: 'not a server!' },
+      null,
+    ]) {
+      await expect(call(C.joinNetwork, bad)).rejects.toThrow();
+      await expect(call(C.leaveNetwork, bad)).rejects.toThrow();
+    }
+    expect(docker.joinNetwork).toHaveBeenCalledTimes(1);
+    expect(docker.leaveNetwork).toHaveBeenCalledTimes(1);
   });
 
   it('checks each lifecycle action and only the options it takes', async () => {

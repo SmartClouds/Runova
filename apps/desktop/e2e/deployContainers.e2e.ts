@@ -132,3 +132,49 @@ test('follows a compose project’s logs and runs a command in one of its contai
   await sheet.getByRole('button', { name: 'Close the console' }).click();
   await expect(sheet.getByLabel('Command')).toHaveValue('echo hi');
 });
+
+test('joins a container to another network and takes it off again', async () => {
+  test.setTimeout(180_000);
+  if (!devHost) throw new Error('DevHost did not start');
+  launched = await launchApp({
+    settings: {},
+    env: { RUNOVA_DEPLOY_DEV_CORE: String(devHost.port) },
+  });
+  const { page } = launched;
+  await page.getByRole('link', { name: 'Deploy' }).click();
+  await expect(page.getByText('Sign in to manage this core.')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const signIn = page.getByRole('dialog', { name: 'Sign in to DevHost' });
+  await signIn.getByLabel('Password', { exact: true }).fill(DEV_PASSWORD);
+  await signIn.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByText(/Signed in as/)).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Server sections' })
+    .getByRole('button', { name: 'Containers' })
+    .click();
+
+  const list = page.getByRole('list', { name: 'Containers' });
+  await list.getByRole('button', { name: 'Open shop-web-1' }).click({ timeout: 30_000 });
+  const drawer = page.getByRole('dialog', { name: 'shop-web-1' });
+  await drawer.getByRole('tab', { name: 'Networks' }).click();
+  const networks = drawer.getByRole('list', { name: 'Networks' });
+  const shop = networks.getByRole('listitem', { name: 'shop_default' });
+  await expect(shop.getByText('172.20.0.1', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(drawer.getByText(/compose file/)).toBeVisible();
+
+  // Join the monitoring project's network; the core gives it an address there.
+  await drawer.getByRole('combobox', { name: 'Network to join' }).click();
+  await page.getByRole('option', { name: /monitoring_default/ }).click();
+  await drawer.getByRole('button', { name: 'Join network' }).click();
+  const monitoring = networks.getByRole('listitem', { name: 'monitoring_default' });
+  // Its own address there, not the gateway (.1).
+  await expect(monitoring.getByText(/^172\.21\.0\.(?!1$)\d+$/)).toBeVisible({ timeout: 30_000 });
+  await expect(monitoring.getByText('172.21.0.1', { exact: true })).toBeVisible();
+
+  // And leave it again, after the confirmation.
+  await monitoring.getByRole('button', { name: 'Leave monitoring_default' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Take shop-web-1 off monitoring_default?' });
+  await confirm.getByRole('button', { name: 'Leave the network' }).click();
+  await expect(monitoring).toHaveCount(0, { timeout: 30_000 });
+  await expect(shop).toBeVisible();
+});

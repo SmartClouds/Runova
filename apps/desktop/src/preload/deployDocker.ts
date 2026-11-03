@@ -20,6 +20,7 @@ import type {
   DeployContainerLimitsInput,
   DeployContainerLogsEvent,
   DeployContainerLogsWatchInput,
+  DeployContainerNetworkInput,
   DeployContainerRemoveInput,
   DeployContainerStatsEvent,
   DeployDockerEventsEvent,
@@ -77,6 +78,10 @@ export function createDeployDocker(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.deployDocker.listNetworks, serverId),
     removeNetwork: (serverId: string, network: string): Promise<void> =>
       ipcRenderer.invoke(IPC.deployDocker.removeNetwork, serverId, network),
+    joinNetwork: (input: DeployContainerNetworkInput): Promise<void> =>
+      ipcRenderer.invoke(IPC.deployDocker.joinNetwork, input),
+    leaveNetwork: (input: DeployContainerNetworkInput): Promise<void> =>
+      ipcRenderer.invoke(IPC.deployDocker.leaveNetwork, input),
     diskUsage: (serverId: string): Promise<DockerDiskUsage> =>
       ipcRenderer.invoke(IPC.deployDocker.diskUsage, serverId),
     prune: (input: DeployDockerPruneInput): Promise<DockerPruneResult> =>

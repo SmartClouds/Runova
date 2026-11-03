@@ -62,7 +62,7 @@ Click the three dot menu on a row (or in the container panel header) to see the 
 
 ### The container panel
 
-Click a container's name to open its panel, which slides in from the right. The header shows the name, the state chip, the image, quick buttons (**Restart** and **Stop** for a running container, **Resume** for a paused one, **Start** otherwise), **Send logs to the project CLI**, **Browse files** (for Admins, see [Server files](deploy-files.md)) and the same three dot menu. It has seven tabs.
+Click a container's name to open its panel, which slides in from the right. The header shows the name, the state chip, the image, quick buttons (**Restart** and **Stop** for a running container, **Resume** for a paused one, **Start** otherwise), **Send logs to the project CLI**, **Browse files** (for Admins, see [Server files](deploy-files.md)) and the same three dot menu. It has eight tabs.
 
 #### Overview
 
@@ -93,6 +93,18 @@ A table of what is mounted into the container: the path inside, where it comes f
 #### Ports
 
 Each port with a plain explanation: "Only other containers on its network reach it", "Only this address on the server", or "Public: anyone who can reach the server reaches it".
+
+#### Networks
+
+Every network the container is on, each in its own card with the container's **IPv4 address**, **IPv6 address**, **Gateway** and **MAC address** there (with a copy button on each), and the names other containers on that network use to reach it. A network's card also says when it is built in, belongs to a compose project or is internal only.
+
+Operators and above can join the container to another network: pick one in **Network to join** (it lists the server's networks with their subnets, leaving out the ones it is already on and the special `host` and `none` networks) and click **Join network**. Docker picks the address. To take it off a network, click **Leave** on that network's card and confirm. If it is the container's last network, the confirmation warns that nothing will reach it over a network until it joins one again. A toast confirms each change, for example "web joined shop_default", and the tab updates on its own when someone else makes a change.
+
+A few things to know:
+
+- Containers from a compose project (including Runova apps) get their networks from the compose file. A change made here lasts until the app is deployed again, when the compose file's networks come back. The tab says so for those containers.
+- A container that uses the server's own network (`host`) or runs with networking turned off (`none`) cannot join other networks, so the picker is not shown for it.
+- Viewers see the networks and addresses but cannot join or leave.
 
 #### Console
 

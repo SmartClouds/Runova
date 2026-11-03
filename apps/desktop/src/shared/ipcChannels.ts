@@ -1335,6 +1335,10 @@ export const IPC = {
     removeVolume: 'deployDocker:removeVolume',
     listNetworks: 'deployDocker:listNetworks',
     removeNetwork: 'deployDocker:removeNetwork',
+    /** (DeployContainerNetworkInput) -> void; the container joins the network. */
+    joinNetwork: 'deployDocker:joinNetwork',
+    /** (DeployContainerNetworkInput) -> void; the container leaves the network. */
+    leaveNetwork: 'deployDocker:leaveNetwork',
     diskUsage: 'deployDocker:diskUsage',
     prune: 'deployDocker:prune',
     /** (serverId) -> subscription id; every running container's stats arrive on onStats. */

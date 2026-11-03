@@ -225,6 +225,37 @@ describe('DeployDocker', () => {
     ]);
   });
 
+  it('joins a container to a network and takes it off one, for Operators only', async () => {
+    const { docker } = setup(['operator']);
+
+    await docker.joinNetwork({ serverId: 'srv-1', container: 'shop-api-1', network: 'bridge' });
+    await docker.leaveNetwork({
+      serverId: 'srv-1',
+      container: 'shop-api-1',
+      network: 'shop_default',
+    });
+
+    const details = await docker.inspect('srv-1', 'shop-api-1');
+    expect(details.networks).toEqual([
+      expect.objectContaining({
+        network: 'bridge',
+        ipAddress: '172.17.0.9',
+        gateway: '172.17.0.1',
+      }),
+    ]);
+    await expect(
+      docker.joinNetwork({ serverId: 'srv-1', container: 'shop-api-1', network: 'bridge' }),
+    ).rejects.toThrow('already exists in network bridge');
+    await expect(
+      docker.leaveNetwork({ serverId: 'srv-1', container: 'shop-api-1', network: 'nowhere' }),
+    ).rejects.toThrow('network nowhere not found');
+
+    const viewer = setup(['viewer']).docker;
+    await expect(
+      viewer.joinNetwork({ serverId: 'srv-1', container: 'shop-api-1', network: 'bridge' }),
+    ).rejects.toThrow();
+  });
+
   it('clears the build cache, and says plainly when an older core cannot', async () => {
     const { core, docker } = setup(['admin']);
     const before = core.docker.diskUsage.buildCache;

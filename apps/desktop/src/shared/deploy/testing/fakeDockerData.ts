@@ -105,6 +105,9 @@ function seed(
         {
           network: options.project ? `${options.project}_default` : 'bridge',
           ipAddress: '172.20.0.5',
+          gateway: '172.20.0.1',
+          macAddress: '02:42:ac:14:00:05',
+          ...(options.project ? { dnsNames: [name, options.service ?? name] } : {}),
         },
       ],
       restartPolicy: options.project ? 'unless-stopped' : 'no',

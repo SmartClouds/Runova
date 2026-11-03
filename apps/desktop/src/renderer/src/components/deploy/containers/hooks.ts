@@ -84,10 +84,19 @@ export function useDockerEvents(serverId: string, enabled: boolean): void {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const touched = new Set<string>();
+    // A container joining or leaving a network is told with the network as the actor, so every
+    // open container is read again rather than the one it named.
+    let endpoints = false;
     const flush = () => {
       timer = null;
       const containers = [...touched];
       touched.clear();
+      if (endpoints) {
+        endpoints = false;
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.deployContainerDetails(serverId),
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.deployContainers(serverId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.deployDiskUsage(serverId) });
       for (const id of containers) {
@@ -109,6 +118,7 @@ export function useDockerEvents(serverId: string, enabled: boolean): void {
           }
           if (item.type === 'network') {
             void queryClient.invalidateQueries({ queryKey: queryKeys.deployNetworks(serverId) });
+            if (item.action === 'connect' || item.action === 'disconnect') endpoints = true;
           }
         }
         timer ??= setTimeout(flush, EVENT_SETTLE_MS);

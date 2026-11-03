@@ -69,6 +69,10 @@ export function dockerBridge(roles: string[] = ['owner']): Record<string, unknow
         input.action,
       ),
     'deployDocker.remove': async () => undefined,
+    'deployDocker.joinNetwork': async (input: { container: string; network: string }) =>
+      docker.connect(input.network, input.container),
+    'deployDocker.leaveNetwork': async (input: { container: string; network: string }) =>
+      docker.disconnect(input.network, input.container),
     'deployDocker.logTail': [],
     'deployJobs.watch': async () => 'job-1',
     'deployJobs.unwatch': async () => true,

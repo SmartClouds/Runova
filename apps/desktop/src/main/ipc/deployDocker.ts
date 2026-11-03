@@ -6,6 +6,7 @@ import type {
   DeployContainerActionInput,
   DeployContainerLimitsInput,
   DeployContainerLogsWatchInput,
+  DeployContainerNetworkInput,
   DeployContainerRemoveInput,
   DeployDockerInstallInput,
   DeployDockerPruneInput,
@@ -189,6 +190,15 @@ function containerAction(value: unknown): DeployContainerActionInput {
   return result;
 }
 
+function networkInput(value: unknown): DeployContainerNetworkInput {
+  const input = object(value, 'a container and a network');
+  return {
+    serverId: serverId(input.serverId),
+    container: named(input.container, 'container'),
+    network: named(input.network, 'network'),
+  };
+}
+
 function removeInput(value: unknown): DeployContainerRemoveInput {
   const input = object(value, 'a container to remove');
   return {
@@ -354,6 +364,10 @@ export function registerDeployDockerHandlers(deps: DeployDockerHandlerDeps): voi
   handle(IPC.deployDocker.listNetworks, (_owner, id) => docker.listNetworks(serverId(id)));
   handle(IPC.deployDocker.removeNetwork, (_owner, id, network) =>
     docker.removeNetwork(serverId(id), named(network, 'network')),
+  );
+  handle(IPC.deployDocker.joinNetwork, (_owner, value) => docker.joinNetwork(networkInput(value)));
+  handle(IPC.deployDocker.leaveNetwork, (_owner, value) =>
+    docker.leaveNetwork(networkInput(value)),
   );
   handle(IPC.deployDocker.diskUsage, (_owner, id) => docker.diskUsage(serverId(id)));
   handle(IPC.deployDocker.prune, (_owner, value) => docker.prune(pruneInput(value)));

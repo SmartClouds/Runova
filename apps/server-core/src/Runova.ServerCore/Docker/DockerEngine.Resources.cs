@@ -110,6 +110,12 @@ internal sealed partial class DockerEngine
     public Task RemoveNetworkAsync(string network, CancellationToken cancellationToken) =>
         CallAsync(client => client.Networks.DeleteNetworkAsync(network, cancellationToken), cancellationToken);
 
+    public Task ConnectNetworkAsync(string network, string container, CancellationToken cancellationToken) =>
+        CallAsync(client => client.Networks.ConnectNetworkAsync(network, new NetworkConnectParameters { Container = container }, cancellationToken), cancellationToken);
+
+    public Task DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken) =>
+        CallAsync(client => client.Networks.DisconnectNetworkAsync(network, new NetworkDisconnectParameters { Container = container }, cancellationToken), cancellationToken);
+
     /// <summary>The engine's own summary (API 1.52 and later); older engines get one counted from the lists.</summary>
     public Task<DockerDiskUsage> GetDiskUsageAsync(CancellationToken cancellationToken) =>
         CallAsync(

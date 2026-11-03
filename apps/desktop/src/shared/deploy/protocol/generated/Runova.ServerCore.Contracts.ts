@@ -1339,6 +1339,20 @@ export type ContainerNetwork = {
     ipv6Address?: string;
     /** Transpiled from string? */
     macAddress?: string;
+    /** Transpiled from string? */
+    gateway?: string;
+    /** Transpiled from string? */
+    ipv6Gateway?: string;
+    /** Transpiled from string[]? */
+    dnsNames?: string[];
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.ContainerNetworkRequest */
+export type ContainerNetworkRequest = {
+    /** Transpiled from string */
+    containerId: string;
+    /** Transpiled from string */
+    network: string;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.ContainerDetails */

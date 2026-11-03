@@ -197,6 +197,51 @@ export class FakeDocker {
     });
   }
 
+  /**
+   * Joins a container to a network as the engine would: an address in the network's subnet with
+   * its .1 as the gateway, and an event with the network as the actor.
+   */
+  connect(network: string, idOrName: string): void {
+    const container = this.require(idOrName);
+    const found = this.network(network);
+    const name = container.summary.name;
+    if (container.details.networks.some((one) => one.network === found.name)) {
+      throw new Error(`endpoint with name ${name} already exists in network ${found.name}`);
+    }
+    if (found.name === 'host' || found.name === 'none') {
+      throw new Error(`container cannot be connected to the ${found.name} network`);
+    }
+    const prefix = found.subnets[0]?.replace(/\.\d+\/\d+$/, '.');
+    container.details.networks.push({
+      network: found.name,
+      ...(prefix ? { ipAddress: `${prefix}9`, gateway: `${prefix}1` } : {}),
+      macAddress: '02:42:ac:14:00:09',
+      ...(found.name === 'bridge' ? {} : { dnsNames: [name] }),
+    });
+    found.containers += 1;
+    this.event('connect', found.id, { type: 'network', actorId: found.id, name: found.name });
+  }
+
+  disconnect(network: string, idOrName: string): void {
+    const container = this.require(idOrName);
+    const found = this.network(network);
+    const index = container.details.networks.findIndex((one) => one.network === found.name);
+    if (index < 0) {
+      throw new Error(
+        `container ${container.summary.id} is not connected to network ${found.name}`,
+      );
+    }
+    container.details.networks.splice(index, 1);
+    found.containers = Math.max(0, found.containers - 1);
+    this.event('disconnect', found.id, { type: 'network', actorId: found.id, name: found.name });
+  }
+
+  private network(nameOrId: string): NetworkInfo {
+    const found = this.networks.find((one) => one.name === nameOrId || one.id === nameOrId);
+    if (!found) throw new Error(`network ${nameOrId} not found`);
+    return found;
+  }
+
   require(idOrName: string): FakeContainer {
     const container = this.find(idOrName);
     if (!container) throw new Error(`No such container: ${idOrName}`);

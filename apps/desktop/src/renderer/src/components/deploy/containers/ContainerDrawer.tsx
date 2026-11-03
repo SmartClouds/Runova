@@ -1,14 +1,14 @@
+import type { ServiceLimits } from '@runova/core';
 import { coreErrorMessage } from '@shared/coreErrors';
 import type {
   ContainerDetails,
   ContainerEnvVariable,
   ContainerSummary,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import type { ServiceLimits } from '@runova/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   FolderOpen,
   Globe,
@@ -33,8 +33,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { isPublic, portText } from '@/lib/deploy/containers/list';
-import { liveLimitsOf, liveRequestOf } from '@/lib/deploy/limits/live';
 import { cpuText, type StatsHistory } from '@/lib/deploy/containers/stats';
+import { liveLimitsOf, liveRequestOf } from '@/lib/deploy/limits/live';
 import { formatBytes } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
@@ -47,6 +47,7 @@ import { ContainerConsoleTab } from './ContainerConsoleTab';
 import { ContainerInspectTab } from './ContainerInspectTab';
 import { ActionMenu, type ContainerActions } from './ContainerList';
 import { ContainerLogsTab } from './ContainerLogsTab';
+import { ContainerNetworksTab } from './ContainerNetworksTab';
 import { ContainerStatsTab } from './ContainerStatsTab';
 import { StateChip } from './StateChip';
 
@@ -56,7 +57,15 @@ import { StateChip } from './StateChip';
  * ports, and a console for Admins. The lifecycle buttons follow the signed-in role.
  */
 
-export type DrawerTab = 'overview' | 'stats' | 'logs' | 'inspect' | 'mounts' | 'ports' | 'console';
+export type DrawerTab =
+  | 'overview'
+  | 'stats'
+  | 'logs'
+  | 'inspect'
+  | 'mounts'
+  | 'ports'
+  | 'networks'
+  | 'console';
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -463,6 +472,7 @@ export function ContainerDrawer({
                 <TabsTrigger value="inspect">Inspect</TabsTrigger>
                 <TabsTrigger value="mounts">Mounts</TabsTrigger>
                 <TabsTrigger value="ports">Ports</TabsTrigger>
+                <TabsTrigger value="networks">Networks</TabsTrigger>
                 <TabsTrigger value="console">Console</TabsTrigger>
               </TabsList>
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
@@ -530,6 +540,16 @@ export function ContainerDrawer({
                 </TabsContent>
                 <TabsContent value="ports" className="mt-0">
                   <PortsTab container={container} />
+                </TabsContent>
+                <TabsContent value="networks" className="mt-0">
+                  {needsDetails((data) => (
+                    <ContainerNetworksTab
+                      serverId={serverId}
+                      container={container}
+                      details={data}
+                      canOperate={canOperate}
+                    />
+                  ))}
                 </TabsContent>
                 <TabsContent
                   value="console"

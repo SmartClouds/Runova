@@ -256,6 +256,9 @@ export const queryKeys = {
   deployContainers: (serverId: string) => ['deploy', 'docker', serverId, 'containers'] as const,
   deployContainer: (serverId: string, containerId: string) =>
     ['deploy', 'docker', serverId, 'container', containerId] as const,
+  /** Prefix of every container read in full on a server. */
+  deployContainerDetails: (serverId: string) =>
+    ['deploy', 'docker', serverId, 'container'] as const,
   deployImages: (serverId: string) => ['deploy', 'docker', serverId, 'images'] as const,
   deployVolumes: (serverId: string) => ['deploy', 'docker', serverId, 'volumes'] as const,
   deployNetworks: (serverId: string) => ['deploy', 'docker', serverId, 'networks'] as const,

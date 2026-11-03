@@ -62,6 +62,10 @@ internal interface IDockerEngine
 
     Task RemoveNetworkAsync(string network, CancellationToken cancellationToken);
 
+    Task ConnectNetworkAsync(string network, string container, CancellationToken cancellationToken);
+
+    Task DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken);
+
     Task<DockerDiskUsage> GetDiskUsageAsync(CancellationToken cancellationToken);
 
     Task<DockerPruneResult> PruneAsync(DockerPruneTarget target, bool allImages, CancellationToken cancellationToken);

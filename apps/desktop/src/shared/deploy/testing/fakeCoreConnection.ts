@@ -17,6 +17,7 @@ import type {
   ContainerLogBatch,
   ContainerLogLine,
   ContainerLogsRequest,
+  ContainerNetworkRequest,
   ContainerRemoveRequest,
   ContainerStatsBatch,
   ContainerStatsRequest,
@@ -909,6 +910,31 @@ export class FakeCoreConnection implements ICoreHub {
     if (found.builtIn) throw invocationError('RemoveNetwork', `${found.name} is built in.`);
     this.docker.networks = this.docker.networks.filter((one) => one !== found);
   };
+
+  connectContainerNetwork = async (request: ContainerNetworkRequest): Promise<void> =>
+    this.networkChange('ConnectContainerNetwork', request, (network, id) =>
+      this.docker.connect(network, id),
+    );
+
+  disconnectContainerNetwork = async (request: ContainerNetworkRequest): Promise<void> =>
+    this.networkChange('DisconnectContainerNetwork', request, (network, id) =>
+      this.docker.disconnect(network, id),
+    );
+
+  private networkChange(
+    method: string,
+    request: ContainerNetworkRequest,
+    change: (network: string, containerId: string) => void,
+  ): void {
+    this.assertOpen();
+    this.assertRole(method, OPERATORS);
+    const id = this.container(method, request.containerId).summary.id;
+    try {
+      change(request.network, id);
+    } catch (error) {
+      throw invocationError(method, (error as Error).message);
+    }
+  }
 
   getDockerDiskUsage = async (): Promise<DockerDiskUsage> =>
     this.answer(structuredClone(this.docker.diskUsage));

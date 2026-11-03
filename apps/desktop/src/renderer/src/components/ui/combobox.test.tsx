@@ -41,4 +41,25 @@ describe('Combobox', () => {
     await user.keyboard('{ArrowDown}{Enter}');
     expect(onChange).toHaveBeenCalledWith('reject');
   });
+
+  it('shows a hint beside an option and finds the option by it', async () => {
+    const user = userEvent.setup();
+    render(
+      <Combobox
+        ariaLabel="Network"
+        options={[
+          { value: 'shop', label: 'shop_default', hint: '172.20.0.0/16' },
+          { value: 'tools', label: 'tools_net', hint: '10.9.0.0/24' },
+        ]}
+        value=""
+        onChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Network' }));
+    expect(await screen.findByText('172.20.0.0/16')).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('Search…'), '10.9');
+    expect(screen.getByRole('option', { name: /tools_net/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /shop_default/ })).toBeNull();
+  });
 });

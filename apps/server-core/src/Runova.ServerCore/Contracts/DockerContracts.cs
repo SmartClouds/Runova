@@ -96,8 +96,26 @@ public sealed record ContainerLabel(string Name, string Value);
 [TranspilationSource]
 public sealed record ContainerMount(string Type, string Destination, bool ReadWrite, string? Source = null, string? Name = null);
 
+/// <summary>
+/// A network the container is on, with its addresses there. DnsNames are the names other
+/// containers on the same network reach it by (none on the default bridge).
+/// </summary>
 [TranspilationSource]
-public sealed record ContainerNetwork(string Network, string? IpAddress = null, string? Ipv6Address = null, string? MacAddress = null);
+public sealed record ContainerNetwork(
+    string Network,
+    string? IpAddress = null,
+    string? Ipv6Address = null,
+    string? MacAddress = null,
+    string? Gateway = null,
+    string? Ipv6Gateway = null,
+    string[]? DnsNames = null);
+
+/// <summary>
+/// Joins a container to a network, or takes it off one (docker network connect / disconnect).
+/// Compose puts a project's own networks back when it recreates the container.
+/// </summary>
+[TranspilationSource]
+public sealed record ContainerNetworkRequest(string ContainerId, string Network);
 
 /// <summary>
 /// One container in full, except its environment values: only the variable names are here.

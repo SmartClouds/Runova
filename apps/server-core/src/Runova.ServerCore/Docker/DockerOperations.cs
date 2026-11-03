@@ -310,6 +310,10 @@ internal sealed partial class DockerOperations(
 
     public Task RemoveNetworkAsync(string network, CancellationToken cancellationToken) => engine.RemoveNetworkAsync(network, cancellationToken);
 
+    public Task ConnectNetworkAsync(string network, string container, CancellationToken cancellationToken) => engine.ConnectNetworkAsync(network, container, cancellationToken);
+
+    public Task DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken) => engine.DisconnectNetworkAsync(network, container, cancellationToken);
+
     public Task<IReadOnlyList<ImageInfo>> ListImagesAsync(CancellationToken cancellationToken) => engine.ListImagesAsync(cancellationToken);
 
     public Task<IReadOnlyList<VolumeInfo>> ListVolumesAsync(CancellationToken cancellationToken) => engine.ListVolumesAsync(cancellationToken);

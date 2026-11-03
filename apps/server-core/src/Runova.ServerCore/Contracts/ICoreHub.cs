@@ -220,6 +220,12 @@ public interface ICoreHub
 
     Task RemoveNetwork(string network);
 
+    /// <summary>docker network connect: the container joins the network; Docker picks its address there.</summary>
+    Task ConnectContainerNetwork(ContainerNetworkRequest request);
+
+    /// <summary>docker network disconnect: the container leaves the network.</summary>
+    Task DisconnectContainerNetwork(ContainerNetworkRequest request);
+
     // Docker, Admin.
 
     /// <summary>Needs a step-up: these are the container's secrets.</summary>

@@ -43,6 +43,13 @@ export interface DeployContainerRemoveInput {
   force: boolean;
 }
 
+/** A container joining or leaving a network (Operators). Both are ids or names. */
+export interface DeployContainerNetworkInput {
+  serverId: string;
+  container: string;
+  network: string;
+}
+
 /** Needs an Admin and a step-up; the password (or a code) can come along in the call. */
 export interface DeployRevealEnvInput {
   serverId: string;

@@ -150,8 +150,7 @@ internal sealed partial class InMemoryDockerEngine
         EnsureRunning();
         lock (_gate)
         {
-            var found = _networks.FirstOrDefault(n => n.Name == network || IdOf("network:" + n.Name).StartsWith(network, StringComparison.Ordinal))
-                ?? throw new DockerNotFoundException($"network {network} not found");
+            var found = FindNetwork(network);
             if (_builtInNetworks.Contains(found.Name))
             {
                 throw new DockerRequestException($"{found.Name} is a pre-defined network and cannot be removed");
@@ -169,6 +168,76 @@ internal sealed partial class InMemoryDockerEngine
 
         return Task.CompletedTask;
     }
+
+    public Task ConnectNetworkAsync(string network, string container, CancellationToken cancellationToken)
+    {
+        EnsureRunning();
+        lock (_gate)
+        {
+            var found = FindNetwork(network);
+            var joining = Find(container);
+            if (joining.Networks.Contains(found.Name))
+            {
+                throw new DockerRequestException($"endpoint with name {joining.Name} already exists in network {found.Name}");
+            }
+
+            if (found.Name == "host" || joining.Networks.Contains("host"))
+            {
+                throw new DockerRequestException("container cannot be disconnected from host network or connected to host network");
+            }
+
+            if (found.Name == "none" || joining.Networks.Contains("none"))
+            {
+                throw new DockerRequestException("container cannot be connected to multiple networks with one of the networks in private (none) mode");
+            }
+
+            joining.Networks.Add(found.Name);
+            Changes.Enqueue($"connect-network:{found.Name} {joining.Name}");
+            RaiseEndpoint("connect", found, joining);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DisconnectNetworkAsync(string network, string container, CancellationToken cancellationToken)
+    {
+        EnsureRunning();
+        lock (_gate)
+        {
+            var found = FindNetwork(network);
+            var leaving = Find(container);
+            if (!leaving.Networks.Contains(found.Name))
+            {
+                throw new DockerRequestException($"container {leaving.Id} is not connected to network {found.Name}");
+            }
+
+            if (found.Name == "host")
+            {
+                throw new DockerRequestException("container cannot be disconnected from host network or connected to host network");
+            }
+
+            leaving.Networks.Remove(found.Name);
+            Changes.Enqueue($"disconnect-network:{found.Name} {leaving.Name}");
+            RaiseEndpoint("disconnect", found, leaving);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private NetworkEntry FindNetwork(string network) =>
+        _networks.FirstOrDefault(n => n.Name == network || IdOf("network:" + n.Name).StartsWith(network, StringComparison.Ordinal))
+        ?? throw new DockerNotFoundException($"network {network} not found");
+
+    private string? SubnetOf(string network) => _networks.FirstOrDefault(n => n.Name == network)?.Subnet;
+
+    /// <summary>The engine's own event: the network is the actor, the container an attribute.</summary>
+    private void RaiseEndpoint(string action, NetworkEntry network, Container container) =>
+        Raise(new EngineEvent(
+            "network",
+            action,
+            IdOf("network:" + network.Name),
+            NextEventNano(),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["name"] = network.Name, ["container"] = container.Id, ["type"] = "bridge" }));
 
     public Task<DockerDiskUsage> GetDiskUsageAsync(CancellationToken cancellationToken)
     {
