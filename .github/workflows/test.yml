@@ -77,7 +77,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -157,7 +157,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -226,7 +226,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -300,7 +300,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Unit tests
         run: node scripts/wordpress-connector.mjs test
@@ -343,7 +343,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -404,7 +404,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
       # this step through NuGet audit.
@@ -477,7 +477,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -576,7 +576,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -696,7 +696,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

@@ -1,6 +1,14 @@
 import type { RemoteInputEvent } from '@runova/protocol';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  type TextInputInstance,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme';
 
@@ -33,7 +41,7 @@ const KEYS: KeyDef[] = [
  * from real onKeyDown/onKeyUp DOM events.
  */
 export function Toolbar({ live, onInput }: ToolbarProps): React.JSX.Element {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [buffer, setBuffer] = useState('');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   // Keep the key row above the Android navigation bar / iOS home indicator.

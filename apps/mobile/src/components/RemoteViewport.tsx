@@ -8,6 +8,7 @@ import {
   PanResponder,
   StyleSheet,
   View,
+  type ViewInstance,
 } from 'react-native';
 import type { MediaStream } from 'react-native-webrtc';
 import { RemoteTransportMode } from '../remote/transport';
@@ -128,7 +129,7 @@ export function RemoteViewport({
   // --- Touch bookkeeping -------------------------------------------------------
   // The wrap view's window offset lets us use pageX/pageY (stable for
   // multi-touch) instead of locationX (unreliable once transforms apply).
-  const wrapRef = useRef<View>(null);
+  const wrapRef = useRef<ViewInstance>(null);
   const wrapOffset = useRef<Point>({ x: 0, y: 0 });
 
   const onLayoutHandler = useCallback((e: LayoutChangeEvent) => {
@@ -348,7 +349,7 @@ export function RemoteViewport({
           },
         ]}
       >
-        {showVideo && RTCView && stream ? (
+        {showVideo ? (
           <RTCView streamURL={stream.toURL()} style={styles.video} objectFit="contain" />
         ) : null}
         {showTiles && screen

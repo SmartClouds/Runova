@@ -301,7 +301,7 @@ function toolCacheVersions() {
   }
 
   // setup-node's folders, node/<version>/<arch>, finished ones marked by <arch>.complete. The
-  // newest finished one of each major version is the one a `node-version: "22"` picks.
+  // newest finished one of each major version is the one a `node-version: "26"` picks.
   const node = join(toolCache, 'node');
   if (existsSync(node)) {
     const complete = (path) => readdirSync(path).some((name) => name.endsWith('.complete'));

@@ -40,6 +40,5 @@ minimumReleaseAgeExclude:
   - zod@4.6.4
 patchedDependencies:
   node-pty@1.1.0: patches/node-pty@1.1.0.patch
-  react-native-webrtc: patches/react-native-webrtc.patch
 overrides:
   dompurify: ">=3.4.12"

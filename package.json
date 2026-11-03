@@ -9,7 +9,7 @@
     "url": "https://github.com/SmartClouds/Runova.git"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "pnpm build:packages && pnpm --parallel --filter @runova/core --filter @runova/protocol --filter @runova/studio --filter @runova/desktop dev",
@@ -53,7 +53,7 @@
     "wordpress-connector:build": "node scripts/wordpress-connector.mjs build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.4",
     "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@12.16.1"

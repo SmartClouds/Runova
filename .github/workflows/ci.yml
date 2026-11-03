@@ -73,7 +73,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -228,7 +228,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "26"
           check-latest: true
 
       # The unit tests ask pnpm whether the site stays outside the repository's workspace. Set up
