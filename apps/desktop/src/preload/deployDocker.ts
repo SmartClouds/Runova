@@ -17,6 +17,7 @@ import type {
   DeployConsoleEvent,
   DeployConsoleOpenInput,
   DeployContainerActionInput,
+  DeployContainerLimitsInput,
   DeployContainerLogsEvent,
   DeployContainerLogsWatchInput,
   DeployContainerRemoveInput,
@@ -54,6 +55,9 @@ export function createDeployDocker(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.deployDocker.revealEnv, input),
     act: (input: DeployContainerActionInput): Promise<ContainerSummary> =>
       ipcRenderer.invoke(IPC.deployDocker.act, input),
+    /** Live CPU and memory caps on a container no app owns. */
+    setLimits: (input: DeployContainerLimitsInput): Promise<ContainerDetails> =>
+      ipcRenderer.invoke(IPC.deployDocker.setLimits, input),
     remove: (input: DeployContainerRemoveInput): Promise<void> =>
       ipcRenderer.invoke(IPC.deployDocker.remove, input),
     logTail: (input: DeployLogTailInput): Promise<ContainerLogLine[]> =>

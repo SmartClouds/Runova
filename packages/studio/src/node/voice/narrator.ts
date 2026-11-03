@@ -60,6 +60,12 @@ export interface Narrator {
   speak(input: { videoId: string; sceneIds: string[]; voiceRef: string }): NarrationJobView;
   jobs(videoId: string): NarrationJobView[];
   cancel(videoId: string, jobId: string): void;
+  /**
+   * A few seconds of a voice, to hear before speaking every scene: the video's opening words as a
+   * WAV. The piece is kept in the cache like any other, so trying a voice twice costs nothing, and
+   * a scene that starts with the same words reuses it.
+   */
+  sample(input: { videoId: string; voiceRef: string }): Promise<Uint8Array>;
   /** Puts a recording (any format ffmpeg reads) on a scene as its narration. */
   placeRecording(input: {
     videoId: string;
@@ -74,6 +80,28 @@ export interface Narrator {
 }
 
 const NARRATION_RATE = 48_000;
+
+/** The longest sample: a sentence or two, a few seconds of speech, a fraction of a cent online. */
+const SAMPLE_CHARS = 160;
+
+const SAMPLE_FALLBACK: Record<string, string> = {
+  fa: 'سلام. این صدایی است که ویدیوی شما را روایت می‌کند.',
+  en: 'Hello. This is the voice that will narrate your video.',
+};
+
+/**
+ * What a voice sample says: the first sentences of the first scene with narration, skipping a
+ * scene that is still a [placeholder], or a line of its own when nothing is written yet.
+ */
+export function sampleText(doc: StudioDocument): string {
+  const written = doc.scenario.scenes
+    .map((s) => s.narration.trim())
+    .find((text) => text && !text.startsWith('['));
+  const first = written ? speechChunks(written, doc.language, SAMPLE_CHARS)[0] : undefined;
+  if (first) return first;
+  const base = doc.language.split('-')[0] ?? '';
+  return SAMPLE_FALLBACK[base] ?? (SAMPLE_FALLBACK.en as string);
+}
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -375,6 +403,23 @@ export function createNarrator(deps: NarratorDeps): Narrator {
     cancel(videoId, jobId) {
       const current = running.get(videoId);
       if (current?.job.id === jobId) current.controller.abort();
+    },
+
+    async sample({ videoId, voiceRef }) {
+      const ref = parseVoiceRef(voiceRef);
+      if (!ref) throw new Error('Pick one of the offered voices.');
+      const doc = deps.store(videoId).document;
+      const dir = await deps.cacheDir(videoId);
+      await mkdir(dir, { recursive: true });
+      const spoken = await piece(
+        dir,
+        ref,
+        sampleText(doc),
+        doc.language,
+        await deps.keys(),
+        new AbortController().signal,
+      );
+      return new Uint8Array(await readFile(spoken.wav));
     },
 
     async placeRecording({ videoId, sceneId, file }) {

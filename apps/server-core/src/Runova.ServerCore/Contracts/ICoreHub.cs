@@ -207,6 +207,9 @@ public interface ICoreHub
     /// <summary>SIGKILL unless another well-known signal is named.</summary>
     Task<ContainerSummary> KillContainer(string containerId, string? signal);
 
+    /// <summary>Caps a container's CPU and memory live. Refused for a container of a Runova app: its caps go in a revision.</summary>
+    Task<ContainerDetails> UpdateContainerLimits(ContainerLimitsRequest request);
+
     /// <summary>With RemoveVolumes (its anonymous volumes go too) only for Admins.</summary>
     Task RemoveContainer(ContainerRemoveRequest request);
 

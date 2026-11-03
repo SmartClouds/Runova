@@ -421,10 +421,12 @@ import type {
 import type {
   DeployAppInstallInput,
   DeployAppInstallResult,
+  DeployAppReleases,
   DeployAppRevealInput,
   DeployAppUpdateInput,
   DeployMakePrivateInput,
   DeployRevisionResult,
+  DeployStackLimitsInput,
 } from '../shared/deployAppStoreTypes';
 import type {
   DeployFirewallApplyInput,
@@ -2020,6 +2022,9 @@ const deployStacks = {
   /** Redeploys the app as a new revision with these services on 127.0.0.1 (E13). */
   makePrivate: (input: DeployMakePrivateInput): Promise<DeployRevisionResult> =>
     ipcRenderer.invoke(IPC.deployStacks.makePrivate, input),
+  /** New resource caps on the app's services: the live revision copied with them and deployed. */
+  setLimits: (input: DeployStackLimitsInput): Promise<DeployRevisionResult> =>
+    ipcRenderer.invoke(IPC.deployStacks.setLimits, input),
   onUploadProgress: (cb: (event: DeployStackUploadProgress) => void): (() => void) =>
     subscribe(IPC.deployStacks.onUploadProgress, cb),
 };
@@ -2037,6 +2042,9 @@ const deployAppStore = {
   /** Admins, after a step-up: the app's .env as a map of key to value. */
   revealSecrets: (input: DeployAppRevealInput): Promise<Record<string, string>> =>
     ipcRenderer.invoke(IPC.deployAppStore.revealSecrets, input),
+  /** The newest releases of the catalog's images (cached for hours unless `refresh`). */
+  releases: (options?: { refresh?: boolean }): Promise<DeployAppReleases> =>
+    ipcRenderer.invoke(IPC.deployAppStore.releases, options),
 };
 
 /** Private registries (E08): sign-ins on this computer and credentials stored on a server. */

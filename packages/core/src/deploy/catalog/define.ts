@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fillVersionLabel } from './latest.js';
 import type { CatalogField, CatalogTemplate } from './types.js';
 
 /**
@@ -35,8 +36,20 @@ export function defineCatalogTemplate<S extends z.ZodObject>(
   if (new Set(secrets).size !== secrets.length) {
     throw new Error(`${template.id}: two secrets share a key.`);
   }
+  const labelled = {
+    ...template,
+    versions: template.versions.map((version) =>
+      version.label.includes('{')
+        ? {
+            ...version,
+            label: fillVersionLabel(version.label, version.images),
+            labelPattern: version.label,
+          }
+        : version,
+    ),
+  };
   // S parses to z.output<S> by definition; TypeScript cannot see that for a generic S.
-  return template as unknown as CatalogTemplate<z.output<S>> & { parameters: S };
+  return labelled as unknown as CatalogTemplate<z.output<S>> & { parameters: S };
 }
 
 const PORT_RANGE = 'Ports go from 1 to 65535.';

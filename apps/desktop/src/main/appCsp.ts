@@ -12,6 +12,8 @@
  *   much stricter policy, which `keepsOwnCsp` leaves in place.
  * - Studio's editor shows imported media and its preview files from `studio-media:` (E35):
  *   pictures, video and sound, and the waveform peaks it fetches.
+ * - Studio's voice panel plays sound it holds in memory from `blob:` URLs in media-src: a take
+ *   just recorded, and a voice sample before a narration run. Only the page itself can make one.
  */
 
 export interface AppCspOptions {
@@ -32,8 +34,8 @@ export function appCsp({
   const files = `${blueprintScheme}: ${media}`;
   const rdp = { script: "'wasm-unsafe-eval'", connect: 'data: ws://127.0.0.1:*' };
   return isDev
-    ? `default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' ${rdp.script} http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${files}; media-src 'self' ${files}; font-src 'self' data:; connect-src 'self' ${rdp.connect} ${media} http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:; frame-src 'self' http://localhost:5173 ${scenes};`
-    : `default-src 'self'; script-src 'self' ${rdp.script}; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${files}; media-src 'self' ${files}; font-src 'self' data:; connect-src 'self' ${rdp.connect} ${media}; worker-src 'self' blob:; frame-src 'self' ${scenes};`;
+    ? `default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' ${rdp.script} http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${files}; media-src 'self' blob: ${files}; font-src 'self' data:; connect-src 'self' ${rdp.connect} ${media} http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:; frame-src 'self' http://localhost:5173 ${scenes};`
+    : `default-src 'self'; script-src 'self' ${rdp.script}; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${files}; media-src 'self' blob: ${files}; font-src 'self' data:; connect-src 'self' ${rdp.connect} ${media}; worker-src 'self' blob:; frame-src 'self' ${scenes};`;
 }
 
 /**

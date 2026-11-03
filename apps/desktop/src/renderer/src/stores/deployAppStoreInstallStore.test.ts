@@ -72,6 +72,32 @@ describe('deployAppStoreInstallStore', () => {
     expect(onSettled).toHaveBeenCalled();
   });
 
+  it('sends the picked release and the resource caps, and no caps when none were set', async () => {
+    const bridge = installRunovaBridge(storeBridge());
+    const picked = request();
+    await store().install(SERVER.id, {
+      ...picked,
+      draft: { ...picked.draft, release: '1.2.3' },
+      limits: [{ service: 'web', cpuCores: 1, cpuPercent: 50, memoryMb: 256 }],
+    });
+    expect(bridge.$fn('deployAppStore.install')).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        release: '1.2.3',
+        limits: [{ service: 'web', cpuCores: 1, cpuPercent: 50, memoryMb: 256 }],
+      }),
+    );
+
+    store().dismiss(SERVER.id);
+    await store().install(SERVER.id, {
+      ...picked,
+      draft: { ...picked.draft, release: 'latest' },
+      limits: [],
+    });
+    const [last] = bridge.$fn('deployAppStore.install').mock.calls.at(-1) as [object];
+    expect(last).toMatchObject({ release: 'latest' });
+    expect(last).not.toHaveProperty('limits');
+  });
+
   it('puts the app on its domain after the install, step by step', async () => {
     installRunovaBridge({
       ...storeBridge(),

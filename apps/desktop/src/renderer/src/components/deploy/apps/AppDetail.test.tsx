@@ -118,6 +118,69 @@ describe('AppDetail', () => {
     expect(screen.getByRole('region', { name: 'Deploy of revision 2' })).toBeInTheDocument();
   });
 
+  it("shows each service's resource caps from the live revision", async () => {
+    renderDetail({
+      'deployStacks.get': sampleDetails({
+        revisions: [
+          sampleRevision({
+            limits: [{ service: 'web', cpuCores: 2, cpuPercent: 50, memoryMb: 512 }],
+          }),
+        ],
+      }),
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    expect(within(services).getByRole('listitem', { name: 'web' })).toHaveTextContent(
+      '2 cores at 50% · 512 MB RAM',
+    );
+    expect(within(services).getByRole('listitem', { name: 'db' })).toHaveTextContent('No limits');
+  });
+
+  it('edits the caps of a service and deploys the copy with them', async () => {
+    const setLimits = vi.fn(async () => ({
+      revision: sampleRevision({ number: 3 }),
+      job: sampleJob(),
+    }));
+    const { user } = renderDetail({ 'deployStacks.setLimits': setLimits });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Edit limits of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit resource limits' });
+    await user.click(within(dialog).getByRole('switch', { name: 'Unlimited memory for web' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save limits' }));
+    await waitFor(() =>
+      expect(setLimits).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        stackId: STACK_ID,
+        limits: [expect.objectContaining({ service: 'web', memoryMb: expect.any(Number) })],
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Edit resource limits' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('keeps the caps read-only for a Viewer', async () => {
+    renderDetail({}, ['viewer']);
+    const services = await screen.findByRole('list', { name: 'Services' });
+    expect(within(services).getByRole('button', { name: 'Edit limits of web' })).toBeDisabled();
+  });
+
+  it('asks for a core update before caps can be set on an old server', async () => {
+    renderDetail({
+      'deployDocker.status': {
+        installed: true,
+        running: true,
+        composeSupported: true,
+        conflictingPackages: [],
+      },
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await waitFor(() =>
+      expect(within(services).getByRole('button', { name: 'Edit limits of web' })).toBeDisabled(),
+    );
+  });
+
   it('says when the app did not load and tries again', async () => {
     let calls = 0;
     const { user, onBack } = renderDetail({

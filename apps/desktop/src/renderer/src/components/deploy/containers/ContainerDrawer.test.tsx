@@ -69,6 +69,56 @@ describe('ContainerDrawer', () => {
     expect(within(drawer).getByText(/shop_default \(172\.20\.0\.5\)/)).toBeInTheDocument();
   });
 
+  it('caps a container outside any app live, without a restart', async () => {
+    const setLimits = vi.fn(async () => ({}));
+    const { drawer, user } = await openContainer('toolbox', {
+      'deployDocker.setLimits': setLimits,
+      'deployStacks.list': [],
+    });
+    await user.click(await within(drawer).findByRole('button', { name: 'Edit limits' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit resource limits' });
+    expect(within(dialog).getByText(/without a restart/)).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('switch', { name: /Unlimited disk/ }),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('switch', { name: 'Unlimited memory for toolbox' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save limits' }));
+    await waitFor(() =>
+      expect(setLimits).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        containerId: expect.any(String),
+        cpus: null,
+        memoryMb: expect.any(Number),
+      }),
+    );
+  });
+
+  it("sends an app's container to the app's page for its limits", async () => {
+    const { drawer, user } = await openContainer('shop-api-1', {
+      'deployStacks.list': [
+        {
+          id: 'stack-shop',
+          name: 'shop',
+          status: 'running',
+          createdAtUnixMs: 1,
+          updatedAtUnixMs: 1,
+          revisionCount: 1,
+          runningContainers: 4,
+          containers: 4,
+        },
+      ],
+    });
+    await user.click(
+      await within(drawer).findByRole('button', { name: "Edit limits on the app's page" }),
+    );
+    await waitFor(() => expect(screen.getByTestId('path')).toHaveTextContent(`app=stack-shop`));
+  });
+
+  it('keeps the limits read-only below Operator', async () => {
+    const { drawer } = await openContainer('toolbox', { 'deployStacks.list': [] }, ['viewer']);
+    expect(await within(drawer).findByRole('button', { name: 'Edit limits' })).toBeDisabled();
+  });
+
   it('draws live figures once they come in', async () => {
     const { user, bridge, drawer } = await openContainer('shop-api-1');
     await user.click(within(drawer).getByRole('tab', { name: 'Stats' }));

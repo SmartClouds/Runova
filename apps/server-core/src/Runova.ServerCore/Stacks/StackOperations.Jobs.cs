@@ -306,6 +306,7 @@ internal sealed partial class StackOperations
         }
 
         var proxied = Read<string[]>(row.ProxiedServices);
+        var limits = Read<StackServiceLimits[]>(row.Limits);
         var acknowledged = Read<string[]>(row.AcknowledgedRisks);
         var project = Project(stack.Name, folder);
         var current = -1;
@@ -322,7 +323,7 @@ internal sealed partial class StackOperations
                 steps[current] = steps[current] with { State = StackStepState.Running, StartedAtUnixMs = Now, FirstLogSeq = job.LogLines + 1 };
                 await SaveStepsAsync(stack.Id, row.Number, steps);
                 job.Log($"Step: {Describe(kind)}.");
-                var detail = await RunStepAsync(kind, stack, folder, project, proxied, acknowledged, signIns, job, token);
+                var detail = await RunStepAsync(kind, stack, folder, project, proxied, limits, acknowledged, signIns, job, token);
                 steps[current] = steps[current] with { State = StackStepState.Succeeded, FinishedAtUnixMs = Now, LastLogSeq = job.LogLines, Detail = detail };
                 await SaveStepsAsync(stack.Id, row.Number, steps);
             }
@@ -374,6 +375,7 @@ internal sealed partial class StackOperations
         string folder,
         ComposeProject project,
         string[] proxied,
+        StackServiceLimits[] limits,
         string[] acknowledged,
         DeploySignIns signIns,
         JobContext job,
@@ -382,7 +384,7 @@ internal sealed partial class StackOperations
         switch (kind)
         {
             case StackStepKind.Validate:
-                var checkedConfig = await CheckAsync(stack, folder, proxied, line => job.Log(line), token);
+                var checkedConfig = await CheckAsync(stack, folder, proxied, limits, line => job.Log(line), token);
                 var waiting = Unacknowledged(checkedConfig.Findings, acknowledged);
                 if (waiting.Length > 0)
                 {

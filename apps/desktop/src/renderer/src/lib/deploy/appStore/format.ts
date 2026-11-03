@@ -82,14 +82,26 @@ export function suggestStoreAppName(
 
 export type UpdateOffer =
   | { kind: 'none' }
-  | { kind: 'digest'; version: string; text: string; detail: string }
+  | {
+      kind: 'digest';
+      version: string;
+      /** The label of the release the update moves to. */
+      target: string;
+      text: string;
+      detail: string;
+    }
   | { kind: 'line'; version: CatalogVersion; text: string };
 
 /**
  * What the post-install card offers. Newer images for the same line come first, since they are
  * fixes; a newer line (PostgreSQL 17 to 18) is offered on its own, as it can need a migration.
+ * `target` names the newest release of the app's line, when the registries list a newer one.
  */
-export function updateOffers(check: CatalogUpdateCheck, current: string): UpdateOffer[] {
+export function updateOffers(
+  check: CatalogUpdateCheck,
+  current: string,
+  target: string = current,
+): UpdateOffer[] {
   const offers: UpdateOffer[] = [];
   if (check.status === 'update') {
     const tags = check.changes.map((change) =>
@@ -100,7 +112,11 @@ export function updateOffers(check: CatalogUpdateCheck, current: string): Update
     offers.push({
       kind: 'digest',
       version: check.version,
-      text: `Newer images for ${current}: ${tags.join(', ')}.`,
+      target,
+      text:
+        target === current
+          ? `Newer images for ${current}: ${tags.join(', ')}.`
+          : `${target} is available: ${tags.join(', ')}.`,
       detail: check.changes
         .map(
           (change) =>

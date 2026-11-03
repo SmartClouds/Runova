@@ -36,7 +36,7 @@ export const wordpress = defineCatalogTemplate({
   versions: [
     {
       id: '7.1',
-      label: 'WordPress 7.1 with MySQL 8.4',
+      label: 'WordPress {app} with MySQL {db}',
       images: { app: CATALOG_IMAGES.wordpress71, db: CATALOG_IMAGES.mysql84 },
     },
   ],

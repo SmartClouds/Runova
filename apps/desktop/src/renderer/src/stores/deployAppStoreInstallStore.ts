@@ -115,6 +115,8 @@ export const useDeployAppStoreInstallStore = create<DeployAppStoreInstallState>(
           params: request.check.params,
           secrets: request.check.secrets,
           domain: request.check.domain,
+          ...(request.draft.release ? { release: request.draft.release } : {}),
+          ...(request.limits?.length ? { limits: request.limits } : {}),
         });
         const stackId = result.stack.id;
         const domain = request.check.domain;

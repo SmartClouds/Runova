@@ -45,6 +45,7 @@ export {
   TriangleAlert,
   Undo,
   Video,
+  VolumeHigh,
   Wand2,
   Wrench,
   X,

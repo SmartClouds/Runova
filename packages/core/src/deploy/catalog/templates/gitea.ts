@@ -9,7 +9,7 @@ export const gitea = defineCatalogTemplate({
   description: 'Lightweight self-hosted Git with issues, pull requests and package registries.',
   category: 'developer',
   homepage: 'https://about.gitea.com',
-  versions: [{ id: '28', label: 'Gitea 28.0 (rootless)', images: { app: CATALOG_IMAGES.gitea } }],
+  versions: [{ id: '28', label: 'Gitea {app} (rootless)', images: { app: CATALOG_IMAGES.gitea } }],
   defaultVersion: '28',
   parameters: z.object({
     port: portParam(3002),

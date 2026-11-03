@@ -9,7 +9,7 @@ export const grafana = defineCatalogTemplate({
   description: 'Dashboards and alerts over Prometheus, databases and many other data sources.',
   category: 'monitoring',
   homepage: 'https://grafana.com',
-  versions: [{ id: '13.2', label: 'Grafana 13.2', images: { app: CATALOG_IMAGES.grafana } }],
+  versions: [{ id: '13.2', label: 'Grafana {app}', images: { app: CATALOG_IMAGES.grafana } }],
   defaultVersion: '13.2',
   parameters: z.object({
     port: portParam(3000),

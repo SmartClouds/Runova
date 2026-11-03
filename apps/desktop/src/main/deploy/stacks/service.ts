@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validateStackName } from '@runova/core';
+import { validateLimits, validateStackName } from '@runova/core';
 import { encodeCoreError } from '../../../shared/coreErrors';
 import type {
   JobInfo,
@@ -20,6 +20,7 @@ import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSi
 import type {
   DeployAppRevealInput,
   DeployMakePrivateInput,
+  DeployStackLimitsInput,
   DeployRevisionResult,
 } from '../../../shared/deployAppStoreTypes';
 import type {
@@ -274,6 +275,28 @@ export class DeployStacks {
       revision: base.number,
       proxiedServices: unique([...base.proxiedServices, ...input.services]),
       purpose: 'makePrivate',
+    });
+  }
+
+  /**
+   * New resource caps: the live revision copied on the server with them (its .env and files
+   * with it) and deployed, so Compose recreates only the services whose caps changed.
+   */
+  async setLimits(input: DeployStackLimitsInput): Promise<DeployRevisionResult> {
+    const details = await this.get(input.serverId, input.stackId);
+    const { stack } = details;
+    const base =
+      details.revisions.find((revision) => revision.number === stack.liveRevision) ??
+      details.revisions[0];
+    if (!base) throw new Error(`${stack.name} has no revision to start from yet.`);
+    const checked = validateLimits(input.limits, base.services);
+    if (!checked.ok) throw new Error(checked.reason);
+    return this.reviseAndDeploy(input.serverId, {
+      stackId: stack.id,
+      revision: base.number,
+      proxiedServices: base.proxiedServices,
+      purpose: 'limits',
+      limits: checked.limits,
     });
   }
 

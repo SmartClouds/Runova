@@ -100,6 +100,9 @@ internal interface IDockerEngine
 
     /// <summary>The ids of every container, running or not, that carries this label.</summary>
     Task<IReadOnlyList<string>> ListLabelledContainersAsync(string label, CancellationToken cancellationToken);
+
+    /// <summary>docker update: new CPU and memory caps on a container, applied without a restart. Swap is held to the memory cap.</summary>
+    Task UpdateContainerLimitsAsync(string container, long nanoCpus, long memoryBytes, CancellationToken cancellationToken);
 }
 
 /// <summary>Nothing is at that path in the container (the container itself is there).</summary>
@@ -122,7 +125,11 @@ internal sealed record EngineVersion(
     string Os,
     string Arch);
 
-internal sealed record EngineInfo(string? StorageDriver, int? CgroupVersion);
+/// <summary>
+/// What `docker info` says about the engine: its storage driver (and the filesystem under it,
+/// which decides whether a container's disk can be capped) and the CPUs and memory it can give.
+/// </summary>
+internal sealed record EngineInfo(string? StorageDriver, int? CgroupVersion, int? Cpus = null, long? MemoryBytes = null, string? BackingFilesystem = null);
 
 /// <summary>A container from the list, with the labels compose grouping and the UI need.</summary>
 internal sealed record EngineContainer(ContainerSummary Summary, IReadOnlyDictionary<string, string> Labels);

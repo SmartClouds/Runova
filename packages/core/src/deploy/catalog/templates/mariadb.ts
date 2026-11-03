@@ -10,8 +10,8 @@ export const mariadb = defineCatalogTemplate({
   category: 'database',
   homepage: 'https://mariadb.org',
   versions: [
-    { id: '12.3', label: 'MariaDB 12.3 LTS', images: { db: CATALOG_IMAGES.mariadb123 } },
-    { id: '11.4', label: 'MariaDB 11.4 LTS', images: { db: CATALOG_IMAGES.mariadb114 } },
+    { id: '12.3', label: 'MariaDB {db} LTS', images: { db: CATALOG_IMAGES.mariadb123 } },
+    { id: '11.4', label: 'MariaDB {db} LTS', images: { db: CATALOG_IMAGES.mariadb114 } },
   ],
   defaultVersion: '12.3',
   parameters: z.object({

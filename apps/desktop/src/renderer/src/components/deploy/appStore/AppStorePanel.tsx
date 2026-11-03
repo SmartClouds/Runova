@@ -16,7 +16,7 @@ import {
 import { useAppsAccess } from '../apps/hooks';
 import { SignInGate } from '../SignInGate';
 import { CatalogGrid } from './CatalogGrid';
-import { useInstalledApps } from './hooks';
+import { useAppStoreReleases, useInstalledApps } from './hooks';
 import { InstalledAppView } from './InstalledAppView';
 import { InstalledList } from './InstalledList';
 import { type InstallRequest, InstallSheet } from './InstallSheet';
@@ -34,6 +34,7 @@ export function AppStorePanel({ server }: { server: DeployServer }): React.JSX.E
   const queryClient = useQueryClient();
   const access = useAppsAccess(serverId);
   const installed = useInstalledApps(serverId, access.signedIn);
+  const releases = useAppStoreReleases();
   const kept = useDeployAppStoreInstallStore(
     (state): AppStoreInstall | undefined => state.installs[serverId],
   );
@@ -115,12 +116,14 @@ export function AppStorePanel({ server }: { server: DeployServer }): React.JSX.E
       ) : (
         <InstalledList
           apps={installed.apps}
+          releases={releases.data}
           loading={installed.loading}
           onOpen={(stackId) => show({ app: stackId })}
         />
       )}
       <CatalogGrid
         templates={CATALOG_TEMPLATES}
+        releases={releases}
         canInstall={access.canOperate}
         onInstall={(templateId) => {
           useDeployAppStoreInstallStore.getState().clearError(serverId);
@@ -130,7 +133,9 @@ export function AppStorePanel({ server }: { server: DeployServer }): React.JSX.E
       {template && (
         <InstallSheet
           key={template.id}
+          serverId={serverId}
           template={template}
+          releases={releases}
           taken={taken}
           canAdmin={access.canAdmin}
           busy={busy}

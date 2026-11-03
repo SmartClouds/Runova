@@ -67,7 +67,18 @@ test('installs Redis from the App Store and shows how to connect', async () => {
   await sheet.getByLabel('Port').fill('16390');
   const password = await sheet.getByRole('textbox', { name: /Password/ }).inputValue();
   expect(password).toMatch(/^[A-Za-z0-9]{32}$/);
+  // The registries are not reached here, so the release picker offers the bundled one.
+  await expect(sheet.getByText(/the registries could not be reached/)).toBeVisible({
+    timeout: 30_000,
+  });
   await sheet.getByRole('button', { name: 'Install Redis' }).click();
+
+  // Install opens the resource limits: cap the memory of the redis container.
+  const limits = page.getByRole('dialog', { name: 'Set resource limits' });
+  await expect(limits.getByRole('region', { name: 'redis' })).toBeVisible();
+  await limits.getByRole('switch', { name: 'Unlimited memory for redis' }).click();
+  await expect(limits.getByRole('region', { name: 'redis' })).toContainText('512 MB RAM');
+  await limits.getByRole('button', { name: 'Install', exact: true }).click();
 
   // The deploy, step by step, then the card.
   const steps = page.getByRole('list', { name: 'Deploy steps' });
@@ -81,8 +92,27 @@ test('installs Redis from the App Store and shows how to connect', async () => {
   await page.getByRole('button', { name: 'Show passwords' }).click();
   await expect(details.getByText(`redis://:${password}@127.0.0.1:16390/0`)).toBeVisible();
 
+  // Its page under Apps shows the cap, and it can be changed there.
+  await page.getByRole('button', { name: 'Open in Apps' }).click();
+  const services = page.getByRole('list', { name: 'Services' });
+  await expect(services.getByRole('listitem', { name: 'redis' })).toContainText('512 MB RAM', {
+    timeout: 30_000,
+  });
+  await services.getByRole('button', { name: 'Edit limits of redis' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit resource limits' });
+  await edit.getByRole('switch', { name: 'Unlimited CPU for redis' }).click();
+  await edit.getByRole('button', { name: 'Save limits' }).click();
+  await expect(edit).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByText('Revision 2 is live.')).toBeVisible({ timeout: 90_000 });
+  await expect(services.getByRole('listitem', { name: 'redis' })).toContainText(
+    /cores? · 512 MB RAM/,
+    {
+      timeout: 30_000,
+    },
+  );
+
   // Back in the store it is listed as installed.
-  await page.getByRole('button', { name: 'App Store' }).first().click();
+  await section(page, 'App Store').click();
   const installed = page.getByRole('region', { name: 'Installed from the App Store' });
   await expect(installed.getByRole('listitem', { name: 'e2e-cache' })).toBeVisible({
     timeout: 30_000,

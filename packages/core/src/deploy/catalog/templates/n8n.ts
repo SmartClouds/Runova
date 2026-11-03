@@ -9,7 +9,7 @@ export const n8n = defineCatalogTemplate({
   description: 'Workflow automation that connects your apps and APIs with a visual editor.',
   category: 'automation',
   homepage: 'https://n8n.io',
-  versions: [{ id: '2.41', label: 'n8n 2.41', images: { app: CATALOG_IMAGES.n8n } }],
+  versions: [{ id: '2.41', label: 'n8n {app}', images: { app: CATALOG_IMAGES.n8n } }],
   defaultVersion: '2.41',
   parameters: z.object({ port: portParam(5678) }),
   fields: {

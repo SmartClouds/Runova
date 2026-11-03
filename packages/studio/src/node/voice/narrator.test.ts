@@ -2,18 +2,18 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { StudioEvent } from '../../api.js';
-import { createScene } from '../../document/schema.js';
+import { createDocument, createScene } from '../../document/schema.js';
 import { type FakeTtsServer, GOOD_KEY, startFakeTts, tonePcm } from '../../test/fakeTts.js';
 import { fakeTools } from '../../test/ffmpegTools.js';
 import { openNodeSqlite } from '../../test/nodeSqlite.js';
 import { useTempDirs } from '../../test/tempDir.js';
 import { secondsToFlicks } from '../../time/flicks.js';
 import { narratedLength } from '../../timeline/narration.js';
-import { encodeWav } from '../../voice/wav.js';
+import { encodeWav, parseWav } from '../../voice/wav.js';
 import { createVideoFolder, VideoStore } from '../project/videoStore.js';
 import type { FfmpegTools } from '../render/ffmpegTool.js';
 import type { EngineKeys } from './engines.js';
-import { createNarrator, type Narrator } from './narrator.js';
+import { createNarrator, type Narrator, sampleText } from './narrator.js';
 
 const tempDir = useTempDirs();
 let server: FakeTtsServer;
@@ -214,6 +214,48 @@ describe('narrating scenes', () => {
     await bare.narrator.idle('v1');
     expect(bare.narrator.jobs('v1')[0]?.error).toMatch(/^Narration needs ffmpeg/);
     await bare.narrator.shutdown();
+  });
+});
+
+describe('voice samples', () => {
+  it('speaks the opening words in a voice, once, and a run of that scene reuses them', async () => {
+    const { narrator, store } = await setup();
+    const before = server.requests.length;
+    const voiceRef = 'azure:fa-IR-DilaraNeural';
+    const wav = await narrator.sample({ videoId: 'v1', voiceRef });
+    expect(parseWav(wav).seconds).toBeCloseTo('سلام. این یک آزمایش است.'.length * 0.05, 2);
+    expect(server.requests.length - before).toBe(1);
+    expect(server.requests.at(-1)?.body).toContain('سلام. این یک آزمایش است.');
+    // Nothing was placed: a sample is only heard.
+    expect(voiceClips(store)).toHaveLength(0);
+
+    await narrator.sample({ videoId: 'v1', voiceRef });
+    expect(server.requests.length - before).toBe(1);
+    narrator.speak({ videoId: 'v1', sceneIds: ['a'], voiceRef });
+    await narrator.idle('v1');
+    expect(narrator.jobs('v1')[0]).toMatchObject({ status: 'done', reused: 1 });
+    expect(server.requests.length - before).toBe(1);
+
+    await expect(narrator.sample({ videoId: 'v1', voiceRef: 'recording' })).rejects.toThrow(
+      'Pick one of the offered voices.',
+    );
+  });
+
+  it('samples the first written scene, a sentence or two of it, or a line of its own', () => {
+    const doc = createDocument({ id: 'v1', title: 'T', language: 'en' });
+    doc.scenario.scenes = [
+      createScene({ id: 'a', narration: '  ' }),
+      createScene({ id: 'b', narration: '[Feature one: name it.] [One plain sentence.]' }),
+      createScene({ id: 'c', narration: `Short start. ${LONG}` }),
+    ];
+    const text = sampleText(doc);
+    expect(text.startsWith('Short start. Studio speaks this sentence')).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(160);
+
+    doc.scenario.scenes = [];
+    expect(sampleText(doc)).toBe('Hello. This is the voice that will narrate your video.');
+    doc.language = 'fa-IR';
+    expect(sampleText(doc)).toBe('سلام. این صدایی است که ویدیوی شما را روایت می‌کند.');
   });
 });
 

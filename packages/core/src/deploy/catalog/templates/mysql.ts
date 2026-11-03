@@ -10,8 +10,8 @@ export const mysql = defineCatalogTemplate({
   category: 'database',
   homepage: 'https://www.mysql.com',
   versions: [
-    { id: '9.7', label: 'MySQL 9.7 LTS', images: { db: CATALOG_IMAGES.mysql97 } },
-    { id: '8.4', label: 'MySQL 8.4 LTS', images: { db: CATALOG_IMAGES.mysql84 } },
+    { id: '9.7', label: 'MySQL {db} LTS', images: { db: CATALOG_IMAGES.mysql97 } },
+    { id: '8.4', label: 'MySQL {db} LTS', images: { db: CATALOG_IMAGES.mysql84 } },
   ],
   defaultVersion: '9.7',
   parameters: z.object({

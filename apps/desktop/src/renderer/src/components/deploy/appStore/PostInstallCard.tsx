@@ -1,8 +1,10 @@
 import {
   type CatalogInstall,
+  type CatalogReleaseData,
   catalogInstallFacts,
   checkCatalogUpdate,
   type RenderedCatalogFact,
+  withLatest,
 } from '@runova/core';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -11,6 +13,7 @@ import { FOOTER_HAIRLINE } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { type UpdateOffer, updateOffers } from '@/lib/deploy/appStore/format';
+import { installedLabel } from '@/lib/deploy/appStore/releases';
 import { DeployCard } from '../deployKit';
 
 /**
@@ -78,12 +81,15 @@ export function PostInstallCard({
   revealing,
   busy,
   rollbackTo,
+  releases = null,
   onReveal,
   onUpdate,
   onRollback,
 }: {
   name: string;
   install: CatalogInstall;
+  /** The registries' reading: an update means a newer release they list. */
+  releases?: CatalogReleaseData | null;
   /** The real values: still held right after the install, or revealed from the server. */
   secrets: Record<string, string> | null;
   canOperate: boolean;
@@ -99,9 +105,10 @@ export function PostInstallCard({
 }): React.JSX.Element {
   const [showing, setShowing] = useState(false);
   const facts = catalogInstallFacts(install, secrets);
-  const pinned = install.template.versions.find((version) => version.id === install.version);
-  const label = pinned?.label ?? `${install.template.name} ${install.version}`;
-  const offers = updateOffers(checkCatalogUpdate(install.template, install.installed), label);
+  const label = installedLabel(install);
+  const latest = withLatest(install.template, releases);
+  const target = latest.versions.find((version) => version.id === install.version)?.label ?? label;
+  const offers = updateOffers(checkCatalogUpdate(latest, install.installed), label, target);
   const known = secrets !== null;
   const anySensitive = facts.ok && facts.facts.some((fact) => fact.sensitive);
 
@@ -153,7 +160,7 @@ export function PostInstallCard({
       <section aria-label="Updates" className={`space-y-2 pt-3 ${FOOTER_HAIRLINE}`}>
         {offers.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Up to date: it runs the images the App Store pins for {label}.
+            Up to date: {label} is the newest release the App Store knows of.
           </p>
         ) : (
           offers.map((offer) =>
@@ -176,7 +183,11 @@ export function PostInstallCard({
                 </div>
                 {canOperate && (
                   <Button size="sm" disabled={busy} onClick={() => onUpdate(offer)}>
-                    {offer.kind === 'digest' ? 'Update' : `Move to ${offer.version.label}`}
+                    {offer.kind === 'line'
+                      ? `Move to ${offer.version.label}`
+                      : offer.target === label
+                        ? 'Update'
+                        : `Update to ${offer.target}`}
                   </Button>
                 )}
               </div>

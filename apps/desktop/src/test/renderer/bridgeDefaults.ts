@@ -128,6 +128,8 @@ export function bridgeDefaults(): Record<string, unknown> {
     'pet.getSnooze': { until: null },
     'pet.customDataUrls': {},
     'deploy.coreRelease': async () => null,
+    // The App Store with only the releases it shipped with, as when the registries are not read.
+    'deployAppStore.releases': { data: null, checkedAtUnixMs: null, error: null },
     'studio.settings': {
       defaultRoot: '',
       defaultRootIsCustom: false,

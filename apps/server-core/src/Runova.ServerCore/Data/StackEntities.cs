@@ -38,7 +38,7 @@ internal sealed class StackRecord
 
 /// <summary>
 /// One upload of a stack's files. The list columns are JSON arrays: env keys (never values),
-/// services, proxied services, the core's findings, acknowledged finding ids, port bindings
+/// services, proxied services, resource caps, the core's findings, acknowledged finding ids, port bindings
 /// after the loopback override, and the deploy's steps.
 /// </summary>
 internal sealed class StackRevisionRecord
@@ -61,6 +61,9 @@ internal sealed class StackRevisionRecord
     public string Services { get; set; } = "[]";
 
     public string ProxiedServices { get; set; } = "[]";
+
+    /// <summary>Resource caps by service (StackServiceLimits), written into the override file.</summary>
+    public string Limits { get; set; } = "[]";
 
     public string Findings { get; set; } = "[]";
 

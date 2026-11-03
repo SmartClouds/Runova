@@ -1,9 +1,21 @@
+import { findCatalogTemplate } from '@runova/core';
 import { encodeCoreError } from '@shared/coreErrors';
 import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { sampleDetails, sampleJob, sampleRevision } from '../apps/testing/fixtures';
-import { installedCompose, SERVER, STACK_ID, storeBridge, storeDetails } from './testing/fixtures';
+import {
+  installedCompose,
+  NEWER_REDIS,
+  RELEASES,
+  SERVER,
+  STACK_ID,
+  storeBridge,
+  storeDetails,
+} from './testing/fixtures';
+
+/** What the catalog ships PostgreSQL 18 as, such as "PostgreSQL 18.6". */
+const PG18 = findCatalogTemplate('postgres')?.versions[0].label ?? '';
 
 /**
  * One installed app later on: the card masks every password, reveals them for an Admin after a
@@ -60,7 +72,7 @@ describe('the post-install card', () => {
       false,
     );
     expect(screen.getByText('Only an Admin can reveal the passwords.')).toBeTruthy();
-    expect(screen.getByText(/Up to date: it runs the images the App Store pins/)).toBeTruthy();
+    expect(screen.getByText(/Up to date: Redis 8\.10\.\d+ is the newest release/)).toBeTruthy();
   });
 
   it('copies a connection detail, and says when the clipboard refuses', async () => {
@@ -109,16 +121,17 @@ describe('the post-install card', () => {
     }));
     const { user } = renderApp({ ...postgresAt('17'), 'deployAppStore.update': update });
     const updates = await screen.findByRole('region', { name: 'Updates' });
-    expect(within(updates).getByText('PostgreSQL 18 is available.')).toBeTruthy();
-    await user.click(within(updates).getByRole('button', { name: 'Move to PostgreSQL 18' }));
+    expect(within(updates).getByText(`${PG18} is available.`)).toBeTruthy();
+    await user.click(within(updates).getByRole('button', { name: `Move to ${PG18}` }));
     expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Move to PostgreSQL 18?', warning: expect.any(String) }),
+      expect.objectContaining({ title: `Move to ${PG18}?`, warning: expect.any(String) }),
     );
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith({
         serverId: SERVER.id,
         stackId: STACK_ID,
         version: '18',
+        release: 'latest',
       }),
     );
   });
@@ -138,10 +151,39 @@ describe('the post-install card', () => {
         serverId: SERVER.id,
         stackId: STACK_ID,
         version: '18',
+        release: 'latest',
       }),
     );
     // The server made the revision but did not deploy it: the screen says why.
     expect(await screen.findByText(/Revision 3 waits for findings/)).toBeTruthy();
+  });
+
+  it('offers the newer release the registries list, and updates to it', async () => {
+    const update = vi.fn(async () => ({
+      revision: sampleRevision({ number: 3, state: 'deploying' }),
+      job: sampleJob(),
+    }));
+    const { user } = renderApp({
+      'deployAppStore.releases': RELEASES,
+      'deployAppStore.update': update,
+    });
+    const updates = await screen.findByRole('region', { name: 'Updates' });
+    expect(
+      await within(updates).findByText(
+        new RegExp(`Redis ${NEWER_REDIS} is available: 8\\.10\\.\\d+ to ${NEWER_REDIS}\\.`),
+      ),
+    ).toBeTruthy();
+    await user.click(
+      within(updates).getByRole('button', { name: `Update to Redis ${NEWER_REDIS}` }),
+    );
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        stackId: STACK_ID,
+        version: '8.10',
+        release: 'latest',
+      }),
+    );
   });
 
   it('leaves the app alone when the update is turned down, and says a refusal', async () => {
@@ -151,10 +193,10 @@ describe('the post-install card', () => {
     });
     const { user } = renderApp({ ...postgresAt('17'), 'deployAppStore.update': update });
     const updates = await screen.findByRole('region', { name: 'Updates' });
-    await user.click(within(updates).getByRole('button', { name: 'Move to PostgreSQL 18' }));
+    await user.click(within(updates).getByRole('button', { name: `Move to ${PG18}` }));
     expect(update).not.toHaveBeenCalled();
     confirm.mockImplementation(async () => true);
-    await user.click(within(updates).getByRole('button', { name: 'Move to PostgreSQL 18' }));
+    await user.click(within(updates).getByRole('button', { name: `Move to ${PG18}` }));
     expect(await screen.findByText(/NEW_KEY, which db was not installed with/)).toBeTruthy();
   });
 

@@ -1,7 +1,9 @@
 import {
   type EditOp,
   type EditResponse,
+  mediaUrl,
   type NarrationJobView,
+  narrationClip,
   parseVoiceRef,
   RECORDED_VOICE,
   type Scene,
@@ -25,19 +27,22 @@ import {
   Lock,
   Microphone,
   Notice,
-  Play,
   persianTextProps,
   SECTION_HEADING,
   SimpleTooltip,
   Skeleton,
+  Sparkles,
   Spinner,
+  StopCircle,
   Switch,
   toast,
   VaultUnlockDialog,
+  VolumeHigh,
 } from '../kit';
 import { studioKeys } from '../queryKeys';
 import { PiperVoiceLibraryDialog } from './PiperVoiceLibraryDialog';
 import { RecordDialog } from './RecordDialog';
+import { useVoicePlayer } from './useVoicePlayer';
 import { VoiceProfilesDialog } from './VoiceProfilesDialog';
 
 export interface VoicePanelProps {
@@ -49,6 +54,9 @@ export interface VoicePanelProps {
   onOpenDevSetup: () => void;
 }
 
+/** The player's key for a voice sample; a scene's narration plays as `scene:<id>`. */
+const SAMPLE = 'sample';
+
 /** "$0.02", or "under a cent", for the estimate before speaking. */
 function formatCost(dollars: number): string {
   if (dollars < 0.01) return 'under a cent';
@@ -57,8 +65,9 @@ function formatCost(dollars: number): string {
 
 /**
  * The video's narration: each scene spoken by an online voice or recorded by the user, then
- * captioned where its words are spoken. A scene timed by its narration grows or shrinks to fit
- * its voice, and later scenes move along with their voices and captions.
+ * captioned where its words are spoken. A voice can be heard on a short sample before a run, and
+ * each scene's narration played back once it has one. A scene timed by its narration grows or
+ * shrinks to fit its voice, and later scenes move along with their voices and captions.
  */
 export function VoicePanel({
   videoId,
@@ -85,6 +94,8 @@ export function VoicePanel({
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [recordTarget, setRecordTarget] = useState<{ scene: Scene; index: number } | null>(null);
   const [captioning, setCaptioning] = useState<string | null>(null);
+  const [sampling, setSampling] = useState(false);
+  const player = useVoicePlayer();
 
   // Until the user picks, the first engine that is ready to use.
   useEffect(() => {
@@ -116,6 +127,13 @@ export function VoicePanel({
   const voiceRef = engine && voiceId ? `${engine.id}:${voiceId}` : null;
   const ready = !!voiceRef && !engine?.problem && !running;
 
+  // A sample of one voice stops when another is picked.
+  const { playing, stop } = player;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a change of voice stops it, not the sample starting
+  useEffect(() => {
+    if (playing === SAMPLE) stop();
+  }, [voiceRef]);
+
   const cost = useMemo(() => {
     const price = engine?.pricePerMillionChars;
     if (price == null) return null;
@@ -131,6 +149,28 @@ export function VoicePanel({
       toast.error(errorMessage(error));
     }
     void queryClient.invalidateQueries({ queryKey: studioKeys.narrationJobs(videoId) });
+  }
+
+  async function hearSample(): Promise<void> {
+    if (!voiceRef) return;
+    if (player.playing === SAMPLE) return player.stop();
+    setSampling(true);
+    try {
+      const wav = await studioAudioClient().sample(videoId, voiceRef);
+      await player.play(SAMPLE, new Blob([new Uint8Array(wav)], { type: 'audio/wav' }));
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      setSampling(false);
+    }
+  }
+
+  function listen(scene: Scene, src: string): void {
+    const key = `scene:${scene.id}`;
+    if (player.playing === key) return player.stop();
+    player
+      .play(key, src)
+      .catch(() => toast.error('Studio could not play this narration. Speak or record it again.'));
   }
 
   async function caption(scene: Scene): Promise<void> {
@@ -219,11 +259,23 @@ export function VoicePanel({
             <Download /> Get voices
           </Button>
         )}
+        <SimpleTooltip label="Speaks the video's opening words in this voice, to hear it before a run">
+          <span className="inline-flex">
+            <Button
+              variant="soft"
+              disabled={!voiceRef || !!engine?.problem || sampling}
+              onClick={() => void hearSample()}
+            >
+              {sampling ? <Spinner /> : player.playing === SAMPLE ? <StopCircle /> : <VolumeHigh />}
+              {player.playing === SAMPLE ? 'Stop sample' : 'Hear this voice'}
+            </Button>
+          </span>
+        </SimpleTooltip>
         <Button
           disabled={!ready || spoken.length === 0}
           onClick={() => void speak(spoken.map((s) => s.id))}
         >
-          <Play /> Speak every scene
+          <Sparkles /> Speak every scene
         </Button>
         <Button variant="soft" onClick={() => setProfilesOpen(true)}>
           <Microphone /> Voices
@@ -349,6 +401,12 @@ export function VoicePanel({
             {scenes.map((scene, index) => {
               const text = scene.narration.trim();
               const rtl = persianTextProps(text);
+              const voice = narrationClip(document, scene.id);
+              const heard =
+                voice?.source.type === 'media'
+                  ? mediaUrl(videoId, voice.source.hash, 'original')
+                  : null;
+              const listening = player.playing === `scene:${scene.id}`;
               return (
                 <li
                   key={scene.id}
@@ -367,6 +425,29 @@ export function VoicePanel({
                   <Chip tone={scene.voiceRef ? 'success' : 'neutral'} dot>
                     {voiceLabel(scene.voiceRef)}
                   </Chip>
+                  <SimpleTooltip
+                    label={
+                      heard
+                        ? listening
+                          ? `Stop scene ${index + 1}`
+                          : `Listen to scene ${index + 1}`
+                        : `Scene ${index + 1} has no voice yet`
+                    }
+                  >
+                    <span className="inline-flex">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={
+                          listening ? `Stop scene ${index + 1}` : `Listen to scene ${index + 1}`
+                        }
+                        disabled={!heard}
+                        onClick={() => heard && listen(scene, heard)}
+                      >
+                        {listening ? <StopCircle /> : <VolumeHigh />}
+                      </Button>
+                    </span>
+                  </SimpleTooltip>
                   <SimpleTooltip label={`Speak scene ${index + 1} with the voice above`}>
                     <span className="inline-flex">
                       <Button
@@ -376,7 +457,7 @@ export function VoicePanel({
                         disabled={!ready || !text}
                         onClick={() => void speak([scene.id])}
                       >
-                        <Play />
+                        <Sparkles />
                       </Button>
                     </span>
                   </SimpleTooltip>

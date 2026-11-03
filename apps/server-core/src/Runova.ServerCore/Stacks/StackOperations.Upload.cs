@@ -86,6 +86,7 @@ internal sealed partial class StackOperations
                 ComposeSha256 = Convert.ToHexStringLower(SHA256.HashData(composeBytes)),
                 EnvKeys = Write(env.Entries.Select(e => e.Key).Distinct(StringComparer.Ordinal).ToArray()),
                 ProxiedServices = Write(upload.ProxiedServices.Distinct(StringComparer.Ordinal).ToArray()),
+                Limits = Write(ResourceLimits.Kept(upload.Limits)),
                 AcknowledgedRisks = Write(acknowledged),
                 HasBuildContext = upload.BuildContext,
                 ProjectId = upload.Source?.ProjectId,
@@ -197,12 +198,13 @@ internal sealed partial class StackOperations
         var folder = RevisionFolder(stack.Id, number);
         var row = await RevisionAsync(stack.Id, number, cancellationToken);
         var proxied = Read<string[]>(row.ProxiedServices);
+        var limits = Read<StackServiceLimits[]>(row.Limits);
         var seeded = redactor.With(await EnvValuesAsync(folder, cancellationToken));
         string state;
         string? error = null;
         try
         {
-            var checkedConfig = await CheckAsync(stack, folder, proxied, null, cancellationToken);
+            var checkedConfig = await CheckAsync(stack, folder, proxied, limits, null, cancellationToken);
             row.Services = Write(checkedConfig.Services);
             row.Builds = checkedConfig.Builds;
             row.Findings = Write(checkedConfig.Findings);
@@ -236,14 +238,16 @@ internal sealed partial class StackOperations
     internal sealed record CheckedConfig(string[] Services, bool Builds, List<StackRisk> Findings, IReadOnlyList<StackPortBinding> Bindings, string[] Registries);
 
     /// <summary>
-    /// docker compose config on the revision, the loopback override written from it, and Compose's
-    /// reading again with the override, which must leave every proxied port on 127.0.0.1. Throws
+    /// docker compose config on the revision, the override written from it (proxied ports on
+    /// loopback, resource caps checked against the server), and Compose's reading again with the
+    /// override, which must leave every proxied port on 127.0.0.1. Throws
     /// <see cref="ComposeConfigException"/> with Compose's own words when it refuses the files.
     /// </summary>
     internal async Task<CheckedConfig> CheckAsync(
         StackRecord stack,
         string folder,
         IReadOnlyCollection<string> proxied,
+        IReadOnlyCollection<StackServiceLimits> limits,
         Action<string>? note,
         CancellationToken cancellationToken)
     {
@@ -270,7 +274,12 @@ internal sealed partial class StackOperations
 
         var plain = Project(stack.Name, folder, withOverride: false);
         using var config = await ConfigAsync(plain, cancellationToken);
-        var rendered = LoopbackOverride.Render(config, proxied);
+        if (limits.Count > 0)
+        {
+            ResourceLimits.Check(limits, [.. config.Services.Select(service => service.Name)], await EngineInfoAsync(cancellationToken));
+        }
+
+        var rendered = LoopbackOverride.Render(config, proxied, limits);
         if (rendered.Text is null)
         {
             var findings = ComposeConfigLint.Lint(config, proxied, plain.ProjectDirectory, directories.Data);
@@ -290,6 +299,19 @@ internal sealed partial class StackOperations
 
         var lint = ComposeConfigLint.Lint(final, proxied, withOverride.ProjectDirectory, directories.Data);
         return new CheckedConfig([.. final.Services.Select(s => s.Name)], final.Builds, lint, rendered.Bindings, RegistriesOf(final));
+    }
+
+    /// <summary>What the engine can give, for the caps; null when it does not answer (Compose will say why).</summary>
+    private async Task<EngineInfo?> EngineInfoAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await engine.GetInfoAsync(cancellationToken);
+        }
+        catch (DockerUnavailableException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Where the images that docker compose pull fetches come from (built services are skipped, as pull skips them).</summary>
@@ -389,7 +411,7 @@ internal sealed partial class StackOperations
 
         return upload.AcknowledgedRisks.Length > StackRules.MaxAcknowledgments || !upload.AcknowledgedRisks.All(StackRules.IsRiskId)
             ? $"Acknowledge at most {StackRules.MaxAcknowledgments} findings, by the ids the linter gave them."
-            : string.Empty;
+            : ResourceLimits.CheckShape(upload.Limits);
     }
 
     private static string Clip(string text) => text.Length <= MaxErrorLength ? text : text[..(MaxErrorLength - 3)] + "...";

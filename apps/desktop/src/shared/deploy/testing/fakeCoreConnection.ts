@@ -12,6 +12,7 @@ import type {
   ConsoleRequest,
   ContainerDetails,
   ContainerEnvVariable,
+  ContainerLimitsRequest,
   ContainerList,
   ContainerLogBatch,
   ContainerLogLine,
@@ -834,6 +835,18 @@ export class FakeCoreConnection implements ICoreHub {
 
   killContainer = async (containerId: string, _signal?: string) =>
     this.lifecycle('KillContainer', containerId, 'exited', 'kill');
+
+  updateContainerLimits = async (request: ContainerLimitsRequest): Promise<ContainerDetails> => {
+    this.assertOpen();
+    this.assertRole('UpdateContainerLimits', OPERATORS);
+    const container = this.container('UpdateContainerLimits', request.container);
+    container.details.cpuLimit = request.cpus ?? this.docker.status.cpus ?? undefined;
+    container.details.memoryLimitBytes =
+      request.memoryMb === undefined || request.memoryMb === null
+        ? (this.docker.status.memoryBytes ?? undefined)
+        : request.memoryMb * 1024 * 1024;
+    return this.docker.details(container);
+  };
 
   removeContainer = async (request: ContainerRemoveRequest): Promise<void> => {
     this.assertOpen();

@@ -163,6 +163,12 @@ describe('voice channels', () => {
     await expect(
       invoke(IPC.studioAudio.speak, { videoId, sceneIds: ['s1'], voiceRef: 'nope:x' }),
     ).rejects.toThrow('Pick one of the offered voices.');
+    await expect(invoke(IPC.studioAudio.sample, { videoId, voiceRef: 'nope:x' })).rejects.toThrow(
+      'Pick one of the offered voices.',
+    );
+    await expect(invoke(IPC.studioAudio.sample, { videoId })).rejects.toThrow(
+      'That Studio request is not valid (voiceRef)',
+    );
     await expect(
       invoke(IPC.studioAudio.captionScene, { videoId, sceneId: 's1' }),
     ).resolves.toMatchObject({

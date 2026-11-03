@@ -9,7 +9,7 @@ export const prometheus = defineCatalogTemplate({
   description: 'Collects metrics from your services and keeps them as time series for querying.',
   category: 'monitoring',
   homepage: 'https://prometheus.io',
-  versions: [{ id: '3', label: 'Prometheus 3.15', images: { app: CATALOG_IMAGES.prometheus } }],
+  versions: [{ id: '3', label: 'Prometheus {app}', images: { app: CATALOG_IMAGES.prometheus } }],
   defaultVersion: '3',
   parameters: z.object({
     port: portParam(9090),

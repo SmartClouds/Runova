@@ -1,21 +1,27 @@
-import { checkCatalogUpdate } from '@runova/core';
+import { type CatalogReleaseData, checkCatalogUpdate, withLatest } from '@runova/core';
 import { ChevronRight, RefreshCw } from '@/components/icons';
 import { Chip, GLASS_CARD, SECTION_HEADING } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
+import { installedLabel } from '@/lib/deploy/appStore/releases';
 import { STATUS_TEXT, STATUS_TONE } from '@/lib/deploy/apps/format';
 import { cn } from '@/lib/utils';
 import { StatusPill } from '../apps/StatusPill';
 import { GLASS_EDGE } from '../deployKit';
 import type { InstalledStoreApp } from './hooks';
 
-/** The apps this server got from the App Store, each with its status and any update waiting. */
+/**
+ * The apps this server got from the App Store, each with its status and any update waiting: a
+ * newer release the registries list, or a newer line the catalog has.
+ */
 
 export function InstalledList({
   apps,
+  releases = null,
   loading,
   onOpen,
 }: {
   apps: InstalledStoreApp[];
+  releases?: CatalogReleaseData | null;
   loading: boolean;
   onOpen: (stackId: string) => void;
 }): React.JSX.Element | null {
@@ -32,9 +38,11 @@ export function InstalledList({
       <h3 className={cn(SECTION_HEADING, 'px-1')}>Installed</h3>
       <ul className="grid gap-2 xl:grid-cols-2">
         {apps.map(({ stack, install }) => {
-          const check = checkCatalogUpdate(install.template, install.installed);
+          const check = checkCatalogUpdate(
+            withLatest(install.template, releases),
+            install.installed,
+          );
           const waiting = check.status === 'update' || check.newerVersions.length > 0;
-          const version = install.template.versions.find((item) => item.id === install.version);
           return (
             <li key={stack.id} aria-label={stack.name}>
               <button
@@ -49,7 +57,7 @@ export function InstalledList({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{stack.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {version?.label ?? `${install.template.name} ${install.version}`}
+                    {installedLabel(install)}
                     {install.domain ? ` on ${install.domain}` : ''}
                   </span>
                 </span>

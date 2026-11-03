@@ -126,6 +126,41 @@ describe('DeployStacks.createFromFiles', () => {
   });
 });
 
+describe('DeployStacks.setLimits', () => {
+  it('copies the live revision with the new caps and deploys it', async () => {
+    const { stacks, hub } = harness();
+    const limits = [{ service: 'web', cpuCores: 2, cpuPercent: 50, memoryMb: 512 }];
+    const result = await stacks.setLimits({ serverId: SERVER, stackId: STACK, limits });
+    expect(hub.reviseStack).toHaveBeenCalledWith({
+      stackId: STACK,
+      revision: 1,
+      proxiedServices: ['db'],
+      purpose: 'limits',
+      limits,
+    });
+    expect(hub.deployStack).toHaveBeenCalledWith({ stackId: STACK, revision: 2 });
+    expect(result.job).toBe(JOB);
+  });
+
+  it('lifts every cap with an empty list', async () => {
+    const { stacks, hub } = harness();
+    await stacks.setLimits({ serverId: SERVER, stackId: STACK, limits: [] });
+    expect(hub.reviseStack).toHaveBeenCalledWith(expect.objectContaining({ limits: [] }));
+  });
+
+  it('refuses caps on a service the app does not have', async () => {
+    const { stacks, hub } = harness();
+    await expect(
+      stacks.setLimits({
+        serverId: SERVER,
+        stackId: STACK,
+        limits: [{ service: 'cache', memoryMb: 64 }],
+      }),
+    ).rejects.toThrow('There is no service called cache in this app.');
+    expect(hub.reviseStack).not.toHaveBeenCalled();
+  });
+});
+
 describe('DeployStacks.makePrivate', () => {
   it('copies the live revision with the services on loopback and deploys it', async () => {
     const { stacks, hub } = harness();

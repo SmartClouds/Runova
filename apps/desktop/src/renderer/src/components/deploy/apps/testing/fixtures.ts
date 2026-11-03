@@ -10,6 +10,7 @@ import type {
   DeployStackUploadResult,
 } from '@shared/deployStacksTypes';
 import { SERVER, signedIn } from '../../security/testing/fixtures';
+import { sampleDockerStatus } from '../../../../../../shared/deploy/testing/fakeDockerData';
 
 /** A server with a shop app on it, and a project with a compose file, for the Apps tests. */
 
@@ -262,6 +263,8 @@ export function appsBridge(roles: string[] = ['owner']): Record<string, unknown>
     },
     'deployJobs.watch': async () => 'log-1',
     'deployJobs.unwatch': async () => true,
+    'deployDocker.listContainers': { groups: [] },
+    'deployDocker.status': sampleDockerStatus(),
     'projects.list': [
       { id: 'proj-1', name: 'Shop', folderPath: 'C:\\work\\Shop' },
       { id: 'proj-2', name: 'Blog', folderPath: 'C:\\work\\blog' },

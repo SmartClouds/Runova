@@ -16,13 +16,13 @@ const options = {
 describe('appCsp', () => {
   it('locks the packaged app down to its own files, plus scene previews in frames', () => {
     expect(appCsp({ ...options, isDev: false })).toBe(
-      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blueprint-file: studio-media:; media-src 'self' blueprint-file: studio-media:; font-src 'self' data:; connect-src 'self' data: ws://127.0.0.1:* studio-media:; worker-src 'self' blob:; frame-src 'self' studio-scene:;",
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blueprint-file: studio-media:; media-src 'self' blob: blueprint-file: studio-media:; font-src 'self' data:; connect-src 'self' data: ws://127.0.0.1:* studio-media:; worker-src 'self' blob:; frame-src 'self' studio-scene:;",
     );
   });
 
   it('lets the dev server in during development', () => {
     expect(appCsp({ ...options, isDev: true })).toBe(
-      "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blueprint-file: studio-media:; media-src 'self' blueprint-file: studio-media:; font-src 'self' data:; connect-src 'self' data: ws://127.0.0.1:* studio-media: http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:; frame-src 'self' http://localhost:5173 studio-scene:;",
+      "default-src 'self' http://localhost:5173 ws://localhost:5173; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blueprint-file: studio-media:; media-src 'self' blob: blueprint-file: studio-media:; font-src 'self' data:; connect-src 'self' data: ws://127.0.0.1:* studio-media: http://localhost:5173 ws://localhost:5173; worker-src 'self' blob:; frame-src 'self' http://localhost:5173 studio-scene:;",
     );
   });
 });

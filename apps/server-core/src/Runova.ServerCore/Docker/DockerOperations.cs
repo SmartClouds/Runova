@@ -82,7 +82,11 @@ internal sealed partial class DockerOperations(
             compose?.ToString(),
             info?.StorageDriver,
             info?.CgroupVersion,
-            message);
+            message,
+            info?.Cpus,
+            info?.MemoryBytes,
+            Stacks.ResourceLimits.DiskSupport(info).Supported,
+            info is null ? null : Stacks.ResourceLimits.DiskSupport(info).Note);
     }
 
     /// <summary>Compose projects by name with their containers by service, then the standalone ones.</summary>
@@ -121,6 +125,20 @@ internal sealed partial class DockerOperations(
     {
         var inspection = await engine.InspectContainerAsync(container, cancellationToken);
         return [.. inspection.Environment.Select(entry => new ContainerEnvVariable(entry.Key, entry.Value))];
+    }
+
+    public Task<EngineInfo> InfoAsync(CancellationToken cancellationToken) => engine.GetInfoAsync(cancellationToken);
+
+    /// <summary>
+    /// Live caps (docker update). Docker keeps a cap once set and takes 0 as "leave it", so no cap
+    /// means the whole server: every core and all of its memory.
+    /// </summary>
+    public async Task UpdateLimitsAsync(string container, double? cpus, int? memoryMb, CancellationToken cancellationToken)
+    {
+        var info = await engine.GetInfoAsync(cancellationToken);
+        var nanoCpus = (long)Math.Round((cpus ?? info.Cpus ?? Environment.ProcessorCount) * 1e9);
+        var memoryBytes = memoryMb is { } mb ? mb * 1024L * 1024 : info.MemoryBytes ?? throw new DockerRequestException("The engine did not say how much memory the server has.");
+        await engine.UpdateContainerLimitsAsync(container, nanoCpus, memoryBytes, cancellationToken);
     }
 
     /// <summary>The container's summary after a change, for the app to show at once.</summary>

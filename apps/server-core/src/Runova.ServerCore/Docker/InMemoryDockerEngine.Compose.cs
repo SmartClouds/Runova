@@ -9,7 +9,9 @@ internal sealed record ComposeContainerSpec(
     IReadOnlyList<ContainerPort> Ports,
     IReadOnlyList<KeyValuePair<string, string>> Environment,
     IReadOnlyList<string> Volumes,
-    bool HasHealthcheck);
+    bool HasHealthcheck,
+    long? NanoCpus = null,
+    long? MemoryLimit = null);
 
 /// <summary>
 /// What the simulated docker compose (DevHost and tests) does to the pretend engine: a project's
@@ -53,7 +55,8 @@ internal sealed partial class InMemoryDockerEngine
             {
                 var name = $"{project}-{spec.Service}-1";
                 var existing = _containers.FirstOrDefault(c => c.Name == name);
-                if (existing is not null && existing.Image == spec.Image && existing.Ports.SequenceEqual(spec.Ports) && existing.Environment.SequenceEqual(spec.Environment))
+                if (existing is not null && existing.Image == spec.Image && existing.Ports.SequenceEqual(spec.Ports) && existing.Environment.SequenceEqual(spec.Environment)
+                    && existing.NanoCpus == spec.NanoCpus && existing.MemoryLimit == spec.MemoryLimit)
                 {
                     if (existing.State != ContainerState.Running)
                     {
@@ -78,6 +81,8 @@ internal sealed partial class InMemoryDockerEngine
                     Health = spec.HasHealthcheck ? ContainerHealth.Healthy : ContainerHealth.None,
                     Load = 0.02,
                     MemoryBase = 24L * 1024 * 1024,
+                    NanoCpus = spec.NanoCpus,
+                    MemoryLimit = spec.MemoryLimit,
                 };
                 var now = NowMs;
                 container.Created(now);

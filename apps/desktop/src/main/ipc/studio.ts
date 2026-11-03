@@ -265,6 +265,9 @@ export function registerStudioHandlers(
   handle(IPC.studioAudio.jobs, (value) =>
     service().narrationJobs(parse(studioAudioInputs.jobs, value)),
   );
+  handle(IPC.studioAudio.sample, (value) =>
+    service().sampleVoice(parse(studioAudioInputs.sample, value)),
+  );
   handle(IPC.studioAudio.cancel, (value) =>
     service().cancelNarration(parse(studioAudioInputs.jobRef, value)),
   );

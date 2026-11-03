@@ -3,7 +3,15 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
-import { SERVER, STACK_ID, storeBridge } from './testing/fixtures';
+import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
+import {
+  NEWER_REDIS,
+  NEWER_REDIS_DIGEST,
+  RELEASES,
+  SERVER,
+  STACK_ID,
+  storeBridge,
+} from './testing/fixtures';
 
 /**
  * The App Store section: the catalog and the installed apps, the install sheet in every state
@@ -38,6 +46,15 @@ function renderStore(
 }
 
 const sheetRoute = (id: string) => `/deploy?server=${SERVER.id}&view=store&install=${id}`;
+
+type User = ReturnType<typeof renderStore>['user'];
+
+/** The step after the sheet: the resource limits, then Install. */
+async function confirmLimits(user: User): Promise<HTMLElement> {
+  const limits = await screen.findByRole('dialog', { name: 'Set resource limits' });
+  await user.click(within(limits).getByRole('button', { name: 'Install' }));
+  return limits;
+}
 
 describe('AppStorePanel', () => {
   it('shimmers while it finds out who is signed in, and then while its apps load', async () => {
@@ -107,7 +124,9 @@ describe('the install sheet', () => {
     const images = within(sheet).getByRole('list', { name: 'Images' });
     expect(within(images).getByText('Docker Official Image')).toBeTruthy();
     expect(within(images).getByText(/redis:8\.10\.\d+ @/)).toBeTruthy();
-    expect(within(sheet).getByLabelText('Version')).toHaveTextContent('Redis 8.10');
+    // One release line: only the release is picked, the newest by default.
+    expect(within(sheet).queryByLabelText('Version')).toBeNull();
+    expect(within(sheet).getByLabelText('Release')).toHaveTextContent(/^Latest \(8\.10\.\d+\)$/);
     // "cache" is taken by the Redis already there; the template id is not.
     expect(within(sheet).getByLabelText('App name')).toHaveProperty('value', 'redis');
     const password = within(sheet).getByLabelText(/^Password/) as HTMLInputElement;
@@ -157,12 +176,14 @@ describe('the install sheet', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
     const password = (within(sheet).getByLabelText(/^Password/) as HTMLInputElement).value;
     await user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    await confirmLimits(user);
 
     await waitFor(() => expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalled());
     expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalledWith({
       serverId: SERVER.id,
       templateId: 'redis',
       version: '8.10',
+      release: 'latest',
       name: 'redis',
       params: { port: 6379 },
       secrets: { REDIS_PASSWORD: password },
@@ -192,9 +213,12 @@ describe('the install sheet', () => {
     );
     const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
     await user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    await confirmLimits(user);
+    // Back on the sheet, with the server's words.
     expect(
-      await within(sheet).findByText('There is already an app called redis on this server.'),
+      await screen.findByText('There is already an app called redis on this server.'),
     ).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Set resource limits' })).toBeNull();
   });
 
   it('puts a web app on a domain: the site, nginx, then the certificate', async () => {
@@ -211,6 +235,7 @@ describe('the install sheet', () => {
     await user.click(within(sheet).getByRole('switch', { name: 'Put it on a domain' }));
     await user.type(within(sheet).getByLabelText('Domain'), 'status.example.com');
     await user.click(within(sheet).getByRole('button', { name: /^Install Uptime Kuma/ }));
+    await confirmLimits(user);
 
     await waitFor(() => expect(bridge.$fn('deployCerts.issue')).toHaveBeenCalled());
     expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalledWith(
@@ -260,6 +285,7 @@ describe('the install sheet', () => {
     await user.click(within(sheet).getByRole('switch', { name: 'Put it on a domain' }));
     await user.type(within(sheet).getByLabelText('Domain'), 'status.example.com');
     await user.click(within(sheet).getByRole('button', { name: /^Install Uptime Kuma/ }));
+    await confirmLimits(user);
     const steps = await screen.findByRole('region', { name: 'Domain steps' });
     const apply = await within(steps).findByRole('listitem', { name: 'Apply nginx' });
     await waitFor(() => expect(apply).toHaveTextContent('(failed)'));
@@ -282,6 +308,7 @@ describe('an install when the page is left', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
     const password = (within(sheet).getByLabelText(/^Password/) as HTMLInputElement).value;
     await first.user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    await confirmLimits(first.user);
     await waitFor(() => expect(first.bridge.$fn('deployAppStore.install')).toHaveBeenCalled());
     first.unmount();
 
@@ -303,10 +330,119 @@ describe('an install when the page is left', () => {
     );
     const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
     await first.user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    await confirmLimits(first.user);
     first.unmount();
 
     renderStore({}, ['owner'], sheetRoute('redis'));
     const again = await screen.findByRole('dialog', { name: 'Install Redis' });
     expect(within(again).getByRole('button', { name: 'Install Redis' })).toBeDisabled();
+  });
+});
+
+describe('releases and resource limits', () => {
+  it('shows the newest release on the card, marked as newer than the one shipped', async () => {
+    renderStore({ 'deployAppStore.releases': RELEASES });
+    const card = await screen.findByRole('listitem', { name: 'Redis' });
+    expect(await within(card).findByText(`Redis ${NEWER_REDIS}`)).toBeTruthy();
+    expect(within(card).getByText('Latest')).toBeTruthy();
+  });
+
+  it('marks the cards as bundled when the registries could not be read', async () => {
+    renderStore({
+      'deployAppStore.releases': { data: null, checkedAtUnixMs: null, error: 'offline' },
+    });
+    const card = await screen.findByRole('listitem', { name: 'Redis' });
+    expect(await within(card).findByText('Bundled')).toBeTruthy();
+  });
+
+  it('installs the newest release, or one picked from the list', async () => {
+    const { user, bridge } = renderStore(
+      { 'deployAppStore.releases': RELEASES },
+      ['owner'],
+      sheetRoute('redis'),
+    );
+    const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
+    const release = within(sheet).getByLabelText('Release');
+    await waitFor(() => expect(release).toHaveTextContent(`Latest (${NEWER_REDIS})`));
+    // The badges name what will run.
+    const images = within(sheet).getByRole('list', { name: 'Images' });
+    expect(within(images).getByText(new RegExp(`redis:${NEWER_REDIS} @`))).toBeTruthy();
+    expect(within(images).getByText(new RegExp(NEWER_REDIS_DIGEST.slice(7, 19)))).toBeTruthy();
+
+    await user.click(release);
+    await user.click(await screen.findByRole('option', { name: /^8\.10\.\d+$/ }));
+    await user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    await confirmLimits(user);
+    await waitFor(() => expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalled());
+    expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalledWith(
+      expect.objectContaining({ release: expect.stringMatching(/^8\.10\.\d+$/) }),
+    );
+  });
+
+  it('says when the store shows the releases it shipped with', async () => {
+    renderStore(
+      { 'deployAppStore.releases': { data: null, checkedAtUnixMs: null, error: 'offline' } },
+      ['owner'],
+      sheetRoute('redis'),
+    );
+    const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
+    expect(
+      await within(sheet).findByText(
+        'Showing the versions this app shipped with: the registries could not be reached.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('asks for resource limits after the sheet, and sends them with the install', async () => {
+    const { user, bridge } = renderStore({}, ['owner'], sheetRoute('ollama'));
+    const sheet = await screen.findByRole('dialog', { name: 'Install Ollama' });
+    await user.click(within(sheet).getByRole('button', { name: 'Install Ollama' }));
+    const limits = await screen.findByRole('dialog', { name: 'Set resource limits' });
+    // One card per container the install makes.
+    expect(within(limits).getByRole('region', { name: 'ollama' })).toBeTruthy();
+    expect(within(limits).getByRole('region', { name: 'open-webui' })).toBeTruthy();
+    // Nothing is sent before Install in this step.
+    expect(() => bridge.$fn('deployAppStore.install')).toThrow();
+
+    await user.click(within(limits).getByRole('switch', { name: 'Unlimited memory for ollama' }));
+    await user.click(within(limits).getByRole('button', { name: '2 GB' }));
+    await user.click(within(limits).getByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalled());
+    expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalledWith(
+      expect.objectContaining({ limits: [{ service: 'ollama', memoryMb: 2048 }] }),
+    );
+  });
+
+  it('goes back to the sheet without installing', async () => {
+    const { user, bridge } = renderStore({}, ['owner'], sheetRoute('redis'));
+    const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
+    await user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    const limits = await screen.findByRole('dialog', { name: 'Set resource limits' });
+    await user.click(within(limits).getByRole('button', { name: 'Back' }));
+    expect(await screen.findByRole('dialog', { name: 'Install Redis' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Set resource limits' })).toBeNull();
+    expect(() => bridge.$fn('deployAppStore.install')).toThrow();
+  });
+
+  it('installs without limits on a core too old to apply them, and says so', async () => {
+    const { user, bridge } = renderStore(
+      { 'deployDocker.status': sampleDockerStatus({ cpus: undefined, memoryBytes: undefined }) },
+      ['owner'],
+      sheetRoute('redis'),
+    );
+    const sheet = await screen.findByRole('dialog', { name: 'Install Redis' });
+    await user.click(within(sheet).getByRole('button', { name: 'Install Redis' }));
+    const limits = await screen.findByRole('dialog', { name: 'Set resource limits' });
+    expect(
+      await within(limits).findByText(
+        "Update this server's core to set resource limits. The app installs without limits.",
+      ),
+    ).toBeTruthy();
+    expect(within(limits).queryByRole('region', { name: 'redis' })).toBeNull();
+    await user.click(within(limits).getByRole('button', { name: 'Install' }));
+    await waitFor(() => expect(bridge.$fn('deployAppStore.install')).toHaveBeenCalled());
+    expect(bridge.$fn('deployAppStore.install')).not.toHaveBeenCalledWith(
+      expect.objectContaining({ limits: expect.anything() }),
+    );
   });
 });

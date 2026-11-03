@@ -32,6 +32,7 @@ function harness(trusted = true) {
       'action',
       'delete',
       'makePrivate',
+      'setLimits',
     ].map((name) => [name, vi.fn(async () => ({ ok: name }))]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   registerDeployStacksHandlers({
@@ -179,6 +180,28 @@ describe('registerDeployStacksHandlers', () => {
       stackId: STACK,
       services: ['web'],
     });
+  });
+
+  it('sets the resource caps of an app', async () => {
+    const { call, stacks } = harness();
+    await call(IPC.deployStacks.setLimits, {
+      serverId: SERVER,
+      stackId: STACK,
+      limits: [{ service: 'web', memoryMb: 512 }],
+    });
+    expect(stacks.setLimits).toHaveBeenCalledWith({
+      serverId: SERVER,
+      stackId: STACK,
+      limits: [{ service: 'web', memoryMb: 512 }],
+    });
+    await expect(
+      call(IPC.deployStacks.setLimits, {
+        serverId: SERVER,
+        stackId: STACK,
+        limits: [{ service: 'web', cpuCores: 0 }],
+      }),
+    ).rejects.toThrow('core count');
+    expect(stacks.setLimits).toHaveBeenCalledTimes(1);
   });
 
   it('refuses arguments the core would refuse anyway', async () => {

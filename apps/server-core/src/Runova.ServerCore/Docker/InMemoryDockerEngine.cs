@@ -57,11 +57,21 @@ internal sealed partial class InMemoryDockerEngine : IDockerEngine, IDisposable
     public Task<EngineVersion?> GetVersionAsync(CancellationToken cancellationToken) =>
         Task.FromResult(Running ? new EngineVersion(EngineVersionText, "1.52", "1.44", "1.52", "linux", "amd64") : null);
 
+    /// <summary>What `docker info` answers; a test can switch the storage driver to one that caps disks.</summary>
+    public EngineInfo Info { get; set; } = new("overlayfs", 2, HostCpus, HostMemory);
+
     public Task<EngineInfo> GetInfoAsync(CancellationToken cancellationToken)
     {
         EnsureRunning();
-        return Task.FromResult(new EngineInfo("overlayfs", 2));
+        return Task.FromResult(Info);
     }
+
+    public Task UpdateContainerLimitsAsync(string container, long nanoCpus, long memoryBytes, CancellationToken cancellationToken) =>
+        Change("update-limits", container, found =>
+        {
+            found.NanoCpus = nanoCpus;
+            found.MemoryLimit = memoryBytes;
+        });
 
     public Task<IReadOnlyList<EngineContainer>> ListContainersAsync(CancellationToken cancellationToken)
     {

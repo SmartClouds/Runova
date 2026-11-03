@@ -484,6 +484,7 @@ const voiceRef = z
 export const studioAudioInputs = {
   speak: z.object({ videoId: id, sceneIds: z.array(id).min(1).max(500), voiceRef }),
   jobs: z.object({ videoId: id }),
+  sample: z.object({ videoId: id, voiceRef }),
   jobRef: z.object({ videoId: id, jobId: id }),
   voices: z.object({
     engine: z.enum(['openai', 'gemini', 'elevenlabs', 'azure', 'piper', 'omnivoice']),

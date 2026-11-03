@@ -12,7 +12,7 @@ export const rabbitmq = defineCatalogTemplate({
   versions: [
     {
       id: '4.3',
-      label: 'RabbitMQ 4.3 with management',
+      label: 'RabbitMQ {app} with management',
       images: { app: CATALOG_IMAGES.rabbitmq43 },
     },
   ],

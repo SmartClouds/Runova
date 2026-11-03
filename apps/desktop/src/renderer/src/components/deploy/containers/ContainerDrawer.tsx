@@ -4,7 +4,9 @@ import type {
   ContainerEnvVariable,
   ContainerSummary,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import { useQuery } from '@tanstack/react-query';
+import type { ServiceLimits } from '@runova/core';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -31,10 +33,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { isPublic, portText } from '@/lib/deploy/containers/list';
+import { liveLimitsOf, liveRequestOf } from '@/lib/deploy/limits/live';
 import { cpuText, type StatsHistory } from '@/lib/deploy/containers/stats';
 import { formatBytes } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { EditLimitsDialog } from '../limits/EditLimitsDialog';
+import { useLimitsHost } from '../limits/useLimitsHost';
 import type { ProofStepUp } from '../overview/useProofStepUp';
 import { ago } from '../security/format';
 import { serverFilesHref } from '../serverFiles/params';
@@ -70,10 +75,13 @@ function OverviewTab({
   container,
   details,
   history,
+  limitsAction,
 }: {
   container: ContainerSummary;
   details: ContainerDetails;
   history: StatsHistory;
+  /** The button that changes the limits, beside them. */
+  limitsAction: React.ReactNode;
 }): React.JSX.Element {
   const latest = history.get(container.id)?.at(-1);
   const now = Date.now();
@@ -112,8 +120,13 @@ function OverviewTab({
         </Fact>
       )}
       <Fact label="Limits">
-        {details.cpuLimit ? `${details.cpuLimit} cores` : 'Any processor'},{' '}
-        {details.memoryLimitBytes ? formatBytes(details.memoryLimitBytes) : 'any memory'}
+        <span className="flex flex-wrap items-center gap-2">
+          <span>
+            {details.cpuLimit ? `${details.cpuLimit} cores` : 'Any processor'},{' '}
+            {details.memoryLimitBytes ? formatBytes(details.memoryLimitBytes) : 'any memory'}
+          </span>
+          {limitsAction}
+        </span>
       </Fact>
       {details.command.length > 0 && (
         <Fact label="Command">
@@ -248,8 +261,23 @@ export function ContainerDrawer({
   onClose: () => void;
 }): React.JSX.Element {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [revealed, setRevealed] = useState<ContainerEnvVariable[] | null>(null);
+  const [editingLimits, setEditingLimits] = useState(false);
+  const [limitsSaving, setLimitsSaving] = useState(false);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
   const id = container?.id ?? '';
+  const project = container?.composeProject ?? null;
+  const apps = useQuery({
+    queryKey: queryKeys.deployAppsList(serverId),
+    queryFn: async () => (await window.runova.deployStacks.list(serverId)) ?? [],
+    enabled: project !== null,
+    retry: false,
+  });
+  // A container of a Runova app takes its caps in the app's revisions, so they survive a redeploy.
+  const owner = project ? apps.data?.find((app) => app.name === project) : undefined;
+  const limitsHost = useLimitsHost(serverId, container !== null);
+  const canOperate = actions.act !== undefined;
   const details = useQuery({
     queryKey: queryKeys.deployContainer(serverId, id),
     queryFn: () => window.runova.deployDocker.inspect(serverId, id),
@@ -260,6 +288,64 @@ export function ContainerDrawer({
   // Revealed values belong to the container they were shown for, and go when it changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the container is the trigger
   useEffect(() => setRevealed(null), [id]);
+
+  async function saveLimits(limits: ServiceLimits[]): Promise<void> {
+    if (!container) return;
+    setLimitsSaving(true);
+    setLimitsError(null);
+    try {
+      await window.runova.deployDocker.setLimits({
+        serverId,
+        containerId: container.id,
+        ...liveRequestOf(limits),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.deployContainer(serverId, id) });
+      setEditingLimits(false);
+      toast.success(`New limits on ${container.name}.`);
+    } catch (error) {
+      setLimitsError(coreErrorMessage(error));
+    } finally {
+      setLimitsSaving(false);
+    }
+  }
+
+  const limitsAction = owner ? (
+    <Button
+      size="xs"
+      variant="soft"
+      onClick={() => {
+        onClose();
+        navigate(
+          `/deploy?${new URLSearchParams({ server: serverId, view: 'apps', app: owner.id }).toString()}`,
+        );
+      }}
+    >
+      Edit limits on the app's page
+    </Button>
+  ) : (
+    <SimpleTooltip
+      label={
+        !canOperate
+          ? 'Changing limits needs the Operator role or higher.'
+          : limitsHost.outdated
+            ? "Update this server's core to set resource limits."
+            : null
+      }
+      wrapTrigger
+    >
+      <Button
+        size="xs"
+        variant="soft"
+        disabled={!canOperate || limitsHost.host === null}
+        onClick={() => {
+          setLimitsError(null);
+          setEditingLimits(true);
+        }}
+      >
+        Edit limits
+      </Button>
+    </SimpleTooltip>
+  );
 
   const running = container?.state === 'running';
   const quick = container && actions.act && (
@@ -382,7 +468,29 @@ export function ContainerDrawer({
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <TabsContent value="overview" className="mt-0">
                   {needsDetails((data) => (
-                    <OverviewTab container={container} details={data} history={history} />
+                    <>
+                      <OverviewTab
+                        container={container}
+                        details={data}
+                        history={history}
+                        limitsAction={limitsAction}
+                      />
+                      {limitsHost.host && !owner && (
+                        <EditLimitsDialog
+                          open={editingLimits}
+                          onOpenChange={(open) => {
+                            if (!limitsSaving) setEditingLimits(open);
+                          }}
+                          services={[container.name]}
+                          initial={[liveLimitsOf(container.name, data, limitsHost.host)]}
+                          host={limitsHost.host}
+                          cpuOnlyLive
+                          busy={limitsSaving}
+                          error={limitsError}
+                          onSave={(limits) => void saveLimits(limits)}
+                        />
+                      )}
+                    </>
                   ))}
                 </TabsContent>
                 <TabsContent value="stats" className="mt-0">

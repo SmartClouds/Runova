@@ -9,7 +9,9 @@ export const phpmyadmin = defineCatalogTemplate({
   description: 'The classic web interface for MySQL and MariaDB.',
   category: 'database',
   homepage: 'https://www.phpmyadmin.net',
-  versions: [{ id: '5.2', label: 'phpMyAdmin 5.2', images: { app: CATALOG_IMAGES.phpmyadmin52 } }],
+  versions: [
+    { id: '5.2', label: 'phpMyAdmin {app}', images: { app: CATALOG_IMAGES.phpmyadmin52 } },
+  ],
   defaultVersion: '5.2',
   parameters: z.object({
     port: portParam(8082),

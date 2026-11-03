@@ -3,7 +3,7 @@ title: Containers, apps and stacks
 category: Deploy
 order: 30
 summary: Manage Docker on a server you deploy to, with live container lists, logs, consoles, images, volumes and networks, and deploy compose apps from your projects with rollbacks.
-keywords: docker, containers, compose, stack, apps, logs, compose logs, console, shell, exec, run command, docker exec, root, images, volumes, networks, prune, disk usage, cleanup, clean up, unused images, build cache, deploy app, revision, rollback, new app wizard, docker install
+keywords: docker, containers, compose, stack, apps, resource limits, cpu limit, cpu cores, memory limit, ram limit, disk limit, docker update, logs, compose logs, console, shell, exec, run command, docker exec, root, images, volumes, networks, prune, disk usage, cleanup, clean up, unused images, build cache, deploy app, revision, rollback, new app wizard, docker install
 route: /deploy
 ---
 
@@ -66,7 +66,7 @@ Click a container's name to open its panel, which slides in from the right. The 
 
 #### Overview
 
-Facts about the container: image, status, compose project and service, restart policy and how many times it restarted, when it came up (or last started), the exit code (and "killed for running out of memory" when that happened), any engine error, current processor, memory and process count, its limits, command, entrypoint, user, working folder, networks with their IP addresses, and whether it runs privileged and with a terminal.
+Facts about the container: image, status, compose project and service, restart policy and how many times it restarted, when it came up (or last started), the exit code (and "killed for running out of memory" when that happened), any engine error, current processor, memory and process count, its limits (with an **Edit limits** button, see [Resource limits](#resource-limits)), command, entrypoint, user, working folder, networks with their IP addresses, and whether it runs privileged and with a terminal.
 
 #### Stats
 
@@ -165,7 +165,7 @@ The **New app** wizard has five steps: **Source**, **Configure**, **Expose**, **
 
 1. **Source.** Pick a **Project** (the projects added in Runova, see [Projects](projects.md)). Then pick one of its **Compose file** entries (it lists each file with its service count; the app finds files like `compose.yaml` and `docker-compose.yml`). Choose an **Environment** or leave **No environment**. The environment's files become the app's `.env` on the server, and the values stay out of the window. Finally set the **App name**: the compose project name on the server, using lowercase letters, digits, dashes and underscores. A name already used by another app on this server is refused. Click **Next**.
 2. **Configure.** Shows the **Services** the compose file runs (a service that builds from the project says so), the **Environment** key names that go up (names only), and a warning if the compose file uses variables the environment does not set (compose reads those as empty). If the file cannot be deployed as it is, a red box says why and **Next** stays disabled.
-3. **Expose.** Shows who can reach each published port. Ports are kept private by default: the server binds them to `127.0.0.1` so only the server itself reaches them. Use the **Keep private** switch per service to change that. A table shows each port as written in the compose file and what it will be after the deploy. A service that uses host networking cannot be kept private. **The override file the server writes** shows the exact file. Published ports skip the server's firewall, so keep a port public only when nothing else will do.
+3. **Expose.** Shows who can reach each published port. Ports are kept private by default: the server binds them to `127.0.0.1` so only the server itself reaches them. Use the **Keep private** switch per service to change that. A table shows each port as written in the compose file and what it will be after the deploy. A service that uses host networking cannot be kept private. If another container on the server already holds a host port the app publishes, a warning at the top names that container (and its app), the port's row says "In use by", and the **Review** step repeats it. Docker would refuse to start the service, so change the host port in the compose file, or stop or remove the other container, before you deploy. Containers of the app you are deploying again do not count, since the deploy replaces them. **The override file the server writes** shows the exact file. Published ports skip the server's firewall, so keep a port public only when nothing else will do.
 4. **Review.** Lists the findings of a safety check on the compose file, worst first (Critical, High, Medium, Low). Anything above Low gets a checkbox you must tick to deploy, and each one you accept is recorded in the server's audit trail. Low findings are listed as advice under "Worth fixing, nothing to accept". The checks look for things such as privileged containers, host networking, mounts of the Docker socket, dangerous capabilities, public port bindings and images tagged `latest`. A **Registry sign-in** card shows which sign-in each image's registry will use. Click **Deploy (app name)** (Operators only).
 5. **Deploy.** The app uploads the compose file and `.env` (and the project folder when a service builds from it, without what `.dockerignore` leaves out) with a progress bar. The server then checks the files as Docker Compose reads them. If it turns the file down, the revision is kept as **Invalid** with the reason, and you go back, fix the file in the project and deploy again. If the server finds more to accept, you tick those and click **Accept and deploy**. Then the deploy timeline runs. When it ends, click **Open the app**.
 
@@ -189,11 +189,26 @@ The lifecycle buttons need the Operator role and are disabled while a job works 
 Below the toolbar:
 
 - The **timeline** of the shown revision.
-- **Services**: each service with its image, ports and containers (with state and health). Each container has a log button, and a running one a console button.
+- **Services**: each service with its image, ports and containers (with state and health), and its resource limits ("No limits", or a line such as "2 cores at 50% · 2 GB RAM"). Each container has a log button, and a running one a console button. The processor button at the end of the row opens **Edit resource limits**, see [Resource limits](#resource-limits).
 - **Revisions**: every upload is kept, with its number, state (Waiting for files, Ready, Invalid, Deploying, Live, Failed or Replaced), date and who made it. Click one to see its timeline. **Roll back** (or **Roll back to this revision** in the timeline) deploys an older revision's files again as a new revision, after a confirmation. Only revisions that ran once can be rolled back to.
 - **Route map**: where each published port leads, starting with the domains whose sites in Websites forward to it (or **No domain**). **Add domain** (Admins only) puts a port on the internet through nginx. Enter the domain, choose whether to get an HTTPS certificate from Let's Encrypt and whether to let WebSocket connections through, then **Add the domain**. It adds the site in Websites, applies nginx and asks for the certificate, showing each step as it runs. If a step fails, it says why, and **Try again** keeps what you typed. Point the domain's DNS at the server first. The button is off for UDP ports, for ports bound to another address than this server or every address, and until nginx is set up under [Websites](deploy-websites-certificates.md).
 - **Registry sign-in**: see [Registries](deploy-registries.md). It has a switch to send this computer's sign-ins with this app's deploys.
 - **Files of revision N**: click to see the compose file as uploaded, the env key names and the loopback override file. Env values stay on the server.
+
+### Resource limits
+
+You can cap how much of the server each container may use: CPU, memory and disk. The **Edit resource limits** window has a card per service with an **Unlimited** switch for each resource:
+
+- **CPU**: the number of **cores** and the **max usage** of those cores (5% to 100%). Two cores at 50% means up to one core of CPU time, spread over any of the server's cores.
+- **Memory**: a size from the presets or any amount up to the server's memory. Swap cannot be used to get past it. A container that needs more is stopped for running out of memory, so the window warns you when the cap is below what it uses now.
+- **Disk**: the most the container's own files may take, in GB. Docker can cap this only when the server stores containers on overlay2 over xfs (with pquota), btrfs or zfs, so on other servers it stays Unlimited and says why.
+
+How the limits apply depends on what the container belongs to:
+
+- **An app** (from the Apps section or the [App Store](deploy-app-store.md)): click the processor button at the end of a service's row on the app's page, change the limits and click **Save limits**. The core copies the live revision with the new limits into a new revision and deploys it, so only the services whose limits changed restart. The limits stay with the app through redeploys, updates and rollbacks (rolling back to an older revision brings back that revision's limits). App Store apps get their first limits in the install's **Set resource limits** window. A container of an app shows **Edit limits on the app's page** in its panel, which takes you there.
+- **Any other container**: **Edit limits** in the container panel's **Overview** sets CPU and memory right away, without a restart (Docker's `docker update`). Disk cannot be changed this way. Whatever recreates the container later (a `docker run` of your own, for example) drops these limits.
+
+Changing limits needs the Operator role. If the server's core is too old to apply limits, the buttons are disabled and ask you to update the core first.
 
 ### Logs and consoles of an app
 
@@ -207,6 +222,7 @@ A panel on the right with two tabs, opened from an app's page, an installed app 
 - Use **Keep private** for every service and put a domain in front of it in Websites, so traffic goes through nginx and the firewall.
 - Check the **Registry sign-in** card on the Review step when an image is private, so the pull does not fail.
 - Roll back from the **Revisions** list if a new deploy does not come up healthy. Data in the app's volumes stays as it is.
+- Give busy apps memory limits so one of them cannot slow down everything else on the server, and keep an eye on the **Memory** chart in the container panel to pick a size with room to spare.
 - Problems after a deploy? Look at the **Logs** section and its problems feed, see [Assistant and logs](deploy-assistant-logs.md).
 
 ## Related

@@ -9,7 +9,7 @@ export const redis = defineCatalogTemplate({
   description: 'An in-memory store for caches, queues and sessions, saved to disk as it goes.',
   category: 'database',
   homepage: 'https://redis.io',
-  versions: [{ id: '8.10', label: 'Redis 8.10', images: { db: CATALOG_IMAGES.redis810 } }],
+  versions: [{ id: '8.10', label: 'Redis {db}', images: { db: CATALOG_IMAGES.redis810 } }],
   defaultVersion: '8.10',
   parameters: z.object({ port: portParam(6379) }),
   fields: {

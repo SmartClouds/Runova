@@ -13,6 +13,8 @@ internal sealed partial class InMemoryDockerEngine
 {
     private const int HostCpus = 4;
 
+    private const long HostMemory = 8L * 1024 * 1024 * 1024;
+
     private void Seed()
     {
         var now = NowMs;
@@ -222,9 +224,9 @@ internal sealed partial class InMemoryDockerEngine
 
         public long MemoryBase { get; init; }
 
-        public long? MemoryLimit { get; init; }
+        public long? MemoryLimit { get; set; }
 
-        public long? NanoCpus { get; init; }
+        public long? NanoCpus { get; set; }
 
         public IReadOnlyDictionary<string, string> Labels { get; } = project is null
             ? new Dictionary<string, string>(StringComparer.Ordinal)

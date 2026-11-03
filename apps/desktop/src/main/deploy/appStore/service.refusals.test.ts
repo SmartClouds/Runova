@@ -55,7 +55,13 @@ function store(revisions: StackRevisionInfo[] = [REVISION]) {
     reviseAndDeploy: vi.fn(),
     revealEnv: vi.fn(),
   };
-  return { appStore: new DeployAppStore({ stacks }), stacks, secrets: rendered.render.env };
+  // Only the bundled pins, as when the registries cannot be reached.
+  const releases = { get: async () => ({ data: null, checkedAtUnixMs: null, error: null }) };
+  return {
+    appStore: new DeployAppStore({ stacks, releases }),
+    stacks,
+    secrets: rendered.render.env,
+  };
 }
 
 describe('DeployAppStore refusals', () => {

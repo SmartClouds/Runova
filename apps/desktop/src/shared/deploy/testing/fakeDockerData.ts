@@ -44,6 +44,11 @@ export function sampleDockerStatus(overrides: Partial<DockerStatus> = {}): Docke
     composeVersion: '2.39.4',
     storageDriver: 'overlayfs',
     cgroupVersion: 2,
+    cpus: 4,
+    memoryBytes: 8 * 1024 * 1024 * 1024,
+    diskLimits: false,
+    diskLimitNote:
+      "overlayfs can't cap a container's disk. Docker needs overlay2 on xfs with pquota, btrfs or zfs for that.",
     ...overrides,
   };
 }

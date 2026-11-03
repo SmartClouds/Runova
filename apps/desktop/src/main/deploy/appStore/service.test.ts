@@ -7,6 +7,7 @@ import type {
   StackRevisionInfo,
   StackRevisionUpload,
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type { DeployAppReleases } from '../../../shared/deployAppStoreTypes';
 import { type AppStoreStacks, DeployAppStore } from './service';
 
 /**
@@ -52,7 +53,20 @@ const revision = (extra: Partial<StackRevisionInfo> = {}): StackRevisionInfo => 
   ...extra,
 });
 
-function harness(stacks: Partial<AppStoreStacks> = {}) {
+const REDIS = 'docker.io/library/redis';
+const NEWER = `sha256:${'e'.repeat(64)}` as const;
+
+/** The registries had a newer Redis 8 than the one the catalog pins. */
+const READING: DeployAppReleases = {
+  data: {
+    checkedAt: '2026-11-03',
+    repositories: { [REDIS]: [{ tag: '8.10.9', digest: NEWER }] },
+  },
+  checkedAtUnixMs: 1,
+  error: null,
+};
+
+function harness(stacks: Partial<AppStoreStacks> = {}, reading: DeployAppReleases = READING) {
   const uploads: StackRevisionUpload[] = [];
   const fake: AppStoreStacks = {
     createFromFiles: vi.fn(async (_server, _name, _description, upload) => {
@@ -66,7 +80,8 @@ function harness(stacks: Partial<AppStoreStacks> = {}) {
     revealEnv: vi.fn(async () => []),
     ...stacks,
   };
-  return { store: new DeployAppStore({ stacks: fake }), stacks: fake, uploads };
+  const releases = { get: vi.fn(async () => reading) };
+  return { store: new DeployAppStore({ stacks: fake, releases }), stacks: fake, uploads, releases };
 }
 
 const INSTALL = {
@@ -110,6 +125,51 @@ describe('DeployAppStore.install', () => {
     await expect(store.install({ ...INSTALL, params: { port: 70000 } })).rejects.toThrow(
       'Ports go from 1 to 65535.',
     );
+    expect(stacks.createFromFiles).not.toHaveBeenCalled();
+  });
+
+  it('installs the newest release the registries listed, pinned by its digest', async () => {
+    const { store, uploads } = harness();
+    await store.install(INSTALL);
+    expect(uploads[0].compose).toContain(`${REDIS}:8.10.9@${NEWER}`);
+    expect(uploads[0].compose).toContain('Redis 8.10.9');
+  });
+
+  it('installs a release picked from the list, and the bundled one without a reading', async () => {
+    const picked = harness();
+    await picked.store.install({ ...INSTALL, release: '8.10.2' });
+    expect(picked.uploads[0].compose).toContain(`${REDIS}:8.10.2@sha256:`);
+    expect(picked.uploads[0].compose).not.toContain(NEWER);
+
+    const offline = harness({}, { data: null, checkedAtUnixMs: null, error: 'down' });
+    await offline.store.install(INSTALL);
+    expect(offline.uploads[0].compose).toContain(`${REDIS}:8.10.2@sha256:`);
+  });
+
+  it('refuses a release the version picker never listed', async () => {
+    const { store, stacks } = harness();
+    await expect(store.install({ ...INSTALL, release: '9.0.0' })).rejects.toThrow(
+      'Redis has no release 9.0.0 on this line.',
+    );
+    expect(stacks.createFromFiles).not.toHaveBeenCalled();
+  });
+
+  it('sends the resource caps with the upload', async () => {
+    const { store, uploads } = harness();
+    await store.install({
+      ...INSTALL,
+      limits: [{ service: 'redis', cpuCores: 1, cpuPercent: 50, memoryMb: 256 }],
+    });
+    expect(uploads[0].limits).toEqual([
+      { service: 'redis', cpuCores: 1, cpuPercent: 50, memoryMb: 256 },
+    ]);
+  });
+
+  it('refuses caps on a service the app does not have', async () => {
+    const { store, stacks } = harness();
+    await expect(
+      store.install({ ...INSTALL, limits: [{ service: 'web', memoryMb: 256 }] }),
+    ).rejects.toThrow('There is no service called web in this app.');
     expect(stacks.createFromFiles).not.toHaveBeenCalled();
   });
 
@@ -166,6 +226,32 @@ describe('DeployAppStore.update', () => {
     expect(result.job).toBe(JOB);
   });
 
+  it('moves to the newest release of the line the registries listed', async () => {
+    const old = installed('18');
+    const newest = `sha256:${'f'.repeat(64)}` as const;
+    const { store, stacks } = harness(
+      {
+        get: async () => details(Object.keys(old.env)),
+        files: vi.fn(async () => ({
+          number: 1,
+          compose: old.compose,
+          envKeys: Object.keys(old.env),
+        })),
+      },
+      {
+        data: {
+          checkedAt: '2026-11-03',
+          repositories: { 'docker.io/library/postgres': [{ tag: '18.9', digest: newest }] },
+        },
+        checkedAtUnixMs: 1,
+        error: null,
+      },
+    );
+    await store.update({ serverId: SERVER, stackId: STACK, version: '18' });
+    const [[, request]] = (stacks.reviseAndDeploy as ReturnType<typeof vi.fn>).mock.calls;
+    expect(request.compose).toContain(`postgres:18.9@${newest}`);
+  });
+
   it('refuses an app that is not from the App Store, and a version that needs a missing secret', async () => {
     const notStore = harness({
       files: async () => ({ number: 1, compose: 'services: {}\n', envKeys: [] }),
@@ -183,6 +269,14 @@ describe('DeployAppStore.update', () => {
       missing.store.update({ serverId: SERVER, stackId: STACK, version: '18' }),
     ).rejects.toThrow('POSTGRES_PASSWORD');
     expect(missing.stacks.reviseAndDeploy).not.toHaveBeenCalled();
+  });
+});
+
+describe('DeployAppStore.releases', () => {
+  it('hands back the reading, fresh when asked', async () => {
+    const { store, releases } = harness();
+    await expect(store.releases({ refresh: true })).resolves.toBe(READING);
+    expect(releases.get).toHaveBeenCalledWith({ refresh: true });
   });
 });
 

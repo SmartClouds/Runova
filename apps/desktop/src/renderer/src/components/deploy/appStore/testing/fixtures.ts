@@ -1,4 +1,6 @@
 import { findCatalogTemplate, generateCatalogSecrets, renderCatalogApp } from '@runova/core';
+import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
+import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import type {
   StackDetails,
   StackInfo,
@@ -26,6 +28,21 @@ export function installedCompose(
   if (!result.ok) throw new Error(result.reason);
   return { compose: result.render.compose, env: result.render.env, render: result.render };
 }
+
+/** A newer Redis 8.10 than the catalog ships, as the registries list it. */
+export const NEWER_REDIS = '8.10.9';
+export const NEWER_REDIS_DIGEST = `sha256:${'9'.repeat(64)}` as const;
+
+export const RELEASES: DeployAppReleases = {
+  data: {
+    checkedAt: '2026-11-03',
+    repositories: {
+      'docker.io/library/redis': [{ tag: NEWER_REDIS, digest: NEWER_REDIS_DIGEST }],
+    },
+  },
+  checkedAtUnixMs: Date.parse('2026-11-03T10:00:00Z'),
+  error: null,
+};
 
 export function storeStack(name: string, extra: Partial<StackInfo> = {}): StackInfo {
   return sampleStack({
@@ -66,6 +83,7 @@ export function storeBridge(roles: string[] = ['owner']): Record<string, unknown
     'deployStacks.list': [storeStack('cache'), sampleStack({ id: 'other', name: 'shop' })],
     'deployStacks.get': storeDetails('cache', Object.keys(redis.env)),
     'deployStacks.files': { number: 2, compose: redis.compose, envKeys: Object.keys(redis.env) },
+    'deployDocker.status': sampleDockerStatus(),
     'deployJobs.watch': async () => 'log-1',
     'deployJobs.unwatch': async () => true,
     'deployAppStore.install': async () => ({

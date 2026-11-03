@@ -36,26 +36,37 @@ function pin(
 const official = (name: string, tag: string, digest: `sha256:${string}`) =>
   pin(`docker.io/library/${name}`, tag, digest, 'docker-official', 'Docker Official Images');
 
+/** A database whose minor versions are release lines of their own (MariaDB 11.4 LTS, MongoDB 8.0). */
+const heldToMinor = (image: PinnedImage): PinnedImage => ({ ...image, track: 2 });
+
 export const CATALOG_IMAGES = {
-  mysql97: official(
-    'mysql',
-    '9.7.2',
-    'sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497',
+  mysql97: heldToMinor(
+    official(
+      'mysql',
+      '9.7.2',
+      'sha256:e2bde46db6563855d7177adb5f0b57b9dc663f5a20927a90f4259d3312068497',
+    ),
   ),
-  mysql84: official(
-    'mysql',
-    '8.4.11',
-    'sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242',
+  mysql84: heldToMinor(
+    official(
+      'mysql',
+      '8.4.11',
+      'sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242',
+    ),
   ),
-  mariadb123: official(
-    'mariadb',
-    '12.3.3',
-    'sha256:805c8e104bd563d5bfa24fadd3f31cd419ea859cb5277f32b5dbf2db714f9ed1',
+  mariadb123: heldToMinor(
+    official(
+      'mariadb',
+      '12.3.3',
+      'sha256:805c8e104bd563d5bfa24fadd3f31cd419ea859cb5277f32b5dbf2db714f9ed1',
+    ),
   ),
-  mariadb114: official(
-    'mariadb',
-    '11.4.13',
-    'sha256:70cc072b29b4a89ae07abb2d4da2c64678a7f2dfe092751bb51c87d67dc1338b',
+  mariadb114: heldToMinor(
+    official(
+      'mariadb',
+      '11.4.13',
+      'sha256:70cc072b29b4a89ae07abb2d4da2c64678a7f2dfe092751bb51c87d67dc1338b',
+    ),
   ),
   postgres18: official(
     'postgres',
@@ -72,15 +83,19 @@ export const CATALOG_IMAGES = {
     '8.10.2',
     'sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee',
   ),
-  mongo90: official(
-    'mongo',
-    '9.0.2',
-    'sha256:c73153413b453d7d31199be36e101ab51195a4e6cff7bee8a2aa52a9769e4e11',
+  mongo90: heldToMinor(
+    official(
+      'mongo',
+      '9.0.2',
+      'sha256:c73153413b453d7d31199be36e101ab51195a4e6cff7bee8a2aa52a9769e4e11',
+    ),
   ),
-  mongo80: official(
-    'mongo',
-    '8.0.32',
-    'sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2',
+  mongo80: heldToMinor(
+    official(
+      'mongo',
+      '8.0.32',
+      'sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2',
+    ),
   ),
   wordpress71: official(
     'wordpress',

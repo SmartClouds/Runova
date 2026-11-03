@@ -166,7 +166,20 @@ public sealed record StackRevisionInfo(
     long? FinishedAtUnixMs = null,
     int? RollbackOf = null,
     string? Error = null,
-    StackSource? Source = null);
+    StackSource? Source = null,
+    StackServiceLimits[]? Limits = null);
+
+/// <summary>
+/// Resource caps on one service of an app; a field left null is no cap. Cores and share are kept
+/// apart (Docker applies their product as `cpus`) so the app shows what was picked. The core
+/// writes them into the override file, so every redeploy and rollback of the revision holds them.
+/// </summary>
+/// <param name="CpuCores">Whole cores, 1 up to the server's count.</param>
+/// <param name="CpuPercent">How much of those cores it may use, 5 to 100.</param>
+/// <param name="MemoryMb">6 MB up to the server's memory; swap cannot go past it.</param>
+/// <param name="DiskGb">The container's writable layer, on storage drivers that can cap it.</param>
+[TranspilationSource]
+public sealed record StackServiceLimits(string Service, int? CpuCores = null, int? CpuPercent = null, int? MemoryMb = null, int? DiskGb = null);
 
 [TranspilationSource]
 public sealed record StackServiceInfo(string Name, ContainerSummary[] Containers, StackPortBinding[] Ports, string? Image = null);
@@ -202,7 +215,8 @@ public sealed record StackRevisionUpload(
     string[] ProxiedServices,
     string[] AcknowledgedRisks,
     bool BuildContext = false,
-    StackSource? Source = null);
+    StackSource? Source = null,
+    StackServiceLimits[]? Limits = null);
 
 /// <summary>Why a revision was made from another one on the server, for the audit trail.</summary>
 [TranspilationSource]
@@ -216,13 +230,16 @@ public enum StackRevisionPurpose
 
     /// <summary>An App Store app on newer images: a new compose file, the same .env (E12).</summary>
     Update,
+
+    /// <summary>The same files with other resource caps on its services.</summary>
+    Limits,
 }
 
 /// <summary>
 /// A new revision copied from Revision on the server, its .env and project files included, so
 /// no env value travels. Compose replaces the compose file when set (an App Store update);
-/// ProxiedServices replaces the loopback set; AcknowledgedRisks defaults to the source's.
-/// The revision is validated like an upload and deployed with DeployStack.
+/// ProxiedServices replaces the loopback set; AcknowledgedRisks and Limits default to the
+/// source's. The revision is validated like an upload and deployed with DeployStack.
 /// </summary>
 [TranspilationSource]
 public sealed record ReviseStackRequest(
@@ -231,7 +248,8 @@ public sealed record ReviseStackRequest(
     string[] ProxiedServices,
     string? Compose = null,
     string[]? AcknowledgedRisks = null,
-    StackRevisionPurpose Purpose = StackRevisionPurpose.Edit);
+    StackRevisionPurpose Purpose = StackRevisionPurpose.Edit,
+    StackServiceLimits[]? Limits = null);
 
 /// <summary>One entry of a revision's .env. Only RevealStackEnv returns these (Admin, step-up).</summary>
 [TranspilationSource]

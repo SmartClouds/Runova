@@ -10,8 +10,8 @@ export const postgres = defineCatalogTemplate({
   category: 'database',
   homepage: 'https://www.postgresql.org',
   versions: [
-    { id: '18', label: 'PostgreSQL 18', images: { db: CATALOG_IMAGES.postgres18 } },
-    { id: '17', label: 'PostgreSQL 17', images: { db: CATALOG_IMAGES.postgres17 } },
+    { id: '18', label: 'PostgreSQL {db}', images: { db: CATALOG_IMAGES.postgres18 } },
+    { id: '17', label: 'PostgreSQL {db}', images: { db: CATALOG_IMAGES.postgres17 } },
   ],
   defaultVersion: '18',
   parameters: z.object({

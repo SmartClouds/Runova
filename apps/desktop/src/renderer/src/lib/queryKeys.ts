@@ -297,6 +297,8 @@ export const queryKeys = {
   deployCertificates: (serverId: string) => ['deploy', 'web', serverId, 'certificates'] as const,
   deployAlertsList: (serverId: string) => ['deploy', 'overview', serverId, 'alerts-list'] as const,
   deployApps: (serverId: string) => ['deploy', 'apps', serverId] as const,
+  /** The newest releases of the App Store's images, read on this computer for every server. */
+  deployAppStoreReleases: () => ['deploy', 'app-store-releases'] as const,
   deployAppsList: (serverId: string) => ['deploy', 'apps', serverId, 'list'] as const,
   deployApp: (serverId: string, stackId: string) =>
     ['deploy', 'apps', serverId, 'app', stackId] as const,

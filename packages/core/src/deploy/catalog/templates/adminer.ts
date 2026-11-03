@@ -9,7 +9,7 @@ export const adminer = defineCatalogTemplate({
   description: 'A one-page database manager for MySQL, MariaDB, PostgreSQL and SQLite.',
   category: 'database',
   homepage: 'https://www.adminer.org',
-  versions: [{ id: '6', label: 'Adminer 6.1', images: { app: CATALOG_IMAGES.adminer6 } }],
+  versions: [{ id: '6', label: 'Adminer {app}', images: { app: CATALOG_IMAGES.adminer6 } }],
   defaultVersion: '6',
   parameters: z.object({
     port: portParam(8081),

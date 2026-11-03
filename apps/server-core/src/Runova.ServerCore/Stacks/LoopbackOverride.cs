@@ -31,7 +31,8 @@ internal static class LoopbackOverride
     public const string LoopbackAddress = "127.0.0.1";
 
     private const string Header =
-        "# Written by Runova: services behind the proxy publish their ports on 127.0.0.1 only.\n"
+        "# Written by Runova: services behind the proxy publish their ports on 127.0.0.1 only,\n"
+        + "# and services with resource caps get them here.\n"
         + "# !override replaces their ports rather than adding to them (Docker Compose 2.24.4 or later).\n";
 
     public sealed record Result(string? Text, IReadOnlyList<StackPortBinding> Bindings);
@@ -40,8 +41,11 @@ internal static class LoopbackOverride
         hostIp is not null
         && (hostIp.StartsWith("127.", StringComparison.Ordinal) || hostIp == "::1" || hostIp.StartsWith("::ffff:127.", StringComparison.Ordinal));
 
-    /// <summary>The override text (null when no proxied service publishes a port) and every binding once it applies.</summary>
-    public static Result Render(ComposeConfig config, IReadOnlyCollection<string> proxiedServices)
+    /// <summary>
+    /// The override text (null when no proxied service publishes a port and nothing is capped)
+    /// and every binding once it applies. The caps were checked against the services already.
+    /// </summary>
+    public static Result Render(ComposeConfig config, IReadOnlyCollection<string> proxiedServices, IReadOnlyCollection<StackServiceLimits>? limits = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(proxiedServices);
@@ -58,37 +62,43 @@ internal static class LoopbackOverride
         var bindings = new List<StackPortBinding>();
         foreach (var service in config.Services)
         {
+            var entry = new StringBuilder();
             var proxied = proxiedServices.Contains(service.Name);
             if (!proxied)
             {
                 bindings.AddRange(service.Ports.Select(port => new StackPortBinding(service.Name, port.Target, port.Protocol, port.HostIp, port.Published)));
-                continue;
             }
-
-            if (service.NetworkMode == "host")
+            else if (service.NetworkMode == "host")
             {
                 throw new ComposeConfigException(
                     $"{service.Name} uses network_mode: host, so it listens on the server's own addresses and has no ports to bind to 127.0.0.1. Remove network_mode: host to put it behind the proxy.");
             }
-
-            if (service.Ports.Count == 0)
+            else if (service.Ports.Count > 0)
             {
-                continue;
+                entry.Append("    ports: !override\n");
+                foreach (var port in service.Ports)
+                {
+                    bindings.Add(new StackPortBinding(service.Name, port.Target, port.Protocol, LoopbackAddress, port.Published));
+                    entry.Append("      - target: ").Append(port.Target.ToString(CultureInfo.InvariantCulture)).Append('\n');
+                    if (port.Published is not null)
+                    {
+                        entry.Append("        published: \"").Append(port.Published).Append("\"\n");
+                    }
+
+                    entry.Append("        host_ip: ").Append(LoopbackAddress).Append('\n');
+                    entry.Append("        protocol: ").Append(port.Protocol).Append('\n');
+                }
             }
 
-            written = true;
-            text.Append("  \"").Append(service.Name).Append("\":\n    ports: !override\n");
-            foreach (var port in service.Ports)
+            if (limits?.FirstOrDefault(limit => limit.Service == service.Name) is { } capped)
             {
-                bindings.Add(new StackPortBinding(service.Name, port.Target, port.Protocol, LoopbackAddress, port.Published));
-                text.Append("      - target: ").Append(port.Target.ToString(CultureInfo.InvariantCulture)).Append('\n');
-                if (port.Published is not null)
-                {
-                    text.Append("        published: \"").Append(port.Published).Append("\"\n");
-                }
+                ResourceLimits.Append(entry, capped);
+            }
 
-                text.Append("        host_ip: ").Append(LoopbackAddress).Append('\n');
-                text.Append("        protocol: ").Append(port.Protocol).Append('\n');
+            if (entry.Length > 0)
+            {
+                written = true;
+                text.Append("  \"").Append(service.Name).Append("\":\n").Append(entry);
             }
         }
 

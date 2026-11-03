@@ -10,8 +10,8 @@ export const mongodb = defineCatalogTemplate({
   category: 'database',
   homepage: 'https://www.mongodb.com',
   versions: [
-    { id: '9.0', label: 'MongoDB 9.0', images: { db: CATALOG_IMAGES.mongo90 } },
-    { id: '8.0', label: 'MongoDB 8.0', images: { db: CATALOG_IMAGES.mongo80 } },
+    { id: '9.0', label: 'MongoDB {db}', images: { db: CATALOG_IMAGES.mongo90 } },
+    { id: '8.0', label: 'MongoDB {db}', images: { db: CATALOG_IMAGES.mongo80 } },
   ],
   defaultVersion: '9.0',
   parameters: z.object({

@@ -38,6 +38,7 @@ function harness(trusted = true) {
       'removeNetwork',
       'diskUsage',
       'prune',
+      'setLimits',
     ].map((name) => [name, vi.fn(async () => ({}))]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   const subscriptions = {
@@ -151,6 +152,22 @@ describe('registerDeployDockerHandlers', () => {
       call(C.act, { serverId: 'srv-1', containerId: 'web', action: 'stop', timeoutSeconds: 601 }),
     ).rejects.toThrow(/0 to 600/);
     await expect(call(C.act, 'stop')).rejects.toThrow(/Expected a container action/);
+  });
+
+  it('checks live caps before a server hears of them', async () => {
+    const { docker, call } = harness();
+    await call(C.setLimits, { serverId: 'srv-1', containerId: 'web', cpus: 1.5, memoryMb: 512 });
+    await call(C.setLimits, { serverId: 'srv-1', containerId: 'web', cpus: null, memoryMb: null });
+    expect(docker.setLimits.mock.calls.map(([input]) => input)).toEqual([
+      { serverId: 'srv-1', containerId: 'web', cpus: 1.5, memoryMb: 512 },
+      { serverId: 'srv-1', containerId: 'web', cpus: null, memoryMb: null },
+    ]);
+    await expect(
+      call(C.setLimits, { serverId: 'srv-1', containerId: 'web', cpus: 0, memoryMb: null }),
+    ).rejects.toThrow(/CPU cap/);
+    await expect(
+      call(C.setLimits, { serverId: 'srv-1', containerId: 'web', cpus: null, memoryMb: 2.5 }),
+    ).rejects.toThrow(/memory cap/);
   });
 
   it('needs a yes or no for removing volumes, and forces nothing unless asked', async () => {

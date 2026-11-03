@@ -4,6 +4,7 @@ import type {
   DeployConsoleOpenInput,
   DeployContainerAction,
   DeployContainerActionInput,
+  DeployContainerLimitsInput,
   DeployContainerLogsWatchInput,
   DeployContainerRemoveInput,
   DeployDockerInstallInput,
@@ -138,6 +139,30 @@ function reference(value: unknown): string {
     throw new Error('That is not an image reference (such as nginx:1.29 or ghcr.io/org/app:1.0).');
   }
   return value;
+}
+
+/** Live caps: cores of CPU time (0.01 or more) and whole MB (6 or more), or null for none. */
+function containerLimits(value: unknown): DeployContainerLimitsInput {
+  const input = object(value, 'the container caps');
+  const { cpus, memoryMb } = input;
+  if (
+    cpus !== null &&
+    (typeof cpus !== 'number' || !Number.isFinite(cpus) || cpus < 0.01 || cpus > 1024)
+  ) {
+    throw new Error('The CPU cap is cores of CPU time, 0.01 or more.');
+  }
+  if (
+    memoryMb !== null &&
+    (typeof memoryMb !== 'number' || !Number.isSafeInteger(memoryMb) || memoryMb < 6)
+  ) {
+    throw new Error('The memory cap is a whole number of MB, 6 or more.');
+  }
+  return {
+    serverId: serverId(input.serverId),
+    containerId: named(input.containerId, 'container'),
+    cpus: cpus as number | null,
+    memoryMb: memoryMb as number | null,
+  };
 }
 
 function containerAction(value: unknown): DeployContainerActionInput {
@@ -316,6 +341,7 @@ export function registerDeployDockerHandlers(deps: DeployDockerHandlerDeps): voi
   );
   handle(IPC.deployDocker.revealEnv, (_owner, value) => docker.revealEnv(revealInput(value)));
   handle(IPC.deployDocker.act, (_owner, value) => docker.act(containerAction(value)));
+  handle(IPC.deployDocker.setLimits, (_owner, value) => docker.setLimits(containerLimits(value)));
   handle(IPC.deployDocker.remove, (_owner, value) => docker.remove(removeInput(value)));
   handle(IPC.deployDocker.logTail, (_owner, value) => docker.logTail(logTail(value)));
   handle(IPC.deployDocker.listImages, (_owner, id) => docker.listImages(serverId(id)));

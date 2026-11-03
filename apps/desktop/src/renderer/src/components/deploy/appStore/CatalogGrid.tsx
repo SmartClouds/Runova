@@ -1,8 +1,9 @@
-import type { AnyCatalogTemplate } from '@runova/core';
+import type { AnyCatalogTemplate, CatalogReleaseData } from '@runova/core';
 import { useMemo, useState } from 'react';
 import { CircleCheck, Store } from '@/components/icons';
 import {
   CARD_GRID,
+  Chip,
   EmptyState,
   GLASS_CARD,
   SECTION_HEADING,
@@ -16,25 +17,38 @@ import {
   CATEGORY_ORDER,
   memoryText,
 } from '@/lib/deploy/appStore/format';
+import { latestLabel, newerThanBundled } from '@/lib/deploy/appStore/releases';
 import { cn } from '@/lib/utils';
 import { GLASS_EDGE } from '../deployKit';
 
 /**
  * The catalog, by category: what each app is, who publishes its images and what it needs, with
- * a filter by name. Every card opens the same install sheet.
+ * a filter by name. Every card opens the same install sheet. Each names the newest release the
+ * registries list for its recommended line, or the one it shipped with when they were not read.
  */
+
+/** What the cards need of the registries' reading. */
+export interface CatalogReleases {
+  data: CatalogReleaseData | null;
+  error: string | null;
+}
 
 function AppCard({
   template,
+  releases,
   canInstall,
   onInstall,
 }: {
   template: AnyCatalogTemplate;
+  releases: CatalogReleases;
   canInstall: boolean;
   onInstall: (templateId: string) => void;
 }): React.JSX.Element {
   const version = template.versions.find((item) => item.id === template.defaultVersion);
   const official = version ? allOfficial(version) : false;
+  const label = latestLabel(template, template.defaultVersion, releases.data);
+  const newer = newerThanBundled(template, template.defaultVersion, releases.data);
+  const bundled = releases.data === null && releases.error !== null;
   const install = (
     <Button
       size="sm"
@@ -64,7 +78,21 @@ function AppCard({
           </div>
           <div className="min-w-0">
             <h4 className="truncate text-sm font-semibold text-foreground">{template.name}</h4>
-            <p className="truncate text-xs text-muted-foreground">{version?.label}</p>
+            <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="truncate">{label}</span>
+              {newer && (
+                <SimpleTooltip label="Newer than the release this app shipped with.">
+                  <Chip tone="primary" tabIndex={0}>
+                    Latest
+                  </Chip>
+                </SimpleTooltip>
+              )}
+              {bundled && (
+                <SimpleTooltip label="The image registries could not be reached, so this is the release the app shipped with. The newest one shows once they answer.">
+                  <Chip tabIndex={0}>Bundled</Chip>
+                </SimpleTooltip>
+              )}
+            </p>
           </div>
         </div>
         {canInstall ? (
@@ -87,12 +115,16 @@ function AppCard({
   );
 }
 
+const NO_RELEASES: CatalogReleases = { data: null, error: null };
+
 export function CatalogGrid({
   templates,
+  releases = NO_RELEASES,
   canInstall,
   onInstall,
 }: {
   templates: readonly AnyCatalogTemplate[];
+  releases?: CatalogReleases;
   canInstall: boolean;
   onInstall: (templateId: string) => void;
 }): React.JSX.Element {
@@ -147,6 +179,7 @@ export function CatalogGrid({
                 <AppCard
                   key={template.id}
                   template={template}
+                  releases={releases}
                   canInstall={canInstall}
                   onInstall={onInstall}
                 />

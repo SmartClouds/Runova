@@ -26,6 +26,7 @@ function harness(trusted = true) {
     install: vi.fn(async () => ({ ok: 'install' })),
     update: vi.fn(async () => ({ ok: 'update' })),
     revealSecrets: vi.fn(async () => ({})),
+    releases: vi.fn(async () => ({ data: null, checkedAtUnixMs: null, error: null })),
   };
   registerDeployAppStoreHandlers({
     ipc: { handle: (channel, listener) => handlers.set(channel, listener) },
@@ -71,6 +72,55 @@ describe('registerDeployAppStoreHandlers', () => {
       revision: 2,
       password: 'hunter2hunter2',
     });
+  });
+
+  it('passes the picked release and the resource caps through', async () => {
+    const { call, store } = harness();
+    const limits = [{ service: 'redis', cpuCores: 2, cpuPercent: 50, memoryMb: 512, diskGb: null }];
+    await call(IPC.deployAppStore.install, { ...INSTALL, release: '8.10.9', limits });
+    expect(store.install).toHaveBeenCalledWith({
+      ...INSTALL,
+      domain: null,
+      release: '8.10.9',
+      limits: [{ service: 'redis', cpuCores: 2, cpuPercent: 50, memoryMb: 512 }],
+    });
+    await call(IPC.deployAppStore.update, {
+      serverId: SERVER,
+      stackId: STACK,
+      version: '18',
+      release: 'latest',
+    });
+    expect(store.update).toHaveBeenLastCalledWith({
+      serverId: SERVER,
+      stackId: STACK,
+      version: '18',
+      release: 'latest',
+    });
+  });
+
+  it('refuses a release and caps out of shape', async () => {
+    const { call, store } = harness();
+    await expect(call(IPC.deployAppStore.install, { ...INSTALL, release: '../x' })).rejects.toThrow(
+      'Pick a release from the list.',
+    );
+    await expect(
+      call(IPC.deployAppStore.install, {
+        ...INSTALL,
+        limits: [{ service: 'redis', cpuPercent: 1 }],
+      }),
+    ).rejects.toThrow('CPU share');
+    await expect(
+      call(IPC.deployAppStore.install, { ...INSTALL, limits: 'all of it' }),
+    ).rejects.toThrow('The resource caps are not a list.');
+    expect(store.install).not.toHaveBeenCalled();
+  });
+
+  it('reads the releases, fresh only when asked', async () => {
+    const { call, store } = harness();
+    await call(IPC.deployAppStore.releases);
+    expect(store.releases).toHaveBeenCalledWith({ refresh: false });
+    await call(IPC.deployAppStore.releases, { refresh: true });
+    expect(store.releases).toHaveBeenLastCalledWith({ refresh: true });
   });
 
   it('refuses what does not fit, without repeating a secret', async () => {

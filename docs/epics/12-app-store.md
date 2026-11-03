@@ -119,3 +119,26 @@ AC3 (2026-10-03):
   than one token.
 - Nightly only (the Ubuntu 24.04 job of `nightly.yml`). It needs well over the 3 minutes the
   every-push job allows.
+
+### Newest releases and resource limits (2026-11)
+
+- The store used to show only the bundled pins (`catalog/images.ts`), so Ollama read 0.35 for
+  weeks while newer releases were out. The desktop now reads the registries itself
+  (`main/deploy/appStore/registry.ts`, anonymous OCI tag and manifest calls) and keeps up to three
+  releases per line newer than the pin that carry linux/amd64 and linux/arm64, with their digests
+  (`releases.ts`, cached for six hours in `app-store-releases.json`). Manifest reads count towards
+  Docker Hub's anonymous pull limit, so only those few are read. Without the registries the
+  bundled pins stay in use.
+- Which tags belong to a line is `latest.ts` in core: the same shape as the pin (leading `v`,
+  number count, suffix, so no prerelease or floating tag) and the same leading numbers as its
+  `track` says (the major by default; MySQL, MariaDB and MongoDB keep their minor line). A major
+  upgrade is still a reviewed new line. Version labels are patterns over the image tags
+  (`'Ollama {ollama} with Open WebUI {webui}'`) so a newer release names itself.
+- An install or update names a `release` (`latest` or a listed tag); the main process resolves it
+  against its own reading with `templateAtRelease` and never takes a digest from the renderer.
+- Resource limits (CPU cores and share, memory, disk) per service go with the upload
+  (`StackRevisionUpload.Limits`) and live in the revision (`StackRevisions.Limits`). The core writes
+  them into `runova.override.yaml` next to the loopback ports, in both Compose forms, so
+  redeploys, updates (`ReviseStackRequest.Limits` null keeps them) and rollbacks hold them. Disk
+  caps need overlay2 on xfs, btrfs or zfs (`ResourceLimits.DiskSupport`). Containers outside an
+  app get live CPU and memory caps through `UpdateContainerLimits` (docker update).

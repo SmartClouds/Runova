@@ -1,11 +1,20 @@
 import type { ComposePortBinding } from '@runova/core';
 import type { DeployStackPreview } from '@shared/deployStacksTypes';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Globe, Lock, LockOpen, Spinner } from '@/components/icons';
+import {
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  Lock,
+  LockOpen,
+  Spinner,
+  TriangleAlert,
+} from '@/components/icons';
 import { SECTION_WELL } from '@/components/pageKit';
 import { Switch } from '@/components/ui/switch';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { bindingAddress, isPublicBinding } from '@/lib/deploy/apps/format';
+import { describeHolder, type PortConflict } from '@/lib/deploy/apps/portConflicts';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,15 +31,61 @@ function hostPort(binding: Pick<ComposePortBinding, 'hostIp' | 'published'>): st
   return `${host.includes(':') ? `[${host}]` : host}:${binding.published ?? 'any'}`;
 }
 
+function holders(conflict: PortConflict): string {
+  const names = conflict.holders.map(describeHolder);
+  return names.length <= 2 ? names.join(' and ') : `${names[0]} and ${names.length - 1} more`;
+}
+
+/** Ports another container on the server already holds, listed before any detail. */
+export function PortConflicts({
+  conflicts,
+}: {
+  conflicts: readonly PortConflict[];
+}): React.JSX.Element {
+  return (
+    <div
+      role="alert"
+      aria-label="Ports already in use"
+      className="space-y-1.5 rounded-xl bg-warning/[0.06] px-3 py-2 text-xs text-foreground ring-1 ring-inset ring-warning/35"
+    >
+      <p className="flex items-start gap-2 font-medium">
+        <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+        {conflicts.length === 1
+          ? 'A port this app publishes is already in use on the server.'
+          : `${conflicts.length} ports this app publishes are already in use on the server.`}
+      </p>
+      <ul className="space-y-0.5 pl-5.5">
+        {conflicts.map((conflict) => (
+          <li key={`${conflict.service}-${conflict.index}-${conflict.target}`}>
+            <span className="font-mono">
+              {conflict.port}/{conflict.protocol}
+            </span>{' '}
+            for <span className="font-mono">{conflict.service}</span> is held by {holders(conflict)}
+            .
+          </li>
+        ))}
+      </ul>
+      <p className="pl-5.5 text-muted-foreground">
+        Docker will refuse to start a service on a port that is taken, so the deploy would fail.
+        Change the host port in the compose file, or stop or remove the other container, before you
+        deploy.
+      </p>
+    </div>
+  );
+}
+
 export function ExposeStep({
   preview,
   proxied,
   updating,
+  conflicts = [],
   onToggle,
 }: {
   preview: DeployStackPreview;
   proxied: readonly string[];
   updating: boolean;
+  /** Ports other containers on the server already hold. */
+  conflicts?: readonly PortConflict[];
   onToggle: (service: string, keepPrivate: boolean) => void;
 }): React.JSX.Element {
   const [showOverride, setShowOverride] = useState(false);
@@ -46,6 +101,8 @@ export function ExposeStep({
           skip the server's firewall, so keep a port public only when nothing else will do.
         </span>
       </p>
+
+      {conflicts.length > 0 && <PortConflicts conflicts={conflicts} />}
 
       {publishing.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -106,6 +163,12 @@ export function ExposeStep({
                             binding.index === port.index && binding.target === port.target,
                         ) ?? port;
                       const open = isPublicBinding(bound);
+                      const taken = conflicts.find(
+                        (conflict) =>
+                          conflict.service === service.name &&
+                          conflict.index === port.index &&
+                          conflict.target === port.target,
+                      );
                       return (
                         <tr
                           key={`${port.index}-${port.target}-${port.protocol}-${port.published}`}
@@ -123,6 +186,12 @@ export function ExposeStep({
                                 ({bindingAddress(bound).toLowerCase()})
                               </span>
                             </span>
+                            {taken && (
+                              <span className="flex items-center gap-1 font-sans text-warning">
+                                <TriangleAlert className="h-3 w-3" />
+                                In use by {holders(taken)}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );

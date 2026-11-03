@@ -34,12 +34,24 @@ export interface PinnedImage {
   publisher: string;
   /** The day the digest was resolved, YYYY-MM-DD. */
   resolvedAt: string;
+  /**
+   * How many leading numbers of the tag a newer release keeps (latest.ts): 1, the default, moves
+   * within the major version; 2 holds a database to its minor line, such as MariaDB 11.4 LTS.
+   */
+  track?: number;
 }
 
 export interface CatalogVersion {
   /** Stable id of the release line, such as "18". Stored with an install. */
   id: string;
+  /** What the store shows, such as "Ollama 0.35.0 with Open WebUI 0.11.4". */
   label: string;
+  /**
+   * The label with `{role}` where each image's version goes. A template writes its label this
+   * way; defineCatalogTemplate fills it in and keeps the pattern here, so a newer release from
+   * the registry gets a label that names what it runs (latest.ts).
+   */
+  labelPattern?: string;
   /** The images this line runs, by role (the template's own names, such as "app" or "db"). */
   images: Readonly<Record<string, PinnedImage>>;
 }

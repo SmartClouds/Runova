@@ -23,6 +23,18 @@ export interface DeployContainerActionInput {
   signal?: string;
 }
 
+/**
+ * Live caps on a container outside any app (docker update, no restart). Null lifts a cap to the
+ * whole server. An app's services take caps through their revisions instead (setLimits).
+ */
+export interface DeployContainerLimitsInput {
+  serverId: string;
+  containerId: string;
+  /** Cores of CPU time, such as 1.5. */
+  cpus: number | null;
+  memoryMb: number | null;
+}
+
 export interface DeployContainerRemoveInput {
   serverId: string;
   containerId: string;

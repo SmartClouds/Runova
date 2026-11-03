@@ -13,12 +13,12 @@ export const nextcloud = defineCatalogTemplate({
   versions: [
     {
       id: '35',
-      label: 'Nextcloud 35 with MariaDB 11.4',
+      label: 'Nextcloud {app} with MariaDB {db}',
       images: { app: CATALOG_IMAGES.nextcloud35, db: CATALOG_IMAGES.mariadb114 },
     },
     {
       id: '34',
-      label: 'Nextcloud 34 (production channel) with MariaDB 11.4',
+      label: 'Nextcloud {app} (production channel) with MariaDB {db}',
       images: { app: CATALOG_IMAGES.nextcloud34, db: CATALOG_IMAGES.mariadb114 },
     },
   ],

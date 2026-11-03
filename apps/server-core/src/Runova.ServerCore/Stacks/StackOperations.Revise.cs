@@ -76,6 +76,7 @@ internal sealed partial class StackOperations
             var acknowledged = request.AcknowledgedRisks is { } risks
                 ? Write(risks.Distinct(StringComparer.Ordinal).ToArray())
                 : source.AcknowledgedRisks;
+            var limits = request.Limits is { } caps ? Write(ResourceLimits.Kept(caps)) : source.Limits;
             tracked.LastRevision = number;
             tracked.UpdatedAt = Now;
             db.StackRevisions.Add(new StackRevisionRecord
@@ -89,6 +90,7 @@ internal sealed partial class StackOperations
                 EnvKeys = source.EnvKeys,
                 Services = source.Services,
                 ProxiedServices = Write(request.ProxiedServices.Distinct(StringComparer.Ordinal).ToArray()),
+                Limits = limits,
                 Findings = source.Findings,
                 AcknowledgedRisks = acknowledged,
                 Bindings = source.Bindings,
@@ -118,6 +120,7 @@ internal sealed partial class StackOperations
                 ["purpose"] = purpose,
                 ["compose"] = request.Compose is null ? "kept" : "replaced",
                 ["proxied"] = string.Join(' ', request.ProxiedServices.Distinct(StringComparer.Ordinal)),
+                ["limits"] = request.Limits is { } named ? Describe(ResourceLimits.Kept(named)) : "kept",
             },
             cancellationToken);
         if (request.AcknowledgedRisks is { } listed)
@@ -158,8 +161,22 @@ internal sealed partial class StackOperations
     {
         StackRevisionPurpose.MakePrivate => "make-private",
         StackRevisionPurpose.Update => "update",
+        StackRevisionPurpose.Limits => "limits",
         _ => "edit",
     };
+
+    /// <summary>The caps as the audit trail shows them: "web cores=2 percent=50 memoryMb=512".</summary>
+    private static string Describe(StackServiceLimits[] limits) =>
+        limits.Length == 0
+            ? "none"
+            : string.Join("; ", limits.Select(limit => string.Join(' ', new[]
+            {
+                limit.Service,
+                limit.CpuCores is { } cores ? $"cores={cores.ToString(CultureInfo.InvariantCulture)}" : null,
+                limit.CpuPercent is { } percent ? $"percent={percent.ToString(CultureInfo.InvariantCulture)}" : null,
+                limit.MemoryMb is { } memory ? $"memoryMb={memory.ToString(CultureInfo.InvariantCulture)}" : null,
+                limit.DiskGb is { } disk ? $"diskGb={disk.ToString(CultureInfo.InvariantCulture)}" : null,
+            }.OfType<string>())));
 
     private static string CheckRevise(ReviseStackRequest request)
     {
@@ -188,6 +205,6 @@ internal sealed partial class StackOperations
 
         return request.AcknowledgedRisks is { } risks && (risks.Length > StackRules.MaxAcknowledgments || !risks.All(StackRules.IsRiskId))
             ? $"Acknowledge at most {StackRules.MaxAcknowledgments} findings, by the ids the linter gave them."
-            : string.Empty;
+            : ResourceLimits.CheckShape(request.Limits);
     }
 }

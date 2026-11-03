@@ -44,6 +44,28 @@ describe('DeployDocker', () => {
     for (const secret of PLANTED_SECRETS) expect(JSON.stringify(details)).not.toContain(secret);
   });
 
+  it('caps a container live for an Operator, and refuses a Viewer', async () => {
+    const { docker } = setup(['operator']);
+    const details = await docker.setLimits({
+      serverId: 'srv-1',
+      containerId: 'toolbox',
+      cpus: 0.5,
+      memoryMb: 128,
+    });
+    expect(details.cpuLimit).toBe(0.5);
+    expect(details.memoryLimitBytes).toBe(128 * 1024 * 1024);
+
+    const viewer = setup(['viewer']);
+    await expect(
+      viewer.docker.setLimits({
+        serverId: 'srv-1',
+        containerId: 'toolbox',
+        cpus: 1,
+        memoryMb: null,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('reveals values to an Admin only after a step-up, which the call can make on the way', async () => {
     const { core, docker } = setup(['admin']);
 

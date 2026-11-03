@@ -8,6 +8,7 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import type { DeployAppStore } from '../deploy/appStore/service';
 import { type DeployIpcRegistry, object, serverId, stepUpInput } from './deploy';
+import { limitsInput } from './limits';
 
 /**
  * The App Store's invoke channels (E12). They answer only the main window and check the shape
@@ -26,6 +27,8 @@ export interface DeployAppStoreHandlerDeps {
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEMPLATE_ID = /^[a-z0-9-]{1,40}$/;
 const VERSION_ID = /^[A-Za-z0-9._-]{1,40}$/;
+/** `latest` or a tag, as registries allow them. */
+const RELEASE = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
 const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,99}$/;
 const MAX_PARAMS = 40;
@@ -50,6 +53,15 @@ function templateId(value: unknown): string {
 function versionId(value: unknown): string {
   if (typeof value !== 'string' || !VERSION_ID.test(value)) throw new Error('Pick a version.');
   return value;
+}
+
+/** The release the version picker sent, if any: left out means the newest. */
+function release(value: unknown): { release?: string } {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'string' || !RELEASE.test(value)) {
+    throw new Error('Pick a release from the list.');
+  }
+  return { release: value };
 }
 
 function params(value: unknown): Record<string, DeployAppParamValue> {
@@ -106,6 +118,8 @@ function installInput(value: unknown): DeployAppInstallInput {
     params: params(input.params),
     secrets: secrets(input.secrets),
     domain: domain(input.domain),
+    ...release(input.release),
+    ...(input.limits === undefined ? {} : { limits: limitsInput(input.limits) }),
   };
 }
 
@@ -115,6 +129,7 @@ function updateInput(value: unknown): DeployAppUpdateInput {
     serverId: serverId(input.serverId),
     stackId: stackId(input.stackId),
     version: versionId(input.version),
+    ...release(input.release),
   };
 }
 
@@ -142,4 +157,12 @@ export function registerDeployAppStoreHandlers(deps: DeployAppStoreHandlerDeps):
   handle(IPC.deployAppStore.install, (value) => store.install(installInput(value)));
   handle(IPC.deployAppStore.update, (value) => store.update(updateInput(value)));
   handle(IPC.deployAppStore.revealSecrets, (value) => store.revealSecrets(revealInput(value)));
+  handle(IPC.deployAppStore.releases, (value) =>
+    store.releases({
+      refresh:
+        typeof value === 'object' &&
+        value !== null &&
+        (value as { refresh?: unknown }).refresh === true,
+    }),
+  );
 }

@@ -90,7 +90,9 @@ describe.skipIf(!enabled)('App Store WordPress over HTTPS on a real server', () 
           },
           pack: buildContextTarball,
         });
-        const store = new DeployAppStore({ stacks });
+        // The catalog's bundled pins: this test reaches no registry.
+        const releases = { get: async () => ({ data: null, checkedAtUnixMs: null, error: null }) };
+        const store = new DeployAppStore({ stacks, releases });
         const template = findCatalogTemplate('wordpress');
         if (!template) throw new Error('The catalog has no WordPress.');
         const choices = {

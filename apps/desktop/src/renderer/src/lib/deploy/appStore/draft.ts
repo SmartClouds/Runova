@@ -5,6 +5,7 @@ import {
   checkCatalogSecret,
   generateCatalogSecret,
   generateCatalogSecrets,
+  LATEST_RELEASE,
   renderCatalogApp,
   validateDomain,
   validateStackName,
@@ -21,6 +22,8 @@ import { suggestStoreAppName } from './format';
 
 export interface InstallDraft {
   version: string;
+  /** The release of the line: `latest`, or a tag the version picker listed. */
+  release: string;
   name: string;
   values: Record<string, string | boolean>;
   secrets: Record<string, string>;
@@ -40,6 +43,7 @@ export function initialDraft(template: AnyCatalogTemplate, taken: readonly strin
   }
   return {
     version: template.defaultVersion,
+    release: LATEST_RELEASE,
     name: suggestStoreAppName(template, taken),
     values,
     secrets: generateCatalogSecrets(template.secrets),
@@ -47,6 +51,11 @@ export function initialDraft(template: AnyCatalogTemplate, taken: readonly strin
     domain: '',
     certificate: true,
   };
+}
+
+/** Another release line, on its newest release. */
+export function withVersion(draft: InstallDraft, version: string): InstallDraft {
+  return { ...draft, version, release: LATEST_RELEASE };
 }
 
 /** The draft's values as parameters: numbers for number and port fields, blanks left out. */

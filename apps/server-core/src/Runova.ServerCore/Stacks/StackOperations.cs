@@ -76,6 +76,13 @@ internal sealed partial class StackOperations(
         })];
     }
 
+    /// <summary>Whether a compose project is one of the core's apps.</summary>
+    public async Task<bool> IsAppAsync(string project, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await db.Stacks.AnyAsync(s => s.Name == project, cancellationToken);
+    }
+
     public async Task<StackDetails> GetAsync(Guid stackId, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
@@ -269,7 +276,8 @@ internal sealed partial class StackOperations(
             row.FinishedAt,
             row.RollbackOf,
             row.Error,
-            SourceOf(row.ProjectId, row.ProjectName, row.ComposePath, row.EnvironmentId, row.EnvironmentName));
+            SourceOf(row.ProjectId, row.ProjectName, row.ComposePath, row.EnvironmentId, row.EnvironmentName),
+            Read<StackServiceLimits[]>(row.Limits));
     }
 
     internal static string[] Unacknowledged(IEnumerable<StackRisk> findings, IEnumerable<string> acknowledged)

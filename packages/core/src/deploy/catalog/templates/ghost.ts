@@ -12,7 +12,7 @@ export const ghost = defineCatalogTemplate({
   versions: [
     {
       id: '6',
-      label: 'Ghost 6.67 with MySQL 8.4',
+      label: 'Ghost {app} with MySQL {db}',
       images: { app: CATALOG_IMAGES.ghost6, db: CATALOG_IMAGES.mysql84 },
     },
   ],

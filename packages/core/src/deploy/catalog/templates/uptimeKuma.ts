@@ -10,7 +10,7 @@ export const uptimeKuma = defineCatalogTemplate({
   category: 'monitoring',
   homepage: 'https://uptime.kuma.pet',
   versions: [
-    { id: '2', label: 'Uptime Kuma 2.5 (rootless)', images: { app: CATALOG_IMAGES.uptimeKuma } },
+    { id: '2', label: 'Uptime Kuma {app} (rootless)', images: { app: CATALOG_IMAGES.uptimeKuma } },
   ],
   defaultVersion: '2',
   parameters: z.object({ port: portParam(3001) }),

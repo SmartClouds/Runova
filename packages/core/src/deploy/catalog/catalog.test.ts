@@ -149,6 +149,18 @@ describe('the app catalog', () => {
     }
   });
 
+  it('writes each version label as a pattern over its images, so a newer release names itself', () => {
+    for (const template of CATALOG_TEMPLATES) {
+      for (const version of template.versions) {
+        const [main] = Object.keys(version.images);
+        expect(version.labelPattern, `${template.id} ${version.id}`).toContain(`{${main}}`);
+        for (const role of Object.keys(version.images)) {
+          expect(version.label, `${template.id} ${version.id} ${role}`).not.toContain(`{${role}}`);
+        }
+      }
+    }
+  });
+
   it('gives each app its own default host ports, so several can be installed side by side', () => {
     const owners = new Map<number, string>();
     for (const template of CATALOG_TEMPLATES) {

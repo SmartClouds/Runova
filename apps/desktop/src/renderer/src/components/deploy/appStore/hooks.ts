@@ -1,4 +1,5 @@
 import { type CatalogInstall, readCatalogInstall } from '@runova/core';
+import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import type {
   StackDetails,
   StackInfo,
@@ -30,6 +31,29 @@ function filesQuery(serverId: string, stackId: string, revision: number, enabled
     retry: false,
     // A revision's files never change; only a new revision brings new ones.
     staleTime: Number.POSITIVE_INFINITY,
+  };
+}
+
+/** The catalog as it shipped, when the registries have not been read. */
+const NO_RELEASES: DeployAppReleases = { data: null, checkedAtUnixMs: null, error: null };
+
+/**
+ * The newest releases of the catalog's images (the main process reads them from the registries
+ * and keeps them for hours). While they load, and when they cannot be read, the catalog is what
+ * it shipped with.
+ */
+export function useAppStoreReleases(): DeployAppReleases & { loading: boolean } {
+  const releases = useQuery({
+    queryKey: queryKeys.deployAppStoreReleases(),
+    queryFn: async () => (await window.runova.deployAppStore.releases()) ?? NO_RELEASES,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const reading = releases.data ?? NO_RELEASES;
+  return {
+    ...reading,
+    error: reading.error ?? (releases.error ? 'The image registries could not be reached.' : null),
+    loading: releases.isPending,
   };
 }
 

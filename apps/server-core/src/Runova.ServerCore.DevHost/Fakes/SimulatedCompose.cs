@@ -197,7 +197,22 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
             .ToList();
         var health = service["healthcheck"] is JsonObject check && check["disable"]?.GetValue<bool>() != true;
         var image = service["image"]?.GetValue<string>() ?? $"{project}-{name}";
-        return new ComposeContainerSpec(name, image, ports, environment, volumes, health);
+        var cpus = double.TryParse(service["cpus"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var cores) ? (long?)Math.Round(cores * 1e9) : null;
+        return new ComposeContainerSpec(name, image, ports, environment, volumes, health, cpus, Bytes(service["mem_limit"]?.ToString()));
+    }
+
+    /// <summary>A Compose size such as 512m or 2g, in bytes.</summary>
+    private static long? Bytes(string? size)
+    {
+        if (string.IsNullOrEmpty(size))
+        {
+            return null;
+        }
+
+        var unit = char.ToLowerInvariant(size[^1]);
+        var multiplier = unit switch { 'k' => 1024L, 'm' => 1024L * 1024, 'g' => 1024L * 1024 * 1024, _ => 1L };
+        var digits = char.IsAsciiDigit(unit) ? size : size[..^1];
+        return long.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value * multiplier : null;
     }
 
     /// <summary>The files merged as Compose merges them, interpolated and normalized.</summary>

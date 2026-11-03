@@ -6,7 +6,7 @@ import {
   type VoiceProfileView,
 } from '@runova/studio';
 import { screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeMicrophone } from '../../../../../test/renderer/fakeMicrophone';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { VoiceKeysFields } from '../settings/VoiceKeysFields';
@@ -104,6 +104,7 @@ function renderPanel(
     doc?: StudioDocument;
     voices?: { id: string; label: string; nonCommercial?: boolean; license?: string }[];
     profiles?: VoiceProfileView[];
+    sample?: () => Promise<Uint8Array>;
   } = {},
 ) {
   const apply = vi.fn(async () => true);
@@ -134,6 +135,7 @@ function renderPanel(
         'studioAudio.removeProfile': async () => undefined,
         'studioAudio.jobs': async () => options.jobs ?? [],
         'studioAudio.speak': async () => job(),
+        'studioAudio.sample': options.sample ?? (async () => new Uint8Array([82, 73, 70, 70])),
         'studioAudio.cancel': async () => undefined,
         'studioAudio.captionScene': async () => ({ seq: 9, document: doc, status: status() }),
         'studioAudio.record': async () => ({ seq: 9, document: doc, status: status() }),
@@ -179,6 +181,42 @@ const LOCAL: VoiceEngineView[] = [
 ];
 
 const row = (n: number) => screen.getByRole('listitem', { name: `Scene ${n}` });
+
+/** Scene s1 with a voice clip on the voice track, as a narration run or a recording leaves it. */
+function withVoice(): StudioDocument {
+  const doc = narrated();
+  doc.timeline.clips = [
+    {
+      id: 'nv-s1-abcd1234',
+      trackId: 'track-voice',
+      start: 0,
+      duration: 1000,
+      source: { type: 'media', hash: 'a'.repeat(64), in: 0, out: 1000 },
+      transitionIn: null,
+      gain: 1,
+      fadeIn: 0,
+      fadeOut: 0,
+    },
+  ];
+  return doc;
+}
+
+/** What the panel played, in order; jsdom has no sound, so play and pause only record. */
+const played: string[] = [];
+let pause: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  played.length = 0;
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (
+    this: HTMLMediaElement,
+  ) {
+    played.push(this.src);
+    return Promise.resolve();
+  });
+  pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('VoicePanel', () => {
   it('speaks every scene with narration in the picked voice, and says what it costs', async () => {
@@ -292,6 +330,58 @@ describe('VoicePanel', () => {
     );
     expect(adopt).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('Your recording is now the narration of scene 1.');
+  });
+
+  it("plays a scene's narration once it has a voice, and stops it", async () => {
+    const { user } = renderPanel({ doc: withVoice() });
+    const listen = await within(
+      await screen.findByRole('listitem', { name: 'Scene 1' }),
+    ).findByRole('button', { name: 'Listen to scene 1' });
+    expect(within(row(2)).getByRole('button', { name: 'Listen to scene 2' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    await user.click(listen);
+    expect(played).toEqual([`studio-media://m/v1/${'a'.repeat(64)}/original`]);
+    await user.click(within(row(1)).getByRole('button', { name: 'Stop scene 1' }));
+    expect(pause).toHaveBeenCalled();
+    expect(within(row(1)).getByRole('button', { name: 'Listen to scene 1' })).toBeTruthy();
+  });
+
+  it('speaks a short sample of the picked voice to hear before a run', async () => {
+    const { user, bridge } = renderPanel();
+    const hear = await screen.findByRole('button', { name: 'Hear this voice' });
+    await waitFor(() => expect(hear.hasAttribute('disabled')).toBe(false));
+    await user.click(hear);
+    await waitFor(() =>
+      expect(bridge.$fn('studioAudio.sample')).toHaveBeenCalledWith('v1', 'openai:marin'),
+    );
+    await waitFor(() => expect(played).toHaveLength(1));
+    expect(played[0]).toMatch(/^blob:/);
+    await user.click(screen.getByRole('button', { name: 'Stop sample' }));
+    expect(pause).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Hear this voice' })).toBeTruthy();
+  });
+
+  it('says why a sample could not be made, and offers none for an engine not set up', async () => {
+    const { user, unmount } = renderPanel({
+      sample: async () => {
+        throw new Error('OpenAI refused the key.');
+      },
+    });
+    const hear = await screen.findByRole('button', { name: 'Hear this voice' });
+    await waitFor(() => expect(hear.hasAttribute('disabled')).toBe(false));
+    await user.click(hear);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('OpenAI refused the key.'));
+    expect(played).toEqual([]);
+    unmount();
+
+    renderPanel({ engines: [ENGINES[2] as VoiceEngineView], doc: document() });
+    expect(await screen.findByText('Unlock the vault to use ElevenLabs.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hear this voice' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('asks for a scenario first when there are no scenes', async () => {

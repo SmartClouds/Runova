@@ -40,6 +40,8 @@ import {
 } from '../ssh/vault';
 import { store } from '../store';
 import { DownloadAbortedError, ResumableDownload } from '../updater/resumableDownload';
+import { CatalogReleaseSource } from './appStore/releases';
+import { RegistryClient } from './appStore/registry';
 import { DeployAppStore } from './appStore/service';
 import { approvalSigner } from './assistant/approvals';
 import { DeployAssistant } from './assistant/service';
@@ -302,8 +304,26 @@ export function registerDeployIpc(): void {
     stacks,
     guard,
   });
-  // The App Store (E12) installs and updates through the same stacks.
-  registerDeployAppStoreHandlers({ ipc: ipcMain, store: new DeployAppStore({ stacks }), guard });
+  // The App Store (E12) installs and updates through the same stacks, on the newest releases
+  // the registries list (read anonymously from here and cached for hours).
+  const releases = new CatalogReleaseSource({
+    // End-to-end runs stay off the internet, so the store shows the pins it shipped with there.
+    client: new RegistryClient(
+      process.env.RUNOVA_E2E === '1'
+        ? {
+            fetch: async () => {
+              throw new Error('End-to-end runs do not reach the image registries.');
+            },
+          }
+        : {},
+    ),
+    cacheFile: join(app.getPath('userData'), 'data', 'app-store-releases.json'),
+  });
+  registerDeployAppStoreHandlers({
+    ipc: ipcMain,
+    store: new DeployAppStore({ stacks, releases }),
+    guard,
+  });
 
   // The Websites section (E10, E11): its site logs end with the window that opened them.
   const siteLogs = new SiteLogSubscriptions({ links: service.links });

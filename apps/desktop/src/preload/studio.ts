@@ -183,6 +183,8 @@ export function createStudioAudio() {
       ipcRenderer.invoke(IPC.studioAudio.jobs, { videoId }),
     cancel: (videoId: string, jobId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.studioAudio.cancel, { videoId, jobId }),
+    sample: (videoId: string, voiceRef: string): Promise<Uint8Array> =>
+      ipcRenderer.invoke(IPC.studioAudio.sample, { videoId, voiceRef }),
     record: (input: {
       videoId: string;
       sceneId: string;

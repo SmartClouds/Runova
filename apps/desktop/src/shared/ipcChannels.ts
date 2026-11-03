@@ -865,6 +865,8 @@ export const IPC = {
     speak: 'studioAudio:speak',
     // ({ videoId }) -> NarrationJobView[]
     jobs: 'studioAudio:jobs',
+    // ({ videoId, voiceRef }) -> Uint8Array, a WAV of the voice saying the video's opening words
+    sample: 'studioAudio:sample',
     // ({ videoId, jobId }) -> void
     cancel: 'studioAudio:cancel',
     // ({ videoId, sceneId, bytes, mimeType }) -> EditResponse, a recording placed as narration
@@ -1321,6 +1323,8 @@ export const IPC = {
     /** Admins, after a step-up: the container's environment values. */
     revealEnv: 'deployDocker:revealEnv',
     act: 'deployDocker:act',
+    /** (DeployContainerLimitsInput) -> ContainerDetails: live CPU and memory caps (docker update). */
+    setLimits: 'deployDocker:setLimits',
     remove: 'deployDocker:remove',
     /** The last lines of a container's log, collected once. */
     logTail: 'deployDocker:logTail',
@@ -1377,6 +1381,8 @@ export const IPC = {
     delete: 'deployStacks:delete',
     /** (DeployMakePrivateInput) -> DeployRevisionResult: services moved to 127.0.0.1 (E13). */
     makePrivate: 'deployStacks:makePrivate',
+    /** (DeployStackLimitsInput) -> DeployRevisionResult: the live revision with new resource caps. */
+    setLimits: 'deployStacks:setLimits',
     /** main -> renderer: DeployStackUploadProgress while files go up. */
     onUploadProgress: 'deployStacks:onUploadProgress',
   },
@@ -1392,6 +1398,8 @@ export const IPC = {
     update: 'deployAppStore:update',
     /** (DeployAppRevealInput) -> the app's .env as a map of key to value. */
     revealSecrets: 'deployAppStore:revealSecrets',
+    /** ({ refresh? }) -> DeployAppReleases: the newest releases of the catalog's images. */
+    releases: 'deployAppStore:releases',
   },
   /**
    * Private registries (E08): sign-ins kept on this computer (GitHub packages token, the gh

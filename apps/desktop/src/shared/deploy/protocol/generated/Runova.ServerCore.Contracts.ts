@@ -1219,6 +1219,24 @@ export type DockerStatus = {
     cgroupVersion?: number;
     /** Transpiled from string? */
     message?: string;
+    /** Transpiled from int */
+    cpus?: number;
+    /** Transpiled from long */
+    memoryBytes?: number;
+    /** Transpiled from bool */
+    diskLimits: boolean;
+    /** Transpiled from string? */
+    diskLimitNote?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.ContainerLimitsRequest */
+export type ContainerLimitsRequest = {
+    /** Transpiled from string */
+    container: string;
+    /** Transpiled from double */
+    cpus?: number;
+    /** Transpiled from int */
+    memoryMb?: number;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.DockerInstallRequest */
@@ -2651,6 +2669,22 @@ export type StackRevisionInfo = {
     error?: string;
     /** Transpiled from Runova.ServerCore.Contracts.StackSource? */
     source?: StackSource;
+    /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
+    limits?: StackServiceLimits[];
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits */
+export type StackServiceLimits = {
+    /** Transpiled from string */
+    service: string;
+    /** Transpiled from int */
+    cpuCores?: number;
+    /** Transpiled from int */
+    cpuPercent?: number;
+    /** Transpiled from int */
+    memoryMb?: number;
+    /** Transpiled from int */
+    diskGb?: number;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackServiceInfo */
@@ -2737,10 +2771,12 @@ export type StackRevisionUpload = {
     buildContext: boolean;
     /** Transpiled from Runova.ServerCore.Contracts.StackSource? */
     source?: StackSource;
+    /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
+    limits?: StackServiceLimits[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackRevisionPurpose */
-export type StackRevisionPurpose = "edit" | "makePrivate" | "update";
+export type StackRevisionPurpose = "edit" | "makePrivate" | "update" | "limits";
 
 /** Transpiled from Runova.ServerCore.Contracts.ReviseStackRequest */
 export type ReviseStackRequest = {
@@ -2756,6 +2792,8 @@ export type ReviseStackRequest = {
     acknowledgedRisks?: string[];
     /** Transpiled from Runova.ServerCore.Contracts.StackRevisionPurpose */
     purpose: StackRevisionPurpose;
+    /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
+    limits?: StackServiceLimits[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackEnvEntry */

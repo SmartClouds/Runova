@@ -1,3 +1,4 @@
+import { describeLimits, type ServiceLimits } from '@runova/core';
 import { coreErrorMessage } from '@shared/coreErrors';
 import type {
   JobInfo,
@@ -5,6 +6,7 @@ import type {
   StackDetails,
   StackRevisionInfo,
   StackServiceInfo,
+  StackServiceLimits,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -15,6 +17,7 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  Cpu,
   Docker,
   FileCode,
   FileText,
@@ -57,6 +60,8 @@ import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
 import { useDeployAssistantStore } from '@/stores/deployAssistantStore';
 import { useFinishedOnce, useFollowedJob } from '@/stores/deployFollowedJobStore';
+import { EditLimitsDialog } from '../limits/EditLimitsDialog';
+import { useLimitsHost } from '../limits/useLimitsHost';
 import { JobLogDialog } from '../overview/JobLogDialog';
 import { RegistryPlanCard } from '../registries/RegistryPlanCard';
 import { dateTime } from '../security/format';
@@ -150,21 +155,33 @@ function Gate({
   );
 }
 
+const LIMITS_OUTDATED = "Update this server's core to set resource limits.";
+
+/** What the Edit limits buttons may do, and why not when they may not. */
+interface LimitsControl {
+  limits: readonly StackServiceLimits[];
+  allowed: boolean;
+  reason: string;
+  onEdit: (service: string) => void;
+}
+
 function ServicesCard({
   services,
   canAdmin,
   onTools,
+  limits,
 }: {
   services: StackServiceInfo[];
   canAdmin: boolean;
   onTools: (request: StackToolsRequest) => void;
+  limits: LimitsControl;
 }): React.JSX.Element {
   return (
     <section className={cn(GLASS_CARD, 'space-y-3 p-4')}>
       <div className="space-y-1">
         <TileHeader icon={<Docker />} title="Services" />
         <p className="text-xs text-muted-foreground">
-          Each service and the containers it runs right now.
+          Each service, the containers it runs right now and how much of the server it may use.
         </p>
       </div>
       {services.length === 0 ? (
@@ -182,6 +199,22 @@ function ServicesCard({
                     {service.image}
                   </span>
                 )}
+                <span className="flex-1" aria-hidden />
+                <LimitsChip
+                  limit={limits.limits.find((limit) => limit.service === service.name)}
+                  service={service.name}
+                />
+                <Gate allowed={limits.allowed} reason={limits.reason}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Edit limits of ${service.name}`}
+                    disabled={!limits.allowed}
+                    onClick={() => limits.onEdit(service.name)}
+                  >
+                    <Cpu />
+                  </Button>
+                </Gate>
               </div>
               {service.ports.length > 0 && (
                 <p className="mt-1 flex flex-wrap gap-x-3 font-mono text-[11px] text-muted-foreground">
@@ -252,6 +285,22 @@ function ServicesCard({
         </ul>
       )}
     </section>
+  );
+}
+
+/** The service's caps in a line, muted when it has none. */
+function LimitsChip({
+  limit,
+  service,
+}: {
+  limit: StackServiceLimits | undefined;
+  service: string;
+}): React.JSX.Element {
+  const text = describeLimits(limit ?? { service });
+  return (
+    <Chip tone={limit ? 'primary' : 'neutral'}>
+      <span className="font-mono text-[11px]">{text}</span>
+    </Chip>
   );
 }
 
@@ -609,6 +658,10 @@ export function AppDetail({
   const [working, setWorking] = useState<string | null>(null);
   const [tools, setTools] = useState<StackToolsRequest | null>(null);
   const [editing, setEditing] = useState(false);
+  const [limitsFocus, setLimitsFocus] = useState<string | null>(null);
+  const [limitsSaving, setLimitsSaving] = useState(false);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
+  const limitsHost = useLimitsHost(serverId, access.signedIn);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.deployApps(serverId) });
@@ -676,6 +729,31 @@ export function AppDetail({
       return null;
     } finally {
       setWorking(null);
+    }
+  }
+
+  async function saveLimits(limits: ServiceLimits[]): Promise<void> {
+    setLimitsSaving(true);
+    setLimitsError(null);
+    try {
+      const result = await window.runova.deployStacks.setLimits({ serverId, stackId, limits });
+      setLimitsFocus(null);
+      refresh();
+      if (result.job) {
+        setBusyJob(result.job.id);
+        setFollowJob(result.job.id);
+        setShownRevision(null);
+        toast.success(`Applying the new limits in revision ${result.revision.number}.`);
+      } else {
+        toast.error(
+          result.revision.error ??
+            `Revision ${result.revision.number} has the new limits but needs a look before it deploys.`,
+        );
+      }
+    } catch (error) {
+      setLimitsError(coreErrorMessage(error));
+    } finally {
+      setLimitsSaving(false);
     }
   }
 
@@ -760,6 +838,23 @@ export function AppDetail({
       ? 'A job is working on this app. Wait for it to finish.'
       : '';
   const containers = stackContainers(data.services);
+  const liveRevision =
+    revisions.find((revision) => revision.number === stack.liveRevision) ?? revisions[0];
+  const limitsAllowed =
+    access.canOperate &&
+    !stackBusy &&
+    working === null &&
+    limitsHost.host !== null &&
+    !!liveRevision;
+  const limitsReason = !access.canOperate
+    ? OPERATOR_ONLY
+    : limitsHost.outdated
+      ? LIMITS_OUTDATED
+      : stackBusy
+        ? 'A job is working on this app. Wait for it to finish.'
+        : !liveRevision
+          ? NO_CONTAINERS
+          : '';
   const rollbackTarget =
     shown && shown.number !== latest && (shown.state === 'superseded' || shown.state === 'live')
       ? shown
@@ -811,6 +906,21 @@ export function AppDetail({
               </Gate>
             )}
           </div>
+        )}
+        {limitsHost.host && liveRevision && (
+          <EditLimitsDialog
+            open={limitsFocus !== null}
+            onOpenChange={(open) => {
+              if (!open && !limitsSaving) setLimitsFocus(null);
+            }}
+            services={liveRevision.services}
+            initial={liveRevision.limits ?? []}
+            host={limitsHost.host}
+            focus={limitsFocus ?? undefined}
+            busy={limitsSaving}
+            error={limitsError}
+            onSave={(limits) => void saveLimits(limits)}
+          />
         )}
         {editing && onEditSource && (
           <EditSourceDialog
@@ -923,7 +1033,20 @@ export function AppDetail({
         />
       )}
       <div className="grid gap-2 xl:grid-cols-2">
-        <ServicesCard services={data.services} canAdmin={access.canAdmin} onTools={setTools} />
+        <ServicesCard
+          services={data.services}
+          canAdmin={access.canAdmin}
+          onTools={setTools}
+          limits={{
+            limits: liveRevision?.limits ?? [],
+            allowed: limitsAllowed,
+            reason: limitsReason,
+            onEdit: (service) => {
+              setLimitsError(null);
+              setLimitsFocus(service);
+            },
+          }}
+        />
         <RevisionsList
           revisions={revisions}
           shown={shown?.number ?? null}

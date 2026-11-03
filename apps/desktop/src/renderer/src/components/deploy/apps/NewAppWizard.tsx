@@ -14,6 +14,8 @@ import { FOOTER_HAIRLINE, GLASS_CARD, SECTION_HEADING } from '@/components/pageK
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { folderName, needsAcknowledgment, suggestAppName } from '@/lib/deploy/apps/format';
+import { findPortConflicts } from '@/lib/deploy/apps/portConflicts';
+import { allContainers } from '@/lib/deploy/containers/list';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { rememberedEnvFiles } from '@/stores/deployAppEnvFilesStore';
@@ -30,7 +32,7 @@ import { RegistryPlanCard } from '../registries/RegistryPlanCard';
 import { DeployTimeline } from './DeployTimeline';
 import { type AppsAccess, useStack, useStacks } from './hooks';
 import { ConfigureStep } from './wizard/ConfigureStep';
-import { ExposeStep } from './wizard/ExposeStep';
+import { ExposeStep, PortConflicts } from './wizard/ExposeStep';
 import { RiskList } from './wizard/RiskList';
 import { SourceStep } from './wizard/SourceStep';
 import { WIZARD_STEPS, type WizardSource, type WizardStep } from './wizard/types';
@@ -231,6 +233,20 @@ export function NewAppWizard({
   });
   const data = preview.data;
 
+  // What already runs on the server, so a port another container holds is caught before Docker
+  // refuses it mid-deploy. Without Docker or the list, there is simply no warning.
+  const containers = useQuery({
+    queryKey: queryKeys.deployContainers(serverId),
+    queryFn: () => window.runova.deployDocker.listContainers(serverId),
+    enabled: access.signedIn && (step === 'expose' || step === 'review'),
+    retry: false,
+  });
+  const conflicts = useMemo(
+    () =>
+      data ? findPortConflicts(data.bindings, allContainers(containers.data), source.name) : [],
+    [data, containers.data, source.name],
+  );
+
   // The first preview decides which services stay private; later ones follow the switches.
   useEffect(() => {
     if (data && proxied === undefined) update(() => ({ proxied: data.proxiedServices }));
@@ -357,6 +373,7 @@ export function NewAppWizard({
         preview={data}
         proxied={proxied ?? data.proxiedServices}
         updating={preview.isFetching}
+        conflicts={conflicts}
         onToggle={(service, keepPrivate) =>
           update((current) => {
             const list = current.proxied ?? data.proxiedServices;
@@ -397,6 +414,7 @@ export function NewAppWizard({
             })
           }
         />
+        {conflicts.length > 0 && <PortConflicts conflicts={conflicts} />}
         {left > 0 && (
           <p role="status" className="text-xs text-warning">
             {left === 1

@@ -42,6 +42,7 @@ export * from './deploy/dockerignore.js';
 export * from './deploy/env/composeEnv.js';
 export * from './deploy/files/index.js';
 export * from './deploy/ignoreRules.js';
+export * from './deploy/limits/limits.js';
 export * from './deploy/prompts.js';
 export * from './deploy/validation.js';
 export * from './deploy/wordpress/bundle.js';

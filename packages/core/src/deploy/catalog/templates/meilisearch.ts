@@ -10,7 +10,7 @@ export const meilisearch = defineCatalogTemplate({
   category: 'search',
   homepage: 'https://www.meilisearch.com',
   versions: [
-    { id: '1.54', label: 'Meilisearch 1.54', images: { app: CATALOG_IMAGES.meilisearch } },
+    { id: '1.54', label: 'Meilisearch {app}', images: { app: CATALOG_IMAGES.meilisearch } },
   ],
   defaultVersion: '1.54',
   parameters: z.object({ port: portParam(7700) }),

@@ -18,6 +18,7 @@ import type {
 import type { ICoreHub } from '../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import type {
   DeployContainerActionInput,
+  DeployContainerLimitsInput,
   DeployContainerRemoveInput,
   DeployDockerInstallInput,
   DeployDockerPruneInput,
@@ -91,6 +92,17 @@ export class DeployDocker {
       },
       // An Operator would pass a step-up and still be refused: only Admins are asked for one.
       { stepUpFor: ADMIN_ROLES },
+    );
+  }
+
+  /** Live CPU and memory caps on a container that no app owns; the core refuses one an app owns. */
+  setLimits(input: DeployContainerLimitsInput): Promise<ContainerDetails> {
+    return this.run(input.serverId, (hub) =>
+      hub.updateContainerLimits({
+        container: input.containerId,
+        ...(input.cpus === null ? {} : { cpus: input.cpus }),
+        ...(input.memoryMb === null ? {} : { memoryMb: input.memoryMb }),
+      }),
     );
   }
 

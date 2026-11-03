@@ -422,6 +422,52 @@ describe('NewAppWizard configure and expose', () => {
     await user.click(screen.getByRole('button', { name: /Next/ }));
     expect(await screen.findByText(/No service publishes a port/)).toBeInTheDocument();
   });
+
+  it('warns when another container already holds a port the app publishes', async () => {
+    const holder = {
+      id: 'c9',
+      name: 'blog-web-1',
+      image: 'nginx:1.29',
+      imageId: 'sha256:9',
+      state: 'running',
+      status: 'Up 2 hours',
+      health: 'none',
+      createdAtUnixMs: 0,
+      ports: [{ privatePort: 80, protocol: 'tcp', hostIp: '0.0.0.0', hostPort: 8080 }],
+      composeProject: 'blog',
+      composeService: 'web',
+    };
+    const own = { ...holder, id: 'c1', name: 'shop-web-1', composeProject: 'shop' };
+    const { user } = renderWizard({
+      'deployDocker.listContainers': {
+        groups: [{ project: 'blog', containers: [holder, own] }],
+      },
+    });
+    await pickSource(user);
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('list', { name: 'Services to deploy' });
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    const warning = await screen.findByRole('alert', { name: 'Ports already in use' });
+    expect(warning).toHaveTextContent('8080/tcp for web is held by blog-web-1 (app blog).');
+    expect(warning).not.toHaveTextContent('shop-web-1');
+    const ports = within(screen.getByRole('listitem', { name: 'web' })).getByRole('table', {
+      name: 'Ports of web',
+    });
+    expect(ports).toHaveTextContent('In use by blog-web-1 (app blog)');
+    // Still a warning, so the review repeats it rather than the wizard stopping here.
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    expect(await screen.findByRole('alert', { name: 'Ports already in use' })).toBeInTheDocument();
+  });
+
+  it('says nothing about ports when no other container holds them', async () => {
+    const { user } = renderWizard();
+    await pickSource(user);
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('list', { name: 'Services to deploy' });
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('list', { name: 'Exposure' });
+    expect(screen.queryByRole('alert', { name: 'Ports already in use' })).not.toBeInTheDocument();
+  });
 });
 
 describe('NewAppWizard review and deploy', () => {

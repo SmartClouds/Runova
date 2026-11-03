@@ -1,6 +1,13 @@
 import { findCatalogTemplate } from '@runova/core';
 import { describe, expect, it } from 'vitest';
-import { checkDraft, initialDraft, paramsFromDraft, regenerate, secretsInUse } from './draft';
+import {
+  checkDraft,
+  initialDraft,
+  paramsFromDraft,
+  regenerate,
+  secretsInUse,
+  withVersion,
+} from './draft';
 
 const redis = findCatalogTemplate('redis');
 const ollama = findCatalogTemplate('ollama');
@@ -12,9 +19,17 @@ describe('the install draft', () => {
     const draft = initialDraft(redis, ['redis']);
     expect(draft.name).toBe('redis-2');
     expect(draft.version).toBe(redis.defaultVersion);
+    // The newest release of the line unless another one is picked.
+    expect(draft.release).toBe('latest');
     expect(draft.values.port).toBe('6379');
     expect(draft.secrets.REDIS_PASSWORD).toHaveLength(32);
     expect(initialDraft(redis, []).secrets.REDIS_PASSWORD).not.toBe(draft.secrets.REDIS_PASSWORD);
+  });
+
+  it('goes back to the newest release when the line changes', () => {
+    const draft = { ...initialDraft(redis, []), release: '8.10.1' };
+    expect(withVersion(draft, '8.10').release).toBe('latest');
+    expect(withVersion(draft, '8.10').version).toBe('8.10');
   });
 
   it('turns typed numbers into numbers and leaves blanks out', () => {

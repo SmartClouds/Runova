@@ -37,7 +37,7 @@ export const kafka = defineCatalogTemplate({
   versions: [
     {
       id: '4.3',
-      label: 'Kafka 4.3 (KRaft, single node)',
+      label: 'Kafka {app} (KRaft, single node)',
       images: { app: CATALOG_IMAGES.kafka43 },
     },
   ],

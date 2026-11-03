@@ -8,7 +8,8 @@ namespace Runova.ServerCore.Contracts;
 
 /// <summary>
 /// The engine as the core finds it. Packages that conflict with Docker's own (podman, runc, the
-/// distribution's docker.io) are listed so the app can ask before an install removes them.
+/// distribution's docker.io) are listed so the app can ask before an install removes them. Cpus,
+/// MemoryBytes and DiskLimits bound the resource caps an app's services can get.
 /// </summary>
 [TranspilationSource]
 public sealed record DockerStatus(
@@ -21,7 +22,19 @@ public sealed record DockerStatus(
     string? ComposeVersion = null,
     string? StorageDriver = null,
     int? CgroupVersion = null,
-    string? Message = null);
+    string? Message = null,
+    int? Cpus = null,
+    long? MemoryBytes = null,
+    bool DiskLimits = false,
+    string? DiskLimitNote = null);
+
+/// <summary>
+/// Live caps on a running container outside any app (docker update), without a restart. A null
+/// field is lifted to the whole server, since Docker cannot drop a cap once it is set. Whatever
+/// recreates the container next drops these; an app's services take caps in its revisions instead.
+/// </summary>
+[TranspilationSource]
+public sealed record ContainerLimitsRequest(string Container, double? Cpus = null, int? MemoryMb = null);
 
 /// <summary>Removing conflicting packages only happens when this says so; the app asks first.</summary>
 [TranspilationSource]

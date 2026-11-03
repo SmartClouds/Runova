@@ -144,6 +144,61 @@ internal sealed partial class CoreHub
     }
 
     [Authorize(Policy = CorePolicies.Operator)]
+    public async Task<ContainerDetails> UpdateContainerLimits(ContainerLimitsRequest request)
+    {
+        const string action = "container.limits";
+        var parameters = new Dictionary<string, string?>
+        {
+            ["cpus"] = request?.Cpus?.ToString("0.##", CultureInfo.InvariantCulture) ?? "server",
+            ["memoryMb"] = request?.MemoryMb?.ToString(CultureInfo.InvariantCulture) ?? "server",
+        };
+        var problem = await LimitsProblemAsync(request);
+        if (problem is not null)
+        {
+            await AuditAsync(action, AuditResult.Denied, Clip(request?.Container), parameters);
+            throw new HubException(problem);
+        }
+
+        await DockerChangeAsync(action, request!.Container, parameters, () => docker.UpdateLimitsAsync(request.Container, request.Cpus, request.MemoryMb, Context.ConnectionAborted));
+        return await DockerCallAsync(() => docker.InspectAsync(request.Container, Context.ConnectionAborted));
+    }
+
+    /// <summary>Why live caps are refused, or null: the shape, the server's own size, and a container an app owns.</summary>
+    private async Task<string?> LimitsProblemAsync(ContainerLimitsRequest? request)
+    {
+        if (request is null || !DockerNames.IsContainer(request.Container))
+        {
+            return "That is not a container id or name.";
+        }
+
+        if (request.Cpus is { } cpus && (double.IsNaN(cpus) || cpus < 0.01))
+        {
+            return "The CPU cap has to be at least 0.01 of a core.";
+        }
+
+        if (request.MemoryMb is { } memory && memory < Stacks.ResourceLimits.MinMemoryMb)
+        {
+            return $"The memory cap has to be {Stacks.ResourceLimits.MinMemoryMb} MB or more.";
+        }
+
+        var info = await DockerCallAsync(() => docker.InfoAsync(Context.ConnectionAborted));
+        if (request.Cpus is { } wanted && info.Cpus is { } available && wanted > available)
+        {
+            return $"The server has {available} {(available == 1 ? "core" : "cores")}, so the container cannot get {wanted.ToString("0.##", CultureInfo.InvariantCulture)}.";
+        }
+
+        if (request.MemoryMb is { } asked && info.MemoryBytes is { } total && asked * 1024L * 1024 > total)
+        {
+            return $"The server has {total / (1024 * 1024)} MB of memory, so the container cannot get {asked} MB.";
+        }
+
+        var summary = await DockerCallAsync(() => docker.SummaryAsync(request.Container, Context.ConnectionAborted));
+        return summary.ComposeProject is { } project && await stacks.IsAppAsync(project, Context.ConnectionAborted)
+            ? $"This container belongs to the app {project}. Change its caps on the app's page, so they hold when the app is redeployed."
+            : null;
+    }
+
+    [Authorize(Policy = CorePolicies.Operator)]
     public async Task RemoveContainer(ContainerRemoveRequest request)
     {
         var parameters = new Dictionary<string, string?>

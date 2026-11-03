@@ -13,7 +13,7 @@ export const ollama = defineCatalogTemplate({
   versions: [
     {
       id: '0.35',
-      label: 'Ollama 0.35 with Open WebUI 0.11',
+      label: 'Ollama {ollama} with Open WebUI {webui}',
       images: { ollama: CATALOG_IMAGES.ollama, webui: CATALOG_IMAGES.openWebUi },
     },
   ],

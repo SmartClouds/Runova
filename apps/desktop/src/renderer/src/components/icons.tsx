@@ -166,6 +166,7 @@ import {
   faUsers,
   faVault,
   faVideo,
+  faVolumeHigh,
   faWandMagic,
   faWandMagicSparkles,
   faWifi,
@@ -362,6 +363,7 @@ export const Tablet = makeIcon(faTabletScreenButton);
 export const RotateCw = makeIcon(faRotate);
 export const Camera = makeIcon(faCamera);
 export const Video = makeIcon(faVideo);
+export const VolumeHigh = makeIcon(faVolumeHigh);
 export const Clapperboard = makeIcon(faClapperboard);
 export const Redo = makeIcon(faRotateRight);
 

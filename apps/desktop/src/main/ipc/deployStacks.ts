@@ -9,6 +9,7 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import type { DeployStacks } from '../deploy/stacks/service';
 import { type DeployIpcRegistry, object, serverId } from './deploy';
+import { limitsInput } from './limits';
 
 /**
  * The Apps' invoke channels (E07). Like the rest of Deploy they answer only the main window and
@@ -199,5 +200,10 @@ export function registerDeployStacksHandlers(deps: DeployStacksHandlerDeps): voi
     const services = serviceNames(object(value, 'the services to make private').services);
     if (services.length === 0) throw new Error('Name a service to make private.');
     return stacks.makePrivate({ ...input, services });
+  });
+  handle(IPC.deployStacks.setLimits, (value) => {
+    const input = ref(value);
+    const limits = limitsInput(object(value, 'the resource caps').limits);
+    return stacks.setLimits({ ...input, limits });
   });
 }

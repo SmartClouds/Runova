@@ -60,9 +60,14 @@ internal sealed partial class DockerEngine(Uri endpoint, ILogger<DockerEngine> l
             async client =>
             {
                 var info = await client.System.GetSystemInfoAsync(cancellationToken);
+                var backing = info.DriverStatus?
+                    .FirstOrDefault(pair => pair is { Length: 2 } && pair[0] == "Backing Filesystem")?[1];
                 return new EngineInfo(
                     string.IsNullOrEmpty(info.Driver) ? null : info.Driver,
-                    int.TryParse(info.CgroupVersion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgroup) ? cgroup : null);
+                    int.TryParse(info.CgroupVersion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgroup) ? cgroup : null,
+                    info.NCPU > 0 ? (int)info.NCPU : null,
+                    info.MemTotal > 0 ? info.MemTotal : null,
+                    string.IsNullOrEmpty(backing) ? null : backing);
             },
             cancellationToken);
 
@@ -92,6 +97,14 @@ internal sealed partial class DockerEngine(Uri endpoint, ILogger<DockerEngine> l
                 var summary = listed.FirstOrDefault(c => c.ID == inspected.ID) is { } entry ? DockerMapping.Container(entry).Summary : null;
                 return DockerMapping.Inspection(inspected, summary);
             },
+            cancellationToken);
+
+    public Task UpdateContainerLimitsAsync(string container, long nanoCpus, long memoryBytes, CancellationToken cancellationToken) =>
+        CallAsync(
+            client => client.Containers.UpdateContainerAsync(
+                container,
+                new ContainerUpdateParameters { NanoCPUs = nanoCpus, Memory = memoryBytes, MemorySwap = memoryBytes },
+                cancellationToken),
             cancellationToken);
 
     public Task StartContainerAsync(string container, CancellationToken cancellationToken) =>

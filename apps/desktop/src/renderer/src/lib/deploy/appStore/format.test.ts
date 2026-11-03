@@ -1,4 +1,9 @@
-import { CATALOG_TEMPLATES, checkCatalogUpdate, findCatalogTemplate } from '@runova/core';
+import {
+  CATALOG_TEMPLATES,
+  checkCatalogUpdate,
+  findCatalogTemplate,
+  withLatest,
+} from '@runova/core';
 import { describe, expect, it } from 'vitest';
 import {
   allOfficial,
@@ -67,5 +72,24 @@ describe('updateOffers', () => {
       text: `Newer images for ${v17.label}: 17.0 to ${image.tag}.`,
     });
     expect(offers[1]).toMatchObject({ kind: 'line', text: `${v18.label} is available.` });
+  });
+
+  it('names the newer release of the same line the registries list', () => {
+    const latest = withLatest(postgres, {
+      checkedAt: '2026-11-03',
+      repositories: {
+        'docker.io/library/postgres': [{ tag: '18.9', digest: `sha256:${'9'.repeat(64)}` }],
+      },
+    });
+    const check = checkCatalogUpdate(latest, {
+      version: v18.id,
+      images: { db: { tag: v18.images.db.tag, digest: v18.images.db.digest } },
+    });
+    const [offer] = updateOffers(check, v18.label, latest.versions[0].label);
+    expect(offer).toMatchObject({
+      kind: 'digest',
+      target: 'PostgreSQL 18.9',
+      text: `PostgreSQL 18.9 is available: ${v18.images.db.tag} to 18.9.`,
+    });
   });
 });

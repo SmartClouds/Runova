@@ -30,7 +30,7 @@ import {
   StackToolsSheet,
   stackContainers,
 } from '../stackTools/StackToolsSheet';
-import { useInstalledApp } from './hooks';
+import { useAppStoreReleases, useInstalledApp } from './hooks';
 import { PostInstallCard } from './PostInstallCard';
 
 /**
@@ -77,6 +77,7 @@ export function InstalledAppView({
   const [tools, setTools] = useState<StackToolsRequest | null>(null);
   const stepUp = useProofStepUp(server);
   const app = useInstalledApp(serverId, stackId, access.signedIn, following);
+  const releases = useAppStoreReleases();
   const details = app.details;
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.deployApps(serverId) });
 
@@ -152,7 +153,10 @@ export function InstalledAppView({
       confirmLabel: offer.kind === 'digest' ? 'Update' : 'Move',
     });
     if (!ok) return;
-    await started(() => window.runova.deployAppStore.update({ serverId, stackId, version }));
+    // The newest release of the line, as the main process read it from the registries.
+    await started(() =>
+      window.runova.deployAppStore.update({ serverId, stackId, version, release: 'latest' }),
+    );
   }
 
   async function rollback(): Promise<void> {
@@ -243,6 +247,7 @@ export function InstalledAppView({
           revealing={revealing}
           busy={busy}
           rollbackTo={earlier && live !== undefined ? earlier.number : null}
+          releases={releases.data}
           onReveal={() => void reveal()}
           onUpdate={(offer) => void update(offer)}
           onRollback={() => void rollback()}

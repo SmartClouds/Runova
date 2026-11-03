@@ -259,6 +259,8 @@ export interface StudioService {
     voiceRef: string;
   }): Promise<NarrationJobView>;
   narrationJobs(input: { videoId: string }): Promise<NarrationJobView[]>;
+  /** A few seconds of a voice saying the video's opening words, as a WAV, to hear before a run. */
+  sampleVoice(input: { videoId: string; voiceRef: string }): Promise<Uint8Array>;
   cancelNarration(input: { videoId: string; jobId: string }): Promise<void>;
   /** Puts a recording made in the app on a scene as its narration. */
   recordNarration(input: {
@@ -1287,6 +1289,11 @@ export function createStudioService(host: StudioHost): StudioService {
     async speak(input) {
       session(input.videoId);
       return narrator.speak(input);
+    },
+
+    async sampleVoice(input) {
+      session(input.videoId);
+      return narrator.sample(input);
     },
 
     async narrationJobs({ videoId }) {
