@@ -248,9 +248,13 @@ function GroupHeading({ label, count }: { label: string; count?: number }): Reac
   );
 }
 
-/** A quiet row for the places this rail hands off to: Remote, Cloudflare and reCAPTCHA. */
+/**
+ * A quiet row for the places this rail hands off to: Remote, Cloudflare and reCAPTCHA. It stays
+ * on one line, since the bold selected label is a little wider and a wrapped one spills out of
+ * the fixed-height row, so a label that does not fit truncates instead.
+ */
 const LINK_ROW =
-  'flex h-8 items-center gap-2 rounded-lg px-3 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0';
+  'flex h-8 min-w-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0';
 
 /** The WordPress sites group under the servers, with its own loading and failure states. */
 function SiteGroup({
@@ -517,11 +521,11 @@ export function ServerRail({
         <div className="flex flex-col gap-px">
           {onChooseServers && (
             <button type="button" onClick={onChooseServers} className={cn(LINK_ROW, 'w-full')}>
-              <Sliders /> Choose servers to show
+              <Sliders /> <span className="truncate">Choose servers to show</span>
             </button>
           )}
           <Link to="/remote" className={LINK_ROW}>
-            <ExternalLink /> Add or edit servers in Remote
+            <ExternalLink /> <span className="truncate">Add or edit servers in Remote</span>
           </Link>
           <button
             type="button"
@@ -536,7 +540,7 @@ export function ServerRail({
             )}
           >
             {cloudflareSelected && <ActivePill />}
-            <CloudflareMark /> Cloudflare: domains and DNS
+            <CloudflareMark /> <span className="truncate">Cloudflare: domains and DNS</span>
           </button>
           {onOpenRecaptcha && (
             <button
@@ -551,7 +555,7 @@ export function ServerRail({
               )}
             >
               {recaptchaSelected && <ActivePill />}
-              <RecaptchaMark /> reCAPTCHA: keys for your sites
+              <RecaptchaMark /> <span className="truncate">reCAPTCHA: keys for your sites</span>
             </button>
           )}
           {onOpenDatabases && (
@@ -567,7 +571,7 @@ export function ServerRail({
               )}
             >
               {databasesSelected && <ActivePill />}
-              <Database /> Databases on this computer
+              <Database /> <span className="truncate">Databases on this computer</span>
             </button>
           )}
         </div>
