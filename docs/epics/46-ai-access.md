@@ -84,7 +84,7 @@ reaches Runova through Runova's own MCP server. The person decides:
 |---|---|---|
 | E46.1 | Engine: settings, policy, approvals, registry, server, bridge, identity, launch flags, IPC | Done |
 | E46.2 | Approval dialog, Settings > AI access, live refresh, attention, help article | Done |
-| E46.3 | Projects and environments tools | Planned |
+| E46.3 | Projects and environments tools (`projects_list`, `projects_get`, `project_update_notes`, `env_list`, `env_create`, `env_read_file`, `env_save_file`, `env_import_file`, `env_remove_file`, `env_history`, `env_restore_version`, `env_write_to_folder`); the environments logic moved into `environments/service.ts` | Done |
 | E46.4 | API Client tools | Planned |
 | E46.5 | Git and worktrees tools | Planned |
 | E46.6 | Docker, scheduled tasks, health, databases | Planned |

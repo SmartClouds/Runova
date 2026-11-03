@@ -152,6 +152,38 @@ export async function setProjectWordPressLink(
   });
 }
 
+/**
+ * Applies the changes the project page (or AI access) asks for. The WordPress link is left alone;
+ * only the deployWordPress channels change it.
+ */
+export function updateProjectRecord(
+  projectId: string,
+  changes: Partial<CreateProjectInput>,
+): Promise<Project> {
+  const { wordpress: _wordpress, ...updates } = changes;
+  return mutateProject(projectId, (current) => ({
+    ...current,
+    ...updates,
+    runCommands: updates.runCommands
+      ? normalizeProjectRunCommands({ runCommands: updates.runCommands })
+      : current.runCommands,
+    // An update that says nothing about the colours leaves them alone; one
+    // that does gets the same hex-only treatment a fresh project gets.
+    iconBgColor:
+      updates.iconBgColor === undefined
+        ? current.iconBgColor
+        : normalizeProjectColor(updates.iconBgColor),
+    iconColor:
+      updates.iconColor === undefined
+        ? current.iconColor
+        : normalizeProjectColor(updates.iconColor),
+    worktreeSetup:
+      updates.worktreeSetup === undefined
+        ? current.worktreeSetup
+        : normalizeProjectWorktreeSetup(updates.worktreeSetup),
+  }));
+}
+
 export function registerProjectHandlers(): void {
   ipcMain.handle(IPC.projects.list, (): Promise<Project[]> => store.getProjects());
 
@@ -166,31 +198,8 @@ export function registerProjectHandlers(): void {
 
   ipcMain.handle(
     IPC.projects.update,
-    async (_event, projectId: string, changes: Partial<CreateProjectInput>): Promise<Project> => {
-      // The WordPress link is left alone here; only the deployWordPress channels change it.
-      const { wordpress: _wordpress, ...updates } = changes;
-      return mutateProject(projectId, (current) => ({
-        ...current,
-        ...updates,
-        runCommands: updates.runCommands
-          ? normalizeProjectRunCommands({ runCommands: updates.runCommands })
-          : current.runCommands,
-        // An update that says nothing about the colours leaves them alone; one
-        // that does gets the same hex-only treatment a fresh project gets.
-        iconBgColor:
-          updates.iconBgColor === undefined
-            ? current.iconBgColor
-            : normalizeProjectColor(updates.iconBgColor),
-        iconColor:
-          updates.iconColor === undefined
-            ? current.iconColor
-            : normalizeProjectColor(updates.iconColor),
-        worktreeSetup:
-          updates.worktreeSetup === undefined
-            ? current.worktreeSetup
-            : normalizeProjectWorktreeSetup(updates.worktreeSetup),
-      }));
-    },
+    (_event, projectId: string, changes: Partial<CreateProjectInput>): Promise<Project> =>
+      updateProjectRecord(projectId, changes),
   );
 
   ipcMain.handle(
