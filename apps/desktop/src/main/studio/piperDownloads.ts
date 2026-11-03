@@ -1,6 +1,4 @@
 import { type PiperDownloadState, type PiperLibraryView, piperLibraryView } from '@runova/studio';
-import type { StudioToolsInstaller } from '../devSetup/runners/studioTools';
-import type { CancelToken } from '../process/spawnStreaming';
 
 /**
  * Downloads for Studio's Piper voice library (E37), in the main process so they carry on while the
@@ -9,8 +7,31 @@ import type { CancelToken } from '../process/spawnStreaming';
  * few times a second at most while bytes arrive.
  */
 
+/** How a download is stopped. Dev Setup's token, which carries no child process for a download. */
+interface DownloadToken {
+  cancelled: boolean;
+  child: null;
+}
+
+/**
+ * The part of Dev Setup's Studio tools installer the library uses. It is written out here rather
+ * than imported, since main/studio reaches the app only through host.ts (studioBoundary.test.ts).
+ */
+export interface PiperVoiceInstaller {
+  fetchPiperVoice: (
+    id: string,
+    hooks: {
+      token: DownloadToken;
+      onCancel: (abort: () => void) => void;
+      onProgress: (update: { phase?: string; fraction?: number | null }) => void;
+      onLine: (line: string) => void;
+    },
+  ) => Promise<{ ok: boolean; cancelled: boolean; message?: string }>;
+  removePiperVoice: (id: string) => Promise<void>;
+}
+
 export interface PiperDownloadsDeps {
-  installer: () => Pick<StudioToolsInstaller, 'fetchPiperVoice' | 'removePiperVoice'>;
+  installer: () => PiperVoiceInstaller;
   /** Piper and the voices on disk, as Studio sees them. */
   installed: () => Promise<{ engine: boolean; voices: readonly string[] }>;
   /** Tells the windows the library changed. */
@@ -21,7 +42,7 @@ export interface PiperDownloadsDeps {
 }
 
 interface Running extends PiperDownloadState {
-  token: CancelToken;
+  token: DownloadToken;
   abort: (() => void) | null;
   done: Promise<void>;
 }
