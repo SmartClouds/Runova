@@ -380,6 +380,8 @@ export class FileTransferManager {
   }
 
   private async handlePartData(state: DownloadState, chunk: FileChunk): Promise<void> {
+    // A frame still on the wire after a cancel or the end of the transfer has no open file to go to.
+    if (state.status !== 'active' && state.status !== 'awaiting-reconnect') return;
     if (chunk.seq === 0) {
       state.currentPartIndex = chunk.partIndex;
       state.partHash = createHash('sha256');
@@ -559,18 +561,27 @@ export class FileTransferManager {
     }
   }
 
-  /** User explicitly disconnected, so cancel everything cleanly rather than waiting to see if it reconnects. */
-  cancelAll(reason: string): void {
-    for (const state of [...this.transfers.values()]) this.cancel(state, reason);
+  /**
+   * User explicitly disconnected, so cancel everything cleanly rather than waiting to see if it
+   * reconnects. Resolves once every half-received file is closed.
+   */
+  async cancelAll(reason: string): Promise<void> {
+    await Promise.all([...this.transfers.values()].map((state) => this.cancel(state, reason)));
   }
 
-  private cancel(state: TransferState, reason: string): void {
-    if (state.status === 'done') return;
+  private cancel(state: TransferState, reason: string): Promise<void> {
+    if (state.status === 'done') return Promise.resolve();
     state.status = 'cancelled';
     state.error = reason;
     if (state.direction === 'upload' && state.ackTimer) clearTimeout(state.ackTimer);
     this.emit(state);
     this.forget(state);
+    if (state.direction === 'upload') return Promise.resolve();
+    // Left open, the temp file's handle leaked until garbage collection closed it, which Node now
+    // raises as an uncaught error. Closing a handle that is already closed does nothing.
+    return state.fh.close().catch((err: Error) => {
+      this.callbacks.log('error', `Failed to close "${state.name}": ${err.message}`);
+    });
   }
 
   private ensureSweep(): void {

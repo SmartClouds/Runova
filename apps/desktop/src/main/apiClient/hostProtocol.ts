@@ -11,6 +11,7 @@ export type MainToHost =
   | { type: 'cancel'; runId: string };
 
 export type HostToMain =
+  | { type: 'alive' }
   | { type: 'ready'; runtimeVersion: string }
   | { type: 'event'; runId: string; event: EngineEvent }
   | { type: 'done'; runId: string; summary: EngineRunSummary }
@@ -86,6 +87,8 @@ export function parseMainMessage(value: unknown): MainToHost | null {
 export function parseHostMessage(value: unknown): HostToMain | null {
   if (!isRecord(value)) return null;
   switch (value.type) {
+    case 'alive':
+      return { type: 'alive' };
     case 'ready':
       return typeof value.runtimeVersion === 'string'
         ? { type: 'ready', runtimeVersion: value.runtimeVersion }

@@ -182,7 +182,8 @@ describe('TestRunManager under a big suite', () => {
 
     // About 14,000 lines. Handling them used to cost at least the trim on every line (60 to 100 ms
     // per chunk on a fast machine, during which no click in the window went anywhere). Now it is
-    // around a quarter of that.
+    // around a tenth of that, with coverage on as in CI. It was half of it while every line,
+    // result or not, rebuilt the lookups that match results to tests.
     //
     // Both are wall time. In a full parallel run the other workers take the CPU away at random,
     // and a GC pause lands on whichever side happens to be running, so one round of each can come

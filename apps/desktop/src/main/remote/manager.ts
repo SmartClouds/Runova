@@ -623,7 +623,7 @@ class RemoteManager {
   }
 
   private giveUpReconnect(): void {
-    this.files.cancelAll('Gave up trying to reconnect.');
+    void this.files.cancelAll('Gave up trying to reconnect.');
     this.connection = {
       status: 'error',
       remoteDeviceName: this.connection.remoteDeviceName,
@@ -652,7 +652,7 @@ class RemoteManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.files.cancelAll('Disconnected.');
+    void this.files.cancelAll('Disconnected.');
     if (this.client) {
       this.safeClose(this.client, 'controller disconnected');
       this.client = null;

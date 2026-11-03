@@ -72,7 +72,8 @@ describe('toCloneable', () => {
 });
 
 describe('parseHostMessage', () => {
-  it('accepts ready, event, done and fatal', () => {
+  it('accepts alive, ready, event, done and fatal', () => {
+    expect(parseHostMessage({ type: 'alive' })).toEqual({ type: 'alive' });
     expect(parseHostMessage({ type: 'ready', runtimeVersion: '7.56.1' })).toEqual({
       type: 'ready',
       runtimeVersion: '7.56.1',

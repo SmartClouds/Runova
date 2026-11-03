@@ -12,6 +12,11 @@ import { createProcessSuspender } from './processSuspend';
  * must not notice its job stopping, print "Stopped" and take the terminal back.
  *
  * Set RUNOVA_STRESS_TESTS=1 to also time a pause with every core busy.
+ *
+ * The tickers get their own session and process group on posix. Left in ours, they would share a
+ * group with vitest, pnpm and the CI step's shell, and if that group turns orphaned while one of
+ * its members is stopped, the kernel sends SIGHUP to every member. That once killed a whole macOS
+ * CI shard (exit 129) in the second the tickers were frozen.
  */
 
 const TICKER = `
@@ -37,6 +42,26 @@ const ptyLoads = await (async (): Promise<boolean> => {
     return false;
   }
 })();
+
+const posix = process.platform !== 'win32';
+
+/** Starts the ticker pair outside our process group (see above). */
+function startTicker(script: string, file: string): ChildProcess {
+  return spawn(process.execPath, [script, file, 'parent'], { stdio: 'ignore', detached: posix });
+}
+
+/** Kills a ticker and the child it started, frozen or not. */
+function killTicker(pid: number): void {
+  if (posix) {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      // Already gone.
+    }
+  } else {
+    spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,11 +97,7 @@ describe('pausing a real process tree', () => {
     if (ticker?.pid) {
       // Thaw first: a frozen process ignores everything but SIGKILL on posix.
       await suspender().resumePids([ticker.pid]);
-      if (process.platform === 'win32') {
-        spawn('taskkill', ['/pid', String(ticker.pid), '/T', '/F'], { stdio: 'ignore' });
-      } else {
-        process.kill(ticker.pid, 'SIGKILL');
-      }
+      killTicker(ticker.pid);
     }
     await sleep(300);
     rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -84,9 +105,7 @@ describe('pausing a real process tree', () => {
 
   it('stops the parent and its child from doing anything until resumed', async () => {
     const file = join(dir, 'ticks');
-    ticker = spawn(process.execPath, [join(dir, 'ticker.cjs'), file, 'parent'], {
-      stdio: 'ignore',
-    });
+    ticker = startTicker(join(dir, 'ticker.cjs'), file);
     await until(() => size(file) > 3 && size(`${file}.child`) > 3);
 
     const control = suspender();
@@ -116,9 +135,7 @@ describe('pausing a real process tree', () => {
     'pauses in reasonable time with every core busy',
     async () => {
       const file = join(dir, 'busy-ticks');
-      const busy = spawn(process.execPath, [join(dir, 'ticker.cjs'), file, 'parent'], {
-        stdio: 'ignore',
-      });
+      const busy = startTicker(join(dir, 'ticker.cjs'), file);
       let burner: ChildProcess | null = null;
       try {
         await until(() => size(file) > 3 && size(`${file}.child`) > 3);
@@ -136,11 +153,7 @@ describe('pausing a real process tree', () => {
         expect(elapsed).toBeLessThan(5000);
       } finally {
         burner?.kill();
-        if (process.platform === 'win32') {
-          spawn('taskkill', ['/pid', String(busy.pid), '/T', '/F'], { stdio: 'ignore' });
-        } else {
-          busy.kill('SIGKILL');
-        }
+        if (busy.pid) killTicker(busy.pid);
       }
     },
     90_000,

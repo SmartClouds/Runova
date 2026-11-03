@@ -26,7 +26,10 @@ export interface HostProcess {
 
 export interface HostEngineOptions {
   spawn: () => HostProcess;
+  /** How long a new process has to start running code at all. */
   readyTimeoutMs?: number;
+  /** How long a running process then has to load Postman's runtime. */
+  loadTimeoutMs?: number;
   idleTimeoutMs?: number;
 }
 
@@ -42,7 +45,14 @@ interface PendingRun {
   sent: boolean;
 }
 
+/**
+ * Two limits, because the two waits are different. Starting the process is quick on any machine,
+ * so a host that has not said it is alive after 15 seconds is stuck. Loading Postman's runtime
+ * reads hundreds of files, and on a cold disk or a busy machine that alone can take longer than
+ * 15 seconds, so it gets a much wider limit that only a host that really hangs runs into.
+ */
 const READY_TIMEOUT_MS = 15_000;
+const LOAD_TIMEOUT_MS = 120_000;
 const IDLE_TIMEOUT_MS = 10 * 60_000;
 
 function failed(error: string | null, cancelled = false): EngineRunSummary {
@@ -51,6 +61,7 @@ function failed(error: string | null, cancelled = false): EngineRunSummary {
 
 export function createHostEngine(options: HostEngineOptions): HostEngine {
   const readyTimeoutMs = options.readyTimeoutMs ?? READY_TIMEOUT_MS;
+  const loadTimeoutMs = options.loadTimeoutMs ?? LOAD_TIMEOUT_MS;
   const idleTimeoutMs = options.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
 
   let host: HostProcess | null = null;
@@ -116,17 +127,24 @@ export function createHostEngine(options: HostEngineOptions): HostEngine {
     const child = options.spawn();
     host = child;
     ready = false;
-    readyTimer = setTimeout(() => {
-      if (host !== child || ready) return;
-      stopHost();
-      settleAll(failed('The request engine did not start in time.'));
-    }, readyTimeoutMs);
+    const waitForReady = (ms: number) => {
+      if (readyTimer) clearTimeout(readyTimer);
+      readyTimer = setTimeout(() => {
+        if (host !== child || ready) return;
+        stopHost();
+        settleAll(failed('The request engine did not start in time.'));
+      }, ms);
+    };
+    waitForReady(readyTimeoutMs);
 
     child.on('message', (raw) => {
       if (host !== child) return;
       const message = parseHostMessage(raw);
       if (!message) return;
       switch (message.type) {
+        case 'alive':
+          if (!ready) waitForReady(loadTimeoutMs);
+          break;
         case 'ready':
           ready = true;
           if (readyTimer) clearTimeout(readyTimer);

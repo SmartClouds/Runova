@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { type FileHandle, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket } from 'ws';
@@ -16,6 +16,25 @@ import {
 import { setElectronPath } from '../../test/main/electronMock';
 import { tempDir } from '../../test/main/fixtures';
 import { FileTransferManager } from './fileTransfer';
+
+/** Every file handle opened while a test runs, so a test can check one was closed. */
+const opened = vi.hoisted(() => [] as FileHandle[]);
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const open: typeof actual.open = async (...args) => {
+    const handle = await actual.open(...args);
+    opened.push(handle);
+    return handle;
+  };
+  return { ...actual, default: { ...actual, open }, open };
+});
+
+function lastOpened(): FileHandle {
+  const handle = opened[opened.length - 1];
+  if (!handle) throw new Error('no file was opened');
+  return handle;
+}
 
 /**
  * Every byte this class moves goes through the injected `sendControl`/`sendBinary` callbacks, so
@@ -37,6 +56,9 @@ interface Recorder {
   progress: RemoteFileProgress[];
 }
 
+/** Every manager a test made, so a download it left half-received is closed before the next test. */
+const managers: FileTransferManager[] = [];
+
 function recorder(): Recorder {
   const control: RemoteControlMessage[] = [];
   const binary: Uint8Array[] = [];
@@ -56,6 +78,7 @@ function recorder(): Recorder {
       progress.push(value);
     },
   });
+  managers.push(manager);
   return { manager, control, binary, logs, progress };
 }
 
@@ -99,8 +122,13 @@ beforeEach(() => {
   setElectronPath('downloads', downloads);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(managers.splice(0).map((manager) => manager.cancelAll('Test over.')));
   vi.useRealTimers();
+  // A handle nobody closed is closed by garbage collection later, which Node raises as an
+  // uncaught error in whichever test happens to be running.
+  const leftOpen = opened.splice(0).filter((handle) => handle.fd !== -1);
+  expect(leftOpen.map((handle) => handle.fd)).toEqual([]);
 });
 
 // --- Receiving -----------------------------------------------------------------
@@ -889,6 +917,32 @@ describe('cancellation', () => {
     expect(finals.every((entry) => entry.done)).toBe(true);
     expect(finals.every((entry) => entry.error === 'Disconnected.')).toBe(true);
     expect(rec.manager.hasActiveTransfers()).toBe(false);
+  });
+
+  it('closes the temp file of a download it cancels', async () => {
+    const rec = recorder();
+    const ws = fakeSocket();
+    await offer(rec, ws, { size: 16, partSize: 16 });
+    const handle = lastOpened();
+
+    await rec.manager.cancelAll('Disconnected.');
+
+    // Left to garbage collection, the handle surfaces as an uncaught ERR_INVALID_STATE.
+    expect(handle.fd).toBe(-1);
+  });
+
+  it('writes nothing for a frame that arrives after the download was cancelled', async () => {
+    const rec = recorder();
+    const ws = fakeSocket();
+    const { transferId, key } = await offer(rec, ws, { size: 16, partSize: 16 });
+    const write = vi.spyOn(lastOpened(), 'write');
+    rec.manager.handleControl(ws, { t: 'file-cancel', transferId });
+
+    rec.manager.handleBinary(
+      encodeFileChunk({ transferKey: key, partIndex: 0, seq: 0, bytes: payload(16) }),
+    );
+
+    expect(write).not.toHaveBeenCalled();
   });
 
   it('honours a cancel from the peer', async () => {

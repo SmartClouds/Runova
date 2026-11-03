@@ -132,6 +132,11 @@ test('keeps a second copy of Runova out of a video the first one has open', asyn
   // Once the first copy closes the video, the second one can open it.
   await goTo(first.page, '#/studio');
   await expect(first.page.getByRole('button', { name: 'New video' }).first()).toBeVisible();
+  // Leaving the editor closes the video in the background (it writes the document, then frees the
+  // lock), so the library can be on screen while the lock is still held. Wait for the lock itself.
+  await expect
+    .poll(() => existsSync(join(video.folder, '.studio.lock')), { timeout: 20_000 })
+    .toBe(false);
   await second.page.getByRole('button', { name: 'Try again' }).click();
   await expect(second.page.getByLabel('Video title')).toHaveValue('Shared film');
 });

@@ -133,6 +133,10 @@ export function resolveResults(
   parsed: readonly ParsedTestResult[],
   folderPath: string,
 ): TestResult[] {
+  // A streaming runner calls this for every line it prints, and most lines carry no result.
+  // Building the lookups below for each of those cost far more than the matching itself, and kept
+  // the desktop app's main process busy (its runner.load.test.ts measures this).
+  if (parsed.length === 0) return [];
   const fileNodes = projectNode.children.filter((node) => node.kind === 'file');
   const out: TestResult[] = [];
 

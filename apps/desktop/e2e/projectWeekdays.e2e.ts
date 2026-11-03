@@ -103,6 +103,10 @@ test('the card splits the scanned usage by project and by weekday', async () => 
       HOME: home,
       USERPROFILE: home,
       CODEX_HOME: join(home, '.codex'),
+      // Cursor keeps its session under APPDATA on Windows, not under the home folder. Left alone,
+      // every Refresh read the real Cursor install and waited on cursor.com, and the page only
+      // shows the new scan once every provider has answered.
+      APPDATA: join(home, 'AppData', 'Roaming'),
     },
   });
   const { page, projectDir, root } = launched;

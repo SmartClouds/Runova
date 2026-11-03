@@ -175,6 +175,33 @@ describe('createHostEngine', () => {
     expect(hosts[0]?.killed).toBe(true);
   });
 
+  it('waits as long as the runtime takes to load once the host says it is alive', async () => {
+    const engine = createHostEngine({ spawn, readyTimeoutMs: 1000, loadTimeoutMs: 60_000 });
+    const run = await started(engine);
+    const host = hosts[0] as FakeHost;
+    host.reply({ type: 'alive' });
+    // Well past the start limit: a cold disk can take this long to read Postman's runtime.
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(host.killed).toBe(false);
+
+    host.reply({ type: 'ready', runtimeVersion: '7' });
+    await vi.advanceTimersByTimeAsync(0);
+    const [runId] = host.runIds();
+    host.reply({ type: 'done', runId, summary: summary() });
+    await expect(run.done).resolves.toMatchObject({ error: null });
+  });
+
+  it('still gives up on a host that is alive but never finishes loading', async () => {
+    const engine = createHostEngine({ spawn, readyTimeoutMs: 1000, loadTimeoutMs: 60_000 });
+    const run = await started(engine);
+    hosts[0]?.reply({ type: 'alive' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    await expect(run.done).resolves.toMatchObject({
+      error: expect.stringMatching(/did not start/),
+    });
+    expect(hosts[0]?.killed).toBe(true);
+  });
+
   it('reports a fatal error from the host to every running request', async () => {
     const engine = createHostEngine({ spawn });
     const run = await started(engine);
