@@ -3,7 +3,7 @@ title: AI Access
 category: Agents
 order: 35
 summary: Let AI agents like Claude Code and Codex work with Runova through its own MCP server, and decide what they may do without asking you.
-keywords: ai access, mcp, mcp server, model context protocol, runova_app, agent permissions, approve, approval, allow, deny, full access, ask for sensitive actions, ask for everything, claude code, codex, copilot, connect other apps, env file, api client
+keywords: ai access, mcp, mcp server, model context protocol, runova_app, agent permissions, approve, approval, allow, deny, full access, ask for sensitive actions, ask for everything, claude code, codex, copilot, connect other apps, env file, api client, database, deploy, vault, git, docker
 route: /settings?tab=aiAccess
 ---
 
@@ -12,6 +12,20 @@ AI access turns Runova into a set of tools an AI agent can use. Instead of openi
 ## Where to find it
 
 Open **Settings** and choose **AI access**. Nothing can use Runova until you turn on **Let AI agents use Runova** at the top of that page.
+
+## What agents can work with
+
+- **Projects and environments**: read a project, edit its notes, read and save env files, save one from a file on disk, restore an earlier version.
+- **API Client**: collections, folders and requests, and sending a request.
+- **Git and worktrees**: status, diffs, history, commits, branches, push, and creating or merging worktrees.
+- **Docker, scheduled tasks and healthchecks**: containers and their logs, tasks, and checks.
+- **Databases**: saved connections, their tables, and read-only queries. Anything that is not a read is refused before Runova connects.
+- **Pipelines, tests, security scans and packages**: why a run failed, running tests, scan reports, outdated packages and updating them.
+- **Skills, prompts and blueprints**: installed skills, prompt templates and blueprint steps.
+- **Servers**: Deploy apps and websites, Cloudflare DNS, WordPress sites, SSH commands and folders, remote devices and error tracking.
+- **Vault, Studio, Relay and usage**: vault entries (a value only when revealed), Studio videos and scenes, the Relay board, and your AI usage.
+
+Some things stay in Runova's own screens because they take several steps or need you: unlocking the vault or the Servers passkey, uploading a new app version, certificates, connecting a WordPress site, writing to a database, rendering a Studio video.
 
 ## Who can connect
 
@@ -46,7 +60,7 @@ The **Recent activity** card lists the last calls agents made: which tool, which
 
 ## What agents can never do
 
-Whatever the mode, no tool can change the AI access settings, so an agent can never give itself more room. Turning AI access off also forgets every **Allow for this session** and denies anything still waiting.
+Whatever the mode, no tool can change the AI access settings, so an agent can never give itself more room. No tool exports or imports the vault, restores a backup, changes a server's firewall, updates Runova or quits it. Turning AI access off also forgets every **Allow for this session** and denies anything still waiting.
 
 ## Good to know
 

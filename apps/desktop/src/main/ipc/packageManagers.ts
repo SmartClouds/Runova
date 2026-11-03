@@ -115,6 +115,57 @@ const runtimeUpdateDeps: RuntimeUpdateDeps = {
   },
 };
 
+/** A project's packages and runtime targets, as the Packages tab lists them. */
+export async function listProjectPackages(projectId: string): Promise<PackageScanResult> {
+  const folderPath = await getProjectPath(projectId);
+  return { projectId, sections: await scanProjectPackages(folderPath) };
+}
+
+/** Updates packages in a project after checking each request against what the list could produce. */
+export async function updateProjectPackages(
+  projectId: string,
+  updates: PackageUpdateRequest[],
+  onProgress: (progress: PackageUpdateProgress) => void = () => undefined,
+): Promise<PackageUpdateResult> {
+  const folderPath = await getProjectPath(projectId);
+
+  // Refuse the whole batch rather than updating some of it: a request
+  // carrying anything invalid did not come from the package list.
+  for (const update of updates) {
+    const problem = rejectUnsafeUpdate(update, folderPath);
+    if (problem) {
+      return {
+        ok: false,
+        results: [{ name: String(update?.name ?? ''), ok: false, message: problem }],
+      };
+    }
+  }
+
+  const results: PackageUpdateResult['results'] = [];
+  let ok = true;
+
+  for (const adapter of PACKAGE_MANAGER_ADAPTERS) {
+    const forAdapter = updates.filter((u) => u.ecosystem === adapter.ecosystem);
+    if (forAdapter.length === 0) continue;
+    const result = await adapter.updatePackages(folderPath, forAdapter, (tick) => {
+      const progress: PackageUpdateProgress = {
+        projectId,
+        ecosystem: adapter.ecosystem,
+        packageName: tick.packageName,
+        status: tick.status,
+        message: tick.message,
+        completed: tick.completed,
+        total: tick.total,
+      };
+      onProgress(progress);
+    });
+    ok = ok && result.ok;
+    results.push(...result.results);
+  }
+
+  return { ok, results };
+}
+
 export function registerPackageManagerHandlers(): void {
   ipcMain.handle(
     IPC.packages.updateRuntime,
@@ -134,59 +185,17 @@ export function registerPackageManagerHandlers(): void {
 
   ipcMain.handle(
     IPC.packages.list,
-    async (_event, projectId: string): Promise<PackageScanResult> => {
-      const folderPath = await getProjectPath(projectId);
-      return { projectId, sections: await scanProjectPackages(folderPath) };
-    },
+    (_event, projectId: string): Promise<PackageScanResult> => listProjectPackages(projectId),
   );
 
   ipcMain.handle(
     IPC.packages.update,
-    async (
-      event,
-      projectId: string,
-      updates: PackageUpdateRequest[],
-    ): Promise<PackageUpdateResult> => {
-      const folderPath = await getProjectPath(projectId);
-
-      // Refuse the whole batch rather than updating some of it: a request
-      // carrying anything invalid did not come from the package list.
-      for (const update of updates) {
-        const problem = rejectUnsafeUpdate(update, folderPath);
-        if (problem) {
-          return {
-            ok: false,
-            results: [{ name: String(update?.name ?? ''), ok: false, message: problem }],
-          };
-        }
-      }
-
-      const results: PackageUpdateResult['results'] = [];
-      let ok = true;
-
-      for (const adapter of PACKAGE_MANAGER_ADAPTERS) {
-        const forAdapter = updates.filter((u) => u.ecosystem === adapter.ecosystem);
-        if (forAdapter.length === 0) continue;
-        const result = await adapter.updatePackages(folderPath, forAdapter, (tick) => {
-          const progress: PackageUpdateProgress = {
-            projectId,
-            ecosystem: adapter.ecosystem,
-            packageName: tick.packageName,
-            status: tick.status,
-            message: tick.message,
-            completed: tick.completed,
-            total: tick.total,
-          };
-          // An update can run for minutes; closing or reloading the window
-          // mid-run would otherwise throw from inside the adapter's callback
-          // and abort the install partway through.
-          sendToContents(event.sender, IPC.packages.onUpdateProgress, progress);
-        });
-        ok = ok && result.ok;
-        results.push(...result.results);
-      }
-
-      return { ok, results };
-    },
+    (event, projectId: string, updates: PackageUpdateRequest[]): Promise<PackageUpdateResult> =>
+      updateProjectPackages(projectId, updates, (progress) => {
+        // An update can run for minutes; closing or reloading the window
+        // mid-run would otherwise throw from inside the adapter's callback
+        // and abort the install partway through.
+        sendToContents(event.sender, IPC.packages.onUpdateProgress, progress);
+      }),
   );
 }

@@ -96,34 +96,60 @@ function sanitizeTarget(raw: unknown, discovery: TestDiscovery): TestTarget | nu
   };
 }
 
+/** Reads the project's tests again, as the Tests panel's refresh does. */
+export async function discoverProjectTests(projectId: string): Promise<TestDiscovery> {
+  return (await discover(projectId)).discovery;
+}
+
+/**
+ * Starts a run in the background and returns its summary at once. An empty target list runs every
+ * test project; picks that are not in the discovered tests are dropped.
+ */
+export async function startTestRun(projectId: string, targets: unknown): Promise<TestRunSummary> {
+  const { folderPath, discovery } = await cached(projectId);
+  const list = Array.isArray(targets) ? targets : null;
+  const picked = (list ?? [])
+    .map((target) => sanitizeTarget(target, discovery))
+    .filter((target): target is TestTarget => target !== null);
+  const runAll = list !== null && list.length === 0 && discovery.projects.length > 0;
+  if (!runAll && picked.length === 0) {
+    throw new Error('Nothing to run: none of the picked tests are in this project anymore.');
+  }
+  return manager.start({ projectId, folderPath, discovery, targets: picked });
+}
+
+export function cancelTestRun(projectId: string): boolean {
+  return manager.cancel(projectId);
+}
+
+/** The project's current or last run, with its results and the tail of its output. */
+export function lastTestRun(projectId: string): TestRunSnapshot | null {
+  return manager.lastRun(projectId);
+}
+
+/** Resolves once the project's current run, if any, has finished. */
+export function whenTestRunIdle(projectId: string): Promise<void> {
+  return manager.whenIdle(projectId);
+}
+
 export function registerTestHandlers(): void {
-  ipcMain.handle(IPC.tests.discover, async (_event, projectId: string): Promise<TestDiscovery> => {
-    return (await discover(String(projectId))).discovery;
-  });
+  ipcMain.handle(
+    IPC.tests.discover,
+    (_event, projectId: string): Promise<TestDiscovery> => discoverProjectTests(String(projectId)),
+  );
 
   ipcMain.handle(
     IPC.tests.run,
-    async (_event, projectId: string, targets: unknown): Promise<TestRunSummary> => {
-      const id = String(projectId);
-      const { folderPath, discovery } = await cached(id);
-      const list = Array.isArray(targets) ? targets : null;
-      const picked = (list ?? [])
-        .map((target) => sanitizeTarget(target, discovery))
-        .filter((target): target is TestTarget => target !== null);
-      const runAll = list !== null && list.length === 0 && discovery.projects.length > 0;
-      if (!runAll && picked.length === 0) {
-        throw new Error('Nothing to run: none of the picked tests are in this project anymore.');
-      }
-      return manager.start({ projectId: id, folderPath, discovery, targets: picked });
-    },
+    (_event, projectId: string, targets: unknown): Promise<TestRunSummary> =>
+      startTestRun(String(projectId), targets),
   );
 
   ipcMain.handle(IPC.tests.cancel, (_event, projectId: string): boolean =>
-    manager.cancel(String(projectId)),
+    cancelTestRun(String(projectId)),
   );
 
   ipcMain.handle(IPC.tests.lastRun, (_event, projectId: string): TestRunSnapshot | null =>
-    manager.lastRun(String(projectId)),
+    lastTestRun(String(projectId)),
   );
 
   ipcMain.handle(

@@ -40,8 +40,8 @@ import {
 } from '../ssh/vault';
 import { store } from '../store';
 import { DownloadAbortedError, ResumableDownload } from '../updater/resumableDownload';
-import { CatalogReleaseSource } from './appStore/releases';
 import { RegistryClient } from './appStore/registry';
+import { CatalogReleaseSource } from './appStore/releases';
 import { DeployAppStore } from './appStore/service';
 import { approvalSigner } from './assistant/approvals';
 import { DeployAssistant } from './assistant/service';
@@ -66,6 +66,7 @@ import { DeployHardening } from './hardening';
 import { DockerLinks } from './live/dockerLinks';
 import { DockerSubscriptions } from './live/dockerSubscriptions';
 import { DeploySubscriptions } from './live/subscriptions';
+import { setLiveDeployServices } from './liveServices';
 import { JournalSubscriptions } from './logs/journal';
 import { registerRecaptchaIpc } from './recaptcha';
 import { createDeployRegistries, registerDeployRegistryIpc } from './registry';
@@ -328,9 +329,12 @@ export function registerDeployIpc(): void {
   // The Websites section (E10, E11): its site logs end with the window that opened them.
   const siteLogs = new SiteLogSubscriptions({ links: service.links });
   const siteLogOwnerOf = subscriptionOwners((ownerId) => siteLogs.dropOwner(ownerId));
+  const sites = new DeploySites({ links: service.links, roles: (id) => service.roles(id) });
+  // AI access (E46) calls these same instances, so an agent goes through the page's own path.
+  setLiveDeployServices({ deploy: service, stacks, sites });
   registerDeploySitesHandlers({
     ipc: ipcMain,
-    sites: new DeploySites({ links: service.links, roles: (id) => service.roles(id) }),
+    sites,
     logs: siteLogs,
     guard,
     owner: (event) => siteLogOwnerOf(event.sender),
@@ -602,6 +606,7 @@ function registerDeployDockerIpc(
     // The file manager's sessions on a removed container or volume end with it (E27).
     removed: closeDockerFileSessions,
   });
+  setLiveDeployServices({ docker });
   registerDeployDockerHandlers({
     ipc: ipcMain,
     docker,

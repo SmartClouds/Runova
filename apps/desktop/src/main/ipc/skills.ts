@@ -494,7 +494,7 @@ async function skillParentDirs(scope: SkillScope, projectId: string | null): Pro
  * them. A cloned repository arrives with `.claude/skills/…` already populated and no record of it
  * here, and those are exactly the skills worth checking before an agent reads them.
  */
-async function listOnDiskSkills(projectId: string | null): Promise<AuditSourceSkill[]> {
+export async function listOnDiskSkills(projectId: string | null): Promise<AuditSourceSkill[]> {
   const scope = await resolveSkillScope(projectId);
   const parents = await skillParentDirs(scope, projectId);
 
@@ -785,6 +785,105 @@ async function addUsedSkillToProjects(input: AddUsedSkillInput): Promise<AddUsed
   return results;
 }
 
+/** The repository's skills as the marketplace shows them, read from its cache or source. */
+export async function getRepositoryIndex(repositoryId: string): Promise<SkillRepositoryIndex> {
+  const repos = await store.getRepositories();
+  const repo = repos.find((r) => r.id === repositoryId);
+  if (!repo) throw new Error(`Repository ${repositoryId} not found`);
+  const { index } = await loadRepositoryIndex(repo);
+  return index;
+}
+
+/** What Runova recorded installing into a project, or into ~/.claude for null. */
+export async function listInstalledSkills(
+  projectId: string | null,
+): Promise<InstalledSkillRecord[]> {
+  const scopeRoot = await resolveSkillScopeRoot(projectId);
+  return readInstalledSkills(scopeRoot);
+}
+
+/** Copies a repository skill into a project's agent dirs, or into ~/.claude/skills for null. */
+export async function installRepositorySkill(params: {
+  projectId: string | null;
+  repositoryId: string;
+  skillId: string;
+}): Promise<void> {
+  const [scope, repos] = await Promise.all([
+    resolveSkillScope(params.projectId),
+    store.getRepositories(),
+  ]);
+  const repo = repos.find((r) => r.id === params.repositoryId);
+  if (!repo) throw new Error(`Repository ${params.repositoryId} not found`);
+
+  const { index, baseDir, baseUrl } = await loadRepositoryIndex(repo);
+  const skill = index.skills.find((s) => s.id === params.skillId);
+  if (!skill) throw new Error(`Skill ${params.skillId} not found in repository ${repo.name}`);
+
+  const installDirs = await resolveSkillInstallDirs(scope);
+  for (const skillsParent of installDirs) {
+    const skillDir = join(skillsParent, skill.id);
+    for (const file of skill.files) {
+      const content = await readSkillFileContent(file, { baseDir, baseUrl });
+      const targetPath = join(skillDir, file.path);
+      await mkdir(dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, content, 'utf-8');
+    }
+  }
+
+  const installed = await readInstalledSkills(scope.scopeRoot);
+  const withoutExisting = installed.filter((s) => s.skillId !== skill.id);
+  withoutExisting.push({
+    skillId: skill.id,
+    repositoryId: repo.id,
+    version: skill.version,
+    installedAt: new Date().toISOString(),
+  });
+  await writeInstalledSkills(scope.scopeRoot, withoutExisting);
+}
+
+/** Removes an installed skill's files (or hands that to its own CLI) and drops its record. */
+export async function removeInstalledSkill(params: {
+  projectId: string | null;
+  skillId: string;
+}): Promise<void> {
+  const scope = await resolveSkillScope(params.projectId);
+  const installed = await readInstalledSkills(scope.scopeRoot);
+  const record = installed.find((s) => s.skillId === params.skillId);
+
+  if (record?.repositoryId === UI_UX_PRO_MAX_PSEUDO_REPOSITORY_ID) {
+    // Nothing to delete here: `uipro uninstall` owns the files it wrote, and the renderer
+    // runs it in a visible terminal (it prints what it removed and can ask for a platform).
+    // This handler only drops Runova's own bookkeeping entry.
+  } else if (record?.repositoryId === SKILLS_SH_PSEUDO_REPOSITORY_ID) {
+    const skillName = params.skillId.split('/').pop() ?? params.skillId;
+    if (SKILL_NAME_PATTERN.test(skillName)) {
+      const agents = (record.agents ?? []).filter((a) => SKILL_NAME_PATTERN.test(a));
+      const args = [
+        'skills',
+        'remove',
+        skillName,
+        '--agent',
+        ...(agents.length > 0 ? agents : ['*']),
+        '-y',
+      ];
+      if (params.projectId === null) args.push('--global');
+      await runSkillsCli(args, scope.scopeRoot);
+    }
+  } else {
+    // Cover agent dirs (.claude/skills, .agents/skills, …) plus the old root skills/ path.
+    await Promise.all(
+      resolveSkillRemoveDirs(scope).map((skillsParent) =>
+        rm(join(skillsParent, params.skillId), { recursive: true, force: true }),
+      ),
+    );
+  }
+
+  await writeInstalledSkills(
+    scope.scopeRoot,
+    installed.filter((s) => s.skillId !== params.skillId),
+  );
+}
+
 export function registerSkillHandlers(): void {
   void syncLocalRepositoryWatchers();
 
@@ -853,13 +952,8 @@ export function registerSkillHandlers(): void {
 
   ipcMain.handle(
     IPC.skills.getRepositoryIndex,
-    async (_event, repositoryId: string): Promise<SkillRepositoryIndex> => {
-      const repos = await store.getRepositories();
-      const repo = repos.find((r) => r.id === repositoryId);
-      if (!repo) throw new Error(`Repository ${repositoryId} not found`);
-      const { index } = await loadRepositoryIndex(repo);
-      return index;
-    },
+    (_event, repositoryId: string): Promise<SkillRepositoryIndex> =>
+      getRepositoryIndex(repositoryId),
   );
 
   // Opens on whatever the renderer already has in the path field, falling back to the projects
@@ -917,92 +1011,22 @@ export function registerSkillHandlers(): void {
 
   ipcMain.handle(
     IPC.skills.install,
-    async (
+    (
       _event,
       params: { projectId: string | null; repositoryId: string; skillId: string },
-    ): Promise<void> => {
-      const [scope, repos] = await Promise.all([
-        resolveSkillScope(params.projectId),
-        store.getRepositories(),
-      ]);
-      const repo = repos.find((r) => r.id === params.repositoryId);
-      if (!repo) throw new Error(`Repository ${params.repositoryId} not found`);
-
-      const { index, baseDir, baseUrl } = await loadRepositoryIndex(repo);
-      const skill = index.skills.find((s) => s.id === params.skillId);
-      if (!skill) throw new Error(`Skill ${params.skillId} not found in repository ${repo.name}`);
-
-      const installDirs = await resolveSkillInstallDirs(scope);
-      for (const skillsParent of installDirs) {
-        const skillDir = join(skillsParent, skill.id);
-        for (const file of skill.files) {
-          const content = await readSkillFileContent(file, { baseDir, baseUrl });
-          const targetPath = join(skillDir, file.path);
-          await mkdir(dirname(targetPath), { recursive: true });
-          await writeFile(targetPath, content, 'utf-8');
-        }
-      }
-
-      const installed = await readInstalledSkills(scope.scopeRoot);
-      const withoutExisting = installed.filter((s) => s.skillId !== skill.id);
-      withoutExisting.push({
-        skillId: skill.id,
-        repositoryId: repo.id,
-        version: skill.version,
-        installedAt: new Date().toISOString(),
-      });
-      await writeInstalledSkills(scope.scopeRoot, withoutExisting);
-    },
+    ): Promise<void> => installRepositorySkill(params),
   );
 
   ipcMain.handle(
     IPC.skills.remove,
-    async (_event, params: { projectId: string | null; skillId: string }): Promise<void> => {
-      const scope = await resolveSkillScope(params.projectId);
-      const installed = await readInstalledSkills(scope.scopeRoot);
-      const record = installed.find((s) => s.skillId === params.skillId);
-
-      if (record?.repositoryId === UI_UX_PRO_MAX_PSEUDO_REPOSITORY_ID) {
-        // Nothing to delete here: `uipro uninstall` owns the files it wrote, and the renderer
-        // runs it in a visible terminal (it prints what it removed and can ask for a platform).
-        // This handler only drops Runova's own bookkeeping entry.
-      } else if (record?.repositoryId === SKILLS_SH_PSEUDO_REPOSITORY_ID) {
-        const skillName = params.skillId.split('/').pop() ?? params.skillId;
-        if (SKILL_NAME_PATTERN.test(skillName)) {
-          const agents = (record.agents ?? []).filter((a) => SKILL_NAME_PATTERN.test(a));
-          const args = [
-            'skills',
-            'remove',
-            skillName,
-            '--agent',
-            ...(agents.length > 0 ? agents : ['*']),
-            '-y',
-          ];
-          if (params.projectId === null) args.push('--global');
-          await runSkillsCli(args, scope.scopeRoot);
-        }
-      } else {
-        // Cover agent dirs (.claude/skills, .agents/skills, …) plus the old root skills/ path.
-        await Promise.all(
-          resolveSkillRemoveDirs(scope).map((skillsParent) =>
-            rm(join(skillsParent, params.skillId), { recursive: true, force: true }),
-          ),
-        );
-      }
-
-      await writeInstalledSkills(
-        scope.scopeRoot,
-        installed.filter((s) => s.skillId !== params.skillId),
-      );
-    },
+    (_event, params: { projectId: string | null; skillId: string }): Promise<void> =>
+      removeInstalledSkill(params),
   );
 
   ipcMain.handle(
     IPC.skills.listInstalled,
-    async (_event, projectId: string | null): Promise<InstalledSkillRecord[]> => {
-      const scopeRoot = await resolveSkillScopeRoot(projectId);
-      return readInstalledSkills(scopeRoot);
-    },
+    (_event, projectId: string | null): Promise<InstalledSkillRecord[]> =>
+      listInstalledSkills(projectId),
   );
 
   ipcMain.handle(

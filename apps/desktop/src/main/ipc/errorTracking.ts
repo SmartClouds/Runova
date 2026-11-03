@@ -37,7 +37,7 @@ const linkSchema = z.object({
   remoteName: z.string().max(200),
 });
 
-const querySchema = z.object({
+export const errorIssueQuerySchema = z.object({
   projectId: id.optional(),
   status: z.enum(['unresolved', 'resolved', 'ignored', 'all']),
   period: z.enum(['24h', '7d', '14d']),
@@ -48,8 +48,9 @@ const querySchema = z.object({
   refresh: z.boolean().optional(),
 });
 
-// Provider issue ids are numbers; anything else would only ever be a path trick.
-const refSchema = z.object({
+// Provider issue ids are numbers; anything else would only ever be a path trick. The AI access
+// tools check their arguments with these too.
+export const errorIssueRefSchema = z.object({
   connectionId: id,
   issueId: z
     .string()
@@ -58,7 +59,7 @@ const refSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/),
 });
 
-const statusSchema = refSchema.extend({
+export const errorStatusChangeSchema = errorIssueRefSchema.extend({
   status: z.enum(['unresolved', 'resolved', 'ignored']),
   ignoreMinutes: z
     .number()
@@ -138,16 +139,18 @@ export function registerErrorTrackingHandlers(options: ErrorTrackingHandlerOptio
   );
 
   handle(IPC.errorTracking.listIssues, (value) =>
-    service.listIssues(parse(querySchema, value, 'issue filter')),
+    service.listIssues(parse(errorIssueQuerySchema, value, 'issue filter')),
   );
 
-  handle(IPC.errorTracking.getIssue, (value) => service.getIssue(parse(refSchema, value, 'issue')));
+  handle(IPC.errorTracking.getIssue, (value) =>
+    service.getIssue(parse(errorIssueRefSchema, value, 'issue')),
+  );
 
   handle(IPC.errorTracking.setIssueStatus, (value) =>
-    service.setIssueStatus(parse(statusSchema, value, 'status change')),
+    service.setIssueStatus(parse(errorStatusChangeSchema, value, 'status change')),
   );
 
   handle(IPC.errorTracking.fixPrompt, (value) =>
-    service.fixPrompt(parse(refSchema, value, 'issue')),
+    service.fixPrompt(parse(errorIssueRefSchema, value, 'issue')),
   );
 }

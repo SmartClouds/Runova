@@ -152,7 +152,8 @@ function saveInput(value: unknown): CloudflareSaveTokenInput {
   };
 }
 
-function recordInput(value: unknown): CloudflareRecordInput {
+/** Checks a DNS record the way the record editor does; AI access (E46) uses it too. */
+export function recordInput(value: unknown): CloudflareRecordInput {
   const input = object(value, 'a DNS record');
   if (typeof input.type !== 'string' || !CLOUDFLARE_RECORD_TYPES.includes(input.type as never)) {
     throw new Error('Runova edits A, AAAA, CNAME, TXT, MX, CAA and SRV records.');

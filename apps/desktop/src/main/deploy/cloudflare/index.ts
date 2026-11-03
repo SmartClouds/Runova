@@ -13,6 +13,7 @@ import {
 } from '../../ssh/vault';
 import { store } from '../../store';
 import { isE2E } from '../../testMode';
+import { setLiveDeployServices } from '../liveServices';
 import { addressesFromCore, addressesOfHost, type ServerAddresses } from './pointDomain';
 import { CloudflareServerOps } from './serverOps';
 import { CloudflareService } from './service';
@@ -92,6 +93,7 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
       !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
     );
   };
+  setLiveDeployServices({ cloudflare: service });
   registerCloudflareHandlers({ ipc: ipcMain, service, guard });
   if (core) {
     registerCloudflareServerHandlers({

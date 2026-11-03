@@ -60,7 +60,7 @@ async function findProject(projectId: string): Promise<Project> {
  * Find-or-create, so the renderer never has to deal with a project that has no
  * blueprint yet. Creating one is cheap and happens the first time the tab opens.
  */
-async function loadBlueprint(projectId: string): Promise<ProjectBlueprint> {
+export async function loadBlueprint(projectId: string): Promise<ProjectBlueprint> {
   const blueprints = await store.getBlueprints();
   const existing = blueprints.find((entry) => entry.projectId === projectId);
   if (existing) return existing;
@@ -203,6 +203,37 @@ async function findAttachment(
   );
 }
 
+/** Edits one step of a blueprint, keeping a revision when its text changed. */
+export async function updateBlueprintSection(
+  projectId: string,
+  stepId: BlueprintStepId,
+  patch: BlueprintSectionPatch,
+): Promise<ProjectBlueprint> {
+  const now = new Date().toISOString();
+  const updated = await mutateBlueprint(projectId, (blueprint) =>
+    mapSection(blueprint, stepId, (section) => {
+      const next: BlueprintSection = { ...section, updatedAt: now };
+      if (patch.text !== undefined) {
+        next.text = patch.text;
+        // An edit invalidates the cached English copy, so the next generate
+        // translates what is there now instead of reusing what the old text said.
+        next.textEn = null;
+        next.textEnHash = null;
+      }
+      if (patch.textEn !== undefined) next.textEn = patch.textEn;
+      if (patch.textEnHash !== undefined) next.textEnHash = patch.textEnHash;
+      if (patch.includeInAgentFile !== undefined) {
+        next.includeInAgentFile = patch.includeInAgentFile;
+      }
+      return next;
+    }),
+  );
+
+  // Only an actual edit is worth a revision. Caching a translation isn't one.
+  if (patch.text !== undefined) recordSectionRevision(updated, stepId);
+  return updated;
+}
+
 export function registerBlueprintHandlers(): void {
   ipcMain.handle(
     IPC.blueprints.get,
@@ -211,36 +242,12 @@ export function registerBlueprintHandlers(): void {
 
   ipcMain.handle(
     IPC.blueprints.updateSection,
-    async (
+    (
       _event,
       projectId: string,
       stepId: BlueprintStepId,
       patch: BlueprintSectionPatch,
-    ): Promise<ProjectBlueprint> => {
-      const now = new Date().toISOString();
-      const updated = await mutateBlueprint(projectId, (blueprint) =>
-        mapSection(blueprint, stepId, (section) => {
-          const next: BlueprintSection = { ...section, updatedAt: now };
-          if (patch.text !== undefined) {
-            next.text = patch.text;
-            // An edit invalidates the cached English copy, so the next generate
-            // translates what is there now instead of reusing what the old text said.
-            next.textEn = null;
-            next.textEnHash = null;
-          }
-          if (patch.textEn !== undefined) next.textEn = patch.textEn;
-          if (patch.textEnHash !== undefined) next.textEnHash = patch.textEnHash;
-          if (patch.includeInAgentFile !== undefined) {
-            next.includeInAgentFile = patch.includeInAgentFile;
-          }
-          return next;
-        }),
-      );
-
-      // Only an actual edit is worth a revision. Caching a translation isn't one.
-      if (patch.text !== undefined) recordSectionRevision(updated, stepId);
-      return updated;
-    },
+    ): Promise<ProjectBlueprint> => updateBlueprintSection(projectId, stepId, patch),
   );
 
   ipcMain.handle(

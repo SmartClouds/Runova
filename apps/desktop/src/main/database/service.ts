@@ -854,3 +854,15 @@ export class DatabaseService {
     this.sweeper = null;
   }
 }
+
+let running: DatabaseService | null = null;
+
+/** Main keeps the one service the Database page uses, so AI access reaches the same sessions. */
+export function setDatabaseService(service: DatabaseService | null): void {
+  running = service;
+}
+
+/** The Database page's service, or null before main has set it up. */
+export function getDatabaseService(): DatabaseService | null {
+  return running;
+}

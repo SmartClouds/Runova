@@ -88,14 +88,20 @@ reaches Runova through Runova's own MCP server. The person decides:
 | E46.4 | API Client tools (`api_list_collections`, `api_get_collection`, `api_create_collection`, `api_create_folder`, `api_save_request`, `api_remove_item`, `api_send_request`); sending goes through the exported `executeApiRequest` | Done |
 | E46.5 | Git and worktrees tools (`git_status`, `git_diff`, `git_log`, `git_branches`, `git_stage`, `git_commit`, `git_create_branch`, `git_checkout`, `git_push`, `git_discard`, `git_delete_branch`, `worktrees_list`, `worktree_create`, `worktree_remove`, `worktree_merge`) | Done |
 | E46.6 | Docker (`docker_list`, `docker_logs`, `docker_start`, `docker_stop`, `docker_restart`, `docker_remove`), scheduled tasks (`tasks_list`, `task_schedule`, `task_schedule_run`, `task_update`, `task_remove`) and healthchecks (`health_list`, `health_check_now`, `health_pause`) | Done |
-| E46.6b | Databases: connections and read-only queries, which need the connect and step-up flow of `DatabaseService` | Planned |
+| E46.6b | Databases (`database_list_connections`, `database_schema`, `database_query`). Queries are reads only: core's `classifyStatement` refuses anything else before connecting, and the driver runs in read-only mode. Only connections that already work with what is saved; anything that needs a password or a step-up tells the agent to ask the user to connect on the Database page | Done |
 | E46.7a | Pipelines (`pipelines_status`, `pipelines_failure_log`, `pipelines_dispatch`, `pipelines_cancel_run`) and usage (`usage_summary`) | Done |
-| E46.7 | Skills, security scans, packages, tests, prompts | Planned |
-| E46.8 | Deploy, Cloudflare, SSH and SFTP, remote, vault, studio, error tracking, WordPress, Relay | Planned |
+| E46.7 | Skills (`skills_list`, `skills_read`, `skills_available`, `skills_install`, `skills_uninstall`), prompts and blueprints (`prompts_list`, `prompts_save`, `prompts_remove`, `prompts_blueprint`, `prompts_blueprint_update`, `prompts_history`), packages (`packages_list`, `packages_outdated`, `packages_update`), security scans (`security_report`, `security_scanners`, `security_run_scan`, `security_cancel_scan`), tests (`tests_list`, `tests_results`, `tests_run`, `tests_cancel`) | Done |
+| E46.8 | Deploy (`hosting_servers`, `hosting_apps`, `hosting_websites`, `hosting_container_logs`, `deploy_app`, `hosting_app_restart`), Cloudflare DNS (`cloudflare_zones`, `cloudflare_dns_records`, `cloudflare_dns_save`, `cloudflare_dns_remove`), WordPress (`wordpress_sites`, `wordpress_site_status`, `wordpress_history`, `wordpress_deploy`, `wordpress_rollback`), error tracking (`errors_issues`, `errors_issue`, `errors_set_status`, `errors_connections`), SSH and SFTP (`ssh_list_hosts`, `ssh_run_command`, `ssh_list_folder`), remote (`remote_status`, `remote_list_devices`, `remote_stop_hosting`), vault (`vault_list`, `vault_reveal`, `vault_add_entry`, `vault_update_entry`), Studio (`studio_list_videos`, `studio_video_details`, `studio_update_scene`, `studio_update_video`), Relay (`relay_board`, `relay_task`). The Deploy services the IPC builds are kept in `deploy/liveServices.ts` and the database service in `database/service.ts`, so tools call the same instances | Done |
 
 ## Limits
 
 - In the CLI prompt mode the answer comes back through the agent's CLI. The Runova dialog is the
   stronger guarantee that the person answered.
-- Never exposed as tools: the AI access settings, vault CSV export, backup restore, app update and
-  quit.
+- Never exposed as tools: the AI access settings, vault CSV export and import, backup restore,
+  server firewall and hardening, app update and quit. `toolsContract.test.ts` checks the names.
+- Left in the UI because they are multi-step or need the person: uploading a new app revision,
+  certificates, WordPress connect and pull, database writes, Studio rendering and generation,
+  starting or pausing a relay, installs from skills.sh.
+- A locked vault or Servers passkey is never unlocked for an agent. The tool says to unlock it in
+  Runova first.
+- Test results live in memory, so after a restart `tests_results` has nothing to show.

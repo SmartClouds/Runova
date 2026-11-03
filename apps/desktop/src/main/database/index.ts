@@ -21,7 +21,7 @@ import { DatabaseConnectionStore } from './connectionStore';
 import { openDriver } from './drivers';
 import { readLocalEnvFile, serverEnvCommand } from './envFile';
 import { createLocalDocker } from './localDocker';
-import { DatabaseService } from './service';
+import { DatabaseService, setDatabaseService } from './service';
 
 /**
  * The Database section (E45) in main: saved connections sealed with the Servers vault, server
@@ -151,6 +151,7 @@ export function registerDatabaseIpc(
       reveal: (connectionId, name) => shell.showItemInFolder(backups.fileIn(connectionId, name)),
     },
   });
+  setDatabaseService(service);
   app.on('will-quit', () => void service.disconnectAll());
   return service;
 }

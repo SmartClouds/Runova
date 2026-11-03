@@ -20,6 +20,21 @@ describe('queryKeysForChange', () => {
     expect(queryKeysForChange({ area: 'projects', projectId: 'p1' })).toEqual([['projects']]);
   });
 
+  it('refreshes a whole page family by its key prefix for the larger areas', () => {
+    expect(queryKeysForChange({ area: 'health', projectId: null })).toEqual([['health']]);
+    expect(queryKeysForChange({ area: 'deploy', projectId: null })).toEqual([['deploy']]);
+    expect(queryKeysForChange({ area: 'cloudflare', projectId: null })).toEqual([
+      ['cloudflare', 'data'],
+    ]);
+    expect(queryKeysForChange({ area: 'vault', projectId: null })).toEqual([['vault', 'data']]);
+    expect(queryKeysForChange({ area: 'packages', projectId: 'p1' })).toEqual([['packages', 'p1']]);
+    expect(queryKeysForChange({ area: 'packages', projectId: null })).toEqual([['packages']]);
+  });
+
+  it('refetches nothing after a call that only reads usage', () => {
+    expect(queryKeysForChange({ area: 'usage', projectId: null })).toEqual([]);
+  });
+
   it('refetches everything for an area it has no list for', () => {
     expect(queryKeysForChange({ area: 'studio', projectId: null })).toBeNull();
   });

@@ -39,6 +39,16 @@ describe('AI access tools', () => {
     }
   });
 
+  it('covers every part of the app the settings page lists', () => {
+    const covered = new Set(tools.map((tool) => tool.area));
+    expect(AI_ACCESS_AREAS.filter((area) => !covered.has(area))).toEqual([]);
+  });
+
+  it('never offers the actions the design keeps out of reach', () => {
+    const forbidden = /vault_(export|import)|backup_restore|app_update|quit|ai_access/;
+    expect(tools.map((tool) => tool.name).filter((name) => forbidden.test(name))).toEqual([]);
+  });
+
   it('marks anything that removes, sends, reveals or runs as sensitive', () => {
     const unmarked = tools
       .filter((tool) => SENSITIVE_WORDS.test(tool.name) && tool.risk !== 'sensitive')

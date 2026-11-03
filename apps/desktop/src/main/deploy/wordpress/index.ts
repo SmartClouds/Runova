@@ -13,6 +13,7 @@ import {
   registerSealedSecretStore,
 } from '../../ssh/vault';
 import { store } from '../../store';
+import { setLiveDeployServices } from '../liveServices';
 import { readShippedConnector } from './connectorBundle';
 import { saveConnectorZip } from './connectorZip';
 import { WordPressProjectService } from './projectService';
@@ -78,5 +79,6 @@ export function registerDeployWordPressIpc(deps: {
         },
       }),
   });
+  setLiveDeployServices({ wordpress: service });
   registerDeployWordPressHandlers({ ipc: ipcMain, service, guard: deps.guard });
 }

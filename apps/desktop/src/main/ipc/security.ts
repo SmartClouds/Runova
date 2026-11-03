@@ -79,45 +79,58 @@ function resolveOptions(
   };
 }
 
+/** Which scanners can run on the project right now, with the project's saved scanner settings. */
+export async function securityPreflight(projectId: string): Promise<ScannerPreflight[]> {
+  const project = await getProject(projectId);
+  const saved = await getScannerSettings(projectId);
+  const options = resolveOptions({}, saved);
+  return checkAllPreflight({
+    projectPath: project.path,
+    config: toConfig(saved),
+    codeqlLanguage: options.codeqlLanguage,
+    codeqlBuildCommand: options.codeqlBuildCommand,
+    sonarProjectKey: options.sonarProjectKey,
+  });
+}
+
+/**
+ * Runs a scan with the project's saved scanner settings filling in what the caller left out.
+ * Resolves with the record once every scanner is done, which can take an hour.
+ */
+export async function startSecurityScan(
+  projectId: string,
+  requested: Partial<SecurityScanOptions>,
+  runId: string,
+): Promise<SecurityScanRecord> {
+  const project = await getProject(projectId);
+  const saved = await getScannerSettings(projectId);
+  const options = resolveOptions(requested, saved);
+
+  // The runner saves the record itself, so a scan whose caller navigated away is still
+  // written to history.
+  return runSecurityScan(runId || newScanRunId(), {
+    projectId,
+    projectName: project.name,
+    projectPath: project.path,
+    options,
+    config: toConfig(saved),
+  });
+}
+
 export function registerSecurityHandlers(): void {
   ipcMain.handle(
     IPC.security.preflight,
-    async (_event, projectId: string): Promise<ScannerPreflight[]> => {
-      const project = await getProject(projectId);
-      const saved = await getScannerSettings(projectId);
-      const options = resolveOptions({}, saved);
-      return checkAllPreflight({
-        projectPath: project.path,
-        config: toConfig(saved),
-        codeqlLanguage: options.codeqlLanguage,
-        codeqlBuildCommand: options.codeqlBuildCommand,
-        sonarProjectKey: options.sonarProjectKey,
-      });
-    },
+    (_event, projectId: string): Promise<ScannerPreflight[]> => securityPreflight(projectId),
   );
 
   ipcMain.handle(
     IPC.security.runScan,
-    async (
+    (
       _event,
       projectId: string,
       requested: Partial<SecurityScanOptions>,
       runId: string,
-    ): Promise<SecurityScanRecord> => {
-      const project = await getProject(projectId);
-      const saved = await getScannerSettings(projectId);
-      const options = resolveOptions(requested, saved);
-
-      // The runner saves the record itself, so a scan whose caller navigated away is still
-      // written to history.
-      return runSecurityScan(runId || newScanRunId(), {
-        projectId,
-        projectName: project.name,
-        projectPath: project.path,
-        options,
-        config: toConfig(saved),
-      });
-    },
+    ): Promise<SecurityScanRecord> => startSecurityScan(projectId, requested, runId),
   );
 
   ipcMain.handle(IPC.security.cancelScan, (_event, runId: string): boolean =>

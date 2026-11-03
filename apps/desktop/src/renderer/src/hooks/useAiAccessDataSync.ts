@@ -16,7 +16,39 @@ export function queryKeysForChange(change: AiAccessDataChange): Key[] | null {
   const project = change.projectId;
   switch (change.area) {
     case 'runova':
+    case 'usage':
       return [];
+    case 'health':
+      return [queryKeys.health];
+    case 'pipelines':
+      return project ? [queryKeys.pipelineStatus(project)] : [['pipeline-status']];
+    case 'packages':
+      return project ? [queryKeys.packages(project)] : [['packages']];
+    case 'security':
+      return project ? [['security', project]] : [['security']];
+    case 'tests':
+      return project ? [queryKeys.testsDiscovery(project)] : [['tests-discovery']];
+    case 'skills':
+      return [['installed-skills'], ['skill-updates']];
+    case 'prompts':
+      return [queryKeys.templates, ['blueprint'], ['blueprint-presets']];
+    case 'database':
+      return [['database']];
+    case 'deploy':
+    case 'wordpress':
+      return [['deploy']];
+    case 'cloudflare':
+      return [queryKeys.cloudflareData];
+    case 'vault':
+      return [queryKeys.vaultData];
+    case 'ssh':
+      return [queryKeys.sshServers];
+    case 'remote':
+      return [queryKeys.remoteSavedServers];
+    case 'relay':
+      return [['relay']];
+    case 'errorTracking':
+      return [queryKeys.errorTracking];
     case 'projects':
       return [queryKeys.projects];
     case 'environments':
