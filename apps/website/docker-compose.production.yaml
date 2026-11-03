@@ -82,7 +82,7 @@ services:
         target: /etc/caddy/Caddyfile
     ports:
       # Loopback only: the server's nginx is the one way in from outside.
-      - 127.0.0.1:${WEBSITE_PORT:-8090}:80
+      - 127.0.0.1:${WEBSITE_PORT:-8040}:80
     volumes:
       - media:/srv/media:ro
     # The API image has no shell to check itself with, so the gateway waits for both upstreams.
