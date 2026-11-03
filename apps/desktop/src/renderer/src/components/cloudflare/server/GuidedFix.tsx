@@ -6,9 +6,10 @@ import {
 } from '@shared/cloudflareErrors';
 import { coreErrorMessage } from '@shared/coreErrors';
 import { useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Key, TriangleAlert } from '@/components/icons';
+import { ExternalLink, Key, RefreshCw, TriangleAlert } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { queryKeys } from '@/lib/queryKeys';
+import { cn } from '@/lib/utils';
 import { Notice } from '../fields';
 
 /**
@@ -19,10 +20,16 @@ import { Notice } from '../fields';
 export function GuidedFix({
   error,
   alternative,
+  onRetry,
+  retrying = false,
 }: {
   error: unknown;
   /** Shown under the fix, such as "or paste a token you made yourself". */
   alternative?: React.ReactNode;
+  /** When set, a button beside the token page link checks again once the permission is added. */
+  onRetry?: () => void;
+  /** Disables the retry button and spins its icon while the check runs. */
+  retrying?: boolean;
 }): React.JSX.Element | null {
   const queryClient = useQueryClient();
   if (!error) return null;
@@ -47,17 +54,25 @@ export function GuidedFix({
           The Cloudflare token cannot {needed.action} yet. On Cloudflare, edit the token and add{' '}
           <span className="font-mono text-xs">{needed.label}</span>, then try again.
         </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="soft"
-          onClick={() => {
-            void window.runova.shell.openExternal(TOKEN_PAGE);
-            void queryClient.invalidateQueries({ queryKey: queryKeys.cloudflareStatus });
-          }}
-        >
-          <ExternalLink className="h-3.5 w-3.5" /> Open Cloudflare's token page
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="soft"
+            onClick={() => {
+              void window.runova.shell.openExternal(TOKEN_PAGE);
+              void queryClient.invalidateQueries({ queryKey: queryKeys.cloudflareStatus });
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open Cloudflare's token page
+          </Button>
+          {onRetry ? (
+            <Button type="button" size="sm" disabled={retrying} onClick={onRetry}>
+              <RefreshCw className={cn('h-3.5 w-3.5', retrying && 'animate-spin')} /> I added it,
+              try again
+            </Button>
+          ) : null}
+        </div>
         {alternative}
       </div>
     </Notice>

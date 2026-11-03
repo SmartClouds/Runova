@@ -209,17 +209,8 @@ export function TurnstileCard({ zone }: { zone: CloudflareZone }): React.JSX.Ele
         {refused ? (
           <GuidedFix
             error={widgets.error}
-            alternative={
-              <Button
-                type="button"
-                size="sm"
-                variant="link"
-                className="px-0"
-                onClick={() => void widgets.refetch()}
-              >
-                I added it, try again
-              </Button>
-            }
+            onRetry={() => void widgets.refetch()}
+            retrying={widgets.isFetching}
           />
         ) : (
           <Problem message={problem ?? ''} onRetry={() => void widgets.refetch()} />
