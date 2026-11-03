@@ -501,6 +501,66 @@ describe('confirmation round trip', () => {
   });
 });
 
+describe('/app-mcp', () => {
+  async function postJson(port: number, path: string, body: unknown) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method: 'POST',
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.text() };
+  }
+
+  it('hands each route to the AI access handlers once the secret matches', async () => {
+    const file = await startAndRead();
+    const module = await import('./hookServer');
+    const seen: { route: string; body: Record<string, unknown> }[] = [];
+    module.setAiAccessHttpHandlers({
+      handle: async (route, body) => {
+        seen.push({ route, body });
+        return { ok: true, text: `answer for ${route}` };
+      },
+    });
+
+    for (const route of ['tools', 'call', 'decide'] as const) {
+      const answer = await postJson(file.port, `/app-mcp/${route}`, {
+        token: file.token,
+        tool: 'x',
+      });
+      expect(answer).toEqual({
+        status: 200,
+        body: JSON.stringify({ ok: true, text: `answer for ${route}` }),
+      });
+    }
+    expect(seen.map((one) => one.route)).toEqual(['tools', 'call', 'decide']);
+    expect(seen[1].body).toEqual({ token: file.token, tool: 'x' });
+    module.setAiAccessHttpHandlers(null);
+  });
+
+  it('refuses a call without the secret, and answers 503 while AI access is not ready', async () => {
+    const file = await startAndRead();
+    const module = await import('./hookServer');
+    const handle = vi.fn();
+    module.setAiAccessHttpHandlers({ handle });
+
+    expect((await postJson(file.port, '/app-mcp/call', { token: 'nope' })).status).toBe(401);
+    expect((await postJson(file.port, '/app-mcp/call', 'not json')).status).toBe(400);
+    expect(handle).not.toHaveBeenCalled();
+
+    module.setAiAccessHttpHandlers(null);
+    expect((await postJson(file.port, '/app-mcp/call', { token: file.token })).status).toBe(503);
+  });
+
+  it('takes a whole env file, far larger than a hook payload', async () => {
+    const file = await startAndRead();
+    const module = await import('./hookServer');
+    module.setAiAccessHttpHandlers({ handle: async () => ({ ok: true }) });
+
+    const big = { token: file.token, args: { content: 'A=1\n'.repeat(100_000) } };
+    expect((await postJson(file.port, '/app-mcp/call', big)).status).toBe(200);
+    module.setAiAccessHttpHandlers(null);
+  });
+});
+
 describe('stopHookServer', () => {
   it('closes the port so nothing answers on it any more', async () => {
     const file = await startAndRead();

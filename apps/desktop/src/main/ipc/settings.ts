@@ -1,6 +1,7 @@
 import type { AppSettings } from '@runova/core';
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
+import { applyAiAccessSettings } from '../aiAccess/service';
 import { clearGrammarCache } from '../grammar/languageToolClient';
 import { stopLocalServer } from '../grammar/localServer';
 import { applyProxySettings } from '../network/proxy';
@@ -29,6 +30,7 @@ export function registerSettingsHandlers(): void {
       }
       // News off stops the poll schedule right away, and on starts it again.
       if ('newsEnabled' in updates) applyNewsSettings(next);
+      if ('aiAccessEnabled' in updates) applyAiAccessSettings(next);
 
       // Waited on rather than fired off, so the settings call only resolves
       // once the new route is the one the next request will take.

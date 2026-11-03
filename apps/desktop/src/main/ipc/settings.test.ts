@@ -39,6 +39,8 @@ vi.mock('../network/proxy', () => ({ applyProxySettings: vi.fn() }));
 vi.mock('../pet/petWindow', () => ({ petManager: { syncFromSettings: vi.fn() } }));
 const applyNewsSettings = vi.hoisted(() => vi.fn());
 vi.mock('../news/runtime', () => ({ applyNewsSettings }));
+const applyAiAccessSettings = vi.hoisted(() => vi.fn());
+vi.mock('../aiAccess/service', () => ({ applyAiAccessSettings }));
 
 const dataFile = (name: string): string => join(userData.dir, 'data', name);
 
@@ -207,6 +209,16 @@ describe('news (E42)', () => {
     await ipc(IPC.settings.update, { newsEnabled: false });
     expect(applyNewsSettings).toHaveBeenCalledTimes(1);
     expect(applyNewsSettings.mock.calls[0]?.[0]).toMatchObject({ newsEnabled: false });
+  });
+
+  it('tells AI access when it is turned on or off, so turning it off drops what was allowed', async () => {
+    applyAiAccessSettings.mockClear();
+    await ipc(IPC.settings.update, { aiAccessMode: 'all' });
+    expect(applyAiAccessSettings).not.toHaveBeenCalled();
+
+    await ipc(IPC.settings.update, { aiAccessEnabled: false });
+    expect(applyAiAccessSettings).toHaveBeenCalledTimes(1);
+    expect(applyAiAccessSettings.mock.calls[0]?.[0]).toMatchObject({ aiAccessEnabled: false });
   });
 });
 

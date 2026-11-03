@@ -8,6 +8,7 @@ import { app, BrowserWindow, desktopCapturer, protocol, session, shell } from 'e
 import { BROWSER_PARTITION } from '../shared/browserGuest';
 import { stopAllRdpTasks } from './agents/rdpTaskRunner';
 import { flushSshTaskHistory, stopAllSshTasks } from './agents/sshTaskRunner';
+import { startAiAccess, stopAiAccess } from './aiAccess/service';
 import { stopEmulatorsOnQuit } from './android/runtime';
 import { appCsp, keepsOwnCsp } from './appCsp';
 import { appIcon, appUserModelId, removeDevShortcuts, showAppIconInDev } from './appIcon';
@@ -25,6 +26,7 @@ import { registerActivityHandlers } from './ipc/activity';
 import { registerAgentChatHandlers } from './ipc/agentChat';
 import { registerAgentHandlers } from './ipc/agents';
 import { registerAiHandlers } from './ipc/ai';
+import { registerAiAccessHandlers } from './ipc/aiAccess';
 import { registerAndroidHandlers } from './ipc/android';
 import { registerApiClientHandlers, shutdownApiClient } from './ipc/apiClient';
 import { registerAppHandlers } from './ipc/app';
@@ -360,6 +362,7 @@ function registerAllIpcHandlers(): void {
   registerPowerHandlers();
   registerProjectHandlers();
   registerRunProposalHandlers();
+  registerAiAccessHandlers();
   registerProxyHandlers();
   registerSkillHandlers();
   registerMcpHandlers();
@@ -534,7 +537,10 @@ app.whenReady().then(async () => {
   void pruneOrphanFileSites();
   void pruneStudioProjects();
   // Relay legs report through the hook server, so it starts first; neither blocks the window.
-  void startHookServer().then(() => startRelayService().catch(() => undefined));
+  void startHookServer().then(() => {
+    startAiAccess();
+    return startRelayService().catch(() => undefined);
+  });
   setMainWindowFactory(createMainWindow);
   // Nothing answers a confirmation dialog in a test, so closing must not ask.
   if (isE2E) allowQuit();
@@ -611,6 +617,7 @@ app.on('before-quit', (event) => {
     .getSettings()
     .then((settings) => stopEmulatorsOnQuit(settings.androidStopEmulatorsOnQuit === true));
   petManager.close();
+  stopAiAccess();
   stopHookServer();
   stopResetAlertWatcher();
   stopThresholdAlertWatcher();

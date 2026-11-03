@@ -323,6 +323,68 @@ async function handleRelayHttp(
   }
 }
 
+/**
+ * AI access (E46) routes, attached by the AI access module so this server does not import it. The
+ * bridge script reads the secret from the port file like every other generated script.
+ */
+export type AiAccessRoute = 'tools' | 'call' | 'decide';
+
+export interface AiAccessHttpHandlers {
+  handle(route: AiAccessRoute, body: Record<string, unknown>): Promise<unknown>;
+}
+
+let aiAccessHandlers: AiAccessHttpHandlers | null = null;
+
+export function setAiAccessHttpHandlers(handlers: AiAccessHttpHandlers | null): void {
+  aiAccessHandlers = handlers;
+}
+
+/** An agent may hand over a whole env file or request body, so these routes take more. */
+const AI_ACCESS_MAX_BODY_BYTES = 4 * 1024 * 1024;
+
+const AI_ACCESS_ROUTES: Record<string, AiAccessRoute> = {
+  '/app-mcp/tools': 'tools',
+  '/app-mcp/call': 'call',
+  '/app-mcp/decide': 'decide',
+};
+
+async function handleAiAccessHttp(
+  req: IncomingMessage,
+  res: ServerResponse,
+  route: AiAccessRoute,
+): Promise<void> {
+  const body = await readBodyUpTo(req, AI_ACCESS_MAX_BODY_BYTES);
+  if (body === null) {
+    res.writeHead(413).end();
+    req.destroy();
+    return;
+  }
+  let parsed: Record<string, unknown>;
+  try {
+    const value: unknown = JSON.parse(body);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('shape');
+    parsed = value as Record<string, unknown>;
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+  if (!tokenMatches(parsed.token)) {
+    res.writeHead(401).end();
+    return;
+  }
+  const handlers = aiAccessHandlers;
+  if (!handlers) {
+    res.writeHead(503).end();
+    return;
+  }
+  try {
+    const answer = await handlers.handle(route, parsed);
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer));
+  } catch {
+    res.writeHead(500).end();
+  }
+}
+
 export async function startHookServer(): Promise<void> {
   if (server) return;
 
@@ -334,6 +396,11 @@ export async function startHookServer(): Promise<void> {
     }
     if (route === '/relay-gate' || route === '/relay') {
       void handleRelayHttp(req, res, route);
+      return;
+    }
+    const aiAccessRoute = route ? AI_ACCESS_ROUTES[route] : undefined;
+    if (aiAccessRoute) {
+      void handleAiAccessHttp(req, res, aiAccessRoute);
       return;
     }
     if (route !== '/hook' && route !== '/agent-event') {

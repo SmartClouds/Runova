@@ -26,6 +26,10 @@ export const queryKeys = {
   /** One collection in full, nested under the list so one invalidate refreshes both. */
   apiCollection: (id: string) => ['api-collections', id] as const,
   project: (id: string) => ['projects', id] as const,
+  /** AI access (E46): the tools agents get, the CLIs connected outside Runova, what agents did. */
+  aiAccessTools: ['ai-access', 'tools'] as const,
+  aiAccessExternal: ['ai-access', 'external'] as const,
+  aiAccessActivity: ['ai-access', 'activity'] as const,
   activity: ['activity'] as const,
   repositories: ['skill-repositories'] as const,
   /** Prefix of every repositoryIndex key, for invalidating them all at once. */

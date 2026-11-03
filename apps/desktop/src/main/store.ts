@@ -59,6 +59,7 @@ import {
   withBlueprintDefaults,
 } from '@runova/core';
 import { app } from 'electron';
+import { aiAccessSettingsFields } from '../shared/aiAccessSettings';
 import type {
   FavoriteSkillRecord,
   LastRunInfoByCli,
@@ -291,6 +292,7 @@ function withSettingsMigrations(settings: AppSettings): AppSettings {
     terminalAiNotifications: settings.terminalAiNotifications !== false,
     checkToolUpdatesEnabled: settings.checkToolUpdatesEnabled !== false,
     ...newsSettingsFields(settings),
+    ...aiAccessSettingsFields(settings),
     keepAwake:
       settings.keepAwake === 'on' || settings.keepAwake === 'off' ? settings.keepAwake : 'agent',
     theme: isThemeMode(settings.theme) ? settings.theme : 'system',

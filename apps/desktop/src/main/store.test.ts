@@ -782,6 +782,42 @@ describe('settings migrations', () => {
     expect((await store.getSettings()).defaultAgentTabMode).toBe('chat');
   });
 
+  it('keeps AI access off with the safe defaults for a file that predates it', async () => {
+    userData.writeData('settings.json', { theme: 'dark' });
+    const { store } = await loadStore();
+
+    expect(await store.getSettings()).toMatchObject({
+      aiAccessEnabled: false,
+      aiAccessMode: 'sensitive',
+      aiAccessPrompt: 'modal',
+      aiAccessClients: 'runova',
+      aiAccessAttachToTabs: true,
+    });
+  });
+
+  it('cleans AI access values it does not know and keeps the ones it does', async () => {
+    const { store } = await loadStore();
+
+    userData.writeData('settings.json', { aiAccessMode: 'god', aiAccessClients: null });
+    expect(await store.getSettings()).toMatchObject({
+      aiAccessMode: 'sensitive',
+      aiAccessClients: 'runova',
+    });
+
+    userData.writeData('settings.json', {
+      aiAccessEnabled: true,
+      aiAccessMode: 'full',
+      aiAccessPrompt: 'cli',
+      aiAccessClients: 'external',
+    });
+    expect(await store.getSettings()).toMatchObject({
+      aiAccessEnabled: true,
+      aiAccessMode: 'full',
+      aiAccessPrompt: 'cli',
+      aiAccessClients: 'external',
+    });
+  });
+
   it('fills in a key the saved file has never heard of', async () => {
     userData.writeData('settings.json', { theme: 'dark' });
     const { store, DEFAULT_SETTINGS } = await loadStore();

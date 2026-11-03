@@ -234,6 +234,26 @@ describe('terminal:create', () => {
       RUNOVA_SESSION_ID: 'tab-1',
       RUNOVA_PROJECT_ID: 'project-1',
     });
+    // The key lets an agent in this tab prove to AI access that it runs inside Runova.
+    const { aiAccessSessionKey } = await import('../aiAccess/sessionKey');
+    expect((payload.env as Record<string, string>).RUNOVA_AI_ACCESS_KEY).toBe(
+      aiAccessSessionKey('tab-1'),
+    );
+  });
+
+  it('tells AI access which project and CLI a tab has, and nothing about an unknown one', async () => {
+    const terminal = await import('./terminal');
+    await invoke(IPC.terminal.create, {
+      sessionId: 'tab-info',
+      projectId: 'project-9',
+      cliId: 'codex-cli',
+    });
+
+    expect(terminal.terminalSessionInfo('tab-info')).toMatchObject({
+      projectId: 'project-9',
+      cliId: 'codex-cli',
+    });
+    expect(terminal.terminalSessionInfo('nobody')).toBeUndefined();
   });
 
   it('puts the tool folders on the end of PATH, even ones that do not exist yet', async () => {

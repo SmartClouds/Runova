@@ -192,6 +192,11 @@ export class FakeBrowserWindow {
     return FakeBrowserWindow.instances.find((one) => one.webContents.id === contents.id) ?? null;
   }
 
+  /** Tests run with no window in front, as if the app were in the background. */
+  static getFocusedWindow(): FakeBrowserWindow | null {
+    return null;
+  }
+
   on(event: string, listener: (...args: unknown[]) => void): this {
     const existing = this.events.get(event) ?? [];
     existing.push(listener);

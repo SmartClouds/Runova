@@ -85,6 +85,15 @@ import type {
 } from '@runova/core';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
+  AiAccessActivityEntry,
+  AiAccessApproval,
+  AiAccessDataChange,
+  AiAccessToolInfo,
+  AiApprovalDecision,
+  AiExternalClientId,
+  AiExternalClientStatus,
+} from '../shared/aiAccessTypes';
+import type {
   ApiCollectionSummary,
   ApiExecutionResult,
   ExecuteApiRequestInput,
@@ -2918,6 +2927,32 @@ const splash = {
   onClose: (cb: () => void): (() => void) => subscribe(IPC.splash.onClose, cb),
 };
 
+/** AI access (E46): Runova's MCP server for AI agents, its approvals and what agents did. */
+const aiAccess = {
+  listTools: (): Promise<AiAccessToolInfo[]> => ipcRenderer.invoke(IPC.aiAccess.listTools),
+  pendingApprovals: (): Promise<AiAccessApproval[]> =>
+    ipcRenderer.invoke(IPC.aiAccess.pendingApprovals),
+  decide: (id: string, decision: AiApprovalDecision): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.aiAccess.decide, { id, decision }),
+  activity: (): Promise<AiAccessActivityEntry[]> => ipcRenderer.invoke(IPC.aiAccess.activity),
+  clearActivity: (): Promise<void> => ipcRenderer.invoke(IPC.aiAccess.clearActivity),
+  externalStatus: (): Promise<AiExternalClientStatus[]> =>
+    ipcRenderer.invoke(IPC.aiAccess.externalStatus),
+  connectExternal: (id: AiExternalClientId): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.aiAccess.connectExternal, id),
+  disconnectExternal: (id: AiExternalClientId): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.aiAccess.disconnectExternal, id),
+  configSnippet: (): Promise<string> => ipcRenderer.invoke(IPC.aiAccess.configSnippet),
+  launchArgs: (cliId: string): Promise<string[]> =>
+    ipcRenderer.invoke(IPC.aiAccess.launchArgs, cliId),
+  onApprovalsChanged: (callback: (approvals: AiAccessApproval[]) => void): (() => void) =>
+    subscribe(IPC.aiAccess.onApprovalsChanged, callback),
+  onActivity: (callback: (entry: AiAccessActivityEntry) => void): (() => void) =>
+    subscribe(IPC.aiAccess.onActivity, callback),
+  onDataChanged: (callback: (change: AiAccessDataChange) => void): (() => void) =>
+    subscribe(IPC.aiAccess.onDataChanged, callback),
+};
+
 /** Run commands an AI agent suggests for a project. Each suggestion waits for the user's decision. */
 const runProposals = {
   list: (): Promise<RunProposal[]> => ipcRenderer.invoke(IPC.runProposals.list),
@@ -2947,6 +2982,7 @@ const runovaApi = {
   platform: process.platform,
   windowsBuild: windowsBuildNumber(),
   app: appInfo,
+  aiAccess,
   runProposals,
   cli,
   terminal,

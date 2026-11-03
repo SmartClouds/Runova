@@ -56,6 +56,7 @@ import {
   Pause,
   Paw,
   Play,
+  Plug,
   Power,
   RefreshCw,
   Robot,
@@ -76,6 +77,10 @@ import { SECTION_HEADING } from '@/components/pageKit';
 import { CompanionSettings } from '@/components/pet/CompanionSettings';
 import { AgentTabViewSettings } from '@/components/settings/AgentTabViewSettings';
 import { AndroidSdkSettings } from '@/components/settings/AndroidSdkSettings';
+import { AiAccessActivityCard } from '@/components/settings/aiAccess/AiAccessActivityCard';
+import { AiAccessConnectCard } from '@/components/settings/aiAccess/AiAccessConnectCard';
+import { AiAccessSettings } from '@/components/settings/aiAccess/AiAccessSettings';
+import { AiAccessToolsCard } from '@/components/settings/aiAccess/AiAccessToolsCard';
 import {
   LabelRow,
   PROVIDER_LABELS,
@@ -180,6 +185,7 @@ const SETTINGS_TABS = [
   'shortcuts',
   'companion',
   'ai',
+  'aiAccess',
   'notifications',
   'network',
   'vault',
@@ -212,6 +218,9 @@ const PIPELINE_FAILURE_OPEN_OPTIONS: ComboboxOption[] = [
 
 const VAULT_KEYWORDS =
   'vault password passwords manager credentials auto-lock lock idle clipboard clear master password reset sleep';
+
+const AI_ACCESS_KEYWORDS =
+  'ai access mcp server model context protocol agent agents claude code codex copilot permission permissions approve approval allow deny ask full access sensitive modal cli session connect other apps env environment api client tools activity';
 
 const PROXY_KEYWORDS =
   'proxy http proxy https proxy socks socks5 socks4 system proxy vpn bypass no_proxy corporate firewall connection internet network offline pac auth username password port host';
@@ -262,6 +271,13 @@ const TAB_META: {
     icon: MessageSquare,
     keywords:
       'openai gemini ollama api key whisper voice translate writing grammar spelling style languagetool context length num_ctx keep alive test connection local model',
+  },
+  {
+    id: 'aiAccess',
+    label: 'AI access',
+    description: 'Let AI agents work with Runova over MCP, and decide what they may do.',
+    icon: Plug,
+    keywords: AI_ACCESS_KEYWORDS,
   },
   {
     id: 'notifications',
@@ -488,6 +504,22 @@ const SECTIONS = {
     tab: 'network',
     title: 'Network ping targets',
     keywords: 'ping network hosts dashboard url http generate_204 icmp status bar ipv4 ipv6',
+  },
+  aiAccess: { tab: 'aiAccess', title: 'AI access', keywords: AI_ACCESS_KEYWORDS },
+  aiAccessConnect: {
+    tab: 'aiAccess',
+    title: 'Connect other apps',
+    keywords: 'mcp connect other apps claude code codex editor ide config add remove external',
+  },
+  aiAccessTools: {
+    tab: 'aiAccess',
+    title: 'What agents can do',
+    keywords: 'mcp tools agents can do read write sensitive asks runs areas',
+  },
+  aiAccessActivity: {
+    tab: 'aiAccess',
+    title: 'Recent activity',
+    keywords: 'mcp activity history log agent calls approved denied audit',
   },
   vault: { tab: 'vault', title: 'Vault', keywords: VAULT_KEYWORDS },
   backup: {
@@ -1557,6 +1589,8 @@ export default function SettingsPage(): React.JSX.Element {
     shortcuts: false,
     companion: false,
     ai: aiDirty || speechDirty || translateRetriesDirty,
+    // AI access saves the moment it changes.
+    aiAccess: false,
     notifications: telegramDirty,
     network: proxyDirty || pingTargetsDirty || pingUrlsDirty,
     // Vault settings persist the moment they change.
@@ -2690,6 +2724,13 @@ export default function SettingsPage(): React.JSX.Element {
                     </p>
                   </SettingsCard>
                 )}
+
+                {searchGroupLabel('aiAccess')}
+
+                {show('aiAccess') ? <AiAccessSettings /> : null}
+                {show('aiAccessConnect') ? <AiAccessConnectCard /> : null}
+                {show('aiAccessTools') ? <AiAccessToolsCard /> : null}
+                {show('aiAccessActivity') ? <AiAccessActivityCard /> : null}
 
                 {searchGroupLabel('notifications')}
 

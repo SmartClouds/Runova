@@ -286,6 +286,25 @@ export const IPC = {
     // main -> Remote Desktop window: the task's status changed (thinking, proposed an action, ...)
     onProgress: 'rdpAgent:onProgress',
   },
+  /** AI access (E46): Runova's own MCP server for AI agents, its approvals and its activity. */
+  aiAccess: {
+    listTools: 'aiAccess:listTools',
+    pendingApprovals: 'aiAccess:pendingApprovals',
+    decide: 'aiAccess:decide',
+    activity: 'aiAccess:activity',
+    clearActivity: 'aiAccess:clearActivity',
+    externalStatus: 'aiAccess:externalStatus',
+    connectExternal: 'aiAccess:connectExternal',
+    disconnectExternal: 'aiAccess:disconnectExternal',
+    configSnippet: 'aiAccess:configSnippet',
+    launchArgs: 'aiAccess:launchArgs',
+    /** Main tells every window the approvals waiting on the user changed. */
+    onApprovalsChanged: 'aiAccess:onApprovalsChanged',
+    /** Main tells every window an agent call was recorded. */
+    onActivity: 'aiAccess:onActivity',
+    /** Main tells every window an agent changed something, so the screens showing it refetch. */
+    onDataChanged: 'aiAccess:onDataChanged',
+  },
   runProposals: {
     list: 'runProposals:list',
     decide: 'runProposals:decide',

@@ -15,6 +15,7 @@ import { IPC } from '../../shared/ipcChannels';
 import { createAutoContinue } from '../agents/autoContinue';
 import { supportsStatusHooks } from '../agents/claudeHooks';
 import { agentStatus } from '../agents/statusTracker';
+import { aiAccessSessionKey } from '../aiAccess/sessionKey';
 import { keepAwake } from '../power/keepAwake';
 import type { HostClient } from '../ptyHost/hostClient';
 import { connectToHost } from '../ptyHost/hostLauncher';
@@ -300,6 +301,8 @@ function terminalEnv(sessionId: string, projectId?: string): Record<string, stri
     // which tab it belongs to. Only a brand-new shell picks them up.
     RUNOVA_SESSION_ID: sessionId,
     RUNOVA_PROJECT_ID: projectId ?? '',
+    // Proves to AI access that an agent started here runs in a Runova tab (aiAccess/sessionKey).
+    RUNOVA_AI_ACCESS_KEY: aiAccessSessionKey(sessionId),
   };
   const key = pathKey(env);
   const current = (env[key] ?? '').split(delimiter).filter(Boolean);
@@ -640,6 +643,11 @@ export function findSessionIdForProject(projectId: string): string | null {
 }
 
 /** True while `sessionId` is a local shell this process is attached to and can drive. */
+/** What main knows about a running session: its project and CLI, for AI access. */
+export function terminalSessionInfo(sessionId: string): TerminalSessionInfo | undefined {
+  return sessions.get(sessionId);
+}
+
 export function hasAttachedTerminalSession(sessionId: string): boolean {
   return attached.has(sessionId) && sessions.has(sessionId);
 }

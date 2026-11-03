@@ -45,6 +45,34 @@ export function isAgentTabMode(value: unknown): value is AgentTabMode {
 }
 
 /**
+ * AI access (E46): how much an AI agent connected to Runova's MCP server may do without asking.
+ * 'full' never asks, 'sensitive' asks before actions that change or reveal something sensitive,
+ * 'all' asks before every call, reads included.
+ */
+export const AI_ACCESS_MODES = ['full', 'sensitive', 'all'] as const;
+export type AiAccessMode = (typeof AI_ACCESS_MODES)[number];
+
+export function isAiAccessMode(value: unknown): value is AiAccessMode {
+  return AI_ACCESS_MODES.includes(value as AiAccessMode);
+}
+
+/** Where Runova asks for an approval: its own window, or inside the agent's CLI session. */
+export const AI_ACCESS_PROMPTS = ['modal', 'cli'] as const;
+export type AiAccessPrompt = (typeof AI_ACCESS_PROMPTS)[number];
+
+export function isAiAccessPrompt(value: unknown): value is AiAccessPrompt {
+  return AI_ACCESS_PROMPTS.includes(value as AiAccessPrompt);
+}
+
+/** Which agents may connect: those in Runova's own tabs, those in other apps, or both. */
+export const AI_ACCESS_CLIENTS = ['runova', 'both', 'external'] as const;
+export type AiAccessClients = (typeof AI_ACCESS_CLIENTS)[number];
+
+export function isAiAccessClients(value: unknown): value is AiAccessClients {
+  return AI_ACCESS_CLIENTS.includes(value as AiAccessClients);
+}
+
+/**
  * Where the main window opens. 'last' reopens the page the app was on when it closed; the rest
  * are the sidebar's pages, so the list has to follow the sidebar when a page is added there.
  */
@@ -518,6 +546,16 @@ export interface AppSettings {
   startupPage: StartupPage;
   /** How a Workspace agent tab shows its CLI until the user switches that tab's view. */
   defaultAgentTabMode: AgentTabMode;
+  /** Whether AI agents may use Runova through its MCP server (E46). */
+  aiAccessEnabled: boolean;
+  /** How much a connected agent may do without asking. */
+  aiAccessMode: AiAccessMode;
+  /** Where approvals are asked: the Runova window or the agent's CLI session. */
+  aiAccessPrompt: AiAccessPrompt;
+  /** Which agents may connect: Runova's own tabs, other apps, or both. */
+  aiAccessClients: AiAccessClients;
+  /** Whether agent tabs Runova opens get the MCP server attached on their command line. */
+  aiAccessAttachToTabs: boolean;
   /** Folder that holds the user's projects; folder pickers open here instead of the OS default. */
   projectsRootPath: string | null;
   skillRepositoryIds: string[];

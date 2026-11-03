@@ -62,12 +62,35 @@ export function prepareStatusHooks(cliIds: string[]): void {
     statusHookSettings.set(cliId, null);
     statusHookLookups.set(
       cliId,
-      window.runova.agents
-        .statusHookSettings(cliId)
-        .then((path) => statusHookSettings.set(cliId, path))
-        .catch(() => undefined),
+      Promise.all([
+        window.runova.agents
+          .statusHookSettings(cliId)
+          .then((path) => statusHookSettings.set(cliId, path))
+          .catch(() => undefined),
+        lookUpAiAccessArgs(cliId),
+      ]),
     );
   }
+}
+
+/**
+ * The flags that give a CLI Runova's AI access server (E46), fetched ahead of launch like the
+ * status hooks. Empty while AI access is off or set to leave Runova's tabs alone.
+ */
+const aiAccessArgs = new Map<string, string[]>();
+
+function lookUpAiAccessArgs(cliId: string): Promise<void> {
+  return window.runova.aiAccess
+    .launchArgs(cliId)
+    .then((args) => {
+      aiAccessArgs.set(cliId, args);
+    })
+    .catch(() => undefined);
+}
+
+/** Fetches the flags again for every CLI seen so far, after the AI access settings changed. */
+export function refreshAiAccessLaunchArgs(): Promise<void> {
+  return Promise.all([...statusHookSettings.keys()].map(lookUpAiAccessArgs)).then(() => undefined);
 }
 
 /**
@@ -89,7 +112,7 @@ function agentCommand(
     cliId,
     shellKind: shellKindFor(shell, window.runova.platform),
     launchDefaults: cliLaunchDefaults[cliId],
-    runArgs,
+    runArgs: [...runArgs, ...(aiAccessArgs.get(cliId) ?? [])],
     leadingArgs,
     hookSettingsPath: statusHookSettings.get(cliId),
     skipLaunchDefaults,

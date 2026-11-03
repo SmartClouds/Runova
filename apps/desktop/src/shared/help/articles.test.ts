@@ -61,6 +61,36 @@ describe('HELP_ARTICLES', () => {
   });
 });
 
+describe('the AI Access article (E46)', () => {
+  const raw = readFileSync(join(articleDir, 'ai-access.md'), 'utf-8');
+
+  it('parses and opens Settings on the AI access tab', () => {
+    const article = parseArticle('ai-access', raw);
+    expect(article.title).toBe('AI Access');
+    expect(article.category).toBe('Agents');
+    expect(article.route).toBe('/settings?tab=aiAccess');
+    expect(article.sections.map((section) => section.heading)).toEqual(
+      expect.arrayContaining([
+        'Who can connect',
+        'What agents may do without asking',
+        'Where Runova asks',
+        'Connect other apps',
+      ]),
+    );
+  });
+
+  it('is found by Help search', () => {
+    const search = createHelpSearch(HELP_ARTICLES);
+    expect(search('ai access')[0]?.slug).toBe('ai-access');
+    expect(search('agent permissions').map((hit) => hit.slug)).toContain('ai-access');
+  });
+
+  it('follows the website copy rules, since the website shows it too', () => {
+    expect(raw).not.toMatch(/\bmobile\b|\bphone\b/i);
+    expect(raw).not.toContain(String.fromCharCode(0x2014));
+  });
+});
+
 describe('the News article (E42)', () => {
   const raw = readFileSync(join(articleDir, 'news.md'), 'utf-8');
 

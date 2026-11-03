@@ -25,12 +25,15 @@ vi.mock('@/stores/workspaceStore', () => ({
 
 const settingsUpdate = vi.fn((_patch: unknown) => Promise.resolve({}));
 
+const aiAccessArgs = { current: [] as string[] };
+
 function stubRunova(hookPath: string | null = null): void {
   vi.stubGlobal('window', {
     runova: {
       platform: 'win32',
       settings: { update: settingsUpdate },
       agents: { statusHookSettings: vi.fn(() => Promise.resolve(hookPath)) },
+      aiAccess: { launchArgs: vi.fn(() => Promise.resolve(aiAccessArgs.current)) },
     },
   });
 }
@@ -59,6 +62,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.resetModules();
+  aiAccessArgs.current = [];
   addTerminal.mockClear();
   settingsUpdate.mockClear();
   stubRunova();
@@ -153,6 +157,28 @@ describe('launchAgentTab', () => {
       launchAgentTab(project, 'claude-code');
       expect(typed()).toBe("claude --settings 'C:\\Users\\A B\\hooks.json'\r");
     });
+  });
+
+  it('attaches Runova AI access once prepared, and drops it after the setting turns off', async () => {
+    aiAccessArgs.current = [
+      '--mcp-config',
+      'C:/data/ai-access/mcp.json',
+      '--allowedTools',
+      'mcp__runova_app__*',
+    ];
+    const { prepareStatusHooks, refreshAiAccessLaunchArgs, launchAgentTab } = await load();
+    prepareStatusHooks(['claude-code']);
+    await vi.waitFor(() => {
+      launchAgentTab(project, 'claude-code');
+      expect(typed()).toMatch(
+        /^claude --mcp-config C:\/data\/ai-access\/mcp\.json --allowedTools '?mcp__runova_app__\*'?\r$/,
+      );
+    });
+
+    aiAccessArgs.current = [];
+    await refreshAiAccessLaunchArgs();
+    launchAgentTab(project, 'claude-code');
+    expect(typed()).toBe('claude\r');
   });
 
   it('opens nothing for an unknown CLI', async () => {

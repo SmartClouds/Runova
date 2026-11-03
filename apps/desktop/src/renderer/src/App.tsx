@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
+import { AiAccessApprovalHost } from './components/aiAccess/AiAccessApprovalHost';
 import { ConfirmDialogHost } from './components/ConfirmDialog';
 import { StopContainersDialogHost } from './components/docker/StopContainersDialog';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -21,6 +22,7 @@ import { UpdateManager } from './components/UpdateManager';
 import { TooltipProvider } from './components/ui/tooltip';
 import WidgetRoute from './components/usage/WidgetRoute';
 import WorkspaceRoute from './components/workspace/WorkspaceRoute';
+import { useAiAccessDataSync } from './hooks/useAiAccessDataSync';
 import { useIsDarkMode } from './lib/chartColors';
 import { installToastHistoryCapture } from './lib/toastHistory';
 import AndroidPage from './pages/AndroidPage';
@@ -93,6 +95,12 @@ function isStandalonePath(pathname: string): boolean {
   );
 }
 
+/** AI access (E46): asks about what agents want to do and refreshes what they changed. */
+function AiAccessChrome(): React.JSX.Element | null {
+  useAiAccessDataSync();
+  return <AiAccessApprovalHost />;
+}
+
 function AppChrome(): React.JSX.Element | null {
   const { pathname } = useLocation();
   if (isStandalonePath(pathname)) return null;
@@ -100,6 +108,7 @@ function AppChrome(): React.JSX.Element | null {
     <>
       <AppToaster />
       <ConfirmDialogHost />
+      <AiAccessChrome />
       <RunProposalHost />
       <RelayBoardHost />
       <RelayPlanHost />
