@@ -43,6 +43,26 @@ describe('VideoCard', () => {
     expect(screen.getByText('Opened 2 hours ago')).toBeInTheDocument();
   });
 
+  it('opens the video from anywhere on the card, once', async () => {
+    const { user, onOpen } = renderCard();
+    await user.click(screen.getByText(/^Created /));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Launch film' }));
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not open the video when the menu is used', async () => {
+    const { user, onOpen } = renderCard();
+    await openMenu(user);
+    await user.click(await screen.findByRole('menuitem', { name: /Open folder/ }));
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('does not underline the title on hover', () => {
+    renderCard();
+    expect(screen.getByRole('button', { name: 'Launch film' }).className).not.toMatch(/underline/);
+  });
+
   it('opens the folder in the file manager', async () => {
     const { user, bridge } = renderCard();
     await openMenu(user);

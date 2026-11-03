@@ -86,7 +86,18 @@ export function VideoCard({ video, projectName, onOpen }: VideoCardProps): React
   }
 
   return (
-    <article className={cn(GLASS_CARD, 'flex flex-col gap-3 p-3')} aria-label={video.title}>
+    // The whole card opens the video, like a project card. The title stays a real button so the
+    // keyboard can reach it, and the menu stops its clicks so they never open the video.
+    <article
+      className={cn(
+        GLASS_CARD,
+        'flex flex-col gap-3 p-3',
+        !video.missing &&
+          'cursor-pointer transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:ring-1 hover:ring-primary/30 focus-within:ring-1 focus-within:ring-primary/30 motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+      )}
+      aria-label={video.title}
+      onClick={video.missing ? undefined : () => onOpen(video)}
+    >
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
           <Clapperboard className="h-4 w-4" />
@@ -95,8 +106,14 @@ export function VideoCard({ video, projectName, onOpen }: VideoCardProps): React
           <button
             type="button"
             disabled={video.missing}
-            onClick={() => onOpen(video)}
-            className="block max-w-full cursor-pointer truncate text-left text-sm font-semibold hover:underline disabled:cursor-default disabled:no-underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(video);
+            }}
+            className={cn(
+              'block max-w-full truncate rounded-sm text-left text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              video.missing ? 'cursor-default' : 'cursor-pointer hover:text-primary',
+            )}
           >
             <span dir={titleProps.dir} className={titleProps.className}>
               {video.title}
@@ -108,30 +125,33 @@ export function VideoCard({ video, projectName, onOpen }: VideoCardProps): React
               : `Created ${formatWhen(video.createdAt)}`}
           </p>
         </div>
-        <DropdownMenu>
-          <SimpleTooltip label="More">
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`More for ${video.title}`}>
-                <EllipsisVertical />
-              </Button>
-            </DropdownMenuTrigger>
-          </SimpleTooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              disabled={video.missing}
-              onSelect={() => void studioClient().revealVideo(video.id)}
-            >
-              <FolderOpen /> Open folder
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={video.missing} onSelect={() => void move()}>
-              <FolderOpen /> Move to another folder...
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => void remove()}>
-              <Trash2 /> Remove from library
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* The menu content is portaled, but React still bubbles its clicks up to the card. */}
+        <div onClick={(event) => event.stopPropagation()}>
+          <DropdownMenu>
+            <SimpleTooltip label="More">
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={`More for ${video.title}`}>
+                  <EllipsisVertical />
+                </Button>
+              </DropdownMenuTrigger>
+            </SimpleTooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={video.missing}
+                onSelect={() => void studioClient().revealVideo(video.id)}
+              >
+                <FolderOpen /> Open folder
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={video.missing} onSelect={() => void move()}>
+                <FolderOpen /> Move to another folder...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void remove()}>
+                <Trash2 /> Remove from library
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {projectName !== undefined && (
