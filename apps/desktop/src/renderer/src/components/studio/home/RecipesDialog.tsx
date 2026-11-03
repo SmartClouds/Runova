@@ -148,7 +148,8 @@ export function RecipesDialog({
                     {[
                       ASPECT_LABELS[recipe.aspect],
                       `${recipe.targetSeconds} s`,
-                      styleById(recipe.styleId)?.name,
+                      styleById(recipe.styleId)?.name ??
+                        (recipe.customStyle ? 'Custom style' : null),
                       runLabel(recipe.scenario),
                       `saved ${formatWhen(recipe.updatedAt)}`,
                     ]

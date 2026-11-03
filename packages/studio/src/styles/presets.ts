@@ -209,3 +209,17 @@ export const STYLE_PRESETS: readonly StylePreset[] = [
 export function styleById(id: string | null | undefined): StylePreset | undefined {
   return id ? STYLE_PRESETS.find((s) => s.id === id) : undefined;
 }
+
+/** What a video should look like: one of the presets, the user's own words, or left to the AI. */
+export type Look = { kind: 'preset'; style: StylePreset } | { kind: 'custom'; text: string } | null;
+
+/** A picked preset wins; otherwise the user's own description, if it says anything. */
+export function lookOf(
+  styleId: string | null | undefined,
+  customStyle: string | null | undefined,
+): Look {
+  const style = styleById(styleId);
+  if (style) return { kind: 'preset', style };
+  const text = customStyle?.trim();
+  return text ? { kind: 'custom', text } : null;
+}

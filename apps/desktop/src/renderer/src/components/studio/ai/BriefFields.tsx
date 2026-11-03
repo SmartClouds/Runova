@@ -1,5 +1,11 @@
-import { type Aspect, buildBriefRewriteRequest, STYLE_PRESETS, styleById } from '@runova/studio';
-import { useId, useState } from 'react';
+import {
+  type Aspect,
+  buildBriefRewriteRequest,
+  CUSTOM_STYLE_MAX,
+  STYLE_PRESETS,
+  styleById,
+} from '@runova/studio';
+import { useId, useRef, useState } from 'react';
 import {
   AgentPromptField,
   Button,
@@ -9,6 +15,7 @@ import {
   RunSettingsFields,
   SEGMENT_TRACK,
   segmentClass,
+  Textarea,
 } from '../kit';
 import { StylesDialog } from '../scenes/StylesDialog';
 
@@ -16,6 +23,11 @@ export interface BriefValue {
   brief: string;
   targetSeconds: number;
   styleId: string | null;
+  /**
+   * The look in the user's own words, for when none of the presets fits. A string (even an empty
+   * one) means "Custom style" is picked; null or missing means it is not.
+   */
+  customStyle?: string | null;
   run: RunSettings;
 }
 
@@ -28,6 +40,17 @@ export const LENGTHS: { seconds: number; label: string }[] = [
 ];
 
 const NO_STYLE = '__none__';
+const CUSTOM_STYLE = '__custom__';
+
+/** The custom style to send with a run: the words if it is picked and says something. */
+export function customStyleOf(value: BriefValue): string | null {
+  return value.styleId === null ? value.customStyle?.trim() || null : null;
+}
+
+/** False while "Custom style" is picked but not described yet. */
+export function styleReady(value: BriefValue): boolean {
+  return value.styleId !== null || value.customStyle == null || customStyleOf(value) !== null;
+}
 
 /**
  * What the AI needs to write a scenario: the brief in the user's own words, about how long, the
@@ -54,9 +77,11 @@ export function BriefFields({
 }): React.JSX.Element {
   const id = useId();
   const [browsing, setBrowsing] = useState(false);
+  const customRef = useRef<HTMLTextAreaElement>(null);
   const style = styleById(value.styleId);
   const styles = [
     { value: NO_STYLE, label: 'Let the AI choose', keywords: ['none', 'any'] },
+    { value: CUSTOM_STYLE, label: 'Custom style', keywords: ['own', 'describe', 'mine'] },
     ...STYLE_PRESETS.map((s) => ({
       value: s.id,
       label:
@@ -117,8 +142,19 @@ export function BriefFields({
               ariaLabel="Style"
               className="min-w-0 flex-1"
               options={styles}
-              value={value.styleId ?? NO_STYLE}
-              onChange={(next) => onChange({ ...value, styleId: next === NO_STYLE ? null : next })}
+              value={value.styleId ?? (value.customStyle == null ? NO_STYLE : CUSTOM_STYLE)}
+              onChange={(next) => {
+                if (next !== CUSTOM_STYLE) {
+                  onChange({
+                    ...value,
+                    styleId: next === NO_STYLE ? null : next,
+                    customStyle: null,
+                  });
+                  return;
+                }
+                onChange({ ...value, styleId: null, customStyle: value.customStyle ?? '' });
+                requestAnimationFrame(() => customRef.current?.focus());
+              }}
             />
             <Button type="button" variant="outline" onClick={() => setBrowsing(true)}>
               See styles
@@ -130,11 +166,25 @@ export function BriefFields({
             value={value.styleId}
             aspect={aspect}
             language={language}
-            onPick={(styleId) => onChange({ ...value, styleId })}
+            onPick={(styleId) => onChange({ ...value, styleId, customStyle: null })}
           />
         </div>
       </div>
       {style && <p className="text-xs text-muted-foreground">{style.summary}</p>}
+      {!style && value.customStyle != null && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`${id}-custom-style`}>Describe your style</Label>
+          <Textarea
+            id={`${id}-custom-style`}
+            ref={customRef}
+            rows={3}
+            maxLength={CUSTOM_STYLE_MAX}
+            value={value.customStyle}
+            onChange={(e) => onChange({ ...value, customStyle: e.target.value })}
+            placeholder="Colors, shapes, type and how things move. Name exact colors and fonts for a look that holds across scenes, like: dark navy background, neon green lines, bold condensed type, quick snappy cuts."
+          />
+        </div>
+      )}
       <RunSettingsFields
         labels="form"
         value={value.run}

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DESIGN_SIZES, type StudioDocument } from '../document/schema.js';
-import { type StylePreset, styleById } from '../styles/presets.js';
+import { type Look, lookOf, type StylePreset } from '../styles/presets.js';
 import { CONTENT_LANGUAGES, directionOf } from '../text/languages.js';
 import { flicksToSeconds } from '../time/flicks.js';
 import { sceneBlocks, videoLength } from '../timeline/layout.js';
@@ -77,6 +77,12 @@ function quoted(text: string): string {
   return `${fence}text\n${text.trim()}\n${fence}`;
 }
 
+function lookSection(look: Look): string {
+  if (!look) return '';
+  if (look.kind === 'preset') return `## Visual style\n${styleGuide(look.style)}`;
+  return `## Visual style\nThe user describes the look in their own words. Follow it, and keep any colors or fonts it names exactly:\n${quoted(look.text)}`;
+}
+
 function schemaBlock(schema: z.ZodType): string {
   return `\`\`\`json\n${JSON.stringify(z.toJSONSchema(schema, { io: 'input' }), null, 2)}\n\`\`\``;
 }
@@ -106,11 +112,17 @@ export interface ScenarioRequestInput {
   /** About how long the video should run. */
   targetSeconds: number;
   styleId?: string | null;
+  /** The look in the user's own words, when no preset is picked. */
+  customStyle?: string | null;
 }
 
 export function buildScenarioRequest(input: ScenarioRequestInput): string {
   const { document: doc, targetSeconds } = input;
-  const style = styleById(input.styleId ?? doc.styleId);
+  // A style asked for with this run replaces the video's; without one the video's stays.
+  const look =
+    input.styleId || input.customStyle
+      ? lookOf(input.styleId, input.customStyle)
+      : lookOf(doc.styleId, doc.customStyle);
   const primary = doc.language.split('-')[0] ?? 'en';
   const wpm = WORDS_PER_MINUTE[primary] ?? 140;
   const sceneCount = Math.max(3, Math.round(targetSeconds / 7));
@@ -125,7 +137,7 @@ export function buildScenarioRequest(input: ScenarioRequestInput): string {
       `- Length: about ${targetSeconds} seconds in all. The scene durations should add up to within 10% of that.`,
       `- Scenes: about ${sceneCount}, each between 3 and 15 seconds.`,
     ].join('\n'),
-    style ? `## Visual style\n${styleGuide(style)}` : '',
+    lookSection(look),
     '## Writing rules',
     [
       ...languageRules(doc.language).map((rule) => `- ${rule}`),
@@ -191,7 +203,7 @@ function currentTimeline(doc: StudioDocument, media: readonly EditMedia[]) {
 
 export function buildEditRequest(input: EditRequestInput): string {
   const doc = input.document;
-  const style = styleById(doc.styleId);
+  const look = lookOf(doc.styleId, doc.customStyle);
   const sections = [
     '# Change a video scenario',
     'You are editing the scenario of a short animated video. Make the change the user asks for, and only that change.',
@@ -200,7 +212,12 @@ export function buildEditRequest(input: EditRequestInput): string {
     '## The video',
     [
       ...videoFacts(doc),
-      ...(style ? [`- Visual style: ${style.name}. ${style.summary}`] : []),
+      ...(look?.kind === 'preset'
+        ? [`- Visual style: ${look.style.name}. ${look.style.summary}`]
+        : []),
+      ...(look?.kind === 'custom'
+        ? [`- Visual style, in the user's own words:\n${quoted(look.text)}`]
+        : []),
     ].join('\n'),
     '## The scenario now',
     `\`\`\`json\n${JSON.stringify(currentScenario(doc), null, 1)}\n\`\`\``,

@@ -83,8 +83,44 @@ describe('NewVideoDialog', () => {
         brief: 'معرفی محصول تازه',
         targetSeconds: 30,
         styleId: null,
+        customStyle: null,
         run: { cliId: null, model: null, effort: null },
       },
+    });
+  });
+
+  it('takes a style the user describes when none of the presets fits', async () => {
+    const { user } = renderDialog();
+    await user.type(await screen.findByLabelText('What is the video about?'), 'A teaser');
+    await user.click(screen.getByRole('combobox', { name: 'Style' }));
+    await user.click(await screen.findByRole('option', { name: 'Custom style' }));
+    const describe = screen.getByLabelText('Describe your style');
+    await waitFor(() => expect(describe).toHaveFocus());
+    // Picked but not described yet, so there is nothing to follow.
+    expect(screen.getByRole('button', { name: 'Create and write' })).toBeDisabled();
+    await user.type(describe, '  Black and gold, serif type, slow fades  ');
+    await user.click(screen.getByRole('button', { name: 'Create and write' }));
+    await waitFor(() => expect(usePendingScenario.getState().pending).not.toBeNull());
+    expect(usePendingScenario.getState().pending?.request).toMatchObject({
+      styleId: null,
+      customStyle: 'Black and gold, serif type, slow fades',
+    });
+  });
+
+  it('drops the custom description once a preset is picked', async () => {
+    const { user } = renderDialog();
+    await user.type(await screen.findByLabelText('What is the video about?'), 'A teaser');
+    await user.click(screen.getByRole('combobox', { name: 'Style' }));
+    await user.click(await screen.findByRole('option', { name: 'Custom style' }));
+    await user.type(screen.getByLabelText('Describe your style'), 'Black and gold');
+    await user.click(screen.getByRole('combobox', { name: 'Style' }));
+    await user.click(await screen.findByRole('option', { name: /^Flat vector/ }));
+    expect(screen.queryByLabelText('Describe your style')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create and write' }));
+    await waitFor(() => expect(usePendingScenario.getState().pending).not.toBeNull());
+    expect(usePendingScenario.getState().pending?.request).toMatchObject({
+      styleId: 'flat-vector',
+      customStyle: null,
     });
   });
 
@@ -119,6 +155,7 @@ describe('NewVideoDialog', () => {
       brief: RECIPE.brief,
       targetSeconds: 30,
       styleId: 'flat-vector',
+      customStyle: null,
       run: RECIPE.scenario,
     });
   });

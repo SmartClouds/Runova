@@ -60,6 +60,7 @@ export function SaveRecipeDialog({
         name: name.trim(),
         brief: g.instruction,
         styleId: g.params.styleId ?? null,
+        customStyle: g.params.customStyle ?? null,
         language: document.language,
         aspect: document.renderSettings.aspect,
         targetSeconds: g.params.targetSeconds ?? 60,

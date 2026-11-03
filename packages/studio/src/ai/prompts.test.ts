@@ -49,6 +49,36 @@ describe('buildScenarioRequest', () => {
     expect(text).not.toContain('The current scenario');
   });
 
+  it('follows a style the user describes, fenced as their own words', () => {
+    const text = buildScenarioRequest({
+      brief: 'x',
+      document: fa(),
+      targetSeconds: 30,
+      customStyle: 'Black and gold, serif type',
+    });
+    expect(text).toContain('describes the look in their own words');
+    expect(text).toContain('~~~~text\nBlack and gold, serif type\n~~~~');
+  });
+
+  it("uses the video's custom style when the run asks for none, and a picked preset over it", () => {
+    const doc = fa();
+    doc.customStyle = 'Black and gold';
+    expect(buildScenarioRequest({ brief: 'x', document: doc, targetSeconds: 30 })).toContain(
+      'Black and gold',
+    );
+    const preset = buildScenarioRequest({
+      brief: 'x',
+      document: doc,
+      targetSeconds: 30,
+      styleId: 'bauhaus',
+    });
+    expect(preset).toContain('**Bauhaus**');
+    expect(preset).not.toContain('Black and gold');
+    expect(buildEditRequest({ instruction: 'y', document: doc })).toContain(
+      "Visual style, in the user's own words",
+    );
+  });
+
   it('includes the current scenes when rewriting', () => {
     const doc = fa();
     doc.scenario.scenes.push(createScene({ id: 'abc', title: 'شروع' }));

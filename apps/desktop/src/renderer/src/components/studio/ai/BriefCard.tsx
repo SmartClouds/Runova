@@ -1,7 +1,7 @@
 import type { Aspect } from '@runova/studio';
 import { useState } from 'react';
 import { Button, ChevronDown, cn, GLASS_CARD, Sparkles } from '../kit';
-import { BriefFields, type BriefValue } from './BriefFields';
+import { BriefFields, type BriefValue, customStyleOf, styleReady } from './BriefFields';
 import { type ScenarioRequest, toRunInput } from './runSettings';
 
 export interface BriefCardProps {
@@ -28,7 +28,7 @@ export function BriefCard({
   const [open, setOpen] = useState(!rewriting);
   const [value, setValue] = useState<BriefValue>(initial);
   const [starting, setStarting] = useState(false);
-  const ready = value.brief.trim().length > 0 && !busy && !starting;
+  const ready = value.brief.trim().length > 0 && styleReady(value) && !busy && !starting;
 
   if (!open) {
     return (
@@ -48,6 +48,7 @@ export function BriefCard({
           brief: value.brief.trim(),
           targetSeconds: value.targetSeconds,
           styleId: value.styleId,
+          customStyle: customStyleOf(value),
           run: toRunInput(value.run),
         },
         value,

@@ -201,10 +201,21 @@ export function StudioEditor({
     ? {
         brief: lastScenario.instruction,
         targetSeconds: lastScenario.params.targetSeconds ?? 60,
-        styleId: lastScenario.params.styleId ?? document.styleId,
+        ...(lastScenario.params.customStyle
+          ? { styleId: null, customStyle: lastScenario.params.customStyle }
+          : {
+              styleId: lastScenario.params.styleId ?? document.styleId,
+              customStyle: document.customStyle,
+            }),
         run: fromRunInput(lastScenario),
       }
-    : { brief: '', targetSeconds: 60, styleId: document.styleId, run: scenarioRun };
+    : {
+        brief: '',
+        targetSeconds: 60,
+        styleId: document.styleId,
+        customStyle: document.customStyle,
+        run: scenarioRun,
+      };
   const hasScenes = document.scenario.scenes.length > 0;
   const busy = ai.running !== null;
   const applyProposal = async (generationId: string) => {

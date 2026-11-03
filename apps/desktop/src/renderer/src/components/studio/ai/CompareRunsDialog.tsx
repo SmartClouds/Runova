@@ -30,7 +30,10 @@ function rows(g: GenerationDetail): [string, string][] {
     ['Stage', STAGE_LABELS[g.stage]],
     ['Result', STATUS_LABELS[g.status].label],
     ['CLI, model and effort', runLabel(g)],
-    ['Style', g.params.styleId ?? 'none'],
+    [
+      'Style',
+      g.params.styleId ?? (g.params.customStyle ? `Custom: ${g.params.customStyle}` : 'none'),
+    ],
     ['Length asked for', g.params.targetSeconds ? `${g.params.targetSeconds} s` : '-'],
     ['Attempts', String(g.attempts.length)],
     ['Started', formatWhen(g.startedAt)],

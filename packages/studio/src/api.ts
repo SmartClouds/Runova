@@ -7,6 +7,7 @@ import {
   type Aspect,
   CODECS,
   type Codec,
+  CUSTOM_STYLE_MAX,
   QUALITIES,
   RESOLUTIONS,
   type RenderSettings,
@@ -110,11 +111,15 @@ const styleId = z
   .max(64)
   .refine((value) => styleById(value) !== undefined, 'Pick one of the offered styles.')
   .nullable();
+/** The look in the user's own words, for when none of the offered styles fits. */
+const customStyle = z.string().trim().min(1).max(CUSTOM_STYLE_MAX).nullable().optional();
 const targetSeconds = z.number().int().min(5).max(1800);
 const brief = z.string().trim().min(1).max(100_000);
 
 export const studioAiInputs = {
-  startScenario: z.object({ videoId: id, brief, targetSeconds, styleId, run: runSettingsSchema }),
+  startScenario: z
+    .object({ videoId: id, brief, targetSeconds, styleId, customStyle, run: runSettingsSchema })
+    .refine((v) => !(v.styleId && v.customStyle), 'Pick a style or describe one, not both.'),
   startEdit: z.object({
     videoId: id,
     instruction: z.string().trim().min(1).max(20_000),
@@ -134,6 +139,7 @@ export const studioAiInputs = {
     name: z.string().trim().min(1).max(120),
     brief,
     styleId,
+    customStyle,
     language: z.string().refine(isContentLanguage, 'Pick one of the offered languages.'),
     aspect: z.enum(ASPECTS),
     targetSeconds,
@@ -226,6 +232,7 @@ export interface RecipeView {
   name: string;
   brief: string;
   styleId: string | null;
+  customStyle?: string | null;
   language: string;
   aspect: Aspect;
   targetSeconds: number;
@@ -381,6 +388,8 @@ export type StoredProposal = EditProposal & { baseSeq: number };
 export interface GenerationParams {
   targetSeconds?: number;
   styleId?: string | null;
+  /** The look in the user's own words, when no preset was picked. */
+  customStyle?: string | null;
   /** The scene a scene run writes the code of. */
   sceneId?: string;
 }

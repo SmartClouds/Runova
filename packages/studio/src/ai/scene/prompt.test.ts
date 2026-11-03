@@ -37,6 +37,16 @@ describe('buildSceneRequest', () => {
     expect(text).toMatch(/U\+200C/);
   });
 
+  it("animates in the user's own style when they described one", () => {
+    const d = doc();
+    d.styleId = null;
+    d.customStyle = 'Black and gold, serif type';
+    const text = buildSceneRequest({ document: d, sceneId: 's1' });
+    expect(text).toContain('## Visual style\n\nThe user describes the look in their own words.');
+    expect(text).toContain('~~~~text\nBlack and gold, serif type\n~~~~');
+    expect(text).not.toContain('Flat vector');
+  });
+
   it('includes the current files and the change asked for, for a new version', () => {
     const text = buildSceneRequest({
       document: doc(),

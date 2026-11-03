@@ -9,6 +9,9 @@ import { type Flicks, secondsToFlicks } from '../time/flicks.js';
 
 export const STUDIO_SCHEMA_VERSION = 1;
 
+/** Longest custom style description. */
+export const CUSTOM_STYLE_MAX = 2000;
+
 export const ASPECTS = ['16:9', '9:16', '1:1', '4:5'] as const;
 export type Aspect = (typeof ASPECTS)[number];
 
@@ -182,6 +185,8 @@ export const documentSchema = z
     title: shortText,
     language: languageSchema,
     styleId: z.string().max(64).nullable(),
+    /** The look in the user's own words, used when no preset style is picked. */
+    customStyle: z.string().max(CUSTOM_STYLE_MAX).nullable().optional(),
     scenario: z.object({
       logline: longText,
       audience: shortText,

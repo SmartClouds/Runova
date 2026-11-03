@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   type Clip,
+  CUSTOM_STYLE_MAX,
   clipSchema,
   documentSchema,
   languageSchema,
@@ -34,15 +35,17 @@ export const editOpSchema = z.discriminatedUnion('op', [
   z
     .object({
       op: z.literal('doc.set'),
-      field: z.enum(['title', 'language', 'styleId']),
-      value: z.string().max(500).nullable(),
+      field: z.enum(['title', 'language', 'styleId', 'customStyle']),
+      value: z.string().max(CUSTOM_STYLE_MAX).nullable(),
     })
     .superRefine((op, ctx) => {
       const ok =
-        op.field === 'styleId'
+        op.field === 'customStyle' ||
+        (op.field === 'styleId'
           ? op.value === null || op.value.length <= 64
           : op.value !== null &&
-            (op.field === 'title' || languageSchema.safeParse(op.value).success);
+            op.value.length <= 500 &&
+            (op.field === 'title' || languageSchema.safeParse(op.value).success));
       if (!ok) ctx.addIssue({ code: 'custom', message: `That is not a valid ${op.field}.` });
     }),
   z.object({
@@ -127,8 +130,10 @@ function applyOne(doc: StudioDocument, op: EditOp): EditOp[] {
   const clips = doc.timeline.clips;
   switch (op.op) {
     case 'doc.set': {
-      const old = doc[op.field];
-      (doc as Record<string, unknown>)[op.field] = op.value;
+      const old = doc[op.field] ?? null;
+      // No custom style is no field at all, so an undo gives back exactly the old document.
+      if (op.field === 'customStyle' && op.value === null) delete doc.customStyle;
+      else (doc as Record<string, unknown>)[op.field] = op.value;
       return [{ op: 'doc.set', field: op.field, value: old } as EditOp];
     }
     case 'scenario.set': {

@@ -1,5 +1,5 @@
 import { DESIGN_SIZES, type StudioDocument } from '../../document/schema.js';
-import { styleById } from '../../styles/presets.js';
+import { lookOf } from '../../styles/presets.js';
 import { directionOf } from '../../text/languages.js';
 import { flicksToSeconds } from '../../time/flicks.js';
 import { languageRules } from '../prompts.js';
@@ -66,7 +66,7 @@ export function buildSceneRequest(input: SceneRequestInput): string {
   const scene = doc.scenario.scenes[index];
   if (!scene) throw new Error('That scene is not in the video any more.');
   const size = DESIGN_SIZES[doc.renderSettings.aspect];
-  const style = styleById(doc.styleId);
+  const look = lookOf(doc.styleId, doc.customStyle);
   const seconds = Math.round(flicksToSeconds(scene.targetDuration) * 10) / 10;
   const next = doc.scenario.scenes[index + 1];
 
@@ -89,8 +89,11 @@ export function buildSceneRequest(input: SceneRequestInput): string {
     `What the narrator says (for timing only; it is not shown on screen):\n${quoted(scene.narration || '(no narration)')}`,
     `On-screen text, shown exactly as written:\n${quoted(scene.onScreenText.join('\n') || '(none)')}`,
     `What the viewer sees:\n${quoted(scene.visualBrief || '(not given; design it from the narration)')}`,
-    style
-      ? `## Visual style: ${style.name}\n\n${style.summary}\n- Palette: ${style.palette.join(', ')} (background first).\n- Motion: ${style.motion}\n- Do: ${style.dos.join('; ')}.\n- Avoid: ${style.donts.join('; ')}.`
+    look?.kind === 'preset'
+      ? `## Visual style: ${look.style.name}\n\n${look.style.summary}\n- Palette: ${look.style.palette.join(', ')} (background first).\n- Motion: ${look.style.motion}\n- Do: ${look.style.dos.join('; ')}.\n- Avoid: ${look.style.donts.join('; ')}.`
+      : '',
+    look?.kind === 'custom'
+      ? `## Visual style\n\nThe user describes the look in their own words. Every scene of this video is animated on its own, so follow it closely: use the colors and fonts it names exactly, and where it leaves something open, pick the plainest choice that fits.\n\n${quoted(look.text)}`
       : '',
     SCENE_AUTHORING_GUIDE,
     input.example && !input.current

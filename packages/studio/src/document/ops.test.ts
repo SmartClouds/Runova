@@ -39,6 +39,7 @@ function base(): StudioDocument {
 const EVERY_OP: EditOp[] = [
   { op: 'doc.set', field: 'title', value: 'New title' },
   { op: 'doc.set', field: 'styleId', value: 'flat-vector' },
+  { op: 'doc.set', field: 'customStyle', value: 'Black and gold, serif type' },
   { op: 'scenario.set', patch: { logline: 'A film about films', tone: 'warm' } },
   { op: 'scene.add', scene: createScene({ id: 's9', title: 'Extra' }), index: 1 },
   { op: 'scene.remove', sceneId: 's2' },
@@ -187,6 +188,7 @@ describe('parseEditOps', () => {
 
   it.each([
     { op: 'doc.set', field: 'title', value: null },
+    { op: 'doc.set', field: 'title', value: 'x'.repeat(501) },
     { op: 'doc.set', field: 'language', value: 'not a language' },
     { op: 'doc.set', field: 'styleId', value: 'x'.repeat(65) },
   ])('refuses a document field set to something it cannot hold (%o)', (op) => {

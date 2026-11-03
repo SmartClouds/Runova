@@ -122,6 +122,7 @@ describe('SaveRecipeDialog', () => {
         name: 'Explainer',
         brief: g.instruction,
         styleId: 'flat-vector',
+        customStyle: null,
         language: 'fa',
         aspect: '9:16',
         targetSeconds: 60,

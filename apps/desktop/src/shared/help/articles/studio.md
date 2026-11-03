@@ -64,6 +64,8 @@ A scene page runs with no internet access and cannot reach Runova or your files.
 
 **See styles** next to the style picker shows all fifteen styles, each with a short example scene playing in your video's language and format. The style you pick guides the scenario, and the AI gets the style's example when it animates the scenes.
 
+If none of them fits, pick **Custom style** and describe the look in your own words: colors, shapes, type and how things move. The AI follows your description when it writes the scenario and animates each scene. Each scene is animated on its own, so name exact colors and fonts if you want every scene to match.
+
 ## Scene network
 
 Animated scenes cannot reach the internet. If a project's scenes need files from a host of yours, such as its own CDN, add the host under **Scene network** in the project's **Studio** tab. Only https is allowed, and only those hosts. Leave it empty to keep scenes offline, which is the safest, since the code is written by AI.

@@ -8,7 +8,7 @@ import {
 } from '@runova/studio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
-import { BriefFields, type BriefValue } from '../ai/BriefFields';
+import { BriefFields, type BriefValue, customStyleOf, styleReady } from '../ai/BriefFields';
 import {
   fromRunInput,
   toRunInput,
@@ -110,6 +110,7 @@ export function NewVideoDialog({
       brief: picked.brief,
       targetSeconds: picked.targetSeconds,
       styleId: picked.styleId,
+      customStyle: picked.styleId ? null : (picked.customStyle ?? null),
       run: fromRunInput(picked.scenario),
     });
   };
@@ -180,6 +181,7 @@ export function NewVideoDialog({
           brief: brief.brief.trim(),
           targetSeconds: brief.targetSeconds,
           styleId: brief.styleId,
+          customStyle: customStyleOf(brief),
           run: toRunInput(brief.run),
         });
       }
@@ -205,7 +207,9 @@ export function NewVideoDialog({
   ];
   const where = chosenProject ? storage.data?.root : settings.data?.standaloneRoot;
   const blocked = chosenProject !== null && storage.data?.check.ok === false;
-  const ready = useAi ? brief.brief.trim().length > 0 : title.trim().length > 0;
+  const ready = useAi
+    ? brief.brief.trim().length > 0 && styleReady(brief)
+    : title.trim().length > 0;
   const error = create.error ? errorMessage(create.error) : null;
   const submit = () => {
     if (ready && !blocked && !create.isPending) create.mutate();

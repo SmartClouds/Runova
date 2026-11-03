@@ -101,6 +101,13 @@ export function compareDocuments(
   field(scenario, 'tone', 'Tone', before.scenario.tone, after.scenario.tone);
   field(scenario, 'language', 'Language', before.language, after.language);
   field(scenario, 'styleId', 'Style', before.styleId ?? 'none', after.styleId ?? 'none');
+  field(
+    scenario,
+    'customStyle',
+    'Custom style',
+    before.customStyle ?? 'none',
+    after.customStyle ?? 'none',
+  );
   const r1 = before.renderSettings;
   const r2 = after.renderSettings;
   field(scenario, 'aspect', 'Format', r1.aspect, r2.aspect);

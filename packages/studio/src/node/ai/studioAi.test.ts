@@ -185,6 +185,49 @@ describe('writing a scenario with AI', () => {
     expect(opened.session.document.title).toBe('My film');
   });
 
+  it('keeps a custom style on the video, and a preset picked later replaces it', async () => {
+    const { service, video, requests } = await setup([
+      () => answer(JSON.stringify(SCENARIO)),
+      () => answer(JSON.stringify(SCENARIO)),
+    ]);
+    const first = await service.startScenario({
+      videoId: video.id,
+      brief: 'x',
+      targetSeconds: 10,
+      styleId: null,
+      customStyle: 'Black and gold, serif type',
+      run,
+    });
+    const done = await settle(service, video.id, first.id);
+    expect(done.params).toEqual({
+      targetSeconds: 10,
+      styleId: null,
+      customStyle: 'Black and gold, serif type',
+    });
+    expect(requests[0]?.prompt).toContain('Black and gold, serif type');
+    const open = async () => {
+      const opened = await service.open({ videoId: video.id });
+      if (opened.state !== 'open') throw new Error('closed');
+      return opened.session.document;
+    };
+    expect(await open()).toMatchObject({
+      styleId: null,
+      customStyle: 'Black and gold, serif type',
+    });
+
+    const second = await service.startScenario({
+      videoId: video.id,
+      brief: 'x',
+      targetSeconds: 10,
+      styleId: 'bauhaus',
+      run,
+    });
+    await settle(service, video.id, second.id);
+    const after = await open();
+    expect(after.styleId).toBe('bauhaus');
+    expect(after.customStyle).toBeUndefined();
+  });
+
   it('repairs a broken answer by sending the problems back', async () => {
     const { service, video, requests } = await setup([
       () => answer('{"logline": "x", "scenes": [{"title": "a"'),

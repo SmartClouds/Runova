@@ -270,6 +270,7 @@ describe('BriefCard', () => {
         brief: 'A film about water',
         targetSeconds: 90,
         styleId: null,
+        customStyle: null,
         run: { cliId: 'claude-code', model: null, effort: null },
       },
       expect.objectContaining({ targetSeconds: 90 }),

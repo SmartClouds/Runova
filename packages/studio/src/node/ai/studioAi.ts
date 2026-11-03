@@ -351,7 +351,11 @@ export function createStudioAi(deps: StudioAiDeps) {
     return {
       stage: 'scenario',
       instruction: input.brief,
-      params: { targetSeconds: input.targetSeconds, styleId: input.styleId },
+      params: {
+        targetSeconds: input.targetSeconds,
+        styleId: input.styleId,
+        ...(input.customStyle ? { customStyle: input.customStyle } : {}),
+      },
       run: input.run,
       parentId,
       request: (doc) =>
@@ -360,13 +364,24 @@ export function createStudioAi(deps: StudioAiDeps) {
           document: doc,
           targetSeconds: input.targetSeconds,
           styleId: input.styleId,
+          customStyle: input.customStyle,
         }),
       read: (text, doc) => readScenarioAnswer(text, doc.language),
       accept: async (answer, store, generationId) => {
         const doc = store.document;
         const ops: EditOp[] = [];
+        // A preset and a custom style never both hold: picking one clears the other.
         if (input.styleId !== null && input.styleId !== doc.styleId) {
           ops.push({ op: 'doc.set', field: 'styleId', value: input.styleId });
+        }
+        if (input.styleId !== null && doc.customStyle) {
+          ops.push({ op: 'doc.set', field: 'customStyle', value: null });
+        }
+        if (input.customStyle && input.customStyle !== doc.customStyle) {
+          ops.push({ op: 'doc.set', field: 'customStyle', value: input.customStyle });
+        }
+        if (input.customStyle && doc.styleId !== null) {
+          ops.push({ op: 'doc.set', field: 'styleId', value: null });
         }
         ops.push(
           ...scenarioToOps(doc, answer, deps.newId, { keepTitle: doc.title !== UNTITLED_TITLE }),
@@ -567,6 +582,7 @@ export function createStudioAi(deps: StudioAiDeps) {
             brief: old.instruction,
             targetSeconds: old.params.targetSeconds ?? 60,
             styleId: old.params.styleId ?? null,
+            customStyle: old.params.customStyle ?? null,
             run,
           },
           old.id,

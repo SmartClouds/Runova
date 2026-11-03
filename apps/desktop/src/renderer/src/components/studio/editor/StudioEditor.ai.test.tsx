@@ -72,6 +72,7 @@ describe('StudioEditor with AI', () => {
         brief: 'یک ویدیو درباره‌ی آب',
         targetSeconds: 60,
         styleId: null,
+        customStyle: null,
         run: { cliId: null, model: null, effort: null },
       }),
     );
