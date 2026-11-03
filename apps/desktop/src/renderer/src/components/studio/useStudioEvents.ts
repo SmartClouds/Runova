@@ -22,6 +22,11 @@ export function useStudioEvents(): void {
         void queryClient.invalidateQueries({ queryKey: studioKeys.narrationJobs(event.videoId) });
       } else if (event.type === 'media-changed') {
         void queryClient.invalidateQueries({ queryKey: studioKeys.media(event.videoId) });
+      } else if (event.type === 'piper-voices-changed') {
+        // A Piper voice downloading, downloaded or removed: the library and the voices to pick.
+        void queryClient.invalidateQueries({ queryKey: studioKeys.piperLibrary });
+        void queryClient.invalidateQueries({ queryKey: studioKeys.voiceEngines });
+        void queryClient.invalidateQueries({ queryKey: ['studio', 'voices', 'piper'] });
       } else if (event.type === 'render-changed') {
         void queryClient.invalidateQueries({ queryKey: studioKeys.renders });
       } else if (event.type === 'render-progress') {

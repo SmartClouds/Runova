@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { STUDIO_PIPER } from '@runova/core';
 import { installMarkerSchema, parseWav, studioToolPaths } from '@runova/studio';
@@ -7,7 +7,9 @@ import type { LocalVoiceTools } from '@runova/studio/node';
 /**
  * What Dev Setup has installed of Studio's local voices (E37), read from the markers each install
  * writes last in `<userData>/studio-tools`, the same way Dev Setup's own check reads them. An
- * install counts only while what its marker names is still in place.
+ * install counts only while what its marker names is still in place. A Piper voice needs no marker:
+ * its files take their names only once checked, so one whose two files are there is installed,
+ * whether it came with Dev Setup's pack or from Studio's voice library.
  */
 
 async function exists(path: string): Promise<boolean> {
@@ -37,9 +39,10 @@ export async function findLocalVoiceTools(root: string, os: string): Promise<Loc
   const piperPython = await env('piper');
   const voicesDir = paths.modelsDir('piper-voices');
   const voices: string[] = [];
-  if (piperPython && (await marker(paths.marker('piper-voices')))) {
+  if (piperPython) {
+    const present = new Set(await readdir(voicesDir).catch(() => [] as string[]));
     for (const voice of STUDIO_PIPER.voices) {
-      if (await exists(join(voicesDir, `${voice.id}.onnx`))) voices.push(voice.id);
+      if (voice.files.every((f) => present.has(f.path))) voices.push(voice.id);
     }
   }
 

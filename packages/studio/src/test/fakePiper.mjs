@@ -1,5 +1,5 @@
 // A stand-in for `python -m piper`, run by Node: `node fakePiper.mjs -m piper -m <voice.onnx>
-// -i <text file> -f <out.wav>`. It speaks a twentieth of a second a character at 22.05 kHz, like
+// [-s <speaker>] -i <text file> -f <out.wav>`. It speaks a twentieth of a second a character at 22.05 kHz, like
 // the fake online engines, and misbehaves on cue: text containing FAIL exits with an error, HANG
 // never finishes, and a voice file that is not there fails the way Piper does.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -10,9 +10,10 @@ const value = (flag) => {
   return at >= 0 ? args[at + 1] : undefined;
 };
 const model = value('-m');
+const speaker = value('-s') ?? null;
 const text = readFileSync(value('-i'), 'utf8').trim();
 if (process.env.FAKE_PIPER_LOG)
-  writeFileSync(process.env.FAKE_PIPER_LOG, JSON.stringify({ model, text }));
+  writeFileSync(process.env.FAKE_PIPER_LOG, JSON.stringify({ model, speaker, text }));
 if (!existsSync(model)) {
   process.stderr.write(`ValueError: Unable to find voice: ${model} (use piper.download_voices)\n`);
   process.exit(1);

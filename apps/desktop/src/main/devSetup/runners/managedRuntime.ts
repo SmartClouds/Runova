@@ -21,7 +21,7 @@ import { createFlutterInstaller } from './flutterInstaller';
 import { createDockerLauncher } from './launchDocker';
 import type { ManagedRunners } from './managedDispatch';
 import { createManagedKit, STUDIO_TOOL_HOSTS } from './managedSystem';
-import { createStudioToolsInstaller } from './studioTools';
+import { createStudioToolsInstaller, type StudioToolsInstaller } from './studioTools';
 
 /**
  * Builds the installers that fetch and unpack things themselves (Flutter, the Android tools,
@@ -125,46 +125,57 @@ export function createManagedRunners(): ManagedRunners {
       now: Date.now,
     }),
     androidPackages: androidPackagesFor(arch),
-    studioTools: createStudioToolsInstaller({
-      kit: createManagedKit(
-        { os, arch, home, workDir: join(app.getPath('userData'), 'studio-tools', 'downloads') },
-        {
-          netFetchText,
-          createDownload: () => new ResumableDownload(),
-          spawn: spawnStreaming,
-          allowedHosts: studioToolHosts(),
-        },
-      ),
-      root: studioToolsRoot(),
-      readLock: async (name) =>
-        JSON.parse(
-          await readFile(join(studioPackageRoot(), 'assets', 'tools', 'locks', name), 'utf8'),
-        ),
-      gpu: async () => {
-        const answer = await runProbe('nvidia-smi', [
-          '--query-gpu=name,driver_version,memory.total',
-          '--format=csv,noheader,nounits',
-        ]);
-        return answer.ok ? parseNvidiaSmi(answer.output) : null;
-      },
-      runCommand,
-      writeText: async (path, text) => {
-        await mkdir(dirname(path), { recursive: true });
-        await writeFile(path, text, 'utf8');
-      },
-      freeBytes: async (path) => {
-        try {
-          await mkdir(path, { recursive: true });
-          const stats = await statfs(path);
-          return stats.bavail * stats.bsize;
-        } catch {
-          return null;
-        }
-      },
-      now: Date.now,
-      mapUrl: studioToolsUrl(),
-    }),
+    studioTools: createStudioTools(),
   };
+}
+
+/**
+ * The installer for Studio's local voices, which Dev Setup runs for its items and Studio's voice
+ * library runs for one Piper voice at a time.
+ */
+export function createStudioTools(): StudioToolsInstaller {
+  const os = currentOs();
+  const arch = currentArch();
+  const home = homedir();
+  return createStudioToolsInstaller({
+    kit: createManagedKit(
+      { os, arch, home, workDir: join(app.getPath('userData'), 'studio-tools', 'downloads') },
+      {
+        netFetchText,
+        createDownload: () => new ResumableDownload(),
+        spawn: spawnStreaming,
+        allowedHosts: studioToolHosts(),
+      },
+    ),
+    root: studioToolsRoot(),
+    readLock: async (name) =>
+      JSON.parse(
+        await readFile(join(studioPackageRoot(), 'assets', 'tools', 'locks', name), 'utf8'),
+      ),
+    gpu: async () => {
+      const answer = await runProbe('nvidia-smi', [
+        '--query-gpu=name,driver_version,memory.total',
+        '--format=csv,noheader,nounits',
+      ]);
+      return answer.ok ? parseNvidiaSmi(answer.output) : null;
+    },
+    runCommand,
+    writeText: async (path, text) => {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, text, 'utf8');
+    },
+    freeBytes: async (path) => {
+      try {
+        await mkdir(path, { recursive: true });
+        const stats = await statfs(path);
+        return stats.bavail * stats.bsize;
+      } catch {
+        return null;
+      }
+    },
+    now: Date.now,
+    mapUrl: studioToolsUrl(),
+  });
 }
 
 /** Where Studio installs its local voices: `<userData>/studio-tools`. */

@@ -255,19 +255,50 @@ describe('Studio local voices', () => {
       expect(file.url, file.path).toMatch(
         /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//,
       );
-      expect(file.url.endsWith(file.path), file.path).toBe(true);
+      expect(decodeURI(file.url).endsWith(file.path), file.path).toBe(true);
     }
   };
 
-  it('pins every Piper voice file, offers Persian voices free to use, and flags the rest', () => {
-    for (const voice of STUDIO_PIPER.voices) pinned(voice.files);
-    const persian = STUDIO_PIPER.voices.filter((v) => v.locale === 'fa-IR');
-    expect(persian.length).toBeGreaterThanOrEqual(3);
-    expect(persian.every((v) => !v.nonCommercial)).toBe(true);
-    for (const voice of STUDIO_PIPER.voices) {
-      expect(voice.nonCommercial, voice.id).toBe(/NC/.test(voice.license));
+  it('pins every Piper voice file and flags every voice not free for commercial use', () => {
+    const voices = STUDIO_PIPER.voices;
+    expect(voices.length).toBeGreaterThan(100);
+    expect(new Set(voices.map((v) => v.id)).size).toBe(voices.length);
+    for (const voice of voices) {
+      pinned(voice.files);
+      expect(voice.id, voice.id).toMatch(/^[\p{L}\p{N}_.-]{1,100}$/u);
+      expect(voice.files.map((f) => f.path)).toEqual([`${voice.id}.onnx`, `${voice.id}.onnx.json`]);
+      // A license not named plainly is treated as non-commercial until someone reads it.
+      expect(voice.nonCommercial, voice.id).toBe(
+        /NC/.test(voice.license) || voice.license === 'Unknown',
+      );
       expect(voice.locale, voice.id).not.toMatch(/^(zh|cmn|yue)\b/);
+      expect(['x_low', 'low', 'medium', 'high']).toContain(voice.quality);
+      if (voice.speakers) {
+        expect(voice.speakers.length, voice.id).toBeGreaterThan(1);
+        expect(voice.speakers.length, voice.id).toBeLessThan(10_000);
+      }
     }
+  });
+
+  it('keeps the pack Dev Setup installs: three free Persian voices and HFC Female', () => {
+    const pack = STUDIO_PIPER.voices.filter((v) => v.pack);
+    expect(pack.map((v) => [v.id, v.label, v.license])).toEqual([
+      ['en_US-hfc_female-medium', 'HFC Female', 'CC BY-NC-SA 4.0'],
+      ['fa_IR-amir-medium', 'Amir', 'CC0'],
+      ['fa_IR-ganji-medium', 'Ganji', 'CC0'],
+      ['fa_IR-reza_ibrahim-medium', 'Reza Ibrahim', 'CC0'],
+    ]);
+    // Moving to a newer revision must not change what the pack downloads.
+    expect(pack.find((v) => v.id === 'fa_IR-amir-medium')?.files[0]?.sha256).toBe(
+      'fb815380d969ea372b0b21b0de14421f58fe481047e153e69685d079b6e1a9d1',
+    );
+  });
+
+  it('offers every quality of a voice and every speaker of a model with several', () => {
+    const ids = STUDIO_PIPER.voices.map((v) => v.id);
+    expect(ids).toEqual(expect.arrayContaining(['en_US-amy-low', 'en_US-amy-medium']));
+    const vctk = STUDIO_PIPER.voices.find((v) => v.id === 'en_GB-vctk-medium');
+    expect(vctk?.speakers?.length).toBe(109);
   });
 
   it('pins every OmniVoice file and says its weights are non-commercial', () => {

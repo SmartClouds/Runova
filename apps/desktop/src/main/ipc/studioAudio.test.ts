@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -5,6 +6,7 @@ import {
   createScene,
   type NarrationJobView,
   type OpenVideoResult,
+  type PiperLibraryView,
   type VideoSummary,
   type VoiceEngineView,
 } from '@runova/studio';
@@ -219,5 +221,43 @@ describe('voice channels', () => {
     await expect(invokeFrom(fakeWebContents(), IPC.studioAudio.engines)).rejects.toThrow(
       'Studio only answers the main window.',
     );
+  });
+});
+
+describe('the Piper voice library over IPC', () => {
+  it('lists every Piper voice, and asks for Piper before downloading one', async () => {
+    const view = await invoke<PiperLibraryView>(IPC.studioAudio.piperLibrary);
+    expect(view.engineInstalled).toBe(false);
+    expect(view.voices.length).toBeGreaterThan(100);
+    expect(view.voices.find((v) => v.id === 'fa_IR-amir-medium')).toMatchObject({
+      pack: true,
+      state: 'absent',
+    });
+    await expect(
+      invoke(IPC.studioAudio.downloadPiperVoice, { id: 'en_GB-vctk-medium' }),
+    ).rejects.toThrow(/^Install Piper first/);
+    await expect(invoke(IPC.studioAudio.downloadPiperVoice, { id: '../x' })).rejects.toThrow(
+      'That Studio request is not valid: Studio does not offer that voice.',
+    );
+    const stopped = await invoke<PiperLibraryView>(IPC.studioAudio.cancelPiperVoice, {
+      id: 'en_GB-vctk-medium',
+    });
+    expect(stopped.voices.find((v) => v.id === 'en_GB-vctk-medium')?.state).toBe('absent');
+  });
+
+  it("removes a voice's files and nothing else", async () => {
+    const dir = join(userData.dir, 'studio-tools', 'models', 'piper-voices');
+    mkdirSync(dir, { recursive: true });
+    for (const name of [
+      'en_US-amy-low.onnx',
+      'en_US-amy-low.onnx.json',
+      'fa_IR-amir-medium.onnx',
+    ]) {
+      writeFileSync(join(dir, name), 'x');
+    }
+    await invoke<PiperLibraryView>(IPC.studioAudio.removePiperVoice, { id: 'en_US-amy-low' });
+    expect(existsSync(join(dir, 'en_US-amy-low.onnx'))).toBe(false);
+    expect(existsSync(join(dir, 'en_US-amy-low.onnx.json'))).toBe(false);
+    expect(existsSync(join(dir, 'fa_IR-amir-medium.onnx'))).toBe(true);
   });
 });

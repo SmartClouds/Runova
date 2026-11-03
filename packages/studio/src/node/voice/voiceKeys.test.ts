@@ -132,7 +132,7 @@ describe('local engines', () => {
     expect(await voices.voices({ engine: 'piper', lang: 'fa' })).toEqual([
       {
         id: 'fa_IR-amir-medium',
-        label: 'Amir',
+        label: 'Amir, medium',
         locale: 'fa-IR',
         gender: 'male',
         nonCommercial: false,
@@ -154,7 +154,7 @@ describe('local engines', () => {
     const none = createVoiceKeys(host, async () => [profile('p0', 0)]);
     const engines = await none.engines();
     expect(engines.find((e) => e.id === 'piper')?.problem).toBe(
-      'Install the Piper voices from Agent Tools, Dev Setup (Studio).',
+      'Download a Piper voice first: Get voices, next to the voice list.',
     );
     expect(engines.find((e) => e.id === 'omnivoice')).toMatchObject({
       problem: 'Make a voice profile first: Voices, then New voice.',

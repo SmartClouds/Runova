@@ -330,13 +330,14 @@ describe('installing a Studio Python environment', () => {
 });
 
 describe('installing model files', () => {
-  it('downloads every Piper voice into its folder and lists them in the marker', async () => {
+  it('downloads the Piper pack into its folder and lists it in the marker', async () => {
     const w = world();
     expect((await w.installer.runModels('piper-voices', w.hooks)).ok).toBe(true);
-    const files = STUDIO_PIPER.voices.flatMap((v) => v.files);
+    const files = STUDIO_PIPER.voices.filter((v) => v.pack).flatMap((v) => v.files);
+    expect(files).toHaveLength(8);
     expect(w.calls.filter((c) => c.startsWith('download '))).toHaveLength(files.length);
     expect(w.disk.get(`${ROOT}\\models\\piper-voices\\fa_IR-amir-medium.onnx`)).toBe(
-      files[0]?.sha256,
+      files.find((f) => f.path === 'fa_IR-amir-medium.onnx')?.sha256,
     );
     const marker = JSON.parse(w.written.get(`${ROOT}\\piper-voices.installed.json`) as string);
     expect(marker.files).toHaveLength(files.length);
@@ -356,5 +357,76 @@ describe('installing model files', () => {
     expect(
       linux.disk.has(`${linux.root}/models/omnivoice-weights/audio_tokenizer/config.json`),
     ).toBe(true);
+  });
+});
+
+describe('one Piper voice from the library', () => {
+  const VOICES = `${ROOT}\\models\\piper-voices`;
+  const vctk = STUDIO_PIPER.voices.find((v) => v.id === 'en_GB-vctk-medium');
+  const model = vctk?.files[0] as { url: string; sha256: string };
+  const config = vctk?.files[1] as { url: string; sha256: string };
+
+  it('downloads its model and settings, each named only once checked, and writes no marker', async () => {
+    const w = world();
+    expect(await w.installer.fetchPiperVoice('en_GB-vctk-medium', w.hooks)).toEqual({
+      ok: true,
+      code: 0,
+      cancelled: false,
+    });
+    expect(w.calls).toEqual([
+      `download ${model.url}`,
+      `rename ${VOICES}\\en_GB-vctk-medium.onnx.part -> ${VOICES}\\en_GB-vctk-medium.onnx`,
+      `download ${config.url}`,
+      `rename ${VOICES}\\en_GB-vctk-medium.onnx.json.part -> ${VOICES}\\en_GB-vctk-medium.onnx.json`,
+    ]);
+    expect(w.disk.get(`${VOICES}\\en_GB-vctk-medium.onnx`)).toBe(model.sha256);
+    expect([...w.written.keys()]).toEqual([]);
+    // A second try finds both in place and fetches nothing.
+    const again = world({ disk: Object.fromEntries(w.disk) });
+    expect((await again.installer.fetchPiperVoice('en_GB-vctk-medium', again.hooks)).ok).toBe(true);
+    expect(again.calls).toEqual([]);
+  });
+
+  it('deletes a download that does not match its checksum and never gives it the name', async () => {
+    const w = world({ corrupt: [model.url] });
+    expect((await w.installer.fetchPiperVoice('en_GB-vctk-medium', w.hooks)).message).toBe(
+      'the VCTK voice did not match its checksum, so it was deleted. Try again.',
+    );
+    expect(w.calls.some((c) => c.startsWith('rename'))).toBe(false);
+    expect([...w.disk.keys()]).toEqual([]);
+  });
+
+  it('keeps what arrived when the connection drops, stops when cancelled, and refuses what it cannot do', async () => {
+    const dropped = world({ failing: { [model.url]: 'drop' } });
+    expect(
+      (await dropped.installer.fetchPiperVoice('en_GB-vctk-medium', dropped.hooks)).message,
+    ).toMatch(/^The download of the VCTK voice keeps losing its connection/);
+    expect(dropped.disk.has(`${VOICES}\\en_GB-vctk-medium.onnx.part`)).toBe(true);
+
+    const cancelled = world({ cancelOn: model.url, failing: { [model.url]: 'error' } });
+    expect(
+      (await cancelled.installer.fetchPiperVoice('en_GB-vctk-medium', cancelled.hooks)).cancelled,
+    ).toBe(true);
+
+    const unknown = world();
+    expect((await unknown.installer.fetchPiperVoice('zz-made-up', unknown.hooks)).message).toBe(
+      'Studio does not offer that voice.',
+    );
+    const full = world({ free: 1000 });
+    expect((await full.installer.fetchPiperVoice('en_GB-vctk-medium', full.hooks)).message).toMatch(
+      /^This needs about/,
+    );
+  });
+
+  it('removes a voice and what was half downloaded of it, and leaves the others', async () => {
+    const w = world({
+      disk: {
+        [`${VOICES}\\en_GB-vctk-medium.onnx`]: 'x',
+        [`${VOICES}\\en_GB-vctk-medium.onnx.json.part`]: 'x',
+        [`${VOICES}\\fa_IR-amir-medium.onnx`]: 'x',
+      },
+    });
+    await w.installer.removePiperVoice('en_GB-vctk-medium');
+    expect([...w.disk.keys()]).toEqual([`${VOICES}\\fa_IR-amir-medium.onnx`]);
   });
 });

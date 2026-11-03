@@ -12,6 +12,7 @@ import { BrowserWindow, dialog, type IpcMainInvokeEvent, ipcMain, shell } from '
 import { z } from 'zod';
 import { IPC } from '../../shared/ipcChannels';
 import { studioService } from '../studio';
+import { registerPiperVoiceHandlers } from './studioPiperVoices';
 
 /**
  * Studio's channels (E31), its AI channels (E32), scenes (E33), rendering (E34) and voice (E36). Every argument is checked against Studio's own input schemas before
@@ -259,6 +260,7 @@ export function registerStudioHandlers(
   handle(IPC.studioAudio.setKey, (value) =>
     service().setVoiceKey(parse(studioAudioInputs.setKey, value)),
   );
+  registerPiperVoiceHandlers(handle);
   handle(IPC.studioAudio.speak, (value) => service().speak(parse(studioAudioInputs.speak, value)));
   handle(IPC.studioAudio.jobs, (value) =>
     service().narrationJobs(parse(studioAudioInputs.jobs, value)),

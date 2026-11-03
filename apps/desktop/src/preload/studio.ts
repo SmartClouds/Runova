@@ -14,6 +14,7 @@ import type {
   MoveResult,
   NarrationJobView,
   OpenVideoResult,
+  PiperLibraryView,
   ProjectStorageView,
   ProposalChange,
   RecipeView,
@@ -161,6 +162,13 @@ export function createStudioAudio() {
     engines: (): Promise<VoiceEngineView[]> => ipcRenderer.invoke(IPC.studioAudio.engines),
     voices: (engine: VoiceEngineView['id'], lang: string): Promise<VoiceView[]> =>
       ipcRenderer.invoke(IPC.studioAudio.voices, { engine, lang }),
+    piperLibrary: (): Promise<PiperLibraryView> => ipcRenderer.invoke(IPC.studioAudio.piperLibrary),
+    downloadPiperVoice: (id: string): Promise<PiperLibraryView> =>
+      ipcRenderer.invoke(IPC.studioAudio.downloadPiperVoice, { id }),
+    cancelPiperVoice: (id: string): Promise<PiperLibraryView> =>
+      ipcRenderer.invoke(IPC.studioAudio.cancelPiperVoice, { id }),
+    removePiperVoice: (id: string): Promise<PiperLibraryView> =>
+      ipcRenderer.invoke(IPC.studioAudio.removePiperVoice, { id }),
     setKey: (input: {
       engine: 'elevenlabs' | 'azure';
       key: string | null;

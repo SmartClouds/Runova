@@ -572,7 +572,7 @@ export const DEV_ITEMS: readonly DevItem[] = [
     id: 'studio-piper',
     name: 'Piper',
     description:
-      'Speaks narration on this computer, offline, in Persian and English. Installed in its own Python inside Runova, nothing system-wide.',
+      'Speaks narration on this computer, offline, in Persian, English and 50 more languages. Installed in its own Python inside Runova, nothing system-wide.',
     stack: 'studio',
     optional: true,
     detect: { kind: 'resolver', id: 'studio-tool', tool: 'piper' },
@@ -586,7 +586,7 @@ export const DEV_ITEMS: readonly DevItem[] = [
     id: 'studio-piper-voices',
     name: 'Piper voices',
     description:
-      'Three Persian voices, free for any use, and one English voice for non-commercial use (about 250 MB).',
+      'Three Persian voices, free for any use, and one English voice for non-commercial use (about 250 MB). Any other Piper voice, in 52 languages, downloads from Get voices in Studio.',
     stack: 'studio',
     optional: true,
     dependsOn: ['studio-piper'],

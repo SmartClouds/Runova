@@ -145,7 +145,7 @@ export function createVoiceKeys(
       const piperProblem = !tools.piper
         ? NOT_INSTALLED.piper
         : tools.piper.voices.length === 0
-          ? 'Install the Piper voices from Agent Tools, Dev Setup (Studio).'
+          ? 'Download a Piper voice first: Get voices, next to the voice list.'
           : null;
       const consented = (await profiles()).filter((p) => p.consent.at > 0);
       const omniProblem = !tools.omnivoice

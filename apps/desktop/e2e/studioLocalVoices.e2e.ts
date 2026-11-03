@@ -139,6 +139,15 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
     await expect(
       panel.getByText('Install Piper and its voices from Agent Tools, Dev Setup (Studio).'),
     ).toBeVisible();
+    // Its voice library lists every voice from the main process, and asks for Piper first.
+    await panel.getByRole('button', { name: 'Get voices' }).click();
+    const library = page.getByRole('dialog', { name: 'Piper voices' });
+    await expect(library.getByText(/^Install Piper first/)).toBeVisible();
+    await library.getByRole('checkbox', { name: 'Every language' }).click();
+    await expect(library.getByRole('region', { name: 'German (de-DE)' })).toBeVisible();
+    await expect(library.getByRole('button', { name: 'Download VCTK, medium' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(library).toBeHidden();
     await panel.getByRole('button', { name: 'Open Dev Setup' }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toContain('stack=studio');
 

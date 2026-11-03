@@ -19,6 +19,7 @@ export {
   CircleCheck,
   Clapperboard,
   Code,
+  Download,
   EllipsisVertical,
   FileText,
   Folder,

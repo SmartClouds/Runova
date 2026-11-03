@@ -34,6 +34,10 @@ describe('findLocalVoiceTools', () => {
     t.put(t.python('piper'));
     t.mark('piper-voices');
     t.put('models/piper-voices/fa_IR-amir-medium.onnx');
+    t.put('models/piper-voices/fa_IR-amir-medium.onnx.json');
+    // Half there: a model without its settings, and a download still going.
+    t.put('models/piper-voices/fa_IR-ganji-medium.onnx');
+    t.put('models/piper-voices/en_US-amy-low.onnx.part');
     t.mark('omnivoice');
     t.put(t.python('omnivoice'));
     t.mark('omnivoice-weights', [{ path: 'audio_tokenizer/model.safetensors', size: 1 }]);
@@ -45,6 +49,15 @@ describe('findLocalVoiceTools', () => {
     expect((await findLocalVoiceTools(t.root, os)).omnivoice?.modelDir).toBe(
       join(t.root, 'models', 'omnivoice-weights'),
     );
+  });
+
+  it('counts a voice from the library without the pack', async () => {
+    const t = tools();
+    t.mark('piper');
+    t.put(t.python('piper'));
+    t.put('models/piper-voices/en_GB-vctk-medium.onnx');
+    t.put('models/piper-voices/en_GB-vctk-medium.onnx.json');
+    expect((await findLocalVoiceTools(t.root, os)).piper?.voices).toEqual(['en_GB-vctk-medium']);
   });
 
   it('does not count an install whose Python was removed', async () => {

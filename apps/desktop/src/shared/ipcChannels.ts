@@ -851,6 +851,14 @@ export const IPC = {
     engines: 'studioAudio:engines',
     // ({ engine, lang }) -> VoiceView[], never a Chinese voice
     voices: 'studioAudio:voices',
+    // () -> PiperLibraryView, every Piper voice Studio offers and which are on this computer
+    piperLibrary: 'studioAudio:piperLibrary',
+    // ({ id }) -> PiperLibraryView; starts the download, which goes on as piper-voices-changed
+    downloadPiperVoice: 'studioAudio:downloadPiperVoice',
+    // ({ id }) -> PiperLibraryView; stops a download (what arrived is kept) or clears its error
+    cancelPiperVoice: 'studioAudio:cancelPiperVoice',
+    // ({ id }) -> PiperLibraryView; deletes the voice's files
+    removePiperVoice: 'studioAudio:removePiperVoice',
     // ({ engine: 'elevenlabs' | 'azure', key, region? }) -> VoiceEngineView[], the key sealed
     setKey: 'studioAudio:setKey',
     // ({ videoId, sceneIds, voiceRef }) -> NarrationJobView; progress comes as narration-changed

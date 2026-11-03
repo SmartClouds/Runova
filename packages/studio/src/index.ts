@@ -28,6 +28,7 @@ export * from './timeline/edits.js';
 export * from './timeline/layout.js';
 export * from './timeline/narration.js';
 export * from './tools/pythonLock.js';
+export * from './voice/piperLibrary.js';
 export * from './voice/text.js';
 export * from './voice/voices.js';
 export * from './voice/wav.js';

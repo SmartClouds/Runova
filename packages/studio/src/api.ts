@@ -475,7 +475,9 @@ const voiceRef = z
   .string()
   .max(200)
   .regex(
-    /^(openai|gemini|elevenlabs|azure|piper|omnivoice):[A-Za-z0-9_.-]{1,100}$/,
+    // A Piper voice may name one speaker of its model after a #, and one Piper voice has a
+    // letter outside ASCII in its name.
+    /^(openai|gemini|elevenlabs|azure|piper|omnivoice):[\p{L}\p{N}_.-]{1,100}(#\d{1,4})?$/u,
     'Pick one of the offered voices.',
   );
 
@@ -756,6 +758,8 @@ export type StudioEvent =
     }
   /** A narration run moved on: a piece spoken, a scene placed, or the run ended. */
   | { type: 'narration-changed'; videoId: string; jobId: string }
+  /** A Piper voice started or stopped downloading, or was removed (the voice library). */
+  | { type: 'piper-voices-changed' }
   /** A generated picture or clip moved on: waiting, downloading, imported, failed. */
   | { type: 'gen-changed'; videoId: string; jobId: string }
   /** A video's media changed: a file imported, or its preview files made. */

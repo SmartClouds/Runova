@@ -86,10 +86,14 @@ function gigabytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(bytes >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
 }
 
-export function createStudioToolsInstaller(deps: StudioToolsDeps): {
+export interface StudioToolsInstaller {
   runEnv: (env: StudioEnvId, hooks: RunHooks) => Promise<RunResult>;
   runModels: (target: 'piper-voices' | 'omnivoice-weights', hooks: RunHooks) => Promise<RunResult>;
-} {
+  fetchPiperVoice: (id: string, hooks: RunHooks) => Promise<RunResult>;
+  removePiperVoice: (id: string) => Promise<void>;
+}
+
+export function createStudioToolsInstaller(deps: StudioToolsDeps): StudioToolsInstaller {
   const { kit } = deps;
   const sep = kit.os === 'win32' ? '\\' : '/';
   const paths = studioToolPaths(deps.root, kit.os);
@@ -136,12 +140,13 @@ export function createStudioToolsInstaller(deps: StudioToolsDeps): {
           );
         }
       }
-      await kit.fs.rename(part, item.dest);
+      // Checked before it takes its name, so a file under its own name is always whole.
       hooks.onProgress({ phase: 'verifying', fraction: null });
-      if (!(await isWhole(item.dest, item.sha256))) {
-        await kit.fs.rm(item.dest);
+      if (!(await isWhole(part, item.sha256))) {
+        await kit.fs.rm(part);
         return fail(`${item.label} did not match its checksum, so it was deleted. Try again.`);
       }
+      await kit.fs.rename(part, item.dest);
       before += item.size;
     }
     return null;
@@ -319,7 +324,7 @@ export function createStudioToolsInstaller(deps: StudioToolsDeps): {
     hooks.onProgress({ phase: 'preparing', fraction: null });
     const files: readonly StudioModelFile[] =
       target === 'piper-voices'
-        ? STUDIO_PIPER.voices.flatMap((v) => v.files)
+        ? STUDIO_PIPER.voices.filter((v) => v.pack).flatMap((v) => v.files)
         : STUDIO_OMNIVOICE.files;
     const bytes = files.reduce((sum, f) => sum + f.size, 0);
     const noRoom = await roomFor(bytes / 2);
@@ -350,5 +355,44 @@ export function createStudioToolsInstaller(deps: StudioToolsDeps): {
     return { ok: true, code: 0, cancelled: false };
   }
 
-  return { runEnv, runModels };
+  /** The places a Piper voice's files go, in the folder every Piper voice shares. */
+  function piperVoiceArtifacts(id: string): Artifact[] | null {
+    const voice = STUDIO_PIPER.voices.find((v) => v.id === id);
+    if (!voice) return null;
+    const dir = paths.modelsDir('piper-voices');
+    return voice.files.map((f) => ({
+      url: f.url,
+      size: f.size,
+      sha256: f.sha256,
+      dest: `${dir}${sep}${f.path}`,
+      label: `the ${voice.label} voice`,
+    }));
+  }
+
+  /**
+   * One Piper voice from Studio's voice library, beside the pack. It needs no marker: a voice whose
+   * two files are in place counts as installed, and each file takes its name only once checked.
+   */
+  async function fetchPiperVoice(id: string, hooks: RunHooks): Promise<RunResult> {
+    if (hooks.token.cancelled) return CANCELLED;
+    const artifacts = piperVoiceArtifacts(id);
+    if (!artifacts) return fail('Studio does not offer that voice.');
+    hooks.onProgress({ phase: 'preparing', fraction: null });
+    const noRoom = await roomFor(artifacts.reduce((sum, a) => sum + a.size, 0) / 2);
+    if (noRoom) return noRoom;
+    await kit.fs.mkdir(paths.modelsDir('piper-voices'));
+    const missing = await fetchAll(artifacts, hooks);
+    if (missing) return missing;
+    return { ok: true, code: 0, cancelled: false };
+  }
+
+  /** Deletes a Piper voice's files and whatever of them was half downloaded. */
+  async function removePiperVoice(id: string): Promise<void> {
+    for (const item of piperVoiceArtifacts(id) ?? []) {
+      await kit.fs.rm(item.dest);
+      await kit.fs.rm(`${item.dest}.part`);
+    }
+  }
+
+  return { runEnv, runModels, fetchPiperVoice, removePiperVoice };
 }

@@ -27,8 +27,20 @@ Python environment installer.
   only to write the locks, never on the user's machine. Model files are pinned the same way, at a
   fixed Hugging Face revision. Each install writes a marker last; Dev Setup's `studio-tool` check and
   Studio both read it, so a half-finished install never counts.
-- **Piper** runs one process per piece: `python -m piper -m <voice>.onnx -i <text file> -f <out.wav>`.
-  The text goes in a UTF-8 file, which no Windows code page can mangle.
+- **Piper** runs one process per piece: `python -m piper -m <voice>.onnx [-s <speaker>] -i <text file>
+  -f <out.wav>`. The text goes in a UTF-8 file, which no Windows code page can mangle.
+- **Every Piper voice** (`scripts/studio-piper-voices.mjs` writes
+  `packages/core/src/models/piperVoices.generated.ts`): all 174 voice models of rhasspy/piper-voices
+  in 52 languages, Chinese left out, each with its two files' sizes and SHA-256 at one pinned
+  revision, its speakers, and the license its model card names. A license that is not named plainly
+  ("See URL", a link to a research licence, nothing) counts as non-commercial, and the voice links to
+  its dataset. Dev Setup's Piper voices item installs the pack (the three CC0 Persian voices and HFC
+  Female); Studio's **Get voices** library downloads any other model one at a time
+  (`main/studio/piperDownloads.ts`, the same resumable, hash-checked download as Dev Setup), in the
+  background, with progress, stop and remove. A file takes its name only once its hash matches, so a
+  voice whose two files are there is installed, with no marker. A model with several speakers (VCTK
+  109, LibriTTS-R 2306) is offered as one voice per speaker, named `<model>#<speaker>` in a scene's
+  `voiceRef`.
 - **OmniVoice** runs in a sidecar of our own (`assets/voice/omnivoice_server.py`, calling only
   `OmniVoice.from_pretrained` and `generate`) behind a generic supervisor (`supervisedHost.ts`):
   JSON lines over stdio, a ready handshake, one job at a time with a watchdog, a crash fails only
@@ -58,6 +70,8 @@ Python environment installer.
   through OmniVoice and ElevenLabs.
 - [x] T5b Piper: its environment and voices, and its adapter behind the narrator's engine call.
 - [x] T6 e2e `studioLocalVoices.e2e.ts`.
+- [x] T7 Every Piper voice: the pinned catalog and its script, speakers in voice refs and `-s`, the
+  library's download, stop and remove in the main process, and the Get voices dialog.
 
 ## Acceptance criteria
 
@@ -95,7 +109,11 @@ sidecar.
   process's stdin was an unhandled EPIPE. The tests caught both.
 - Most English Piper voices are non-commercial (hfc_female and hfc_male are CC BY-NC-SA, lessac
   carries the Blizzard license). The Persian amir, ganji and reza_ibrahim voices are CC0; gyro's
-  license is unclear, so it is left out.
+  license is unclear, so it stays out of the pack and the library marks it non-commercial.
+- Model cards state licenses many ways (CC URLs, "CC-BY 4.0", "Attribution-ShareAlike 4.0
+  International", YAML front matter in newer cards), so the script normalises them; 38 of 174 name
+  none plainly. One voice id has a letter outside ASCII (`pt_PT-tugão-medium`), so ids and
+  `voiceRef` take any letter and the download URL is percent-encoded.
 - ElevenLabs states no minimum length for an instant clone, so Studio sets none beyond its own
   3 to 60 seconds for a take.
 

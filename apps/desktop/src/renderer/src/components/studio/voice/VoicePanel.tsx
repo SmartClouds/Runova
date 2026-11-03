@@ -18,6 +18,7 @@ import {
   Chip,
   Combobox,
   cn,
+  Download,
   EmptyState,
   GLASS_CARD,
   LoadFailure,
@@ -35,6 +36,7 @@ import {
   VaultUnlockDialog,
 } from '../kit';
 import { studioKeys } from '../queryKeys';
+import { PiperVoiceLibraryDialog } from './PiperVoiceLibraryDialog';
 import { RecordDialog } from './RecordDialog';
 import { VoiceProfilesDialog } from './VoiceProfilesDialog';
 
@@ -80,6 +82,7 @@ export function VoicePanel({
   const [voiceId, setVoiceId] = useState<string>(firstRef?.voice ?? '');
   const [unlocking, setUnlocking] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [recordTarget, setRecordTarget] = useState<{ scene: Scene; index: number } | null>(null);
   const [captioning, setCaptioning] = useState<string | null>(null);
 
@@ -211,6 +214,11 @@ export function VoicePanel({
             />
           )}
         </div>
+        {engine?.id === 'piper' && (
+          <Button variant="soft" onClick={() => setLibraryOpen(true)}>
+            <Download /> Get voices
+          </Button>
+        )}
         <Button
           disabled={!ready || spoken.length === 0}
           onClick={() => void speak(spoken.map((s) => s.id))}
@@ -235,6 +243,10 @@ export function VoicePanel({
             engine.locked ? (
               <Button size="sm" variant="soft" onClick={() => setUnlocking(true)}>
                 <Lock /> Unlock
+              </Button>
+            ) : engine.id === 'piper' && engine.problem.startsWith('Download') ? (
+              <Button size="sm" variant="soft" onClick={() => setLibraryOpen(true)}>
+                <Download /> Get voices
               </Button>
             ) : engine.local && engine.problem.startsWith('Install') ? (
               <Button size="sm" variant="soft" onClick={onOpenDevSetup}>
@@ -400,6 +412,13 @@ export function VoicePanel({
         open={profilesOpen}
         onOpenChange={setProfilesOpen}
         lang={document.language}
+      />
+      <PiperVoiceLibraryDialog
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        lang={document.language}
+        usedVoiceRefs={scenes.map((s) => s.voiceRef)}
+        onOpenDevSetup={onOpenDevSetup}
       />
       <RecordDialog
         videoId={videoId}

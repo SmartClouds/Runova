@@ -69,13 +69,66 @@ export function voicesFor(
   return all.some((v) => v.locale) ? local : all;
 }
 
-/** Piper's voices for a language, only those installed when the list of installed ones is given. */
-export function piperVoicesFor(lang: string, installed?: readonly string[]): StudioLocalVoice[] {
+/**
+ * A Piper voice as a scene names it: the model, and for a model with several speakers the speaker's
+ * number after a `#` (`en_GB-vctk-medium#12`). Null when the model is not one Studio offers or
+ * the speaker is not one of its speakers.
+ */
+export function parsePiperVoice(
+  id: string,
+): { model: StudioLocalVoice; speaker: number | null } | null {
+  const hash = id.indexOf('#');
+  const modelId = hash < 0 ? id : id.slice(0, hash);
+  const model = STUDIO_PIPER.voices.find((v) => v.id === modelId);
+  if (!model) return null;
+  if (hash < 0) return { model, speaker: model.speakers ? 0 : null };
+  const speaker = /^\d{1,4}$/.test(id.slice(hash + 1)) ? Number(id.slice(hash + 1)) : -1;
+  if (!model.speakers || speaker < 0 || speaker >= model.speakers.length) return null;
+  return { model, speaker };
+}
+
+/** One Piper voice to pick: a model with one speaker, or one speaker of a model with several. */
+export interface PiperVoiceChoice {
+  id: string;
+  label: string;
+  locale: string;
+  gender?: 'female' | 'male';
+  license: string;
+  nonCommercial: boolean;
+}
+
+/** The Piper models for a language, only those installed when the installed ones are given. */
+export function piperModelsFor(lang: string, installed?: readonly string[]): StudioLocalVoice[] {
   const primary = lang.split('-')[0]?.toLowerCase() ?? '';
   return voicesWithoutChinese(STUDIO_PIPER.voices).filter(
     (v) =>
       v.locale.toLowerCase().split('-')[0] === primary && (!installed || installed.includes(v.id)),
   );
+}
+
+/** Piper's voices for a language, each speaker of a model with several as a voice of its own. */
+export function piperVoicesFor(lang: string, installed?: readonly string[]): PiperVoiceChoice[] {
+  return piperModelsFor(lang, installed).flatMap((model) => {
+    const common = {
+      locale: model.locale,
+      gender: model.gender,
+      license: model.license,
+      nonCommercial: model.nonCommercial,
+    };
+    if (!model.speakers) {
+      return [{ ...common, id: model.id, label: `${model.label}, ${qualityLabel(model.quality)}` }];
+    }
+    return model.speakers.map((name, index) => ({
+      ...common,
+      id: `${model.id}#${index}`,
+      label: `${model.label} ${name}, ${qualityLabel(model.quality)}`,
+    }));
+  });
+}
+
+/** x_low as people say it. */
+export function qualityLabel(quality: string): string {
+  return quality === 'x_low' ? 'extra low' : quality;
 }
 
 /**
@@ -88,7 +141,7 @@ export function nonCommercialNarration(voiceRefs: readonly (string | null)[]): s
     const ref = parseVoiceRef(value);
     if (ref?.engine === 'omnivoice') names.add('OmniVoice');
     if (ref?.engine === 'piper') {
-      const voice = STUDIO_PIPER.voices.find((v) => v.id === ref.voice);
+      const voice = parsePiperVoice(ref.voice)?.model;
       if (voice?.nonCommercial) names.add(`Piper ${voice.label}`);
     }
   }

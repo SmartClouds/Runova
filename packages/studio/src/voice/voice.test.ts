@@ -5,6 +5,7 @@ import { speechChunks, timeLines, wordsByLength, wordsFromCharacters } from './t
 import {
   formatVoiceRef,
   nonCommercialNarration,
+  parsePiperVoice,
   parseVoiceRef,
   piperVoicesFor,
   voicesFor,
@@ -162,10 +163,48 @@ describe('non-commercial narration', () => {
   });
 
   it('offers only the Piper voices installed, for the language', () => {
-    expect(piperVoicesFor('fa').map((v) => v.id)).toHaveLength(3);
-    expect(piperVoicesFor('fa-IR', ['fa_IR-ganji-medium']).map((v) => v.id)).toEqual([
-      'fa_IR-ganji-medium',
+    expect(piperVoicesFor('fa').length).toBeGreaterThanOrEqual(3);
+    expect(piperVoicesFor('fa-IR', ['fa_IR-ganji-medium'])).toEqual([
+      {
+        id: 'fa_IR-ganji-medium',
+        label: 'Ganji, medium',
+        locale: 'fa-IR',
+        gender: 'male',
+        license: 'CC0',
+        nonCommercial: false,
+      },
     ]);
-    expect(piperVoicesFor('de')).toEqual([]);
+    expect(piperVoicesFor('de', [])).toEqual([]);
+    expect(piperVoicesFor(ZH).length).toBe(0);
+  });
+
+  it('offers every speaker of a Piper model with several as a voice of its own', () => {
+    const vctk = piperVoicesFor('en', ['en_GB-vctk-medium']);
+    expect(vctk).toHaveLength(109);
+    expect(vctk[0]).toMatchObject({ id: 'en_GB-vctk-medium#0', label: 'VCTK p239, medium' });
+    expect(vctk.at(-1)?.id).toBe('en_GB-vctk-medium#108');
+    expect(piperVoicesFor('en', ['en_US-amy-low'])[0]?.label).toBe('Amy, low');
+  });
+
+  it('reads a Piper voice as its model and speaker, and refuses one it does not offer', () => {
+    expect(parsePiperVoice('fa_IR-amir-medium')).toMatchObject({
+      model: { id: 'fa_IR-amir-medium' },
+      speaker: null,
+    });
+    expect(parsePiperVoice('en_GB-vctk-medium#12')).toMatchObject({
+      model: { id: 'en_GB-vctk-medium' },
+      speaker: 12,
+    });
+    // A model with several speakers named without one speaks with its first.
+    expect(parsePiperVoice('en_GB-vctk-medium')?.speaker).toBe(0);
+    for (const bad of [
+      'en_GB-vctk-medium#109',
+      'en_GB-vctk-medium#x',
+      'fa_IR-amir-medium#0',
+      'zz',
+    ]) {
+      expect(parsePiperVoice(bad), bad).toBeNull();
+    }
+    expect(nonCommercialNarration(['piper:en_US-l2arctic-medium#3'])).toEqual(['Piper L2-ARCTIC']);
   });
 });

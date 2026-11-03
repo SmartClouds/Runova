@@ -1,14 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { STUDIO_PIPER } from '@runova/core';
+import { parsePiperVoice } from '../../voice/voices.js';
 import { TtsError } from './engines.js';
 import { runLocal } from './localProcess.js';
 
 /**
  * Piper on this computer (piper-tts in Studio's own Python, E37): one process per piece of text.
  * The text goes in a UTF-8 file rather than on the command line or through stdin, either of which
- * a Windows code page can mangle; the voice is a file Dev Setup downloaded and checked.
+ * a Windows code page can mangle; the voice is a file Dev Setup or Studio's voice library
+ * downloaded and checked.
  */
 
 export interface PiperSetup {
@@ -35,9 +36,8 @@ export function createPiperSpeaker(setup: PiperSetup) {
     text: string;
     signal?: AbortSignal;
   }): Promise<Uint8Array> => {
-    if (!STUDIO_PIPER.voices.some((v) => v.id === voice)) {
-      throw new TtsError('Pick one of the offered voices.', false);
-    }
+    const picked = parsePiperVoice(voice);
+    if (!picked) throw new TtsError('Pick one of the offered voices.', false);
     await mkdir(setup.workDir, { recursive: true });
     const name = randomBytes(6).toString('hex');
     const input = join(setup.workDir, `${name}.txt`);
@@ -52,7 +52,9 @@ export function createPiperSpeaker(setup: PiperSetup) {
           '-m',
           'piper',
           '-m',
-          join(setup.voicesDir, `${voice}.onnx`),
+          join(setup.voicesDir, `${picked.model.id}.onnx`),
+          // A model with several speakers speaks with the one picked.
+          ...(picked.speaker === null ? [] : ['-s', String(picked.speaker)]),
           '-i',
           input,
           '-f',

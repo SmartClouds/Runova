@@ -1,3 +1,5 @@
+import { PIPER_VOICE_MODELS, PIPER_VOICES_REVISION } from './piperVoices.generated.js';
+
 /**
  * Every AI model name Runova knows, in one file.
  *
@@ -464,110 +466,69 @@ export interface StudioModelFile {
 
 export interface StudioLocalVoice extends StudioTtsVoice {
   locale: string;
-  /** The voice's own license, from its model card. */
+  /** The language in English, such as German. */
+  language: string;
+  /** Piper's own grading of the model: x_low, low, medium or high. */
+  quality: string;
+  /** The voice's own license, from its model card; Unknown when the card does not name one. */
   license: string;
   /** Usable for non-commercial work only, which Studio says wherever the voice is offered. */
   nonCommercial: boolean;
+  /** Where the recordings it was trained on came from, to read their terms. */
+  source?: string;
+  /** For a model with several speakers, their names by speaker number. */
+  speakers?: readonly string[];
+  /** Installed by Dev Setup with Piper; every other voice is downloaded from Studio's library. */
+  pack?: boolean;
   files: readonly StudioModelFile[];
 }
 
-const PIPER_VOICES_AT =
-  'https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd';
+/** A Piper voice model as scripts/studio-piper-voices.mjs pins it. */
+export interface PiperVoiceModel extends Omit<StudioLocalVoice, 'files'> {
+  /** Its folder in rhasspy/piper-voices. */
+  folder: string;
+  /** The model file's size and SHA-256. */
+  onnx: readonly [number, string];
+  /** Its settings file's size and SHA-256. */
+  config: readonly [number, string];
+}
 
-function piperVoice(
-  voice: Omit<StudioLocalVoice, 'files'>,
-  folder: string,
-  onnx: { size: number; sha256: string },
-  config: { size: number; sha256: string },
-): StudioLocalVoice {
+const PIPER_VOICES_AT = `https://huggingface.co/rhasspy/piper-voices/resolve/${PIPER_VOICES_REVISION}`;
+
+function piperVoice({ folder, onnx, config, ...voice }: PiperVoiceModel): StudioLocalVoice {
   const name = voice.id;
+  // One voice is named with a letter outside ASCII (pt_PT-tugão-medium).
+  const at = `${PIPER_VOICES_AT}/${encodeURI(folder)}/${encodeURIComponent(name)}`;
   return {
     ...voice,
     files: [
-      { path: `${name}.onnx`, url: `${PIPER_VOICES_AT}/${folder}/${name}.onnx`, ...onnx },
+      {
+        path: `${name}.onnx`,
+        url: `${at}.onnx`,
+        size: onnx[0],
+        sha256: onnx[1],
+      },
       {
         path: `${name}.onnx.json`,
-        url: `${PIPER_VOICES_AT}/${folder}/${name}.onnx.json`,
-        ...config,
+        url: `${at}.onnx.json`,
+        size: config[0],
+        sha256: config[1],
       },
     ],
   };
 }
 
 /**
- * Piper (piper-tts, GPL-3.0, installed by Dev Setup into Studio's own Python) and the voices
- * Studio offers with it. The Persian voices are CC0; Piper's English voices are almost all
- * non-commercial, and the one here is marked so.
+ * Piper (piper-tts, GPL-3.0, installed by Dev Setup into Studio's own Python) and every voice
+ * Studio offers with it, pinned by scripts/studio-piper-voices.mjs. Dev Setup installs the pack
+ * (three Persian voices free for any use and one English voice for non-commercial use); the rest
+ * are downloaded one by one from Studio's voice library. A model with several speakers is offered
+ * as one voice per speaker.
  */
 export const STUDIO_PIPER = {
   label: 'Piper',
   license: 'GPL-3.0-or-later',
-  voices: [
-    piperVoice(
-      {
-        id: 'fa_IR-amir-medium',
-        label: 'Amir',
-        locale: 'fa-IR',
-        gender: 'male',
-        license: 'CC0',
-        nonCommercial: false,
-      },
-      'fa/fa_IR/amir/medium',
-      {
-        size: 63_531_379,
-        sha256: 'fb815380d969ea372b0b21b0de14421f58fe481047e153e69685d079b6e1a9d1',
-      },
-      { size: 4958, sha256: '75f918a3bf0f57a9179abe725af529f2a5c79d6c899e2a84aec76c685d5dfb9a' },
-    ),
-    piperVoice(
-      {
-        id: 'fa_IR-ganji-medium',
-        label: 'Ganji',
-        locale: 'fa-IR',
-        gender: 'male',
-        license: 'CC0',
-        nonCommercial: false,
-      },
-      'fa/fa_IR/ganji/medium',
-      {
-        size: 63_516_050,
-        sha256: '6a98504bb77dc2fd3a863c977d37e67a6a525fdf661917385d569a3ff78e6cae',
-      },
-      { size: 4958, sha256: '9d3e0c0cf00156d8bf38fb7f96bdfbcb21911b37e062a328da0632e3c2cbc465' },
-    ),
-    piperVoice(
-      {
-        id: 'fa_IR-reza_ibrahim-medium',
-        label: 'Reza Ibrahim',
-        locale: 'fa-IR',
-        gender: 'male',
-        license: 'CC0',
-        nonCommercial: false,
-      },
-      'fa/fa_IR/reza_ibrahim/medium',
-      {
-        size: 63_511_038,
-        sha256: '99f0c31464a2120831ca87d079e10a9a2b3e426cc1ee662d80ff9042df15cd3c',
-      },
-      { size: 4967, sha256: 'e9866c88c16245f8b8f4d0eaeaa6eab4f2e193db69a2ab4683d83fe78a30b6ca' },
-    ),
-    piperVoice(
-      {
-        id: 'en_US-hfc_female-medium',
-        label: 'HFC Female',
-        locale: 'en-US',
-        gender: 'female',
-        license: 'CC BY-NC-SA 4.0',
-        nonCommercial: true,
-      },
-      'en/en_US/hfc_female/medium',
-      {
-        size: 63_201_294,
-        sha256: '914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7',
-      },
-      { size: 5033, sha256: '03f1fa0622b80463283592d97aca9f6e89aec345a5c56b7257723e0093c58b6c' },
-    ),
-  ] as readonly StudioLocalVoice[],
+  voices: PIPER_VOICE_MODELS.map(piperVoice) as readonly StudioLocalVoice[],
 } as const;
 
 const OMNIVOICE_AT =

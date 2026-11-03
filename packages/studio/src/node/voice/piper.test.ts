@@ -39,6 +39,17 @@ describe('Piper on this computer', () => {
     expect(await readdir(join(root, 'work'))).toEqual([]);
   });
 
+  it('speaks with the picked speaker of a model with several', async () => {
+    const { root, piper, log } = await setup();
+    await writeFile(join(root, 'voices', 'en_GB-vctk-medium.onnx'), 'model');
+    await piper({ voice: 'en_GB-vctk-medium#12', text: 'Hello there.' });
+    const said = JSON.parse(await readFile(log, 'utf8'));
+    expect(said.model).toBe(join(root, 'voices', 'en_GB-vctk-medium.onnx'));
+    expect(said.speaker).toBe('12');
+    await piper({ voice: 'fa_IR-amir-medium', text: 'سلام' });
+    expect(JSON.parse(await readFile(log, 'utf8')).speaker).toBeNull();
+  });
+
   it('is what the narrator reaches through the engine call, and says when it is missing', async () => {
     const { piper } = await setup();
     const spoken = await speak({
@@ -76,6 +87,9 @@ describe('Piper on this computer', () => {
       /Unable to find voice/,
     );
     await expect(piper({ voice: 'zz-made-up', text: 'سلام' })).rejects.toThrow(
+      'Pick one of the offered voices.',
+    );
+    await expect(piper({ voice: 'en_GB-vctk-medium#500', text: 'Hi' })).rejects.toThrow(
       'Pick one of the offered voices.',
     );
     const controller = new AbortController();
