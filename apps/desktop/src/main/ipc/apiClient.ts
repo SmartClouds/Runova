@@ -52,7 +52,13 @@ function assertSaveInput(input: unknown): asserts input is SaveApiRequestInput {
   }
 }
 
-async function execute(input: ExecuteApiRequestInput): Promise<ApiExecutionResult> {
+/**
+ * Sends one request through the runner with the collection's variables, auth and scripts, the way
+ * the API Client tab does. AI access sends requests through here too.
+ */
+export async function executeApiRequest(
+  input: ExecuteApiRequestInput,
+): Promise<ApiExecutionResult> {
   const startedAt = Date.now();
   let collection = null;
   let scriptsEnabled = true;
@@ -130,7 +136,7 @@ export function registerApiClientHandlers(deps: { engine?: ApiEngine } = {}): vo
 
   ipcMain.handle(IPC.apiClient.execute, (_event, input: unknown): Promise<ApiExecutionResult> => {
     assertExecuteInput(input);
-    return execute(input);
+    return executeApiRequest(input);
   });
 
   ipcMain.handle(IPC.apiClient.cancel, (_event, requestId: string): boolean => {

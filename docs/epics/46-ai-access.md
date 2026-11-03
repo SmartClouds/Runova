@@ -85,10 +85,12 @@ reaches Runova through Runova's own MCP server. The person decides:
 | E46.1 | Engine: settings, policy, approvals, registry, server, bridge, identity, launch flags, IPC | Done |
 | E46.2 | Approval dialog, Settings > AI access, live refresh, attention, help article | Done |
 | E46.3 | Projects and environments tools (`projects_list`, `projects_get`, `project_update_notes`, `env_list`, `env_create`, `env_read_file`, `env_save_file`, `env_import_file`, `env_remove_file`, `env_history`, `env_restore_version`, `env_write_to_folder`); the environments logic moved into `environments/service.ts` | Done |
-| E46.4 | API Client tools | Planned |
-| E46.5 | Git and worktrees tools | Planned |
-| E46.6 | Docker, scheduled tasks, health, databases | Planned |
-| E46.7 | Pipelines, skills, usage, security scans, packages, tests, prompts | Planned |
+| E46.4 | API Client tools (`api_list_collections`, `api_get_collection`, `api_create_collection`, `api_create_folder`, `api_save_request`, `api_remove_item`, `api_send_request`); sending goes through the exported `executeApiRequest` | Done |
+| E46.5 | Git and worktrees tools (`git_status`, `git_diff`, `git_log`, `git_branches`, `git_stage`, `git_commit`, `git_create_branch`, `git_checkout`, `git_push`, `git_discard`, `git_delete_branch`, `worktrees_list`, `worktree_create`, `worktree_remove`, `worktree_merge`) | Done |
+| E46.6 | Docker (`docker_list`, `docker_logs`, `docker_start`, `docker_stop`, `docker_restart`, `docker_remove`), scheduled tasks (`tasks_list`, `task_schedule`, `task_schedule_run`, `task_update`, `task_remove`) and healthchecks (`health_list`, `health_check_now`, `health_pause`) | Done |
+| E46.6b | Databases: connections and read-only queries, which need the connect and step-up flow of `DatabaseService` | Planned |
+| E46.7a | Pipelines (`pipelines_status`, `pipelines_failure_log`, `pipelines_dispatch`, `pipelines_cancel_run`) and usage (`usage_summary`) | Done |
+| E46.7 | Skills, security scans, packages, tests, prompts | Planned |
 | E46.8 | Deploy, Cloudflare, SSH and SFTP, remote, vault, studio, error tracking, WordPress, Relay | Planned |
 
 ## Limits

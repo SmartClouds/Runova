@@ -96,7 +96,11 @@ function callTool(script: string, cwd: string, name: string, args: Record<string
     // A test run started from a Runova tab must not pass as one.
     delete env.RUNOVA_SESSION_ID;
     delete env.RUNOVA_AI_ACCESS_KEY;
-    const child = spawn(process.execPath, [script], { cwd, env, stdio: ['pipe', 'pipe', 'inherit'] });
+    const child = spawn(process.execPath, [script], {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf-8');
@@ -118,7 +122,11 @@ function callTool(script: string, cwd: string, name: string, args: Record<string
       jsonrpc: '2.0',
       id: 1,
       method: 'initialize',
-      params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code' } },
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'claude-code' },
+      },
     });
     send({ jsonrpc: '2.0', method: 'notifications/initialized' });
     send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
@@ -149,7 +157,10 @@ test('an agent asks to update an env file, and Allow in the window carries it ou
   await expect(dialog.getByText('https://new.test')).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Allow', exact: true }).click();
 
-  expect(await reply).toEqual({ text: expect.stringContaining('Saved .env in Staging'), isError: false });
+  expect(await reply).toEqual({
+    text: expect.stringContaining('Saved .env in Staging'),
+    isError: false,
+  });
   expect(await envContent(page, projectId)).toBe(NEW_CONTENT);
 });
 
