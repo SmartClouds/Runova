@@ -148,7 +148,9 @@ export function ConnectionDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="max-w-lg">
-        <form className="space-y-5" onSubmit={(event) => void save(event)}>
+        {/* The content is a header, body and footer grid. Spanning all three rows keeps the
+            empty rows' gaps from leaving a blank strip under the buttons. */}
+        <form className="row-span-3 space-y-5" onSubmit={(event) => void save(event)}>
           <DialogHeader className="flex-row items-start gap-3 pr-8">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
               <Plug className="h-4 w-4" />
@@ -156,7 +158,7 @@ export function ConnectionDialog({
             <div className="min-w-0 space-y-1">
               <DialogTitle>Add a connection</DialogTitle>
               <DialogDescription>
-                Paste the database's connection URL, the same one your app uses.
+                Paste the connection URL your app uses.
               </DialogDescription>
             </div>
           </DialogHeader>
