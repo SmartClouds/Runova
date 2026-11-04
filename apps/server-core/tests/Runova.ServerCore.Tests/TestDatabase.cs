@@ -25,6 +25,7 @@ public sealed class TestDatabase : IAsyncDisposable
         var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"core-db-{Guid.NewGuid():N}");
         System.IO.Directory.CreateDirectory(directory);
         var database = new TestDatabase(directory);
+        MigratedDatabase.CopyTo(database.Path);
         await CoreDatabase.PrepareAsync(database.Path, CancellationToken.None);
         return database;
     }

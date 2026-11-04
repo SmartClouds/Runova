@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Runova.ServerCore.Alerts;
@@ -6,6 +7,7 @@ using Runova.ServerCore.Assistant;
 using Runova.ServerCore.Backups;
 using Runova.ServerCore.Cloudflare;
 using Runova.ServerCore.CoreDomain;
+using Runova.ServerCore.Data;
 using Runova.ServerCore.DevHost.Fakes;
 using Runova.ServerCore.DirectTls;
 using Runova.ServerCore.Docker;
@@ -32,12 +34,16 @@ namespace Runova.ServerCore.Tests;
 /// </summary>
 public sealed class CoreFactory : WebApplicationFactory<Program>
 {
+    /// <summary>PBKDF2 rounds for the passwords tests set (production uses CoreIdentity.Pbkdf2Iterations).</summary>
+    private const int TestPasswordIterations = 1_000;
+
     /// <summary>Each factory gets its own data folder, so no test touches /var/lib or a real key ring.</summary>
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), $"core-tests-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        PrepareDataDirectory();
         builder.UseEnvironment("Testing");
         builder.UseSetting("Core:DataDirectory", _dataDirectory);
         // Registry sign-ins (E08) go to a plain folder here: test machines have no tmpfs to spare.
@@ -46,6 +52,12 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
         builder.UseSetting("Core:DirectTls:LoopbackOnly", "true");
         builder.ConfigureServices(services =>
         {
+            // Production hashes with 210,000 PBKDF2 rounds, which is the point there and only CPU here:
+            // a test signs in and steps up at least once, and thousands run side by side. A stored hash
+            // with other rounds still verifies (Identity reads the count from the hash), so nothing a
+            // test checks depends on it.
+            services.Configure<PasswordHasherOptions>(options => options.IterationCount = TestPasswordIterations);
+
             services.AddSingleton<MutationLog>();
             services.AddSingleton<FakeSystemProbe>();
             services.AddSingleton<ISystemProbe>(provider => provider.GetRequiredService<FakeSystemProbe>());
@@ -124,6 +136,31 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             services.AddSingleton<FakeTelegramApi>();
             services.AddSingleton<ITelegramTransport>(provider => new FakeTelegramTransport(provider.GetRequiredService<FakeTelegramApi>().Handler));
         });
+    }
+
+    /// <summary>
+    /// The data folder as the core's first start would leave it: private, with a migrated database.
+    /// The core still prepares it as it starts. A host built twice from one factory (WithWebHostBuilder
+    /// builds its own) finds the database already there.
+    /// </summary>
+    private void PrepareDataDirectory()
+    {
+        var database = CoreDatabase.PathIn(_dataDirectory);
+        if (File.Exists(database))
+        {
+            return;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(_dataDirectory);
+        }
+        else
+        {
+            Directory.CreateDirectory(_dataDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        MigratedDatabase.CopyTo(database);
     }
 
     protected override void Dispose(bool disposing)
