@@ -18,12 +18,12 @@ import {
 } from '@runova/core';
 import type { CpuThermalState, SystemStatsSample } from '@shared/apiTypes';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as CountryFlags from 'country-flag-icons/react/3x2';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CliLogo } from '@/components/cliLogos';
+import { CountryFlag } from '@/components/CountryFlag';
 import { GithubActionsCard } from '@/components/dashboard/GithubActionsCard';
 import { GithubActivityCard } from '@/components/dashboard/GithubActivityCard';
 import { IdleResourcesCard } from '@/components/dashboard/IdleResourcesCard';
@@ -409,14 +409,6 @@ function ChartDragHandle({
       </span>
     </SimpleTooltip>
   );
-}
-
-// Rendered as an SVG component (not a Unicode flag emoji) since Windows'
-// default emoji font doesn't reliably draw regional-indicator flag glyphs.
-function CountryFlag({ countryCode, className }: { countryCode: string; className?: string }) {
-  const Flag = CountryFlags[countryCode.toUpperCase() as keyof typeof CountryFlags];
-  if (!Flag) return null;
-  return <Flag className={className} />;
 }
 
 // Defers `ready` until the browser is idle after mount, so callers can hold

@@ -93,7 +93,7 @@ The strip along the bottom of the window shows what is running. The left side is
 | Android | "N running" emulators. The panel lists them with their memory and CPU. **Open the Android page** goes to [Android](android.md). Hidden when no Android SDK is found. |
 | CPU | Current CPU use with a meter. The panel adds a chart, per-core bars, the busiest apps and any GPU. |
 | Memory | Memory in use out of the total, with a meter. The panel adds a chart, In use, Free and Total, and the heaviest apps. |
-| Network | Latency in milliseconds (or **Online**, **No ping**, **Offline**). It is green, amber or red. Hover to see each ping target and its latency. |
+| Network | Latency in milliseconds (or **Online**, **No ping**, **Offline**). It is green, amber or red. Click it for a latency graph, each ping target and its latency, and your public IP (with its country) and local IP. Each address has a copy button, and the refresh button looks them up again, handy after switching VPN or network. |
 | Keep computer awake | **On**, **Agent** or **Off**. See below. |
 
 The network figure comes from the ping targets you can edit under Settings, Network, **Network ping targets**. See [Dashboard](dashboard.md).

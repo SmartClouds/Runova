@@ -30,7 +30,6 @@ import {
   StopCircle,
   TerminalSquare,
   TriangleAlert,
-  Wifi,
 } from '@/components/icons';
 import { ProviderLogo } from '@/components/providerLogos';
 import { RelayPlanStatusSegment } from '@/components/relay/RelayPlanStatusSegment';
@@ -57,6 +56,7 @@ import { useShortcutLabel } from '@/stores/shortcutStore';
 import { useTerminalStore } from '@/stores/terminalStore';
 import { terminalTabLabel, useWorkspaceStore } from '@/stores/workspaceStore';
 import { GithubAccountSegment } from './GithubAccountSegment';
+import { NetworkSegment } from './NetworkSegment';
 import { SftpTransfersSegment } from './SftpTransfersSegment';
 import { focusPanel, PANEL_SURFACE, PanelTitle, PopSegment, segmentClass } from './statusBarKit';
 
@@ -726,22 +726,6 @@ function SystemSegments(): React.JSX.Element {
   }
 
   const timestamps = history.map((sample) => sample.timestamp);
-  const pings = latest.pings ?? [];
-  const alive = pings.filter((p) => p.alive);
-  const latencies = alive.flatMap((p) => (p.latencyMs == null ? [] : [p.latencyMs]));
-  const latency = latencies.length ? Math.round(Math.min(...latencies)) : null;
-  // Quality over the recent window, so one dropped ping does not flash the bar red.
-  const recent = history.flatMap((sample) => sample.pings ?? []);
-  const quality = recent.length ? recent.filter((p) => p.alive).length / recent.length : 1;
-  const online = pings.length === 0 || alive.length > 0;
-  // Plenty of networks drop ping while the connection works, so no replies only reads as
-  // offline when the OS agrees.
-  const offline = !online && !navigator.onLine;
-  const netTone = offline
-    ? 'text-destructive'
-    : !online || quality < 0.8 || (latency ?? 0) > 250
-      ? 'text-warning'
-      : 'text-success';
 
   return (
     <>
@@ -850,34 +834,7 @@ function SystemSegments(): React.JSX.Element {
         <Meter percent={latest.memPercent} />
       </PopSegment>
 
-      <Segment
-        tooltip={
-          <span className="flex flex-col gap-0.5">
-            <span className="font-semibold">
-              {online
-                ? `Online, ${Math.round(quality * 100)}% of recent pings answered`
-                : offline
-                  ? 'Offline'
-                  : 'Connected, but pings get no reply'}
-            </span>
-            {pings.some((ping) => /^https?:\/\//i.test(ping.host)) && (
-              <span className="text-muted-foreground">Measured with URL requests</span>
-            )}
-            {pings.map((ping) => (
-              <span key={ping.host} className="flex justify-between gap-4 text-muted-foreground">
-                <span className="font-mono">{ping.host}</span>
-                <span>{ping.alive ? `${Math.round(ping.latencyMs ?? 0)} ms` : 'no reply'}</span>
-              </span>
-            ))}
-          </span>
-        }
-        className={netTone}
-      >
-        <Wifi className="h-2.5 w-2.5" />
-        <span className="tabular-nums">
-          {offline ? 'Offline' : !online ? 'No ping' : latency != null ? `${latency} ms` : 'Online'}
-        </span>
-      </Segment>
+      <NetworkSegment history={history} />
     </>
   );
 }

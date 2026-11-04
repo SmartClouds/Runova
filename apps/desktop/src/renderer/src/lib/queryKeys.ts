@@ -86,6 +86,8 @@ export const queryKeys = {
   // Nested under the same root so invalidating `promptHistory` refreshes it too.
   projectPromptHistory: (projectId: string) => ['prompt-history', 'project', projectId] as const,
   ipGeo: ['ip-geo'] as const,
+  /** This machine's LAN addresses, asked for while the status bar's network panel is open. */
+  localAddresses: ['local-addresses'] as const,
   topResourceApps: (resource: string) => ['top-resource-apps', resource] as const,
   cliUpdateCheck: (cliId: string, version: string | null) =>
     ['cli-update-check', cliId, version] as const,
