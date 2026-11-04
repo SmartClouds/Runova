@@ -368,6 +368,21 @@ describe('DeployService access', () => {
     });
   });
 
+  it('asks to enroll again when the core says this computer is not enrolled', async () => {
+    const { service, core } = await installed({
+      coreUsers: [{ userName: 'maria', roles: ['owner'] }],
+    });
+    await service.enroll({
+      serverId: 'srv-1',
+      sudoPassword: 'deployer-pw',
+      account: { userName: 'maria', password: PASSWORD },
+    });
+    service.forgetTokens('srv-1');
+    core.refuse('notEnrolled');
+
+    expect(await service.access('srv-1')).toEqual({ state: 'not-enrolled' });
+  });
+
   it('passes a refused sign-in on as a code', async () => {
     const { service, core } = await installed({
       coreUsers: [{ userName: 'maria', roles: ['owner'] }],

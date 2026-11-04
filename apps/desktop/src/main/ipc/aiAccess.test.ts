@@ -31,6 +31,11 @@ vi.mock('../aiAccess/external', () => ({
 
 vi.mock('./terminal', () => ({ terminalSessionInfo: () => undefined }));
 
+// The tools reach into nearly every main-process area. Each test rebuilds the module graph, but
+// Vitest keeps the transformed files, so loading them once here moves the cold transform (slow
+// under coverage on a busy runner) out of the first test's time limit.
+await import('../aiAccess/tools');
+
 const userData = useTempUserData();
 
 expectChannelsCovered(IPC.aiAccess, [

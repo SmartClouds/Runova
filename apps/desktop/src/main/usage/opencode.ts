@@ -124,8 +124,12 @@ function accumulateOpencode(entries: OpencodeEntry[], sinceMs: number): UsagePer
   return { tokens, costUsd: priced ? cost : null };
 }
 
-function bucketDaily(entries: OpencodeEntry[], value: (entry: OpencodeEntry) => number): number[] {
-  const startToday = startOfLocalDay(Date.now());
+function bucketDaily(
+  entries: OpencodeEntry[],
+  value: (entry: OpencodeEntry) => number,
+  now: number,
+): number[] {
+  const startToday = startOfLocalDay(now);
   const buckets = new Array<number>(SERIES_DAYS).fill(0);
   for (const entry of entries) {
     const dayIdx = Math.floor((startToday - startOfLocalDay(entry.at)) / DAY_MS);
@@ -139,8 +143,8 @@ function bucketDaily(entries: OpencodeEntry[], value: (entry: OpencodeEntry) => 
 export function buildOpencodeUsage(
   entries: OpencodeEntry[],
   projectDaily?: ProjectDaily,
+  now = Date.now(),
 ): ProviderUsage {
-  const now = Date.now();
   const startToday = startOfLocalDay(now);
   const usage: ProviderUsage = {
     providerId: 'opencode',
@@ -148,8 +152,8 @@ export function buildOpencodeUsage(
     today: accumulateOpencode(entries, startToday),
     last7d: accumulateOpencode(entries, now - 7 * DAY_MS),
     last30d: accumulateOpencode(entries, now - 30 * DAY_MS),
-    series: bucketDaily(entries, (entry) => entry.tokens.total),
-    costSeries: bucketDaily(entries, (entry) => entry.cost ?? 0),
+    series: bucketDaily(entries, (entry) => entry.tokens.total, now),
+    costSeries: bucketDaily(entries, (entry) => entry.cost ?? 0, now),
     currency: 'USD',
     updatedAt: new Date(now).toISOString(),
   };
@@ -199,7 +203,7 @@ export async function scanOpencodeUsage(deps: OpencodeScanDeps = {}): Promise<Pr
   const queryDb = deps.queryDb ?? defaultQueryDb;
 
   const dbPath = await findDb();
-  if (!dbPath) return buildOpencodeUsage([]);
+  if (!dbPath) return buildOpencodeUsage([], undefined, now);
 
   const table = await opencodeSessionTable((sql) => queryDb(dbPath, sql, []));
   const rows = await queryDb(dbPath, sessionsSql(table), [sinceMs]);
@@ -223,5 +227,5 @@ export async function scanOpencodeUsage(deps: OpencodeScanDeps = {}): Promise<Pr
     projectDaily = undefined;
   }
 
-  return buildOpencodeUsage(entries, projectDaily);
+  return buildOpencodeUsage(entries, projectDaily, now);
 }

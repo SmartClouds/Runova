@@ -241,7 +241,7 @@ describe('scanOpencodeUsage', () => {
   function deps(overrides: Partial<Parameters<typeof scanOpencodeUsage>[0]> = {}) {
     return {
       sinceMs: 0,
-      now: new Date(2026, 9, 5, 12).getTime(),
+      now: Date.now(),
       findDb: async () => DB,
       queryDb: async () => [row()],
       knownProjects: async () => ({ projects: [], worktrees: [] }),
