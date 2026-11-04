@@ -9,6 +9,15 @@ import type { NewsService } from '../news/service';
  * can only ask for the filters, pages, slugs and ids the contract allows.
  */
 
+// The handlers get the fake service below, so the real one is never built. Its module would
+// still load the store, the deploy watcher, Dev Setup and CLI detection, and on a busy CI
+// runner that cold import ran past the 20 second hook timeout.
+vi.mock('../news/runtime', () => ({
+  getNewsService: () => {
+    throw new Error('the news IPC tests pass their own service');
+  },
+}));
+
 // onChanged is main to renderer, broadcast by the service.
 expectChannelsCovered(IPC.news, [IPC.news.onChanged]);
 
