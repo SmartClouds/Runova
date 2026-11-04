@@ -26,6 +26,47 @@ export const fakeProjects = [
   { id: '103', slug: 'billing-worker', name: 'Billing Worker', platform: null },
 ];
 
+export const fakeTeams = [
+  { id: '7', slug: 'platform', name: 'Platform', isMember: true },
+  { id: '8', slug: 'web', name: 'Web', isMember: false },
+];
+
+/** The secret half of every fake key, which must never reach the app's answers. */
+export const FAKE_KEY_SECRET = 'f0e1d2c3b4a5968778695a4b3c2d1e0f';
+
+/** A client key as Sentry lists it, with the secret Runova must leave behind. */
+export function fakeKey(projectId: string, publicKey: string, name = 'Default') {
+  return {
+    id: publicKey,
+    name,
+    public: publicKey,
+    secret: FAKE_KEY_SECRET,
+    isActive: true,
+    projectId: Number(projectId),
+    dsn: {
+      public: `https://${publicKey}@o1.ingest.sentry.io/${projectId}`,
+      secret: `https://${publicKey}:${FAKE_KEY_SECRET}@o1.ingest.sentry.io/${projectId}`,
+    },
+  };
+}
+
+/** The DSN a fake project's default key has. */
+export function fakeDsn(projectId: string): string {
+  return `https://${fakePublicKey(projectId)}@o1.ingest.sentry.io/${projectId}`;
+}
+
+function fakePublicKey(projectId: string): string {
+  return `${projectId}`.padStart(32, 'a');
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
 export const fakeEnvironments: Record<string, unknown[]> = {
   'storefront-web': [
     { id: '1', name: 'production', isHidden: false },
@@ -179,6 +220,9 @@ export interface FakeSentryState extends Required<FakeSentryOptions> {
   organizations: Record<string, unknown>[];
   projects: Record<string, unknown>[];
   issues: Record<string, unknown>[];
+  teams: Record<string, unknown>[];
+  /** Client keys by project slug; a project with no entry has none. */
+  keys: Record<string, Record<string, unknown>[]>;
   /** By issue id; a missing id answers 404. */
   events: Record<string, unknown>;
   /** The Link header sent with an issue list, when set. */
@@ -214,6 +258,13 @@ export async function startFakeSentry(options: FakeSentryOptions = {}): Promise<
     organizations: fakeOrganizations.map((org) => ({ ...org })),
     projects: fakeProjects.map((project) => ({ ...project })),
     issues: fakeIssues(),
+    teams: fakeTeams.map((team) => ({ ...team })),
+    keys: Object.fromEntries(
+      fakeProjects.map((project) => [
+        project.slug,
+        [fakeKey(project.id, fakePublicKey(project.id))],
+      ]),
+    ),
     events: { '4501': fakeEvent() },
     issueLink: null,
     override: null,
@@ -231,6 +282,29 @@ export async function startFakeSentry(options: FakeSentryOptions = {}): Promise<
     const change = JSON.parse(body || '{}') as Record<string, unknown>;
     Object.assign(issue, change);
     json(response, { ...change, statusDetails: {} });
+  };
+
+  const createProject = (response: ServerResponse, teamSlug: string, body: string) => {
+    if (state.scopes && !state.scopes.some((s) => s === 'project:write' || s === 'project:admin')) {
+      json(response, { detail: 'You do not have permission to perform this action.' }, 403);
+      return;
+    }
+    if (!state.teams.some((team) => team.slug === teamSlug)) return notFound(response);
+    const input = JSON.parse(body || '{}') as { name?: string; slug?: string; platform?: string };
+    const slug = input.slug || slugify(input.name ?? '');
+    if (!input.name || !slug) {
+      json(response, { name: ['This field is required.'] }, 400);
+      return;
+    }
+    if (state.projects.some((project) => project.slug === slug)) {
+      json(response, { detail: 'A project with this slug already exists.' }, 409);
+      return;
+    }
+    const id = String(200 + state.projects.length);
+    const project = { id, slug, name: input.name, platform: input.platform ?? null };
+    state.projects.push(project);
+    state.keys[slug] = [fakeKey(id, fakePublicKey(id))];
+    json(response, project, 201);
   };
 
   const list = (response: ServerResponse, url: URL, slug: string | null) => {
@@ -272,6 +346,21 @@ export async function startFakeSentry(options: FakeSentryOptions = {}): Promise<
           state.regionUrl ? { ...org, links: { regionUrl: state.regionUrl } } : org,
         ),
       );
+      return;
+    }
+    if ((match = path.match(/^\/api\/0\/organizations\/([^/]+)\/teams\/$/))) {
+      json(response, state.teams);
+      return;
+    }
+    if ((match = path.match(/^\/api\/0\/teams\/([^/]+)\/([^/]+)\/projects\/$/))) {
+      if (method !== 'POST') return notFound(response);
+      createProject(response, decodeURIComponent(match[2]), body);
+      return;
+    }
+    if ((match = path.match(/^\/api\/0\/projects\/([^/]+)\/([^/]+)\/keys\/$/))) {
+      const slug = decodeURIComponent(match[2]);
+      if (!state.projects.some((project) => project.slug === slug)) return notFound(response);
+      json(response, state.keys[slug] ?? []);
       return;
     }
     if ((match = path.match(/^\/api\/0\/organizations\/([^/]+)\/projects\/$/))) {

@@ -3,6 +3,7 @@ import {
   type ErrorLevel,
   type ErrorPeriod,
   type Project,
+  SENTRY_CREATE_SCOPE,
   SENTRY_READ_SCOPES,
   SENTRY_WRITE_SCOPE,
 } from '@runova/core';
@@ -202,16 +203,22 @@ export function tokenPageUrl(host: string): string {
 }
 
 /** The scopes the token page asks for, as the copy button puts them on the clipboard. */
-export const SCOPE_LIST_TEXT = [...SENTRY_READ_SCOPES, SENTRY_WRITE_SCOPE].join(', ');
+export const SCOPE_LIST_TEXT = [
+  ...SENTRY_READ_SCOPES,
+  SENTRY_WRITE_SCOPE,
+  SENTRY_CREATE_SCOPE,
+].join(', ');
 
 export interface ScopeRow {
   scope: string;
   state: 'granted' | 'missing' | 'unknown';
-  /** Only resolve and ignore need it. */
+  /** Only some actions need it. */
   optional: boolean;
+  /** What an optional scope is for, or null for a required one. */
+  note: string | null;
 }
 
-/** The checklist a checked token shows: every read scope, then the optional write one. */
+/** The checklist a checked token shows: every read scope, then the optional ones. */
 export function scopeChecklist(check: ErrorTokenCheck): ScopeRow[] {
   const known = check.scopes !== null;
   const read = SENTRY_READ_SCOPES.map(
@@ -219,6 +226,7 @@ export function scopeChecklist(check: ErrorTokenCheck): ScopeRow[] {
       scope,
       state: !known ? 'unknown' : check.missingScopes.includes(scope) ? 'missing' : 'granted',
       optional: false,
+      note: null,
     }),
   );
   const write: ScopeRow = {
@@ -230,6 +238,18 @@ export function scopeChecklist(check: ErrorTokenCheck): ScopeRow[] {
           ? 'granted'
           : 'missing',
     optional: true,
+    note: 'optional, needed for Resolve and Ignore',
   };
-  return [...read, write];
+  const create: ScopeRow = {
+    scope: SENTRY_CREATE_SCOPE,
+    state:
+      check.canCreateProjects === null || !known
+        ? 'unknown'
+        : check.canCreateProjects
+          ? 'granted'
+          : 'missing',
+    optional: true,
+    note: 'optional, needed to create projects',
+  };
+  return [...read, write, create];
 }

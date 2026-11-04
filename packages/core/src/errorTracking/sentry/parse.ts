@@ -13,6 +13,8 @@ import {
   MAX_BREADCRUMBS,
   type RemoteOrganization,
   type RemoteProject,
+  type RemoteProjectKey,
+  type RemoteTeam,
 } from '../types.js';
 
 /**
@@ -378,4 +380,59 @@ export function parseSentryEnvironments(raw: unknown): string[] {
     const parsed = environmentSchema.safeParse(entry);
     return parsed.success && parsed.data.isHidden !== true ? parsed.data.name : null;
   });
+}
+
+const teamSchema = z.object({
+  id,
+  slug: z.string().min(1),
+  name: optionalText,
+  isMember: z.boolean().nullish().catch(null),
+});
+
+export function parseSentryTeams(raw: unknown): RemoteTeam[] {
+  return list(raw, (entry) => {
+    const parsed = teamSchema.safeParse(entry);
+    if (!parsed.success) return null;
+    const { id: teamId, slug, name, isMember } = parsed.data;
+    return { id: teamId, slug, name: clean(name || slug, MAX_SHORT), isMember: isMember ?? null };
+  });
+}
+
+const webAddress = z
+  .string()
+  .max(2_000)
+  .refine((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' || url.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  });
+
+const keySchema = z.object({
+  id,
+  name: optionalText,
+  label: optionalText,
+  isActive: z.boolean().nullish().catch(null),
+  dsn: z.object({ public: webAddress }),
+});
+
+/**
+ * A project's client keys, active ones first. Only the public DSN is read: the key's secret and
+ * the secret DSN are left in the reply.
+ */
+export function parseSentryProjectKeys(raw: unknown): RemoteProjectKey[] {
+  const keys = list(raw, (entry): RemoteProjectKey | null => {
+    const parsed = keySchema.safeParse(entry);
+    if (!parsed.success) return null;
+    const { id: keyId, name, label, isActive, dsn } = parsed.data;
+    return {
+      id: keyId,
+      name: clean(name || label || 'Key', MAX_SHORT),
+      dsn: dsn.public,
+      isActive: isActive ?? true,
+    };
+  });
+  return keys.sort((a, b) => Number(b.isActive) - Number(a.isActive));
 }

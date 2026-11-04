@@ -5,6 +5,7 @@ import { type LaunchedApp, launchApp } from './app';
 import {
   CRASH,
   type FakeSentryServer,
+  KEY_SECRET,
   LEAK_BEARER,
   LEAK_COOKIE,
   LEAK_EMAIL,
@@ -269,4 +270,101 @@ test('error tracking connects Sentry, shows an issue, copies it redacted, resolv
 
   // Still nowhere on disk once the app has run an agent with the prompt.
   expect(filesContaining(current.userDataDir, SENTRY_TOKEN)).toEqual([]);
+});
+
+test('error tracking creates a Sentry project, links it and hands back its DSN', async () => {
+  sentry = await startFakeSentry();
+  const server = sentry;
+  launched = await launchApp({ settings: { defaultCliId: 'claude-code' } });
+  const current = launched;
+  const { page } = current;
+
+  await createProject(current);
+  await page.evaluate(() => {
+    location.hash = '#/monitoring?view=errors';
+  });
+  await page.reload();
+  await page.evaluate(() => {
+    const original = navigator.clipboard.writeText.bind(navigator.clipboard);
+    navigator.clipboard.writeText = async (text: string) => {
+      (window as unknown as { copied?: string[] }).copied = [
+        ...((window as unknown as { copied?: string[] }).copied ?? []),
+        text,
+      ];
+      await original(text).catch(() => undefined);
+    };
+  });
+
+  // Connect with a token that may create projects, and leave the suggested links alone.
+  await page.getByRole('button', { name: 'Connect Sentry' }).click({ timeout: 30_000 });
+  const connections = page.getByRole('dialog', { name: 'Error tracking connections' });
+  await connections.getByRole('combobox', { name: 'Sentry host', exact: true }).click();
+  await page.getByRole('option', { name: 'Self-hosted or GlitchTip' }).click();
+  await connections.getByLabel('Server URL', { exact: true }).fill(server.url);
+  await connections.getByLabel('Auth token', { exact: true }).fill(SENTRY_TOKEN);
+  await connections.getByRole('button', { name: 'Check token' }).click();
+  const scopes = connections.getByRole('list', { name: 'Token scopes' });
+  await expect(scopes).toContainText('project:write', { timeout: 30_000 });
+  await connections.getByRole('button', { name: 'Save connection' }).click();
+  await expect(page.getByText(`Connected to ${ORG.name}`)).toBeVisible({ timeout: 30_000 });
+
+  // Straight from the connections to a new project.
+  await connections.getByRole('button', { name: 'New Sentry project' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New Sentry project' });
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+  await expect(connections).toBeHidden();
+  await expect(dialog.getByRole('combobox', { name: 'Team', exact: true })).toContainText(
+    'Platform',
+    { timeout: 30_000 },
+  );
+  await dialog.getByRole('combobox', { name: 'Link to', exact: true }).click();
+  await page.getByRole('option', { name: PROJECT, exact: true }).click();
+  await expect(dialog.getByLabel('Project name', { exact: true })).toHaveValue(PROJECT);
+  await dialog.getByRole('combobox', { name: 'Platform', exact: true }).click();
+  await page.getByRole('option', { name: 'Node.js', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Create project' }).click();
+
+  // Made in Sentry under the team, with the platform picked.
+  await expect(dialog.getByRole('heading', { name: `${PROJECT} is ready` })).toBeVisible({
+    timeout: 30_000,
+  });
+  const created = server.requestsTo(`/api/0/teams/${ORG.slug}/platform/projects/`, 'POST');
+  expect(created).toHaveLength(1);
+  expect(JSON.parse(created[0].body)).toEqual({ name: PROJECT, platform: 'node' });
+
+  // The DSN, ready to copy, and the snippet with it already in place.
+  const dsn = server.dsnOf('storefront');
+  expect(dsn).toBeTruthy();
+  await expect(dialog.getByLabel('DSN', { exact: true })).toHaveText(dsn as string);
+  await expect(dialog).toContainText(`Linked to ${PROJECT}`);
+  await expect(dialog.getByRole('region', { name: 'Install' })).toContainText(
+    'npm install --save @sentry/node',
+  );
+  await expect(dialog.getByRole('region', { name: 'Init code' })).toContainText(dsn as string);
+  await expect(dialog).not.toContainText(KEY_SECRET);
+  await dialog.getByRole('button', { name: 'Copy DSN' }).click();
+  await expect(page.getByText('DSN copied')).toBeVisible({ timeout: 30_000 });
+  const copied = await page.evaluate(
+    () => (window as unknown as { copied?: string[] }).copied ?? [],
+  );
+  expect(copied).toEqual([dsn]);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Linked: the tab reads the new project's issues, and the link row gives the same DSN again.
+  await expect(page.getByRole('button', { name: 'New project' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Connections' }).click();
+  await connections
+    .getByRole('button', { name: `Get DSN for ${PROJECT}` })
+    .click({ timeout: 30_000 });
+  const keys = page.getByRole('dialog', { name: /^DSN/ });
+  await expect(keys.getByRole('list', { name: 'Client keys' })).toContainText(dsn as string, {
+    timeout: 30_000,
+  });
+  await expect(keys).not.toContainText(KEY_SECRET);
+
+  // The DSN is fetched when asked for, never written down.
+  const saved = readFileSync(join(current.userDataDir, 'data', 'error-tracking.json'), 'utf-8');
+  expect(saved).toContain('"remoteSlug": "storefront"');
+  expect(saved).not.toContain(dsn as string);
 });

@@ -3,7 +3,18 @@ import type { ErrorIssueQuery } from '@shared/errorTrackingTypes';
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
-import { connection, detail, issue, link, page, project, remoteProject } from './testing/fixtures';
+import {
+  connection,
+  createdProject,
+  detail,
+  issue,
+  link,
+  page,
+  project,
+  projectKey,
+  remoteProject,
+  team,
+} from './testing/fixtures';
 
 vi.mock('@/lib/workspace/launch', () => ({
   launchPromptTab: vi.fn(() => 'tab-1'),
@@ -87,6 +98,7 @@ describe('ErrorsBoard, first run', () => {
     expect(steps).toHaveTextContent('project:read');
     expect(steps).toHaveTextContent('event:read');
     expect(steps).toHaveTextContent('event:write');
+    expect(steps).toHaveTextContent('project:write');
     expect(within(steps).getByRole('link', { name: /token page/ })).toHaveAttribute(
       'href',
       'https://sentry.io/settings/account/api/auth-tokens/',
@@ -94,7 +106,7 @@ describe('ErrorsBoard, first run', () => {
 
     await user.click(within(steps).getByRole('button', { name: 'Copy scopes' }));
     expect(await navigator.clipboard.readText()).toBe(
-      'org:read, project:read, event:read, event:write',
+      'org:read, project:read, event:read, event:write, project:write',
     );
 
     await user.click(screen.getByRole('button', { name: 'Connect Sentry' }));
@@ -374,5 +386,142 @@ describe('ErrorsBoard, connected with nothing linked', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Error tracking connections' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('ErrorsBoard, new Sentry projects and their DSN', () => {
+  const creator = connection({ canCreateProjects: true });
+
+  it('opens New project from the toolbar, linked to nothing on the Monitoring page', async () => {
+    const { user } = renderBoard({
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.teams': [team()],
+      }),
+    });
+    await screen.findByRole('list', { name: 'Issues' });
+    await user.click(screen.getByRole('button', { name: 'New project' }));
+    const view = await screen.findByRole('dialog', { name: 'New Sentry project' });
+    expect(within(view).getByRole('combobox', { name: 'Link to' })).toHaveTextContent(
+      'Do not link',
+    );
+  });
+
+  it('names and links a new project after the project tab it opened on, and reads its DSN', async () => {
+    const { user, bridge } = renderBoard({
+      projectId: 'p1',
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.listLinks': [link()],
+        'errorTracking.teams': [team()],
+        'errorTracking.projectKeys': { keys: [projectKey()], keysUrl: 'https://sentry.io/x/' },
+        'errorTracking.remoteProjects': [remoteProject()],
+      }),
+    });
+    await screen.findByRole('list', { name: 'Issues' });
+    await user.click(screen.getByRole('button', { name: 'New project' }));
+    const created = await screen.findByRole('dialog', { name: 'New Sentry project' });
+    expect(within(created).getByLabelText('Project name')).toHaveValue('Storefront');
+    expect(within(created).getByRole('combobox', { name: 'Link to' })).toHaveTextContent(
+      'Storefront',
+    );
+    await user.click(within(created).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await user.click(screen.getByRole('button', { name: 'Get DSN' }));
+    const keys = await screen.findByRole('dialog', { name: 'DSN for storefront-web' });
+    await within(keys).findByRole('list', { name: 'Client keys' });
+    expect(bridge.$fn('errorTracking.projectKeys')).toHaveBeenCalledWith({
+      connectionId: 'c1',
+      remoteSlug: 'storefront-web',
+    });
+    // The platform comes from Sentry's own project, so the snippet starts on it.
+    await waitFor(() =>
+      expect(within(keys).getByRole('combobox', { name: 'Snippet platform' })).toHaveTextContent(
+        'Browser JavaScript',
+      ),
+    );
+  });
+
+  it('sends a token that cannot create projects to the connections to replace it', async () => {
+    const { user } = renderBoard();
+    await screen.findByRole('list', { name: 'Issues' });
+    await user.click(screen.getByRole('button', { name: 'New project' }));
+    const view = await screen.findByRole('dialog', { name: 'New Sentry project' });
+    await user.click(within(view).getByRole('button', { name: 'Replace token' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Error tracking connections' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'New Sentry project' })).toBeNull();
+  });
+
+  it('opens New project from the connections dialog', async () => {
+    const { user } = renderBoard({
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.teams': [team()],
+      }),
+    });
+    await screen.findByRole('list', { name: 'Issues' });
+    await user.click(screen.getByRole('button', { name: 'Connections' }));
+    const connections = await screen.findByRole('dialog', { name: 'Error tracking connections' });
+    await user.click(within(connections).getByRole('button', { name: 'New Sentry project' }));
+    expect(await screen.findByRole('dialog', { name: 'New Sentry project' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Error tracking connections' })).toBeNull();
+  });
+
+  it('keeps the new DSN on screen when the first link turns the empty tab into the list', async () => {
+    let created = false;
+    const { user } = renderBoard({
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.listLinks': async () =>
+          created ? [link({ remoteProjectId: '203', remoteSlug: 'checkout' })] : [],
+        'errorTracking.remoteProjects': [],
+        'errorTracking.teams': [team()],
+        'errorTracking.createProject': async () => {
+          created = true;
+          return createdProject();
+        },
+      }),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Create a Sentry project' }));
+    const view = await screen.findByRole('dialog', { name: 'New Sentry project' });
+    await within(view).findByRole('combobox', { name: 'Team' });
+    await user.click(within(view).getByRole('combobox', { name: 'Link to' }));
+    await user.click(await screen.findByRole('option', { name: 'Storefront' }));
+    await user.click(within(view).getByRole('button', { name: 'Create project' }));
+    expect(await screen.findByRole('heading', { name: 'Checkout is ready' })).toBeInTheDocument();
+    // The tab behind the dialog becomes the issue list once the link is read back.
+    await screen.findByRole('button', { name: 'New project', hidden: true });
+    expect(screen.getByRole('heading', { name: 'Checkout is ready' })).toBeInTheDocument();
+    expect(screen.getByLabelText('DSN')).toBeInTheDocument();
+  });
+
+  it('offers a new project when nothing is linked yet, on the page and on a project tab', async () => {
+    const { user, unmount } = renderBoard({
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.listLinks': [],
+        'errorTracking.remoteProjects': [],
+        'errorTracking.teams': [team()],
+      }),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Create a Sentry project' }));
+    expect(await screen.findByRole('dialog', { name: 'New Sentry project' })).toBeInTheDocument();
+    unmount();
+
+    const tab = renderBoard({
+      projectId: 'p1',
+      bridge: connected({
+        'errorTracking.listConnections': [creator],
+        'errorTracking.listLinks': [],
+        'errorTracking.remoteProjects': [],
+        'errorTracking.teams': [team()],
+      }),
+    });
+    await tab.user.click(await screen.findByRole('button', { name: 'Create a Sentry project' }));
+    const view = await screen.findByRole('dialog', { name: 'New Sentry project' });
+    expect(within(view).getByLabelText('Project name')).toHaveValue('Storefront');
   });
 });

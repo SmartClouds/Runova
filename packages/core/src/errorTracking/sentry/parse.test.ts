@@ -3,8 +3,10 @@ import * as errorTracking from '../index.js';
 import {
   FAKE_EMAIL,
   FAKE_IP,
+  FAKE_KEY_SECRET,
   FAKE_LITERALS,
   FAKE_QUERY_TOKEN,
+  glitchtipProjectKeys,
   sentryEnvironments,
   sentryEvent,
   sentryIssue,
@@ -12,7 +14,9 @@ import {
   sentryIssueWarning,
   sentryMessageEvent,
   sentryOrganizations,
+  sentryProjectKeys,
   sentryProjects,
+  sentryTeams,
 } from '../testing/sentryFixtures.js';
 import { MAX_BREADCRUMBS } from '../types.js';
 import {
@@ -21,7 +25,9 @@ import {
   parseSentryIssue,
   parseSentryIssues,
   parseSentryOrganizations,
+  parseSentryProjectKeys,
   parseSentryProjects,
+  parseSentryTeams,
 } from './parse.js';
 
 /**
@@ -507,5 +513,58 @@ describe('parseSentryEnvironments', () => {
       'dev',
     ]);
     expect(parseSentryEnvironments(null)).toEqual([]);
+  });
+});
+
+describe('parseSentryTeams', () => {
+  it('reads teams, says whether the token user is on them, and drops the rest', () => {
+    expect(parseSentryTeams(sentryTeams)).toEqual([
+      { id: '7', slug: 'platform', name: 'Platform', isMember: false },
+      { id: '8', slug: 'web', name: 'Web', isMember: true },
+      { id: '9', slug: 'ops', name: 'ops', isMember: null },
+    ]);
+  });
+
+  it('reads a non-array as empty', () => {
+    expect(parseSentryTeams({ detail: 'nope' })).toEqual([]);
+  });
+});
+
+describe('parseSentryProjectKeys', () => {
+  it('reads the public DSN of each key, active ones first, and never the secret', () => {
+    const keys = parseSentryProjectKeys(sentryProjectKeys);
+    expect(keys).toEqual([
+      {
+        id: 'default',
+        name: 'Default',
+        dsn: 'https://abcdef0123456789abcdef0123456789@o1.ingest.sentry.io/104',
+        isActive: true,
+      },
+      {
+        id: 'old',
+        name: 'Old key',
+        dsn: 'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/104',
+        isActive: false,
+      },
+    ]);
+    expect(JSON.stringify(keys)).not.toContain(FAKE_KEY_SECRET);
+  });
+
+  it('reads GlitchTip keys, which have a label and no active flag', () => {
+    expect(parseSentryProjectKeys(glitchtipProjectKeys)).toEqual([
+      {
+        id: '6b3f1c1e-0000-4000-8000-000000000001',
+        name: 'Default',
+        dsn: 'https://6b3f1c1e000040008000000000000001@glitchtip.example.com/3',
+        isActive: true,
+      },
+    ]);
+  });
+
+  it('drops a key whose DSN is not a web address, and reads a non-array as empty', () => {
+    expect(
+      parseSentryProjectKeys([{ id: 'k', dsn: { public: 'javascript:alert(1)' } }, { id: 'n' }]),
+    ).toEqual([]);
+    expect(parseSentryProjectKeys(null)).toEqual([]);
   });
 });

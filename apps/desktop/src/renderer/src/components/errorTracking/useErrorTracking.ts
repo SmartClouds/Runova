@@ -7,9 +7,12 @@ import type {
   ErrorIssueQuery,
   ErrorIssueRef,
   ErrorIssueSummary,
+  ErrorProjectKeys,
+  ErrorProjectKeysRef,
   ErrorProjectLink,
   ErrorStatusFilter,
   RemoteProject,
+  RemoteTeam,
 } from '@shared/errorTrackingTypes';
 import {
   type InfiniteData,
@@ -99,6 +102,33 @@ export function useErrorEnvironments(projectId: string | undefined, enabled: boo
       (await window.runova.errorTracking.environments(projectId ? { projectId } : undefined)) ?? [],
     enabled,
     staleTime: 5 * 60_000,
+    meta: QUIET,
+  });
+}
+
+/** The teams of one connection's organization, for the new project form. */
+export function useErrorTeams(connectionId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.errorTeams(connectionId ?? ''),
+    queryFn: async (): Promise<RemoteTeam[]> =>
+      (await window.runova.errorTracking.teams(connectionId ?? '')) ?? [],
+    enabled: enabled && connectionId !== null,
+    staleTime: 5 * 60_000,
+    meta: QUIET,
+  });
+}
+
+/** One provider project's client keys, read from the provider since Runova keeps none. */
+export function useProjectKeys(ref: ErrorProjectKeysRef | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.errorProjectKeys(ref?.connectionId ?? '', ref?.remoteSlug ?? ''),
+    queryFn: async (): Promise<ErrorProjectKeys> =>
+      (await window.runova.errorTracking.projectKeys(ref as ErrorProjectKeysRef)) ?? {
+        keys: [],
+        keysUrl: '',
+      },
+    enabled: enabled && ref !== null,
+    staleTime: 60_000,
     meta: QUIET,
   });
 }

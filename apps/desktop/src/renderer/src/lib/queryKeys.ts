@@ -432,6 +432,10 @@ export const queryKeys = {
       : (['error-tracking', 'links'] as const),
   errorRemoteProjects: (connectionId: string) =>
     ['error-tracking', 'remote-projects', connectionId] as const,
+  /** The teams a new Sentry project can go under, and one provider project's client keys. */
+  errorTeams: (connectionId: string) => ['error-tracking', 'teams', connectionId] as const,
+  errorProjectKeys: (connectionId: string, remoteSlug: string) =>
+    ['error-tracking', 'keys', connectionId, remoteSlug] as const,
   errorEnvironments: (projectId?: string) =>
     ['error-tracking', 'environments', projectId ?? 'all'] as const,
   /** The issue list; the query object is part of the key. */

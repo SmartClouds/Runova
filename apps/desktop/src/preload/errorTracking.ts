@@ -2,18 +2,23 @@ import { ipcRenderer } from 'electron';
 import type {
   ErrorConnectInput,
   ErrorConnectionSummary,
+  ErrorCreatedProject,
+  ErrorCreateProjectInput,
   ErrorIssueDetail,
   ErrorIssuePage,
   ErrorIssuePrompt,
   ErrorIssueQuery,
   ErrorIssueRef,
   ErrorIssueSummary,
+  ErrorProjectKeys,
+  ErrorProjectKeysRef,
   ErrorProjectLink,
   ErrorStatusChange,
   ErrorTokenCheck,
   ErrorTokenCheckInput,
   ErrorTrackingChangedEvent,
   RemoteProject,
+  RemoteTeam,
 } from '../shared/errorTrackingTypes';
 import { IPC } from '../shared/ipcChannels';
 
@@ -35,6 +40,12 @@ export function createErrorTracking() {
       ipcRenderer.invoke(IPC.errorTracking.replaceToken, connectionId, token),
     remoteProjects: (connectionId: string): Promise<RemoteProject[]> =>
       ipcRenderer.invoke(IPC.errorTracking.remoteProjects, connectionId),
+    teams: (connectionId: string): Promise<RemoteTeam[]> =>
+      ipcRenderer.invoke(IPC.errorTracking.teams, connectionId),
+    createProject: (input: ErrorCreateProjectInput): Promise<ErrorCreatedProject> =>
+      ipcRenderer.invoke(IPC.errorTracking.createProject, input),
+    projectKeys: (ref: ErrorProjectKeysRef): Promise<ErrorProjectKeys> =>
+      ipcRenderer.invoke(IPC.errorTracking.projectKeys, ref),
     environments: (filter?: { projectId?: string }): Promise<string[]> =>
       ipcRenderer.invoke(IPC.errorTracking.environments, filter),
     listLinks: (filter?: { projectId?: string }): Promise<ErrorProjectLink[]> =>

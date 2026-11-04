@@ -6,6 +6,8 @@ import type {
   ErrorTrackingProvider,
   RemoteOrganization,
   RemoteProject,
+  RemoteProjectKey,
+  RemoteTeam,
 } from '@runova/core';
 
 /**
@@ -30,6 +32,8 @@ export interface ErrorConnectionSummary {
   scopes: string[] | null;
   /** Resolve and ignore work. False once a write was refused for a missing scope. */
   canWrite: boolean;
+  /** The token has project:write, from its scopes; null when they are unknown. */
+  canCreateProjects: boolean | null;
   /** The token is sealed with a passkey that is not unlocked yet. */
   locked: boolean;
   createdAt: number;
@@ -65,6 +69,7 @@ export interface ErrorTokenCheck {
   /** Read scopes the token lacks (empty when scopes are unknown). */
   missingScopes: string[];
   canWrite: boolean | null;
+  canCreateProjects: boolean | null;
   /** A hint for the user, such as an org auth token that cannot read issues. */
   warning: string | null;
 }
@@ -145,10 +150,44 @@ export interface ErrorTrackingChangedEvent {
   reason: 'connections' | 'links' | 'issues';
 }
 
-export type { RemoteOrganization, RemoteProject };
+export type { RemoteOrganization, RemoteProject, RemoteProjectKey, RemoteTeam };
 
 /** The two texts an issue turns into: the prompt for an agent and the plain copy. */
 export interface ErrorIssuePrompt {
   prompt: string;
   copy: string;
+}
+
+/** A new provider project, made through one connection. */
+export interface ErrorCreateProjectInput {
+  connectionId: string;
+  teamSlug: string;
+  name: string;
+  /** A `SENTRY_PLATFORMS` id; `other` or none lets the provider pick. */
+  platform?: string | null;
+  /** The Runova project to link the new one to, if any. */
+  linkProjectId?: string | null;
+}
+
+export interface ErrorCreatedProject {
+  connectionId: string;
+  project: RemoteProject;
+  /** The first active key's DSN, or null when the provider made none yet. */
+  dsn: string | null;
+  keys: RemoteProjectKey[];
+  /** The link that was added, or null when none was asked for. */
+  link: ErrorProjectLink | null;
+  /** The project's Client Keys settings page. */
+  keysUrl: string;
+}
+
+/** Addresses one provider project's keys. */
+export interface ErrorProjectKeysRef {
+  connectionId: string;
+  remoteSlug: string;
+}
+
+export interface ErrorProjectKeys {
+  keys: RemoteProjectKey[];
+  keysUrl: string;
 }

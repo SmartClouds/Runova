@@ -12,6 +12,7 @@ import {
   Key,
   Lock,
   Plus,
+  Rocket,
   Spinner,
   Trash2,
 } from '@/components/icons';
@@ -82,11 +83,7 @@ function ScopeList({ rows }: { rows: ScopeRow[] }): React.JSX.Element {
             />
             <span className="font-mono font-medium">{row.scope}</span>
             <span className={cn(soft ? 'text-muted-foreground' : state.tone)}>{state.word}</span>
-            {row.optional && (
-              <span className="text-muted-foreground">
-                (optional, needed for Resolve and Ignore)
-              </span>
-            )}
+            {row.note && <span className="text-muted-foreground">({row.note})</span>}
           </li>
         );
       })}
@@ -227,8 +224,8 @@ function AddConnectionForm({
           placeholder="sntryu_…"
         />
         <p className="text-[11px] text-muted-foreground">
-          A personal token with {SCOPE_LIST_TEXT}. The last one is optional and lets you resolve and
-          ignore issues from here.
+          A personal token with {SCOPE_LIST_TEXT}. The last two are optional: event:write lets you
+          resolve and ignore issues from here, and project:write lets you create Sentry projects.
         </p>
       </div>
 
@@ -418,10 +415,13 @@ export function ErrorConnectionsDialog({
   open,
   onOpenChange,
   projects,
+  onNewProject,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projects: readonly Project[];
+  /** Opens the new Sentry project dialog; the button is left out without it. */
+  onNewProject?: () => void;
 }): React.JSX.Element {
   const connections = useErrorConnections();
   const list = connections.data ?? [];
@@ -483,6 +483,12 @@ export function ErrorConnectionsDialog({
                   <Plus />
                   Add a connection
                 </Button>
+                {onNewProject && linkable && (
+                  <Button size="sm" variant="soft" onClick={onNewProject}>
+                    <Rocket />
+                    New Sentry project
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"

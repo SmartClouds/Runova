@@ -91,6 +91,7 @@ describe('ErrorConnectionsDialog, adding a connection', () => {
       expect.stringMatching(/project:read.*Granted/),
       expect.stringMatching(/event:read.*Granted/),
       expect.stringMatching(/event:write.*needed for Resolve and Ignore/),
+      expect.stringMatching(/project:write.*needed to create projects/),
     ]);
 
     await user.click(within(view).getByRole('combobox', { name: 'Organization' }));
@@ -137,7 +138,7 @@ describe('ErrorConnectionsDialog, adding a connection', () => {
     await user.type(await within(view).findByLabelText('Auth token'), 'sntrys_org');
     await user.click(within(view).getByRole('button', { name: 'Check token' }));
     const scopes = await within(view).findByRole('list', { name: 'Token scopes' });
-    expect(within(scopes).getAllByText('Missing')).toHaveLength(4);
+    expect(within(scopes).getAllByText('Missing')).toHaveLength(5);
     expect(view).toHaveTextContent('This is an organization token');
     expect(view).toHaveTextContent('needs org:read, project:read and event:read');
     expect(within(view).getByRole('button', { name: 'Save connection' })).toBeDisabled();
@@ -249,5 +250,49 @@ describe('ErrorConnectionsDialog, linking projects', () => {
         remoteName: 'storefront-web',
       },
     ]);
+  });
+});
+
+describe('ErrorConnectionsDialog, the DSN of a linked project', () => {
+  it('opens the keys of a linked project from its row', async () => {
+    const { user, bridge } = renderDialog({
+      'errorTracking.listConnections': [connection()],
+      'errorTracking.listLinks': [link()],
+      'errorTracking.projectKeys': { keys: [], keysUrl: 'https://sentry.io/x/' },
+    });
+    const view = await dialog();
+    // Only a project with links has a DSN to show.
+    await within(view).findByRole('button', { name: 'Get DSN for Storefront' });
+    expect(within(view).queryByRole('button', { name: 'Get DSN for Admin' })).toBeNull();
+    await user.click(within(view).getByRole('button', { name: 'Get DSN for Storefront' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'DSN for storefront-web' }),
+    ).toBeInTheDocument();
+    expect(bridge.$fn('errorTracking.projectKeys')).toHaveBeenCalledWith({
+      connectionId: 'c1',
+      remoteSlug: 'storefront-web',
+    });
+  });
+
+  it('offers a new Sentry project only when asked to handle it', async () => {
+    const onNewProject = vi.fn();
+    const { user } = renderWithProviders(
+      <ErrorConnectionsDialog
+        open
+        onOpenChange={vi.fn()}
+        projects={projects}
+        onNewProject={onNewProject}
+      />,
+      {
+        bridge: {
+          'errorTracking.listConnections': [connection()],
+          'errorTracking.listLinks': [],
+          'errorTracking.remoteProjects': remote,
+        },
+      },
+    );
+    const view = await dialog();
+    await user.click(await within(view).findByRole('button', { name: 'New Sentry project' }));
+    expect(onNewProject).toHaveBeenCalled();
   });
 });

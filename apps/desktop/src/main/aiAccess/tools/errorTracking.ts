@@ -1,11 +1,20 @@
+import {
+  buildSentrySetup,
+  SENTRY_PLATFORMS,
+  sentryPlatform,
+  suggestSentryPlatform,
+} from '@runova/core';
 import { z } from 'zod';
 import type { ErrorIssueSummary } from '../../../shared/errorTrackingTypes';
 import { getErrorTrackingService } from '../../errorTracking/service';
 import {
+  errorCreateProjectSchema,
   errorIssueQuerySchema,
   errorIssueRefSchema,
+  errorProjectKeysSchema,
   errorStatusChangeSchema,
 } from '../../ipc/errorTracking';
+import { store } from '../../store';
 import { defineTool } from '../registry';
 import { projectIdArg } from './shared';
 
@@ -14,6 +23,9 @@ import { projectIdArg } from './shared';
  * its latest event, and resolving, ignoring or reopening an issue as the tab's buttons do. They go
  * through the same service as the tab, which never hands out a token, and the issues and events
  * it returns are already redacted by the parser. Arguments are checked with the tab's own schemas.
+ *
+ * An agent can also make a new Sentry project, linked to the project it works on, and read the
+ * DSN of one, with the setup snippet the tab shows next to it.
  */
 
 const query = errorIssueQuerySchema.shape;
@@ -37,6 +49,34 @@ function issueShape(issue: ErrorIssueSummary) {
     permalink: issue.permalink,
   };
 }
+
+const platformIds = SENTRY_PLATFORMS.map((one) => one.id) as [string, ...string[]];
+
+/** The snippet that puts a DSN to work, without the function that builds it. */
+function setupShape(platformId: string, dsn: string) {
+  const setup = buildSentrySetup(platformId, dsn);
+  return {
+    platform: setup.platform.label,
+    install: setup.install,
+    where: setup.platform.where,
+    code: setup.code,
+    env: setup.env,
+    docsUrl: setup.platform.docsUrl,
+  };
+}
+
+/** The team a new project goes under: the one asked for, or the organization's only one. */
+async function teamFor(connectionId: string, teamSlug: string | undefined): Promise<string> {
+  if (teamSlug) return teamSlug;
+  const teams = await getErrorTrackingService().teams(connectionId);
+  if (teams.length === 1) return teams[0].slug;
+  if (teams.length === 0) {
+    throw new Error('The organization has no team the token can see, and a project needs one.');
+  }
+  throw new Error(`Pass teamSlug, one of: ${teams.map((team) => team.slug).join(', ')}.`);
+}
+
+const create = errorCreateProjectSchema.shape;
 
 const STATUS_VERB = { resolved: 'Resolve', ignored: 'Ignore', unresolved: 'Reopen' } as const;
 const STATUS_DONE = { resolved: 'Resolved', ignored: 'Ignored', unresolved: 'Reopened' } as const;
@@ -170,10 +210,101 @@ export const errorTrackingTools = [
             orgSlug: connection.orgSlug,
             orgName: connection.orgName,
             canWrite: connection.canWrite,
+            canCreateProjects: connection.canCreateProjects,
             locked: connection.locked,
             problem: connection.problem,
           })),
           links,
+        },
+      };
+    },
+  }),
+
+  defineTool({
+    name: 'errors_create_project',
+    area: 'errorTracking',
+    title: 'Create a Sentry project',
+    description:
+      'Makes a new project in a connected Sentry organization and hands back its DSN with the install command and init code for the platform. It is linked to the project the agent works on unless link is false. Leave teamSlug out when the organization has one team. Needs a token with project:write; errors_connections says which can.',
+    risk: 'write',
+    input: z.object({
+      connectionId: create.connectionId.describe('From errors_connections.'),
+      name: z.string().min(1).max(50).describe('The Sentry project name; Sentry makes the slug.'),
+      teamSlug: create.teamSlug.optional(),
+      platform: z
+        .enum(platformIds)
+        .optional()
+        .describe('Which setup snippet to return, and the platform Sentry records.'),
+      projectId: projectIdArg,
+      link: z.boolean().default(true).describe('Link the new project to the Runova project.'),
+    }),
+    async preview(args, context) {
+      const connections = await getErrorTrackingService()
+        .listConnections()
+        .catch(() => []);
+      const connection = connections.find((one) => one.id === args.connectionId);
+      const linkTo = args.link ? context.projectId : null;
+      let projectName = linkTo;
+      if (linkTo) {
+        const projects = await store.getProjects().catch(() => []);
+        projectName = projects.find((one) => one.id === linkTo)?.name ?? linkTo;
+      }
+      return {
+        title: `Create the Sentry project "${args.name}"`,
+        fields: [
+          { label: 'Organization', value: connection?.label ?? args.connectionId },
+          ...(args.teamSlug ? [{ label: 'Team', value: args.teamSlug }] : []),
+          ...(args.platform
+            ? [{ label: 'Platform', value: sentryPlatform(args.platform).label }]
+            : []),
+          ...(projectName ? [{ label: 'Link to', value: projectName }] : []),
+        ],
+      };
+    },
+    async run(args, context) {
+      const teamSlug = await teamFor(args.connectionId, args.teamSlug);
+      const created = await getErrorTrackingService().createProject({
+        connectionId: args.connectionId,
+        teamSlug,
+        name: args.name,
+        platform: args.platform ?? null,
+        linkProjectId: args.link ? context.projectId : null,
+      });
+      const platformId = args.platform ?? suggestSentryPlatform(created.project.platform);
+      return {
+        data: {
+          project: created.project,
+          dsn: created.dsn,
+          keysUrl: created.keysUrl,
+          linkedTo: created.link?.projectId ?? null,
+          setup: created.dsn ? setupShape(platformId, created.dsn) : null,
+        },
+      };
+    },
+  }),
+
+  defineTool({
+    name: 'errors_project_keys',
+    area: 'errorTracking',
+    title: 'Sentry project DSN',
+    description:
+      "A Sentry project's client keys (the public DSN an app sends its errors to, never the secret), with the setup snippet for its platform. remoteSlug is a linked project's remoteSlug from errors_connections.",
+    risk: 'read',
+    input: errorProjectKeysSchema.extend({
+      platform: z.enum(platformIds).optional().describe('Which setup snippet to return.'),
+    }),
+    preview: (args) => ({ title: `Read the DSN of the Sentry project ${args.remoteSlug}` }),
+    async run(args) {
+      const { keys, keysUrl } = await getErrorTrackingService().projectKeys({
+        connectionId: args.connectionId,
+        remoteSlug: args.remoteSlug,
+      });
+      const dsn = keys.find((key) => key.isActive)?.dsn ?? null;
+      return {
+        data: {
+          keys,
+          keysUrl,
+          setup: dsn ? setupShape(args.platform ?? 'other', dsn) : null,
         },
       };
     },

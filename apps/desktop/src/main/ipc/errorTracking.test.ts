@@ -2,17 +2,25 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type {
   ErrorConnectionSummary,
+  ErrorCreatedProject,
   ErrorIssueDetail,
   ErrorIssuePage,
   ErrorIssuePrompt,
   ErrorIssueSummary,
+  ErrorProjectKeys,
   ErrorProjectLink,
   ErrorTokenCheck,
   RemoteProject,
 } from '../../shared/errorTrackingTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { FakeBrowserWindow } from '../../test/main/electronMock';
-import { FAKE_TOKEN, type FakeSentry, startFakeSentry } from '../../test/main/fakeSentry';
+import {
+  FAKE_KEY_SECRET,
+  FAKE_TOKEN,
+  type FakeSentry,
+  fakeDsn,
+  startFakeSentry,
+} from '../../test/main/fakeSentry';
 import { tempDir } from '../../test/main/fixtures';
 import {
   expectChannelsCovered,
@@ -151,6 +159,28 @@ describe('connections', () => {
       }),
     ).rejects.toThrow(/not valid \(ignoreMinutes\)/);
     await expect(invoke(IPC.errorTracking.fixPrompt, null)).rejects.toThrow(/not valid/);
+    await expect(invoke(IPC.errorTracking.teams, '')).rejects.toThrow(/not valid/);
+    await expect(
+      invoke(IPC.errorTracking.createProject, { connectionId: 'c1', teamSlug: 't', name: 7 }),
+    ).rejects.toThrow(/not valid \(name\)/);
+    await expect(
+      invoke(IPC.errorTracking.createProject, {
+        connectionId: 'c1',
+        teamSlug: 't',
+        name: 'x'.repeat(201),
+      }),
+    ).rejects.toThrow(/not valid \(name\)/);
+    await expect(
+      invoke(IPC.errorTracking.createProject, {
+        connectionId: 'c1',
+        teamSlug: 't',
+        name: 'x',
+        platform: 'a'.repeat(65),
+      }),
+    ).rejects.toThrow(/not valid \(platform\)/);
+    await expect(
+      invoke(IPC.errorTracking.projectKeys, { connectionId: 'c1', remoteSlug: '' }),
+    ).rejects.toThrow(/not valid \(remoteSlug\)/);
   });
 
   it('keeps the token out of a refusal message', async () => {
@@ -174,6 +204,39 @@ describe('links and remote data', () => {
       'staging',
     ]);
     expect(await invoke(IPC.errorTracking.environments)).toEqual(['production', 'staging']);
+  });
+});
+
+describe('new projects', () => {
+  it('lists teams, creates a linked project and reads its keys', async () => {
+    fake.state.scopes = ['org:read', 'project:read', 'event:read', 'project:write'];
+    const connection = await connect();
+    expect(connection.canCreateProjects).toBe(true);
+    const teams = await invoke<{ slug: string }[]>(IPC.errorTracking.teams, connection.id);
+    expect(teams.map((team) => team.slug)).toEqual(['platform', 'web']);
+    const window = new FakeBrowserWindow();
+    const created = await invoke<ErrorCreatedProject>(IPC.errorTracking.createProject, {
+      connectionId: connection.id,
+      teamSlug: 'platform',
+      name: 'Checkout',
+      platform: 'python',
+      linkProjectId: 'p1',
+    });
+    expect(created).toMatchObject({
+      project: { slug: 'checkout', platform: 'python' },
+      dsn: fakeDsn('203'),
+      link: { projectId: 'p1', remoteSlug: 'checkout' },
+    });
+    expect(window.webContents.sentOn(IPC.errorTracking.onChanged)).toEqual([[{ reason: 'links' }]]);
+    const keys = await invoke<ErrorProjectKeys>(IPC.errorTracking.projectKeys, {
+      connectionId: connection.id,
+      remoteSlug: 'checkout',
+    });
+    expect(keys.keys.map((key) => key.dsn)).toEqual([fakeDsn('203')]);
+    for (const payload of [created, keys]) {
+      expectNoToken(payload);
+      expect(JSON.stringify(payload)).not.toContain(FAKE_KEY_SECRET);
+    }
   });
 });
 

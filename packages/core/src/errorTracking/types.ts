@@ -121,6 +121,24 @@ export interface RemoteProject {
   platform: string | null;
 }
 
+/** A provider team. A new Sentry project always belongs to one. */
+export interface RemoteTeam {
+  id: string;
+  slug: string;
+  name: string;
+  /** Whether the token's user is on the team, or null when the provider does not say. */
+  isMember: boolean | null;
+}
+
+/** A client key of a provider project: the DSN an app sends its errors to. */
+export interface RemoteProjectKey {
+  id: string;
+  name: string;
+  /** The public DSN. The key's secret half is never read. */
+  dsn: string;
+  isActive: boolean;
+}
+
 /** An organization a token can see. */
 export interface RemoteOrganization {
   slug: string;

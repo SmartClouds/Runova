@@ -10,8 +10,10 @@ import { IPC } from '../../shared/ipcChannels';
 import { FakeBrowserWindow } from '../../test/main/electronMock';
 import {
   FAKE_EMAIL,
+  FAKE_KEY_SECRET,
   FAKE_TOKEN,
   type FakeSentry,
+  fakeDsn,
   fakeIssue,
   startFakeSentry,
 } from '../../test/main/fakeSentry';
@@ -125,6 +127,7 @@ describe('checkToken', () => {
       scopes: ['org:read', 'project:read', 'event:read', 'event:write'],
       missingScopes: [],
       canWrite: true,
+      canCreateProjects: false,
       warning: null,
     });
     expect(() => onDisk()).toThrow();
@@ -148,7 +151,12 @@ describe('checkToken', () => {
       host: fake.url,
       token: FAKE_TOKEN,
     });
-    expect(check).toMatchObject({ scopes: null, missingScopes: [], canWrite: null });
+    expect(check).toMatchObject({
+      scopes: null,
+      missingScopes: [],
+      canWrite: null,
+      canCreateProjects: null,
+    });
   });
 
   it('warns about an organization auth token', async () => {
@@ -205,6 +213,7 @@ describe('connections', () => {
       orgName: 'Acme',
       scopes: ['org:read', 'project:read', 'event:read', 'event:write'],
       canWrite: true,
+      canCreateProjects: false,
       locked: false,
       createdAt: NOW,
       checkedAt: NOW,
@@ -271,7 +280,11 @@ describe('connections', () => {
 
   it('assumes it can write when the scopes are unknown', async () => {
     fake.state.scopes = null;
-    expect(await service.addConnection(input())).toMatchObject({ scopes: null, canWrite: true });
+    expect(await service.addConnection(input())).toMatchObject({
+      scopes: null,
+      canWrite: true,
+      canCreateProjects: null,
+    });
   });
 
   it('refuses a token without the read scopes, an organization it cannot see and a duplicate', async () => {
@@ -340,6 +353,10 @@ describe('connections', () => {
       vault.lockVault();
       expect((await service.listConnections())[0]).toMatchObject({ locked: true });
       await expect(service.remoteProjects(connection.id)).rejects.toThrow(/Unlock the vault/);
+      await expect(service.teams(connection.id)).rejects.toThrow(/Unlock the vault/);
+      await expect(
+        service.createProject({ connectionId: connection.id, teamSlug: 'platform', name: 'X' }),
+      ).rejects.toThrow(/Unlock the vault/);
       await expect(
         service.getIssue({ connectionId: connection.id, issueId: '4501' }),
       ).rejects.toThrow(/Unlock the vault/);
@@ -737,6 +754,194 @@ describe('setIssueStatus', () => {
     const connection = await linked();
     await expect(
       service.setIssueStatus({ connectionId: connection.id, issueId: '999', status: 'resolved' }),
+    ).rejects.toThrow(/could not find/);
+  });
+});
+
+describe('new projects and their keys', () => {
+  const CREATE_SCOPES = ['org:read', 'project:read', 'event:read', 'event:write', 'project:write'];
+
+  it('says from the scopes whether a connection can create projects', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    expect(await service.addConnection(input())).toMatchObject({ canCreateProjects: true });
+    fake.state.scopes = [...CREATE_SCOPES.slice(0, 4), 'project:admin'];
+    expect(
+      await service.checkToken({ provider: 'sentry', host: fake.url, token: FAKE_TOKEN }),
+    ).toMatchObject({ canCreateProjects: true });
+  });
+
+  it('lists the teams of a connection', async () => {
+    const connection = await service.addConnection(input());
+    expect(await service.teams(connection.id)).toEqual([
+      { id: '7', slug: 'platform', name: 'Platform', isMember: true },
+      { id: '8', slug: 'web', name: 'Web', isMember: false },
+    ]);
+    await expect(service.teams('gone')).rejects.toThrow(/connection no longer exists/);
+  });
+
+  it('creates a project, hands back its DSN and adds a link next to the old ones', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    const connection = await linked();
+    await service.listIssues(query());
+    const window = new FakeBrowserWindow();
+    const created = await service.createProject({
+      connectionId: connection.id,
+      teamSlug: 'platform',
+      name: '  Checkout API ',
+      platform: 'node',
+      linkProjectId: 'p1',
+    });
+    const newLink = {
+      projectId: 'p1',
+      connectionId: connection.id,
+      remoteProjectId: '203',
+      remoteSlug: 'checkout-api',
+      remoteName: 'Checkout API',
+    };
+    expect(created).toEqual({
+      connectionId: connection.id,
+      project: { id: '203', slug: 'checkout-api', name: 'Checkout API', platform: 'node' },
+      dsn: fakeDsn('203'),
+      keys: [{ id: expect.any(String), name: 'Default', dsn: fakeDsn('203'), isActive: true }],
+      link: newLink,
+      keysUrl: `${fake.url}/settings/acme/projects/checkout-api/keys/`,
+    });
+    const [post] = fake.requestsTo('/api/0/teams/acme/platform/projects/', 'POST');
+    expect(JSON.parse(post.body)).toEqual({ name: 'Checkout API', platform: 'node' });
+    expect(await service.listLinks({ projectId: 'p1' })).toEqual([link(connection), newLink]);
+    expect(window.webContents.sentOn(IPC.errorTracking.onChanged)).toEqual([[{ reason: 'links' }]]);
+    await service.listIssues(query());
+    expect(issueRequests()).toHaveLength(2);
+    expectNoToken(created);
+    expect(JSON.stringify(created)).not.toContain(FAKE_KEY_SECRET);
+    expect(onDisk()).not.toContain(fakeDsn('203'));
+  });
+
+  it('lets Sentry pick the platform for Other, and links nothing unless asked', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    const connection = await service.addConnection(input());
+    const window = new FakeBrowserWindow();
+    const created = await service.createProject({
+      connectionId: connection.id,
+      teamSlug: 'web',
+      name: 'Landing',
+      platform: 'other',
+    });
+    expect(created).toMatchObject({ link: null, dsn: fakeDsn('203') });
+    const [post] = fake.requestsTo('/api/0/teams/acme/web/projects/', 'POST');
+    expect(JSON.parse(post.body)).toEqual({ name: 'Landing' });
+    expect(await service.listLinks()).toEqual([]);
+    expect(window.webContents.sentOn(IPC.errorTracking.onChanged)).toEqual([]);
+  });
+
+  it('reads the keys once more when Sentry has not made one yet', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    let keyReads = 0;
+    fake.state.override = (_request, response, url) => {
+      if (!url.pathname.endsWith('/keys/')) return false;
+      keyReads += 1;
+      if (keyReads > 1) return false;
+      json(response, []);
+      return true;
+    };
+    const sleeps: number[] = [];
+    service = module.createErrorTrackingService({
+      transport: (url, init) => fetch(url, init),
+      now: () => clock,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const connection = await service.addConnection(input());
+    const created = await service.createProject({
+      connectionId: connection.id,
+      teamSlug: 'platform',
+      name: 'Late keys',
+    });
+    expect(created.dsn).toBe(fakeDsn('203'));
+    expect(keyReads).toBe(2);
+    expect(sleeps).toHaveLength(1);
+
+    fake.state.override = (_request, response, url) => {
+      if (!url.pathname.endsWith('/keys/')) return false;
+      json(response, []);
+      return true;
+    };
+    const keyless = await service.createProject({
+      connectionId: connection.id,
+      teamSlug: 'platform',
+      name: 'No keys',
+    });
+    expect(keyless).toMatchObject({ dsn: null, keys: [] });
+  });
+
+  it('still reports a project it made when its keys cannot be read', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    const connection = await service.addConnection(input());
+    fake.state.override = (_request, response, url) => {
+      if (!url.pathname.endsWith('/keys/')) return false;
+      json(response, { detail: 'boom' }, 500);
+      return true;
+    };
+    const created = await service.createProject({
+      connectionId: connection.id,
+      teamSlug: 'platform',
+      name: 'Keyless',
+      linkProjectId: 'p2',
+    });
+    expect(created).toMatchObject({
+      project: { slug: 'keyless' },
+      dsn: null,
+      keys: [],
+      link: { projectId: 'p2', remoteSlug: 'keyless' },
+    });
+  });
+
+  it('refuses a bad name or a missing project before asking Sentry', async () => {
+    fake.state.scopes = CREATE_SCOPES;
+    const connection = await service.addConnection(input());
+    const base = { connectionId: connection.id, teamSlug: 'platform' };
+    await expect(service.createProject({ ...base, name: '   ' })).rejects.toThrow('Enter a name.');
+    await expect(service.createProject({ ...base, name: 'x'.repeat(51) })).rejects.toThrow(
+      'Use 50 characters or fewer.',
+    );
+    await expect(
+      service.createProject({ ...base, name: 'Fine', linkProjectId: 'gone' }),
+    ).rejects.toThrow(/project no longer exists/);
+    await expect(
+      service.createProject({ ...base, connectionId: 'gone', name: 'Fine' }),
+    ).rejects.toThrow(/connection no longer exists/);
+    expect(fake.requestsTo('/api/0/teams/acme/platform/projects/', 'POST')).toEqual([]);
+  });
+
+  it('explains a refused create without marking the connection as broken', async () => {
+    const connection = await service.addConnection(input());
+    await expect(
+      service.createProject({ connectionId: connection.id, teamSlug: 'platform', name: 'X' }),
+    ).rejects.toThrow(
+      'Sentry refused to create the project. The token needs the project:write scope, and the organization must let members create projects. Replace the token with one that has it, or ask an owner.',
+    );
+    fake.state.scopes = CREATE_SCOPES;
+    await expect(
+      service.createProject({
+        connectionId: connection.id,
+        teamSlug: 'platform',
+        name: 'storefront web',
+      }),
+    ).rejects.toThrow(/A project with this slug already exists/);
+    expect((await service.listConnections())[0].problem).toBeNull();
+  });
+
+  it('reads the keys of a project the connection can see', async () => {
+    const connection = await service.addConnection(input());
+    expect(
+      await service.projectKeys({ connectionId: connection.id, remoteSlug: 'storefront-api' }),
+    ).toEqual({
+      keys: [{ id: expect.any(String), name: 'Default', dsn: fakeDsn('102'), isActive: true }],
+      keysUrl: `${fake.url}/settings/acme/projects/storefront-api/keys/`,
+    });
+    await expect(
+      service.projectKeys({ connectionId: connection.id, remoteSlug: 'gone' }),
     ).rejects.toThrow(/could not find/);
   });
 });

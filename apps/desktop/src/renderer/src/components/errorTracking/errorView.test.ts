@@ -6,6 +6,7 @@ import {
   issueParam,
   mergeIssuePages,
   parseIssueParam,
+  SCOPE_LIST_TEXT,
   scopeChecklist,
   sparklineBars,
   tokenPageUrl,
@@ -131,15 +132,39 @@ describe('scopeChecklist', () => {
       tokenCheck({ scopes: ['org:read', 'event:read'], missingScopes: ['project:read'] }),
     );
     expect(list).toEqual([
-      { scope: 'org:read', state: 'granted', optional: false },
-      { scope: 'project:read', state: 'missing', optional: false },
-      { scope: 'event:read', state: 'granted', optional: false },
-      { scope: 'event:write', state: 'missing', optional: true },
+      { scope: 'org:read', state: 'granted', optional: false, note: null },
+      { scope: 'project:read', state: 'missing', optional: false, note: null },
+      { scope: 'event:read', state: 'granted', optional: false, note: null },
+      {
+        scope: 'event:write',
+        state: 'missing',
+        optional: true,
+        note: 'optional, needed for Resolve and Ignore',
+      },
+      {
+        scope: 'project:write',
+        state: 'missing',
+        optional: true,
+        note: 'optional, needed to create projects',
+      },
     ]);
   });
 
+  it('grants project:write when the token can create projects', () => {
+    const list = scopeChecklist(
+      tokenCheck({ scopes: ['org:read', 'project:admin'], canCreateProjects: true }),
+    );
+    expect(list.find((one) => one.scope === 'project:write')?.state).toBe('granted');
+  });
+
+  it('lists every scope to copy, the optional ones last', () => {
+    expect(SCOPE_LIST_TEXT).toBe('org:read, project:read, event:read, event:write, project:write');
+  });
+
   it('says unknown when the provider would not list the scopes', () => {
-    const list = scopeChecklist(tokenCheck({ scopes: null, missingScopes: [], canWrite: null }));
+    const list = scopeChecklist(
+      tokenCheck({ scopes: null, missingScopes: [], canWrite: null, canCreateProjects: null }),
+    );
     expect(list.every((one) => one.state === 'unknown')).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   FAKE_EMAIL,
+  FAKE_KEY_SECRET,
   FAKE_TOKEN,
   type FakeSentry,
   startFakeSentry,
@@ -72,6 +73,7 @@ describe('createSentryProvider', () => {
     expect(provider.id).toBe('sentry');
     expect(provider.readScopes).toEqual(['org:read', 'project:read', 'event:read']);
     expect(provider.writeScope).toBe('event:write');
+    expect(provider.createScope).toBe('project:write');
     expect(provider.normalizeHost('acme.sentry.io')).toEqual({
       baseUrl: 'https://sentry.io',
       orgSlugHint: 'acme',
@@ -197,5 +199,77 @@ describe('createSentryProvider', () => {
     await provider.setStatus(access, 'acme', '4501', { status: 'ignored', ignoreMinutes: 60 });
     const [put] = fake.requestsTo('/api/0/organizations/acme/issues/4501/', 'PUT');
     expect(JSON.parse(put.body)).toEqual({ status: 'ignored', ignoreDuration: 60 });
+  });
+
+  it('lists teams with the ones the token user is on first, across pages', async () => {
+    const { provider, access, fake } = await setup();
+    expect(await provider.teams(access, 'acme')).toEqual([
+      { id: '7', slug: 'platform', name: 'Platform', isMember: true },
+      { id: '8', slug: 'web', name: 'Web', isMember: false },
+    ]);
+    fake.state.teams = [
+      { id: '1', slug: 'b', name: 'B', isMember: false },
+      { id: '2', slug: 'a', name: 'A', isMember: true },
+    ];
+    expect((await provider.teams(access, 'acme')).map((team) => team.slug)).toEqual(['a', 'b']);
+    fake.state.override = (_request, response, url) => {
+      if (!url.pathname.endsWith('/teams/')) return false;
+      const page = Number(url.searchParams.get('cursor') ?? '0');
+      response.writeHead(200, {
+        'content-type': 'application/json',
+        link: `<x>; rel="next"; results="true"; cursor="${page + 1}"`,
+      });
+      response.end(JSON.stringify([{ id: String(page), slug: `t${page}` }]));
+      return true;
+    };
+    expect(await provider.teams(access, 'acme')).toHaveLength(10);
+  });
+
+  it('creates a project and reads it back in Runova terms', async () => {
+    const { provider, access, fake } = await setup({ scopes: ['project:write'] });
+    const project = await provider.createProject(access, 'acme', 'platform', {
+      name: 'Checkout API',
+      platform: 'node',
+    });
+    expect(project).toEqual({
+      id: '203',
+      slug: 'checkout-api',
+      name: 'Checkout API',
+      platform: 'node',
+    });
+    const [post] = fake.requestsTo('/api/0/teams/acme/platform/projects/', 'POST');
+    expect(JSON.parse(post.body)).toEqual({ name: 'Checkout API', platform: 'node' });
+  });
+
+  it('leaves the platform out when there is none, so Sentry picks', async () => {
+    const { provider, access, fake } = await setup({ scopes: ['project:write'] });
+    await provider.createProject(access, 'acme', 'platform', { name: 'Thing', platform: null });
+    const [post] = fake.requestsTo('/api/0/teams/acme/platform/projects/', 'POST');
+    expect(JSON.parse(post.body)).toEqual({ name: 'Thing' });
+  });
+
+  it('refuses a created project it cannot read', async () => {
+    const { provider, access, fake } = await setup();
+    fake.state.override = (_request, response) => {
+      json(response, { nope: true }, 201);
+      return true;
+    };
+    await expect(
+      provider.createProject(access, 'acme', 'platform', { name: 'X', platform: null }),
+    ).rejects.toThrow('Sentry made the project but sent back something Runova could not read.');
+  });
+
+  it('reads the client keys of a project without their secrets', async () => {
+    const { provider, access } = await setup();
+    const keys = await provider.projectKeys(access, 'acme', 'storefront-api');
+    expect(keys).toEqual([
+      {
+        id: expect.any(String),
+        name: 'Default',
+        dsn: expect.stringMatching(/^https:\/\/a+102@o1\.ingest\.sentry\.io\/102$/),
+        isActive: true,
+      },
+    ]);
+    expect(JSON.stringify(keys)).not.toContain(FAKE_KEY_SECRET);
   });
 });

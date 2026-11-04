@@ -89,7 +89,7 @@ The **Errors** tab shows the issues Sentry recorded for your projects: what brok
 
 ### Connect Sentry
 
-1. In Sentry, create a personal auth token (User Settings, then Personal Tokens). Give it the scopes `org:read`, `project:read` and `event:read`. Add `event:write` too if you want to resolve and ignore issues from Runova. Sentry cannot add a scope to a token later, so pick them now. The first-use screen has a **Copy scopes** button and a link to the token page.
+1. In Sentry, create a personal auth token (User Settings, then Personal Tokens). Give it the scopes `org:read`, `project:read` and `event:read`. Add `event:write` too if you want to resolve and ignore issues from Runova, and `project:write` to create Sentry projects from Runova. Sentry cannot add a scope to a token later, so pick them now. The first-use screen has a **Copy scopes** button and a link to the token page.
 2. Click **Connect Sentry** (or **Connections** in the toolbar). Choose where your Sentry is: **Sentry.io (US)**, **Sentry.io (EU)**, or **Self-hosted or GlitchTip** with its server URL. Paste the token and click **Check token**.
 3. Runova shows which scopes the token has and which organizations it sees. An organization token (the kind made for uploading releases) cannot read issues, and the dialog says so. Pick the organization and click **Save connection**.
 
@@ -98,6 +98,18 @@ The token is encrypted on this computer, together with your saved servers, and i
 ### Link your projects
 
 Each Runova project is linked to one or more Sentry projects (a web app and its API, say). Under **Link projects**, pick them for each project. A project with no links yet starts with the Sentry projects whose names look like it already picked, so check them and click **Save links**. On a project's own Monitoring tab, a project that is not linked yet shows the same picker just for itself.
+
+### Create a Sentry project and get its DSN
+
+A new app needs a Sentry project and its DSN, the address the app sends its errors to. Runova makes both without leaving the Errors tab.
+
+1. Click **New project** in the toolbar (or **Create a Sentry project** when nothing is linked yet, or **New Sentry project** in **Connections**).
+2. Pick the team, give it a name, and pick the platform if you know it. **Link to** chooses the Runova project whose errors it holds; the name follows the project you pick until you type your own. On a project's own Monitoring tab, that project is picked for you.
+3. Click **Create project**. The dialog shows the DSN with **Copy DSN** and **Copy as env var**, then the install command and the init code for your platform with the DSN already in place, and a link to Sentry's full guide. Switch the platform to see another snippet.
+
+Creating a project needs the `project:write` scope, and your Sentry organization must let members create projects. When the token lacks the scope, the dialog says so and offers **Copy scopes** and **Replace token**.
+
+To see the DSN of a project that is already linked, click **Get DSN** on a project's Monitoring tab, or the key button next to a linked project in **Connections**. Runova reads the keys from Sentry each time and never stores them. A DSN is public by design, so it is fine in client code.
 
 ### Read the issues
 

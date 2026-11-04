@@ -5,7 +5,7 @@ import type {
   ErrorStatusFilter,
 } from '@shared/errorTrackingTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -13,9 +13,11 @@ import {
   CircleCheck,
   Copy,
   ExternalLink,
+  Key,
   Link,
   Lock,
   Plug,
+  Plus,
   RefreshCw,
   Spinner,
 } from '@/components/icons';
@@ -45,6 +47,8 @@ import { ErrorFixDialog } from './ErrorFixDialog';
 import { ErrorIssueDetail } from './ErrorIssueDetail';
 import { ErrorIssueRow, ErrorIssueRowSkeleton } from './ErrorIssueRow';
 import { ErrorLinkProjects } from './ErrorLinkProjects';
+import { ErrorNewProjectDialog } from './ErrorNewProjectDialog';
+import { ErrorProjectKeysDialog } from './ErrorProjectKeysDialog';
 import {
   DEFAULT_PERIOD,
   DEFAULT_SORT,
@@ -72,6 +76,9 @@ import {
  * in a dense list with the filters Sentry itself offers. The Monitoring page shows every linked
  * project grouped by project; a project's own tab passes `projectId` and gets just that project.
  * `?issue=<connectionId>:<issueId>` opens an issue's panel.
+ *
+ * New project makes a Sentry project and hands back its DSN (E47), and Get DSN shows the DSN of
+ * the project the tab is on.
  */
 
 const QUIET = { silentLoading: true } as const;
@@ -92,8 +99,9 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     title: 'Create a Sentry auth token',
     body: (
       <>
-        A personal token with the scopes below. Add event:write too if you want to resolve and
-        ignore issues from here. Sentry cannot add scopes to a token later.
+        A personal token with the scopes below. Add event:write to resolve and ignore issues from
+        here, and project:write to create Sentry projects. Sentry cannot add scopes to a token
+        later.
       </>
     ),
   },
@@ -141,6 +149,9 @@ function FirstRun({ onConnect }: { onConnect: () => void }): React.JSX.Element {
                         ))}
                         <Chip tone="primary" className="font-mono">
                           event:write, optional
+                        </Chip>
+                        <Chip tone="primary" className="font-mono">
+                          project:write, optional
                         </Chip>
                         <Button
                           size="xs"
@@ -208,6 +219,8 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
   const [environment, setEnvironment] = useState(ALL_ENVIRONMENTS);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [fixing, setFixing] = useState<ErrorIssueSummary | null>(null);
 
@@ -224,6 +237,7 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
   const links = useErrorLinks(projectId, hasConnection);
   const linkList = (links.data ?? []).filter((one) => !scoped || one.projectId === projectId);
   const linked = linkList.length > 0;
+  const canMakeProjects = connList.some((one) => !one.locked);
 
   const queryProject = projectId ?? projectFilter ?? undefined;
   const environments = useErrorEnvironments(queryProject, linked);
@@ -305,12 +319,38 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
     </Notice>
   );
 
+  // Keyed, so every state of the tab below holds the same dialogs: a dialog that turns the empty
+  // tab into the list (linking a new project) stays open with what it was showing.
   const dialogs = (
-    <>
+    <Fragment key="dialogs">
       <ErrorConnectionsDialog
         open={connectionsOpen}
         onOpenChange={setConnectionsOpen}
         projects={scopedProject ? [scopedProject] : projects}
+        onNewProject={() => {
+          setConnectionsOpen(false);
+          setNewProjectOpen(true);
+        }}
+      />
+      <ErrorNewProjectDialog
+        open={newProjectOpen}
+        onOpenChange={setNewProjectOpen}
+        connections={connList}
+        projects={projects}
+        defaultProjectId={projectId}
+        onReplaceToken={() => {
+          setNewProjectOpen(false);
+          setConnectionsOpen(true);
+        }}
+      />
+      <ErrorProjectKeysDialog
+        open={keysOpen}
+        onOpenChange={setKeysOpen}
+        targets={linkList.map((one) => ({
+          connectionId: one.connectionId,
+          remoteSlug: one.remoteSlug,
+          remoteName: one.remoteName,
+        }))}
       />
       <SshVaultUnlockDialog
         open={unlockOpen}
@@ -321,7 +361,7 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
           void queryClient.invalidateQueries({ queryKey: queryKeys.errorTracking });
         }}
       />
-    </>
+    </Fragment>
   );
 
   // Before there is anything to filter: loading, no connection, or nothing linked yet.
@@ -362,6 +402,15 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
               title="Link projects"
               description={`Pick the Sentry projects that hold ${scopedProject.name}’s errors, and they show up here.`}
             />
+            {canMakeProjects && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 pt-3 text-xs text-muted-foreground shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]">
+                No Sentry project for it yet?
+                <Button size="xs" variant="soft" onClick={() => setNewProjectOpen(true)}>
+                  <Plus />
+                  Create a Sentry project
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className={GLASS_CARD}>
@@ -370,10 +419,18 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
               title="Link your projects to Sentry"
               description="Sentry is connected. Pick which Sentry projects belong to each of your projects, and their errors show up here."
               action={
-                <Button size="sm" onClick={() => setConnectionsOpen(true)}>
-                  <Link />
-                  Link projects
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button size="sm" onClick={() => setConnectionsOpen(true)}>
+                    <Link />
+                    Link projects
+                  </Button>
+                  {canMakeProjects && (
+                    <Button size="sm" variant="soft" onClick={() => setNewProjectOpen(true)}>
+                      <Plus />
+                      Create a Sentry project
+                    </Button>
+                  )}
+                </div>
               }
             />
           </div>
@@ -456,6 +513,20 @@ export function ErrorsBoard({ projectId }: { projectId?: string }): React.JSX.El
               <RefreshCw className={cn(issues.isFetching && 'animate-spin')} />
             </Button>
           </SimpleTooltip>
+          {scoped && (
+            <SimpleTooltip label="The DSN this project's app sends its errors to">
+              <Button size="sm" variant="ghost" onClick={() => setKeysOpen(true)}>
+                <Key />
+                Get DSN
+              </Button>
+            </SimpleTooltip>
+          )}
+          {canMakeProjects && (
+            <Button size="sm" variant="soft" onClick={() => setNewProjectOpen(true)}>
+              <Plus />
+              New project
+            </Button>
+          )}
           <Button size="sm" variant="soft" onClick={() => setConnectionsOpen(true)}>
             <Plug />
             Connections

@@ -26,7 +26,8 @@ import { store } from '../store';
  * gone.
  */
 
-export interface StoredErrorConnection extends Omit<ErrorConnectionSummary, 'locked'> {
+export interface StoredErrorConnection
+  extends Omit<ErrorConnectionSummary, 'locked' | 'canCreateProjects'> {
   tokenEnvelope: SecretEnvelope;
 }
 

@@ -1,6 +1,10 @@
 import { type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { z } from 'zod';
-import type { ErrorConnectInput, ErrorTokenCheckInput } from '../../shared/errorTrackingTypes';
+import type {
+  ErrorConnectInput,
+  ErrorCreateProjectInput,
+  ErrorTokenCheckInput,
+} from '../../shared/errorTrackingTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { type ErrorTrackingService, getErrorTrackingService } from '../errorTracking/service';
 import { broadcastErrorTrackingChanged, errorTrackingSealedKeys } from '../errorTracking/store';
@@ -36,6 +40,17 @@ const linkSchema = z.object({
   remoteSlug: slug,
   remoteName: z.string().max(200),
 });
+
+// The service checks the name against Sentry's own limit with a clearer message.
+export const errorCreateProjectSchema = z.object({
+  connectionId: id,
+  teamSlug: slug,
+  name: z.string().max(200),
+  platform: z.string().min(1).max(64).nullable().optional(),
+  linkProjectId: id.nullable().optional(),
+});
+
+export const errorProjectKeysSchema = z.object({ connectionId: id, remoteSlug: slug });
 
 export const errorIssueQuerySchema = z.object({
   projectId: id.optional(),
@@ -121,6 +136,18 @@ export function registerErrorTrackingHandlers(options: ErrorTrackingHandlerOptio
 
   handle(IPC.errorTracking.remoteProjects, (value) =>
     service.remoteProjects(parse(id, value, 'connection id')),
+  );
+
+  handle(IPC.errorTracking.teams, (value) => service.teams(parse(id, value, 'connection id')));
+
+  handle(IPC.errorTracking.createProject, (value) =>
+    service.createProject(
+      parse(errorCreateProjectSchema, value, 'new project') as ErrorCreateProjectInput,
+    ),
+  );
+
+  handle(IPC.errorTracking.projectKeys, (value) =>
+    service.projectKeys(parse(errorProjectKeysSchema, value, 'project')),
   );
 
   handle(IPC.errorTracking.environments, (value) =>

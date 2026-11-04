@@ -12,6 +12,9 @@ import type { AddressInfo } from 'node:net';
  *
  * The latest event carries an email, an IP, a cookie, a query token and a bearer token in the
  * places a real SDK puts them, so the spec can show none of them reach the clipboard.
+ *
+ * It also makes projects (E47): one team, a POST that adds the project with a default client key,
+ * and the key list, whose secret half the app must never show.
  */
 
 export const SENTRY_TOKEN = 'sntryu_e2eUserTokenThatMustNeverLeak_9f3a71c0b2d4e6f8';
@@ -23,6 +26,8 @@ export const LEAK_BEARER = 'eyJhbGciOiJIUzI1NiJ9.e2eAppSessionBearer.c2lnbmF0dXJ
 export const LEAK_PASSWORD = 'hunter2';
 
 export const ORG = { id: '1', slug: 'acme', name: 'Acme' };
+export const TEAM = { id: '7', slug: 'platform', name: 'Platform', isMember: true };
+export const KEY_SECRET = 'e2eKeySecretThatMustNeverShow0001';
 
 const PROJECTS = [
   { id: '101', slug: 'storefront-web', name: 'storefront-web', platform: 'javascript-react' },
@@ -220,6 +225,8 @@ export interface FakeSentryServer {
   requestsTo: (path: string, method?: string) => RecordedRequest[];
   /** The issue's status as the fake holds it now. */
   statusOf: (id: string) => string | undefined;
+  /** The public DSN of a project the fake made, by slug. */
+  dsnOf: (slug: string) => string | undefined;
   close: () => Promise<void>;
 }
 
@@ -239,6 +246,8 @@ function notFound(response: ServerResponse): void {
 
 export async function startFakeSentry(): Promise<FakeSentryServer> {
   const state = {
+    projects: PROJECTS.map((project) => ({ ...project })) as Record<string, unknown>[],
+    keys: {} as Record<string, Record<string, unknown>[]>,
     issues: issues(),
     events: { [CRASH.id]: crashEvent() } as Record<string, unknown>,
   };
@@ -260,7 +269,9 @@ export async function startFakeSentry(): Promise<FakeSentryServer> {
     if (path === '/api/0/') {
       json(response, {
         version: '0',
-        auth: { scopes: ['org:read', 'project:read', 'event:read', 'event:write'] },
+        auth: {
+          scopes: ['org:read', 'project:read', 'event:read', 'event:write', 'project:write'],
+        },
         user: { id: '1', email: LEAK_EMAIL },
       });
       return;
@@ -270,7 +281,47 @@ export async function startFakeSentry(): Promise<FakeSentryServer> {
       return;
     }
     if (path === `/api/0/organizations/${ORG.slug}/projects/`) {
-      json(response, PROJECTS);
+      json(response, state.projects);
+      return;
+    }
+    if (path === `/api/0/organizations/${ORG.slug}/teams/`) {
+      json(response, [TEAM]);
+      return;
+    }
+    if (path === `/api/0/teams/${ORG.slug}/${TEAM.slug}/projects/` && method === 'POST') {
+      const input = JSON.parse(body || '{}') as { name?: string; platform?: string };
+      const slug = (input.name ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (!slug) return json(response, { name: ['This field is required.'] }, 400);
+      if (state.projects.some((project) => project.slug === slug)) {
+        return json(response, { detail: 'A project with this slug already exists.' }, 409);
+      }
+      const id = String(200 + state.projects.length);
+      const project = { id, slug, name: input.name, platform: input.platform ?? null };
+      state.projects.push(project);
+      const publicKey = `e2e${id}`.padEnd(32, '0');
+      state.keys[slug] = [
+        {
+          id: publicKey,
+          name: 'Default',
+          public: publicKey,
+          secret: KEY_SECRET,
+          isActive: true,
+          dsn: {
+            public: `${base.replace('://', `://${publicKey}@`)}/${id}`,
+            secret: `${base.replace('://', `://${publicKey}:${KEY_SECRET}@`)}/${id}`,
+          },
+        },
+      ];
+      json(response, project, 201);
+      return;
+    }
+    if ((match = path.match(/^\/api\/0\/projects\/([^/]+)\/([^/]+)\/keys\/$/))) {
+      const keys = state.keys[decodeURIComponent(match[2])];
+      if (match[1] !== ORG.slug || !keys) return notFound(response);
+      json(response, keys);
       return;
     }
     if ((match = path.match(/^\/api\/0\/projects\/([^/]+)\/([^/]+)\/environments\/$/))) {
@@ -352,6 +403,7 @@ export async function startFakeSentry(): Promise<FakeSentryServer> {
           request.url.split('?')[0] === path && (method === undefined || request.method === method),
       ),
     statusOf: (id) => issueById(id)?.status as string | undefined,
+    dsnOf: (slug) => (state.keys[slug]?.[0]?.dsn as { public?: string } | undefined)?.public,
     close: () =>
       new Promise((resolve) => {
         server.closeAllConnections();

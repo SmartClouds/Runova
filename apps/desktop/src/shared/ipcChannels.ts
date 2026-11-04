@@ -1011,6 +1011,12 @@ export const IPC = {
     replaceToken: 'errorTracking:replaceToken',
     // (connectionId) -> RemoteProject[]
     remoteProjects: 'errorTracking:remoteProjects',
+    // (connectionId) -> RemoteTeam[]: where a new project can go
+    teams: 'errorTracking:teams',
+    // (ErrorCreateProjectInput) -> ErrorCreatedProject: makes it, reads its DSN, links it if asked
+    createProject: 'errorTracking:createProject',
+    // (ErrorProjectKeysRef) -> ErrorProjectKeys: a provider project's DSNs, never stored
+    projectKeys: 'errorTracking:projectKeys',
     // ({ projectId? }) -> string[]: environments of the linked provider projects
     environments: 'errorTracking:environments',
     // ({ projectId? }) -> ErrorProjectLink[]

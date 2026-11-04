@@ -77,6 +77,12 @@ export interface SentryIssueParams {
   cursor?: string | null;
 }
 
+/** What a new project is made from. Sentry makes the slug from the name. */
+export interface SentryNewProject {
+  name: string;
+  platform?: string;
+}
+
 export interface SentryStatusBody {
   status: 'resolved' | 'unresolved' | 'ignored';
   ignoreDuration?: number;
@@ -91,6 +97,7 @@ const SCOPE = {
   project: 'project:read',
   read: 'event:read',
   write: 'event:write',
+  createProject: 'project:write',
 } as const;
 
 const REDIRECTED =
@@ -289,7 +296,7 @@ export function createSentryClient(options: SentryClientOptions) {
   async function call(
     path: string,
     scope: string,
-    init: { method?: 'GET' | 'PUT'; params?: URLSearchParams; body?: unknown } = {},
+    init: { method?: 'GET' | 'PUT' | 'POST'; params?: URLSearchParams; body?: unknown } = {},
   ): Promise<SentryReply> {
     const query = init.params?.toString();
     const url = `${base}${path}${query ? `?${query}` : ''}`;
@@ -405,6 +412,23 @@ export function createSentryClient(options: SentryClientOptions) {
       const params = new URLSearchParams();
       if (cursor) params.set('cursor', cursor);
       return call(`/api/0/organizations/${segment(org)}/projects/`, SCOPE.project, { params });
+    },
+
+    listTeams(org: string, cursor?: string | null): Promise<SentryReply> {
+      const params = new URLSearchParams();
+      if (cursor) params.set('cursor', cursor);
+      return call(`/api/0/organizations/${segment(org)}/teams/`, SCOPE.org, { params });
+    },
+
+    async createProject(org: string, teamSlug: string, body: SentryNewProject): Promise<unknown> {
+      const path = `/api/0/teams/${segment(org)}/${segment(teamSlug)}/projects/`;
+      return (await call(path, SCOPE.createProject, { method: 'POST', body })).data;
+    },
+
+    /** The project's client keys, whose public DSN an app sends its errors to. */
+    async listKeys(org: string, projectSlug: string): Promise<unknown> {
+      const path = `/api/0/projects/${segment(org)}/${segment(projectSlug)}/keys/`;
+      return (await call(path, SCOPE.project)).data;
     },
 
     async listEnvironments(org: string, projectSlug: string): Promise<unknown> {

@@ -1,12 +1,15 @@
 import type { ErrorEvent, ErrorException, ErrorFrame, Project } from '@runova/core';
 import type {
   ErrorConnectionSummary,
+  ErrorCreatedProject,
   ErrorIssueDetail,
   ErrorIssuePage,
   ErrorIssueSummary,
   ErrorProjectLink,
   ErrorTokenCheck,
   RemoteProject,
+  RemoteProjectKey,
+  RemoteTeam,
 } from '@shared/errorTrackingTypes';
 
 /** Test data for the Errors tab. Times are fixed so relative labels are stable. */
@@ -39,6 +42,7 @@ export function connection(
     orgName: 'Acme',
     scopes: ['org:read', 'project:read', 'event:read', 'event:write'],
     canWrite: true,
+    canCreateProjects: false,
     locked: false,
     createdAt: NOW - 86_400_000,
     checkedAt: NOW - 60_000,
@@ -194,7 +198,30 @@ export function tokenCheck(overrides: Partial<ErrorTokenCheck> = {}): ErrorToken
     scopes: ['org:read', 'project:read', 'event:read'],
     missingScopes: [],
     canWrite: false,
+    canCreateProjects: false,
     warning: null,
+    ...overrides,
+  };
+}
+
+export const DSN = 'https://abcdef0123456789abcdef0123456789@o1.ingest.sentry.io/203';
+
+export function team(overrides: Partial<RemoteTeam> = {}): RemoteTeam {
+  return { id: '7', slug: 'platform', name: 'Platform', isMember: true, ...overrides };
+}
+
+export function projectKey(overrides: Partial<RemoteProjectKey> = {}): RemoteProjectKey {
+  return { id: 'k1', name: 'Default', dsn: DSN, isActive: true, ...overrides };
+}
+
+export function createdProject(overrides: Partial<ErrorCreatedProject> = {}): ErrorCreatedProject {
+  return {
+    connectionId: 'c1',
+    project: { id: '203', slug: 'checkout', name: 'Checkout', platform: 'node' },
+    dsn: DSN,
+    keys: [projectKey()],
+    link: link({ remoteProjectId: '203', remoteSlug: 'checkout', remoteName: 'Checkout' }),
+    keysUrl: 'https://sentry.io/settings/acme/projects/checkout/keys/',
     ...overrides,
   };
 }

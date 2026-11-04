@@ -58,6 +58,57 @@ export const sentryProjects = [
   { slug: 'broken' },
 ];
 
+/** GET /api/0/organizations/{org}/teams/ */
+export const sentryTeams = [
+  { id: '7', slug: 'platform', name: 'Platform', isMember: false },
+  { id: '8', slug: 'web', name: 'Web', isMember: true },
+  { id: 9, slug: 'ops' },
+  { name: 'No slug' },
+];
+
+/** The secret half of a key, which Runova never keeps. */
+export const FAKE_KEY_SECRET = 'f0e1d2c3b4a5968778695a4b3c2d1e0f';
+
+/** GET /api/0/projects/{org}/{project}/keys/ */
+export const sentryProjectKeys = [
+  {
+    id: 'old',
+    name: 'Old key',
+    public: '0123456789abcdef0123456789abcdef',
+    secret: FAKE_KEY_SECRET,
+    isActive: false,
+    dsn: {
+      public: 'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/104',
+      secret: `https://0123456789abcdef0123456789abcdef:${FAKE_KEY_SECRET}@o1.ingest.sentry.io/104`,
+    },
+  },
+  {
+    id: 'default',
+    name: 'Default',
+    public: 'abcdef0123456789abcdef0123456789',
+    secret: FAKE_KEY_SECRET,
+    isActive: true,
+    dsn: {
+      public: 'https://abcdef0123456789abcdef0123456789@o1.ingest.sentry.io/104',
+      secret: `https://abcdef0123456789abcdef0123456789:${FAKE_KEY_SECRET}@o1.ingest.sentry.io/104`,
+    },
+  },
+  { id: 'broken', name: 'No DSN', isActive: true, dsn: { public: 'not a url' } },
+];
+
+/** GlitchTip's key list: `label` next to `name`, and no `isActive`. */
+export const glitchtipProjectKeys = [
+  {
+    id: '6b3f1c1e-0000-4000-8000-000000000001',
+    label: 'Default',
+    public: '6b3f1c1e000040008000000000000001',
+    dsn: {
+      public: 'https://6b3f1c1e000040008000000000000001@glitchtip.example.com/3',
+      secret: `https://6b3f1c1e000040008000000000000001:${FAKE_KEY_SECRET}@glitchtip.example.com/3`,
+    },
+  },
+];
+
 /** GET /api/0/projects/{org}/{project}/environments/ */
 export const sentryEnvironments = [
   { id: '1', name: 'production', isHidden: false },

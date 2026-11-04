@@ -257,3 +257,4 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E41](epics/41-website-api.md) | Website API: staff sign-in, news, blog, media, signed API clients, releases | Standalone (Website) | none |
 | [E42](epics/42-dashboard-news.md) | Dashboard news: the News card and "Affects your system" | Standalone (Website) | E41 |
 | [E44](epics/44-core-domain.md) | Core domain: the server core behind a domain in nginx, reachable without SSH | Standalone (Deploy) | E10, E11, E16 |
+| [E47](epics/47-sentry-projects.md) | Sentry projects and DSNs: create a project from the Errors tab and get its DSN | Standalone (Ship) | E24 |

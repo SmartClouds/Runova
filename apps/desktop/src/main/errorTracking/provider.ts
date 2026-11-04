@@ -11,9 +11,14 @@ import {
   parseSentryIssue,
   parseSentryIssues,
   parseSentryOrganizations,
+  parseSentryProjectKeys,
   parseSentryProjects,
+  parseSentryTeams,
   type RemoteOrganization,
   type RemoteProject,
+  type RemoteProjectKey,
+  type RemoteTeam,
+  SENTRY_CREATE_SCOPE,
   SENTRY_READ_SCOPES,
   SENTRY_WRITE_SCOPE,
 } from '@runova/core';
@@ -56,10 +61,18 @@ export interface ErrorProviderStatusChange {
   ignoreMinutes?: number | null;
 }
 
+/** What a new provider project is made from. A null platform lets the provider pick. */
+export interface ErrorProviderNewProject {
+  name: string;
+  platform: string | null;
+}
+
 export interface ErrorProvider {
   readonly id: ErrorTrackingProvider;
   readonly readScopes: readonly string[];
   readonly writeScope: string;
+  /** The scope creating a project needs. */
+  readonly createScope: string;
   /** Cleans up a typed host; throws a message for the user when it is not usable. */
   normalizeHost(input: string): { baseUrl: string; orgSlugHint: string | null };
   /** A hint when the token is of a kind that cannot do the job, else null. */
@@ -69,6 +82,20 @@ export interface ErrorProvider {
   organizations(access: ErrorProviderAccess): Promise<RemoteOrganization[]>;
   projects(access: ErrorProviderAccess, org: string): Promise<RemoteProject[]>;
   environments(access: ErrorProviderAccess, org: string, projectSlug: string): Promise<string[]>;
+  /** The organization's teams, the ones the token's user is on first. */
+  teams(access: ErrorProviderAccess, org: string): Promise<RemoteTeam[]>;
+  createProject(
+    access: ErrorProviderAccess,
+    org: string,
+    teamSlug: string,
+    project: ErrorProviderNewProject,
+  ): Promise<RemoteProject>;
+  /** The project's client keys, active ones first. */
+  projectKeys(
+    access: ErrorProviderAccess,
+    org: string,
+    projectSlug: string,
+  ): Promise<RemoteProjectKey[]>;
   issues(
     access: ErrorProviderAccess,
     org: string,
@@ -121,7 +148,7 @@ export function sentryStatusBody(
     : { status, substatus: 'archived_forever' };
 }
 
-/** Pages of projects read before giving up; 100 a page is far more than anyone links. */
+/** Pages of projects or teams read before giving up; 100 a page is far more than anyone links. */
 const MAX_PROJECT_PAGES = 10;
 
 const ORG_TOKEN_WARNING =
@@ -147,6 +174,7 @@ export function createSentryProvider(deps: SentryProviderDeps): ErrorProvider {
     id: 'sentry',
     readScopes: SENTRY_READ_SCOPES,
     writeScope: SENTRY_WRITE_SCOPE,
+    createScope: SENTRY_CREATE_SCOPE,
     normalizeHost: (input) => normalizeSentryHost(input),
     tokenWarning: (token) => (token.trim().startsWith('sntrys_') ? ORG_TOKEN_WARNING : null),
 
@@ -173,6 +201,36 @@ export function createSentryProvider(deps: SentryProviderDeps): ErrorProvider {
 
     async environments(access, org, projectSlug) {
       return parseSentryEnvironments(await client(access).listEnvironments(org, projectSlug));
+    },
+
+    async teams(access, org) {
+      const api = client(access);
+      const teams: RemoteTeam[] = [];
+      let cursor: string | null = null;
+      for (let page = 0; page < MAX_PROJECT_PAGES; page++) {
+        const reply = await api.listTeams(org, cursor);
+        teams.push(...parseSentryTeams(reply.data));
+        cursor = parseLinkHeader(reply.link).next;
+        if (!cursor) break;
+      }
+      return teams.sort((a, b) => Number(b.isMember === true) - Number(a.isMember === true));
+    },
+
+    async createProject(access, org, teamSlug, project) {
+      const body = project.platform
+        ? { name: project.name, platform: project.platform }
+        : { name: project.name };
+      const [created] = parseSentryProjects([
+        await client(access).createProject(org, teamSlug, body),
+      ]);
+      if (!created) {
+        throw new Error('Sentry made the project but sent back something Runova could not read.');
+      }
+      return created;
+    },
+
+    async projectKeys(access, org, projectSlug) {
+      return parseSentryProjectKeys(await client(access).listKeys(org, projectSlug));
     },
 
     async issues(access, org, request) {

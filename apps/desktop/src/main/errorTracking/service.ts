@@ -1,18 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import {
   buildErrorFixPrompt,
+  canCreateProjects,
   type ErrorIssue,
   type ErrorPeriod,
   type ErrorPromptInput,
   formatErrorIssueForCopy,
   isNewIssue,
   type RemoteProject,
+  type RemoteProjectKey,
+  type RemoteTeam,
+  sentryKeysPageUrl,
+  sentryPlatform,
+  validateSentryProjectName,
 } from '@runova/core';
 import { net } from 'electron';
 import type { SecretEnvelope } from '../../shared/apiTypes';
 import type {
   ErrorConnectInput,
   ErrorConnectionSummary,
+  ErrorCreatedProject,
+  ErrorCreateProjectInput,
   ErrorIssueDetail,
   ErrorIssuePage,
   ErrorIssuePrompt,
@@ -20,6 +28,8 @@ import type {
   ErrorIssueRef,
   ErrorIssueSort,
   ErrorIssueSummary,
+  ErrorProjectKeys,
+  ErrorProjectKeysRef,
   ErrorProjectLink,
   ErrorSourceFailure,
   ErrorStatusChange,
@@ -51,6 +61,9 @@ import {
  *
  * Lists are cached for a minute per query, since Sentry asks clients to poll lightly; the
  * Refresh button skips the cache, and anything this service changes drops it.
+ *
+ * A new project is made through a connection too, and its DSN read straight back so the user can
+ * put it to work. DSNs are fetched when asked for and never written down.
  */
 
 export interface ErrorTrackingServiceDeps {
@@ -61,6 +74,8 @@ export interface ErrorTrackingServiceDeps {
   now: () => number;
   /** The Runova projects, for names and to check a link's project exists. */
   projects: () => Promise<{ id: string; name: string }[]>;
+  /** Waits before reading a new project's keys again. */
+  sleep: (ms: number) => Promise<void>;
 }
 
 export const ERROR_CACHE_MS = 60_000;
@@ -68,6 +83,8 @@ export const ERROR_CACHE_MS = 60_000;
 const CHECKED_AT_STEP_MS = 60_000;
 const ISSUES_PER_CONNECTION = 50;
 const MAX_LABEL = 80;
+/** How long to give Sentry to make a new project's first key before reading again. */
+const KEY_RETRY_MS = 750;
 /** The period an issue opened on its own is judged "new" against. */
 const DETAIL_PERIOD: ErrorPeriod = '24h';
 
@@ -75,6 +92,9 @@ const LOCKED =
   'The vault is locked, so Runova cannot read the Sentry token. Unlock the vault with your passkey first.';
 const GONE = 'That error tracking connection no longer exists.';
 const BAD_CURSOR = 'That page of issues is no longer available. Refresh the list.';
+const NO_PROJECT = 'That project no longer exists.';
+/** Failures that are about one request, not about the connection it went through. */
+const REQUEST_FAILURES = new Set(['http', 'forbidden', 'notFound']);
 
 class LockedConnectionError extends Error {
   constructor() {
@@ -161,6 +181,7 @@ export function createErrorTrackingService(
     isLocked: isLockedEnvelope,
     now: Date.now,
     projects: () => store.getProjects(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     ...given,
   };
   const { provider } = deps;
@@ -168,7 +189,11 @@ export function createErrorTrackingService(
 
   function summary(connection: StoredErrorConnection): ErrorConnectionSummary {
     const { tokenEnvelope, ...rest } = connection;
-    return { ...rest, locked: deps.isLocked(tokenEnvelope) };
+    return {
+      ...rest,
+      canCreateProjects: canCreateProjects(connection.scopes),
+      locked: deps.isLocked(tokenEnvelope),
+    };
   }
 
   async function access(connection: StoredErrorConnection): Promise<ErrorProviderAccess> {
@@ -185,8 +210,14 @@ export function createErrorTrackingService(
    * Writes down how the last call through a connection went: a problem as soon as it changes, a
    * good call at most once a minute. A missing issue says nothing about the connection.
    */
-  async function record(connection: StoredErrorConnection, error: unknown): Promise<void> {
+  async function record(
+    connection: StoredErrorConnection,
+    error: unknown,
+    requestOnly = false,
+  ): Promise<void> {
     if (error instanceof LockedConnectionError || errorKind(error) === 'notFound') return;
+    // A refused create or a taken name says nothing about the connection.
+    if (requestOnly && REQUEST_FAILURES.has(errorKind(error) ?? '')) return;
     // A refused write is the missing write scope, which canWrite already says.
     if ((error as { scope?: unknown } | null)?.scope === provider.writeScope) return;
     const problem = error ? (error instanceof Error ? error.message : String(error)) : null;
@@ -201,16 +232,20 @@ export function createErrorTrackingService(
     }).catch(() => undefined);
   }
 
-  /** Runs one call through a connection and records how it went. */
+  /**
+   * Runs one call through a connection and records how it went. With `requestOnly`, a refusal of
+   * this one request is passed on without marking the connection as having a problem.
+   */
   async function through<T>(
     connection: StoredErrorConnection,
     work: (access: ErrorProviderAccess) => Promise<T>,
+    requestOnly = false,
   ): Promise<T> {
     let result: T;
     try {
       result = await work(await access(connection));
     } catch (error) {
-      await record(connection, error);
+      await record(connection, error, requestOnly);
       throw error;
     }
     await record(connection, null);
@@ -241,6 +276,7 @@ export function createErrorTrackingService(
       scopes,
       missingScopes: scopes ? provider.readScopes.filter((scope) => !scopes.includes(scope)) : [],
       canWrite: scopes ? scopes.includes(provider.writeScope) : null,
+      canCreateProjects: canCreateProjects(scopes),
       warning:
         warning ??
         (organizations.length === 0
@@ -287,6 +323,27 @@ export function createErrorTrackingService(
         (one) => one.connectionId === connectionId && one.remoteProjectId === remoteProjectId,
       )?.projectId ?? ''
     );
+  }
+
+  function keysUrl(connection: StoredErrorConnection, projectSlug: string): string {
+    return sentryKeysPageUrl(connection.host, connection.orgSlug, projectSlug);
+  }
+
+  /** A new project's keys, read once more if Sentry has not made the first one yet. */
+  async function newProjectKeys(
+    connection: StoredErrorConnection,
+    projectSlug: string,
+  ): Promise<RemoteProjectKey[]> {
+    const read = () =>
+      through(
+        connection,
+        (one) => provider.projectKeys(one, connection.orgSlug, projectSlug),
+        true,
+      );
+    const keys = await read();
+    if (keys.length > 0) return keys;
+    await deps.sleep(KEY_RETRY_MS);
+    return read();
   }
 
   async function issueDetail(ref: ErrorIssueRef): Promise<ErrorIssueDetail> {
@@ -382,6 +439,86 @@ export function createErrorTrackingService(
       return summary(replaced);
     },
 
+    async teams(connectionId: string): Promise<RemoteTeam[]> {
+      const connection = findConnection((await readErrorTracking()).connections, connectionId);
+      return through(connection, (one) => provider.teams(one, connection.orgSlug));
+    },
+
+    /**
+     * Makes a provider project under a team, reads its DSN back, and links it to a Runova project
+     * when asked, next to the links that project already has.
+     */
+    async createProject(input: ErrorCreateProjectInput): Promise<ErrorCreatedProject> {
+      const name = validateSentryProjectName(input.name);
+      if (!name.ok) throw new Error(name.reason);
+      const connection = findConnection(
+        (await readErrorTracking()).connections,
+        input.connectionId,
+      );
+      const linkProjectId = input.linkProjectId || null;
+      if (linkProjectId && !(await deps.projects()).some((one) => one.id === linkProjectId)) {
+        throw new Error(NO_PROJECT);
+      }
+
+      let project: RemoteProject;
+      try {
+        project = await through(
+          connection,
+          (one) =>
+            provider.createProject(one, connection.orgSlug, input.teamSlug, {
+              name: name.value,
+              platform: sentryPlatform(input.platform).sentryPlatform,
+            }),
+          true,
+        );
+      } catch (error) {
+        if (errorKind(error) !== 'forbidden') throw error;
+        throw new Error(
+          `Sentry refused to create the project. The token needs the ${provider.createScope} scope, and the organization must let members create projects. Replace the token with one that has it, or ask an owner.`,
+        );
+      }
+
+      // The project exists now, so a key that cannot be read leaves the DSN for later.
+      const keys = await newProjectKeys(connection, project.slug).catch(() => []);
+
+      let link: ErrorProjectLink | null = null;
+      if (linkProjectId) {
+        const entry: ErrorProjectLink = {
+          projectId: linkProjectId,
+          connectionId: connection.id,
+          remoteProjectId: project.id,
+          remoteSlug: project.slug,
+          remoteName: project.name,
+        };
+        await mutateErrorTracking((state) => {
+          findConnection(state.connections, connection.id);
+          state.links.push(entry);
+        });
+        link = entry;
+        cache.clear();
+        broadcastErrorTrackingChanged('links');
+      }
+
+      return {
+        connectionId: connection.id,
+        project,
+        dsn: keys.find((key) => key.isActive)?.dsn ?? null,
+        keys,
+        link,
+        keysUrl: keysUrl(connection, project.slug),
+      };
+    },
+
+    async projectKeys(ref: ErrorProjectKeysRef): Promise<ErrorProjectKeys> {
+      const connection = findConnection((await readErrorTracking()).connections, ref.connectionId);
+      const keys = await through(
+        connection,
+        (one) => provider.projectKeys(one, connection.orgSlug, ref.remoteSlug),
+        true,
+      );
+      return { keys, keysUrl: keysUrl(connection, ref.remoteSlug) };
+    },
+
     async remoteProjects(connectionId: string): Promise<RemoteProject[]> {
       const connection = findConnection((await readErrorTracking()).connections, connectionId);
       return through(connection, (one) => provider.projects(one, connection.orgSlug));
@@ -434,7 +571,7 @@ export function createErrorTrackingService(
     /** Replaces the project's links. A link always belongs to the project it is saved under. */
     async setLinks(projectId: string, links: ErrorProjectLink[]): Promise<ErrorProjectLink[]> {
       if (!(await deps.projects()).some((project) => project.id === projectId)) {
-        throw new Error('That project no longer exists.');
+        throw new Error(NO_PROJECT);
       }
       const saved = await mutateErrorTracking((state) => {
         const next: ErrorProjectLink[] = [];

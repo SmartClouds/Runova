@@ -204,6 +204,67 @@ describe('issues', () => {
   });
 });
 
+describe('teams, new projects and keys', () => {
+  it('lists the teams of an organization with the Link cursor', async () => {
+    const fake = await sentry();
+    const reply = await client(fake.url).listTeams('acme', '0:100:0');
+    expect(fake.requests[0].url).toBe('/api/0/organizations/acme/teams/?cursor=0%3A100%3A0');
+    expect(reply.data).toEqual(fake.state.teams);
+  });
+
+  it('creates a project under a team with a JSON POST', async () => {
+    const fake = await sentry({
+      scopes: ['org:read', 'project:read', 'event:read', 'project:write'],
+    });
+    const created = await client(fake.url).createProject('acme', 'platform', {
+      name: 'Checkout',
+      platform: 'node',
+    });
+    expect(created).toMatchObject({ slug: 'checkout', name: 'Checkout', platform: 'node' });
+    const post = fake.requestsTo('/api/0/teams/acme/platform/projects/', 'POST');
+    expect(post).toHaveLength(1);
+    expect(JSON.parse(post[0].body)).toEqual({ name: 'Checkout', platform: 'node' });
+    expect(post[0].headers['content-type']).toBe('application/json');
+  });
+
+  it('names project:write when Sentry refuses to create a project', async () => {
+    const fake = await sentry();
+    const error = await failure(
+      client(fake.url).createProject('acme', 'platform', { name: 'Checkout' }),
+    );
+    expect(error.kind).toBe('forbidden');
+    expect(error.scope).toBe('project:write');
+  });
+
+  it("shows Sentry's own reason when the slug is taken", async () => {
+    const fake = await sentry({ scopes: ['project:write'] });
+    const error = await failure(
+      client(fake.url).createProject('acme', 'platform', { name: 'storefront web' }),
+    );
+    expect(error.kind).toBe('http');
+    expect(error.message).toBe(
+      'Sentry refused the request (HTTP 409: A project with this slug already exists.).',
+    );
+  });
+
+  it('lists the client keys of a project, by slug', async () => {
+    const fake = await sentry();
+    const keys = await client(fake.url).listKeys('acme', 'storefront-api');
+    expect(fake.requests[0].url).toBe('/api/0/projects/acme/storefront-api/keys/');
+    expect(keys).toEqual(fake.state.keys['storefront-api']);
+  });
+
+  it('escapes the team and project slugs in the path', async () => {
+    const fake = await sentry();
+    await failure(client(fake.url).createProject('acme', '../x', { name: 'y' }));
+    await failure(client(fake.url).listKeys('acme', 'a/b'));
+    expect(fake.requests.map((one) => one.url)).toEqual([
+      '/api/0/teams/acme/..%2Fx/projects/',
+      '/api/0/projects/acme/a%2Fb/keys/',
+    ]);
+  });
+});
+
 describe('GlitchTip fallback', () => {
   it('lists issues per project on the older path when the organization path is missing', async () => {
     const fake = await sentry({ glitchtip: true });

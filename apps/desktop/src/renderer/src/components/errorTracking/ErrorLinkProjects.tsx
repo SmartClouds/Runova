@@ -3,13 +3,15 @@ import type { ErrorConnectionSummary, ErrorProjectLink } from '@shared/errorTrac
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Link, Spinner } from '@/components/icons';
+import { Key, Link, Spinner } from '@/components/icons';
 import { Notice, SECTION_HEADING } from '@/components/pageKit';
 import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SimpleTooltip } from '@/components/ui/tooltip';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { type ErrorKeysTarget, ErrorProjectKeysDialog } from './ErrorProjectKeysDialog';
 import { MultiCombobox, type MultiComboboxOption } from './MultiCombobox';
 import { useRemoteProjects } from './useErrorTracking';
 
@@ -51,6 +53,7 @@ export function ErrorLinkProjects({
   const remote = useRemoteProjects(usable.map((one) => one.id));
   const [edits, setEdits] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
+  const [keysFor, setKeysFor] = useState<{ name: string; targets: ErrorKeysTarget[] } | null>(null);
   const several = usable.length > 1;
 
   const options = useMemo(() => {
@@ -110,6 +113,20 @@ export function ErrorLinkProjects({
   });
   const changed = rows.filter((row) => row.changed);
 
+  /** The saved links of a project, as the DSN dialog takes them. */
+  function keyTargets(projectId: string): ErrorKeysTarget[] {
+    return links
+      .filter((one) => one.projectId === projectId && usable.some((c) => c.id === one.connectionId))
+      .map((one) => ({
+        connectionId: one.connectionId,
+        remoteSlug: one.remoteSlug,
+        remoteName: one.remoteName,
+        platform:
+          remote.byConnection.get(one.connectionId)?.find((p) => p.id === one.remoteProjectId)
+            ?.platform ?? null,
+      }));
+  }
+
   async function save(): Promise<void> {
     if (changed.length === 0) return;
     setSaving(true);
@@ -167,7 +184,7 @@ export function ErrorLinkProjects({
         {rows.map((row) => (
           <li
             key={row.project.id}
-            className="grid gap-2 py-2.5 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] sm:items-center"
+            className="grid gap-2 py-2.5 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_2rem] sm:items-center"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{row.project.name}</p>
@@ -194,6 +211,22 @@ export function ErrorLinkProjects({
                 emptyText="No Sentry project matches."
               />
             )}
+            {keyTargets(row.project.id).length > 0 ? (
+              <SimpleTooltip label="Get the DSN">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Get DSN for ${row.project.name}`}
+                  onClick={() =>
+                    setKeysFor({ name: row.project.name, targets: keyTargets(row.project.id) })
+                  }
+                >
+                  <Key />
+                </Button>
+              </SimpleTooltip>
+            ) : (
+              <span aria-hidden className="hidden sm:block" />
+            )}
           </li>
         ))}
       </ul>
@@ -209,6 +242,12 @@ export function ErrorLinkProjects({
           Save links
         </Button>
       </div>
+
+      <ErrorProjectKeysDialog
+        open={keysFor !== null}
+        onOpenChange={(open) => !open && setKeysFor(null)}
+        targets={keysFor?.targets ?? []}
+      />
     </section>
   );
 }
