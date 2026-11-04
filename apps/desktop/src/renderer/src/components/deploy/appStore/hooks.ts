@@ -1,9 +1,9 @@
 import { type CatalogInstall, readCatalogInstall } from '@runova/core';
-import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import type {
   StackDetails,
   StackInfo,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { useStack, useStacks } from '../apps/hooks';

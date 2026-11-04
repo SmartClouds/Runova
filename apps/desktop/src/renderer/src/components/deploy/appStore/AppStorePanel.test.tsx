@@ -1,9 +1,9 @@
 import { CATALOG_TEMPLATES } from '@runova/core';
+import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
 import { screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
-import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
 import {
   NEWER_REDIS,
   NEWER_REDIS_DIGEST,

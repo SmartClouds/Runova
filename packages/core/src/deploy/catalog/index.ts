@@ -27,10 +27,10 @@ import type { AnyCatalogTemplate } from './types.js';
 
 export * from './images.js';
 export * from './installed.js';
+export * from './latest.js';
 export * from './render.js';
 export * from './secrets.js';
 export type * from './types.js';
-export * from './latest.js';
 export * from './updates.js';
 
 export const CATALOG_TEMPLATES: readonly AnyCatalogTemplate[] = [

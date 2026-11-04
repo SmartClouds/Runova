@@ -1,6 +1,7 @@
 import type { ServiceLimits } from '@runova/core';
 import { useState } from 'react';
 import { Rocket, Spinner } from '@/components/icons';
+import { Notice } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Notice } from '@/components/pageKit';
 import type { LimitsHostFacts } from '@/lib/deploy/limits/editor';
 import { ResourceLimitsEditor } from '../limits/ResourceLimitsEditor';
 

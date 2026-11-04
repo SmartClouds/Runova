@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type AnyCatalogTemplate, findCatalogTemplate } from '@runova/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CatalogReleaseSource, RELEASES_TTL_MS } from './releases';
 import type { RegistryImage } from './registry';
+import { CatalogReleaseSource, RELEASES_TTL_MS } from './releases';
 
 /**
  * The newest releases of the App Store's images, as the store and the update check see them:

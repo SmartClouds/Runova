@@ -1,10 +1,10 @@
 import { findCatalogTemplate, generateCatalogSecrets, renderCatalogApp } from '@runova/core';
-import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
-import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import type {
   StackDetails,
   StackInfo,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import { sampleDockerStatus } from '@shared/deploy/testing/fakeDockerData';
+import type { DeployAppReleases } from '@shared/deployAppStoreTypes';
 import { STACK_ID, sampleJob, sampleRevision, sampleStack, T0 } from '../../apps/testing/fixtures';
 import { SERVER, signedIn } from '../../security/testing/fixtures';
 

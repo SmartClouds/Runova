@@ -9,8 +9,8 @@ import type {
   DeployStackPreview,
   DeployStackUploadResult,
 } from '@shared/deployStacksTypes';
-import { SERVER, signedIn } from '../../security/testing/fixtures';
 import { sampleDockerStatus } from '../../../../../../shared/deploy/testing/fakeDockerData';
+import { SERVER, signedIn } from '../../security/testing/fixtures';
 
 /** A server with a shop app on it, and a project with a compose file, for the Apps tests. */
 

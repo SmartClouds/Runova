@@ -20,8 +20,8 @@ import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSi
 import type {
   DeployAppRevealInput,
   DeployMakePrivateInput,
-  DeployStackLimitsInput,
   DeployRevisionResult,
+  DeployStackLimitsInput,
 } from '../../../shared/deployAppStoreTypes';
 import type {
   DeployComposeDiscovery,

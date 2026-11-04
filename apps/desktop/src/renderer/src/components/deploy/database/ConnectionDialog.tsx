@@ -157,9 +157,7 @@ export function ConnectionDialog({
             </span>
             <div className="min-w-0 space-y-1">
               <DialogTitle>Add a connection</DialogTitle>
-              <DialogDescription>
-                Paste the connection URL your app uses.
-              </DialogDescription>
+              <DialogDescription>Paste the connection URL your app uses.</DialogDescription>
             </div>
           </DialogHeader>
 
