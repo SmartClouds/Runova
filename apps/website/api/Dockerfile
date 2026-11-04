@@ -5,7 +5,7 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-ARG VERSION=3.2.0
+ARG VERSION=3.3.0
 # The commit CD builds, which the healthcheck reports as its releaseId. Empty leaves it out.
 ARG SOURCE_REVISION=
 
@@ -25,7 +25,7 @@ RUN dotnet publish src/Runova.Website.Api/Runova.Website.Api.csproj --no-restore
 RUN mkdir -p /data/media
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
-ARG VERSION=3.2.0
+ARG VERSION=3.3.0
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /data /var/lib/runova
 COPY --from=build /app ./

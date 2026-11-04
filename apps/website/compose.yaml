@@ -27,8 +27,8 @@ services:
     build:
       context: api
       args:
-        VERSION: ${VERSION:-3.2.0}
-    image: runova-website-api:${VERSION:-3.2.0}
+        VERSION: ${VERSION:-3.3.0}
+    image: runova-website-api:${VERSION:-3.3.0}
     environment:
       ConnectionStrings__Default: Host=db;Database=runova_website;Username=runova;Password=${POSTGRES_PASSWORD:-runova}
       Database__MigrateOnStart: "true"
@@ -53,7 +53,7 @@ services:
       args:
         SITE_URL: ${SITE_URL:-https://localhost:8443}
         PUBLIC_SENTRY_DSN: ${PUBLIC_SENTRY_DSN:-}
-    image: runova-website-web:${VERSION:-3.2.0}
+    image: runova-website-web:${VERSION:-3.3.0}
     environment:
       WEBSITE_API_INTERNAL_URL: http://api:8080
       SITE_URL: ${SITE_URL:-https://localhost:8443}
