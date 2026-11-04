@@ -11,6 +11,12 @@ vi.mock('../windowsPath', () => ({
     Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH',
 }));
 
+// The runtime reaches into the store, Android, the installers and the registries. Each test
+// resets the modules and imports it again with its own environment, but Vitest keeps the
+// transformed files, so loading it once here moves the cold transform (slow under coverage on a
+// busy runner) out of the first test's time limit, as in aiAccess.test.ts.
+await import('./runtime');
+
 /**
  * The end-to-end tests of Dev Setup rely on the sandbox hiding the machine's real tools. That is
  * proven here with two different `node`s, one on the real PATH and one in the sandbox, and the
