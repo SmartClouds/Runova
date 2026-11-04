@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Runova.Website.Api.Releases;
 
@@ -10,9 +11,13 @@ namespace Runova.Website.Api.Releases;
 internal sealed class GitHubReleasesClient(HttpClient http, IConfiguration configuration)
 {
     public const string LatestPath = "repos/SmartClouds/Runova/releases/latest";
+    public const string RateLimitPath = "rate_limit";
 
     /// <summary>GitHub's release body and the ETag it came with.</summary>
     public sealed record Latest(string Json, string? ETag);
+
+    /// <summary>How many REST calls GitHub allows this client per hour, and how many are left.</summary>
+    public sealed record RateLimit(int Limit, int Remaining, DateTimeOffset ResetsAt);
 
     public static void Configure(HttpClient http)
     {
@@ -36,11 +41,7 @@ internal sealed class GitHubReleasesClient(HttpClient http, IConfiguration confi
             request.Headers.IfNoneMatch.Add(tag);
         }
 
-        if (configuration["GitHub:Token"] is { Length: > 0 } token)
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-
+        AddToken(request);
         using var response = await http.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotModified)
         {
@@ -49,5 +50,32 @@ internal sealed class GitHubReleasesClient(HttpClient http, IConfiguration confi
 
         response.EnsureSuccessStatusCode();
         return new Latest(await response.Content.ReadAsStringAsync(cancellationToken), response.Headers.ETag?.ToString());
+    }
+
+    /// <summary>
+    /// The rate limit the releases sync runs under. GitHub does not count this call against it, so
+    /// the healthcheck can ask as often as it likes. Throws like <see cref="GetLatestAsync"/>.
+    /// </summary>
+    public async Task<RateLimit> GetRateLimitAsync(CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, RateLimitPath);
+        AddToken(request);
+        using var response = await http.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken);
+        var rate = json.RootElement.GetProperty("rate");
+        return new RateLimit(
+            rate.GetProperty("limit").GetInt32(),
+            rate.GetProperty("remaining").GetInt32(),
+            DateTimeOffset.FromUnixTimeSeconds(rate.GetProperty("reset").GetInt64()));
+    }
+
+    private void AddToken(HttpRequestMessage request)
+    {
+        if (configuration["GitHub:Token"] is { Length: > 0 } token)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
     }
 }

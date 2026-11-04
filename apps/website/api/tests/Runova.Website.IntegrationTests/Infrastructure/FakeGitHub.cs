@@ -37,6 +37,17 @@ internal sealed class FakeGitHub
             ? new HttpResponseMessage(HttpStatusCode.NotModified)
             : throw new InvalidOperationException("The sync did not send the stored ETag.");
 
+    /// <summary>GitHub's <c>rate_limit</c> answer with this much of the hourly limit left.</summary>
+    public void SendsRateLimit(int remaining, int limit = 5000) => _reply = _ => new HttpResponseMessage(HttpStatusCode.OK)
+    {
+        Content = new StringContent(
+            $$"""{ "resources": { }, "rate": { "limit": {{limit}}, "remaining": {{remaining}}, "reset": 1793534400, "used": {{limit - remaining}} } }""",
+            MediaTypeHeaderValue.Parse("application/json")),
+    };
+
+    /// <summary>Answers each request with whatever <paramref name="reply"/> returns.</summary>
+    public void Replies(Func<HttpRequestMessage, HttpResponseMessage> reply) => _reply = reply;
+
     public void Answers(HttpStatusCode status) => _reply = _ => new HttpResponseMessage(status) { Content = new StringContent("{\"message\":\"no\"}") };
 
     /// <summary>As when GitHub can not be reached at all.</summary>

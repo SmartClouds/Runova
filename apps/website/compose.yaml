@@ -37,6 +37,8 @@ services:
       Website__KnownProxies: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       Sentry__Dsn: ${SENTRY_DSN:-}
       GitHub__Token: ${GITHUB_TOKEN:-}
+      RUNOVA_HEALTH_TOKEN_SHA256: ${RUNOVA_HEALTH_TOKEN_SHA256:-}
+      Website__InternalSiteUrl: http://web:4321/
     volumes:
       - media:/var/lib/runova/media
     depends_on:

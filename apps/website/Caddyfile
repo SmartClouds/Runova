@@ -24,7 +24,7 @@ http://{$SITE_ADDRESS:localhost} {
 		file_server
 	}
 
-	@api path /api /api/* /hangfire /hangfire/*
+	@api path /api /api/* /hangfire /hangfire/* /_runova/health
 	handle @api {
 		reverse_proxy api:8080
 	}

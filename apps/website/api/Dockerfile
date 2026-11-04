@@ -6,6 +6,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 ARG VERSION=3.2.0
+# The commit CD builds, which the healthcheck reports as its releaseId. Empty leaves it out.
+ARG SOURCE_REVISION=
 
 # Restore first, from the project and lock files only, so a code change keeps the restore layer.
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
@@ -16,7 +18,7 @@ RUN dotnet restore src/Runova.Website.Api/Runova.Website.Api.csproj --locked-mod
 
 COPY src/ src/
 RUN dotnet publish src/Runova.Website.Api/Runova.Website.Api.csproj --no-restore --configuration Release \
-    --output /app -p:UseAppHost=false -p:Version=${VERSION}
+    --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
 
 # The media folder, owned by the runtime image's app user (APP_UID, 1654), so a new volume mounted
 # there starts with that owner. The chiseled image has no shell to make it in.

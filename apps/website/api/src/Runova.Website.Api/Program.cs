@@ -33,6 +33,7 @@ builder.Services.AddWebsiteJson();
 builder.Services.AddHostedService<MigrateOnStart>();
 builder.Services.AddWebsiteProblemDetails();
 builder.Services.AddWebsiteHealthChecks();
+builder.Services.AddRunovaHealth();
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, _, _) =>
@@ -63,6 +64,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 }
 
 app.MapHealth();
+app.MapRunovaHealth();
 app.MapApiV1();
 app.MapJobsDashboard();
 

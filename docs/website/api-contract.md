@@ -15,9 +15,11 @@ the same commit.
   sub-resources `me`, `current`, `latest`, `two-factor`, `password` and `downloads`, and the mass
   nouns `news` and `media`. Verbs never appear in a path.
 - **Outside `/api/v1`.** `GET /health/live` (200 while the process runs), `GET /health/ready` (200
-  when PostgreSQL answers, 503 problem details when it does not), `GET /openapi/v1.json` (the
-  built-in OpenAPI document), `GET /scalar` (the reference page, development and staging only),
-  `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
+  when PostgreSQL answers, 503 problem details when it does not), `GET /_runova/health` (the
+  runova-health/1 report for Runova's Health page: `Authorization: Bearer <key>` whose SHA-256 is
+  `RUNOVA_HEALTH_TOKEN_SHA256`, else an empty 401; 200 or 503 `application/health+json`; 30 requests
+  a minute per address, then an empty 429), `GET /openapi/v1.json` (the built-in OpenAPI
+  document), `GET /scalar` (the reference page, development and staging only), `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
 - **JSON.** UTF-8, camelCase property names, `null` for a missing optional value (never left out of
   a response), enums as the lowercase strings listed below. Ids are JSON numbers (PostgreSQL
   `bigint`; the API never hands out an id above 2^53 - 1 so JavaScript reads them exactly).

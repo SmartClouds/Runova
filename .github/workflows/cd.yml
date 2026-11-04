@@ -532,6 +532,7 @@ jobs:
             org.opencontainers.image.title=runova-website-${{ matrix.image }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
+            SOURCE_REVISION=${{ github.sha }}
             SITE_URL=${{ vars.WEBSITE_SITE_URL || 'https://runovahq.com' }}
             PUBLIC_SENTRY_DSN=${{ vars.WEBSITE_PUBLIC_SENTRY_DSN }}
             SENTRY_ENVIRONMENT=production

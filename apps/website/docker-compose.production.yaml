@@ -46,6 +46,10 @@ services:
       Sentry__Dsn: ${SENTRY_DSN:-}
       Sentry__Environment: ${SENTRY_ENVIRONMENT:-production}
       GitHub__Token: ${GITHUB_TOKEN:-}
+      # The SHA-256 of the key Runova sends to /_runova/health. Empty turns the endpoint off.
+      RUNOVA_HEALTH_TOKEN_SHA256: ${RUNOVA_HEALTH_TOKEN_SHA256:-}
+      # The healthcheck asks the site container too.
+      Website__InternalSiteUrl: http://web:4321/
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
@@ -129,7 +133,8 @@ configs:
       		file_server
       	}
 
-      	@api path /api /api/* /hangfire /hangfire/*
+      	# /_runova/health is the API's report for Runova's Health page.
+      	@api path /api /api/* /hangfire /hangfire/* /_runova/health
       	handle @api {
       		reverse_proxy api:8080 {
       			import from_nginx
