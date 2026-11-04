@@ -102,7 +102,10 @@ export function startTool(
   // A write after ffmpeg has gone fails with EPIPE; the exit below says why it went.
   child.stdin?.on('error', () => undefined);
 
+  // ffmpeg takes SIGTERM as "finish up", and one blocked reading frames from stdin keeps waiting
+  // for them, so its input is closed too: the end of input lets it exit.
   const kill = () => {
+    child.stdin?.destroy();
     if (child.exitCode === null && child.signalCode === null) child.kill();
   };
   const onAbort = () => {

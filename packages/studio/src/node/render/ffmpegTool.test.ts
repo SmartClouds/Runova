@@ -113,6 +113,19 @@ describe('running a tool', () => {
     ).rejects.toBeInstanceOf(RenderCancelledError);
   });
 
+  it('ends the input of a tool that waits on it through a cancel, the way ffmpeg does', async () => {
+    const controller = new AbortController();
+    // It ignores SIGTERM and leaves only at the end of its input; the progress line says it is set.
+    const run = startTool(
+      node(
+        'process.on("SIGTERM", () => {}); process.stdin.on("end", () => process.exit(0)); process.stdin.resume(); console.log("progress=continue")',
+      ),
+      [],
+      { stdin: true, signal: controller.signal, onProgress: () => controller.abort() },
+    );
+    await expect(run.done).rejects.toBeInstanceOf(RenderCancelledError);
+  });
+
   it('reads progress blocks even when they arrive split across writes', async () => {
     const seen: FfmpegProgress[] = [];
     const script = [
