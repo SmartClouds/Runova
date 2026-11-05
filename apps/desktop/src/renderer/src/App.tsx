@@ -25,6 +25,7 @@ import WorkspaceRoute from './components/workspace/WorkspaceRoute';
 import { useAiAccessDataSync } from './hooks/useAiAccessDataSync';
 import { useIsDarkMode } from './lib/chartColors';
 import { installToastHistoryCapture } from './lib/toastHistory';
+import AccountPage from './pages/AccountPage';
 import AndroidPage from './pages/AndroidPage';
 import AskAiPage from './pages/AskAiPage';
 import CliManagerPage from './pages/CliManagerPage';
@@ -285,6 +286,7 @@ export default function App(): React.JSX.Element {
                     </Suspense>
                   }
                 />
+                <Route path="account" element={<AccountPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="help" element={<HelpPage />} />
                 <Route path="help/:slug" element={<HelpPage />} />

@@ -97,6 +97,7 @@ export const STARTUP_PAGES = [
   '/ask-ai',
   '/remote',
   '/vault',
+  '/account',
   '/help',
   '/settings',
 ] as const;

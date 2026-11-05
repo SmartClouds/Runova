@@ -32,6 +32,7 @@ import {
   X,
 } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
+import { ChooseFolderButton, needsFolder } from '@/components/projects/ChooseFolderButton';
 import { DiffrayReviewWizardDialog } from '@/components/projects/DiffrayReviewWizard';
 import { ProjectFormDialog, type ProjectFormValues } from '@/components/projects/ProjectFormDialog';
 import { ProjectIcon } from '@/components/projects/ProjectIcon';
@@ -1164,19 +1165,23 @@ function ProjectMetaLinks({
 }): React.JSX.Element {
   return (
     <div className={cn('flex min-w-0 items-center gap-0.5', className)}>
-      <SimpleTooltip label={`Open folder: ${project.folderPath}`}>
-        <button
-          type="button"
-          className="-ml-1 flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={(e) => {
-            e.stopPropagation();
-            void window.runova.shell.openPath(project.folderPath);
-          }}
-        >
-          <Folder className="h-3 w-3 shrink-0" />
-          <span className="truncate">{folderBasename(project.folderPath)}</span>
-        </button>
-      </SimpleTooltip>
+      {needsFolder(project) ? (
+        <ChooseFolderButton project={project} />
+      ) : (
+        <SimpleTooltip label={`Open folder: ${project.folderPath}`}>
+          <button
+            type="button"
+            className="-ml-1 flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={(e) => {
+              e.stopPropagation();
+              void window.runova.shell.openPath(project.folderPath);
+            }}
+          >
+            <Folder className="h-3 w-3 shrink-0" />
+            <span className="truncate">{folderBasename(project.folderPath)}</span>
+          </button>
+        </SimpleTooltip>
+      )}
       {project.websiteUrl ? (
         <SimpleTooltip label={`Open ${stripUrl(project.websiteUrl)}`}>
           <Button

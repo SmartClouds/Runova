@@ -1,6 +1,19 @@
 import type { NewsListQuery } from '@shared/newsTypes';
 
 export const queryKeys = {
+  /** The Runova account on this computer (E48). */
+  accountStatus: ['account', 'status'] as const,
+  accountProfile: ['account', 'profile'] as const,
+  accountSessions: ['account', 'sessions'] as const,
+  accountActivities: (page: number) => ['account', 'activities', page] as const,
+  syncOverview: ['sync', 'overview'] as const,
+  syncConflicts: ['sync', 'conflicts'] as const,
+  syncShareable: ['sync', 'shareable'] as const,
+  syncUsage: (scopeId: number) => ['sync', 'usage', scopeId] as const,
+  teams: ['teams'] as const,
+  teamMembers: (teamId: number) => ['teams', teamId, 'members'] as const,
+  teamInvitations: (teamId: number) => ['teams', teamId, 'invitations'] as const,
+  myInvitations: ['teams', 'my-invitations'] as const,
   /** A project file open in an editor tab. */
   workspaceFile: (path: string) => ['workspace-file', path] as const,
   /** An image file open in a viewer tab. Nested under its file key, so a rename clears both. */

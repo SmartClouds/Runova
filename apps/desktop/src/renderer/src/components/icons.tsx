@@ -41,6 +41,7 @@ import {
   faCircleInfo,
   faCirclePlay,
   faCircleQuestion,
+  faCircleUser,
   faCircleXmark,
   faClapperboard,
   faClock,
@@ -425,6 +426,7 @@ export const Shield = makeIcon(faShieldHalved);
 export const Bug = makeIcon(faBug);
 // A server core's users (Deploy, Security).
 export const Users = makeIcon(faUsers);
+export const UserRound = makeIcon(faCircleUser);
 export const UserPlus = makeIcon(faUserPlus);
 
 // Agent tools icons.

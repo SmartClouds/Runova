@@ -9,7 +9,7 @@ route: /vault
 
 The Vault is a password manager inside Runova. It stores logins, API keys, private notes and custom entries in one encrypted file on your computer. Everything is locked with a single master password that only you know. Passwords stay hidden until you ask to see or copy them, and a copied value is wiped from the clipboard after a short time.
 
-The Vault never sends your data anywhere. It is stored locally, and Runova cannot recover the master password for you.
+The Vault is stored on your computer, and Runova cannot recover the master password for you. It leaves the computer only if you sign in to a Runova account and set an encryption key, and then only sealed with that key (see Account, sync and teams).
 
 ## Where to find it
 

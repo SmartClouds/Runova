@@ -24,6 +24,7 @@ import {
   SettingsIcon,
   Sparkles,
   TerminalSquare,
+  UserRound,
   Vault,
   Workspace,
   Wrench,
@@ -58,8 +59,11 @@ export const SETTINGS_ITEM: NavItem = { to: '/settings', label: 'Settings', icon
 /** Help sits with Settings rather than in the list, since it is about every page at once. */
 export const HELP_ITEM: NavItem = { to: '/help', label: 'Help', icon: CircleQuestion };
 
+/** The Runova account (E48): signing in, sync, encryption and teams. Pinned above Help. */
+export const ACCOUNT_ITEM: NavItem = { to: '/account', label: 'Account', icon: UserRound };
+
 /** The entries kept out of the list and pinned at its end, in the order they are shown. */
-export const PINNED_ITEMS: readonly NavItem[] = [HELP_ITEM, SETTINGS_ITEM];
+export const PINNED_ITEMS: readonly NavItem[] = [ACCOUNT_ITEM, HELP_ITEM, SETTINGS_ITEM];
 
 /** Every destination, in sidebar order. The command palette lists them in this order too. */
 export const NAV_ITEMS: NavItem[] = [
@@ -89,6 +93,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/android', label: 'Android', icon: Android, group: 'Ship' },
   { to: '/remote', label: 'Remote', icon: Monitor, group: 'Connect' },
   { to: '/vault', label: 'Vault', icon: Vault, group: 'Connect' },
+  ACCOUNT_ITEM,
   HELP_ITEM,
   SETTINGS_ITEM,
 ];
