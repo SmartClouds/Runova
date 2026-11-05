@@ -1790,6 +1790,7 @@ export const IPC = {
     cancelSuggestTag: 'git:cancelSuggestTag',
     applyVersion: 'git:applyVersion',
     cancelApplyVersion: 'git:cancelApplyVersion',
+    onApplyVersionLog: 'git:onApplyVersionLog',
     swapVersionFile: 'git:swapVersionFile',
     writeVersionHunks: 'git:writeVersionHunks',
     suggestBranchName: 'git:suggestBranchName',

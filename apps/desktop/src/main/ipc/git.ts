@@ -47,6 +47,7 @@ import type {
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { cancelHeadlessPrompt, runHeadlessCliPrompt } from '../cli/headlessPrompt';
+import { streamHeadlessCliPrompt } from '../cli/headlessStream';
 import {
   buildConflictResolutionPrompt,
   hasConflictMarkers,
@@ -152,6 +153,7 @@ import { showOsNotification } from '../notifications/osNotification';
 import { schedulePipelineCheck } from '../pipelines/watcher';
 import { store } from '../store';
 import { findProjectScope } from '../worktrees/resolve';
+import { broadcastToWindows } from './send';
 
 const GH_TIMEOUT_MS = 30000;
 /**
@@ -160,6 +162,33 @@ const GH_TIMEOUT_MS = 30000;
  * for a one-question prompt, routinely cuts that off halfway.
  */
 const VERSION_BUMP_TIMEOUT_MS = 900000;
+
+/** Version bumps in flight, by requestId, so Cancel can stop the one it belongs to. */
+const versionBumpRuns = new Map<string, AbortController>();
+
+/** How long a version bump's lines wait to go out together, so a busy run sends a few a second. */
+const VERSION_LOG_BATCH_MS = 150;
+
+/** Collects lines and hands them over in batches: right away for the first, then every `everyMs`. */
+function batchLines(send: (lines: string[]) => void, everyMs = VERSION_LOG_BATCH_MS) {
+  let pending: string[] = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const flush = (): void => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (pending.length === 0) return;
+    const out = pending;
+    pending = [];
+    send(out);
+  };
+  return {
+    push(line: string): void {
+      pending.push(line);
+      timer ??= setTimeout(flush, everyMs);
+    },
+    flush,
+  };
+}
 /** The agent reads the file and maybe its neighbours before editing, so a bare prompt's budget is short. */
 const CONFLICT_RESOLVE_TIMEOUT_MS = 600000;
 
@@ -727,82 +756,109 @@ function registerTagHandlers(): void {
   ipcMain.handle(
     IPC.git.applyVersion,
     async (_event, input: ApplyVersionInput): Promise<ApplyVersionResult> => {
-      const project = await getProject(input.projectId);
-      const cwd = project.folderPath;
-      const tag = input.tag.trim();
-      if (!tag) {
-        return { ok: false, output: '', changes: [], error: 'No version to apply.' };
+      // Registered before the first await, so a Cancel sent right after the start finds it.
+      const controller = new AbortController();
+      const requestId = input.requestId;
+      if (requestId) versionBumpRuns.set(requestId, controller);
+      try {
+        return await applyVersion(input, controller.signal);
+      } finally {
+        if (requestId) versionBumpRuns.delete(requestId);
       }
-
-      // Snapshot first: the CLI's own summary of what it edited can't be trusted, and
-      // comparing file contents before and after is the only account of it that can.
-      const root = (await repoRoot(cwd).catch(() => '')) || cwd;
-      const before = await snapshotChangedFiles(root);
-      const headBefore = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
-
-      const result = await runHeadlessCliPrompt(buildVersionBumpPrompt(tag), cwd, {
-        requestId: input.requestId,
-        preferredCliId: project.cliId,
-        allowWrites: true,
-        timeoutMs: VERSION_BUMP_TIMEOUT_MS,
-      });
-
-      // The CLI may edit anything, so every file it touched is listed for the user to keep
-      // or revert, rather than guessing up front which ones belong to this release.
-      const after = await snapshotChangedFiles(root);
-      const changes = await compareSnapshots(root, before, after);
-
-      // Despite the prompt telling it not to, a CLI occasionally reaches for a tool like
-      // `npm version` that commits (and tags) by itself; that leaves no working-tree diff to
-      // report, so this is the only way to tell the UI the bump actually landed in a commit.
-      const headAfter = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
-      const committedByCli = headBefore !== null && headAfter !== null && headBefore !== headAfter;
-
-      // Agent CLIs are unreliable narrators of their own exit: OpenCode ends a run whose
-      // last act was a tool call with an empty stdout, and a run we stop for running long
-      // exits non-zero. Neither says the bump failed, and the working tree above already
-      // knows whether it landed. A cancel still reads as a cancel, since the user asked.
-      const landed = (changes.length > 0 || committedByCli) && !result.cancelled;
-
-      const applyResult: ApplyVersionResult = {
-        ok: result.ok || landed,
-        // Falls back to the progress log for CLIs that keep stdout for the final message
-        // and print everything they did to stderr.
-        output: result.text || result.log || '',
-        changes,
-        committedByCli,
-        cliName: result.cliName,
-        // A run that wrote files but ended badly is a partial success, not a failure: say
-        // what went wrong without burying the edits the user now has to deal with.
-        warning: landed && !result.ok ? result.error : undefined,
-        error: result.ok || landed ? undefined : result.error,
-        cancelled: result.cancelled,
-      };
-
-      // The run can take minutes, so this says it's done even if the dialog watching it has
-      // since closed or the user moved to another project or page entirely. Clicking it
-      // reopens the review, same as the in-app toast the still-open dialog would show.
-      if (!applyResult.cancelled) {
-        const settings = await store.getSettings();
-        if (settings.workspaceNotifications !== false) {
-          showOsNotification({
-            title: applyResult.ok
-              ? `${project.name}: version files updated`
-              : `${project.name}: version update failed`,
-            body: applyResult.ok
-              ? `${changes.length} file${changes.length === 1 ? '' : 's'} changed for ${tag}. Review and commit when ready.`
-              : (applyResult.error ?? 'The CLI did not finish.'),
-            route: `/workspace/${input.projectId}?tag=1`,
-          });
-        }
-      }
-
-      return applyResult;
     },
   );
 
+  async function applyVersion(
+    input: ApplyVersionInput,
+    signal: AbortSignal,
+  ): Promise<ApplyVersionResult> {
+    const project = await getProject(input.projectId);
+    const cwd = project.folderPath;
+    const tag = input.tag.trim();
+    if (!tag) {
+      return { ok: false, output: '', changes: [], error: 'No version to apply.' };
+    }
+
+    // Snapshot first: the CLI's own summary of what it edited can't be trusted, and
+    // comparing file contents before and after is the only account of it that can.
+    const root = (await repoRoot(cwd).catch(() => '')) || cwd;
+    const before = await snapshotChangedFiles(root);
+    const headBefore = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
+
+    // The dialog shows each step as it happens, so the run streams instead of answering at
+    // the end. The lines go to every window: the dialog may have been closed and opened again.
+    const { requestId } = input;
+    const log = batchLines((lines) => {
+      if (requestId) broadcastToWindows(IPC.git.onApplyVersionLog, { requestId, lines });
+    });
+    const result = await streamHeadlessCliPrompt(buildVersionBumpPrompt(tag), cwd, {
+      preferredCliId: project.cliId,
+      allowWrites: true,
+      timeoutMs: VERSION_BUMP_TIMEOUT_MS,
+      readableProgress: true,
+      signal,
+      onLine: log.push,
+    });
+    log.flush();
+
+    // The CLI may edit anything, so every file it touched is listed for the user to keep
+    // or revert, rather than guessing up front which ones belong to this release.
+    const after = await snapshotChangedFiles(root);
+    const changes = await compareSnapshots(root, before, after);
+
+    // Despite the prompt telling it not to, a CLI occasionally reaches for a tool like
+    // `npm version` that commits (and tags) by itself; that leaves no working-tree diff to
+    // report, so this is the only way to tell the UI the bump actually landed in a commit.
+    const headAfter = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
+    const committedByCli = headBefore !== null && headAfter !== null && headBefore !== headAfter;
+
+    // Agent CLIs are unreliable narrators of their own exit: OpenCode ends a run whose
+    // last act was a tool call with an empty stdout, and a run we stop for running long
+    // exits non-zero. Neither says the bump failed, and the working tree above already
+    // knows whether it landed. A cancel still reads as a cancel, since the user asked.
+    const landed = (changes.length > 0 || committedByCli) && !result.cancelled;
+
+    const applyResult: ApplyVersionResult = {
+      ok: result.ok || landed,
+      // Falls back to the progress log for CLIs that keep stdout for the final message
+      // and print everything they did to stderr.
+      output: result.text || result.log || '',
+      changes,
+      committedByCli,
+      cliName: result.cliName,
+      // A run that wrote files but ended badly is a partial success, not a failure: say
+      // what went wrong without burying the edits the user now has to deal with.
+      warning: landed && !result.ok ? result.error : undefined,
+      error: result.ok || landed ? undefined : result.error,
+      cancelled: result.cancelled,
+    };
+
+    // The run can take minutes, so this says it's done even if the dialog watching it has
+    // since closed or the user moved to another project or page entirely. Clicking it
+    // reopens the review, same as the in-app toast the still-open dialog would show.
+    if (!applyResult.cancelled) {
+      const settings = await store.getSettings();
+      if (settings.workspaceNotifications !== false) {
+        showOsNotification({
+          title: applyResult.ok
+            ? `${project.name}: version files updated`
+            : `${project.name}: version update failed`,
+          body: applyResult.ok
+            ? `${changes.length} file${changes.length === 1 ? '' : 's'} changed for ${tag}. Review and commit when ready.`
+            : (applyResult.error ?? 'The CLI did not finish.'),
+          route: `/workspace/${input.projectId}?tag=1`,
+        });
+      }
+    }
+
+    return applyResult;
+  }
+
   ipcMain.handle(IPC.git.cancelApplyVersion, (_event, requestId: string): boolean => {
-    return cancelHeadlessPrompt(requestId);
+    const run = versionBumpRuns.get(requestId);
+    if (!run) return false;
+    run.abort();
+    return true;
   });
 
   ipcMain.handle(

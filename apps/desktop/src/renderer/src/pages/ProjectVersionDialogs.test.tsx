@@ -41,6 +41,7 @@ vi.mock('@/components/editor/MonacoDiffEditor', () => ({
 const { ProjectVersionDialogs } = await import('./ProjectDetailPage');
 const { useVersionDialogStore } = await import('@/stores/versionDialogStore');
 const { useConfirmStore } = await import('@/stores/confirmStore');
+const { useApplyVersionLogStore } = await import('@/stores/applyVersionLogStore');
 
 const status = {
   isRepo: true,
@@ -86,11 +87,58 @@ function retryButton(): HTMLElement {
 
 beforeEach(() => {
   useVersionDialogStore.setState({ openProjectId: null, applyTags: {}, drafts: {} });
+  useApplyVersionLogStore.setState({ logs: {} });
   localStorage.clear();
   vi.clearAllMocks();
 });
 
 describe('ProjectVersionDialogs', () => {
+  it('shows what the run is doing in a read-only log, and keeps it once the run is over', async () => {
+    let finish: (result: typeof failedRun) => void = () => undefined;
+    let requestId = '';
+    const { user, bridge } = renderDialogs({
+      'git.applyVersion': (input: { requestId: string }) => {
+        requestId = input.requestId;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+
+    await user.type(await screen.findByLabelText('Version'), '1.1.0');
+    await user.click(screen.getByRole('button', { name: /Update version in files/ }));
+
+    const output = await screen.findByRole('log', { name: 'Run output' });
+    expect(screen.getByText('Live output')).toBeTruthy();
+    expect(within(output).getByText('Starting your CLI…')).toBeTruthy();
+    // Nothing to type into: the run has no terminal behind it.
+    expect(within(output).queryByRole('textbox')).toBeNull();
+    expect(output.getAttribute('aria-readonly')).toBe('true');
+
+    bridge.$emit('git.onApplyVersionLog', { requestId, lines: ['› Edit package.json'] });
+    bridge.$emit('git.onApplyVersionLog', {
+      requestId: 'another-run',
+      lines: ['› Edit other.json'],
+    });
+    bridge.$emit('git.onApplyVersionLog', { requestId, lines: ['$ git status --short'] });
+
+    await waitFor(() => expect(output.textContent).toContain('Edit package.json'));
+    expect(output.textContent).toContain('git status --short');
+    expect(output.textContent).not.toContain('other.json');
+    expect(screen.getByText(/2 lines/)).toBeTruthy();
+
+    finish(failedRun);
+    const toggle = await screen.findByRole('button', { name: 'Run log' });
+    expect(screen.queryByText('Live output')).toBeNull();
+    expect(screen.queryByRole('log')).toBeNull();
+    await user.click(toggle);
+    expect((await screen.findByRole('log', { name: 'Run output' })).textContent).toContain(
+      'Edit package.json',
+    );
+    // The run is over, so it stops listening.
+    expect(bridge.$listenerCount('git.onApplyVersionLog')).toBe(0);
+  });
+
   it('keeps the version and message when a failed run is retried and the user goes back', async () => {
     const { user } = renderDialogs({ 'git.applyVersion': async () => failedRun });
 

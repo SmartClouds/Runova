@@ -60,6 +60,14 @@ export const CliDefinitionSchema = z.object({
   promptTrustArgs: z.array(z.string()).optional(),
   promptTrustEnv: z.record(z.string(), z.string()).optional(),
   /**
+   * For a run the user watches: the args that make the CLI report each step as it happens, and
+   * the format it reports them in. Claude Code's plain `-p` prints nothing until it is done, so
+   * a live log stays empty without these. CLIs that already print their steps as they go
+   * (Codex, OpenCode) need neither.
+   */
+  promptProgressArgs: z.array(z.string()).optional(),
+  promptProgressFormat: z.enum(['claude-stream-json']).optional(),
+  /**
    * Example for the per-CLI "Arguments" field, shown as its placeholder. Each one names
    * a flag this CLI really has (taken from its own --help), since the flag for picking a
    * model differs per CLI: `--model sonnet`, `-m provider/model`, and so on. Absent for
@@ -119,6 +127,9 @@ export const CLI_REGISTRY: CliDefinition[] = [
     promptCommand: { command: 'claude', args: ['-p'] },
     promptInputMode: 'stdin',
     promptWriteArgs: ['--permission-mode', 'acceptEdits'],
+    // stream-json only works in `-p` together with --verbose.
+    promptProgressArgs: ['--output-format', 'stream-json', '--verbose'],
+    promptProgressFormat: 'claude-stream-json',
     // `-p` has no image flag, but it can open a PNG with its Read tool, which a headless run
     // may only use when it is allowed up front.
     promptImageInput: 'read-tool',

@@ -109,6 +109,7 @@ import type {
   AgentSessionUsage,
   AgentStatusMap,
   ApplyVersionInput,
+  ApplyVersionLogEvent,
   ApplyVersionResult,
   AskAiInput,
   AskAiResult,
@@ -1657,6 +1658,9 @@ const git = {
     ipcRenderer.invoke(IPC.git.applyVersion, input),
   cancelApplyVersion: (requestId: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.git.cancelApplyVersion, requestId),
+  /** The steps of every running version bump as they happen; filter by requestId. */
+  onApplyVersionLog: (callback: (event: ApplyVersionLogEvent) => void): (() => void) =>
+    subscribe(IPC.git.onApplyVersionLog, callback),
   /** Reverts one file the version bump changed, or puts the bump's edit back. */
   swapVersionFile: (input: SwapVersionFileInput): Promise<GitOpResult> =>
     ipcRenderer.invoke(IPC.git.swapVersionFile, input),

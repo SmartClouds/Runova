@@ -10,6 +10,7 @@ import {
   stripEnvExpansions,
   truncateForCommandLine,
 } from './headlessPrompt';
+import { type ProgressDecoder, progressDecoderFor } from './progressFormat';
 
 /**
  * A headless CLI run the user watches: its output arrives line by line while it works, and it can
@@ -32,6 +33,12 @@ export interface StreamPromptOptions
    * `cwd` that holds the whole prompt. Without it the prompt is cut to fit the Windows command line.
    */
   pointerPrompt?: string;
+  /**
+   * Someone is watching `onLine`, so a CLI that only prints at the end is asked to report each
+   * step as it goes, and those steps are turned into readable lines. The answer is still the
+   * same text a plain run gives back.
+   */
+  readableProgress?: boolean;
 }
 
 export async function streamHeadlessCliPrompt(
@@ -52,15 +59,25 @@ export async function streamHeadlessCliPrompt(
   const { cli, command, args, prompt: fullPrompt, env } = prepared.run;
   if (options.signal.aborted) return cancelled(cli.name);
 
+  const decoder = options.readableProgress ? progressDecoderFor(cli, cwd) : null;
+  const runArgs = decoder ? [...args, ...(cli.promptProgressArgs ?? [])] : args;
   const viaStdin = cli.promptInputMode === 'stdin';
   const argv = viaStdin
-    ? args
+    ? runArgs
     : [
-        ...args,
+        ...runArgs,
         options.pointerPrompt ??
           truncateForCommandLine(stripEnvExpansions(fullPrompt), command, args),
       ];
-  const outcome = await spawnPrompt(command, argv, cwd, env, viaStdin ? fullPrompt : null, options);
+  const outcome = await spawnPrompt(
+    command,
+    argv,
+    cwd,
+    env,
+    viaStdin ? fullPrompt : null,
+    options,
+    decoder,
+  );
   return headlessResult(cli.name, outcome, options.timeoutMs);
 }
 
@@ -71,6 +88,7 @@ function spawnPrompt(
   env: NodeJS.ProcessEnv,
   stdinPayload: string | null,
   options: StreamPromptOptions,
+  decoder: ProgressDecoder | null,
 ): Promise<HeadlessOutcome> {
   return new Promise((resolve) => {
     // The same argv form execFile gets in runHeadlessCliPrompt: npm-installed CLIs are .cmd shims
@@ -86,34 +104,45 @@ function spawnPrompt(
     let cancelled = false;
     let settled = false;
 
+    /** The decoded steps, kept as the run's log since stdout no longer carries plain text. */
+    const steps: string[] = [];
+
     /** Each stream keeps its own half-read line, so the two never glue together. */
-    const lineReader = () => {
+    const lineReader = (decode?: (line: string) => string[]) => {
       let pending = '';
       return {
         push(text: string) {
           pending += text;
           const lines = pending.split('\n');
           pending = lines.pop() ?? '';
-          for (const line of lines) emit(line);
+          for (const line of lines) take(line);
         },
         end() {
-          if (pending) emit(pending);
+          if (pending) take(pending);
           pending = '';
         },
       };
+      function take(line: string) {
+        if (!decode) {
+          emit(line);
+          return;
+        }
+        for (const step of decode(line)) if (emit(step)) steps.push(step);
+      }
     };
-    const emit = (line: string) => {
+    const emit = (line: string): boolean => {
       const clean = stripAnsi(line).trimEnd();
       if (clean) options.onLine(clean);
+      return !!clean;
     };
-    const out = lineReader();
+    const out = lineReader(decoder ? (line) => decoder.lines(line) : undefined);
     const err = lineReader();
 
     // A multi-byte character split across two chunks would otherwise decode as garbage.
     child.stdout?.setEncoding('utf8');
     child.stderr?.setEncoding('utf8');
     child.stdout?.on('data', (text: string) => {
-      if (stdout.length < MAX_ANSWER_CHARS) stdout += text;
+      if (!decoder && stdout.length < MAX_ANSWER_CHARS) stdout += text;
       out.push(text);
     });
     child.stderr?.on('data', (text: string) => {
@@ -138,7 +167,14 @@ function spawnPrompt(
       options.signal.removeEventListener('abort', stop);
       out.end();
       err.end();
-      resolve({ stdout, stderr: stderr + extra, failed, cancelled, timedOut });
+      // With a decoder, stdout was events: the answer is the one the CLI sent at the end, and
+      // the steps join stderr as the log, which is what a run that never answered falls back on.
+      const answer = decoder ? (decoder.answer() ?? '').slice(0, MAX_ANSWER_CHARS) : stdout;
+      const log =
+        decoder && steps.length > 0
+          ? [stderr.trimEnd(), ...steps].filter(Boolean).join('\n')
+          : stderr;
+      resolve({ stdout: answer, stderr: log + extra, failed, cancelled, timedOut });
     };
     child.on('error', (error) => finish(true, `\nError: ${error.message}`));
     child.on('close', (code) => finish(code !== 0));

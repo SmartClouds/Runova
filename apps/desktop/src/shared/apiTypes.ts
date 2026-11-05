@@ -1702,6 +1702,13 @@ export interface ApplyVersionInput {
   requestId?: string;
 }
 
+/** Steps a running version bump printed, sent while it works so its dialog can show them. */
+export interface ApplyVersionLogEvent {
+  requestId: string;
+  /** Readable lines, oldest first, batched so a busy run doesn't flood the renderer. */
+  lines: string[];
+}
+
 /**
  * One file the version bump run changed, compared by content before and after the run. The
  * two object ids are what let the user revert that one file, or put the edit back again.

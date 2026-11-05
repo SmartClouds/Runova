@@ -111,6 +111,7 @@ import { ProjectFileBrowser } from '@/components/projects/ProjectFileBrowser';
 import { ProjectFormDialog, type ProjectFormValues } from '@/components/projects/ProjectFormDialog';
 import { ProjectPromptDialog } from '@/components/projects/ProjectPromptDialog';
 import { ProjectPrompts } from '@/components/projects/prompts/ProjectPrompts';
+import { RunLogPanel } from '@/components/projects/RunLogPanel';
 import { SecurityTab } from '@/components/projects/security/SecurityTab';
 import { ProjectUsageTab } from '@/components/projects/usage/ProjectUsageTab';
 import { useProjectDeployBadge } from '@/components/projects/useProjectDeployBadge';
@@ -169,6 +170,7 @@ import { sanitizeCommitMessage, splitGitPath } from '@/lib/git';
 import { rememberable, restoreTarget } from '@/lib/projectDetailTab';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { useApplyVersionLogStore } from '@/stores/applyVersionLogStore';
 import { confirmDialog } from '@/stores/confirmStore';
 import { usePageHeader } from '@/stores/pageHeaderStore';
 import { projectUiKey, useProjectUiStore } from '@/stores/projectUiStore';
@@ -3030,8 +3032,21 @@ function ApplyVersionDialog({
     // Well past the run's own timeout, so a result reached through a "Review" click on a
     // notification (fired minutes after the run settles) still finds it in the cache.
     gcTime: 30 * 60 * 1000,
-    mutationFn: ({ tag: versionTag, requestId }: { tag: string; requestId: string }) =>
-      window.runova.git.applyVersion({ projectId, tag: versionTag, requestId }),
+    // The run listens for its own steps for as long as it lasts, which is longer than this
+    // dialog often stays open, so the log is complete whenever it's opened again.
+    mutationFn: async ({ tag: versionTag, requestId }: { tag: string; requestId: string }) => {
+      useApplyVersionLogStore.getState().begin(requestId);
+      const stop = window.runova.git.onApplyVersionLog((event) => {
+        if (event.requestId === requestId) {
+          useApplyVersionLogStore.getState().append(requestId, event.lines);
+        }
+      });
+      try {
+        return await window.runova.git.applyVersion({ projectId, tag: versionTag, requestId });
+      } finally {
+        stop();
+      }
+    },
     onSettled: (result) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus(projectId) });
       // Fires even if this dialog (or the project it belongs to) has since gone off screen,
@@ -3073,6 +3088,8 @@ function ApplyVersionDialog({
     }),
   });
   const currentRun = [...runs].reverse().find((run) => run.variables?.tag === tag);
+  const runRequestId = currentRun?.variables?.requestId;
+  const runLog = useApplyVersionLogStore((s) => (runRequestId ? s.logs[runRequestId] : undefined));
 
   // The tag lands on HEAD, so the version bump this dialog just wrote has to be committed first
   // or the tag points at a commit that still has the old version (TagVersionDialog checks).
@@ -3173,16 +3190,19 @@ function ApplyVersionDialog({
 
         <OverflowScroll fill className="-mx-1 space-y-3 px-1">
           {isApplying && (
-            <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 px-3 py-3">
-              <Spinner className="h-4 w-4 animate-spin text-primary" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">Updating version strings</p>
-                <p className="text-xs text-muted-foreground">
-                  Your CLI is searching the repo and editing manifests. This can take several
-                  minutes. Feel free to close this and keep working, you'll get a notification when
-                  it's done.
-                </p>
+            <div className="overflow-hidden rounded-xl border border-border bg-card/60">
+              <div className="flex items-center gap-3 px-3 py-3">
+                <Spinner className="h-4 w-4 animate-spin text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Updating version strings</p>
+                  <p className="text-xs text-muted-foreground">
+                    Your CLI is searching the repo and editing manifests. This can take several
+                    minutes. Feel free to close this and keep working, you'll get a notification
+                    when it's done.
+                  </p>
+                </div>
               </div>
+              <RunLogPanel log={runLog} live />
             </div>
           )}
 
@@ -3350,6 +3370,8 @@ function ApplyVersionDialog({
               </Button>
             </div>
           )}
+
+          {!isApplying && <RunLogPanel log={runLog} live={false} />}
 
           {cliOutput && (
             <div className="space-y-1.5">

@@ -52,6 +52,19 @@ process.stdin.on('end', async () => {
   } else if (mode === 'fail') {
     process.stderr.write('Error: not logged in\\n');
     process.exit(2);
+  } else if (mode === 'events') {
+    if (!process.argv.includes('stream-json')) {
+      process.stdout.write('plain answer, no events');
+      return;
+    }
+    const send = (event) => process.stdout.write(JSON.stringify(event) + '\\n');
+    send({ type: 'system', subtype: 'init' });
+    await wait(10);
+    send({ type: 'assistant', message: { content: [
+      { type: 'tool_use', name: 'Edit', input: { file_path: process.cwd() + '/package.json' } },
+    ] } });
+    await wait(10);
+    send({ type: 'result', subtype: 'success', result: 'package.json: 1.0.0 -> 1.1.0' });
   } else if (mode === 'slow') {
     process.stderr.write('working\\n');
     await wait(60000);
@@ -66,11 +79,20 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true, maxRetries: 5 });
 });
 
-function useCli(mode: string, promptInputMode?: 'stdin') {
+function useCli(
+  mode: string,
+  promptInputMode?: 'stdin',
+  extra: Partial<PreparedHeadlessRun['cli']> = {},
+) {
   prepared.current = {
     ok: true,
     run: {
-      cli: { id: 'fake', name: 'Fake CLI', promptInputMode } as PreparedHeadlessRun['cli'],
+      cli: {
+        id: 'fake',
+        name: 'Fake CLI',
+        promptInputMode,
+        ...extra,
+      } as PreparedHeadlessRun['cli'],
       command: 'node',
       args: [script, mode],
       prompt: 'the whole request',
@@ -118,6 +140,37 @@ describe('streamHeadlessCliPrompt', () => {
     useCli('fail', 'stdin');
     const result = await streamHeadlessCliPrompt('p', dir, base());
     expect(result).toMatchObject({ ok: false, error: 'Fake CLI failed: not logged in' });
+  });
+
+  describe('with readable progress', () => {
+    const streaming = {
+      promptProgressArgs: ['--output-format', 'stream-json'],
+      promptProgressFormat: 'claude-stream-json' as const,
+    };
+
+    it('asks for events and streams each step as a readable line', async () => {
+      useCli('events', 'stdin', streaming);
+      const options = { ...base(), readableProgress: true };
+      const result = await streamHeadlessCliPrompt('p', dir, options);
+      expect(result).toMatchObject({ ok: true, text: 'package.json: 1.0.0 -> 1.1.0' });
+      expect(options.onLine.mock.calls).toEqual([['› Edit package.json']]);
+      // The steps are the log a run that never answered falls back on.
+      expect(result.log).toBe('› Edit package.json');
+    });
+
+    it('leaves the CLI alone when nobody watches the progress', async () => {
+      useCli('events', 'stdin', streaming);
+      const result = await streamHeadlessCliPrompt('p', dir, base());
+      expect(result.text).toBe('plain answer, no events');
+    });
+
+    it('streams a CLI with no progress format as it prints', async () => {
+      useCli('answer', 'stdin');
+      const options = { ...base(), readableProgress: true };
+      const result = await streamHeadlessCliPrompt('the whole request', dir, options);
+      expect(result.text).toBe('{"got": "the whole request"}');
+      expect(options.onLine).toHaveBeenCalledWith('Reading request');
+    });
   });
 
   it('stops the run when the signal aborts', async () => {
