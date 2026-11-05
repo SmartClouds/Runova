@@ -218,14 +218,10 @@ function escapeEnd(text: string, from: number): number {
 }
 
 /**
- * Output of a command typed with plain-text markers, minus the shell's echo of the typed line.
- * ConPTY wraps that echo with escape codes and line breaks of its own, and can paint it again
- * after the output has started, so the line is found by its visible characters alone: whatever
- * came before the first copy goes, and any later copy is cut out. Unchanged without an echo.
+ * The characters of `output` a terminal would draw, without escape sequences or whitespace, and
+ * where in `output` each of them came from.
  */
-export function dropEcho(output: string, typedLine: string): string {
-  const target = typedLine.replace(/\s+/g, '');
-  if (!target) return output;
+function visibleText(output: string): { visible: string; origin: number[] } {
   let visible = '';
   const origin: number[] = [];
   for (let i = 0; i < output.length; i++) {
@@ -238,6 +234,32 @@ export function dropEcho(output: string, typedLine: string): string {
     visible += ch;
     origin.push(i);
   }
+  return { visible, origin };
+}
+
+/**
+ * Where the shell's echo of `typedLine` starts in `output`, or -1 when it isn't there. It is found
+ * by the visible characters of the line up to `id`, which no prompt or earlier output contains.
+ */
+function echoStart(output: string, typedLine: string, id: string): number {
+  const idAt = typedLine.indexOf(id);
+  if (idAt < 0) return -1;
+  const head = typedLine.slice(0, idAt + id.length).replace(/\s+/g, '');
+  const { visible, origin } = visibleText(output);
+  const at = visible.indexOf(head);
+  return at < 0 ? -1 : (origin[at] ?? -1);
+}
+
+/**
+ * Output of a command typed with plain-text markers, minus the shell's echo of the typed line.
+ * ConPTY wraps that echo with escape codes and line breaks of its own, and can paint it again
+ * after the output has started, so the line is found by its visible characters alone: whatever
+ * came before the first copy goes, and any later copy is cut out. Unchanged without an echo.
+ */
+export function dropEcho(output: string, typedLine: string): string {
+  const target = typedLine.replace(/\s+/g, '');
+  if (!target) return output;
+  const { visible, origin } = visibleText(output);
   const copies: [number, number][] = [];
   for (
     let at = visible.indexOf(target);
@@ -286,7 +308,7 @@ export class CommandDisplay {
     private readonly sink: DisplaySink,
     private readonly command: string,
     private readonly marked: MarkedCommand & { start: string },
-    id: string,
+    private readonly id: string,
   ) {
     this.donePrefix = `\x1b]7750;Runova:Done:${id}:`;
     sink.captureDisplay(true);
@@ -306,8 +328,12 @@ export class CommandDisplay {
       if (at < 0) return;
       clearTimeout(this.echoTimer);
       this.phase = 'output';
+      // The previous command's prompt can still be on its way when this one is typed. It comes
+      // ahead of the echo, so whatever the shell printed before the echo is drawn as it came.
+      const echoAt = echoStart(this.held.slice(0, at), this.marked.line, this.id);
+      const before = echoAt > 0 ? this.held.slice(0, echoAt) : '';
       this.held = this.held.slice(at + this.marked.start.length);
-      this.sink.display(`${this.command}\r\n`);
+      this.sink.display(`${before}${this.command}\r\n`);
     }
     this.passOutput();
   }

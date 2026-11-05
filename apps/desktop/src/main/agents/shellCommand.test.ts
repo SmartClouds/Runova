@@ -312,6 +312,25 @@ describe('CommandDisplay', () => {
     expect(shown).toBe('uptime\r\nup 3 days\r\nuser@host:~$ ');
   });
 
+  it('keeps the prompt that was still on its way when the command was typed', () => {
+    const display = new CommandDisplay(sink, 'uptime', marked, ID);
+    display.push('user@host:~$ ');
+    display.push(`${echo}${START}up 3 days\r\n${done(0)}user@host:~$ `);
+    expect(shown).toBe('user@host:~$ uptime\r\nup 3 days\r\nuser@host:~$ ');
+  });
+
+  it('keeps a late prompt with escape codes in it, however the stream is split', () => {
+    const prompt = '\x1b[?2004h\x1b[01;32muser@host\x1b[00m:~$ ';
+    const stream = `${prompt}${echo}${START}up\r\n${done(0)}`;
+    for (let a = 1; a < stream.length; a += 1) {
+      shown = '';
+      const display = new CommandDisplay(sink, 'uptime', marked, ID);
+      display.push(stream.slice(0, a));
+      display.push(stream.slice(a));
+      expect(shown, `split at ${a}`).toBe(`${prompt}uptime\r\nup\r\n`);
+    }
+  });
+
   it('shows nothing until the command starts', () => {
     const display = new CommandDisplay(sink, 'uptime', marked, ID);
     display.push(echo);
