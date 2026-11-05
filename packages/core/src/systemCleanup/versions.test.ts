@@ -16,34 +16,25 @@ describe('parseCacheVersion', () => {
 
   it('keeps the pre-release part apart from the numbers', () => {
     expect(parseCacheVersion('1.0.0-rc.1')).toMatchObject({ numbers: [1, 0, 0], pre: ['rc', 1] });
-    expect(parseCacheVersion('10.0.0-preview.3.25171.5')?.pre).toEqual([
-      'preview',
-      3,
-      25171,
-      5,
-    ]);
+    expect(parseCacheVersion('10.0.0-preview.3.25171.5')?.pre).toEqual(['preview', 3, 25171, 5]);
     expect(parseCacheVersion('8.5-rc-1')).toMatchObject({ numbers: [8, 5], pre: ['rc-1'] });
   });
 
   it('ignores build metadata, including the +incompatible mark Go puts on old major versions', () => {
-    expect(parseCacheVersion('2.0.0+incompatible')).toMatchObject({ numbers: [2, 0, 0], pre: null });
+    expect(parseCacheVersion('2.0.0+incompatible')).toMatchObject({
+      numbers: [2, 0, 0],
+      pre: null,
+    });
     expect(parseCacheVersion('1.0.0+build.5')?.pre).toBeNull();
     expect(parseCacheVersion('1.0.0-beta.2+exp.sha.5114f85')?.pre).toEqual(['beta', 2]);
   });
 
-  it.each([
-    'LATEST',
-    'r05',
-    '',
-    '   ',
-    '1.2.x',
-    'main',
-    '2024-01-08T10:00',
-    '.1.2',
-    '1..2',
-  ])('gives up on %j rather than guess an order', (text) => {
-    expect(parseCacheVersion(text)).toBeNull();
-  });
+  it.each(['LATEST', 'r05', '', '   ', '1.2.x', 'main', '2024-01-08T10:00', '.1.2', '1..2'])(
+    'gives up on %j rather than guess an order',
+    (text) => {
+      expect(parseCacheVersion(text)).toBeNull();
+    },
+  );
 });
 
 describe('isStableVersion', () => {

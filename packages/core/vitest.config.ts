@@ -37,6 +37,9 @@ export default defineConfig({
         // The Database section: what may run without asking, and what a container's env is read
         // as.
         'src/database/**': { lines: 95, branches: 90 },
+        // Disk Cleanup (E50): which folders may be treated as caches, which versions a clean-up keeps
+        // and which it removes. A silent mistake here deletes the wrong thing.
+        'src/systemCleanup/**': { lines: 95, branches: 90 },
       },
     },
   },

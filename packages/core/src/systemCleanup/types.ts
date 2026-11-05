@@ -91,6 +91,12 @@ export interface CacheProvider extends CacheProviderInfo {
   locate: CacheLocateSpec;
   /** Lists what the cache holds. Versioned caches only. */
   enumerate?: (read: DirReader) => Promise<EnumeratedItem[]>;
+  /**
+   * Confirms the folder really is this tool's cache, by looking at a few of its items. Layouts
+   * that are only "folders inside folders" (NuGet) need it, so a wrong environment variable that
+   * names an ordinary folder is never offered for clean-up.
+   */
+  looksLikeCache?: (read: DirReader, items: EnumeratedItem[]) => Promise<boolean>;
   /** Clearing an opaque cache, or tidying one that cannot be pruned by version. */
   clearCommand?: CommandAction;
   tidyCommand?: CommandAction;

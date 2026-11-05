@@ -103,6 +103,7 @@ export * from './sync/plan.js';
 export * from './sync/policy.js';
 export * from './system/listeningPorts.js';
 export * from './system/processTree.js';
+export * from './systemCleanup/index.js';
 export * from './testing/index.js';
 export * from './tools/diffray.js';
 export * from './tools/registry.js';
