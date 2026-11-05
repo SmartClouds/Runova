@@ -12,7 +12,6 @@ import {
 import { useEffect, useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   type Account,
   type Activity,
@@ -29,6 +28,7 @@ import {
   type TeamMember,
   type TeamRole,
 } from '@/lib/account/api';
+import { AppInput, AppRadio, AppSelect } from './fields';
 import { ActivityList } from './Panel';
 import {
   bytes,
@@ -304,9 +304,8 @@ export function Teams() {
           <form onSubmit={create} className="grid gap-3 px-5 pb-5">
             <Field id="team-name" label="Team name" errors={error}>
               {(control) => (
-                <Input
+                <AppInput
                   {...control}
-                  className="app-field"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={80}
@@ -510,20 +509,20 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                       <label className="sr-only" htmlFor={`role-${m.userId}`}>
                         Role of {m.displayName}
                       </label>
-                      <select
+                      <AppSelect
+                        size="sm"
                         id={`role-${m.userId}`}
                         value={m.role}
                         onChange={(e) =>
                           setPending({ kind: 'role', member: m, role: e.target.value as TeamRole })
                         }
-                        className="app-field h-8 rounded-full px-3 text-sm"
                       >
                         {ROLES.filter((r) => mayManage(r)).map((r) => (
                           <option key={r} value={r}>
                             {ROLE_LABELS[r]}
                           </option>
                         ))}
-                      </select>
+                      </AppSelect>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -558,9 +557,8 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                   errors={inviteError ? [inviteError] : undefined}
                 >
                   {(control) => (
-                    <Input
+                    <AppInput
                       {...control}
-                      className="app-field"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -574,15 +572,16 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                   {ROLES.filter((r) => mayManage(r)).map((r) => (
                     <label
                       key={r}
+                      htmlFor={`invite-role-${r}`}
                       className="flex cursor-pointer items-start gap-2.5 rounded-inner p-2 text-sm transition-colors hover:bg-foreground/[0.04] has-[:checked]:bg-primary/8"
                     >
-                      <input
-                        type="radio"
+                      <AppRadio
+                        id={`invite-role-${r}`}
                         name="role"
                         value={r}
                         checked={role === r}
                         onChange={() => setRole(r)}
-                        className="mt-1 accent-[hsl(var(--primary))]"
+                        className="mt-0.5"
                       />
                       <span>
                         <span className="font-medium">{ROLE_LABELS[r]}</span>

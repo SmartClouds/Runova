@@ -1,9 +1,9 @@
 import { AlertTriangle, CheckCircle2, Info, Loader2 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { apiRequest, type Problem, type StepUp } from '@/lib/account/api';
 import { cn } from '@/lib/utils';
+import { AppInput, PasswordInput } from './fields';
 
 /** A glass card, as the app draws its sections. */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
@@ -325,17 +325,29 @@ export function StepUpDialog({
             <label htmlFor="step-up-secret" className="font-medium">
               {usesCode ? 'Code from your authenticator app' : 'Your password'}
             </label>
-            <Input
-              id="step-up-secret"
-              type={usesCode ? 'text' : 'password'}
-              inputMode={usesCode ? 'numeric' : undefined}
-              autoComplete={usesCode ? 'one-time-code' : 'current-password'}
-              value={secret}
-              onChange={(e) => setSecret(e.target.value)}
-              aria-invalid={error ? true : undefined}
-              required
-              autoFocus
-            />
+            {usesCode ? (
+              <AppInput
+                id="step-up-secret"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="font-mono tracking-[0.2em]"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                required
+                autoFocus
+              />
+            ) : (
+              <PasswordInput
+                id="step-up-secret"
+                autoComplete="current-password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                required
+                autoFocus
+              />
+            )}
           </div>
         ) : (
           <p className="text-muted-foreground text-sm">

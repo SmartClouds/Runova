@@ -2,8 +2,8 @@ import { ArrowRight, MailCheck } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { apiRequest, type Problem, safeAccountPath } from '@/lib/account/api';
+import { AppInput, PasswordInput } from './fields';
 import { Notice } from './ui';
 
 const goTo = (path: string) => window.location.assign(path);
@@ -161,7 +161,7 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
             <>
               <Field id="email" label="Email">
                 {(control) => (
-                  <Input
+                  <AppInput
                     {...control}
                     type="email"
                     autoComplete="email"
@@ -184,9 +184,8 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
                 }
               >
                 {(control) => (
-                  <Input
+                  <PasswordInput
                     {...control}
-                    type="password"
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -198,7 +197,7 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
           ) : (
             <Field id="code" label={useRecovery ? 'Recovery code' : 'Code'}>
               {(control) => (
-                <Input
+                <AppInput
                   {...control}
                   inputMode={useRecovery ? 'text' : 'numeric'}
                   autoComplete="one-time-code"
@@ -336,7 +335,7 @@ export function Register() {
         <form onSubmit={submit} className="grid gap-4">
           <Field id="name" label="Your name" errors={errors.displayName}>
             {(control) => (
-              <Input
+              <AppInput
                 {...control}
                 autoComplete="name"
                 value={name}
@@ -349,7 +348,7 @@ export function Register() {
           </Field>
           <Field id="email" label="Email" errors={errors.email}>
             {(control) => (
-              <Input
+              <AppInput
                 {...control}
                 type="email"
                 autoComplete="email"
@@ -367,9 +366,8 @@ export function Register() {
           >
             {(control) => (
               <div className="grid gap-2">
-                <Input
+                <PasswordInput
                   {...control}
-                  type="password"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -489,7 +487,7 @@ export function ForgotPassword() {
       <form onSubmit={submit} className="grid gap-4">
         <Field id="email" label="Email" errors={error}>
           {(control) => (
-            <Input
+            <AppInput
               {...control}
               type="email"
               autoComplete="email"
@@ -562,9 +560,8 @@ export function ResetPassword() {
         >
           {(control) => (
             <div className="grid gap-2">
-              <Input
+              <PasswordInput
                 {...control}
-                type="password"
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

@@ -15,7 +15,6 @@ import {
 import { useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   type Account,
   type Activity,
@@ -25,6 +24,7 @@ import {
   type SyncScope,
   type Team,
 } from '@/lib/account/api';
+import { AppInput } from './fields';
 import {
   Card,
   CardHeader,
@@ -405,9 +405,8 @@ export function Profile() {
           <form onSubmit={save} className="grid gap-4 px-5 pb-5">
             <Field id="name" label="Name" errors={errors}>
               {(control) => (
-                <Input
+                <AppInput
                   {...control}
-                  className="app-field"
                   value={name ?? me.displayName}
                   onChange={(e) => {
                     setName(e.target.value);
@@ -423,7 +422,7 @@ export function Profile() {
               label="Email"
               hint="Your email is how teams invite you and how you sign in."
             >
-              {(control) => <Input {...control} className="app-field" value={me.email} readOnly />}
+              {(control) => <AppInput {...control} value={me.email} readOnly />}
             </Field>
             <p className="text-muted-foreground text-xs">Member since {dateTime(me.createdAt)}</p>
             <div className="flex items-center gap-3">

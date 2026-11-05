@@ -316,10 +316,75 @@
     0 8px 32px -8px hsl(0 0% 0% / 0.35);
 }
 
-/* The app's field and search wash: a faint tint of the text color, not a filled box. */
+/* The app's .field-surface (desktop index.css), renamed: a faint tint of the text color, not a
+   filled box, with the same hover, focus, invalid and disabled states. Unlayered like the app's,
+   so utilities such as a stray border color can't repaint it. tests/accountFields.test.tsx holds
+   these rules to the app's word for word. */
 .app-field {
   background-color: hsl(var(--foreground) / 0.05);
   border: 1px solid hsl(var(--foreground) / 0.07);
+}
+
+.app-field {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.app-field::placeholder,
+.app-field ::placeholder {
+  color: hsl(var(--muted-foreground) / 0.7);
+}
+
+.app-field:hover:where(
+  :not(
+    :disabled,
+    :focus-within,
+    [aria-disabled="true"],
+    :has(> :is(input, textarea, select):disabled)
+  )
+) {
+  background-color: hsl(var(--foreground) / 0.08);
+}
+
+.app-field:focus-within,
+.app-field[data-state="open"] {
+  border-color: hsl(var(--primary) / 0.45);
+}
+
+.app-field:focus-visible,
+.app-field:has(:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22);
+}
+
+.app-field[aria-invalid="true"],
+.app-field:has([aria-invalid="true"]) {
+  background-color: hsl(var(--destructive) / 0.06);
+  border-color: hsl(var(--destructive) / 0.6);
+}
+
+.app-field[aria-invalid="true"]:focus-visible,
+.app-field:has([aria-invalid="true"]:focus-visible) {
+  box-shadow: 0 0 0 3px hsl(var(--destructive) / 0.22);
+}
+
+.app-field:disabled,
+.app-field[aria-disabled="true"],
+.app-field:has(> :is(input, textarea, select):disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.dark .app-field {
+  color-scheme: dark;
+}
+
+/* A select's options open in the browser's own list, which takes its colors from here. */
+.app-field option {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--foreground));
 }
 
 /* The quiet light behind the panel, the same green the app's active pill glows with. */

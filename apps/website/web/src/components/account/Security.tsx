@@ -2,9 +2,9 @@ import { Copy, KeyRound, Link2, Smartphone, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { type Account, apiRequest } from '@/lib/account/api';
 import { StrengthMeter } from './AuthForms';
+import { AppInput, PasswordInput } from './fields';
 import { Card, CardHeader, Notice, PageHeader, Pill, Shimmer, StepUpDialog, useLoad } from './ui';
 
 const LINK_MESSAGES: Record<string, { tone: 'success' | 'warning'; text: string }> = {
@@ -125,10 +125,8 @@ function PasswordCard({ account }: { account: Account }) {
       <form onSubmit={save} className="grid gap-4 px-5 pb-5 md:grid-cols-2">
         <Field id="current" label="Current password" errors={errors.currentPassword}>
           {(control) => (
-            <Input
+            <PasswordInput
               {...control}
-              className="app-field"
-              type="password"
               autoComplete="current-password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
@@ -139,10 +137,8 @@ function PasswordCard({ account }: { account: Account }) {
         <Field id="new" label="New password" errors={errors.newPassword}>
           {(control) => (
             <div className="grid gap-2">
-              <Input
+              <PasswordInput
                 {...control}
-                className="app-field"
-                type="password"
                 autoComplete="new-password"
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
@@ -237,7 +233,7 @@ function TwoFactorCard({
               <span className="font-medium">1. Add Runova to your authenticator app</span> with this
               key, or open the link on your phone.
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <code className="app-field rounded-inner px-3 py-1.5 font-mono text-sm tracking-wider">
+                <code className="app-field rounded-full px-3.5 py-1.5 font-mono text-sm tracking-wider">
                   {setup.sharedKey.match(/.{1,4}/g)?.join(' ')}
                 </code>
                 <Button
@@ -258,9 +254,9 @@ function TwoFactorCard({
           <div className="flex flex-wrap items-end gap-3">
             <Field id="totp" label="Code" errors={error ? [error] : undefined}>
               {(control) => (
-                <Input
+                <AppInput
                   {...control}
-                  className="app-field w-40 font-mono tracking-[0.2em]"
+                  className="w-40 font-mono tracking-[0.2em]"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   value={code}
