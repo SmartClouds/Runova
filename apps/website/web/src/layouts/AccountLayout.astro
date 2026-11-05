@@ -59,13 +59,51 @@ const initials = (account?.displayName ?? '?')
       Skip to content
     </a>
     <div class="mx-auto flex min-h-dvh max-w-[1320px] flex-col gap-3 p-3 md:flex-row md:gap-4 md:p-4">
-      <aside class="app-glass flex shrink-0 flex-col md:sticky md:top-4 md:h-[calc(100dvh-2rem)] md:w-64">
-        <a href="/" class="flex items-center gap-2.5 px-5 pt-5 pb-4 font-display font-semibold text-lg tracking-tight">
-          <img src="/favicon-32.png" alt="" width="26" height="26" class="rounded-[6px]" />
-          Runova
+      <aside class="app-glass relative z-20 flex shrink-0 flex-col md:sticky md:top-4 md:h-[calc(100dvh-2rem)] md:w-64">
+        <div class="flex items-center gap-2.5 px-4 pt-3 pb-2 md:px-5 md:pt-5 md:pb-4">
+          <a href="/" class="flex min-w-0 items-center gap-2.5 font-display font-semibold text-lg tracking-tight">
+            <img src="/favicon-32.png" alt="" width="26" height="26" class="rounded-[6px]" />
+            Runova
+          </a>
           <span class="ml-auto rounded-full bg-primary/12 px-2 py-0.5 font-medium font-sans text-primary text-xs">Account</span>
-        </a>
-        <nav aria-label="Account" class="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-visible">
+          {
+            account && (
+              <details class="relative md:hidden" data-account-menu>
+                <summary
+                  class="flex size-9 cursor-pointer list-none items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-severity-info/30 font-semibold text-foreground text-xs ring-1 ring-foreground/10 transition-shadow hover:ring-foreground/25 [&::-webkit-details-marker]:hidden"
+                  aria-label={`Account menu for ${account.displayName}`}
+                >
+                  {initials}
+                </summary>
+                <div class="absolute top-full right-0 z-30 mt-2 w-[min(17rem,calc(100vw-2rem))] rounded-box border border-foreground/10 bg-card p-2 shadow-[0_16px_40px_-12px_hsl(0_0%_0%/0.6)]">
+                  <div class="px-3 pt-2 pb-3">
+                    <p class="truncate font-medium text-sm">{account.displayName}</p>
+                    <p class="truncate text-muted-foreground text-xs">{account.email}</p>
+                  </div>
+                  <div class="grid gap-px border-foreground/[0.07] border-t pt-2">
+                    {
+                      account.staff && (
+                        <a
+                          href="/admin"
+                          class="flex items-center gap-2.5 rounded-inner px-3 py-2.5 text-muted-foreground text-sm transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                        >
+                          <Gauge className="size-4" aria-hidden="true" />
+                          Staff admin
+                        </a>
+                      )
+                    }
+                    <SignOutLink client:only="react" labelled />
+                  </div>
+                </div>
+              </details>
+            )
+          }
+        </div>
+        <nav
+          aria-label="Account"
+          data-account-nav
+          class="flex gap-1 overflow-x-auto px-3 pb-3 [mask-image:linear-gradient(to_right,transparent,black_12px,black_calc(100%-28px),transparent)] [scrollbar-width:none] md:flex-1 md:flex-col md:overflow-visible md:[mask-image:none] [&::-webkit-scrollbar]:hidden"
+        >
           {
             groups.map((group) => (
               <div class="contents md:flex md:flex-col md:gap-px">
@@ -76,7 +114,7 @@ const initials = (account?.displayName ?? '?')
                   <a
                     href={href}
                     aria-current={section === key ? 'page' : undefined}
-                    class="group relative flex shrink-0 items-center gap-2.5 rounded-inner px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:bg-foreground/[0.06] hover:text-foreground aria-[current=page]:bg-primary/12 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
+                    class="group relative flex shrink-0 items-center gap-2 rounded-inner px-3 py-2 font-medium md:gap-2.5 text-muted-foreground text-sm transition-colors duration-[120ms] hover:bg-foreground/[0.06] hover:text-foreground aria-[current=page]:bg-primary/12 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
                   >
                     <span
                       aria-hidden="true"
@@ -113,9 +151,14 @@ const initials = (account?.displayName ?? '?')
           )
         }
       </aside>
-      <main id="main" class="min-w-0 flex-1 px-1 py-2 md:px-4 md:py-6">
+      <main id="main" class="min-w-0 flex-1 px-1.5 pt-3 pb-8 md:px-4 md:py-6">
         <slot />
       </main>
     </div>
+    <script>
+      import { setUpAccountShell } from '../components/account/shell';
+
+      setUpAccountShell(document);
+    </script>
   </body>
 </html>

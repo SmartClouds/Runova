@@ -122,7 +122,7 @@ function PasswordCard({ account }: { account: Account }) {
         title="Password"
         description="Changing it signs out every other browser and computer."
       />
-      <form onSubmit={save} className="grid gap-4 px-5 pb-5 md:grid-cols-2">
+      <form onSubmit={save} className="grid gap-4 px-4 pb-4 sm:px-5 sm:pb-5 md:grid-cols-2">
         <Field id="current" label="Current password" errors={errors.currentPassword}>
           {(control) => (
             <PasswordInput
@@ -149,8 +149,10 @@ function PasswordCard({ account }: { account: Account }) {
             </div>
           )}
         </Field>
-        <div className="flex items-center gap-3 md:col-span-2">
-          <Button type="submit">Change password</Button>
+        <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+          <Button type="submit" className="w-full sm:w-auto">
+            Change password
+          </Button>
           {done && (
             <span className="text-success text-sm">
               Changed. Your other devices are signed out.
@@ -227,13 +229,13 @@ function TwoFactorCard({
         }
       />
       {setup && (
-        <form onSubmit={confirm} className="grid gap-4 px-5 pb-5">
+        <form onSubmit={confirm} className="grid gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
           <ol className="grid gap-3 text-sm">
             <li>
               <span className="font-medium">1. Add Runova to your authenticator app</span> with this
               key, or open the link on your phone.
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <code className="app-field rounded-full px-3.5 py-1.5 font-mono text-sm tracking-wider">
+                <code className="app-field break-all rounded-inner px-3.5 py-1.5 font-mono text-sm tracking-wider sm:rounded-full">
                   {setup.sharedKey.match(/.{1,4}/g)?.join(' ')}
                 </code>
                 <Button
@@ -251,12 +253,12 @@ function TwoFactorCard({
             </li>
             <li className="font-medium">2. Enter the 6-digit code it shows.</li>
           </ol>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-end">
             <Field id="totp" label="Code" errors={error ? [error] : undefined}>
               {(control) => (
                 <AppInput
                   {...control}
-                  className="w-40 font-mono tracking-[0.2em]"
+                  className="w-full font-mono tracking-[0.2em] sm:w-40"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   value={code}

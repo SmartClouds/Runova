@@ -34,9 +34,11 @@ import {
   bytes,
   Card,
   CardHeader,
+  EmptyState,
   LoadFailure,
   Notice,
   PageHeader,
+  PageHint,
   Pill,
   Rows,
   relativeTime,
@@ -106,8 +108,8 @@ function ScopeCard({ scope, account }: { scope: SyncScope; account: Account | nu
         </div>
       )}
       {usage.value ? (
-        <div className="px-5 pb-5">
-          <div className="mb-2 flex justify-between text-muted-foreground text-xs">
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+          <div className="mb-2 flex justify-between gap-3 text-muted-foreground text-xs">
             <span>
               {usage.value.records} items · {bytes(usage.value.bytes)}
             </span>
@@ -222,10 +224,9 @@ export function SyncPage() {
           ))}
         </div>
       )}
-      <p className="mt-4 flex items-center gap-2 text-muted-foreground text-xs">
-        <CloudCog className="size-3.5" aria-hidden />A project's folder never syncs: each computer
-        keeps its own.
-      </p>
+      <PageHint icon={<CloudCog aria-hidden />}>
+        A project's folder never syncs: each computer keeps its own.
+      </PageHint>
     </>
   );
 }
@@ -266,18 +267,20 @@ export function Teams() {
           ) : !teams.value ? (
             <Shimmer />
           ) : teams.value.items.length === 0 ? (
-            <p className="px-5 pb-5 text-muted-foreground text-sm">
-              You are not in a team yet. Make one, or accept an invitation sent to your email.
-            </p>
+            <div className="border-foreground/[0.07] border-t">
+              <EmptyState icon={<Users />} title="You are not in a team yet">
+                Make one, or accept an invitation sent to your email.
+              </EmptyState>
+            </div>
           ) : (
             <Rows>
               {teams.value.items.map((team) => (
                 <li key={team.id}>
                   <a
                     href={`/account/teams/${team.id}`}
-                    className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-foreground/[0.03]"
+                    className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-foreground/[0.03] sm:px-5"
                   >
-                    <span className="flex size-9 items-center justify-center rounded-inner bg-foreground/[0.06] font-semibold text-sm">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-inner bg-foreground/[0.06] font-semibold text-sm">
                       {team.name.slice(0, 1).toUpperCase()}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -301,7 +304,7 @@ export function Teams() {
             title="Make a team"
             description="You become its Owner and can invite people by email."
           />
-          <form onSubmit={create} className="grid gap-3 px-5 pb-5">
+          <form onSubmit={create} className="grid gap-3 px-4 pb-4 sm:px-5 sm:pb-5">
             <Field id="team-name" label="Team name" errors={error}>
               {(control) => (
                 <AppInput
@@ -340,20 +343,22 @@ export function Invitations({ items, onChange }: { items: MyInvitation[]; onChan
       />
       <Rows>
         {items.map((invitation) => (
-          <li key={invitation.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-            <div className="min-w-[12rem] flex-1">
-              <p className="font-medium">{invitation.teamName}</p>
+          <li key={invitation.id} className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+            <div className="min-w-[min(100%,12rem)] flex-1">
+              <p className="break-words font-medium">{invitation.teamName}</p>
               <p className="text-muted-foreground text-xs">
                 {invitation.invitedBy} invited you as {ROLE_LABELS[invitation.role]} · ends{' '}
                 {relativeTime(invitation.expiresAt)}
               </p>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => answer(invitation, false)}>
-              Decline
-            </Button>
-            <Button size="sm" onClick={() => answer(invitation, true)}>
-              Join {invitation.teamName}
-            </Button>
+            <div className="flex w-full gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
+              <Button size="sm" variant="ghost" onClick={() => answer(invitation, false)}>
+                Decline
+              </Button>
+              <Button size="sm" onClick={() => answer(invitation, true)}>
+                Join {invitation.teamName}
+              </Button>
+            </div>
           </li>
         ))}
       </Rows>
@@ -375,12 +380,18 @@ export function InvitationsPage() {
         </Card>
       ) : invitations.value.items.length === 0 ? (
         <Card>
-          <div className="p-5">
-            <Notice title="No invitations waiting">
-              An invitation lasts 7 days. Ask for a new one if yours expired, and check it went to
-              the email you sign in with.
-            </Notice>
-          </div>
+          <EmptyState
+            icon={<Mail />}
+            title="No invitations waiting"
+            action={
+              <Button asChild size="sm" variant="outline" className="app-field border-0">
+                <a href="/account/teams">Go to your teams</a>
+              </Button>
+            }
+          >
+            An invitation lasts 7 days. Ask for a new one if yours expired, and check it went to the
+            email you sign in with.
+          </EmptyState>
         </Card>
       ) : (
         <Invitations items={invitations.value.items} onChange={invitations.reload} />
@@ -488,8 +499,8 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
           ) : (
             <Rows>
               {members.value.items.map((m) => (
-                <li key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-3">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/30 to-severity-info/20 font-semibold text-xs ring-1 ring-foreground/10">
+                <li key={m.userId} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/30 to-severity-info/20 font-semibold text-xs ring-1 ring-foreground/10">
                     {m.displayName
                       .split(/\s+/)
                       .map((p) => p[0])
@@ -497,15 +508,15 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                       .slice(0, 2)
                       .toUpperCase()}
                   </span>
-                  <div className="min-w-[10rem] flex-1">
-                    <p className="font-medium text-sm">
+                  <div className="min-w-0 flex-1 basis-40">
+                    <p className="break-words font-medium text-sm">
                       {m.displayName}{' '}
                       {m.userId === meId && <span className="text-muted-foreground">(you)</span>}
                     </p>
-                    <p className="text-muted-foreground text-xs">{m.email}</p>
+                    <p className="truncate text-muted-foreground text-xs">{m.email}</p>
                   </div>
                   {mayManage(m.role) && m.userId !== meId ? (
-                    <>
+                    <div className="flex w-full items-center gap-2 pl-12 sm:w-auto sm:pl-0">
                       <label className="sr-only" htmlFor={`role-${m.userId}`}>
                         Role of {m.displayName}
                       </label>
@@ -530,7 +541,7 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                       >
                         Remove
                       </Button>
-                    </>
+                    </div>
                   ) : (
                     <Pill tone={m.role === 'owner' ? 'primary' : 'neutral'}>
                       {ROLE_LABELS[m.role]}
@@ -550,7 +561,7 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                 title="Invite someone"
                 description="They get an email and join once they sign in with that address."
               />
-              <form onSubmit={invite} className="grid gap-3 px-5 pb-5">
+              <form onSubmit={invite} className="grid gap-3 px-4 pb-4 sm:px-5 sm:pb-5">
                 <Field
                   id="invite-email"
                   label="Email"
@@ -599,7 +610,7 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                 <CardHeader icon={<Mail />} title="Waiting to join" />
                 <Rows>
                   {invites.value.items.map((i) => (
-                    <li key={i.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                    <li key={i.id} className="flex items-center gap-3 px-4 py-3 text-sm sm:px-5">
                       <span className="min-w-0 flex-1 truncate">{i.email}</span>
                       <Pill>{ROLE_LABELS[i.role]}</Pill>
                       <Button
@@ -733,7 +744,7 @@ function LeaveDialog({
       aria-labelledby="leave-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
     >
-      <div className="app-glass w-full max-w-md p-6">
+      <div className="app-glass w-full max-w-md p-5 sm:p-6">
         <h2 id="leave-title" className="font-display font-semibold text-xl">
           Leave {teamName}?
         </h2>
@@ -741,7 +752,7 @@ function LeaveDialog({
           The team’s items leave your computers at their next sync. An Owner or Admin can invite you
           back.
         </p>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="ghost" onClick={onCancel}>
             Stay
           </Button>
