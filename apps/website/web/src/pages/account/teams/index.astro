@@ -1,0 +1,10 @@
+---
+import { Teams } from '../../../components/account/SyncTeams';
+import AccountLayout from '../../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Teams">
+  <Teams client:only="react" />
+</AccountLayout>

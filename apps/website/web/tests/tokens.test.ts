@@ -59,6 +59,13 @@ describe('design tokens match the desktop app', () => {
     expect(readTokenBlock(siteCss, ['.dark']).size).toBe(0);
   });
 
+  it("gives the account panel the app's own Dark surfaces, so it looks like the app", () => {
+    const appDark = readTokenBlock(appCss, ['.dark']);
+    const panel = readTokenBlock(siteCss, ['.app-surface']);
+    expect([...panel.keys()].sort()).toEqual([...DARK_SURFACES].sort());
+    for (const name of DARK_SURFACES) expect(panel.get(name), name).toBe(appDark.get(name));
+  });
+
   it('lifts every Dark surface above the app, keeping the order from page to raised surface', () => {
     const appDark = readTokenBlock(appCss, ['.dark']);
     for (const name of DARK_SURFACES) {

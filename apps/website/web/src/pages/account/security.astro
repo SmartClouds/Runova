@@ -1,0 +1,10 @@
+---
+import Security from '../../components/account/Security';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Security">
+  <Security client:only="react" />
+</AccountLayout>

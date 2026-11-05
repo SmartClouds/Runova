@@ -1,0 +1,10 @@
+---
+import { Profile } from '../../components/account/Panel';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Profile">
+  <Profile client:only="react" />
+</AccountLayout>

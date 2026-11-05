@@ -1,0 +1,10 @@
+---
+import { Overview } from '../../components/account/Panel';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Overview">
+  <Overview client:only="react" />
+</AccountLayout>

@@ -1,0 +1,10 @@
+---
+import { SyncPage } from '../../components/account/SyncTeams';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Sync">
+  <SyncPage client:only="react" />
+</AccountLayout>

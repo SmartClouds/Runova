@@ -289,3 +289,63 @@
     navigation: none;
   }
 }
+
+/* The account panel (E48, design.md "Account panel") looks like the app: the app's own Dark
+   surfaces rather than the site's lighter ones, its glass cards, its field wash and its sidebar.
+   tests/tokens.test.ts holds these to the app's .dark block. */
+.app-surface {
+  --background: 0 0% 4%;
+  --card: 0 0% 11%;
+  --popover: 0 0% 10%;
+  --secondary: 0 0% 15%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 62%;
+  --accent: 0 0% 18%;
+  --border: 0 0% 17%;
+  --input: 0 0% 17%;
+}
+
+/* The app's .dark .glass card, with the site's box radius. */
+.app-glass {
+  background: hsl(var(--card) / 0.5);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid hsl(var(--foreground) / 0.1);
+  border-radius: var(--radius-box);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.07),
+    0 8px 32px -8px hsl(0 0% 0% / 0.35);
+}
+
+/* The app's field and search wash: a faint tint of the text color, not a filled box. */
+.app-field {
+  background-color: hsl(var(--foreground) / 0.05);
+  border: 1px solid hsl(var(--foreground) / 0.07);
+}
+
+/* The quiet light behind the panel, the same green the app's active pill glows with. */
+.app-backdrop {
+  background:
+    radial-gradient(60rem 28rem at 12% -12%, hsl(var(--glow) / 0.09), transparent 62%),
+    radial-gradient(42rem 26rem at 108% 4%, hsl(var(--severity-info) / 0.05), transparent 60%),
+    hsl(var(--background));
+}
+
+/* The link between the browser and the computer it approves (the authorize page). */
+@keyframes device-link {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 48px 0;
+  }
+}
+
+.device-link {
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--primary) / 0.9) 0 12px,
+    transparent 12px 24px
+  );
+  background-size: 48px 2px;
+  animation: device-link 900ms linear infinite;
+}

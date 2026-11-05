@@ -162,6 +162,9 @@ try {
     ASPNETCORE_URLS: `https://127.0.0.1:${STACK.apiHttpsPort};http://127.0.0.1:${STACK.apiHttpPort}`,
     Kestrel__Certificates__Default__Path: certificate,
     Kestrel__Certificates__Default__Password: certificatePassword,
+    // Every test signs in from 127.0.0.1, far past the 10 a minute a real address gets. The limit
+    // itself is covered by the API's integration tests (AuthRateLimitTests).
+    RateLimits__Auth__PermitLimit: '10000',
   };
   log('migrating and making the owner');
   await run('dotnet', [dll, 'admin', 'migrate'], { env: apiEnv });

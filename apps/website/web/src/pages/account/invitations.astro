@@ -1,0 +1,10 @@
+---
+import { InvitationsPage } from '../../components/account/SyncTeams';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Invitations">
+  <InvitationsPage client:only="react" />
+</AccountLayout>

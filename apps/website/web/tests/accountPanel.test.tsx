@@ -1,0 +1,227 @@
+// @vitest-environment jsdom
+import './setup/dom';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Register, SignIn } from '../src/components/account/AuthForms';
+import AuthorizeDevice, { readAuthorizeRequest } from '../src/components/account/AuthorizeDevice';
+import { describeActivity } from '../src/components/account/Panel';
+import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
+
+const noContent = () => new Response(null, { status: 204 });
+const providers = (items: string[] = []) => json({ items });
+
+const AUTHORIZE =
+  '?client_id=runova-desktop&redirect_uri=http%3A%2F%2F127.0.0.1%3A53111%2Fcallback&response_type=code&code_challenge=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG&code_challenge_method=S256&state=state-12345&device_name=Sam%27s%20MacBook&platform=macos&app_version=3.4.0&device_id=4b2c0c0e-1111-4222-8333-944444444444';
+
+beforeEach(() => {
+  document.cookie = 'XSRF-TOKEN=xsrf; path=/';
+});
+
+describe('SignIn', () => {
+  beforeEach(() =>
+    window.history.replaceState(null, '', '/account/sign-in?next=%2Faccount%2Fteams'),
+  );
+
+  it('signs in and goes on to the page it came for', async () => {
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/sessions': noContent(),
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<SignIn navigate={navigate} />);
+
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText(/^Password/), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: /Sign in/ }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/account/teams'));
+    expect(api.calls('POST /api/v1/sessions')[0]?.headers.get('x-xsrf-token')).toBe('xsrf');
+  });
+
+  it('asks for the two-factor code when the account has it on', async () => {
+    fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/sessions': [
+        problem(401, 'two-factor-required', { detail: 'Enter the code.' }),
+        noContent(),
+      ],
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<SignIn navigate={navigate} />);
+
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText(/^Password/), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: /Sign in/ }));
+    await user.type(await screen.findByLabelText('Code'), '123 456');
+    await user.click(screen.getByRole('button', { name: /Sign in/ }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+  });
+
+  it('offers a new confirmation link to an account whose email is not confirmed', async () => {
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/sessions': problem(403, 'email-unverified', {
+        detail: 'Confirm your email first.',
+      }),
+      'POST /api/v1/verification-emails': new Response(null, { status: 202 }),
+    });
+    const user = userEvent.setup();
+    render(<SignIn />);
+
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText(/^Password/), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: /Sign in/ }));
+    await user.click(await screen.findByRole('button', { name: 'Send a new link' }));
+
+    expect(await screen.findByText(/A new link is on its way/)).toBeInTheDocument();
+    expect(api.calls('POST /api/v1/verification-emails')[0]?.json()).toEqual({
+      email: 'sam@example.com',
+    });
+  });
+
+  it('shows Continue with Google only when the site has it', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google']) });
+    render(<SignIn />);
+
+    const google = await screen.findByRole('link', { name: /Continue with Google/ });
+
+    expect(google).toHaveAttribute(
+      'href',
+      '/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fteams',
+    );
+  });
+
+  it('explains why Google could not link by email', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google']) });
+    window.history.replaceState(null, '', '/account/sign-in?error=link-needed');
+    render(<SignIn />);
+
+    expect(screen.getByText(/link Google from Security/)).toBeInTheDocument();
+  });
+});
+
+describe('Register', () => {
+  it('says to check the email once the account is made', async () => {
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/accounts': new Response(null, { status: 202 }),
+    });
+    const user = userEvent.setup();
+    render(<Register />);
+
+    await user.type(screen.getByLabelText('Your name'), 'Sam');
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await user.click(screen.getByRole('button', { name: 'Make account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
+    expect(api.calls('POST /api/v1/accounts')[0]?.json()).toEqual({
+      email: 'sam@example.com',
+      password: 'correct horse battery',
+      displayName: 'Sam',
+    });
+  });
+
+  it('shows the field the API refused under that field', async () => {
+    fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/accounts': problem(400, 'validation-failed', {
+        errors: { password: ['Use at least 12 characters.'] },
+      }),
+    });
+    const user = userEvent.setup();
+    render(<Register />);
+
+    await user.type(screen.getByLabelText('Your name'), 'Sam');
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText('Password'), 'twelve chars');
+    await user.click(screen.getByRole('button', { name: 'Make account' }));
+
+    expect(await screen.findByText('Use at least 12 characters.')).toBeInTheDocument();
+  });
+});
+
+describe('AuthorizeDevice', () => {
+  it('reads a desktop sign-in link and refuses anything else', () => {
+    expect(readAuthorizeRequest(AUTHORIZE)?.deviceName).toBe("Sam's MacBook");
+    expect(readAuthorizeRequest(AUTHORIZE.replace('runova-desktop', 'evil'))).toBeNull();
+    expect(readAuthorizeRequest(AUTHORIZE.replace('127.0.0.1', 'evil.example'))).toBeNull();
+  });
+
+  it('names the computer and the account, and approving sends the browser back to the app', async () => {
+    window.history.replaceState(null, '', `/account/authorize${AUTHORIZE}`);
+    const api = fakeFetch({
+      'POST /api/v1/device-authorizations': json(
+        {
+          redirectUrl: 'http://127.0.0.1:53111/callback?code=c&state=state-12345',
+          expiresAt: '2026-11-05T10:00:00.000Z',
+        },
+        { status: 201 },
+      ),
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<AuthorizeDevice email="sam@example.com" navigate={navigate} />);
+
+    expect(
+      screen.getByRole('heading', { name: "Sign in Runova on Sam's MacBook?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('sam@example.com')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Sign in this computer/ }));
+
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(
+        'http://127.0.0.1:53111/callback?code=c&state=state-12345',
+      ),
+    );
+    expect(api.calls('POST /api/v1/device-authorizations')[0]?.json()).toMatchObject({
+      clientId: 'runova-desktop',
+      platform: 'macos',
+      deviceName: "Sam's MacBook",
+      state: 'state-12345',
+    });
+  });
+
+  it('tells the app no when the person declines', async () => {
+    window.history.replaceState(null, '', `/account/authorize${AUTHORIZE}`);
+    fakeFetch({});
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<AuthorizeDevice email="sam@example.com" navigate={navigate} />);
+
+    await user.click(screen.getByRole('button', { name: 'Not now' }));
+
+    expect(navigate).toHaveBeenCalledWith(
+      'http://127.0.0.1:53111/callback?error=access_denied&state=state-12345',
+    );
+  });
+
+  it('turns away a link that did not come from the app', () => {
+    window.history.replaceState(null, '', '/account/authorize?client_id=evil');
+    render(<AuthorizeDevice email="sam@example.com" />);
+
+    expect(
+      screen.getByRole('heading', { name: 'This link is not from Runova' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('describeActivity', () => {
+  it('says what happened in plain words', () => {
+    const entry = { id: 1, teamId: null, ip: null, device: null, at: '2026-11-05T10:00:00.000Z' };
+
+    expect(
+      describeActivity({ ...entry, action: 'device-sign-in', details: { device: 'Sam’s PC' } }),
+    ).toBe('Signed in Runova on Sam’s PC');
+    expect(describeActivity({ ...entry, action: 'sign-in', details: { method: 'google' } })).toBe(
+      'Signed in with Google',
+    );
+    expect(describeActivity({ ...entry, action: 'something-new', details: null })).toBe(
+      'something-new',
+    );
+  });
+});

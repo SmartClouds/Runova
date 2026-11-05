@@ -1,5 +1,5 @@
-/** The paths crawlers stay out of: the admin pages, the API and the jobs dashboard. */
-export const DISALLOWED = ['/admin', '/api/', '/hangfire'];
+/** The paths crawlers stay out of: the admin pages, the account panel, the API and the jobs dashboard. */
+export const DISALLOWED = ['/admin', '/account', '/api/', '/hangfire'];
 
 /** robots.txt for `site`: everything is open except DISALLOWED, with the sitemaps listed. */
 export function robotsTxt(site: string | URL): string {

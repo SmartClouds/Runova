@@ -17,9 +17,10 @@ describe('robots.txt', () => {
   it('lets every crawler in except to /admin, /api and the jobs dashboard', () => {
     expect(lines[0]).toBe('User-agent: *');
     expect(lines).toContain('Disallow: /admin');
+    expect(lines).toContain('Disallow: /account');
     expect(lines).toContain('Disallow: /api/');
     expect(lines).toContain('Disallow: /hangfire');
-    expect(lines.filter((line) => line.startsWith('Disallow:'))).toHaveLength(3);
+    expect(lines.filter((line) => line.startsWith('Disallow:'))).toHaveLength(4);
   });
 
   it('points at the sitemap index and the news sitemap with absolute URLs', () => {

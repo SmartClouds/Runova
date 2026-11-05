@@ -1,0 +1,12 @@
+---
+import AuthorizeDevice from '../../components/account/AuthorizeDevice';
+import AuthLayout from '../../layouts/AuthLayout.astro';
+
+export const prerender = false;
+// The middleware sent a signed-out visit to sign in first, so the account is here.
+const email = Astro.locals.account?.email ?? '';
+---
+
+<AuthLayout title="Sign in Runova on your computer" wide>
+  <AuthorizeDevice client:only="react" email={email} />
+</AuthLayout>

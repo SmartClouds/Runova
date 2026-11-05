@@ -1,0 +1,13 @@
+---
+import { TeamDetail } from '../../../components/account/SyncTeams';
+import AccountLayout from '../../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+const teamId = Number(Astro.params.id);
+if (!Number.isSafeInteger(teamId) || teamId < 1) return Astro.redirect('/account/teams');
+const meId = Astro.locals.account?.id ?? 0;
+---
+
+<AccountLayout title="Team">
+  <TeamDetail client:only="react" teamId={teamId} meId={meId} />
+</AccountLayout>

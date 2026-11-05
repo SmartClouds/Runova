@@ -50,9 +50,9 @@ test.describe('the sitemap index', () => {
     for (const path of pages) crawled.push({ path, html: await text(request, path) });
   });
 
-  test('lists no admin or API URL', () => {
+  test('lists no admin, account or API URL', () => {
     expect(pages.length).toBeGreaterThan(70);
-    for (const path of pages) expect(path).not.toMatch(/^\/(admin|api|hangfire)(\/|$|\?)/);
+    for (const path of pages) expect(path).not.toMatch(/^\/(admin|account|api|hangfire)(\/|$|\?)/);
   });
 
   test('lists every built page, and the blog, news and download pages', () => {

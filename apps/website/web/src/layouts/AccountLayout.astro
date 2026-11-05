@@ -1,0 +1,121 @@
+---
+import '@fontsource-variable/inter/wght.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '../styles/global.css';
+import { Activity, CloudCog, Gauge, KeyRound, LayoutDashboard, MonitorSmartphone, UserRound, Users } from 'lucide-react';
+import SignOutLink from '../components/account/SignOutLink';
+import SeoHead from '../components/SeoHead.astro';
+
+interface Props {
+  title: string;
+}
+
+// The middleware has already sent noindex and no-store and turned away anyone signed out.
+const { title } = Astro.props;
+const account = Astro.locals.account;
+const section = Astro.url.pathname.split('/')[2] ?? '';
+
+const groups = [
+  {
+    label: 'Account',
+    links: [
+      { href: '/account', label: 'Overview', section: '', Icon: LayoutDashboard },
+      { href: '/account/profile', label: 'Profile', section: 'profile', Icon: UserRound },
+      { href: '/account/security', label: 'Security', section: 'security', Icon: KeyRound },
+      { href: '/account/sessions', label: 'Devices and sessions', section: 'sessions', Icon: MonitorSmartphone },
+      { href: '/account/activity', label: 'Activity', section: 'activity', Icon: Activity },
+    ],
+  },
+  {
+    label: 'Data',
+    links: [
+      { href: '/account/sync', label: 'Sync', section: 'sync', Icon: CloudCog },
+      { href: '/account/teams', label: 'Teams', section: 'teams', Icon: Users },
+    ],
+  },
+];
+const initials = (account?.displayName ?? '?')
+  .split(/\s+/)
+  .map((part) => part[0])
+  .join('')
+  .slice(0, 2)
+  .toUpperCase();
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <SeoHead title={`${title} | Runova account`} description="Your Runova account: devices, sync, teams and security." noindex />
+  </head>
+  <body class="app-surface app-backdrop min-h-dvh">
+    <a
+      href="#main"
+      class="sr-only rounded-full bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50"
+    >
+      Skip to content
+    </a>
+    <div class="mx-auto flex min-h-dvh max-w-[1320px] flex-col gap-3 p-3 md:flex-row md:gap-4 md:p-4">
+      <aside class="app-glass flex shrink-0 flex-col md:sticky md:top-4 md:h-[calc(100dvh-2rem)] md:w-64">
+        <a href="/" class="flex items-center gap-2.5 px-5 pt-5 pb-4 font-display font-semibold text-lg tracking-tight">
+          <img src="/favicon-32.png" alt="" width="26" height="26" class="rounded-[6px]" />
+          Runova
+          <span class="ml-auto rounded-full bg-primary/12 px-2 py-0.5 font-medium font-sans text-primary text-xs">Account</span>
+        </a>
+        <nav aria-label="Account" class="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-visible">
+          {
+            groups.map((group) => (
+              <div class="contents md:flex md:flex-col md:gap-px">
+                <div class="hidden select-none px-3 pt-3 pb-1.5 font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-[0.08em] md:block">
+                  {group.label}
+                </div>
+                {group.links.map(({ href, label, section: key, Icon }) => (
+                  <a
+                    href={href}
+                    aria-current={section === key ? 'page' : undefined}
+                    class="group relative flex shrink-0 items-center gap-2.5 rounded-inner px-3 py-2 font-medium text-muted-foreground text-sm transition-colors duration-[120ms] hover:bg-foreground/[0.06] hover:text-foreground aria-[current=page]:bg-primary/12 aria-[current=page]:font-semibold aria-[current=page]:text-primary"
+                  >
+                    <span
+                      aria-hidden="true"
+                      class="absolute top-1/2 left-0 hidden h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)] group-aria-[current=page]:md:block"
+                    />
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span class="whitespace-nowrap">{label}</span>
+                  </a>
+                ))}
+              </div>
+            ))
+          }
+        </nav>
+        {
+          account && (
+            <div class="hidden items-center gap-3 border-foreground/[0.07] border-t p-4 md:flex">
+              <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-severity-info/30 font-semibold text-foreground text-xs ring-1 ring-foreground/10">
+                {initials}
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate font-medium text-sm">{account.displayName}</p>
+                <p class="truncate text-muted-foreground text-xs">{account.email}</p>
+              </div>
+              <SignOutLink client:only="react" />
+            </div>
+          )
+        }
+        {
+          account?.staff && (
+            <a href="/admin" class="link-muted hidden px-5 pb-4 text-xs md:block">
+              <Gauge className="mr-1 inline size-3.5" aria-hidden="true" />
+              Staff admin
+            </a>
+          )
+        }
+      </aside>
+      <main id="main" class="min-w-0 flex-1 px-1 py-2 md:px-4 md:py-6">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

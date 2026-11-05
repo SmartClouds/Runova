@@ -1,0 +1,40 @@
+---
+import '@fontsource-variable/inter/wght.css';
+import '@fontsource-variable/jetbrains-mono/wght.css';
+import '../styles/global.css';
+import SeoHead from '../components/SeoHead.astro';
+
+interface Props {
+  title: string;
+  /** A wider card, for the computer approval. */
+  wide?: boolean;
+}
+
+const { title, wide = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <SeoHead title={`${title} | Runova`} description="Sign in to your Runova account." noindex />
+  </head>
+  <body class="app-surface app-backdrop min-h-dvh">
+    <div class="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
+      <a href="/" class="mb-8 flex items-center gap-2.5 font-display font-semibold text-xl tracking-tight">
+        <img src="/favicon-32.png" alt="" width="30" height="30" class="rounded-[7px]" />
+        Runova
+      </a>
+      <main id="main" class:list={['app-glass w-full p-6 md:p-8', wide ? 'max-w-xl' : 'max-w-md']}>
+        <slot />
+      </main>
+      <p class="mt-6 max-w-md text-center text-muted-foreground text-xs leading-relaxed">
+        One Runova account keeps your projects, servers and settings the same on every computer you
+        sign in on.
+      </p>
+    </div>
+  </body>
+</html>

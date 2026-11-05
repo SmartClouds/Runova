@@ -15,8 +15,9 @@ const site = env.SITE_URL || 'https://runovahq.com';
 
 /** @type {NonNullable<import('@astrojs/sitemap').SitemapOptions>} */
 export const sitemapOptions = {
-  // The admin pages are private, so they stay out of the sitemap even when Astro lists them.
-  filter: (page) => !/^\/admin(?:\/|$)/.test(new URL(page).pathname),
+  // The admin pages and the account panel are private, so they stay out of the sitemap even
+  // when Astro lists them.
+  filter: (page) => !/^\/(?:admin|account)(?:\/|$)/.test(new URL(page).pathname),
   // The blog and news pages come from the API, so their sitemaps are rendered on demand.
   customSitemaps: [
     new URL('/sitemap-dynamic.xml', site).href,

@@ -1,0 +1,10 @@
+---
+import { VerifyEmail } from '../../components/account/AuthForms';
+import AuthLayout from '../../layouts/AuthLayout.astro';
+
+export const prerender = false;
+---
+
+<AuthLayout title="Confirm your email">
+  <VerifyEmail client:only="react" />
+</AuthLayout>

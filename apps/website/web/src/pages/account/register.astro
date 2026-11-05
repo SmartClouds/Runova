@@ -1,0 +1,10 @@
+---
+import { Register } from '../../components/account/AuthForms';
+import AuthLayout from '../../layouts/AuthLayout.astro';
+
+export const prerender = false;
+---
+
+<AuthLayout title="Make an account">
+  <Register client:only="react" />
+</AuthLayout>

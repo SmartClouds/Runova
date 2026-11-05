@@ -75,10 +75,10 @@ Choices the user made:
 - [x] E48.5 API: desktop authorization (code and PKCE), device tokens, refresh rotation, bearer scheme.
 - [x] E48.6 API: sync scopes and records, changes feed, pushes with conflicts, limits, key envelopes.
 - [x] E48.7 API: teams, members, roles, invitations, team scopes, team activity.
-- [ ] E48.8 Website: shared API helper, account guard, account layout, sign-in, register, verify,
+- [x] E48.8 Website: shared API helper, account guard, account layout, sign-in, register, verify,
   reset and authorize pages.
-- [ ] E48.9 Website: overview, profile, security, sessions, activity, delete account.
-- [ ] E48.10 Website: teams and invitations, sync overview, encryption status.
+- [x] E48.9 Website: overview, profile, security, sessions, activity, delete account.
+- [x] E48.10 Website: teams and invitations, sync overview, encryption status.
 - [ ] E48.11 Desktop: account client, browser sign-in, token store, IPC and preload.
 - [ ] E48.12 Desktop: key ring (wrap and unwrap, recovery key, sealing on the computer).
 - [ ] E48.13 Desktop: sync engine.

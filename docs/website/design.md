@@ -291,3 +291,33 @@ With `prefers-reduced-motion: reduce`:
 - Smooth scrolling is off (`scroll-behavior: auto`).
 
 Color changes on hover still happen, but instantly.
+
+## Account panel
+
+The Runova account panel at `/account` (E48) is a tool, not a page to read, so it looks like the
+desktop app rather than the marketing site:
+
+- **Surfaces.** The panel's `<body>` carries `.app-surface`, which sets the app's own Dark
+  surfaces (`--background` `0 0% 4%`, `--card` `0 0% 11%` and the rest) instead of the site's
+  lighter charcoal. `tests/tokens.test.ts` holds them to the app's `.dark` block. Accents, text and
+  status colors are the shared ones.
+- **Cards.** `.app-glass` is the app's dark glass card (a half-clear card color, a 20px blur, a
+  hairline edge and the soft top sheen) with the site's box radius. Form fields use `.app-field`,
+  the app's faint wash of the text color.
+- **Sidebar.** A glass rail on the left, grouped like the app's menu (Account, Data) with its small
+  uppercase group labels. The current page gets the app's green tint and the 3px glowing edge.
+  Below 768px the rail turns into a scrolling row of links under the logo.
+- **Light.** `.app-backdrop` puts two faint glows behind everything: the primary green at the top
+  left and the info blue at the top right. Nothing else moves.
+- **The signature.** On `/account/authorize` (approving the desktop app), the browser and the
+  computer sit side by side as two icon tiles joined by a dashed line that runs while the person
+  decides (`.device-link`, still under reduced motion) and turns into a solid glowing green line
+  once the computer is approved. The same laptop and globe glyphs mark computers and browsers in
+  Devices and sessions.
+- **Type.** The site's own pairing: Bricolage Grotesque for page titles, Inter for everything else,
+  and JetBrains Mono for addresses, versions and codes.
+- **Shapes.** The three site shapes still hold: pills for buttons and chips, `--radius-box` for
+  cards and dialogs, `--radius-inner` for rows, tiles and fields.
+
+Sign-in, sign-up, the email links and the computer approval use `AuthLayout`: one glass card in the
+middle of the same backdrop, with the logo above it.

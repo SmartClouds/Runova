@@ -1,0 +1,10 @@
+---
+import { Sessions } from '../../components/account/Panel';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Devices and sessions">
+  <Sessions client:only="react" />
+</AccountLayout>
