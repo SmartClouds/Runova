@@ -38,6 +38,12 @@ vi.mock('../studio/capture/offscreenSource', () => ({
   sceneWindowsMemoryBytes: () => 0,
 }));
 
+// The studio channels reach the render queue, ffmpeg and the project store. Vitest keeps the
+// transformed files between the hooks' imports, so loading them once here moves the cold
+// transform (slow under coverage on the Mac runner's disk) out of the first hook's time limit,
+// as in aiAccess.test.ts.
+await import('./studio');
+
 const userData = useTempUserData();
 expectChannelsCovered(IPC.studioRender);
 
