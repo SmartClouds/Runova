@@ -79,6 +79,7 @@ import { registerSpeechHandlers, shutdownSpeech } from './ipc/speech';
 import { killAllSshSessions, registerSshHandlers } from './ipc/ssh';
 import { registerSshAgentHandlers } from './ipc/sshAgent';
 import { registerStudioHandlers } from './ipc/studio';
+import { registerSystemCleanupHandlers } from './ipc/systemCleanup';
 import { registerSystemStatsHandlers } from './ipc/systemStats';
 import { registerTemplateHandlers } from './ipc/templates';
 import { registerTerminalHandlers, startTerminalBackend, terminalsHoldQuit } from './ipc/terminal';
@@ -442,6 +443,15 @@ function registerAllIpcHandlers(): void {
   });
   // Project clean-up (E49) deletes folders, so it answers the main window only too.
   registerProjectCleanupHandlers({
+    guard: (event) => {
+      const win = getMainWindow();
+      return (
+        !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
+      );
+    },
+  });
+  // Disk Cleanup (E50) permanently removes package caches, so it answers the main window only.
+  registerSystemCleanupHandlers({
     guard: (event) => {
       const win = getMainWindow();
       return (

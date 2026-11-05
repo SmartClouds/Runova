@@ -553,6 +553,7 @@ import {
   createStudioRender,
   createStudioScenes,
 } from './studio';
+import { createSystemCleanup } from './systemCleanup';
 
 interface TerminalDataPayload {
   sessionId: string;
@@ -3053,6 +3054,7 @@ const runovaApi = {
   deployFiles,
   sftp: createSftp(subscribe),
   projectCleanup: createProjectCleanup(subscribe),
+  systemCleanup: createSystemCleanup(subscribe),
   deployFirewall,
   deploySystem,
   deployJobs,

@@ -2082,4 +2082,25 @@ export const IPC = {
     // main -> renderer: CleanupRemoveEvent while a removal runs
     onRemoveEvent: 'projectCleanup:onRemoveEvent',
   },
+  // Disk Cleanup (E50): the caches package managers and developer tools keep, what they take, and
+  // removing old versions or everything. The window names caches, scans and items by id, never by
+  // path.
+  systemCleanup: {
+    // () -> SystemCleanupStatus: whether it is on (it is off in a test run with no sandbox)
+    status: 'systemCleanup:status',
+    // (requestId, CacheProviderId[]?) -> SystemCleanupScan: finds the caches and measures them,
+    // all of them or just the ones named
+    scan: 'systemCleanup:scan',
+    // (requestId) -> boolean: stops a scan or a clean-up that is running
+    cancel: 'systemCleanup:cancel',
+    // (requestId, scanId, CleanSelection) -> CleanResult: removes what the choice names, from the
+    // scan with that id
+    clean: 'systemCleanup:clean',
+    // (CacheProviderId) -> boolean: shows the folder a cache lives in
+    reveal: 'systemCleanup:reveal',
+    // main -> renderer: SystemScanEvent while a scan runs
+    onScanEvent: 'systemCleanup:onScanEvent',
+    // main -> renderer: SystemCleanEvent while a clean-up runs
+    onCleanEvent: 'systemCleanup:onCleanEvent',
+  },
 } as const;

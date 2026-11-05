@@ -32,6 +32,7 @@ const SHELL_PAGES = new Set([
   'docker',
   'android',
   'cli-manager',
+  'cleanup',
   'ask-ai',
   'remote',
   'remote-files',

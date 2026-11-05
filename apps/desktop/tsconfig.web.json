@@ -39,6 +39,7 @@
     "src/preload/sftp.ts",
     "src/preload/database.ts",
     "src/preload/account.ts",
-    "src/preload/projectCleanup.ts"
+    "src/preload/projectCleanup.ts",
+    "src/preload/systemCleanup.ts"
   ]
 }

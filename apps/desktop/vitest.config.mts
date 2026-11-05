@@ -248,6 +248,10 @@ export default defineConfig({
             'src/renderer/src/components/projects/cleanup/**': { lines: 90, branches: 80 },
             'src/renderer/src/lib/projectCleanup/**': { lines: 90, branches: 85 },
             'src/renderer/src/stores/projectCleanupStore.ts': { lines: 90, branches: 80 },
+            // Disk Cleanup (E50): which caches may be cleaned, the scan, the removal that cannot be
+            // undone, the sandbox that keeps tests off real caches, and the IPC. Built test-first.
+            'src/main/systemCleanup/**': { lines: 90, branches: 80 },
+            'src/main/ipc/systemCleanup.ts': { lines: 90, branches: 80 },
             // Error tracking (E24): the Sentry client that holds a token, its store and the IPC.
             'src/main/errorTracking/**': { lines: 90, branches: 80 },
             'src/main/ipc/errorTracking.ts': { lines: 90, branches: 80 },
