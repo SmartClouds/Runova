@@ -25,6 +25,15 @@ export interface CspOptions {
   sentryDsn: string;
 }
 
+/**
+ * Whether the process is `astro dev`. Its dev server sends the CSP without the hashes of the
+ * inline scripts that start React islands, so every `client:only` page (the admin and the account
+ * panel) renders an empty card. The CSP is for the built site, where Astro hashes those scripts.
+ */
+export function isDevServer(argv: readonly string[]): boolean {
+  return argv.slice(2).find((arg) => !arg.startsWith('-')) === 'dev';
+}
+
 /** The `security.csp` object for the Astro config. */
 export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
   const connect = ["'self'"];

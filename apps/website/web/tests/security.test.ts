@@ -3,7 +3,12 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import config from '../astro.config.mjs';
-import { contentSecurityPolicy, SECURITY_HEADERS, withSecurityHeaders } from '../src/lib/security';
+import {
+  contentSecurityPolicy,
+  isDevServer,
+  SECURITY_HEADERS,
+  withSecurityHeaders,
+} from '../src/lib/security';
 
 const site = 'https://runovahq.com';
 
@@ -69,6 +74,19 @@ describe('contentSecurityPolicy', () => {
     expect(directive('connect-src', withSentry)).toBe(
       "connect-src 'self' https://o42.ingest.sentry.io",
     );
+  });
+});
+
+describe('isDevServer', () => {
+  it('is true for `astro dev`, whose CSP would leave out the island scripts', () => {
+    expect(isDevServer(['node', 'astro', 'dev'])).toBe(true);
+    expect(isDevServer(['node', 'astro', 'dev', '--port', '4391'])).toBe(true);
+  });
+
+  it('is false for a build, a preview and the tests', () => {
+    expect(isDevServer(['node', 'astro', 'build'])).toBe(false);
+    expect(isDevServer(['node', 'astro', 'preview'])).toBe(false);
+    expect(isDevServer(['node', 'vitest', 'run'])).toBe(false);
   });
 });
 

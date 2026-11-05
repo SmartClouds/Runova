@@ -131,6 +131,8 @@ test.describe('under the CSP', () => {
     `/news/${FIXTURE_NEWS[0].slug}`,
     '/no-such-page',
     '/admin/sign-in',
+    '/account/sign-in',
+    '/account/register',
   ]) {
     test(`${path} loads with no CSP violation`, async ({ page }) => {
       const violations = await watchCsp(page);

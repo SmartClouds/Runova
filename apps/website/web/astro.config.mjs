@@ -6,7 +6,7 @@ import sitemap from '@astrojs/sitemap';
 import sentry from '@sentry/astro';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
-import { contentSecurityPolicy } from './src/lib/security';
+import { contentSecurityPolicy, isDevServer } from './src/lib/security';
 
 const env = process.env;
 const apiUrl = env.WEBSITE_API_URL || 'http://localhost:5180';
@@ -31,7 +31,8 @@ export default defineConfig({
   output: 'static',
   // staticHeaders: the adapter sends the CSP of prerendered pages as a header too, not a <meta>.
   adapter: node({ mode: 'standalone', staticHeaders: true }),
-  security: { csp: contentSecurityPolicy({ site, sentryDsn }) },
+  // Left out under `astro dev`, which would block the islands' inline scripts (see isDevServer).
+  security: isDevServer(process.argv) ? {} : { csp: contentSecurityPolicy({ site, sentryDsn }) },
   integrations: [
     react(),
     mdx(),
