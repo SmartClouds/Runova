@@ -44,11 +44,16 @@ public sealed class DeleteAccountTests(PostgresFixture postgres) : IDisposable
         var user = await TestAccounts.CreateAsync(_factory.Services);
         var key = await TestUsers.EnableTwoFactorAsync(_factory.Services, user);
         var client = _factory.CreateApiClient();
-        await client.SignInAsync(user.Email!, TestAccounts.Password, Core.Identity.Totp.Code(key, Core.Identity.Totp.TimeStep(DateTimeOffset.UtcNow.AddSeconds(-30))));
+        // Sign in with the current step and step up with the next one: both stay inside the allowed
+        // drift even when the clock crosses a step boundary in between, and neither is a replay.
+        var step = Core.Identity.Totp.TimeStep(DateTimeOffset.UtcNow);
+        var signIn = await client.SignInAsync(user.Email!, TestAccounts.Password, Core.Identity.Totp.Code(key, step));
+        Assert.Equal(HttpStatusCode.NoContent, signIn.StatusCode);
 
-        var response = await client.SendAsync(HttpMethod.Delete, Me, new { password = (string?)null, code = Core.Identity.Totp.Code(key, Core.Identity.Totp.TimeStep(DateTimeOffset.UtcNow)) });
+        var response = await client.SendAsync(HttpMethod.Delete, Me, new { password = (string?)null, code = Core.Identity.Totp.Code(key, step + 1) });
 
         // The account has a password, so the code alone is not enough.
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), Me);
+        Assert.True(problem.GetProperty("errors").TryGetProperty("password", out _));
     }
 }

@@ -29,8 +29,13 @@ export function sshServersAdapter(
     ...(ready ? { ready } : {}),
     fromValue: (value, existing) => {
       const { privateKeyPath: _path, lastConnectedAt: _last, ...shared } = value;
+      const server = shared as unknown as StoredSshServer;
+      // The same rule as an edit on this computer (ipc/ssh.ts): a server that now points somewhere
+      // else is trusted again only after the person checks its host key on the next connect.
+      const moved = existing && (existing.host !== server.host || existing.port !== server.port);
+      if (moved) delete (server as Partial<StoredSshServer>).hostKeyFingerprint;
       return {
-        ...(shared as unknown as StoredSshServer),
+        ...server,
         ...(existing?.privateKeyPath ? { privateKeyPath: existing.privateKeyPath } : {}),
         lastConnectedAt: existing?.lastConnectedAt ?? null,
       };

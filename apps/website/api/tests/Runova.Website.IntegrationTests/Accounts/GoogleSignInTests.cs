@@ -170,6 +170,20 @@ public sealed class GoogleSignInTests : IDisposable
         Assert.Equal("/account/sign-in?error=google-failed", response.Headers.Location!.OriginalString);
     }
 
+    [Theory]
+    [InlineData("/\t/evil.example")]
+    [InlineData("/\n/evil.example")]
+    [InlineData(@"/\evil.example")]
+    [InlineData(@"/a\b")]
+    [InlineData("//evil.example")]
+    [InlineData("https://evil.example")]
+    public void A_return_url_a_browser_could_read_as_another_site_is_refused(string returnUrl) =>
+        Assert.Equal("/account", Runova.Website.Api.Accounts.ExternalSignInEndpoints.SafeReturn(returnUrl));
+
+    [Fact]
+    public void A_plain_path_on_the_site_is_kept() =>
+        Assert.Equal("/account/security?linked=google", Runova.Website.Api.Accounts.ExternalSignInEndpoints.SafeReturn("/account/security?linked=google"));
+
     [Fact]
     public async Task A_return_url_off_the_site_is_replaced_with_the_account_page()
     {

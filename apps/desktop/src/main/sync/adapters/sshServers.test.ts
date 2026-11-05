@@ -80,6 +80,32 @@ describe('sshServersAdapter', () => {
     });
   });
 
+  it('drops the host key pin when another computer points the server at a new host or port', async () => {
+    const store = memoryStore([server()]);
+    const adapter = sshServersAdapter(store, memorySecrets());
+
+    await adapter.apply({
+      id: 's1',
+      teamId: null,
+      value: { ...server(), host: 'other.example.com', hostKeyFingerprint: 'SHA256:theirs' },
+    });
+
+    expect(store.get()[0]?.host).toBe('other.example.com');
+    expect(store.get()[0]).not.toHaveProperty('hostKeyFingerprint');
+  });
+
+  it('keeps the pin that came with an update that leaves the host alone', async () => {
+    const store = memoryStore([server()]);
+
+    await sshServersAdapter(store, memorySecrets()).apply({
+      id: 's1',
+      teamId: null,
+      value: { ...server(), hostKeyFingerprint: 'SHA256:new' },
+    });
+
+    expect(store.get()[0]?.hostKeyFingerprint).toBe('SHA256:new');
+  });
+
   it('waits while the Servers passkey is locked', () => {
     let unlocked = false;
     const adapter = sshServersAdapter(memoryStore(), memorySecrets(), () => unlocked);

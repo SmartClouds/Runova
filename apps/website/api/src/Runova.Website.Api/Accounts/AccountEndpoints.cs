@@ -82,7 +82,13 @@ internal static class AccountEndpoints
 
         await using var transaction = await db.Database.BeginTransactionAsync();
         var existing = await users.FindByEmailAsync(email);
-        if (existing is { EmailConfirmed: true })
+        if (existing is { EmailConfirmed: false } && (await users.GetRolesAsync(existing)).Count > 0)
+        {
+            // Staff an Admin invited: their invitation link is how they set a password, and a
+            // stranger signing up with that address must never touch it.
+            users.PasswordHasher.HashPassword(existing, request.Password!);
+        }
+        else if (existing is { EmailConfirmed: true })
         {
             // As long as a new account takes, so the answer's timing tells nothing either.
             users.PasswordHasher.HashPassword(existing, request.Password!);

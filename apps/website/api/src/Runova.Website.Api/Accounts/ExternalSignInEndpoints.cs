@@ -86,12 +86,17 @@ internal static class ExternalSignInEndpoints
     private static Ok<SignInProvidersDto> ListProviders(IConfiguration configuration) =>
         TypedResults.Ok(new SignInProvidersDto(GoogleSignIn.IsConfigured(configuration) ? [GoogleSignIn.Provider] : []));
 
-    /// <summary>A path on this site, or the account page. Never another origin.</summary>
+    /// <summary>
+    /// A path on this site, or the account page. Never another origin: no backslash and no control
+    /// character anywhere, since a browser drops tabs and newlines and would read a slash, a tab and
+    /// a slash as "//", another site.
+    /// </summary>
     internal static string SafeReturn(string? returnUrl) =>
         returnUrl is { Length: > 0 and < 512 } path
         && path[0] == '/'
         && !path.StartsWith("//", StringComparison.Ordinal)
-        && !path.StartsWith("/\\", StringComparison.Ordinal)
+        && !path.Contains('\\', StringComparison.Ordinal)
+        && !path.Any(char.IsControl)
         && !path.Contains("://", StringComparison.Ordinal)
             ? path
             : DefaultReturn;

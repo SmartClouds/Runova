@@ -62,6 +62,31 @@ public sealed class RegistrationTests(PostgresFixture postgres) : IDisposable
     }
 
     [Fact]
+    public async Task Signing_up_with_an_invited_staff_address_changes_nothing_and_keeps_the_invitation()
+    {
+        var admin = await TestUsers.CreateAsync(_factory.Services, Core.Identity.Roles.Admin);
+        var adminClient = await TestUsers.SignedInClientAsync(_factory, admin);
+        var email = TestAccounts.NewEmail();
+        var invited = await ApiClient.ReadJsonAsync(
+            await adminClient.SendAsync(HttpMethod.Post, "/api/v1/users", new { email, displayName = "New Editor", roles = new[] { "Editor" } }),
+            HttpStatusCode.Created);
+        var inviteToken = new Uri(invited.GetProperty("setupLink").GetProperty("url").GetString()!).Fragment.Replace("#token=", "", StringComparison.Ordinal);
+
+        var response = await TestAccounts.RegisterAsync(_factory.CreateApiClient(), email, "the attacker's own password");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var stored = (await TestAccounts.FindAsync(_factory.Services, email))!;
+        Assert.Null(stored.PasswordHash);
+        Assert.Equal("New Editor", stored.DisplayName);
+        Assert.DoesNotContain(await TestAccounts.EmailsToAsync(_factory.Services, email), m => m.Kind == "verify-email");
+        var client = _factory.CreateApiClient();
+        await client.RefreshAntiforgeryTokenAsync();
+        var setup = await client.SendAsync(HttpMethod.Post, "/api/v1/password-setups", new { token = inviteToken, password = "the editor's real password" });
+        Assert.Equal(HttpStatusCode.NoContent, setup.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the attacker's own password")).StatusCode);
+    }
+
+    [Fact]
     public async Task Registering_again_before_verifying_replaces_the_first_password()
     {
         var email = TestAccounts.NewEmail();

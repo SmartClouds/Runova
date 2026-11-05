@@ -79,14 +79,14 @@ Choices the user made:
   reset and authorize pages.
 - [x] E48.9 Website: overview, profile, security, sessions, activity, delete account.
 - [x] E48.10 Website: teams and invitations, sync overview, encryption status.
-- [ ] E48.11 Desktop: account client, browser sign-in, token store, IPC and preload.
-- [ ] E48.12 Desktop: key ring (wrap and unwrap, recovery key, sealing on the computer).
-- [ ] E48.13 Desktop: sync engine.
-- [ ] E48.14 Desktop: adapters for every collection, per-device fields, deletes.
-- [ ] E48.15 Desktop UI: Account page, signed-out state, devices, activity, nav entry, status bar.
-- [ ] E48.16 Desktop UI: sync settings, encryption, conflicts, "choose folder" for a synced project.
-- [ ] E48.17 Desktop UI: teams, team key, share to team, badges and filters.
-- [ ] E48.18 End-to-end tests, security review, docs.
+- [x] E48.11 Desktop: account client, browser sign-in, token store, IPC and preload.
+- [x] E48.12 Desktop: key ring (wrap and unwrap, recovery key, sealing on the computer).
+- [x] E48.13 Desktop: sync engine.
+- [x] E48.14 Desktop: adapters for every collection, per-device fields, deletes.
+- [x] E48.15 Desktop UI: Account page, signed-out state, devices, activity, nav entry, status bar.
+- [x] E48.16 Desktop UI: sync settings, encryption, conflicts, "choose folder" for a synced project.
+- [x] E48.17 Desktop UI: teams, team key, share to team, badges and filters.
+- [x] E48.18 End-to-end tests, security review, docs.
 
 ## Acceptance criteria
 
@@ -103,6 +103,53 @@ Choices the user made:
 - AC6 An edit of the same item on two computers before they sync shows both versions and keeps the
   one the person picks.
 - AC7 Google sign-in never links to an existing account by email alone.
+
+## Implementation notes
+
+- **Server.** Accounts, sessions, activity, device tokens, sync and teams live in
+  `apps/website/api/src/Runova.Website.Api/Accounts/`. The default and fallback policies are
+  Staff, so any route that forgets a policy stays closed to accounts. A device token carries no
+  role and reaches account routes only. A sign-in writes its session and activity through a
+  context of its own, so two sign-ins of one account at the same moment never fail each other.
+- **Desktop.** `main/account/` holds the browser sign-in (`client.ts`, over the loopback listener
+  of `oauth/loopback.ts`), the sealed account file (`state.ts`), the key ring (`keyring.ts`:
+  scrypt at the Vault's cost, AES-256-GCM, recovery keys in Crockford base32) and the key
+  service. `main/sync/` holds the engine, its SQLite state, the wire format and one adapter per
+  store (`adapters/`). Secrets sealed on one computer are opened in memory for the sync and
+  sealed again on the other (`adapters/envelopes.ts`).
+- **Teams on items.** Which team an item is shared with is kept by the sync layer
+  (`sync/teamMap.ts`, in sync-state.db), not on the stored record, because the stores' own save
+  paths rebuild records and would drop it at the first edit.
+- **Items that stop travelling** (an API collection grown past 700 KB, a database connection
+  switched to a local file) are listed as local only, so the other computers do not read them
+  as deleted.
+- **Key rotation.** A new key bumps the scope's key version; the computer that rotated marks every
+  item of the scope as changed, so the next push seals them all again on their own revisions.
+- **Epochs.** Wiping the cloud copy or resetting a lost key starts a new epoch on the scope, and
+  each computer then forgets what it knew of it and sends what it holds again.
+- **Website panel.** `apps/website/web/src/pages/account/`, with the app's Dark surfaces under
+  `.app-surface` (design.md, Account panel). The panel never sees decrypted data and never asks
+  for a key.
+- Built test-first: API integration tests against PostgreSQL in Docker, Vitest for core, main and
+  renderer, Testing Library for the panel, the website e2e (fake API and the real admin stack), and
+  `e2e/accountSync.e2e.ts` with two app instances on `e2e/fakeAccountServer.ts`.
+
+- **Security review** (before merging): signing up with an address an Admin had just invited as
+  staff could reset that account's password, so sign-up now leaves any user with a role alone and
+  their invitation keeps working. The Google `returnUrl` refuses backslashes and control
+  characters, and a synced change of an SSH server's host or port drops its host key pin, as an
+  edit on the computer does.
+
+## Known limits
+
+- Role changes, removing a member and deleting a team need the password, so in the app they open
+  the team's page on runovahq.com. Inviting, accepting, leaving, sharing and the team key are in
+  the app.
+- Monitoring history (samples and incidents) does not sync yet; monitors do.
+- A computer offline for more than 90 days misses deletes made meanwhile (tombstones are purged).
+- Sharing is in the Teams tab (Share something). The item menus of each screen do not have their
+  own Share entry yet.
+- Settings has no Account tab of its own; the Account page is pinned in the main menu.
 
 ## Needs from the owner
 
