@@ -47,7 +47,7 @@ export async function streamHeadlessCliPrompt(
     error: 'Request cancelled.',
   });
   if (options.signal.aborted) return cancelled(null);
-  const prepared = await prepareHeadlessRun(prompt, options);
+  const prepared = await prepareHeadlessRun(prompt, cwd, options);
   if (!prepared.ok) return prepared.result;
   const { cli, command, args, prompt: fullPrompt, env } = prepared.run;
   if (options.signal.aborted) return cancelled(cli.name);

@@ -14,6 +14,7 @@ import { runCli } from '../packageManagers/execUtils';
 import { refreshShellPath } from '../shellPath';
 import { store } from '../store';
 import { withToolPath } from '../toolPaths';
+import { writeScopeArgs, writeScopeNote } from './writeScope';
 
 /** Agent CLIs answer through a model round-trip, so they need far longer than a git call. */
 const HEADLESS_TIMEOUT_MS = 180000;
@@ -307,7 +308,7 @@ export async function runHeadlessCliPrompt(
   };
   if (options.requestId && cancelledBeforeStart.delete(options.requestId)) return cancelledResult;
 
-  const prepared = await prepareHeadlessRun(prompt, options);
+  const prepared = await prepareHeadlessRun(prompt, cwd, options);
   if (!prepared.ok) return prepared.result;
   const { cli, command, args, prompt: fullPrompt, env } = prepared.run;
   // Resolving the CLI can take seconds, and working out the tool folders can mean starting
@@ -356,6 +357,7 @@ export interface PreparedHeadlessRun {
  */
 export async function prepareHeadlessRun(
   prompt: string,
+  cwd: string,
   options: Omit<HeadlessPromptOptions, 'requestId' | 'timeoutMs'>,
 ): Promise<{ ok: true; run: PreparedHeadlessRun } | { ok: false; result: HeadlessPromptResult }> {
   const fail = (result: Omit<HeadlessPromptResult, 'ok' | 'text'>) =>
@@ -416,14 +418,19 @@ export async function prepareHeadlessRun(
     ...imageInput.env,
     ...(options.trustCwd ? cli.promptTrustEnv : {}),
   });
+  // A run that may write is held to its own folder, so it can never edit another project the
+  // CLI happens to reach (see writeScope.ts).
+  const scopeArgs = options.allowWrites ? await writeScopeArgs(cli, cwd) : [];
+  const scopeNote = options.allowWrites ? writeScopeNote(cwd) : '';
+  const args = [...baseArgs, ...scopeArgs];
   return {
     ok: true,
     run: {
       cli,
       command: cli.promptCommand.command,
       // An image run and a trusted folder can both ask for the same flag; a CLI may refuse it twice.
-      args: [...baseArgs, ...imageInput.args.filter((arg) => !baseArgs.includes(arg))],
-      prompt: imageInput.promptPrefix + prompt,
+      args: [...args, ...imageInput.args.filter((arg) => !args.includes(arg))],
+      prompt: imageInput.promptPrefix + scopeNote + prompt,
       env,
     },
   };

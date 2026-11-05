@@ -1,5 +1,8 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { AppSettings } from '@runova/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * runHeadlessCliPrompt() is the one way every background AI task (commit messages, PR text, tag
@@ -90,11 +93,26 @@ async function run(options: Parameters<typeof import('./headlessPrompt').runHead
   return last;
 }
 
-beforeEach(() => {
+/**
+ * Claude Code's user settings live in CLAUDE_CONFIG_DIR, pointed at an empty folder per test so
+ * the extra working directories of whoever runs the suite never end up in a run's arguments.
+ */
+let claudeConfigDir: string;
+const realClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
+
+beforeEach(async () => {
   spawned.length = 0;
   installed.clear();
   installed.add('claude');
   settings.current = { defaultCliId: 'claude-code' };
+  claudeConfigDir = await mkdtemp(path.join(tmpdir(), 'runova-headless-claude-'));
+  process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+});
+
+afterEach(async () => {
+  if (realClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = realClaudeConfigDir;
+  await rm(claudeConfigDir, { recursive: true, force: true });
 });
 
 describe('runHeadlessCliPrompt uses the user CLI settings', () => {
@@ -181,6 +199,68 @@ describe('runHeadlessCliPrompt uses the user CLI settings', () => {
     };
     const { args } = await run({ allowWrites: true });
     expect(args).toEqual(['-p', '--permission-mode', 'acceptEdits', '--verbose']);
+  });
+});
+
+describe('runHeadlessCliPrompt keeps a write run inside its own project', () => {
+  // Regression: "Update version in files" in MyWebSite rewrote the version across CuraLink,
+  // because Claude Code's user settings listed CuraLink as an extra working directory and
+  // acceptEdits approves edits in every one of them.
+  async function startIn(cwd: string, options: { allowWrites?: boolean }) {
+    const { runHeadlessCliPrompt } = await import('./headlessPrompt');
+    const result = await runHeadlessCliPrompt('Update the version to 1.0.0', cwd, options);
+    expect(result.ok).toBe(true);
+    const last = spawned.at(-1);
+    if (!last) throw new Error('no CLI was started');
+    return last;
+  }
+
+  async function listInUserSettings(dirs: string[]) {
+    await writeFile(
+      path.join(claudeConfigDir, 'settings.json'),
+      JSON.stringify({ permissions: { additionalDirectories: dirs } }),
+    );
+  }
+
+  it('denies edits in another project the user settings give Claude Code', async () => {
+    const { claudeEditDenyRule } = await import('./writeScope');
+    const project = path.join(claudeConfigDir, 'MyWebSite');
+    const otherProject = path.join(claudeConfigDir, 'CuraLink');
+    await mkdir(project);
+    await listInUserSettings([otherProject]);
+
+    const { args, stdin } = await startIn(project, { allowWrites: true });
+
+    expect(args).toEqual([
+      '-p',
+      '--permission-mode',
+      'acceptEdits',
+      '--disallowedTools',
+      claudeEditDenyRule(otherProject),
+    ]);
+    expect(stdin).toContain(`You are working in the project folder ${project}.`);
+    expect(stdin?.endsWith('Update the version to 1.0.0')).toBe(true);
+  });
+
+  it('tells every CLI which folder it may change, even with no extra folders', async () => {
+    installed.add('codex');
+    settings.current = { defaultCliId: 'codex-cli' };
+    const project = path.join(claudeConfigDir, 'MyWebSite');
+
+    const { command, args, stdin } = await startIn(project, { allowWrites: true });
+
+    expect(command).toBe('codex');
+    expect(args).not.toContain('--disallowedTools');
+    expect(stdin?.startsWith(`You are working in the project folder ${project}.`)).toBe(true);
+  });
+
+  it('leaves a read-only run as it was', async () => {
+    await listInUserSettings([path.join(claudeConfigDir, 'CuraLink')]);
+
+    const { args, stdin } = await startIn(path.join(claudeConfigDir, 'MyWebSite'), {});
+
+    expect(args).toEqual(['-p']);
+    expect(stdin).toBe('Update the version to 1.0.0');
   });
 });
 
