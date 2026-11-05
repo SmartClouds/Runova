@@ -28,7 +28,7 @@ internal sealed class AccountSessions(
     TimeProvider time,
     IMemoryCache cache,
     IHttpContextAccessor accessor,
-    EmailOutbox outbox,
+    IServiceScopeFactory scopes,
     IConfiguration configuration)
 {
     public const string SessionClaim = "runova:sid";
@@ -52,9 +52,14 @@ internal sealed class AccountSessions(
     /// <summary>
     /// A new browser session, saved at once. The owner gets an email when this browser and address
     /// have not signed in to the account in the last 30 days, unless this is their first session.
+    /// It is written through a context of its own: a sign-in on another computer at the same moment
+    /// can leave this request's copy of the user stale, and nothing here should try to save that.
     /// </summary>
     public async Task<AccountSession> StartWebAsync(AppUser user)
     {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var outbox = scope.ServiceProvider.GetRequiredService<EmailOutbox>();
         var http = accessor.HttpContext;
         var userAgent = Truncate(http?.Request.Headers.UserAgent.ToString(), 300);
         var ip = http?.Connection.RemoteIpAddress?.ToString();
@@ -231,15 +236,39 @@ internal sealed class AppSignInManager(
 }
 
 /// <summary>Adds account activity to the request's <see cref="AppDbContext"/>, saved with the change it describes.</summary>
-internal sealed class ActivityLog(AppDbContext db, TimeProvider time, IHttpContextAccessor accessor)
+internal sealed class ActivityLog(AppDbContext db, TimeProvider time, IHttpContextAccessor accessor, IServiceScopeFactory scopes)
 {
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 
     /// <summary><paramref name="details"/> must hold no secret.</summary>
-    public void Add(long userId, string action, object? details = null, long? teamId = null)
+    public void Add(long userId, string action, object? details = null, long? teamId = null) =>
+        db.AccountActivities.Add(Entry(userId, action, details, teamId));
+
+    /// <summary>
+    /// Saves an entry at once, through a context of its own, for a sign-in: it belongs to no other
+    /// change, and the request's own context may hold a copy of the user another sign-in made stale.
+    /// </summary>
+    public async Task SaveNowAsync(long userId, string action, object? details = null)
+    {
+        using var scope = scopes.CreateScope();
+        var own = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        own.AccountActivities.Add(Entry(userId, action, details, null));
+        await own.SaveChangesAsync();
+    }
+
+    /// <summary>The time a user last signed in, set straight in the database with no row version check.</summary>
+    public async Task MarkSignedInAsync(long userId)
+    {
+        using var scope = scopes.CreateScope();
+        var own = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var now = time.GetUtcNow();
+        await own.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(u => u.SetProperty(x => x.LastSignInAt, now));
+    }
+
+    private AccountActivity Entry(long userId, string action, object? details, long? teamId)
     {
         var http = accessor.HttpContext;
-        db.AccountActivities.Add(new AccountActivity
+        return new AccountActivity
         {
             UserId = userId,
             TeamId = teamId,
@@ -249,7 +278,7 @@ internal sealed class ActivityLog(AppDbContext db, TimeProvider time, IHttpConte
             Device = AccountSessions.Truncate(DeviceOf(http), 100),
             At = time.GetUtcNow(),
             Details = details is null ? null : JsonSerializer.Serialize(details, _json),
-        });
+        };
     }
 
     private static string? DeviceOf(HttpContext? http)

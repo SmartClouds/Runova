@@ -84,6 +84,22 @@ public sealed class AccountSessionsTests(PostgresFixture postgres) : IDisposable
     }
 
     [Fact]
+    public async Task The_same_account_signing_in_from_many_places_at_once_gets_a_session_each()
+    {
+        var user = await TestAccounts.CreateAsync(_factory.Services);
+
+        var clients = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            var client = _factory.CreateApiClient();
+            var response = await client.SignInAsync(user.Email!, TestAccounts.Password);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            return client;
+        }));
+
+        Assert.Equal(8, (await ListAsync(clients[0])).Length);
+    }
+
+    [Fact]
     public async Task Signing_out_ends_the_session_for_good()
     {
         var user = await TestAccounts.CreateAsync(_factory.Services);

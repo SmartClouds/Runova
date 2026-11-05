@@ -68,8 +68,7 @@ internal static class SessionEndpoints
         var password = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!password.Succeeded)
         {
-            activity.Add(user.Id, ActivityActions.SignInFailed, new { reason = "password" });
-            await db.SaveChangesAsync();
+            await activity.SaveNowAsync(user.Id, ActivityActions.SignInFailed, new { reason = "password" });
             return ApiProblems.Of(ProblemTypes.Unauthorized, WrongCredentials);
         }
 
@@ -97,8 +96,7 @@ internal static class SessionEndpoints
 
             if (verified is false)
             {
-                activity.Add(user.Id, ActivityActions.SignInFailed, new { reason = "two-factor" });
-                await db.SaveChangesAsync();
+                await activity.SaveNowAsync(user.Id, ActivityActions.SignInFailed, new { reason = "two-factor" });
                 await users.AccessFailedAsync(user);
                 return ApiProblems.Of(ProblemTypes.TwoFactorRequired, "The code is not right or was already used.");
             }
@@ -106,11 +104,10 @@ internal static class SessionEndpoints
             await users.ResetAccessFailedCountAsync(user);
         }
 
-        user.LastSignInAt = time.GetUtcNow();
-        await users.UpdateAsync(user);
+        // Straight to the database: another sign-in of this user at the same moment must not turn this one into a 500.
+        await activity.MarkSignedInAsync(user.Id);
         await signIn.SignInAsync(user, isPersistent: true);
-        activity.Add(user.Id, ActivityActions.SignIn, new { method = "password" });
-        await db.SaveChangesAsync();
+        await activity.SaveNowAsync(user.Id, ActivityActions.SignIn, new { method = "password" });
 
         // The antiforgery token belongs to a user, so the one from before sign-in is replaced.
         http.User = await signIn.CreateUserPrincipalAsync(user);

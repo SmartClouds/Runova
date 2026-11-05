@@ -219,10 +219,8 @@ internal static class ExternalSignInEndpoints
             return Fail(result.IsLockedOut ? "locked" : "google-failed");
         }
 
-        owner.LastSignInAt = time.GetUtcNow();
-        await users.UpdateAsync(owner);
-        activity.Add(owner.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
-        await db.SaveChangesAsync();
+        await activity.MarkSignedInAsync(owner.Id);
+        await activity.SaveNowAsync(owner.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
         return TypedResults.Redirect(back);
     }
 
@@ -244,15 +242,13 @@ internal static class ExternalSignInEndpoints
 
         if (result is not { Succeeded: true })
         {
-            activity.Add(user.Id, ActivityActions.SignInFailed, new { reason = "two-factor" });
-            await db.SaveChangesAsync();
+            await activity.SaveNowAsync(user.Id, ActivityActions.SignInFailed, new { reason = "two-factor" });
             return result is { IsLockedOut: true }
                 ? ApiProblems.Of(ProblemTypes.AccountLocked, "Too many failed sign-ins in a row. Try again later.")
                 : ApiProblems.Of(ProblemTypes.TwoFactorRequired, "The code is not right or was already used.");
         }
 
-        activity.Add(user.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
-        await db.SaveChangesAsync();
+        await activity.SaveNowAsync(user.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
         http.User = await signIn.CreateUserPrincipalAsync(user);
         AntiforgeryCheck.IssueToken(http);
         return TypedResults.NoContent();
