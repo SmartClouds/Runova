@@ -298,6 +298,20 @@ describe('removeItem', () => {
     });
   });
 
+  it.skipIf(process.platform !== 'win32')(
+    'removes a folder whose paths are longer than the 260 characters Windows allows by default',
+    async () => {
+      const root = tempDir();
+      const deep = join(root, 'pkg', '1.0.0', ...Array.from({ length: 8 }, () => 'x'.repeat(40)));
+      mkdirSync(deep, { recursive: true });
+      writeFileSync(join(deep, 'f.bin'), 'x');
+      expect(deep.length).toBeGreaterThan(300);
+      const outcome = await removeItem(join(root, 'pkg', '1.0.0'), options);
+      expect(outcome.status).toBe('removed');
+      expect(existsSync(join(root, 'pkg', '1.0.0'))).toBe(false);
+    },
+  );
+
   it('finishes a folder an earlier run set aside, without setting it aside again', async () => {
     const root = tempDir();
     const leftover = join(root, `1.0.0${TRASH_MARK}abc123`);
