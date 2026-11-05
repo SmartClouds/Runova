@@ -152,11 +152,15 @@ const registryEntrySchema = z.object({
   linkedProjectId: z.string().nullable(),
   createdAt: z.number(),
   lastOpenedAt: z.number().nullable(),
+  // Added with the library's order; older registries have none, so nothing starts pinned.
+  pinned: z.boolean().default(false),
 });
 type RegistryEntry = z.infer<typeof registryEntrySchema>;
 const registrySchema = z.object({
   version: z.literal(1),
   videos: z.record(z.string(), registryEntrySchema),
+  /** Video ids in the order the user dragged them into. A video not in it is newer than the order. */
+  order: z.array(z.string()).default([]),
 });
 type RegistryFile = z.infer<typeof registrySchema>;
 
@@ -207,6 +211,10 @@ export interface StudioService {
   addExisting(input: { folder: string }): Promise<VideoSummary>;
   locate(input: { videoId: string; folder: string }): Promise<VideoSummary>;
   removeFromLibrary(input: { videoId: string }): Promise<void>;
+  /** Saves the library's order, highest priority first, as the user dragged it. */
+  reorder(input: { videoIds: string[] }): Promise<void>;
+  /** Pins a video to the top of the library, or lets it go back among the rest. */
+  setPinned(input: { videoId: string; pinned: boolean }): Promise<void>;
   move(input: { videoId: string; toRoot: string }): Promise<MoveResult>;
   startScenario(input: StartScenarioInput): Promise<GenerationView>;
   startEdit(input: StartEditInput): Promise<GenerationView>;
@@ -428,7 +436,7 @@ export function createStudioService(host: StudioHost): StudioService {
   const registry = new JsonStore<RegistryFile>(
     join(host.dataDir, 'registry.json'),
     registrySchema,
-    () => ({ version: 1, videos: {} }),
+    () => ({ version: 1, videos: {}, order: [] }),
     now,
   );
   const sessions = new Map<string, Session>();
@@ -501,6 +509,23 @@ export function createStudioService(host: StudioHost): StudioService {
     const { root, isCustom, project } = await projectRoot(projectId);
     const sceneHosts = (await settingsStore.read()).projectSceneHosts[projectId] ?? [];
     return { projectId, root, isCustom, check: await check(root, project.folderPath), sceneHosts };
+  }
+
+  /**
+   * The library as the user arranged it: pinned videos first, then the rest. Within each, videos
+   * newer than the saved order come first, newest at the top, and the others follow that order.
+   */
+  function libraryOrder(videos: RegistryEntry[], order: string[]): RegistryEntry[] {
+    const place = new Map(order.map((id, index) => [id, index] as const));
+    return [...videos].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      const pa = place.get(a.id);
+      const pb = place.get(b.id);
+      if (pa === undefined && pb === undefined) return b.createdAt - a.createdAt;
+      if (pa === undefined) return -1;
+      if (pb === undefined) return 1;
+      return pa - pb;
+    });
   }
 
   async function summarize(entry: RegistryEntry): Promise<VideoSummary> {
@@ -838,6 +863,7 @@ export function createStudioService(host: StudioHost): StudioService {
       linkedProjectId: manifest.linkedProjectId,
       createdAt: manifest.createdAt,
       lastOpenedAt: null,
+      pinned: false,
     };
     await putEntry(value);
     return summarize(value);
@@ -969,13 +995,30 @@ export function createStudioService(host: StudioHost): StudioService {
     },
 
     async list(input) {
-      const all = Object.values((await registry.read()).videos);
+      const file = await registry.read();
+      const all = Object.values(file.videos);
       const wanted =
         input?.projectId === undefined
           ? all
           : all.filter((v) => v.linkedProjectId === input.projectId);
-      const sorted = wanted.sort((a, b) => b.createdAt - a.createdAt);
-      return Promise.all(sorted.map(summarize));
+      return Promise.all(libraryOrder(wanted, file.order).map(summarize));
+    },
+
+    async reorder({ videoIds }) {
+      await registry.mutate((file) => {
+        // The ids given go first in that order; any the caller did not see keep their places after.
+        const given = videoIds.filter((id, i) => file.videos[id] && videoIds.indexOf(id) === i);
+        const rest = libraryOrder(Object.values(file.videos), file.order)
+          .map((v) => v.id)
+          .filter((id) => !given.includes(id));
+        file.order = [...given, ...rest];
+      });
+      host.notify({ type: 'library-changed' });
+    },
+
+    async setPinned({ videoId, pinned }) {
+      const current = await entry(videoId);
+      await putEntry({ ...current, pinned });
     },
 
     create: createVideo,
@@ -1103,6 +1146,7 @@ export function createStudioService(host: StudioHost): StudioService {
         linkedProjectId: manifest.linkedProjectId,
         createdAt: manifest.createdAt,
         lastOpenedAt: known?.lastOpenedAt ?? null,
+        pinned: known?.pinned ?? false,
       };
       await putEntry(value);
       return summarize(value);

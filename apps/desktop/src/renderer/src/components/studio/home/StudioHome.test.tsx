@@ -1,5 +1,5 @@
-import { screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { PROJECT, settings, video } from '../testing/fixtures';
 
@@ -138,6 +138,95 @@ describe('StudioHome', () => {
       expect(within(dialog).getByLabelText('What is the video about?')).toHaveValue(
         'Explain the product',
       ),
+    );
+  });
+});
+
+describe('the order of the library', () => {
+  const A = video({ id: 'vaaaaaaaaaaaaaaa', title: 'Alpha' });
+  const B = video({ id: 'vbbbbbbbbbbbbbbb', title: 'Beta' });
+  const C = video({ id: 'vccccccccccccccc', title: 'Gamma' });
+
+  /** Lays the cards out one under another, 100px apart, so a drag has somewhere to land. */
+  function stackCards() {
+    const place = (element: HTMLElement) =>
+      Array.from(element.parentElement?.children ?? []).indexOf(element);
+    vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get').mockReturnValue(0);
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return place(this) * 100;
+    });
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(90);
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  const grip = (title: string) =>
+    within(screen.getByRole('article', { name: title })).getByRole('img', {
+      name: 'Drag to reorder',
+    });
+
+  it('saves the order a card is dragged into, and the card glides there', async () => {
+    stackCards();
+    const { bridge } = renderHome({ 'studio.list': async () => [A, B, C] });
+    await screen.findByRole('article', { name: 'Alpha' });
+    const handle = grip('Alpha');
+    fireEvent.pointerDown(handle, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(handle, { clientX: 10, clientY: 215, pointerId: 1 });
+    // While held, the card follows the pointer and the others make room.
+    expect(screen.getByRole('article', { name: 'Alpha' }).style.transform).toBe(
+      'translate(0px, 200px)',
+    );
+    expect(screen.getByRole('article', { name: 'Beta' }).style.transform).toBe(
+      'translate(0px, -100px)',
+    );
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    await waitFor(() =>
+      expect(bridge.$fn('studio.reorder')).toHaveBeenCalledWith([B.id, C.id, A.id]),
+    );
+    expect(screen.getAllByRole('article').map((card) => card.getAttribute('aria-label'))).toEqual([
+      'Beta',
+      'Gamma',
+      'Alpha',
+    ]);
+  });
+
+  it('only reorders the whole library, never a filtered part of it', async () => {
+    const { user } = renderHome({ 'studio.list': async () => [A, B] });
+    await screen.findByRole('article', { name: 'Alpha' });
+    expect(grip('Alpha')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Standalone' }));
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('article', { name: 'Alpha' })).queryByRole('img', {
+          name: 'Drag to reorder',
+        }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('pins a video to its own group on top, and unpins it', async () => {
+    let list = [A, B];
+    const { user, bridge } = renderHome({
+      'studio.list': async () => list,
+      'studio.setPinned': async (id: string, pinned: boolean) => {
+        list = list.map((v) => (v.id === id ? { ...v, pinned } : v));
+        list.sort((x, y) => Number(y.pinned) - Number(x.pinned));
+      },
+    });
+    const beta = await screen.findByRole('article', { name: 'Beta' });
+    await user.click(within(beta).getByRole('button', { name: 'Pin to top' }));
+    expect(bridge.$fn('studio.setPinned')).toHaveBeenCalledWith(B.id, true);
+    const pinned = await screen.findByRole('region', { name: 'Pinned videos' });
+    expect(within(pinned).getByRole('article', { name: 'Beta' })).toBeInTheDocument();
+    expect(within(pinned).getByText('Pinned')).toBeInTheDocument();
+    const unpin = within(pinned).getByRole('button', { name: 'Unpin video' });
+    expect(unpin).toHaveAttribute('aria-pressed', 'true');
+    await user.click(unpin);
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Pinned videos' })).not.toBeInTheDocument(),
     );
   });
 });

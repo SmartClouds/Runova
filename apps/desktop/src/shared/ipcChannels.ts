@@ -890,6 +890,10 @@ export const IPC = {
     // ({ videoId, folder }) -> VideoSummary
     locate: 'studio:locate',
     removeFromLibrary: 'studio:removeFromLibrary',
+    // ({ videoIds }) -> void: the library's order, highest priority first
+    reorder: 'studio:reorder',
+    // ({ videoId, pinned }) -> void
+    setPinned: 'studio:setPinned',
     // ({ videoId, toRoot }) -> MoveResult
     move: 'studio:move',
     // ({ folder }) -> void: only a folder a move in this session left behind

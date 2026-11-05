@@ -22,6 +22,7 @@ export function video(overrides: Partial<VideoSummary> = {}): VideoSummary {
     linkedProjectId: null,
     createdAt: NOW - 3 * 3600_000,
     lastOpenedAt: null,
+    pinned: false,
     missing: false,
     ...overrides,
   };

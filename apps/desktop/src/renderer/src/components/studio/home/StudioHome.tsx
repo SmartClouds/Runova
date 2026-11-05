@@ -121,6 +121,8 @@ export function StudioHome({
         onRetry={() => void videos.refetch()}
         onOpen={onOpen}
         projectNames={projectNames}
+        // Only the whole library shows the whole order, so only it can be dragged into a new one.
+        reorderable={filter === 'all'}
         emptyAction={
           <Button onClick={() => startNew(null)}>
             <Plus /> New video

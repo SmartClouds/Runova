@@ -102,6 +102,10 @@ export function createStudio() {
       ipcRenderer.invoke(IPC.studio.locate, { videoId, folder }),
     removeFromLibrary: (videoId: string): Promise<void> =>
       ipcRenderer.invoke(IPC.studio.removeFromLibrary, { videoId }),
+    reorder: (videoIds: string[]): Promise<void> =>
+      ipcRenderer.invoke(IPC.studio.reorder, { videoIds }),
+    setPinned: (videoId: string, pinned: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC.studio.setPinned, { videoId, pinned }),
     move: (videoId: string, toRoot: string): Promise<MoveResult> =>
       ipcRenderer.invoke(IPC.studio.move, { videoId, toRoot }),
     trashOldFolder: (folder: string): Promise<void> =>

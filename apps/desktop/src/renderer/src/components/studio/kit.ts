@@ -26,6 +26,7 @@ export {
   Folder,
   FolderOpen,
   FolderPlus,
+  GripVertical,
   History,
   ImageIcon,
   Key,
@@ -33,6 +34,7 @@ export {
   Microphone,
   Pause,
   Pencil,
+  Pin,
   Play,
   Plus,
   Redo,
@@ -81,6 +83,7 @@ export {
 export { SshVaultUnlockDialog as VaultUnlockDialog } from '@/components/remote/SshVaultUnlockDialog';
 export { AgentPromptField } from '@/components/terminal/AgentPromptField';
 export { Button } from '@/components/ui/button';
+export { Card } from '@/components/ui/card';
 export { Checkbox } from '@/components/ui/checkbox';
 export { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 export {
@@ -101,6 +104,7 @@ export {
 export { Input } from '@/components/ui/input';
 export { Label } from '@/components/ui/label';
 export { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+export { ReorderableGroup, type ReorderMotion } from '@/components/ui/ReorderableGroup';
 export { SecretInput } from '@/components/ui/secret-input';
 export { Skeleton } from '@/components/ui/skeleton';
 export { Switch } from '@/components/ui/switch';
@@ -111,3 +115,4 @@ export { persianTextProps } from '@/lib/rtl';
 export { cn } from '@/lib/utils';
 export { confirmDialog } from '@/stores/confirmStore';
 export { usePageHeader } from '@/stores/pageHeaderStore';
+export { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';

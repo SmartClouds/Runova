@@ -32,6 +32,9 @@ const projectId = z.string().min(1).max(200);
 
 export const studioInputs = {
   videoRef: z.object({ videoId: id }),
+  /** The library's videos in the order the user put them, highest priority first. */
+  reorder: z.object({ videoIds: z.array(id).max(10_000) }),
+  setPinned: z.object({ videoId: id, pinned: z.boolean() }),
   /** Two versions of a video to compare (E39). */
   compare: z.object({ videoId: id, from: z.number().int().min(1), to: z.number().int().min(1) }),
   treeFiles: z.object({ videoId: id, treeHash: z.string().regex(/^[0-9a-f]{64}$/) }),
@@ -275,6 +278,8 @@ export interface VideoSummary {
   linkedProjectId: string | null;
   createdAt: number;
   lastOpenedAt: number | null;
+  /** Pinned videos lead the library, above the rest. */
+  pinned: boolean;
   /** The folder is gone (moved, renamed or deleted outside Runova); Locate finds it again. */
   missing: boolean;
 }

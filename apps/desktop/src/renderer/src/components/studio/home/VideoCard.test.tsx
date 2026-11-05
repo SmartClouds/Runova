@@ -58,9 +58,48 @@ describe('VideoCard', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it('does not underline the title on hover', () => {
+  it('does not underline or recolour the title on hover', () => {
     renderCard();
-    expect(screen.getByRole('button', { name: 'Launch film' }).className).not.toMatch(/underline/);
+    const title = screen.getByRole('button', { name: 'Launch film' });
+    expect(title.className).not.toMatch(/underline/);
+    expect(title.className).not.toMatch(/hover:text-/);
+  });
+
+  it('sits on the same lifting card a project does, and lifts only an openable one', () => {
+    const { unmount } = renderCard();
+    const card = screen.getByRole('article', { name: 'Launch film' });
+    expect(card.className).toMatch(/\bglass\b/);
+    expect(card.className).toMatch(/hover:-translate-y-0\.5/);
+    expect(card.className).toMatch(/hover:ring-primary\/30/);
+    unmount();
+    renderCard({ video: video({ missing: true }) });
+    expect(screen.getByRole('article', { name: 'Launch film' }).className).not.toMatch(
+      /hover:-translate-y/,
+    );
+  });
+
+  it('shows its grip and pin only on hover or focus, unless the video is pinned', () => {
+    const { unmount } = renderCard({ draggable: true, onTogglePin: vi.fn() });
+    const reveal = /opacity-0 .*group-hover:opacity-100/;
+    expect(screen.getByRole('img', { name: 'Drag to reorder' }).className).toMatch(reveal);
+    expect(screen.getByRole('button', { name: 'Pin to top' }).className).toMatch(reveal);
+    unmount();
+    renderCard({ video: video({ pinned: true }), draggable: true, onTogglePin: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Unpin video' }).className).toMatch(/opacity-100/);
+  });
+
+  it('pins without opening the video', async () => {
+    const onTogglePin = vi.fn();
+    const { user, onOpen } = renderCard({ onTogglePin });
+    await user.click(screen.getByRole('button', { name: 'Pin to top' }));
+    expect(onTogglePin).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('has no grip or pin where the card cannot be moved', () => {
+    renderCard();
+    expect(screen.queryByRole('img', { name: 'Drag to reorder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pin to top' })).not.toBeInTheDocument();
   });
 
   it('opens the folder in the file manager', async () => {

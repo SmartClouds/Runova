@@ -113,6 +113,10 @@ export function registerStudioHandlers(
   handle(IPC.studio.removeFromLibrary, (value) =>
     service().removeFromLibrary(parse(studioInputs.videoRef, value)),
   );
+  handle(IPC.studio.reorder, (value) => service().reorder(parse(studioInputs.reorder, value)));
+  handle(IPC.studio.setPinned, (value) =>
+    service().setPinned(parse(studioInputs.setPinned, value)),
+  );
   handle(IPC.studio.move, async (value) => {
     const result = await service().move(parse(studioInputs.move, value));
     movedAway.add(result.oldFolder);

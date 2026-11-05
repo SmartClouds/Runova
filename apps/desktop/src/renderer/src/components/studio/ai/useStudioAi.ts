@@ -1,10 +1,9 @@
 import type { EditResponse, GenerationView } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
-import { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';
 import { studioAiClient, studioScenesClient } from '../client';
 import { errorMessage } from '../format';
-import { type RunSettings, toast } from '../kit';
+import { type RunSettings, toast, useStudioAiOutputStore } from '../kit';
 import { studioKeys } from '../queryKeys';
 import { useStudioEvents } from '../useStudioEvents';
 import { type ScenarioRequest, toRunInput } from './runSettings';

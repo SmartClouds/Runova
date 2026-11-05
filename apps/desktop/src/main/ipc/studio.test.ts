@@ -194,6 +194,20 @@ describe('videos', () => {
     expect(located.missing).toBe(false);
   });
 
+  it('saves the library order and pins, and refuses a malformed order', async () => {
+    const first = await create();
+    const second = await create();
+    await invoke(IPC.studio.reorder, { videoIds: [first.id, second.id] });
+    await invoke(IPC.studio.setPinned, { videoId: second.id, pinned: true });
+    const listed = await invoke<VideoSummary[]>(IPC.studio.list);
+    expect(listed.map((v) => [v.id, v.pinned])).toEqual([
+      [second.id, true],
+      [first.id, false],
+    ]);
+    await expect(invoke(IPC.studio.reorder, { videoIds: ['../x'] })).rejects.toThrow(/not valid/);
+    await expect(invoke(IPC.studio.setPinned, { videoId: first.id })).rejects.toThrow(/not valid/);
+  });
+
   it('moves a video and then trashes the old copy, but trashes nothing else', async () => {
     const video = await create();
     const moved = await invoke<MoveResult>(IPC.studio.move, {

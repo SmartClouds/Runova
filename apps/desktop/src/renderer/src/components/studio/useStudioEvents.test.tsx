@@ -3,8 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { act } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
+import { useStudioAiOutputStore } from './kit';
 import { studioKeys } from './queryKeys';
 import { useStudioEvents } from './useStudioEvents';
 

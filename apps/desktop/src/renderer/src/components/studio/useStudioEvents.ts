@@ -1,8 +1,8 @@
 import type { RenderJobView } from '@runova/studio';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';
 import { studioClient } from './client';
+import { useStudioAiOutputStore } from './kit';
 import { studioKeys } from './queryKeys';
 
 /** The one subscription every mounted `useStudioEvents` shares, and how many hold it. */

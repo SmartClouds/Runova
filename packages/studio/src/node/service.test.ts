@@ -156,6 +156,40 @@ describe('creating and listing videos', () => {
     expect((await service.list({ projectId: null })).map((v) => v.id)).toEqual([a.id]);
   });
 
+  it('keeps the order the user dragged the videos into, with pinned ones on top', async () => {
+    const { service, events } = await setup();
+    const a = await newVideo(service, null, 'A');
+    const b = await newVideo(service, 'p1', 'B');
+    const c = await newVideo(service, null, 'C');
+    const ids = async (input?: { projectId?: string | null }) =>
+      (await service.list(input)).map((v) => v.id);
+    expect(await ids()).toEqual([c.id, b.id, a.id]);
+
+    const changed = events.length;
+    await service.reorder({ videoIds: [a.id, c.id, b.id] });
+    expect(await ids()).toEqual([a.id, c.id, b.id]);
+    expect(events.slice(changed)).toContainEqual({ type: 'library-changed' });
+    // A filtered list keeps the same order among the videos it shows.
+    expect(await ids({ projectId: null })).toEqual([a.id, c.id]);
+
+    // Reordering what a filter shows leaves the hidden videos where they were, after them.
+    await service.reorder({ videoIds: [c.id, a.id] });
+    expect(await ids()).toEqual([c.id, a.id, b.id]);
+
+    // A new video goes on top of the order; a pinned one above everything.
+    const d = await newVideo(service, null, 'D');
+    expect(await ids()).toEqual([d.id, c.id, a.id, b.id]);
+    await service.setPinned({ videoId: b.id, pinned: true });
+    expect(await ids()).toEqual([b.id, d.id, c.id, a.id]);
+    expect((await service.list())[0]).toMatchObject({ id: b.id, pinned: true });
+    await service.setPinned({ videoId: b.id, pinned: false });
+    expect(await ids()).toEqual([d.id, c.id, a.id, b.id]);
+
+    // Unknown and repeated ids are ignored rather than saved.
+    await service.reorder({ videoIds: ['nope', a.id, a.id] });
+    expect(await ids()).toEqual([a.id, d.id, c.id, b.id]);
+  });
+
   it('marks a video whose folder disappeared', async () => {
     const { service } = await setup();
     const video = await newVideo(service);
