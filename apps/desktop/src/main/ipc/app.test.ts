@@ -16,6 +16,12 @@ vi.mock('../updater', () => ({
 }));
 vi.mock('./terminal', () => ({ preserveTerminalsOnQuit: vi.fn() }));
 
+// The app channels reach the main window, the quit guard and the store. Vitest keeps the
+// transformed files between the tests' imports, so loading them once here moves the cold
+// transform (slow under coverage on the Mac runner's disk) out of the first test's time limit,
+// as in aiAccess.test.ts.
+await import('./app');
+
 const userData = useTempUserData();
 
 async function register(): Promise<typeof import('../lastRoute')> {

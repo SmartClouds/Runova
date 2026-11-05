@@ -116,6 +116,10 @@ test('a removed project is gone after a reload, and cancelling keeps it', async 
   await page.getByRole('button', { name: 'New Project' }).first().click();
   const form = page.getByRole('dialog', { name: 'New project' });
   await form.getByRole('button', { name: 'Browse' }).click();
+  // The pick names the project after the folder a moment later. Typing before that lands mixed
+  // the two names ("projectLantern e2e"), so wait for it first.
+  await expect(form.getByLabel('Folder')).toHaveValue(projectDir);
+  await expect(form.getByLabel(/^Name/)).not.toHaveValue('');
   await form.getByLabel(/^Name/).fill(NAME);
   await form.getByRole('button', { name: 'Create project' }).click();
   await expect(form).toBeHidden();
