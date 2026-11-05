@@ -56,6 +56,7 @@ import { registerPackageManagerHandlers } from './ipc/packageManagers';
 import { registerPetHandlers } from './ipc/pet';
 import { registerPipelineHandlers } from './ipc/pipelines';
 import { registerPowerHandlers } from './ipc/power';
+import { registerProjectCleanupHandlers } from './ipc/projectCleanup';
 import { registerProjectDraftHandlers } from './ipc/projectDrafts';
 import { registerProjectHandlers } from './ipc/projects';
 import { registerPromptBuildWidgetHandlers } from './ipc/promptBuildWidget';
@@ -438,6 +439,15 @@ function registerAllIpcHandlers(): void {
   // file manager's own pop-out windows only, each from its top frame.
   registerSftpIpc({
     guard: (event) => sftpSenderAllowed(event, getMainWindow(), isSftpWindow),
+  });
+  // Project clean-up (E49) deletes folders, so it answers the main window only too.
+  registerProjectCleanupHandlers({
+    guard: (event) => {
+      const win = getMainWindow();
+      return (
+        !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
+      );
+    },
   });
   // Studio (E31) moves and trashes folders and writes video files, so it answers the main window
   // only, like the stores holding secrets above.

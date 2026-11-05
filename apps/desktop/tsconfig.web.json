@@ -38,6 +38,7 @@
     "src/preload/errorTracking.ts",
     "src/preload/sftp.ts",
     "src/preload/database.ts",
-    "src/preload/account.ts"
+    "src/preload/account.ts",
+    "src/preload/projectCleanup.ts"
   ]
 }

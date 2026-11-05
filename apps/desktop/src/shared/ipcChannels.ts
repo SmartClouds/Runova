@@ -2069,4 +2069,17 @@ export const IPC = {
     // main -> renderer: per-package progress while an update batch runs
     onUpdateProgress: 'packages:onUpdateProgress',
   },
+  // Project clean-up (E49): what a project weighs, and deleting what it can rebuild.
+  projectCleanup: {
+    // (projectId, requestId) -> ProjectCleanupScan: walks the project folder and its worktrees
+    scan: 'projectCleanup:scan',
+    // (requestId) -> boolean: stops a scan or a removal that is running
+    cancel: 'projectCleanup:cancel',
+    // (projectId, requestId, CleanupRemoveItem[]) -> CleanupRemoveResult
+    remove: 'projectCleanup:remove',
+    // main -> renderer: CleanupScanEvent while a scan runs
+    onScanEvent: 'projectCleanup:onScanEvent',
+    // main -> renderer: CleanupRemoveEvent while a removal runs
+    onRemoveEvent: 'projectCleanup:onRemoveEvent',
+  },
 } as const;

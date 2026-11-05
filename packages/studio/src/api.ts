@@ -301,6 +301,26 @@ export interface ProjectStorageView {
   sceneHosts: string[];
 }
 
+/** What the clearable cache of one video holds (scene chunks and media previews). */
+export interface StudioCacheVideoView {
+  videoId: string;
+  title: string;
+  bytes: number;
+  /** A render of the video is waiting or running, so its cache is in use. */
+  busy: boolean;
+}
+
+export interface StudioCacheUsageView {
+  /** Videos with something to clear, biggest first. */
+  videos: StudioCacheVideoView[];
+}
+
+export interface StudioCacheClearView {
+  freedBytes: number;
+  cleared: string[];
+  skipped: { videoId: string; reason: 'busy' | 'unknown' }[];
+}
+
 export interface VideoStatusView {
   seq: number;
   canUndo: boolean;

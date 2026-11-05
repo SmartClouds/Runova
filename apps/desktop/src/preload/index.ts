@@ -541,6 +541,7 @@ import { createDeployWordPress } from './deployWordPress';
 import { createErrorTracking } from './errorTracking';
 import { createHealth } from './health';
 import { createNews } from './news';
+import { createProjectCleanup } from './projectCleanup';
 import { createRelay } from './relay';
 import { createSftp } from './sftp';
 import {
@@ -3051,6 +3052,7 @@ const runovaApi = {
   deployWordPress,
   deployFiles,
   sftp: createSftp(subscribe),
+  projectCleanup: createProjectCleanup(subscribe),
   deployFirewall,
   deploySystem,
   deployJobs,

@@ -34,6 +34,8 @@ import type {
   StartRenderInput,
   StartScenarioInput,
   StartSceneInput,
+  StudioCacheClearView,
+  StudioCacheUsageView,
   StudioEvent,
   StudioSettingsPatch,
   StudioSettingsView,
@@ -74,6 +76,7 @@ import {
   type VideoStoreDeps,
 } from './project/videoStore.js';
 import { RecipeStore } from './recipes/recipeStore.js';
+import { clearVideoCache, videoCacheBytes } from './render/cacheClear.js';
 import { createStudioRender, type StudioRenderHost } from './render/renderQueue.js';
 import { type StudioAssets, studioAssets } from './scenes/assets.js';
 import { readTree, type TreeManifest, treeFile, treeFromFiles } from './scenes/codeTree.js';
@@ -178,6 +181,13 @@ export interface StudioService {
   sceneHosts(input: { treeHash: string }): Promise<string[]>;
   checkRoot(input: { path: string; projectId: string | null }): Promise<RootCheckView>;
   pruneProjects(known: ReadonlySet<string>): Promise<void>;
+  /** What clearing the render cache would free for each of a project's videos. */
+  cacheUsage(input: { projectId: string }): Promise<StudioCacheUsageView>;
+  /**
+   * Clears the scene chunks and media previews of these videos. Voice recordings and generated
+   * media are never touched, and a video with a render waiting or running is skipped.
+   */
+  clearCache(input: { videoIds: string[] }): Promise<StudioCacheClearView>;
   list(input?: { projectId?: string | null }): Promise<VideoSummary[]>;
   create(input: CreateVideoInput): Promise<VideoSummary>;
   open(input: { videoId: string }): Promise<OpenVideoResult>;
@@ -707,6 +717,11 @@ export function createStudioService(host: StudioHost): StudioService {
 
   const voiceProfiles = new VoiceProfiles(join(host.dataDir, 'voices'), now, newId);
   const voiceKeys = createVoiceKeys(host.voice, () => voiceProfiles.list());
+  /** Where one video's previews, render chunks, narration and generated media are cached. */
+  const videoCacheDir = async (videoId: string) => {
+    const file = await settingsStore.read();
+    return join(file.cacheDir ?? host.defaultCacheDir, videoId);
+  };
   const narrationCache = async (videoId: string) => {
     const file = await settingsStore.read();
     return join(file.cacheDir ?? host.defaultCacheDir, videoId, 'voice');
@@ -897,6 +912,42 @@ export function createStudioService(host: StudioHost): StudioService {
         for (const id of Object.keys(file.projectSceneHosts))
           if (!known.has(id)) delete file.projectSceneHosts[id];
       });
+    },
+
+    async cacheUsage({ projectId }) {
+      const videos = Object.values((await registry.read()).videos).filter(
+        (v) => v.linkedProjectId === projectId,
+      );
+      const rows = await Promise.all(
+        videos.map(async (v) => ({
+          videoId: v.id,
+          title: v.title,
+          bytes: await videoCacheBytes(await videoCacheDir(v.id)),
+          busy: await render.busy(v.id),
+        })),
+      );
+      return {
+        videos: rows
+          .filter((row) => row.bytes > 0)
+          .sort((a, b) => b.bytes - a.bytes || a.title.localeCompare(b.title)),
+      };
+    },
+
+    async clearCache({ videoIds }) {
+      // Only ids the library knows are used, so a request can never name a folder of its own.
+      const known = (await registry.read()).videos;
+      const result: StudioCacheClearView = { freedBytes: 0, cleared: [], skipped: [] };
+      for (const videoId of new Set(videoIds)) {
+        if (!Object.hasOwn(known, videoId)) {
+          result.skipped.push({ videoId, reason: 'unknown' });
+        } else if (await render.busy(videoId)) {
+          result.skipped.push({ videoId, reason: 'busy' });
+        } else {
+          result.freedBytes += await clearVideoCache(await videoCacheDir(videoId));
+          result.cleared.push(videoId);
+        }
+      }
+      return result;
     },
 
     async list(input) {

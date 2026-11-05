@@ -1,5 +1,5 @@
 import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StudioEvent } from '../api.js';
 import { createScene } from '../document/schema.js';
@@ -643,6 +643,57 @@ describe('rendering', () => {
     );
     expect((await s.service.renderTools()).ffmpeg.found).toBe(false);
   });
+
+  it('leaves the cache of a video alone while it is rendering', async () => {
+    const { fakeFrameHost } = await import('../test/fakeFrames.js');
+    const { fakeTools } = await import('../test/ffmpegTools.js');
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const frames = fakeFrameHost({ fixedSize: { width: 16, height: 9 } });
+    const s = await setup({
+      render: {
+        tools: async () => fakeTools,
+        frames: {
+          open(input) {
+            const source = frames.open(input);
+            return {
+              ...source,
+              async open(url) {
+                await gate;
+                await source.open(url);
+              },
+            };
+          },
+        },
+      },
+    });
+    const { video } = await renderableVideo(s);
+    await mkdir(join(s.host.defaultCacheDir, video.id, 'scenes', 'abc'), { recursive: true });
+    await writeFile(
+      join(s.host.defaultCacheDir, video.id, 'scenes', 'abc', 'chunk.mkv'),
+      'x'.repeat(64),
+    );
+
+    const job = await s.service.startRender({ videoId: video.id });
+    const usage = await s.service.cacheUsage({ projectId: 'p1' });
+    expect(usage.videos).toEqual([
+      { videoId: video.id, title: 'Launch film', bytes: 64, busy: true },
+    ]);
+    const result = await s.service.clearCache({ videoIds: [video.id] });
+    expect(result).toEqual({
+      freedBytes: 0,
+      cleared: [],
+      skipped: [{ videoId: video.id, reason: 'busy' }],
+    });
+    expect(await readdir(join(s.host.defaultCacheDir, video.id, 'scenes', 'abc'))).toContain(
+      'chunk.mkv',
+    );
+
+    release();
+    await finished(s.service, job.id);
+  });
 });
 
 describe('narration', () => {
@@ -755,5 +806,106 @@ describe('narration', () => {
     expect((await s.service.voiceEngines())[0]?.problem).toBe(
       'Voices are not available in this copy of Studio.',
     );
+  });
+});
+
+describe('the render cache of a project', () => {
+  /** Writes files of the given sizes into a video's cache folder. */
+  async function seed(
+    cacheRoot: string,
+    videoId: string,
+    files: Record<string, number>,
+  ): Promise<void> {
+    for (const [path, size] of Object.entries(files)) {
+      const file = join(cacheRoot, videoId, path);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, Buffer.alloc(size));
+    }
+  }
+
+  it('lists the videos of the project with what their cache could free, biggest first', async () => {
+    const { service, host } = await setup();
+    const launch = await newVideo(service, 'p1', 'Launch film');
+    const teaser = await newVideo(service, 'p1', 'Teaser');
+    const other = await newVideo(service, null, 'Not in the project');
+    await seed(host.defaultCacheDir, launch.id, {
+      'scenes/abc/chunk.mkv': 1000,
+      'media/h1/proxy.mp4': 200,
+      'voice/recordings/take.wav': 5000,
+    });
+    await seed(host.defaultCacheDir, teaser.id, { 'scenes/def/chunk.mkv': 50 });
+    await seed(host.defaultCacheDir, other.id, { 'scenes/zzz/chunk.mkv': 9999 });
+
+    expect(await service.cacheUsage({ projectId: 'p1' })).toEqual({
+      videos: [
+        { videoId: launch.id, title: 'Launch film', bytes: 1200, busy: false },
+        { videoId: teaser.id, title: 'Teaser', bytes: 50, busy: false },
+      ],
+    });
+  });
+
+  it('leaves out a video with nothing that can be cleared', async () => {
+    const { service, host } = await setup();
+    const video = await newVideo(service, 'p1');
+    await seed(host.defaultCacheDir, video.id, { 'voice/recordings/take.wav': 5000 });
+    expect((await service.cacheUsage({ projectId: 'p1' })).videos).toEqual([]);
+  });
+
+  it('answers with nothing for a project it has no videos for', async () => {
+    const { service } = await setup();
+    expect(await service.cacheUsage({ projectId: 'ghost' })).toEqual({ videos: [] });
+  });
+
+  it('clears the scene and media caches and keeps the recordings and generated media', async () => {
+    const { service, host } = await setup();
+    const video = await newVideo(service, 'p1');
+    await seed(host.defaultCacheDir, video.id, {
+      'scenes/abc/chunk.mkv': 1000,
+      'media/h1/proxy.mp4': 200,
+      'voice/recordings/take.wav': 5000,
+      'gen/j1/image.png': 7000,
+    });
+
+    const result = await service.clearCache({ videoIds: [video.id] });
+    expect(result).toEqual({ freedBytes: 1200, cleared: [video.id], skipped: [] });
+    expect((await readdir(join(host.defaultCacheDir, video.id))).sort()).toEqual(['gen', 'voice']);
+    expect((await service.cacheUsage({ projectId: 'p1' })).videos).toEqual([]);
+  });
+
+  it('skips ids it does not know and never builds a path out of them', async () => {
+    const { service, host, base } = await setup();
+    const victim = join(base, 'userData', 'victim');
+    await mkdir(join(victim, 'scenes', 'x'), { recursive: true });
+    await writeFile(join(victim, 'scenes', 'x', 'keep.txt'), 'keep');
+    expect(host.defaultCacheDir).toBe(join(base, 'userData', 'studio-cache'));
+
+    const result = await service.clearCache({ videoIds: ['../victim', '..', 'nope', '__proto__'] });
+    expect(result.cleared).toEqual([]);
+    expect(result.freedBytes).toBe(0);
+    expect(result.skipped.map((s) => s.reason)).toEqual([
+      'unknown',
+      'unknown',
+      'unknown',
+      'unknown',
+    ]);
+    expect(await readdir(join(victim, 'scenes', 'x'))).toEqual(['keep.txt']);
+  });
+
+  it('counts a video once when its id is asked for twice', async () => {
+    const { service, host } = await setup();
+    const video = await newVideo(service, 'p1');
+    await seed(host.defaultCacheDir, video.id, { 'scenes/abc/chunk.mkv': 100 });
+    const result = await service.clearCache({ videoIds: [video.id, video.id] });
+    expect(result).toEqual({ freedBytes: 100, cleared: [video.id], skipped: [] });
+  });
+
+  it('reads the cache folder from where the user moved it', async () => {
+    const { service, base } = await setup();
+    const moved = join(base, 'fast-disk', 'cache');
+    await service.updateSettings({ cacheDir: moved });
+    const video = await newVideo(service, 'p1');
+    await seed(moved, video.id, { 'scenes/abc/chunk.mkv': 300 });
+    expect((await service.cacheUsage({ projectId: 'p1' })).videos[0]?.bytes).toBe(300);
+    expect((await service.clearCache({ videoIds: [video.id] })).freedBytes).toBe(300);
   });
 });
