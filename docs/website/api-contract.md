@@ -19,7 +19,8 @@ the same commit.
   runova-health/1 report for Runova's Health page: `Authorization: Bearer <key>` whose SHA-256 is
   `RUNOVA_HEALTH_TOKEN_SHA256`, else an empty 401; 200 or 503 `application/health+json`; 30 requests
   a minute per address, then an empty 429), `GET /openapi/v1.json` (the built-in OpenAPI
-  document), `GET /scalar` (the reference page, development and staging only), `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
+  document), `GET /api/oauth/google/callback` (where Google sends the browser back during "Continue
+  with Google"; handled by the Google sign-in middleware, not an endpoint), `GET /scalar` (the reference page, development and staging only), `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
 - **JSON.** UTF-8, camelCase property names, `null` for a missing optional value (never left out of
   a response), enums as the lowercase strings listed below. Ids are JSON numbers (PostgreSQL
   `bigint`; the API never hands out an id above 2^53 - 1 so JavaScript reads them exactly).
@@ -354,6 +355,28 @@ password. Setting a password ends every other session.
 
 Emails wait in an outbox saved with the change that sends them and go out over SMTP (`Email__*`
 settings). A sent email keeps its subject but loses its body, which held a one-time link.
+
+### Continue with Google
+
+Google sign-in for accounts, as browser redirects, when `Authentication__Google__ClientId` and
+`Authentication__Google__ClientSecret` are set. Only an email Google says is verified is trusted.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[] }` (`["google"]` when it is set up) |
+| GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add Google to the signed-in account) | 302 to Google; 404 not set up |
+| GET | `/api/v1/external-sign-ins/current` | Anonymous (Google's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
+| POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after Google) | `{ "code": string \| null, "recoveryCode": string \| null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
+| DELETE | `/api/v1/accounts/me/logins/{provider}` | Account | none | 204; 401; 404 not linked; 409 it is the only way in |
+
+Rules: a Google login already linked signs in to its account (two-factor still applies). A new
+address gets a new confirmed account with no password. An address whose account someone confirmed
+is never linked by email alone: the redirect carries `error=link-needed`, and the owner signs in
+with their password and links Google from Security (`link=true`), which only finishes for the
+account that started it. An address nobody confirmed goes to the Google owner, and the password it
+was registered with stops working. Errors in the redirect: `google-failed`, `email-unverified`,
+`link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
+Google login). A `returnUrl` that is not a path on this site becomes `/account`.
 
 ### Account sessions and activity
 

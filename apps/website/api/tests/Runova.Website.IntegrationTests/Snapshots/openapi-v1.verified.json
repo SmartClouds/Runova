@@ -459,6 +459,126 @@
         }
       }
     },
+    "/api/v1/sign-in-providers": {
+      "get": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInProvidersDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/external-sign-ins/{provider}": {
+      "get": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "returnUrl",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found"
+          }
+        }
+      }
+    },
+    "/api/v1/external-sign-ins/current": {
+      "get": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "returnUrl",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found"
+          }
+        }
+      }
+    },
+    "/api/v1/two-factor-sign-ins": {
+      "post": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorSignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/logins/{provider}": {
+      "delete": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/v1/technologies": {
       "get": {
         "tags": [
@@ -4447,6 +4567,21 @@
         },
         "additionalProperties": false
       },
+      "SignInProvidersDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "SignInRequest": {
         "required": [
           "email",
@@ -4669,6 +4804,28 @@
         },
         "additionalProperties": false
       },
+      "TwoFactorSignInRequest": {
+        "required": [
+          "code",
+          "recoveryCode"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "TwoFactorStatusDto": {
         "required": [
           "enabled",
@@ -4821,6 +4978,9 @@
     },
     {
       "name": "AccountEndpoints"
+    },
+    {
+      "name": "ExternalSignInEndpoints"
     },
     {
       "name": "TechnologyEndpoints"

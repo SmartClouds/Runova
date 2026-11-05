@@ -61,6 +61,7 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),
                 ("POST", "/api/v1/sessions", true),
+                ("POST", "/api/v1/two-factor-sign-ins", true),
                 ("POST", "/api/v1/verification-emails", true),
             ],
             anonymousWrites);

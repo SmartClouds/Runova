@@ -7,6 +7,7 @@ internal static class AccountsSetup
 {
     public static IServiceCollection AddWebsiteAccounts(this IServiceCollection services)
     {
+        services.AddGoogleSignIn();
         services.AddMemoryCache();
         services.AddHttpContextAccessor();
         services.AddScoped<AccountSessions>();
