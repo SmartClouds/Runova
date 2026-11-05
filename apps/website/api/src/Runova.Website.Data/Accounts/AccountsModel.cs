@@ -46,6 +46,53 @@ internal static class AccountsModel
             approval.HasOne<AppUser>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<Team>(team =>
+        {
+            team.Property(t => t.Name).HasMaxLength(80);
+            team.Property(t => t.Version).IsRowVersion();
+        });
+
+        builder.Entity<TeamMember>(member =>
+        {
+            member.HasKey(m => new { m.TeamId, m.UserId });
+            member.Property(m => m.Role).HasMaxLength(16);
+            member.HasIndex(m => m.UserId);
+            member.HasOne<Team>().WithMany().HasForeignKey(m => m.TeamId).OnDelete(DeleteBehavior.Cascade);
+            member.HasOne<AppUser>().WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamInvitation>(invitation =>
+        {
+            invitation.Property(i => i.Email).HasMaxLength(320);
+            invitation.Property(i => i.NormalizedEmail).HasMaxLength(320);
+            invitation.Property(i => i.Role).HasMaxLength(16);
+            invitation.HasIndex(i => new { i.NormalizedEmail, i.ExpiresAt });
+            invitation.HasIndex(i => i.TeamId);
+            invitation.HasOne<Team>().WithMany().HasForeignKey(i => i.TeamId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SyncScope>(scope =>
+        {
+            scope.HasOne<Team>().WithMany().HasForeignKey(s => s.TeamId).OnDelete(DeleteBehavior.Cascade);
+            scope.Property(s => s.Kind).HasMaxLength(16);
+            scope.Property(s => s.KeyEnvelope).HasColumnType("jsonb");
+            scope.Property(s => s.Version).IsRowVersion();
+            scope.HasIndex(s => s.UserId).IsUnique().HasFilter("\"Kind\" = 'personal'");
+            scope.HasIndex(s => s.TeamId).IsUnique().HasFilter("\"Kind\" = 'team'");
+            scope.HasOne<AppUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SyncRecord>(record =>
+        {
+            record.Property(r => r.Collection).HasMaxLength(40);
+            record.Property(r => r.ItemId).HasMaxLength(64);
+            record.Property(r => r.Encryption).HasMaxLength(8);
+            record.HasIndex(r => new { r.ScopeId, r.Collection, r.ItemId }).IsUnique();
+            record.HasIndex(r => new { r.ScopeId, r.Revision });
+            record.HasIndex(r => new { r.Deleted, r.UpdatedAt });
+            record.HasOne<SyncScope>().WithMany().HasForeignKey(r => r.ScopeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<AccountActivity>(activity =>
         {
             activity.Property(a => a.Action).HasMaxLength(48);

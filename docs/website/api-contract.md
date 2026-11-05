@@ -13,7 +13,7 @@ the same commit.
 - **Base path.** Every resource lives under `/api/v1`. Path segments are plural nouns
   (`/news`, `/posts`, `/users`, `/api-clients`, `/accounts`). The only non-plural segments are the fixed
   sub-resources `me`, `current`, `latest`, `two-factor`, `password` and `downloads`, and the mass
-  nouns `news` and `media`. Verbs never appear in a path.
+  nouns `news`, `media` and `usage`. Verbs never appear in a path.
 - **Outside `/api/v1`.** `GET /health/live` (200 while the process runs), `GET /health/ready` (200
   when PostgreSQL answers, 503 problem details when it does not), `GET /_runova/health` (the
   runova-health/1 report for Runova's Health page: `Authorization: Bearer <key>` whose SHA-256 is
@@ -415,6 +415,88 @@ with the same `deviceId` replaces its old session. Each new computer is in the a
 (`device-sign-in`) and sends the owner a "new sign-in" email. Disabling a user ends all their
 sessions at once.
 
+### Sync
+
+Each account has one personal scope, made on first use, and each team it is in has one more
+(E48.7). A scope holds the newest record of every synced item, by `collection` and `itemId`. Every
+accepted record takes the scope's next revision, and the changes feed returns records after a
+revision in order. A push names the revision each record was based on (0 for a new item); a stale
+one is not written and comes back in `conflicts` with the stored copy, and the rest of the push is
+written. Payloads are opaque text the desktop app made (shared fields in the clear and a sealed
+part, or all sealed): the server stores them as they are and never reads or logs them. A scope an
+account can not see answers 404.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/sync-scopes` | Account | none | 200 `{ "items": SyncScopeDto[] }`; 401 |
+| PATCH | `/api/v1/sync-scopes/{id}` | Account (scope managers) | `{ "policy": { "servers"?: bool, "environments"?: bool, "everything"?: bool } }` | 200 `SyncScopeDto`; 400; 401; 403; 404 |
+| GET | `/api/v1/sync-scopes/{id}/changes` | Account | query `since` (revision, default 0), `limit` (1 to 1000, default 500) | 200 `{ "records": SyncRecordDto[], "next": number, "more": bool }`; 400; 401; 404 |
+| POST | `/api/v1/sync-scopes/{id}/records` | Account (not a Viewer) | `{ "records": SyncPushRecord[] }` (1 to 100) | 200 `{ "accepted": [{ "collection", "itemId", "revision" }], "conflicts": SyncRecordDto[] }`; 400; 401; 403; 404; 409 the key changed; 413 a record over 1 MB, or the scope full; 429 |
+| DELETE | `/api/v1/sync-scopes/{id}/records` | Account (scope managers) | `StepUpRequest` | 204 (every record gone, new epoch); 400; 401; 403; 404 |
+| GET | `/api/v1/sync-scopes/{id}/usage` | Account | none | 200 `{ "records": int, "bytes": number, "quotaBytes": number, "collections": { [name]: int } }`; 401; 404 |
+| GET | `/api/v1/sync-scopes/{id}/keys/current` | Account | none | 200 `{ "version": int, "envelope": object, "setAt": time }`; 401; 404 no key yet |
+| PUT | `/api/v1/sync-scopes/{id}/keys/current` | Account (scope managers) | `{ "version": int, "envelope": object }` | 200 the same shape; 400; 401; 403; 404; 409 not the next version |
+| DELETE | `/api/v1/sync-scopes/{id}/keys/current` | Account (scope managers) | `StepUpRequest` | 204 (key and sealed records gone, new epoch); 400; 401; 403; 404 |
+
+`SyncScopeDto`: `{ "id": number, "kind": "personal" | "team", "teamId": number | null, "name":
+string, "canWrite": bool, "canManage": bool, "latestRevision": number, "epoch": int, "keyVersion":
+int | null, "policy": { "servers": bool, "environments": bool, "everything": bool } }`. For a
+personal scope the account is its manager; for a team, its Owners and Admins are. A Viewer has
+`canWrite: false`.
+
+`SyncPushRecord`: `{ "collection": string (2 to 40 of a-z, 0-9 and -, starting with a letter),
+"itemId": string (1 to 64 of letters, digits, . : - _), "baseRevision": number, "deleted": bool,
+"encryption": "none" | "e2ee", "keyVersion": int | null, "payload": string | null }`. A delete has
+no payload and anything else has one, up to 1 MB. An `e2ee` record must use the scope's current
+`keyVersion`. `SyncRecordDto` is the stored record: `{ "collection", "itemId", "revision",
+"deleted", "encryption", "keyVersion", "payload", "updatedAt" }`. Deletes stay in the feed for 90
+days. A scope holds up to `Sync__QuotaBytes` of payload (200 MB unless set), and an account may push
+`Sync__PushesPerMinute` times a minute (120 unless set).
+
+The key envelope is the scope's end-to-end key, wrapped by the desktop app with the passphrase and
+with the recovery key; the server can not open it. The first key is version 1. Sending the current
+version again stores a new wrapping of the same key (a new passphrase); the next version is a new
+key (after someone left a team), and the app seals the scope's records again under it. Deleting the
+key (a lost passphrase and recovery key) deletes every sealed record, which nobody can open any
+more. Deleting the key or the records starts a new `epoch`, which tells each computer to forget
+what it knew of the scope and send what it holds again.
+
+### Teams
+
+Accounts in a team share its sync scope. Roles: `owner` (everything, the only role that changes or
+removes Owners and Admins or deletes the team), `admin` (invites, and manages Members and Viewers),
+`member` (reads and writes the team's items) and `viewer` (reads them only). A team always keeps an
+Owner. A team an account is not in answers 404. Invitations go to an email address and only an
+account with that address confirmed sees and accepts them, so the email links to
+`https://runovahq.com/account/invitations` and carries no secret. They last 7 days, and inviting
+an address again replaces its invitation.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/teams` | Account | none | 200 `{ "items": TeamDto[] }`; 401 |
+| POST | `/api/v1/teams` | Account | `{ "name": string (1 to 80) }` | 201 `TeamDto` (the caller is its Owner); 400; 401 |
+| GET | `/api/v1/teams/{id}` | Account (member) | none | 200 `TeamDto`; 401; 404 |
+| PATCH | `/api/v1/teams/{id}` | Account (Owner or Admin) | merge patch of `name` | 200 `TeamDto`; 400; 401; 403; 404 |
+| DELETE | `/api/v1/teams/{id}` | Account (Owner) | `StepUpRequest` | 204 (members, invitations, scope and records gone); 400; 401; 403; 404 |
+| GET | `/api/v1/teams/{id}/members` | Account (member) | none | 200 `{ "items": TeamMemberDto[] }`; 401; 404 |
+| PATCH | `/api/v1/teams/{id}/members/{userId}` | Account (Owner or Admin) | `{ "role": string, "password"?: string, "code"?: string }` (a step-up) | 200 `TeamMemberDto`; 400; 401; 403; 404; 409 the last Owner |
+| DELETE | `/api/v1/teams/{id}/members/{userId}` | Account (the member, or an Owner or Admin) | `StepUpRequest` (not needed to leave) | 204; 400; 401; 403; 404; 409 the last Owner |
+| GET | `/api/v1/teams/{id}/invitations` | Account (Owner or Admin) | none | 200 `{ "items": TeamInvitationDto[] }`; 401; 403; 404 |
+| POST | `/api/v1/teams/{id}/invitations` | Account (Owner or Admin) | `{ "email": string, "role": string }` | 201 `TeamInvitationDto`; 400; 401; 403; 404; 409 already a member; 429 |
+| DELETE | `/api/v1/teams/{id}/invitations/{invitationId}` | Account (Owner or Admin) | none | 204; 401; 403; 404 |
+| GET | `/api/v1/teams/{id}/activities` | Account (Owner or Admin) | query `page`, `pageSize` | 200 `Page<ActivityDto>`; 400; 401; 403; 404 |
+| GET | `/api/v1/invitations` | Account | none | 200 `{ "items": [{ "id", "teamId", "teamName", "role", "invitedBy", "expiresAt" }] }`; 401 |
+| POST | `/api/v1/invitations/{id}/acceptances` | Account | none | 201 `TeamDto`; 401; 404 not for this account, or expired |
+| DELETE | `/api/v1/invitations/{id}` | Account | none | 204 (declined); 401; 404 |
+
+`TeamDto`: `{ "id": number, "name": string, "role": string, "memberCount": int, "scopeId": number,
+"createdAt": time }`. `TeamMemberDto`: `{ "userId": number, "email": string, "displayName":
+string, "role": string, "joinedAt": time }`. `TeamInvitationDto`: `{ "id": number, "email": string,
+"role": string, "createdAt": time, "expiresAt": time }`. Removing a member ends their access to the
+team's scope at once; the app then suggests rotating the team key. Deleting an account that is the
+only Owner of a team with other members is a 409 until the team has another Owner or is deleted;
+a team of one goes with its account.
+
 ### Account sessions and activity
 
 Every browser and every computer signed in to an account is a session. The session cookie (and a
@@ -439,7 +521,7 @@ the owner a "new sign-in" email (not for the very first session).
 `sign-in-failed`, `sign-out`, `device-sign-in`, `session-ended`, `sessions-ended`,
 `refresh-token-reused`, `email-verified`, `password-changed`, `password-reset`, `two-factor-on`,
 `two-factor-off`, `login-linked`, `login-unlinked`, `account-updated`, `key-set`, `key-changed`,
-`key-reset`, `sync-reset`, `team-created`, `team-updated`, `team-deleted`, `member-invited`,
+`key-reset`, `sync-reset`, `sync-policy-changed`, `team-created`, `team-updated`, `team-deleted`, `member-invited`,
 `member-joined`, `member-removed`, `member-role-changed`, `team-left`. No entry holds a password,
 code, token or key.
 

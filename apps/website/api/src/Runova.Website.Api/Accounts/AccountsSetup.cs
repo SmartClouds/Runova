@@ -9,6 +9,8 @@ internal static class AccountsSetup
     public static IServiceCollection AddWebsiteAccounts(this IServiceCollection services)
     {
         services.AddGoogleSignIn();
+        services.AddWebsiteSync();
+        services.AddScoped<SyncTombstonesPurgeJob>();
         services.AddSingleton<DeviceTokens>();
         services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, DeviceTokenAuthenticationHandler>(DeviceTokenAuthenticationHandler.SchemeName, null);
         services.AddMemoryCache();
@@ -19,6 +21,25 @@ internal static class AccountsSetup
         services.AddScoped<UnverifiedAccountsCleanupJob>();
         return services;
     }
+}
+
+/// <summary>
+/// Forgets deletes older than 90 days: by then every computer that was going to see one has. A
+/// computer offline longer than that keeps an item another one deleted.
+/// </summary>
+internal sealed partial class SyncTombstonesPurgeJob(AppDbContext db, TimeProvider time, ILogger<SyncTombstonesPurgeJob> logger)
+{
+    public static readonly TimeSpan KeepFor = TimeSpan.FromDays(90);
+
+    public async Task RunAsync(CancellationToken cancellationToken)
+    {
+        var cutoff = time.GetUtcNow() - KeepFor;
+        var purged = await db.SyncRecords.Where(r => r.Deleted && r.UpdatedAt < cutoff).ExecuteDeleteAsync(cancellationToken);
+        LogPurged(logger, purged);
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Purged {Count} sync tombstones")]
+    private static partial void LogPurged(ILogger logger, int count);
 }
 
 /// <summary>

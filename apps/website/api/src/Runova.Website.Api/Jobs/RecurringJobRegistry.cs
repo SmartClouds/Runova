@@ -21,6 +21,7 @@ internal static class RecurringJobRegistry
     public const string ReleasesSync = "releases-sync";
     public const string EmailOutbox = "email-outbox";
     public const string UnverifiedAccountsCleanup = "unverified-accounts-cleanup";
+    public const string SyncTombstonesPurge = "sync-tombstones-purge";
 
     public static readonly IReadOnlyDictionary<string, string> Schedules = new Dictionary<string, string>
     {
@@ -31,6 +32,7 @@ internal static class RecurringJobRegistry
         [ReleasesSync] = Cron.MinuteInterval(15),
         [EmailOutbox] = Cron.Minutely(),
         [UnverifiedAccountsCleanup] = Cron.Daily(),
+        [SyncTombstonesPurge] = Cron.Daily(3),
     };
 
     /// <summary>Adds each job, or updates it when its schedule or method changed.</summary>
@@ -43,6 +45,7 @@ internal static class RecurringJobRegistry
         Add<ReleasesSyncJob>(jobs, ReleasesSync, job => job.RunAsync(CancellationToken.None));
         Add<EmailOutboxJob>(jobs, EmailOutbox, job => job.RunAsync(CancellationToken.None));
         Add<UnverifiedAccountsCleanupJob>(jobs, UnverifiedAccountsCleanup, job => job.RunAsync(CancellationToken.None));
+        Add<SyncTombstonesPurgeJob>(jobs, SyncTombstonesPurge, job => job.RunAsync(CancellationToken.None));
     }
 
     // Hangfire passes its own shutdown token in place of CancellationToken.None.

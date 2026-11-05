@@ -22,6 +22,7 @@ public static class ActivityActions
     public const string KeyChanged = "key-changed";
     public const string KeyReset = "key-reset";
     public const string SyncReset = "sync-reset";
+    public const string SyncPolicyChanged = "sync-policy-changed";
     public const string TeamCreated = "team-created";
     public const string TeamUpdated = "team-updated";
     public const string TeamDeleted = "team-deleted";

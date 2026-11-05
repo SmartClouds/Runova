@@ -55,6 +55,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<DeviceAuthorization> DeviceAuthorizations => Set<DeviceAuthorization>();
 
+    public DbSet<SyncScope> SyncScopes => Set<SyncScope>();
+
+    public DbSet<Team> Teams => Set<Team>();
+
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+
+    public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
+
+    public DbSet<SyncRecord> SyncRecords => Set<SyncRecord>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

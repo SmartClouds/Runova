@@ -166,7 +166,7 @@ internal static class AccountSessionEndpoints
             return ApiProblems.Invalid(problems);
         }
 
-        if (await AccountDeletion.BlockerAsync(user) is { } blocker)
+        if (await deletion.BlockerAsync(user) is { } blocker)
         {
             return ApiProblems.Of(ProblemTypes.Conflict, blocker);
         }
@@ -179,24 +179,47 @@ internal static class AccountSessionEndpoints
 }
 
 /// <summary>
-/// What deleting an account takes with it. Later tasks add the account's sync scope and its team
-/// memberships; a team it owns alone with other members in it must be handed over first.
+/// What deleting an account takes with it: its sessions, activity and links, its personal sync
+/// scope and records (all by cascade), its memberships, and each team it was the only member of. A
+/// team it owns alone while others are in it must be handed over or deleted first.
 /// </summary>
-internal sealed class AccountDeletion(UserManager<AppUser> users)
+internal sealed class AccountDeletion(UserManager<AppUser> users, AppDbContext db)
 {
-    /// <summary>Why the account can not be deleted yet, or null. Nothing blocks it until teams arrive (E48.7).</summary>
-    public static Task<string?> BlockerAsync(AppUser user)
+    /// <summary>Why the account can not be deleted yet, or null.</summary>
+    public async Task<string?> BlockerAsync(AppUser user)
     {
-        ArgumentNullException.ThrowIfNull(user);
-        return Task.FromResult<string?>(null);
+        var owned = await db.TeamMembers.Where(m => m.UserId == user.Id && m.Role == Data.Accounts.TeamRoles.Owner).Select(m => m.TeamId).ToListAsync();
+        foreach (var teamId in owned)
+        {
+            var others = await db.TeamMembers.Where(m => m.TeamId == teamId && m.UserId != user.Id).ToListAsync();
+            if (others.Count > 0 && !others.Any(m => m.Role == Data.Accounts.TeamRoles.Owner))
+            {
+                var name = await db.Teams.Where(t => t.Id == teamId).Select(t => t.Name).SingleAsync();
+                return $"You are the only Owner of {name}. Make someone else an Owner, or delete the team, first.";
+            }
+        }
+
+        return null;
     }
 
     public async Task DeleteAsync(AppUser user)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var alone = await db.TeamMembers.Where(m => m.UserId == user.Id)
+            .Where(m => !db.TeamMembers.Any(o => o.TeamId == m.TeamId && o.UserId != user.Id))
+            .Select(m => m.TeamId)
+            .ToListAsync();
+        foreach (var teamId in alone)
+        {
+            await TeamRemoval.DeleteTeamAsync(db, teamId);
+        }
+
         var result = await users.DeleteAsync(user);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException(string.Join(" ", result.Errors.Select(e => e.Code)));
         }
+
+        await transaction.CommitAsync();
     }
 }

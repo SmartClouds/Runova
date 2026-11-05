@@ -15,7 +15,7 @@ internal static partial class ApiConventions
     /// <summary>The fixed sub-resources and mass nouns that the contract allows in the singular.</summary>
     public static readonly IReadOnlySet<string> SingularSegments = new HashSet<string>(StringComparer.Ordinal)
     {
-        "me", "current", "latest", "two-factor", "password", "downloads", "news", "media",
+        "me", "current", "latest", "two-factor", "password", "downloads", "news", "media", "usage",
     };
 
     private static readonly HashSet<string> _problemSchemas = new(StringComparer.Ordinal)
