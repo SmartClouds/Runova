@@ -6,11 +6,21 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import InviteForm from '../src/components/admin/InviteForm';
 import SetPasswordForm from '../src/components/admin/SetPasswordForm';
 import UserEditor from '../src/components/admin/UserEditor';
-import UserList from '../src/components/admin/UserList';
+import UserList, { filterQuery, readFilters } from '../src/components/admin/UserList';
+import { isStaffUser, roleOf, userStatus } from '../src/lib/admin/users';
 import { page, SETUP_LINK, STAFF_USER } from './fixtures/admin/staff';
 import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
 
 const etag = (version: string) => ({ headers: { etag: `"${version}"` } });
+const account = {
+  ...STAFF_USER,
+  id: 12,
+  email: 'ada@example.com',
+  displayName: 'Ada Account',
+  roles: [],
+  twoFactorEnabled: false,
+  version: '77',
+};
 const invited = {
   ...STAFF_USER,
   id: 8,
@@ -48,6 +58,141 @@ describe('UserList', () => {
       'href',
       '/admin/users/new',
     );
+  });
+});
+
+describe('UserList filters', () => {
+  it('shows a Runova account as an account, and one that never verified its email as such', async () => {
+    fakeFetch({
+      'GET /api/v1/users?page=1&pageSize=20': json(
+        page([account, { ...account, id: 13, displayName: 'New Account', emailConfirmed: false }]),
+      ),
+    });
+    render(<UserList />);
+
+    await screen.findByRole('link', { name: 'Ada Account' });
+    const cells = (name: string) =>
+      within(screen.getByRole('link', { name }).closest('tr') as HTMLElement)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells('Ada Account')).toEqual(['ada@example.com', 'Runova account', 'Active', 'Off']);
+    expect(cells('New Account')).toEqual([
+      'ada@example.com',
+      'Runova account',
+      'Email not verified',
+      'Off',
+    ]);
+  });
+
+  it('searches by name or email and keeps the search in the address', async () => {
+    const api = fakeFetch({
+      'GET /api/v1/users?page=1&pageSize=20': json(page([STAFF_USER, account])),
+      'GET /api/v1/users?q=ada&page=1&pageSize=20': json(page([account])),
+    });
+    const user = userEvent.setup();
+    render(<UserList />);
+    await screen.findByRole('link', { name: 'Sam Editor' });
+
+    await user.type(screen.getByRole('searchbox', { name: 'Name or email' }), '  ada ');
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(await screen.findByRole('link', { name: 'Ada Account' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Sam Editor' })).toBeNull();
+    expect(window.location.search).toBe('?q=ada');
+    expect(api.calls('GET /api/v1/users?q=ada&page=1&pageSize=20')).toHaveLength(1);
+    // jsdom gives <search> no landmark role yet, so look for the element itself.
+    expect(document.querySelector('search[aria-label="Users"]')).toContainElement(
+      screen.getByRole('searchbox', { name: 'Name or email' }),
+    );
+  });
+
+  it('filters by type and status, starting again from the first page, and clears both', async () => {
+    window.history.replaceState(null, '', '/admin/users?page=2');
+    const api = fakeFetch({
+      'GET /api/v1/users?page=2&pageSize=20': json(page([STAFF_USER], 2, 2)),
+      'GET /api/v1/users?role=Account&page=1&pageSize=20': json(page([account])),
+      'GET /api/v1/users?role=Account&disabled=true&page=1&pageSize=20': json(page([])),
+      'GET /api/v1/users?page=1&pageSize=20': json(page([STAFF_USER, account])),
+    });
+    const user = userEvent.setup();
+    render(<UserList />);
+    await screen.findByRole('link', { name: 'Sam Editor' });
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText('Type'), 'Account');
+    expect(await screen.findByRole('link', { name: 'Ada Account' })).toBeVisible();
+    expect(window.location.search).toBe('?role=Account');
+
+    await user.selectOptions(screen.getByLabelText('Status'), 'disabled');
+    expect(await screen.findByText('No users match these filters.')).toBeVisible();
+    expect(window.location.search).toBe('?role=Account&disabled=true');
+
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(await screen.findByRole('link', { name: 'Sam Editor' })).toBeVisible();
+    expect(window.location.search).toBe('');
+    expect(screen.getByLabelText('Type')).toHaveValue('all');
+    expect(screen.getByLabelText('Status')).toHaveValue('all');
+    expect(api.calls('GET /api/v1/users?page=1&pageSize=20')).toHaveLength(1);
+  });
+
+  it('opens with the filters a shared link names', async () => {
+    window.history.replaceState(null, '', '/admin/users?q=sam&role=Editor&disabled=false&page=3');
+    const api = fakeFetch({
+      'GET /api/v1/users?q=sam&role=Editor&disabled=false&page=3&pageSize=20': json(
+        page([STAFF_USER], 3, 3),
+      ),
+    });
+    render(<UserList />);
+
+    expect(await screen.findByRole('link', { name: 'Sam Editor' })).toBeVisible();
+    expect(screen.getByRole('searchbox', { name: 'Name or email' })).toHaveValue('sam');
+    expect(screen.getByLabelText('Type')).toHaveValue('Editor');
+    expect(screen.getByLabelText('Status')).toHaveValue('enabled');
+    expect(
+      api.calls('GET /api/v1/users?q=sam&role=Editor&disabled=false&page=3&pageSize=20'),
+    ).toHaveLength(1);
+  });
+
+  it('says so when there are no users at all', async () => {
+    fakeFetch({ 'GET /api/v1/users?page=1&pageSize=20': json(page([])) });
+    render(<UserList />);
+
+    expect(await screen.findByText('No users here.')).toBeVisible();
+  });
+});
+
+describe('readFilters and filterQuery', () => {
+  it('ignore values the list does not offer', () => {
+    expect(readFilters('?role=Owner&disabled=maybe&page=-1&q=%20%20')).toEqual({
+      q: '',
+      kind: 'all',
+      enabled: 'all',
+      page: 1,
+    });
+  });
+
+  it('round-trip every filter, leaving out the defaults', () => {
+    const filters = readFilters('?q=ada&role=Admin&disabled=true&page=4');
+    expect(filters).toEqual({ q: 'ada', kind: 'Admin', enabled: 'disabled', page: 4 });
+    expect(filterQuery(filters).toString()).toBe('q=ada&role=Admin&disabled=true&page=4');
+    expect(filterQuery({ q: '', kind: 'all', enabled: 'all', page: 1 }).toString()).toBe('');
+  });
+});
+
+describe('roleOf and userStatus', () => {
+  it('give an Admin with both roles one role, and a user with none the account kind', () => {
+    expect(roleOf({ roles: ['Admin', 'Editor'] })).toBe('Admin');
+    expect(roleOf({ roles: ['Editor'] })).toBe('Editor');
+    expect(roleOf({ roles: [] })).toBe('Account');
+    expect(isStaffUser({ roles: [] })).toBe(false);
+    expect(isStaffUser({ roles: ['Editor'] })).toBe(true);
+  });
+
+  it('call unconfirmed staff invited and an unconfirmed account unverified, with disabled first', () => {
+    expect(userStatus({ ...STAFF_USER, emailConfirmed: false })).toBe('invited');
+    expect(userStatus({ ...account, emailConfirmed: false })).toBe('unverified');
+    expect(userStatus({ ...account, emailConfirmed: false, disabled: true })).toBe('disabled');
+    expect(userStatus(account)).toBe('active');
   });
 });
 
@@ -112,6 +257,37 @@ describe('UserEditor', () => {
     const [patch] = api.calls('PATCH /api/v1/users/7');
     expect(patch.headers.get('if-match')).toBe('"1234"');
     expect(patch.json()).toEqual({ displayName: 'Sam Editor', roles: ['Admin'] });
+  });
+
+  it('gives a Runova account no role to pick, so saving its name never makes it staff', async () => {
+    const api = fakeFetch({
+      'GET /api/v1/users/12': json(account, etag('77')),
+      'PATCH /api/v1/users/12': json({ ...account, displayName: 'Ada Lovelace', version: '78' }),
+    });
+    const user = userEvent.setup();
+    render(<UserEditor id={12} />);
+
+    const name = await screen.findByLabelText('Name');
+    expect(screen.queryByLabelText('Role')).toBeNull();
+    const details = screen.getByRole('region', { name: 'Account' });
+    expect(within(details).getByText('Runova account')).toBeVisible();
+    await user.clear(name);
+    await user.type(name, 'Ada Lovelace');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Saved.')).toBeVisible();
+    const [patch] = api.calls('PATCH /api/v1/users/12');
+    expect(patch.headers.get('if-match')).toBe('"77"');
+    expect(patch.json()).toEqual({ displayName: 'Ada Lovelace' });
+  });
+
+  it('shows a staff user as their role in the account details', async () => {
+    fakeFetch({ 'GET /api/v1/users/7': json(STAFF_USER, etag('1234')) });
+    render(<UserEditor id={7} />);
+
+    const details = await screen.findByRole('region', { name: 'Account' });
+    expect(within(details).getByText('Editor')).toBeVisible();
+    expect(screen.getByLabelText('Role')).toHaveValue('Editor');
   });
 
   it('disables the account only after a confirmation', async () => {

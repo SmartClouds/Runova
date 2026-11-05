@@ -10,7 +10,9 @@
 # which the deploy writes to the app's .env on the server. Nothing else is uploaded: the gateway's
 # config is inline below, so no file from the project is needed on the server.
 #
-# Make the first Admin from the server once the app is up (the app name is the compose project):
+# The first Admin comes from ADMIN_EMAIL and ADMIN_PASSWORD in the environment: the API makes it on
+# start. To make one by hand instead, from the server once the app is up (the app name is the
+# compose project):
 #   echo "$PASSWORD" | docker compose -p <app name> exec -T api \
 #     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
 name: runova-website
@@ -53,6 +55,11 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      # The Admin the API makes on start, and whose password it sets back to ADMIN_PASSWORD on
+      # every start. Empty leaves it out.
+      Admin__Email: ${ADMIN_EMAIL:-}
+      Admin__Password: ${ADMIN_PASSWORD:-}
+      Admin__DisplayName: ${ADMIN_NAME:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
       RateLimits__ApiClients__TokenLimit: ${API_CLIENT_TOKEN_LIMIT:-20}
       RateLimits__ApiClients__TokensPerPeriod: ${API_CLIENT_TOKENS_PER_PERIOD:-1}

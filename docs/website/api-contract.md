@@ -272,7 +272,7 @@ TOTP follows RFC 6238 (SHA-1, 6 digits, 30 seconds, one step of drift), and each
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/users` | Admin | query `page`, `pageSize`, `q` (email or name), `role`, `disabled` | 200 `Page<UserDto>`; 400; 401; 403 |
+| GET | `/api/v1/users` | Admin | query `page`, `pageSize`, `q` (email or name), `role` (`Admin`, `Editor`, or `Account` for the users with no staff role), `disabled` | 200 `Page<UserDto>`; 400; 401; 403 |
 | POST | `/api/v1/users` | Admin | `{ "email": string, "displayName": string, "roles": string[] }` | 201 `UserInvitedDto`, `Location: /api/v1/users/{id}`; 400; 401; 403; 409 email taken |
 | GET | `/api/v1/users/{id}` | Admin | none | 200 `UserDto`; 401; 403; 404 |
 | PATCH | `/api/v1/users/{id}` | Admin | merge patch of `displayName`, `roles`, `disabled`; `If-Match` | 200 `UserDto`; 400; 401; 403; 404; 409 last Admin; 412; 428 |
@@ -548,6 +548,50 @@ token, password or signature.
 ### News
 
 | Method | Path | Auth | Request | Responses |
+### Reports (Admin)
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/reports/current` | Admin | query `days` (1 to 365, default 30) | 200 `ReportDto`; 400; 401; 403 |
+
+The numbers behind the admin Reports page, counted when asked and never cached. The period is the
+last `days` whole UTC days, today included. `ReportDto`:
+
+```json
+{
+  "generatedAt": "2026-11-06T09:00:00.000Z",
+  "days": 30,
+  "users": {
+    "total": 120, "accounts": 115, "admins": 2, "editors": 3, "disabled": 1,
+    "unconfirmed": 4, "twoFactor": 9, "joined": 31, "active": 57
+  },
+  "signUps": [{ "date": "2026-10-08", "count": 2 }],
+  "newestUsers": [
+    { "id": 120, "displayName": "Ada", "email": "ada@example.com", "staff": false, "createdAt": "2026-11-06T08:12:00.000Z" }
+  ],
+  "sessions": {
+    "web": 40, "desktop": 22,
+    "platforms": [{ "name": "windows", "count": 14 }],
+    "appVersions": [{ "name": "3.3.0", "count": 18 }]
+  },
+  "teams": { "total": 6, "members": 19, "pendingInvitations": 2 },
+  "sync": { "scopes": 70, "items": 1400, "bytes": 5242880 },
+  "content": {
+    "newsPublished": 48, "newsScheduled": 1, "newsDrafts": 3,
+    "postsPublished": 12, "postsScheduled": 0, "postsDrafts": 2, "media": 30
+  },
+  "apiClients": { "active": 2, "inactive": 1 },
+  "latestRelease": "3.3.0"
+}
+```
+
+`accounts` are the users with no staff role; an Admin counts once, under `admins`, even with the
+Editor role too. `joined` counts the users made in the period and `active` the users who signed in
+or were seen on a session in it. `signUps` has one entry per day of the period, oldest first, zero
+included. `sessions` counts the sessions not ended and seen in the period, with the computers'
+platforms and app versions (an empty name is a computer that sent none), the eight most common.
+`sync` leaves out deleted items. An Editor gets 403.
+
 |---|---|---|---|---|
 | GET | `/api/v1/news` | Anonymous | query below | 200 `Page<NewsListItemDto>`, weak `ETag`; 304; 400 |
 | GET | `/api/v1/news/{slug}` | Anonymous | `If-None-Match` | 200 `NewsItemDto`, `ETag`; 304; 404 when missing or not published |

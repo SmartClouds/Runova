@@ -33,22 +33,43 @@ export interface UserInvited {
   setupLink: SetupLink;
 }
 
-/** An Admin can do everything an Editor can, so an account shows one role. */
-export const roleOf = (user: Pick<StaffUser, 'roles'>): Role =>
-  user.roles.includes('Admin') ? 'Admin' : 'Editor';
+/** A staff role, or `Account` for someone who signed up for Runova and has no staff role. */
+export type UserKind = Role | 'Account';
 
-export type UserStatus = 'active' | 'invited' | 'disabled';
+/** The kinds the users list filters by, in the order its select shows them. */
+export const USER_KINDS: readonly UserKind[] = ['Admin', 'Editor', 'Account'];
+
+export const KIND_LABELS: Record<UserKind, string> = {
+  Admin: 'Admin',
+  Editor: 'Editor',
+  Account: 'Runova account',
+};
+
+/** An Admin can do everything an Editor can, so a user shows one role, or none at all. */
+export function roleOf(user: Pick<StaffUser, 'roles'>): UserKind {
+  if (user.roles.includes('Admin')) return 'Admin';
+  if (user.roles.includes('Editor')) return 'Editor';
+  return 'Account';
+}
+
+export const isStaffUser = (user: Pick<StaffUser, 'roles'>) => roleOf(user) !== 'Account';
+
+export type UserStatus = 'active' | 'invited' | 'unverified' | 'disabled';
 
 export const STATUS_LABELS: Record<UserStatus, string> = {
   active: 'Active',
   invited: 'Invited',
+  unverified: 'Email not verified',
   disabled: 'Disabled',
 };
 
-/** Disabled wins; someone who never set a password from their link is still invited. */
+/**
+ * Disabled wins. Staff who never set a password from their link are still invited; an account
+ * that signed up and never opened its verification email is unverified.
+ */
 export function userStatus(user: StaffUser): UserStatus {
   if (user.disabled) return 'disabled';
-  if (!user.emailConfirmed) return 'invited';
+  if (!user.emailConfirmed) return isStaffUser(user) ? 'invited' : 'unverified';
   return 'active';
 }
 

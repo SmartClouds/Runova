@@ -9,6 +9,7 @@ import ApiClientsPage from '../src/pages/admin/api-clients/index.astro';
 import NewApiClientPage from '../src/pages/admin/api-clients/new.astro';
 import ForbiddenPage from '../src/pages/admin/forbidden.astro';
 import OverviewPage from '../src/pages/admin/index.astro';
+import ReportsPage from '../src/pages/admin/reports.astro';
 import SetPasswordPage from '../src/pages/admin/set-password.astro';
 import UserPage from '../src/pages/admin/users/[id].astro';
 import UsersPage from '../src/pages/admin/users/index.astro';
@@ -49,15 +50,21 @@ describe('the admin menu', () => {
     expect(navLinks(html)).toEqual(['/admin/news', '/admin/blog']);
   });
 
-  it('gives an Admin the API clients, the users and the jobs dashboard too', async () => {
+  it('gives an Admin the reports, the users, the API clients and the jobs dashboard too', async () => {
     const html = await (await render(AdminLayout, '/admin', ADMIN)).text();
     expect(navLinks(html)).toEqual([
       '/admin/news',
       '/admin/blog',
-      '/admin/api-clients',
+      '/admin/reports',
       '/admin/users',
+      '/admin/api-clients',
       '/hangfire',
     ]);
+  });
+
+  it('marks Reports on the reports page', async () => {
+    const html = await (await render(AdminLayout, '/admin/reports', ADMIN)).text();
+    expect(html).toMatch(/<a href="\/admin\/reports" aria-current="page"/);
   });
 
   it('marks the section of the current page', async () => {
@@ -77,6 +84,7 @@ describe('the overview', () => {
     const main = html.slice(html.indexOf('<main'));
     expect(main).not.toContain('/admin/api-clients');
     expect(main).not.toContain('/admin/users');
+    expect(main).not.toContain('/admin/reports');
     expect(main).not.toContain('/hangfire');
   });
 
@@ -85,6 +93,7 @@ describe('the overview', () => {
     const main = html.slice(html.indexOf('<main'));
     expect(main).toContain('href="/admin/api-clients"');
     expect(main).toContain('href="/admin/users"');
+    expect(main).toContain('href="/admin/reports"');
     expect(main).toContain('href="/hangfire"');
   });
 });
@@ -95,6 +104,7 @@ describe('the admin pages', () => {
     ['/admin/api-clients/new', NewApiClientPage, 'ApiClientEditor'],
     ['/admin/users', UsersPage, 'UserList'],
     ['/admin/users/new', NewUserPage, 'InviteForm'],
+    ['/admin/reports', ReportsPage, 'ReportsView'],
   ] as const)('%s renders its island', async (path, page, island) => {
     const response = await render(page, path, ADMIN);
     expect(response.status).toBe(200);

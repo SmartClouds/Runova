@@ -1,0 +1,10 @@
+---
+import ReportsView from '../../components/admin/ReportsView';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Reports">
+  <ReportsView client:only="react" />
+</AdminLayout>

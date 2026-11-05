@@ -5,6 +5,7 @@ using Runova.Website.Api.Media;
 using Runova.Website.Api.News;
 using Runova.Website.Api.Posts;
 using Runova.Website.Api.Releases;
+using Runova.Website.Api.Reports;
 using Runova.Website.Api.Sessions;
 using Runova.Website.Api.Users;
 
@@ -36,6 +37,7 @@ internal static class ApiV1
         api.MapAuditEntries();
         api.MapApiClients();
         api.MapReleases();
+        api.MapReports();
         return api;
     }
 }

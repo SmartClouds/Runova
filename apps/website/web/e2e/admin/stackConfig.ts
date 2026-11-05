@@ -16,7 +16,7 @@ export const STACK = {
 
 export const ADMIN_BASE_URL = `https://localhost:${STACK.proxyPort}`;
 
-/** The first Admin, made with `admin create-owner` before the API starts. */
+/** The first Admin, which the API makes on start from its `Admin__*` settings. */
 export const OWNER = {
   email: 'owner@e2e.runovahq.test',
   displayName: 'E2E Owner',

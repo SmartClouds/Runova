@@ -1,7 +1,7 @@
 /**
  * The gate in front of `/admin/**`. Every admin response is private and kept out of search
  * engines, and a page other than sign-in and set-password renders only for a staff session the
- * API recognises. A Runova account with no staff role is sent to its own panel at `/account`. The pages for API clients and users render only for an Admin.
+ * API recognises. A Runova account with no staff role is sent to its own panel at `/account`. The pages for API clients, users and reports render only for an Admin.
  */
 
 /** A `UserDto` reduced to what the admin pages show. */
@@ -26,7 +26,7 @@ export const FORBIDDEN_PATH = '/admin/forbidden';
 const PUBLIC_PATHS = [SIGN_IN_PATH, SET_PASSWORD_PATH];
 
 export const isAdminOnlyPath = (pathname: string) =>
-  /^\/admin\/(?:api-clients|users)(?:\/|$)/.test(pathname);
+  /^\/admin\/(?:api-clients|users|reports)(?:\/|$)/.test(pathname);
 
 export const isAdmin = (user: AdminUser | undefined) => user?.roles.includes('Admin') === true;
 

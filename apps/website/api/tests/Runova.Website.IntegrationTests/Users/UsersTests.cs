@@ -181,6 +181,21 @@ public sealed class UsersTests : IDisposable
     }
 
     [Fact]
+    public async Task role_Account_lists_the_users_with_no_staff_role()
+    {
+        var admin = await AdminClientAsync();
+        var marker = NewMarker();
+        var account = await TestAccounts.CreateAsync(_factory.Services, displayName: marker);
+        await TestUsers.CreateAsync(_factory.Services, displayName: marker);
+        await TestUsers.CreateAsync(_factory.Services, Roles.Admin, displayName: marker);
+
+        Assert.Equal([account.Id], await IdsAsync(admin, $"{Users}?q={marker}&role=Account"));
+        var dto = (await ApiClient.ReadJsonAsync(await admin.GetAsync($"{Users}?q={marker}&role=Account"), HttpStatusCode.OK))
+            .GetProperty("items")[0];
+        Assert.Empty(dto.GetProperty("roles").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Patch_changes_the_name_roles_and_disabled_flag_and_returns_the_new_etag()
     {
         var admin = await AdminClientAsync();

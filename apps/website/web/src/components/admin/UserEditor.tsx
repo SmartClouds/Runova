@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { apiRequest, type Problem } from '@/lib/admin/api';
 import { errorsFor, type FieldErrors, unplacedErrors } from '@/lib/admin/problems';
 import {
+  isStaffUser,
+  KIND_LABELS,
   type Role,
   roleOf,
   type SetupLink,
@@ -24,7 +26,10 @@ type LinkKind = 'Invitation link' | 'Password reset link';
 
 const ifMatch = (user: StaffUser) => `"${user.version}"`;
 
-/** One staff account: its name and role, and the Admin actions on it. */
+/**
+ * One user: their name, their role when they are staff, and the Admin actions on them. A Runova
+ * account has no role to pick, so saving it never makes it staff.
+ */
 export default function UserEditor({ id }: { id: number }) {
   const [user, setUser] = useState<StaffUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +49,8 @@ export default function UserEditor({ id }: { id: number }) {
   const show = useCallback((next: StaffUser) => {
     setUser(next);
     setDisplayName(next.displayName);
-    setRole(roleOf(next));
+    const kind = roleOf(next);
+    if (kind !== 'Account') setRole(kind);
   }, []);
 
   const fail = (next: Problem) => {
@@ -110,6 +116,7 @@ export default function UserEditor({ id }: { id: number }) {
     });
 
   const status = user ? userStatus(user) : null;
+  const staff = user ? isStaffUser(user) : false;
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -138,7 +145,12 @@ export default function UserEditor({ id }: { id: number }) {
             className="grid gap-6"
             onSubmit={(event) => {
               event.preventDefault();
-              void patch({ displayName: displayName.trim(), roles: [role] }, 'Saved.');
+              void patch(
+                staff
+                  ? { displayName: displayName.trim(), roles: [role] }
+                  : { displayName: displayName.trim() },
+                'Saved.',
+              );
             }}
           >
             <Field id="user-name" label="Name" errors={errorsFor(errors, 'displayName')}>
@@ -150,12 +162,14 @@ export default function UserEditor({ id }: { id: number }) {
                 />
               )}
             </Field>
-            <RoleField
-              id="user-role"
-              value={role}
-              onChange={setRole}
-              errors={errorsFor(errors, 'roles')}
-            />
+            {staff && (
+              <RoleField
+                id="user-role"
+                value={role}
+                onChange={setRole}
+                errors={errorsFor(errors, 'roles')}
+              />
+            )}
             <div className="flex flex-wrap items-center gap-4 border-t pt-6">
               <Button type="submit">Save</Button>
               {message && (
@@ -170,6 +184,10 @@ export default function UserEditor({ id }: { id: number }) {
               Account
             </h2>
             <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+              <dt className="font-medium">Type</dt>
+              <dd>{KIND_LABELS[roleOf(user)]}</dd>
+              <dt className="font-medium">Joined</dt>
+              <dd>{formatTime(user.createdAt)}</dd>
               <dt className="font-medium">Status</dt>
               <dd>{STATUS_LABELS[status]}</dd>
               <dt className="font-medium">Last sign-in</dt>

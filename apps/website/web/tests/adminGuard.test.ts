@@ -150,7 +150,12 @@ describe('adminMiddleware', () => {
 });
 
 describe('pages for Admins only', () => {
-  const ADMIN_ONLY = ['/admin/api-clients', '/admin/api-clients/new', '/admin/users/7'];
+  const ADMIN_ONLY = [
+    '/admin/api-clients',
+    '/admin/api-clients/new',
+    '/admin/users/7',
+    '/admin/reports',
+  ];
   const session = '__Host-runova-session=abc';
 
   for (const path of ADMIN_ONLY) {

@@ -165,14 +165,14 @@ try {
     // Every test signs in from 127.0.0.1, far past the 10 a minute a real address gets. The limit
     // itself is covered by the API's integration tests (AuthRateLimitTests).
     RateLimits__Auth__PermitLimit: '10000',
+    // The owner comes from the settings, as ADMIN_EMAIL and ADMIN_PASSWORD make it in production.
+    // The API makes it on start, right after the migrations.
+    Admin__Email: OWNER.email,
+    Admin__Password: OWNER.password,
+    Admin__DisplayName: OWNER.displayName,
   };
-  log('migrating and making the owner');
+  log('migrating');
   await run('dotnet', [dll, 'admin', 'migrate'], { env: apiEnv });
-  await run(
-    'dotnet',
-    [dll, 'admin', 'create-owner', '--email', OWNER.email, '--name', OWNER.displayName],
-    { env: apiEnv, input: `${OWNER.password}\n` },
-  );
   start('dotnet', [dll], api, apiEnv);
   await waitFor(`http://127.0.0.1:${STACK.apiHttpPort}/health/ready`, 'The API');
 

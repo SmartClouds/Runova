@@ -1,7 +1,9 @@
 # The website as production runs it: PostgreSQL, the API and the site in their images, and Caddy
 # in front of them on one origin (see Caddyfile). From the repository root:
 #   docker compose -f apps/website/compose.yaml up -d --build --wait
-# then open https://localhost:8443. The API migrates the database on start. Make the first Admin with:
+# then open https://localhost:8443. The API migrates the database on start, then makes the Admin
+# named by ADMIN_EMAIL and ADMIN_PASSWORD in apps/website/.env when they are set. Or make the first
+# Admin by hand with:
 #   echo "$PASSWORD" | docker compose -f apps/website/compose.yaml exec -T api \
 #     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
 name: runova-website
@@ -44,6 +46,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # The Admin the API makes (or keeps up to date) on every start. Empty leaves it out.
+      Admin__Email: ${ADMIN_EMAIL:-}
+      Admin__Password: ${ADMIN_PASSWORD:-}
+      Admin__DisplayName: ${ADMIN_NAME:-}
     restart: unless-stopped
 
   web:

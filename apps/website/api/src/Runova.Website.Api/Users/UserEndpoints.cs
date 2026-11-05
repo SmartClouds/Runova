@@ -34,6 +34,9 @@ internal static class UserEndpoints
     private const int MaxEmail = 256;
     private const string RolesMessage = "Roles are Admin and Editor.";
 
+    /// <summary>The <c>role</c> filter for the users with no staff role, the Runova accounts.</summary>
+    public const string AccountRole = "Account";
+
     // Serializes the changes that could remove the last Admin, so two of them can not each see
     // the other as the one that remains.
     private const long LastAdminLock = 41_004;
@@ -59,9 +62,9 @@ internal static class UserEndpoints
         int? page, int? pageSize, string? q, string? role, bool? disabled, AppDbContext db, TimeProvider time, HttpContext http)
     {
         var request = PageRequest.Parse(page, pageSize, out var errors);
-        if (role is not null && !Roles.All.Contains(role))
+        if (role is not null && role != AccountRole && !Roles.All.Contains(role))
         {
-            errors["role"] = [RolesMessage];
+            errors["role"] = [$"role is Admin, Editor or {AccountRole} (a Runova account with no staff role)."];
         }
 
         if (errors.Count > 0)
@@ -76,7 +79,11 @@ internal static class UserEndpoints
             query = query.Where(u => EF.Functions.ILike(u.Email!, pattern, @"\") || EF.Functions.ILike(u.DisplayName, pattern, @"\"));
         }
 
-        if (role is not null)
+        if (role == AccountRole)
+        {
+            query = query.Where(u => !db.UserRoles.Any(ur => ur.UserId == u.Id));
+        }
+        else if (role is not null)
         {
             var roleId = await db.Roles.Where(r => r.Name == role).Select(r => r.Id).SingleAsync();
             query = query.Where(u => db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == roleId));

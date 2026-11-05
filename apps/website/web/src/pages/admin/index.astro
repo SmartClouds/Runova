@@ -11,11 +11,20 @@ const cards = [
   ...(isAdmin(user)
     ? [
         {
+          href: '/admin/reports',
+          label: 'Reports',
+          text: 'How many people use Runova, who joined lately, their sessions, teams and sync, and the content on the site.',
+        },
+        {
+          href: '/admin/users',
+          label: 'Users',
+          text: 'Everyone who can sign in: staff and Runova accounts. Search, roles, two-factor and disabling.',
+        },
+        {
           href: '/admin/api-clients',
           label: 'API clients',
           text: 'The systems allowed to write news, with their keys, scopes and allowed addresses.',
         },
-        { href: '/admin/users', label: 'Users', text: 'Staff accounts: invitations, roles and two-factor.' },
         { href: '/hangfire', label: 'Jobs', text: 'The background jobs dashboard.' },
       ]
     : []),

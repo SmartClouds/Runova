@@ -36,6 +36,8 @@ builder.Services.AddWebsiteReleases();
 builder.Services.AddWebsiteJobs();
 builder.Services.AddWebsiteJson();
 builder.Services.AddHostedService<MigrateOnStart>();
+// After the migrations, which the hosted services run before it in the order they are added.
+builder.Services.AddHostedService<AdminFromSettings>();
 builder.Services.AddWebsiteProblemDetails();
 builder.Services.AddWebsiteHealthChecks();
 builder.Services.AddRunovaHealth();

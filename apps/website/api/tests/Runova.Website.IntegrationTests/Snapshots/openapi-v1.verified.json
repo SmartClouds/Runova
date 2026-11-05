@@ -918,6 +918,49 @@
         }
       }
     },
+    "/api/v1/reports/current": {
+      "get": {
+        "tags": [
+          "ReportEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "tags": [
@@ -3622,6 +3665,32 @@
         },
         "additionalProperties": false
       },
+      "ApiClientCountsDto": {
+        "required": [
+          "active",
+          "inactive"
+        ],
+        "type": "object",
+        "properties": {
+          "active": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "inactive": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "ApiClientCreatedDto": {
         "required": [
           "client",
@@ -3879,6 +3948,77 @@
         },
         "additionalProperties": false
       },
+      "ContentCountsDto": {
+        "required": [
+          "newsPublished",
+          "newsScheduled",
+          "newsDrafts",
+          "postsPublished",
+          "postsScheduled",
+          "postsDrafts",
+          "media"
+        ],
+        "type": "object",
+        "properties": {
+          "newsPublished": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "newsScheduled": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "newsDrafts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "postsPublished": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "postsScheduled": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "postsDrafts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "media": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "CoverImageDto": {
         "required": [
           "url",
@@ -3921,6 +4061,27 @@
         "properties": {
           "token": {
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DailyCountDto": {
+        "required": [
+          "date",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -4375,6 +4536,61 @@
             "items": {
               "$ref": "#/components/schemas/MyInvitationDto"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "NamedCountDto": {
+        "required": [
+          "name",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NewUserDto": {
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "staff",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "staff": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -5794,6 +6010,113 @@
           "linux"
         ]
       },
+      "ReportDto": {
+        "required": [
+          "generatedAt",
+          "days",
+          "users",
+          "signUps",
+          "newestUsers",
+          "sessions",
+          "teams",
+          "sync",
+          "content",
+          "apiClients",
+          "latestRelease"
+        ],
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "days": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "users": {
+            "$ref": "#/components/schemas/UserCountsDto"
+          },
+          "signUps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyCountDto"
+            }
+          },
+          "newestUsers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewUserDto"
+            }
+          },
+          "sessions": {
+            "$ref": "#/components/schemas/SessionCountsDto"
+          },
+          "teams": {
+            "$ref": "#/components/schemas/TeamCountsDto"
+          },
+          "sync": {
+            "$ref": "#/components/schemas/SyncCountsDto"
+          },
+          "content": {
+            "$ref": "#/components/schemas/ContentCountsDto"
+          },
+          "apiClients": {
+            "$ref": "#/components/schemas/ApiClientCountsDto"
+          },
+          "latestRelease": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionCountsDto": {
+        "required": [
+          "web",
+          "desktop",
+          "platforms",
+          "appVersions"
+        ],
+        "type": "object",
+        "properties": {
+          "web": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "desktop": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "platforms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedCountDto"
+            }
+          },
+          "appVersions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedCountDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "SessionDto": {
         "required": [
           "id",
@@ -6047,6 +6370,41 @@
           },
           "more": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SyncCountsDto": {
+        "required": [
+          "scopes",
+          "items",
+          "bytes"
+        ],
+        "type": "object",
+        "properties": {
+          "scopes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "items": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "bytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
           }
         },
         "additionalProperties": false
@@ -6377,6 +6735,41 @@
             "type": "string"
           },
           "postCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TeamCountsDto": {
+        "required": [
+          "total",
+          "members",
+          "pendingInvitations"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "members": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pendingInvitations": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -6726,6 +7119,95 @@
         },
         "additionalProperties": false
       },
+      "UserCountsDto": {
+        "required": [
+          "total",
+          "accounts",
+          "admins",
+          "editors",
+          "disabled",
+          "unconfirmed",
+          "twoFactor",
+          "joined",
+          "active"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "accounts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "admins": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "editors": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "disabled": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "unconfirmed": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "twoFactor": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "joined": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "active": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "UserDto": {
         "required": [
           "id",
@@ -6875,6 +7357,9 @@
     },
     {
       "name": "AuditEntryEndpoints"
+    },
+    {
+      "name": "ReportEndpoints"
     },
     {
       "name": "MeEndpoints"
