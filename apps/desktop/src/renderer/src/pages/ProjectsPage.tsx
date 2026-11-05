@@ -895,11 +895,7 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
               <TagChip>+{extraTags}</TagChip>
             </SimpleTooltip>
           )}
-          <ProjectStorageChip
-            projectId={project.id}
-            name={project.name}
-            onOpen={props.onOpenCleanup}
-          />
+          <ProjectStorageChip projectId={project.id} onOpen={props.onOpenCleanup} />
         </div>
       </div>
       <div className={cn(CARD_FOOTER, 'mt-auto')}>
@@ -964,11 +960,7 @@ function ProjectRow(props: ProjectItemProps): React.JSX.Element {
         </div>
       </div>
       <div className="hidden shrink-0 lg:block">
-        <ProjectStorageChip
-          projectId={project.id}
-          name={project.name}
-          onOpen={props.onOpenCleanup}
-        />
+        <ProjectStorageChip projectId={project.id} onOpen={props.onOpenCleanup} />
       </div>
       <div className="hidden shrink-0 md:block">
         <AgentBadge project={project} />

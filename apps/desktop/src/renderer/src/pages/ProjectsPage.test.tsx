@@ -686,7 +686,7 @@ describe('ProjectsPage disk use', () => {
   it('offers to check the size of a project nobody has measured yet', async () => {
     renderList([project()]);
     expect(
-      await screen.findByRole('button', { name: /check how much space apollo uses/i }),
+      await screen.findByRole('button', { name: /check how much space this project uses/i }),
     ).toBeInTheDocument();
   });
 
@@ -700,7 +700,7 @@ describe('ProjectsPage disk use', () => {
   it('opens the project on its Cleanup tab from the chip, not on its overview', async () => {
     know('p1', 3.1 * GB, 1.2 * GB);
     const { user } = renderList([project()]);
-    await user.click(await screen.findByRole('button', { name: /apollo uses 3\.10 GB/i }));
+    await user.click(await screen.findByRole('button', { name: /this project uses 3\.10 GB/i }));
     await waitFor(() =>
       expect(screen.getByRole('status', { name: 'Location' })).toHaveTextContent(
         '/projects/p1?tab=cleanup',

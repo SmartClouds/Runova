@@ -121,12 +121,12 @@ test('the Projects page shows each size once the projects are checked, and the c
   await page.reload();
 
   await expect(
-    page.getByRole('button', { name: /check how much space e2e project uses/i }),
+    page.getByRole('button', { name: /check how much space this project uses/i }),
   ).toBeVisible();
   await page.getByRole('button', { name: /check sizes/i }).click();
 
   const chip = page.getByRole('button', {
-    name: /e2e project uses .* can be freed\. Open Cleanup\./i,
+    name: /this project uses .* can be freed\. Open Cleanup\./i,
   });
   await expect(chip).toBeVisible();
   await expect(page.getByText(/to free/).first()).toBeVisible();
