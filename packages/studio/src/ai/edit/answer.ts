@@ -14,7 +14,7 @@ import {
   trimClip,
   updateClip,
 } from '../../timeline/edits.js';
-import { overlapsOnTrack, sceneBlocks, trackFor } from '../../timeline/layout.js';
+import { captionSpan, overlapsOnTrack, sceneBlocks, trackFor } from '../../timeline/layout.js';
 import {
   type AiScenePatch,
   aiScenePatchSchema,
@@ -479,15 +479,16 @@ export function editToProposal(
         const lines = splitCaptions(scene.narration, work.language);
         if (!block || lines.length === 0)
           throw new OpError(`Scene ${at + 1} has no narration to caption.`);
-        if (overlapsOnTrack(work, track.id, block.start, block.duration)) {
+        const span = captionSpan(block);
+        if (overlapsOnTrack(work, track.id, span.start, span.duration)) {
           throw new OpError(`There are captions over scene ${at + 1} already; remove them first.`);
         }
         const clips = captionClips({
           lines,
           lang: work.language,
           trackId: track.id,
-          start: block.start,
-          span: block.duration,
+          start: span.start,
+          span: span.duration,
           fps,
           newId: makeId,
         });

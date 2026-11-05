@@ -26,6 +26,52 @@ export function formatWhen(at: number, now = Date.now()): string {
   return 'just now';
 }
 
+export interface DayGroup<T> {
+  /** The day's local date, as YYYY-MM-DD, to key the group by. */
+  key: string;
+  /** "Today", "Yesterday", or a short date ("Mar 3", with the year when it is not this one). */
+  label: string;
+  items: T[];
+}
+
+const dayKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+/**
+ * Splits a list that is already newest first into one group per local day, keeping its order, so
+ * a long history reads by day.
+ */
+export function groupByDay<T>(
+  items: T[],
+  at: (item: T) => number,
+  now = Date.now(),
+): DayGroup<T>[] {
+  const today = new Date(now);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const groups: DayGroup<T>[] = [];
+  for (const item of items) {
+    const date = new Date(at(item));
+    const key = dayKey(date);
+    let group = groups.at(-1);
+    if (group?.key !== key) {
+      const label =
+        key === dayKey(today)
+          ? 'Today'
+          : key === dayKey(yesterday)
+            ? 'Yesterday'
+            : date.toLocaleDateString('en', {
+                month: 'short',
+                day: 'numeric',
+                ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+              });
+      group = { key, label, items: [] };
+      groups.push(group);
+    }
+    group.items.push(item);
+  }
+  return groups;
+}
+
 /** A scene length for a field: whole seconds stay whole, the rest get one decimal. */
 export function flicksToFieldSeconds(flicks: number): string {
   const seconds = flicksToSeconds(flicks);

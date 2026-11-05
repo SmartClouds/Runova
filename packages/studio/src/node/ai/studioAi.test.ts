@@ -569,6 +569,40 @@ describe('editing by typing', () => {
     if (opened.state !== 'open') throw new Error('closed');
     expect(opened.session.document).toEqual(s.doc);
   });
+
+  it('keeps only the newest proposal waiting, and closes the rest once one is applied', async () => {
+    let sceneId = '';
+    const rename = (title: string) => () =>
+      answer(
+        JSON.stringify({
+          summary: `Renamed to ${title}.`,
+          ops: [{ op: 'scene.update', sceneId, patch: { title } }],
+        }),
+      );
+    const s = await withScenario([rename('One'), rename('Two'), rename('Three')]);
+    sceneId = s.doc.scenario.scenes[0]!.id;
+    const ask = async (instruction: string) => {
+      const g = await s.service.startEdit({ videoId: s.video.id, instruction, run });
+      return settle(s.service, s.video.id, g.id);
+    };
+    const statuses = async () =>
+      (await s.service.generations({ videoId: s.video.id, limit: 10 }))
+        .filter((g) => g.stage === 'edit')
+        .map((g) => g.status);
+
+    const first = await ask('one');
+    const second = await ask('two');
+    // The first was never applied or discarded, but a newer proposal replaced it.
+    expect(await statuses()).toEqual(['proposed', 'discarded']);
+    await expect(
+      s.service.applyProposal({ videoId: s.video.id, generationId: first.id }),
+    ).rejects.toThrow(/no longer waiting/);
+
+    await s.service.applyProposal({ videoId: s.video.id, generationId: second.id });
+    expect(await statuses()).toEqual(['applied', 'discarded']);
+    await ask('three');
+    expect(await statuses()).toEqual(['proposed', 'applied', 'discarded']);
+  });
 });
 
 describe('animating a scene', () => {

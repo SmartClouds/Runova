@@ -1,7 +1,9 @@
 import type { StudioEvent } from '@runova/studio';
 import { useQueryClient } from '@tanstack/react-query';
 import { act } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
 import { studioKeys } from './queryKeys';
 import { useStudioEvents } from './useStudioEvents';
@@ -49,10 +51,42 @@ describe('useStudioEvents', () => {
     ]);
   });
 
-  it('leaves live output to the run card, so a chatty CLI refetches nothing', () => {
+  it('keeps live output for the run card, even with no editor open, and refetches nothing', () => {
     const { emit, keys } = setup();
     emit({ type: 'generation-output', videoId: 'v1', generationId: 'g1', lines: ['x'] });
+    emit({ type: 'generation-output', videoId: 'v1', generationId: 'g1', lines: ['y'] });
+    expect(useStudioAiOutputStore.getState().output.v1?.g1).toEqual(['x', 'y']);
     expect(keys() ?? []).toEqual([]);
+  });
+
+  it('shares one subscription between every holder, and lets go when the last one leaves', () => {
+    const stops: ReturnType<typeof vi.fn>[] = [];
+    const subscribe = vi.fn(() => {
+      const stop = vi.fn();
+      stops.push(stop);
+      return stop;
+    });
+    function Holder() {
+      useStudioEvents();
+      return null;
+    }
+    let dropSecond: () => void = () => undefined;
+    function Two() {
+      const [second, setSecond] = useState(true);
+      dropSecond = () => setSecond(false);
+      return (
+        <>
+          <Holder />
+          {second && <Holder />}
+        </>
+      );
+    }
+    const view = renderWithProviders(<Two />, { bridge: { 'studio.onEvent': subscribe } });
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    act(() => dropSecond());
+    expect(stops[0]).not.toHaveBeenCalled();
+    view.unmount();
+    expect(stops[0]).toHaveBeenCalledTimes(1);
   });
 
   it('refetches the render lists when a render changes, and patches progress in without asking', () => {

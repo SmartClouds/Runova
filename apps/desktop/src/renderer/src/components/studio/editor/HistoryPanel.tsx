@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { AiRunsList, type AiRunsListProps } from '../ai/AiRunsList';
 import { CompareRunsDialog } from '../ai/CompareRunsDialog';
 import { studioClient } from '../client';
-import { errorMessage, formatWhen } from '../format';
+import { errorMessage, formatWhen, groupByDay } from '../format';
 import {
   Button,
+  ChevronRight,
   Chip,
   cn,
   confirmDialog,
@@ -19,20 +20,45 @@ import {
   SimpleTooltip,
   Skeleton,
   segmentClass,
+  X,
 } from '../kit';
 import { studioKeys } from '../queryKeys';
 import { CompareVersionsDialog } from './CompareVersionsDialog';
+import { DaySection, RailDot } from './DaySection';
 
 const PAGE = 50;
 
+/** Where the panel remembers being folded, on this computer. */
+const FOLDED_KEY = 'runova.studio.historyFolded';
+
+function readFolded(): boolean {
+  try {
+    return window.localStorage.getItem(FOLDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeFolded(folded: boolean): void {
+  try {
+    window.localStorage.setItem(FOLDED_KEY, folded ? '1' : '0');
+  } catch {
+    // Storage can be unavailable; the panel then just opens unfolded next time.
+  }
+}
+
 const ACTOR: Record<
   HistoryEntryView['actor'],
-  { label: string; tone: 'primary' | 'neutral' | 'success' }
+  { label: string; tone: 'primary' | 'neutral' | 'success'; dot: string }
 > = {
-  user: { label: 'You', tone: 'neutral' },
-  ai: { label: 'AI', tone: 'primary' },
-  system: { label: 'Studio', tone: 'success' },
+  user: { label: 'You', tone: 'neutral', dot: 'bg-muted-foreground' },
+  ai: { label: 'AI', tone: 'primary', dot: 'bg-primary' },
+  system: { label: 'Studio', tone: 'success', dot: 'bg-success' },
 };
+
+/** Hover shows a row's actions, and so does keyboard focus inside it, so no mouse is needed. */
+const ROW_ACTION =
+  'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100';
 
 export interface HistoryPanelProps {
   videoId: string;
@@ -42,11 +68,15 @@ export interface HistoryPanelProps {
   ai?: AiRunsListProps;
   /** Opens a video: one started from a version of this one. */
   onOpenVideo?: (videoId: string) => void;
+  /** Hides the panel; the History button in the toolbar brings it back. */
+  onClose?: () => void;
 }
 
 /**
- * Every change ever made to the video, newest first. Nothing is ever dropped from it: restoring an
- * older version adds a new entry, so the version restored from is still there to come back to.
+ * Every change ever made to the video, newest first and grouped by day, on a timeline tinted by
+ * who made each change. Nothing is ever dropped from it: restoring an older version adds a new
+ * entry, so the version restored from is still there to come back to. The panel folds to its
+ * header (remembered on this computer) and can be hidden.
  */
 export function HistoryPanel({
   videoId,
@@ -54,8 +84,10 @@ export function HistoryPanel({
   onRestore,
   ai,
   onOpenVideo,
+  onClose,
 }: HistoryPanelProps): React.JSX.Element {
   const [tab, setTab] = useState<'changes' | 'ai'>('changes');
+  const [folded, setFolded] = useState(readFolded);
   const [compareFrom, setCompareFrom] = useState<number | null>(null);
   const [runs, setRuns] = useState<[string, string] | null>(null);
   const history = useInfiniteQuery({
@@ -65,6 +97,17 @@ export function HistoryPanel({
     getNextPageParam: (last) => (last.length === PAGE ? last.at(-1)?.seq : undefined),
   });
   const entries = history.data?.pages.flat() ?? [];
+  const days = groupByDay(entries, (entry) => entry.at);
+  const today = days[0]?.label === 'Today' ? days[0].items.length : 0;
+  const summary =
+    today > 0
+      ? `v${currentSeq}, ${today} ${today === 1 ? 'change' : 'changes'} today`
+      : `v${currentSeq}`;
+
+  const fold = () => {
+    writeFolded(!folded);
+    setFolded(!folded);
+  };
 
   async function restore(entry: HistoryEntryView) {
     const ok = await confirmDialog({
@@ -76,12 +119,30 @@ export function HistoryPanel({
   }
 
   return (
-    <aside className={cn(GLASS_PANEL, 'max-h-[calc(100vh-10rem)]')} aria-label="History">
-      <div className="flex items-center gap-2 px-3 pb-1 pt-3">
-        <History className="h-3.5 w-3.5 text-muted-foreground" />
-        <h2 className={SECTION_HEADING}>History</h2>
-        {ai && (
-          <div className={cn(SEGMENT_TRACK, 'ml-auto')} role="tablist" aria-label="History view">
+    <aside className={cn(GLASS_PANEL, 'max-h-[calc(100vh-10rem)] self-start')} aria-label="History">
+      <div className={cn('flex items-center gap-1.5 px-2 pt-2', folded ? 'pb-2' : 'pb-1')}>
+        <button
+          type="button"
+          aria-expanded={!folded}
+          aria-label={folded ? 'Unfold the history' : 'Fold the history'}
+          onClick={fold}
+          className="group/fold flex h-7 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-full px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              'h-2.5 w-2.5 shrink-0 text-muted-foreground/60 transition-transform group-hover/fold:text-muted-foreground motion-reduce:transition-none',
+              !folded && 'rotate-90',
+            )}
+          />
+          <History aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <h2 className={SECTION_HEADING}>History</h2>
+          {folded && (
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">{summary}</span>
+          )}
+        </button>
+        {ai && !folded && (
+          <div className={SEGMENT_TRACK} role="tablist" aria-label="History view">
             {(
               [
                 ['changes', 'Changes'],
@@ -101,8 +162,15 @@ export function HistoryPanel({
             ))}
           </div>
         )}
+        {onClose && (
+          <SimpleTooltip label="Hide history">
+            <Button variant="ghost" size="icon-xs" aria-label="Hide history" onClick={onClose}>
+              <X />
+            </Button>
+          </SimpleTooltip>
+        )}
       </div>
-      {ai && tab === 'ai' ? (
+      {folded ? null : ai && tab === 'ai' ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           <AiRunsList {...ai} onCompare={setRuns} />
         </div>
@@ -121,64 +189,83 @@ export function HistoryPanel({
               retry={() => void history.refetch()}
             />
           )}
-          <ol className="space-y-0.5">
-            {entries.map((entry) => {
-              const actor = ACTOR[entry.actor];
-              const current = entry.seq === currentSeq;
-              return (
-                <li
-                  key={entry.seq}
-                  className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-foreground/[0.04]"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium" dir="auto">
-                      {entry.label}
-                    </p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Chip tone={actor.tone}>{actor.label}</Chip>
-                      <span>{formatWhen(entry.at)}</span>
-                      <span className="tabular-nums">v{entry.seq}</span>
-                      {current && <Chip tone="success">Current</Chip>}
-                    </p>
-                  </div>
-                  {entry.generationId && ai && (
-                    <SimpleTooltip label="What the AI was asked">
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        aria-label="AI run details"
-                        className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                        onClick={() => ai.onDetails(entry.generationId as string)}
+          {days.map((day, index) => (
+            <DaySection
+              key={day.key}
+              label={day.label}
+              count={day.items.length}
+              defaultOpen={index === 0}
+              noun={['change', 'changes']}
+            >
+              {day.items.map((entry) => {
+                const actor = ACTOR[entry.actor];
+                const current = entry.seq === currentSeq;
+                return (
+                  <li
+                    key={entry.seq}
+                    aria-current={current ? 'true' : undefined}
+                    className={cn(
+                      'group relative flex items-start gap-2 rounded-lg py-1.5 pl-7 pr-1.5 hover:bg-foreground/[0.04] focus-within:bg-foreground/[0.04]',
+                      current && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/15',
+                    )}
+                  >
+                    <RailDot className={actor.dot} />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className="line-clamp-2 break-words text-xs font-medium"
+                        dir="auto"
+                        title={entry.label}
                       >
-                        <FileText />
-                      </Button>
-                    </SimpleTooltip>
-                  )}
-                  {!current && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      aria-label={`Compare version ${entry.seq} with now`}
-                      className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={() => setCompareFrom(entry.seq)}
-                    >
-                      Compare
-                    </Button>
-                  )}
-                  {!current && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={() => void restore(entry)}
-                    >
-                      Restore
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+                        {entry.label}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Chip tone={actor.tone}>{actor.label}</Chip>
+                        <span>{formatWhen(entry.at)}</span>
+                        <span className="tabular-nums">v{entry.seq}</span>
+                        {current && <Chip tone="success">Current</Chip>}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {entry.generationId && ai && (
+                        <SimpleTooltip label="What the AI was asked">
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            aria-label="AI run details"
+                            className={ROW_ACTION}
+                            onClick={() => ai.onDetails(entry.generationId as string)}
+                          >
+                            <FileText />
+                          </Button>
+                        </SimpleTooltip>
+                      )}
+                      {!current && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          aria-label={`Compare version ${entry.seq} with now`}
+                          className={ROW_ACTION}
+                          onClick={() => setCompareFrom(entry.seq)}
+                        >
+                          Compare
+                        </Button>
+                      )}
+                      {!current && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className={ROW_ACTION}
+                          onClick={() => void restore(entry)}
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </DaySection>
+          ))}
           {history.hasNextPage && (
             <Button
               size="sm"

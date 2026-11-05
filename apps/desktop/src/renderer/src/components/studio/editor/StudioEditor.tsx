@@ -89,6 +89,8 @@ export function StudioEditor({
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [recipeFrom, setRecipeFrom] = useState<GenerationView | null>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  // Proposals applied or discarded here stay hidden, even before the list of runs catches up.
+  const [settled, setSettled] = useState<ReadonlySet<string>>(new Set());
   const [applying, setApplying] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [rendering, setRendering] = useState(false);
@@ -195,7 +197,7 @@ export function StudioEditor({
 
   const { document } = view;
   const latest = ai.generations[0];
-  const proposal = ai.generations.find((g) => g.status === 'proposed');
+  const proposal = ai.generations.find((g) => g.status === 'proposed' && !settled.has(g.id));
   const lastScenario = ai.generations.find((g) => g.stage === 'scenario');
   const briefInitial: BriefValue = lastScenario
     ? {
@@ -218,13 +220,20 @@ export function StudioEditor({
       };
   const hasScenes = document.scenario.scenes.length > 0;
   const busy = ai.running !== null;
+  const settle = (generationId: string) => setSettled((ids) => new Set(ids).add(generationId));
   const applyProposal = async (generationId: string) => {
     setApplying(true);
     try {
-      await ai.applyProposal(generationId);
+      if (await ai.applyProposal(generationId)) {
+        settle(generationId);
+        toast.success('Applied. Undo takes it all back.');
+      }
     } finally {
       setApplying(false);
     }
+  };
+  const discardProposal = async (generationId: string) => {
+    if (await ai.discardProposal(generationId)) settle(generationId);
   };
 
   const saveTitle = () => {
@@ -359,10 +368,11 @@ export function StudioEditor({
         )}
         {proposal && (
           <ProposalCard
+            key={proposal.id}
             generation={proposal}
             applying={applying}
             onApply={() => void applyProposal(proposal.id)}
-            onDiscard={() => void ai.discardProposal(proposal.id)}
+            onDiscard={() => void discardProposal(proposal.id)}
           />
         )}
       </ErrorBoundary>
@@ -430,6 +440,7 @@ export function StudioEditor({
               currentSeq={view.status.seq}
               onRestore={(seq) => void video.restore(seq)}
               onOpenVideo={onOpenVideo}
+              onClose={() => setShowHistory(false)}
               ai={{
                 generations: ai.generations,
                 loading: ai.loading,

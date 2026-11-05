@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AnglesLeft, AnglesRight, Bell, MessageSquare, TerminalSquare } from '@/components/icons';
 import { CommandPalette } from '@/components/search/CommandPalette';
 import { SftpConflictHost } from '@/components/sftp/SftpConflictHost';
+import { useStudioEvents } from '@/components/studio/useStudioEvents';
 import { RunningClisDialog } from '@/components/terminal/RunningClisDialog';
 import { TerminalDrawer } from '@/components/terminal/TerminalDrawer';
 import { ToastHistoryPanel } from '@/components/toast/ToastHistoryPanel';
@@ -238,6 +239,9 @@ export function AppShell(): React.JSX.Element {
   // The Deploy AI's run goes on in main too, so its steps keep arriving while another page is
   // open and the drawer is not stuck where it was when the user comes back.
   useDeployAssistantEvents();
+  // Studio's narration, renders, AI runs and voice downloads go on in main as well, so their lists
+  // stay fresh and an AI run's output keeps coming while the user is on another page.
+  useStudioEvents();
 
   // The window is still hidden behind the startup splash. Once the first page has its data, give
   // React a beat to commit it and tell main to swap them. A timer, not requestAnimationFrame: a

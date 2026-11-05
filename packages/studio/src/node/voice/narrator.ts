@@ -7,7 +7,7 @@ import { applyOps, type EditOp } from '../../document/ops.js';
 import type { StudioDocument } from '../../document/schema.js';
 import { flicksToSeconds, samplesToFlicks } from '../../time/flicks.js';
 import { splitCaptions } from '../../timeline/captions.js';
-import { overlapsOnTrack, sceneBlocks, trackFor } from '../../timeline/layout.js';
+import { captionSpan, overlapsOnTrack, sceneBlocks, trackFor } from '../../timeline/layout.js';
 import {
   captionClipsFromTimes,
   narratedLength,
@@ -54,6 +54,8 @@ export interface NarratorDeps {
   retryDelaysMs?: readonly number[];
   /** The engines installed on this computer (Piper, OmniVoice). */
   local?: () => Promise<LocalSpeakers>;
+  /** Called when a video's run has ended, however it ended. */
+  onIdle?: (videoId: string) => void;
 }
 
 export interface Narrator {
@@ -76,6 +78,8 @@ export interface Narrator {
   captionScene(input: { videoId: string; sceneId: string }): Promise<StudioDocument>;
   /** Resolves when the video's run has ended (closing a video waits for it). */
   idle(videoId: string): Promise<void>;
+  /** True while a run is speaking the video's scenes. */
+  isRunning(videoId: string): boolean;
   shutdown(): Promise<void>;
 }
 
@@ -387,6 +391,7 @@ export function createNarrator(deps: NarratorDeps): Narrator {
           job.endedAt = deps.now();
           running.delete(videoId);
           changed(job);
+          deps.onIdle?.(videoId);
         });
       running.set(videoId, { job, controller, done });
       return { ...job };
@@ -473,26 +478,29 @@ export function createNarrator(deps: NarratorDeps): Narrator {
         throw new Error('That scene is not in the video any more.');
       const lines = splitCaptions(scene.narration, doc.language);
       if (lines.length === 0) throw new Error(`Scene ${index + 1} has no narration to caption.`);
-      if (overlapsOnTrack(doc, textTrack.id, block.start, block.duration)) {
-        throw new Error(`There are captions over scene ${index + 1} already; remove them first.`);
-      }
       const voice = narrationClip(doc, sceneId);
       const wordsHash =
         voice?.source.type === 'media' ? store.narrationWords(voice.source.hash) : null;
       const words = wordsHash
         ? (JSON.parse(await store.blobs.text(wordsHash)) as WordTiming[])
         : null;
-      const seconds = flicksToSeconds(block.duration);
+      const span = captionSpan(block);
+      const seconds = flicksToSeconds(span.duration);
       const timed = timeLines(lines, words ?? wordsByLength(lines.join(' '), seconds));
       const clips = captionClipsFromTimes({
         lines: timed,
         lang: doc.language,
         sceneId,
-        sceneStart: voice?.start ?? block.start,
+        sceneStart: voice?.start ?? span.start,
         trackId: textTrack.id,
         fps: doc.renderSettings.fps,
         newId: deps.newId,
       });
+      // Only where the new lines would actually sit counts, so captions on the next scene that
+      // start in the crossfade the two scenes share do not block this one.
+      if (clips.some((c) => overlapsOnTrack(doc, textTrack.id, c.start, c.duration))) {
+        throw new Error(`There are captions over scene ${index + 1} already; remove them first.`);
+      }
       const result = store.apply({
         baseSeq: store.seq,
         ops: clips.map((clip) => ({ op: 'clip.add', clip })),
@@ -507,6 +515,8 @@ export function createNarrator(deps: NarratorDeps): Narrator {
     async idle(videoId) {
       await running.get(videoId)?.done;
     },
+
+    isRunning: (videoId) => running.has(videoId),
 
     async shutdown() {
       for (const { controller } of running.values()) controller.abort();

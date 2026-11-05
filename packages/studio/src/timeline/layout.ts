@@ -48,6 +48,15 @@ export function sceneBlocks(doc: StudioDocument): SceneBlock[] {
   return blocks;
 }
 
+/**
+ * The stretch of a scene that its own captions get: from its start to where the next scene
+ * begins. The transition into the next scene belongs to that scene's captions, so captioning
+ * neighbouring scenes never collides in the crossfade they share.
+ */
+export function captionSpan(block: SceneBlock): { start: Flicks; duration: Flicks } {
+  return { start: block.start, duration: block.duration - block.transitionOut };
+}
+
 /** How long the finished video runs: the scene sequence. Clips past its end are cut there. */
 export function videoLength(doc: StudioDocument): Flicks {
   return sceneBlocks(doc).at(-1)?.end ?? 0;

@@ -773,7 +773,7 @@ describe('narration', () => {
     }
   });
 
-  it('places a recording, cleans up its temporary file, and stops speaking when the video closes', async () => {
+  it('places a recording, cleans up its temporary file, and stops speaking when Studio shuts down', async () => {
     const { s, video, tts } = await narratable();
     try {
       const { encodeWav } = await import('../voice/wav.js');
@@ -790,13 +790,84 @@ describe('narration', () => {
 
       tts.failNext(1000, 503);
       await s.service.speak({ videoId: video.id, sceneIds: ['a'], voiceRef: 'openai:marin' });
-      await s.service.close({ videoId: video.id });
+      await s.service.shutdown();
       expect((await s.service.narrationJobs({ videoId: video.id }))[0]?.status).toBe('cancelled');
       await expect(
         s.service.speak({ videoId: video.id, sceneIds: ['a'], voiceRef: 'openai:marin' }),
       ).rejects.toThrow('That video is not open.');
     } finally {
       tts.failNext(0, 503);
+      await tts.close();
+    }
+  });
+
+  it('keeps speaking after the editor closes the video, then closes it', async () => {
+    const { s, video, tts } = await narratable();
+    const release = tts.hold();
+    try {
+      await s.service.speak({ videoId: video.id, sceneIds: ['a', 'b'], voiceRef: 'openai:marin' });
+      await s.service.close({ videoId: video.id });
+      // Still open: the scenes are still being spoken and can be watched.
+      expect((await s.service.narrationJobs({ videoId: video.id }))[0]?.status).toBe('running');
+      expect((await s.service.history({ videoId: video.id, limit: 1 })).length).toBe(1);
+      release();
+      expect((await waitForJob(s.service, video.id)).status).toBe('done');
+      await vi.waitFor(async () => {
+        await expect(s.service.history({ videoId: video.id, limit: 1 })).rejects.toThrow(
+          /not open/,
+        );
+      });
+      // What was spoken is in the video when it opens again.
+      const again = await openSession(s.service, video.id);
+      expect(again.document.scenario.scenes.map((scene) => scene.voiceRef)).toEqual([
+        'openai:marin',
+        'openai:marin',
+      ]);
+    } finally {
+      release();
+      await tts.close();
+    }
+  });
+
+  it('cancels the pending close when the video opens again while it speaks', async () => {
+    const { s, video, tts } = await narratable();
+    const release = tts.hold();
+    try {
+      await s.service.speak({ videoId: video.id, sceneIds: ['a'], voiceRef: 'openai:marin' });
+      await s.service.close({ videoId: video.id });
+      const again = await openSession(s.service, video.id);
+      release();
+      expect((await waitForJob(s.service, video.id)).status).toBe('done');
+      // The video stayed open for the editor that came back, so edits still go through.
+      const status = (await openSession(s.service, video.id)).status;
+      await expect(
+        s.service.apply({
+          videoId: video.id,
+          baseSeq: status.seq,
+          ops: [{ op: 'doc.set', field: 'title', value: 'Back again' }],
+          label: 'Renamed',
+        }),
+      ).resolves.toMatchObject({ document: { title: 'Back again' } });
+      expect(again.document.id).toBe(video.id);
+    } finally {
+      release();
+      await tts.close();
+    }
+  });
+
+  it('never hands over a video that is still closing', async () => {
+    const { s, video, tts } = await narratable();
+    const release = tts.hold();
+    try {
+      await s.service.speak({ videoId: video.id, sceneIds: ['a'], voiceRef: 'openai:marin' });
+      // Removing it stops the run first; an open that comes in meanwhile waits for the close
+      // instead of getting the session that is about to go away.
+      const removing = s.service.removeFromLibrary({ videoId: video.id });
+      const reopened = s.service.open({ videoId: video.id });
+      await removing;
+      await expect(reopened).rejects.toThrow('That video is not in the Studio library.');
+    } finally {
+      release();
       await tts.close();
     }
   });

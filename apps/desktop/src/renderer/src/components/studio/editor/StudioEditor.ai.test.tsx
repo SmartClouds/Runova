@@ -125,6 +125,36 @@ describe('StudioEditor with AI', () => {
     expect(bridge.$fn('studio.open').mock.calls.length).toBe(opens);
   });
 
+  it('keeps a run going while the user is on another page, and tells them when they come back', async () => {
+    const running = generation();
+    const first = renderEditor({ runs: [running] });
+    const card = await screen.findByRole('region', { name: 'AI run' });
+    first.emit({
+      type: 'generation-output',
+      videoId: ID,
+      generationId: running.id,
+      lines: ['Reading request.md'],
+    });
+    expect(await within(card).findByText('Reading request.md')).toBeInTheDocument();
+    first.unmount();
+
+    // Back on the editor while the run is still going: its output so far is all there.
+    const back = renderEditor({ runs: [running] });
+    const again = await screen.findByRole('region', { name: 'AI run' });
+    expect(within(again).getByText('Reading request.md')).toBeInTheDocument();
+    back.unmount();
+    expect(toast.success).not.toHaveBeenCalled();
+
+    // It finished while the user was elsewhere; the editor says so once they return.
+    renderEditor({
+      runs: [{ ...running, status: 'done', resultSeq: 2, finishedAt: Date.now() }],
+      open: async () => opened(withScenes('Hook', 'Close')),
+    });
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/scenario is written/)),
+    );
+  });
+
   it('starts the scenario asked for in the New video dialog once the video is open', async () => {
     usePendingScenario.getState().set(ID, {
       brief: 'From the dialog',
@@ -190,6 +220,61 @@ describe('StudioEditor with AI', () => {
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'AI proposal' })).not.toBeInTheDocument(),
     );
+  });
+
+  it('hides an applied proposal at once, even before the list of runs catches up', async () => {
+    const proposed = generation({
+      id: 'g2',
+      stage: 'edit',
+      status: 'proposed',
+      proposal: proposal(),
+    });
+    const after = withScenes('Punchy hook', 'Close');
+    const { user, bridge } = renderEditor({
+      // The list still reports the run as waiting, as a refetch that has not landed yet would.
+      runs: [proposed],
+      open: async () => opened(withScenes('A')),
+      overrides: {
+        'studioAi.applyProposal': async () => ({
+          seq: 3,
+          document: after,
+          status: status({ seq: 3, canUndo: true }),
+        }),
+      },
+    });
+    const card = await screen.findByRole('region', { name: 'AI proposal' });
+    await user.click(within(card).getByRole('button', { name: /Apply/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'AI proposal' })).not.toBeInTheDocument(),
+    );
+    expect(toast.success).toHaveBeenCalledWith('Applied. Undo takes it all back.');
+    // Refetching the stale list does not bring the buttons back.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('region', { name: 'AI proposal' })).not.toBeInTheDocument();
+    expect(bridge.$fn('studioAi.applyProposal')).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the proposal when applying it failed', async () => {
+    const proposed = generation({
+      id: 'g2',
+      stage: 'edit',
+      status: 'proposed',
+      proposal: proposal(),
+    });
+    const { user } = renderEditor({
+      runs: [proposed],
+      open: async () => opened(withScenes('A')),
+      overrides: {
+        'studioAi.applyProposal': async () => {
+          throw new Error('The scenario changed since this was proposed, so it no longer fits.');
+        },
+      },
+    });
+    const card = await screen.findByRole('region', { name: 'AI proposal' });
+    await user.click(within(card).getByRole('button', { name: /Apply/ }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(screen.getByRole('region', { name: 'AI proposal' })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /Apply/ })).toBeEnabled();
   });
 
   it('discards a proposal', async () => {

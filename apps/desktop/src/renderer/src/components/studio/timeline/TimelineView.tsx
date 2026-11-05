@@ -3,6 +3,7 @@ import {
   addMediaClip,
   addTextClip,
   captionClips,
+  captionSpan,
   DEFAULT_STILL,
   type EditOp,
   FLICKS_PER_SECOND,
@@ -136,7 +137,8 @@ export function TimelineView({
     const block = sceneBlocks(doc).find((b) => b.sceneId === sceneId);
     const track = trackFor(doc, 'text');
     if (!scene || !block || !track) return;
-    if (overlapsOnTrack(doc, track.id, block.start, block.duration)) {
+    const span = captionSpan(block);
+    if (overlapsOnTrack(doc, track.id, span.start, span.duration)) {
       toast.error(`There are captions over scene ${index + 1} already; remove them first.`);
       return;
     }
@@ -146,8 +148,8 @@ export function TimelineView({
       lines,
       lang: doc.language,
       trackId: track.id,
-      start: block.start,
-      span: block.duration,
+      start: span.start,
+      span: span.duration,
       fps,
       newId,
     });

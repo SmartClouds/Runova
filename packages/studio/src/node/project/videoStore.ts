@@ -282,6 +282,12 @@ export class VideoStore {
     this.db.updateGeneration(id, patch);
   }
 
+  /** Discards every waiting proposal but `exceptId`; returns how many it closed. */
+  discardProposals(exceptId: string | null): number {
+    this.assertOpen();
+    return this.db.discardProposals(exceptId);
+  }
+
   generation(id: string): GenerationView | undefined {
     return this.db.generation(id);
   }

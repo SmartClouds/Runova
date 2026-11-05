@@ -298,6 +298,29 @@ describe('recordings and captions', () => {
     );
   });
 
+  it('captions a scene after the next one, though they share a crossfade', async () => {
+    const { store, narrator } = await setup();
+    store.apply({
+      baseSeq: store.seq,
+      ops: [
+        {
+          op: 'scene.update',
+          sceneId: 'a',
+          patch: { transitionOut: { kind: 'fade', duration: secondsToFlicks(0.5) } },
+        },
+      ],
+      label: 'Fade',
+    });
+    await narrator.captionScene({ videoId: 'v1', sceneId: 'b' });
+    await narrator.captionScene({ videoId: 'v1', sceneId: 'a' });
+    const captions = store.document.timeline.clips
+      .filter((c) => c.trackId === 'track-text')
+      .sort((x, y) => x.start - y.start);
+    const lastOfA = captions.filter((c) => c.id.startsWith('nc-a-')).at(-1);
+    const firstOfB = captions.find((c) => c.id.startsWith('nc-b-'));
+    expect(lastOfA && firstOfB && lastOfA.start + lastOfA.duration).toBe(firstOfB?.start);
+  });
+
   it('captions a scene without a voice by the length of its lines', async () => {
     const { store, narrator } = await setup();
     await narrator.captionScene({ videoId: 'v1', sceneId: 'a' });

@@ -1,5 +1,6 @@
 import type { GenerationView } from '@runova/studio';
 import { useState } from 'react';
+import { RailDot } from '../editor/DaySection';
 import { formatWhen, scriptClass } from '../format';
 import {
   Bookmark,
@@ -24,6 +25,15 @@ export interface AiRunsListProps {
   /** Two runs picked to compare, older first (E39). */
   onCompare?: (ids: [string, string]) => void;
 }
+
+/** The timeline dot of a run, tinted like its status chip. */
+const DOT = {
+  primary: 'bg-primary',
+  neutral: 'bg-muted-foreground',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  destructive: 'bg-destructive',
+} as const;
 
 const RETRYABLE = new Set<GenerationView['status']>(['failed', 'interrupted', 'cancelled']);
 
@@ -69,11 +79,18 @@ export function AiRunsList({
     );
   }
   return (
-    <ol className="space-y-0.5" aria-label="AI runs">
+    <ol
+      className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-px before:bg-foreground/10"
+      aria-label="AI runs"
+    >
       {generations.map((g) => {
         const status = STATUS_LABELS[g.status];
         return (
-          <li key={g.id} className="group rounded-lg px-2 py-1.5 hover:bg-foreground/[0.04]">
+          <li
+            key={g.id}
+            className="group relative rounded-lg py-1.5 pl-7 pr-2 hover:bg-foreground/[0.04] focus-within:bg-foreground/[0.04]"
+          >
+            <RailDot className={DOT[status.tone]} />
             <p
               className={cn('line-clamp-2 text-xs font-medium', scriptClass(g.instruction))}
               dir="auto"

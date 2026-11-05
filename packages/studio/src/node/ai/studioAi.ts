@@ -427,6 +427,8 @@ export function createStudioAi(deps: StudioAiDeps) {
           proposal: { ...proposal, baseSeq: store.seq },
           finishedAt: deps.now(),
         });
+        // Only the newest proposal waits; an older one would be offered again once this one goes.
+        store.discardProposals(generationId);
       },
     };
   }
@@ -649,6 +651,7 @@ export function createStudioAi(deps: StudioAiDeps) {
         throw error;
       }
       store.updateGeneration(generationId, { status: 'applied', resultSeq: result.seq });
+      store.discardProposals(null);
       await deps.afterEdit(videoId, store);
       changed(videoId, generationId);
       return result;

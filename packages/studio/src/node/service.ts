@@ -432,8 +432,10 @@ export function createStudioService(host: StudioHost): StudioService {
     now,
   );
   const sessions = new Map<string, Session>();
-  /** Videos the editor closed while an AI run was still working on them. */
+  /** Videos the editor closed while an AI run or a narration run was still working on them. */
   const closeAfterRun = new Set<string>();
+  /** Closes still finishing, so opening the video again waits for them first. */
+  const closing = new Map<string, Promise<void>>();
   const recipeStore = new RecipeStore(join(host.dataDir, 'recipes.json'), now, newId);
   const libraryBlobs = new BlobStore(join(host.dataDir, 'blobs'));
   const assets = studioAssets(host.packageRoot);
@@ -581,6 +583,8 @@ export function createStudioService(host: StudioHost): StudioService {
   }
 
   async function openWith(videoId: string, takeOverStale: boolean): Promise<OpenVideoResult> {
+    // Coming back while the video is still closing would hand over a session about to go away.
+    await closing.get(videoId)?.catch(() => undefined);
     const existing = sessions.get(videoId);
     if (existing) {
       closeAfterRun.delete(videoId);
@@ -623,9 +627,7 @@ export function createStudioService(host: StudioHost): StudioService {
     store: (videoId) => session(videoId).store,
     afterEdit,
     styleReference: assets.styleReference,
-    onIdle: (videoId) => {
-      if (closeAfterRun.delete(videoId)) void closeSession(videoId).catch(() => undefined);
-    },
+    onIdle: (videoId) => closeIfIdle(videoId),
   });
 
   /** Videos with a render running, whose code the scene server serves even when they are closed. */
@@ -772,7 +774,17 @@ export function createStudioService(host: StudioHost): StudioService {
     newId,
     now,
     local: () => localVoices.speakers(),
+    onIdle: (videoId) => closeIfIdle(videoId),
   });
+
+  /** True while an AI run or a narration run is working on the video. */
+  const busy = (videoId: string) => ai.isRunning(videoId) || narrator.isRunning(videoId);
+
+  /** Closes a video the editor already left, once the last run working on it has ended. */
+  function closeIfIdle(videoId: string): void {
+    if (busy(videoId) || !closeAfterRun.delete(videoId)) return;
+    void closeSession(videoId).catch(() => undefined);
+  }
 
   const gen = createGenJobs({
     dataDir: host.dataDir,
@@ -831,23 +843,29 @@ export function createStudioService(host: StudioHost): StudioService {
     return summarize(value);
   }
 
-  async function closeSession(videoId: string): Promise<void> {
+  function closeSession(videoId: string): Promise<void> {
+    const pending = closing.get(videoId);
+    if (pending) return pending;
     const open = sessions.get(videoId);
-    if (!open) return;
-    // The AI run writes its outcome into the video's history, so it stops before the video closes;
-    // so does a narration run, which keeps the pieces it spoke for next time.
-    await ai.stopForClose(videoId);
-    const speaking = narrator.jobs(videoId).find((job) => job.status === 'running');
-    if (speaking) {
-      narrator.cancel(videoId, speaking.id);
-      await narrator.idle(videoId);
-    }
-    sessions.delete(videoId);
-    try {
-      await open.store.close();
-    } finally {
-      await open.lock.release();
-    }
+    if (!open) return Promise.resolve();
+    const done = (async () => {
+      // The AI run writes its outcome into the video's history, so it stops before the video
+      // closes; so does a narration run, which keeps the pieces it spoke for next time.
+      await ai.stopForClose(videoId);
+      const speaking = narrator.jobs(videoId).find((job) => job.status === 'running');
+      if (speaking) {
+        narrator.cancel(videoId, speaking.id);
+        await narrator.idle(videoId);
+      }
+      sessions.delete(videoId);
+      try {
+        await open.store.close();
+      } finally {
+        await open.lock.release();
+      }
+    })().finally(() => closing.delete(videoId));
+    closing.set(videoId, done);
+    return done;
   }
 
   return {
@@ -1021,9 +1039,9 @@ export function createStudioService(host: StudioHost): StudioService {
     open: ({ videoId }) => openWith(videoId, false),
     takeOver: ({ videoId }) => openWith(videoId, true),
     async close({ videoId }) {
-      // Leaving the editor does not stop a scenario being written: the video stays open until
-      // the run ends, then closes. Quitting, moving or removing the video does stop it.
-      if (ai.isRunning(videoId)) {
+      // Leaving the editor does not stop a scenario being written or scenes being spoken: the
+      // video stays open until the runs end, then closes. Quitting, moving or removing it does.
+      if (busy(videoId)) {
         closeAfterRun.add(videoId);
         return;
       }

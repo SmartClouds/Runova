@@ -15,6 +15,7 @@ export {
   Bookmark,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   CircleCheck,
   Clapperboard,

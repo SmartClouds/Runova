@@ -1,20 +1,21 @@
 import type { EditResponse, GenerationView } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { studioAiClient, studioClient, studioScenesClient } from '../client';
+import { useCallback, useEffect } from 'react';
+import { useStudioAiOutputStore } from '@/stores/studioAiOutputStore';
+import { studioAiClient, studioScenesClient } from '../client';
 import { errorMessage } from '../format';
 import { type RunSettings, toast } from '../kit';
 import { studioKeys } from '../queryKeys';
+import { useStudioEvents } from '../useStudioEvents';
 import { type ScenarioRequest, toRunInput } from './runSettings';
 
-/** Lines of live output kept per run; the full log is in the run's record. */
-const MAX_OUTPUT_LINES = 300;
+const NO_OUTPUT: Record<string, string[] | undefined> = {};
 
 export interface StudioAi {
   generations: GenerationView[];
   loading: boolean;
   /** Live output of runs while they work, by generation id. */
-  output: Record<string, string[]>;
+  output: Record<string, string[] | undefined>;
   /** The run working on the video right now, if any. */
   running: GenerationView | null;
   startScenario: (request: ScenarioRequest) => Promise<boolean>;
@@ -24,10 +25,14 @@ export interface StudioAi {
   cancel: (generationId: string) => Promise<void>;
   retry: (generationId: string) => Promise<void>;
   applyProposal: (generationId: string) => Promise<boolean>;
-  discardProposal: (generationId: string) => Promise<void>;
+  discardProposal: (generationId: string) => Promise<boolean>;
 }
 
-/** One video's AI runs: their records, their live output, and the actions on them. */
+/**
+ * One video's AI runs: their records, their live output, and the actions on them. The runs go on
+ * in the service when the editor goes away; the app-wide Studio events keep the list fresh and
+ * collect the output meanwhile (`useStudioEvents`).
+ */
 export function useStudioAi(
   videoId: string,
   adopt: (result: EditResponse) => Promise<void>,
@@ -38,34 +43,18 @@ export function useStudioAi(
     queryFn: () => studioAiClient().generations(videoId, 50),
   });
   const generations = list.data ?? [];
-  const [output, setOutput] = useState<Record<string, string[]>>({});
+  // The editor holds the Studio events too, so it works on its own; the app shell shares them.
+  useStudioEvents();
+  const output = useStudioAiOutputStore((state) => state.output[videoId]) ?? NO_OUTPUT;
+  const observe = useStudioAiOutputStore((state) => state.observe);
 
+  // A scenario that lands gets a word, since the whole scenario changed. What the editor saw is
+  // kept outside it, so one that finished while the user was on another page is told on return.
   useEffect(() => {
-    return studioClient().onEvent((event) => {
-      if (event.type === 'generation-output' && event.videoId === videoId) {
-        setOutput((all) => ({
-          ...all,
-          [event.generationId]: [...(all[event.generationId] ?? []), ...event.lines].slice(
-            -MAX_OUTPUT_LINES,
-          ),
-        }));
-      } else if (event.type === 'generation-changed' && event.videoId === videoId) {
-        void queryClient.invalidateQueries({ queryKey: studioKeys.generations(videoId) });
-      }
-    });
-  }, [queryClient, videoId]);
-
-  // A scenario that lands while the user watches gets a word, since the whole scenario changed.
-  const seen = useRef(new Map<string, GenerationView['status']>());
-  useEffect(() => {
-    for (const g of generations) {
-      const before = seen.current.get(g.id);
-      if (before === 'running' && g.status === 'done' && g.stage === 'scenario') {
-        toast.success('The scenario is written. Undo brings back the one before.');
-      }
-      seen.current.set(g.id, g.status);
+    if (observe(generations).length > 0) {
+      toast.success('The scenario is written. Undo brings back the one before.');
     }
-  }, [generations]);
+  }, [generations, observe]);
 
   const refresh = useCallback(
     () => queryClient.invalidateQueries({ queryKey: studioKeys.generations(videoId) }),
@@ -117,8 +106,10 @@ export function useStudioAi(
       if (result) await adopt(result);
       return result !== null;
     },
-    discardProposal: async (id) => {
-      await attempt(() => client().discardProposal(videoId, id));
-    },
+    discardProposal: async (id) =>
+      (await attempt(async () => {
+        await client().discardProposal(videoId, id);
+        return true;
+      })) !== null,
   };
 }

@@ -7,7 +7,7 @@ import { AiRunsList } from './AiRunsList';
 import { AskAiBar } from './AskAiBar';
 import { BriefCard } from './BriefCard';
 import { GenerationCard } from './GenerationCard';
-import { ProposalCard } from './ProposalCard';
+import { FOLD_AFTER, ProposalCard } from './ProposalCard';
 import { runLabel, usePendingScenario, useRunSettings } from './runSettings';
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
@@ -176,6 +176,16 @@ describe('ProposalCard', () => {
     const card = screen.getByRole('region', { name: 'AI proposal' });
     expect(within(card).getByText('Shortened the opening and added a hook.')).toBeInTheDocument();
     expect(within(card).getByText('Make it punchier')).toBeInTheDocument();
+    // A long list starts folded under its count, with Apply still in view.
+    const count = g.proposal?.changes.length ?? 0;
+    expect(count).toBeGreaterThan(FOLD_AFTER);
+    const toggle = within(card).getByRole('button', { name: `Show the ${count} changes` });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(card).queryByText('Every drop')).not.toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /Apply/ })).toBeEnabled();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAccessibleName('Hide the changes');
     expect(within(card).getByText('Every drop')).toBeInTheDocument();
     expect(within(card).getByText(/New scene 1:/)).toBeInTheDocument();
     expect(within(card).getByText(/Remove scene 3:/)).toBeInTheDocument();
@@ -192,6 +202,23 @@ describe('ProposalCard', () => {
     await user.click(within(card).getByRole('button', { name: /Discard/ }));
     expect(onApply).toHaveBeenCalled();
     expect(onDiscard).toHaveBeenCalled();
+  });
+
+  it('shows a short list open, and folds it on request', async () => {
+    const full = proposal();
+    const g = generation({
+      stage: 'edit',
+      status: 'proposed',
+      proposal: { ...full, changes: full.changes.slice(0, 1) },
+    });
+    const { user } = renderWithProviders(
+      <ProposalCard generation={g} applying={false} onApply={vi.fn()} onDiscard={vi.fn()} />,
+    );
+    const card = screen.getByRole('region', { name: 'AI proposal' });
+    expect(within(card).getAllByRole('listitem')).toHaveLength(1);
+    await user.click(within(card).getByRole('button', { name: 'Hide the change' }));
+    expect(within(card).queryByRole('listitem')).not.toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Show the 1 change' })).toBeInTheDocument();
   });
 
   it('disables both buttons while applying, and renders nothing without a proposal', () => {

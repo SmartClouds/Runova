@@ -139,6 +139,78 @@ describe('comparing versions', () => {
   });
 });
 
+describe('the panel', () => {
+  const DAY = 24 * 3600_000;
+  beforeEach(() => window.localStorage.clear());
+
+  function renderDays(onClose = vi.fn()) {
+    const view = renderWithProviders(
+      <HistoryPanel videoId="v1" currentSeq={4} onRestore={vi.fn()} onClose={onClose} />,
+      {
+        bridge: {
+          'studio.history': async () => [
+            { ...entry(4, 'Renamed'), actor: 'ai' as const },
+            entry(3, 'Trimmed'),
+            { ...entry(2, 'Scene code'), at: NOW - 2 * DAY },
+            { ...entry(1, 'Created'), at: NOW - 40 * DAY, actor: 'system' as const },
+          ],
+        },
+      },
+    );
+    return { ...view, onClose };
+  }
+
+  it('groups the changes by day, with the newest day open and older ones folded', async () => {
+    const { user } = renderDays();
+    const history = await screen.findByRole('complementary', { name: 'History' });
+    const today = await within(history).findByRole('group', { name: 'Today' });
+    expect(within(today).getByRole('button', { name: 'Today, 2 changes' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(within(today).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(today).getByText('Renamed').closest('li')).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    const groups = within(history).getAllByRole('group');
+    expect(groups).toHaveLength(3);
+    const older = groups[1] as HTMLElement;
+    expect(within(older).queryByRole('listitem')).not.toBeInTheDocument();
+    await user.click(within(older).getByRole('button', { name: /1 change$/ }));
+    expect(within(older).getByText('Scene code')).toBeInTheDocument();
+    // Its actions are buttons in the row, so the keyboard reaches them too.
+    const row = within(older).getByText('Scene code').closest('li') as HTMLElement;
+    expect(within(row).getByRole('button', { name: 'Compare version 2 with now' })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'Restore' })).toBeTruthy();
+  });
+
+  it('folds to its header with a summary, remembers it, and hides on request', async () => {
+    const { user, onClose, unmount } = renderDays();
+    const history = await screen.findByRole('complementary', { name: 'History' });
+    await within(history).findByRole('group', { name: 'Today' });
+    await user.click(within(history).getByRole('button', { name: 'Fold the history' }));
+    expect(within(history).queryByRole('group')).not.toBeInTheDocument();
+    expect(within(history).getByText('v4, 2 changes today')).toBeInTheDocument();
+    unmount();
+
+    renderDays();
+    const again = await screen.findByRole('complementary', { name: 'History' });
+    const unfold = within(again).getByRole('button', { name: 'Unfold the history' });
+    expect(unfold).toHaveAttribute('aria-expanded', 'false');
+    await user.click(unfold);
+    expect(await within(again).findByRole('group', { name: 'Today' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('calls back to be hidden', async () => {
+    const { user, onClose } = renderDays();
+    const history = await screen.findByRole('complementary', { name: 'History' });
+    await user.click(within(history).getByRole('button', { name: 'Hide history' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
 describe('comparing AI runs (AC2)', () => {
   it('shows how two runs differed, and what each was asked', async () => {
     const { user } = renderPanel([

@@ -17,6 +17,8 @@ export interface FakeTtsServer {
   requests: { path: string; body: string; headers: IncomingMessage['headers'] }[];
   /** The next `count` speech requests fail with `status`. */
   failNext(count: number, status: number): void;
+  /** Keeps speech requests waiting until the returned function is called. */
+  hold(): () => void;
   close(): Promise<void>;
 }
 
@@ -35,6 +37,7 @@ export async function startFakeTts(): Promise<FakeTtsServer> {
   const requests: FakeTtsServer['requests'] = [];
   let failures = 0;
   let failStatus = 500;
+  let held: Promise<void> | null = null;
   const server: Server = createServer((req, res) => {
     let body = '';
     req.setEncoding('utf8');
@@ -85,55 +88,60 @@ export async function startFakeTts(): Promise<FakeTtsServer> {
         );
         return;
       }
-      if (failures > 0) {
-        failures -= 1;
-        res.writeHead(failStatus, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: `Fake failure ${failStatus}` } }));
-        return;
-      }
-      if (path === '/v1/audio/speech') {
-        const { input } = JSON.parse(body) as { input: string };
-        res.writeHead(200, { 'Content-Type': 'audio/wav' });
-        res.end(Buffer.from(encodeWav(tonePcm(lengthOf(input), 24_000), 24_000)));
-      } else if (path === '/v1beta/interactions') {
-        const parsed = JSON.parse(body) as { input: { content: { text: string }[] }[] };
-        const text = parsed.input[0]?.content[0]?.text ?? '';
-        const wav = Buffer.from(encodeWav(tonePcm(lengthOf(text), 24_000), 24_000)).toString(
-          'base64',
-        );
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            steps: [
-              { type: 'thinking' },
-              { type: 'model_output', content: [{ type: 'audio', data: wav }] },
-            ],
-          }),
-        );
-      } else if (/^\/v1\/text-to-speech\/[^/]+\/with-timestamps$/.test(path)) {
-        const { text } = JSON.parse(body) as { text: string };
-        const seconds = lengthOf(text);
-        const characters = [...text];
-        const step = seconds / Math.max(1, characters.length);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            audio_base64: tonePcm(seconds, 48_000).toString('base64'),
-            alignment: {
-              characters,
-              character_start_times_seconds: characters.map((_, i) => i * step),
-              character_end_times_seconds: characters.map((_, i) => (i + 1) * step),
-            },
-          }),
-        );
-      } else if (path === '/cognitiveservices/v1') {
-        const text = body.replace(/<[^>]+>/g, '');
-        res.writeHead(200, { 'Content-Type': 'audio/wav' });
-        res.end(Buffer.from(encodeWav(tonePcm(lengthOf(text), 48_000), 48_000)));
-      } else {
-        res.writeHead(404);
-        res.end();
-      }
+      const answer = () => {
+        if (failures > 0) {
+          failures -= 1;
+          res.writeHead(failStatus, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: `Fake failure ${failStatus}` } }));
+          return;
+        }
+        if (path === '/v1/audio/speech') {
+          const { input } = JSON.parse(body) as { input: string };
+          res.writeHead(200, { 'Content-Type': 'audio/wav' });
+          res.end(Buffer.from(encodeWav(tonePcm(lengthOf(input), 24_000), 24_000)));
+        } else if (path === '/v1beta/interactions') {
+          const parsed = JSON.parse(body) as { input: { content: { text: string }[] }[] };
+          const text = parsed.input[0]?.content[0]?.text ?? '';
+          const wav = Buffer.from(encodeWav(tonePcm(lengthOf(text), 24_000), 24_000)).toString(
+            'base64',
+          );
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              steps: [
+                { type: 'thinking' },
+                { type: 'model_output', content: [{ type: 'audio', data: wav }] },
+              ],
+            }),
+          );
+        } else if (/^\/v1\/text-to-speech\/[^/]+\/with-timestamps$/.test(path)) {
+          const { text } = JSON.parse(body) as { text: string };
+          const seconds = lengthOf(text);
+          const characters = [...text];
+          const step = seconds / Math.max(1, characters.length);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              audio_base64: tonePcm(seconds, 48_000).toString('base64'),
+              alignment: {
+                characters,
+                character_start_times_seconds: characters.map((_, i) => i * step),
+                character_end_times_seconds: characters.map((_, i) => (i + 1) * step),
+              },
+            }),
+          );
+        } else if (path === '/cognitiveservices/v1') {
+          const text = body.replace(/<[^>]+>/g, '');
+          res.writeHead(200, { 'Content-Type': 'audio/wav' });
+          res.end(Buffer.from(encodeWav(tonePcm(lengthOf(text), 48_000), 48_000)));
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      };
+      // A held server keeps speech waiting, like a slow engine, until the hold is let go.
+      if (held) void held.then(answer);
+      else answer();
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -144,6 +152,16 @@ export async function startFakeTts(): Promise<FakeTtsServer> {
     failNext(count, status) {
       failures = count;
       failStatus = status;
+    },
+    hold() {
+      let release: () => void = () => undefined;
+      held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => {
+        held = null;
+        release();
+      };
     },
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };

@@ -1,6 +1,7 @@
 import type { FieldChange, GenerationView, ProposalChange } from '@runova/studio';
+import { useId, useState } from 'react';
 import { scriptClass } from '../format';
-import { Button, Check, cn, GLASS_CARD, Sparkles, X } from '../kit';
+import { Button, Check, ChevronRight, cn, GLASS_CARD, Sparkles, X } from '../kit';
 import { runLabel } from './runSettings';
 
 function Text({ value, className }: { value: string; className?: string }): React.JSX.Element {
@@ -133,6 +134,9 @@ export function ChangeItem({ change }: { change: ProposalChange }): React.JSX.El
   }
 }
 
+/** A proposal with more changes than this starts folded, so Apply stays in view. */
+export const FOLD_AFTER = 4;
+
 export interface ProposalCardProps {
   generation: GenerationView;
   applying: boolean;
@@ -140,7 +144,10 @@ export interface ProposalCardProps {
   onDiscard: () => void;
 }
 
-/** What the AI wants to change, spelled out, waiting for the user to apply or discard it. */
+/**
+ * What the AI wants to change, spelled out, waiting for the user to apply or discard it. A long
+ * list of changes folds away under its count, and the summary and buttons always stay in view.
+ */
 export function ProposalCard({
   generation,
   applying,
@@ -148,7 +155,11 @@ export function ProposalCard({
   onDiscard,
 }: ProposalCardProps): React.JSX.Element | null {
   const proposal = generation.proposal;
+  const count = proposal?.changes.length ?? 0;
+  const [open, setOpen] = useState(count <= FOLD_AFTER);
+  const listId = useId();
   if (!proposal) return null;
+  const noun = count === 1 ? 'change' : 'changes';
   return (
     <section className={cn(GLASS_CARD, 'space-y-3 p-3')} aria-label="AI proposal">
       <div className="flex items-start gap-2">
@@ -162,16 +173,36 @@ export function ProposalCard({
           </p>
         </div>
       </div>
-      <ol className="space-y-2">
-        {proposal.changes.map((change, i) => (
-          <li
-            key={`${change.kind}-${i}`}
-            className="rounded-lg bg-foreground/[0.03] px-2.5 py-2 ring-1 ring-inset ring-foreground/[0.06]"
-          >
-            <ChangeItem change={change} />
-          </li>
-        ))}
-      </ol>
+      {count > 0 && (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen((value) => !value)}
+          className="group/fold flex cursor-pointer items-center gap-1.5 rounded-full px-1.5 py-0.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <ChevronRight
+            className={cn(
+              'h-2.5 w-2.5 shrink-0 transition-transform motion-reduce:transition-none',
+              open && 'rotate-90',
+            )}
+            aria-hidden
+          />
+          {open ? `Hide the ${noun}` : `Show the ${count} ${noun}`}
+        </button>
+      )}
+      {open && (
+        <ol id={listId} className="space-y-2">
+          {proposal.changes.map((change, i) => (
+            <li
+              key={`${change.kind}-${i}`}
+              className="rounded-lg bg-foreground/[0.03] px-2.5 py-2 ring-1 ring-inset ring-foreground/[0.06]"
+            >
+              <ChangeItem change={change} />
+            </li>
+          ))}
+        </ol>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={onApply} disabled={applying}>
           <Check /> {applying ? 'Applying...' : 'Apply'}

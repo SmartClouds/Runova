@@ -433,6 +433,18 @@ export class HistoryDb {
       .map(toGeneration);
   }
 
+  /**
+   * Closes every proposal still waiting, except one. A newer proposal or an applied one leaves
+   * the rest built on a version that is gone, so they are not offered again.
+   */
+  discardProposals(exceptId: string | null): number {
+    return this.db
+      .prepare(
+        `UPDATE generations SET status = 'discarded' WHERE status = 'proposed' AND id IS NOT ?`,
+      )
+      .run(exceptId).changes;
+  }
+
   /** Runs still marked running when the video opens were cut off by a crash or a quit. */
   interruptRunning(at: number): number {
     return this.db
