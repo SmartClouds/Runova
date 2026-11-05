@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Data;
 
 namespace Runova.Website.Api.ApiClients;
 
 internal static class ApiClientsSetup
 {
-    /// <summary>Picks the signature scheme for a signed request and the session cookie for any other.</summary>
+    /// <summary>Picks the signature scheme for a signed request, the device scheme for a desktop bearer token, and the session cookie for any other.</summary>
     public const string Scheme = "RunovaSessionOrSignature";
 
     /// <summary>
@@ -28,7 +29,9 @@ internal static class ApiClientsSetup
                 options.DefaultForbidScheme = Scheme;
             })
             .AddPolicyScheme(Scheme, null, options => options.ForwardDefaultSelector = http =>
-                SignatureAuthentication.IsSigned(http) ? SignatureAuthenticationHandler.SchemeName : IdentityConstants.ApplicationScheme)
+                SignatureAuthentication.IsSigned(http) ? SignatureAuthenticationHandler.SchemeName
+                : DeviceTokenAuthenticationHandler.HasToken(http) ? DeviceTokenAuthenticationHandler.SchemeName
+                : IdentityConstants.ApplicationScheme)
             .AddScheme<AuthenticationSchemeOptions, SignatureAuthenticationHandler>(SignatureAuthenticationHandler.SchemeName, null);
 
         services.AddApiClientRateLimits();

@@ -118,6 +118,9 @@ Three ways in, named in the **Auth** column of every table below:
 - **Account session (cookie).** The same sign-in and cookie for a Runova account (E48), which is a
   user with no staff role. An account reaches only its own resources, marked `Account` below; staff
   are accounts too. Every route not marked otherwise is for staff only, so an account gets 403 there.
+- **Device token (desktop app).** `Authorization: Bearer rd1...` from the Runova desktop app (E48.5),
+  got from [device tokens](#desktop-sign-in). It reaches `Account` routes only (never a staff route,
+  even for staff) and needs no antiforgery header.
 - **Signed request (API client).** For other systems that publish. See
   [Signed requests](#signed-requests). Scopes are `news:write` and `posts:write`. A signed request
   never uses cookies or antiforgery.
@@ -377,6 +380,40 @@ account that started it. An address nobody confirmed goes to the Google owner, a
 was registered with stops working. Errors in the redirect: `google-failed`, `email-unverified`,
 `link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
 Google login). A `returnUrl` that is not a path on this site becomes `/account`.
+
+### Desktop sign-in
+
+The desktop app signs in the way RFC 8252 describes for a native app: it opens
+`https://runovahq.com/account/authorize?client_id=runova-desktop&redirect_uri=http://127.0.0.1:<port>/callback&response_type=code&code_challenge=<S256>&code_challenge_method=S256&state=...&device_name=...&platform=windows|macos|linux&app_version=...&device_id=<uuid>`
+in the browser. The signed-in person approves the computer there, the page calls
+`POST /device-authorizations` and sends the browser to the redirect it gets back, and the app trades
+the code at `POST /device-tokens`.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| POST | `/api/v1/device-authorizations` | Account (cookie, with antiforgery) | `DeviceAuthorizationRequest` | 201 `{ "redirectUrl": string, "expiresAt": time }`; 400; 401 |
+| POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 429 |
+
+`DeviceAuthorizationRequest`: `{ "clientId": "runova-desktop", "redirectUri": string (only
+http://127.0.0.1:<port>/callback or http://[::1]:<port>/callback, port 1024 to 65535),
+"codeChallenge": string (base64url SHA-256), "codeChallengeMethod": "S256", "state": string,
+"deviceName": string (1 to 100), "platform": "windows" | "macos" | "linux", "appVersion": string |
+null, "deviceId": uuid | null }`. The code is 32 random bytes, kept only as its SHA-256, good for two
+minutes and one use.
+
+`DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token", "code": string | null,
+"codeVerifier": string | null, "redirectUri": string | null, "refreshToken": string | null }`. A
+code needs the verifier that matches its challenge and the same redirect URI. `DeviceTokenDto`:
+`{ "accessToken": string, "refreshToken": string, "expiresIn": 900, "sessionId": number,
+"account": AccountDto }`.
+
+The access token lasts 15 minutes and names its session, which must still be live. The refresh
+token lasts 60 days from its last use and is replaced by every refresh; only its SHA-256 is kept. A
+refresh token used again more than 30 seconds after it was replaced ends its session (it was
+copied), and earlier than that it is only refused (a lost answer). A computer that signs in again
+with the same `deviceId` replaces its old session. Each new computer is in the activity
+(`device-sign-in`) and sends the owner a "new sign-in" email. Disabling a user ends all their
+sessions at once.
 
 ### Account sessions and activity
 

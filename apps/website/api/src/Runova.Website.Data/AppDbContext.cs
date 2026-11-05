@@ -53,6 +53,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<AccountActivity> AccountActivities => Set<AccountActivity>();
 
+    public DbSet<DeviceAuthorization> DeviceAuthorizations => Set<DeviceAuthorization>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

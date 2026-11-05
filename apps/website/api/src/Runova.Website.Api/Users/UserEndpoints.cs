@@ -171,7 +171,8 @@ internal static class UserEndpoints
         UserManager<AppUser> users,
         AppDbContext db,
         AuditLog audit,
-        TimeProvider time)
+        TimeProvider time,
+        Accounts.AccountSessions sessions)
     {
         if (await FindAsync(users, id) is not { } user)
         {
@@ -233,6 +234,12 @@ internal static class UserEndpoints
         }
 
         await transaction.CommitAsync();
+        if (user.DisabledAt is not null)
+        {
+            // Every browser and computer of a disabled user stops at its next request.
+            await sessions.RevokeAllAsync(user.Id, keep: null);
+        }
+
         Versions.SetETag(http.Response, user.Version);
         return TypedResults.Ok(UserViews.ToDto(user, roles, time));
     }

@@ -72,7 +72,7 @@ Choices the user made:
   sign-in rate limits.
 - [x] E48.3 API: Google sign-in and safe linking.
 - [x] E48.4 API: account sessions, ending them, activity, step-up, the new sign-in email.
-- [ ] E48.5 API: desktop authorization (code and PKCE), device tokens, refresh rotation, bearer scheme.
+- [x] E48.5 API: desktop authorization (code and PKCE), device tokens, refresh rotation, bearer scheme.
 - [ ] E48.6 API: sync scopes and records, changes feed, pushes with conflicts, limits, key envelopes.
 - [ ] E48.7 API: teams, members, roles, invitations, team scopes, team activity.
 - [ ] E48.8 Website: shared API helper, account guard, account layout, sign-in, register, verify,

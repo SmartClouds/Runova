@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Data;
 
@@ -8,6 +9,8 @@ internal static class AccountsSetup
     public static IServiceCollection AddWebsiteAccounts(this IServiceCollection services)
     {
         services.AddGoogleSignIn();
+        services.AddSingleton<DeviceTokens>();
+        services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, DeviceTokenAuthenticationHandler>(DeviceTokenAuthenticationHandler.SchemeName, null);
         services.AddMemoryCache();
         services.AddHttpContextAccessor();
         services.AddScoped<AccountSessions>();

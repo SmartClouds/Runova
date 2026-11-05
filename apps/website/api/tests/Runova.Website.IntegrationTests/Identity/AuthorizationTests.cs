@@ -57,6 +57,9 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
         Assert.Equal(
             [
                 ("POST", "/api/v1/accounts", true),
+
+                // The desktop app trades a code or refresh token; it sends no cookie to forge.
+                ("POST", "/api/v1/device-tokens", false),
                 ("POST", "/api/v1/email-verifications", true),
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),

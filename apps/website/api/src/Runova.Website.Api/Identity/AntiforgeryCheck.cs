@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Antiforgery;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Core.Problems;
 
@@ -76,7 +77,8 @@ internal static class AntiforgeryCheck
             return false;
         }
 
-        if (ApiClientPrincipal.IsApiClient(http.User))
+        // A signed request and a desktop bearer token carry no cookie a page could ride on.
+        if (ApiClientPrincipal.IsApiClient(http.User) || DeviceTokenAuthenticationHandler.IsDevice(http.User))
         {
             return false;
         }

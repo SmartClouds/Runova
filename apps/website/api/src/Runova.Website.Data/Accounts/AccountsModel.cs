@@ -34,6 +34,18 @@ internal static class AccountsModel
             session.HasOne<AppUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<DeviceAuthorization>(approval =>
+        {
+            approval.Property(a => a.CodeChallenge).HasMaxLength(128);
+            approval.Property(a => a.RedirectUri).HasMaxLength(200);
+            approval.Property(a => a.DeviceName).HasMaxLength(100);
+            approval.Property(a => a.Platform).HasMaxLength(32);
+            approval.Property(a => a.AppVersion).HasMaxLength(32);
+            approval.HasIndex(a => a.CodeHash).IsUnique();
+            approval.HasIndex(a => a.ExpiresAt);
+            approval.HasOne<AppUser>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<AccountActivity>(activity =>
         {
             activity.Property(a => a.Action).HasMaxLength(48);
