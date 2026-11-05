@@ -42,7 +42,7 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
     }
 
     [Fact]
-    public void Every_write_needs_credentials_except_sign_in_and_password_setup_which_need_antiforgery()
+    public void Every_write_needs_credentials_except_sign_in_sign_up_and_email_links_which_need_antiforgery()
     {
         string[] safe = ["GET", "HEAD", "OPTIONS"];
         var anonymousWrites = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
@@ -55,7 +55,14 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
             .ToList();
 
         Assert.Equal(
-            [("POST", "/api/v1/password-setups", true), ("POST", "/api/v1/sessions", true)],
+            [
+                ("POST", "/api/v1/accounts", true),
+                ("POST", "/api/v1/email-verifications", true),
+                ("POST", "/api/v1/password-resets", true),
+                ("POST", "/api/v1/password-setups", true),
+                ("POST", "/api/v1/sessions", true),
+                ("POST", "/api/v1/verification-emails", true),
+            ],
             anonymousWrites);
     }
 

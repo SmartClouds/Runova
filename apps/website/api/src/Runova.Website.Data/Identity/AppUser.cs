@@ -3,7 +3,10 @@ using Runova.Website.Core.Users;
 
 namespace Runova.Website.Data.Identity;
 
-/// <summary>A staff user. Every one is made by an Admin or the CLI; there is no public sign-up.</summary>
+/// <summary>
+/// A user: a Runova account made by signing up (E48), or a staff user made by an Admin or the CLI.
+/// Staff are the users with the Admin or Editor role.
+/// </summary>
 public class AppUser : IdentityUser<long>, IStaffUser
 {
     public string DisplayName { get; set; } = "";

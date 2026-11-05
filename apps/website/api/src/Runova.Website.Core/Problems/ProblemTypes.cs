@@ -18,6 +18,7 @@ public static class ProblemTypes
     public static readonly ProblemType Unauthorized = new("unauthorized", 401, "Sign-in is required.");
     public static readonly ProblemType TwoFactorRequired = new("two-factor-required", 401, "A two-factor code is required.");
     public static readonly ProblemType Forbidden = new("forbidden", 403, "This is not allowed for you.");
+    public static readonly ProblemType EmailUnverified = new("email-unverified", 403, "The email address is not confirmed yet.");
     public static readonly ProblemType NotFound = new("not-found", 404, "Nothing was found here.");
     public static readonly ProblemType Conflict = new("conflict", 409, "The request conflicts with what is stored.");
     public static readonly ProblemType PreconditionFailed = new("precondition-failed", 412, "The resource has changed since you read it.");
@@ -31,7 +32,7 @@ public static class ProblemTypes
 
     public static IReadOnlyList<ProblemType> All { get; } =
     [
-        ValidationFailed, Unauthorized, TwoFactorRequired, Forbidden, NotFound, Conflict, PreconditionFailed,
+        ValidationFailed, Unauthorized, TwoFactorRequired, Forbidden, EmailUnverified, NotFound, Conflict, PreconditionFailed,
         PayloadTooLarge, IdempotencyKeyReused, AccountLocked, PreconditionRequired, RateLimited, Internal, Unavailable,
     ];
 

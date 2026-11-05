@@ -629,6 +629,15 @@
         "resolved": "5.0.0",
         "contentHash": "dDoKi0PnDz31yAyETfRntsLArTlVAVzUzCIvvEDsDsucrl33Dl8pIJG06ePTJTI3tGpeyHS9Cq7Foc/s4EeKcg=="
       },
+      "MimeKit": {
+        "type": "Transitive",
+        "resolved": "4.18.2",
+        "contentHash": "aYnwCCq+ZgQIsnHSJd3TMeGqf/Rz/9jYEItXpOoG3E2REOCZtLishwBSDFl2wQ/W2SB5wBsvE38DgHZ0IEyz4Q==",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.7.0",
+          "System.Security.Cryptography.Pkcs": "10.0.13"
+        }
+      },
       "Npgsql": {
         "type": "Transitive",
         "resolved": "10.0.3",
@@ -811,6 +820,8 @@
           "Hangfire.AspNetCore": "[1.8.25, )",
           "Hangfire.Core": "[1.8.25, )",
           "Hangfire.PostgreSql": "[1.21.1, )",
+          "MailKit": "[4.18.2, )",
+          "Microsoft.AspNetCore.Authentication.Google": "[10.0.14, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.14, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.14, )",
           "Npgsql.OpenTelemetry": "[10.0.3, )",
@@ -819,8 +830,8 @@
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.20.1, )",
           "OpenTelemetry.Instrumentation.EntityFrameworkCore": "[1.20.1-beta.1, )",
           "OpenTelemetry.Instrumentation.Http": "[1.20.1, )",
-          "Runova.Website.Core": "[0.1.0, )",
-          "Runova.Website.Data": "[0.1.0, )",
+          "Runova.Website.Core": "[3.3.0, )",
+          "Runova.Website.Data": "[3.3.0, )",
           "Scalar.AspNetCore": "[2.18.6, )",
           "Sentry.AspNetCore": "[6.12.1, )",
           "Sentry.OpenTelemetry.Exporter": "[6.12.1, )"
@@ -841,7 +852,7 @@
           "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": "[10.0.14, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.14, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
-          "Runova.Website.Core": "[0.1.0, )"
+          "Runova.Website.Core": "[3.3.0, )"
         }
       },
       "Hangfire.AspNetCore": {
@@ -884,11 +895,26 @@
           "AngleSharp.Css": "1.0.2"
         }
       },
+      "MailKit": {
+        "type": "CentralTransitive",
+        "requested": "[4.18.2, )",
+        "resolved": "4.18.2",
+        "contentHash": "ofqddpSbdrD00NqTD0ZyVfKvrl/ZZ70VFFEQ+DuR8r8CdbY3U02/sdb0CSQBNUqJifsXfVHIwRe1ToR2MvJJkw==",
+        "dependencies": {
+          "MimeKit": "4.18.2"
+        }
+      },
       "Markdig": {
         "type": "CentralTransitive",
         "requested": "[1.5.1, )",
         "resolved": "1.5.1",
         "contentHash": "NtHwU5t5yKr6Gnylhs8/hlR0mOAftTFQURDz2ID8bkunxps1neOzKw0dYKKlwNuwiYIGLHjJTXK91f809Ko1ww=="
+      },
+      "Microsoft.AspNetCore.Authentication.Google": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "3enUvuEqorstWs1o2wc2hd8VgiF+fK0vZtGXl3wjE760887BNXUTh9vl86cLY+qdDujCHHWxA773nkWW4n8FBA=="
       },
       "Microsoft.AspNetCore.DataProtection.EntityFrameworkCore": {
         "type": "CentralTransitive",

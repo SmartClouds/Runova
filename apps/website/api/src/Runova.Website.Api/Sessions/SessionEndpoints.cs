@@ -11,7 +11,10 @@ public sealed record SignInRequest(string? Email, string? Password, string? TwoF
 
 public sealed record CsrfTokenDto(string Token);
 
-/// <summary>Staff sign-in and sign-out, and the antiforgery token the admin app sends back.</summary>
+/// <summary>
+/// Sign-in and sign-out for staff and Runova accounts alike, and the antiforgery token the site
+/// sends back. An account whose email is not confirmed yet can not sign in.
+/// </summary>
 internal static class SessionEndpoints
 {
     private const string WrongCredentials = "The email or password is not right.";
@@ -19,8 +22,8 @@ internal static class SessionEndpoints
     public static RouteGroupBuilder MapSessions(this RouteGroupBuilder api)
     {
         api.MapGet("/csrf-tokens/current", GetCsrfToken).AllowAnonymous();
-        api.MapPost("/sessions", SignInAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance);
-        api.MapDelete("/sessions/current", SignOutAsync).RequireAuthorization(Policies.Staff);
+        api.MapPost("/sessions", SignInAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
+        api.MapDelete("/sessions/current", SignOutAsync).RequireAuthorization(Policies.Account);
         return api;
     }
 
@@ -61,6 +64,12 @@ internal static class SessionEndpoints
         if (!password.Succeeded)
         {
             return ApiProblems.Of(ProblemTypes.Unauthorized, WrongCredentials);
+        }
+
+        // Said only once the password is right, so it tells a stranger nothing.
+        if (!user.EmailConfirmed)
+        {
+            return ApiProblems.Of(ProblemTypes.EmailUnverified, "Confirm your email first: open the link we sent you, or ask for a new one.");
         }
 
         if (user.TwoFactorEnabled)

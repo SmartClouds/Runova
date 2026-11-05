@@ -17,7 +17,7 @@ internal static class PasswordSetupEndpoints
 {
     public static RouteGroupBuilder MapPasswordSetups(this RouteGroupBuilder api)
     {
-        api.MapPost("/password-setups", SetPasswordAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance);
+        api.MapPost("/password-setups", SetPasswordAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
         return api;
     }
 
@@ -34,7 +34,7 @@ internal static class PasswordSetupEndpoints
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync();
-        var link = string.IsNullOrEmpty(request.Token) ? null : await links.FindAsync(request.Token);
+        var link = string.IsNullOrEmpty(request.Token) ? null : await links.FindAsync(request.Token, SetupLinkPurposes.SetPassword);
         var user = link is null ? null : await users.FindByIdAsync(link.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (link is null || user is null)
         {
@@ -67,7 +67,7 @@ internal static class PasswordSetupEndpoints
     }
 
     private static ProblemHttpResult UnknownLink() =>
-        ApiProblems.Of(ProblemTypes.NotFound, "This link is not valid. It may have been used or expired; ask an Admin for a new one.");
+        ApiProblems.Of(ProblemTypes.NotFound, "This link is not valid. It may have been used or expired. Ask for a new one.");
 
     private static void Succeeded(IdentityResult result)
     {

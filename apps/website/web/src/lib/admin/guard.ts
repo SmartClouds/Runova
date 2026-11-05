@@ -1,7 +1,7 @@
 /**
  * The gate in front of `/admin/**`. Every admin response is private and kept out of search
  * engines, and a page other than sign-in and set-password renders only for a staff session the
- * API recognises. The pages for API clients and users render only for an Admin.
+ * API recognises. A Runova account with no staff role is sent to its own panel at `/account`. The pages for API clients and users render only for an Admin.
  */
 
 /** A `UserDto` reduced to what the admin pages show. */
@@ -29,6 +29,12 @@ export const isAdminOnlyPath = (pathname: string) =>
   /^\/admin\/(?:api-clients|users)(?:\/|$)/.test(pathname);
 
 export const isAdmin = (user: AdminUser | undefined) => user?.roles.includes('Admin') === true;
+
+/** Staff are the users with a role; a Runova account (E48) has none and belongs in `/account`. */
+export const isStaff = (user: AdminUser | undefined) =>
+  user?.roles.some((role) => role === 'Admin' || role === 'Editor') === true;
+
+export const ACCOUNT_PATH = '/account';
 
 const RETRY_AFTER_SECONDS = 30;
 
@@ -98,6 +104,10 @@ export async function adminMiddleware(
   const session = await currentSession(context.request.headers.get('cookie'));
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
+  if (session.state === 'signed-in' && !isStaff(session.user)) {
+    if (isPublic) return withAdminHeaders(await next());
+    return withAdminHeaders(redirect(ACCOUNT_PATH));
+  }
   if (session.state === 'signed-in') {
     if (pathname === SIGN_IN_PATH) return withAdminHeaders(redirect('/admin'));
     context.locals.adminUser = session.user;

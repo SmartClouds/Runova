@@ -1,3 +1,4 @@
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Media;
@@ -22,6 +23,7 @@ internal static class ApiV1
         api.MapMe();
         api.MapUsers();
         api.MapPasswordSetups();
+        api.MapAccounts();
         api.MapNews();
         api.MapTechnologies();
         api.MapPosts();

@@ -55,7 +55,7 @@ internal static class ApiClientRateLimits
                         Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
                 }
 
-                await ApiProblems.WriteAsync(context.HttpContext, ProblemTypes.RateLimited, "Too many requests from this client. Retry after the time in Retry-After.");
+                await ApiProblems.WriteAsync(context.HttpContext, ProblemTypes.RateLimited, "Too many requests. Retry after the time in Retry-After.");
             };
         });
         return services;

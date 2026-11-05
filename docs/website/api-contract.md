@@ -11,7 +11,7 @@ the same commit.
 ## Conventions
 
 - **Base path.** Every resource lives under `/api/v1`. Path segments are plural nouns
-  (`/news`, `/posts`, `/users`, `/api-clients`). The only non-plural segments are the fixed
+  (`/news`, `/posts`, `/users`, `/api-clients`, `/accounts`). The only non-plural segments are the fixed
   sub-resources `me`, `current`, `latest`, `two-factor`, `password` and `downloads`, and the mass
   nouns `news` and `media`. Verbs never appear in a path.
 - **Outside `/api/v1`.** `GET /health/live` (200 while the process runs), `GET /health/ready` (200
@@ -91,6 +91,7 @@ never carries a stack trace or exception text.
 | `unauthorized` | 401 | No session, wrong password, or any failed signature check (always the same detail) |
 | `two-factor-required` | 401 | Right password, but the account needs a TOTP or recovery code |
 | `forbidden` | 403 | Signed in, but the role or scope does not allow it |
+| `email-unverified` | 403 | Right password, but the account's email is not confirmed yet |
 | `not-found` | 404 | No such route or resource, or the resource is not published |
 | `conflict` | 409 | Duplicate slug or email, removing or demoting the last Admin |
 | `precondition-failed` | 412 | Stale `If-Match` |
@@ -113,11 +114,14 @@ Three ways in, named in the **Auth** column of every table below:
   needs the antiforgery header `X-XSRF-TOKEN`, whose value comes from the readable `XSRF-TOKEN`
   cookie that `GET /api/v1/csrf-tokens/current` (and every sign-in) sets. Missing or wrong: 400
   `validation-failed` with `errors.antiforgery`.
+- **Account session (cookie).** The same sign-in and cookie for a Runova account (E48), which is a
+  user with no staff role. An account reaches only its own resources, marked `Account` below; staff
+  are accounts too. Every route not marked otherwise is for staff only, so an account gets 403 there.
 - **Signed request (API client).** For other systems that publish. See
   [Signed requests](#signed-requests). Scopes are `news:write` and `posts:write`. A signed request
   never uses cookies or antiforgery.
 
-Auth column values: `Anonymous`, `Staff` (Editor or Admin session), `Admin` (Admin session),
+Auth column values: `Anonymous`, `Account` (any signed-in user, staff included), `Staff` (Editor or Admin session), `Admin` (Admin session),
 `Editor or news:write` (an Editor or Admin session, or a client with that scope), `Editor or
 posts:write` (likewise). Anything not marked `Anonymous` answers 401 when no credentials come with
 it (the fallback policy denies by default).
@@ -237,24 +241,26 @@ the API's validation and the desktop matcher, and both have table tests over the
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/csrf-tokens/current` | Anonymous | none | 200 `{ "token": string }` and sets the `XSRF-TOKEN` cookie |
-| POST | `/api/v1/sessions` | Anonymous (with antiforgery) | `SignInRequest` | 204 and the session cookie; 400; 401 `unauthorized`; 401 `two-factor-required`; 423 `account-locked`; 429 |
-| DELETE | `/api/v1/sessions/current` | Staff | none | 204 and the cookie cleared; 401 |
+| POST | `/api/v1/sessions` | Anonymous (with antiforgery) | `SignInRequest` | 204 and the session cookie; 400; 401 `unauthorized`; 401 `two-factor-required`; 403 `email-unverified`; 423 `account-locked`; 429 |
+| DELETE | `/api/v1/sessions/current` | Account | none | 204 and the cookie cleared; 401 |
 
 `SignInRequest`: `{ "email": string, "password": string, "twoFactorCode": string | null,
 "recoveryCode": string | null }`. A wrong email and a wrong password give the same 401. Sign-in is
-rate-limited to 10 attempts a minute per IP (429).
+rate-limited to 10 attempts a minute per IP (429), a limit shared with the account routes that
+send email. An account whose email is not confirmed gets 403 `email-unverified`, and only once its
+password is right.
 
 ### The signed-in user
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/users/me` | Staff | none | 200 `UserDto`; 401 |
-| PUT | `/api/v1/users/me/password` | Staff | `{ "currentPassword": string, "newPassword": string }` | 204; 400; 401 |
-| GET | `/api/v1/users/me/two-factor` | Staff | none | 200 `{ "enabled": bool, "recoveryCodesLeft": int }`; 401 |
-| POST | `/api/v1/users/me/two-factor` | Staff | none | 200 `{ "sharedKey": string, "authenticatorUri": string }` (starts setup, not yet on); 401 |
-| PUT | `/api/v1/users/me/two-factor` | Staff | `{ "code": string }` | 200 `{ "recoveryCodes": string[10] }` (turns it on); 400 wrong code; 401 |
-| DELETE | `/api/v1/users/me/two-factor` | Staff | `{ "password": string }` | 204; 400; 401 |
-| POST | `/api/v1/users/me/two-factor/recovery-codes` | Staff | `{ "code": string }` | 201 `{ "recoveryCodes": string[10] }` (the old ones stop working); 400; 401 |
+| GET | `/api/v1/users/me` | Account | none | 200 `UserDto`; 401 |
+| PUT | `/api/v1/users/me/password` | Account | `{ "currentPassword": string, "newPassword": string }` | 204; 400; 401 |
+| GET | `/api/v1/users/me/two-factor` | Account | none | 200 `{ "enabled": bool, "recoveryCodesLeft": int }`; 401 |
+| POST | `/api/v1/users/me/two-factor` | Account | none | 200 `{ "sharedKey": string, "authenticatorUri": string }` (starts setup, not yet on); 401 |
+| PUT | `/api/v1/users/me/two-factor` | Account | `{ "code": string }` | 200 `{ "recoveryCodes": string[10] }` (turns it on); 400 wrong code; 401 |
+| DELETE | `/api/v1/users/me/two-factor` | Account | `{ "password": string }` | 204; 400; 401 |
+| POST | `/api/v1/users/me/two-factor/recovery-codes` | Account | `{ "code": string }` | 201 `{ "recoveryCodes": string[10] }` (the old ones stop working); 400; 401 |
 
 TOTP follows RFC 6238 (SHA-1, 6 digits, 30 seconds, one step of drift), and each code works once.
 
@@ -270,7 +276,7 @@ TOTP follows RFC 6238 (SHA-1, 6 digits, 30 seconds, one step of drift), and each
 | POST | `/api/v1/users/{id}/password-resets` | Admin | none | 201 `SetupLinkDto`; 401; 403; 404 |
 | DELETE | `/api/v1/users/{id}/two-factor` | Admin | none | 204 (two-factor off, recovery codes gone); 401; 403; 404 |
 | POST | `/api/v1/users/{id}/invitations` | Admin | none | 201 `SetupLinkDto` (a new link; the old one stops working); 401; 403; 404; 409 already accepted |
-| POST | `/api/v1/password-setups` | Anonymous (with antiforgery) | `{ "token": string, "password": string }` | 204 (password set, email confirmed); 400 bad password; 404 unknown, used or expired token |
+| POST | `/api/v1/password-setups` | Anonymous (with antiforgery) | `{ "token": string, "password": string }` | 204 (password set, email confirmed); 400 bad password; 404 unknown, used or expired token; 429 |
 
 `UserInvitedDto`: `{ "user": UserDto, "setupLink": SetupLinkDto }`. `SetupLinkDto`:
 `{ "url": string, "expiresAt": time }`. The link is
@@ -300,6 +306,53 @@ Admin. An Editor gets 403 on every route in this table.
 
 No user DTO ever carries a password hash, security stamp, concurrency stamp, authenticator key,
 recovery code or token.
+
+### Accounts
+
+Runova accounts (E48): signing up, confirming the email, a forgotten password, and the account
+itself. Every anonymous route here answers the same whether or not an address has an account.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| POST | `/api/v1/accounts` | Anonymous (with antiforgery) | `RegisterRequest` | 202 (a link is on its way); 400; 429 |
+| POST | `/api/v1/email-verifications` | Anonymous (with antiforgery) | `{ "token": string }` | 200 `{ "signedIn": bool }` and the session cookie when signed in; 400; 404 unknown, used or expired token; 429 |
+| POST | `/api/v1/verification-emails` | Anonymous (with antiforgery) | `{ "email": string }` | 202; 400; 429 |
+| POST | `/api/v1/password-resets` | Anonymous (with antiforgery) | `{ "email": string }` | 202; 400; 429 |
+| GET | `/api/v1/accounts/me` | Account | none | 200 `AccountDto`; 401 |
+| PATCH | `/api/v1/accounts/me` | Account | merge patch of `displayName`; `If-Match` | 200 `AccountDto`; 400; 401; 412; 428 |
+
+`RegisterRequest`: `{ "email": string, "password": string (12 or more), "displayName": string (1 to
+100) }`. A new address gets an account with no role and a link to
+`https://runovahq.com/account/verify-email#token=<token>` (24 hours, one use). An address whose
+account was never confirmed gets a new link, and the password it was registered with before stops
+working. A confirmed address gets an email saying it already has an account, and nothing changes.
+Confirming signs in, unless the account has two-factor on. Accounts never confirmed are deleted
+after 7 days.
+
+`POST /password-resets` sends a link to `https://runovahq.com/account/reset-password#token=<token>`
+(one hour, one use), redeemed at `POST /password-setups`. An email verification token never sets a
+password. Setting a password ends every other session.
+
+`AccountDto`:
+
+```json
+{
+  "id": 42,
+  "email": "sam@example.com",
+  "displayName": "Sam",
+  "emailConfirmed": true,
+  "hasPassword": true,
+  "twoFactorEnabled": false,
+  "logins": ["google"],
+  "staff": false,
+  "createdAt": "2026-11-05T08:00:00.000Z",
+  "lastSignInAt": "2026-11-05T09:12:44.000Z",
+  "version": "1234"
+}
+```
+
+Emails wait in an outbox saved with the change that sends them and go out over SMTP (`Email__*`
+settings). A sent email keeps its subject but loses its body, which held a one-time link.
 
 ### Audit entries (Admin)
 
@@ -555,7 +608,9 @@ asked `arch`, else `arm64`, else `universal`, else `x64`; linux gives `appimage`
   (per API client, or per user). The same key with the same body replays the first response with
   `Idempotent-Replayed: true` and creates nothing; the same key with another body is a 422.
 - API clients: 60 requests a minute each (token bucket, burst 20). Over it: 429 with `Retry-After`.
-- Sign-in: 10 attempts a minute per IP. Anonymous reads: 300 a minute per IP.
+- Sign-in and the anonymous account routes (`/accounts`, `/email-verifications`,
+  `/verification-emails`, `/password-resets`, `/password-setups`): 10 requests a minute per IP
+  together. Anonymous reads: 300 a minute per IP.
 
 ## Signed requests
 

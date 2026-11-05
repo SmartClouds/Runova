@@ -16,6 +16,12 @@
     <!-- Keeps the Data Protection key ring, which seals API client signing keys, in PostgreSQL. -->
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup Label="Accounts">
+    <!-- Sends the account emails (verification, password reset, invitations) over SMTP. -->
+    <PackageVersion Include="MailKit" Version="4.18.2" />
+    <!-- Continue with Google for Runova accounts (E48.3). -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.14" />
+  </ItemGroup>
   <ItemGroup Label="OpenAPI">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <!-- The reference page at /scalar, in Development and Staging only. -->

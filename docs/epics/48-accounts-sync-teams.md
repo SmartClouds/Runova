@@ -67,8 +67,8 @@ Choices the user made:
 
 ## Tasks
 
-- [ ] E48.1 Epic doc, roadmap row and status row.
-- [ ] E48.2 API: policies split, registration, email verification, password reset, email outbox,
+- [x] E48.1 Epic doc, roadmap row and status row.
+- [x] E48.2 API: policies split, registration, email verification, password reset, email outbox,
   sign-in rate limits.
 - [ ] E48.3 API: Google sign-in and safe linking.
 - [ ] E48.4 API: account sessions, ending them, activity, step-up, the new sign-in email.

@@ -10,10 +10,16 @@ using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Api.Identity;
 
-/// <summary>The named authorization policies. The fallback policy covers everything else.</summary>
+/// <summary>
+/// The named authorization policies. The default and fallback policies are <see cref="Staff"/>, so
+/// a route that forgets to name one stays closed to accounts.
+/// </summary>
 internal static class Policies
 {
     public const string Staff = "Staff";
+
+    /// <summary>Any signed-in Runova account, staff included (E48). Never an API client.</summary>
+    public const string Account = "Account";
     public const string Admin = "Admin";
 
     /// <summary>Writing news: Editors, Admins, and API clients with the <c>news:write</c> scope.</summary>
@@ -89,9 +95,14 @@ internal static class IdentitySetup
             .RequireAuthenticatedUser()
             .RequireAssertion(context => !ApiClientPrincipal.IsApiClient(context.User))
             .Build();
+        var staff = new AuthorizationPolicyBuilder()
+            .Combine(signedInUser)
+            .RequireRole(Roles.Admin, Roles.Editor)
+            .Build();
         services.AddAuthorizationBuilder()
-            .SetDefaultPolicy(signedInUser)
-            .SetFallbackPolicy(signedInUser)
+            .SetDefaultPolicy(staff)
+            .SetFallbackPolicy(staff)
+            .AddPolicy(Policies.Account, signedInUser)
             .AddPolicy(Policies.Staff, policy => policy.RequireRole(Roles.Admin, Roles.Editor))
             .AddPolicy(Policies.Admin, policy => policy.RequireRole(Roles.Admin))
             .AddPolicy(Policies.NewsWrite, policy => policy.RequireAssertion(context => IsStaffOrHasScope(context.User, ApiScopes.NewsWrite)))

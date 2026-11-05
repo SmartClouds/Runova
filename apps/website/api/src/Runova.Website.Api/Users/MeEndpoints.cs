@@ -38,7 +38,7 @@ internal static class MeEndpoints
 
     public static RouteGroupBuilder MapMe(this RouteGroupBuilder api)
     {
-        var me = api.MapGroup("/users/me").RequireAuthorization(Policies.Staff);
+        var me = api.MapGroup("/users/me").RequireAuthorization(Policies.Account);
         me.MapGet("", GetMeAsync);
         me.MapGet("/two-factor", GetTwoFactorAsync);
         me.MapPost("/two-factor", StartTwoFactorAsync);

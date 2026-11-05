@@ -56,6 +56,30 @@ describe('isAdminPath', () => {
 });
 
 describe('adminMiddleware', () => {
+  it('sends a Runova account with no staff role to the account panel, not the admin', async () => {
+    me = { ...EDITOR, roles: [] };
+
+    const response = await adminMiddleware(
+      context('/admin/news', '__Host-runova-session=abc'),
+      page,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/account');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('lets a Runova account with no staff role see the admin sign-in page', async () => {
+    me = { ...EDITOR, roles: [] };
+
+    const response = await adminMiddleware(
+      context('/admin/sign-in', '__Host-runova-session=abc'),
+      page,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it('leaves pages outside /admin alone', async () => {
     const response = await adminMiddleware(context('/news'), page);
 

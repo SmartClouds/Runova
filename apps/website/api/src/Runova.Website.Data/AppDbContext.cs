@@ -7,8 +7,10 @@ using Runova.Website.Core.Media;
 using Runova.Website.Core.News;
 using Runova.Website.Core.Posts;
 using Runova.Website.Core.Releases;
+using Runova.Website.Data.Accounts;
 using Runova.Website.Data.ApiClients;
 using Runova.Website.Data.Audit;
+using Runova.Website.Data.Email;
 using Runova.Website.Data.Identity;
 using Runova.Website.Data.News;
 using Runova.Website.Data.Posts;
@@ -44,6 +46,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SignatureNonce> SignatureNonces => Set<SignatureNonce>();
 
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+
+    public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
 
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -85,6 +89,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigurePosts();
         builder.ConfigureApiClients();
         builder.ConfigureReleases();
+        builder.ConfigureAccounts();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

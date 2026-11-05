@@ -25,4 +25,13 @@ public static class SetupLinkPurposes
 {
     public const string Invitation = "invitation";
     public const string PasswordReset = "password-reset";
+
+    /// <summary>A reset a Runova account asked for itself, on the account panel (E48).</summary>
+    public const string AccountReset = "account-reset";
+
+    /// <summary>Confirms the email of a new account (E48). It can never set a password.</summary>
+    public const string EmailVerification = "email-verification";
+
+    /// <summary>The purposes whose link sets a password.</summary>
+    public static readonly IReadOnlySet<string> SetPassword = new HashSet<string>(StringComparer.Ordinal) { Invitation, PasswordReset, AccountReset };
 }
