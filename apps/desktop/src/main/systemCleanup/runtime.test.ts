@@ -286,6 +286,23 @@ describe('clean', () => {
     expect(service.current()?.providers.find((p) => p.id === 'nuget')?.bytes).toBe(50);
   });
 
+  it('reads the disks again afterwards, so the free space shown is the real one', async () => {
+    let freeBytes = 1000;
+    const { deps } = setup(NUGET, {
+      volumeOf: async () => ({ key: 'V', mount: 'V:', totalBytes: 5000, freeBytes }),
+    });
+    const service = createSystemCleanup(deps);
+    const scan = await service.scan(request({ providerIds: ['nuget'] }).request);
+    expect(scan.volumes[0]).toMatchObject({ freeBytes: 1000 });
+
+    freeBytes = 1010; // what removing a version gives back
+    const result = await service.clean(
+      cleanRequest(scan.scanId, { mode: 'old-versions', providerId: 'nuget', keep: 1 }).request,
+    );
+    expect(result.volumes?.[0]).toMatchObject({ mount: 'V:', freeBytes: 1010, cacheBytes: 50 });
+    expect(service.current()?.volumes[0]).toMatchObject({ freeBytes: 1010 });
+  });
+
   it('refuses when nothing has been scanned yet', async () => {
     const service = createSystemCleanup(setup().deps);
     await expect(

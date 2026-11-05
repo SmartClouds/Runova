@@ -260,3 +260,4 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E47](epics/47-sentry-projects.md) | Sentry projects and DSNs: create a project from the Errors tab and get its DSN | Standalone (Ship) | E24 |
 | [E48](epics/48-accounts-sync-teams.md) | Accounts, cloud sync and teams: one account on every computer, shared team workspaces, end-to-end encryption | Standalone (Account) | E40W, E41 |
 | [E49](epics/49-project-cleanup.md) | Project cleanup: see what each project takes on disk and delete the folders it can rebuild | Standalone (Build) | E31, E21, E23 |
+| [E50](epics/50-system-cleanup.md) | Disk Cleanup: find the caches package managers and developer tools keep, and remove old versions or everything | Standalone (Build) | E49 |

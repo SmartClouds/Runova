@@ -35,7 +35,9 @@ describe('cleanupAvailability', () => {
     });
     expect(result.enabled).toBe(false);
     expect(result.sandbox).toBeNull();
-    expect(result.reason).toMatch(/test/i);
+    expect(result.reason).toMatch(/test runs/i);
+    // The page titles this "Disk Cleanup is switched off", so the reason must not say it again.
+    expect(result.reason).not.toMatch(/disk cleanup is switched off/i);
   });
 
   it('is off when the sandbox folder is empty or is not a full path', () => {

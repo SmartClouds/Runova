@@ -62,6 +62,8 @@ const ApiClientPage = lazy(() => import('./pages/ApiClientPage'));
 const DeployPage = lazy(() => import('./pages/DeployPage'));
 /** Health checks (E22) load on first visit, like Deploy. */
 const HealthPage = lazy(() => import('./pages/HealthPage'));
+/** Disk Cleanup (E50) loads on first visit, since most sessions never open it. */
+const DiskCleanupPage = lazy(() => import('./pages/DiskCleanupPage'));
 const StudioPage = lazy(() => import('./pages/StudioPage'));
 /** Carries the IronRDP WebAssembly engine, which only Remote Desktop session windows need. */
 const RdpSessionRoute = lazy(() => import('./components/rdp/RdpSessionRoute'));
@@ -230,6 +232,20 @@ export default function App(): React.JSX.Element {
                       }
                     >
                       <HealthPage />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="cleanup"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="p-6 text-sm text-muted-foreground">
+                          Loading Disk Cleanup…
+                        </div>
+                      }
+                    >
+                      <DiskCleanupPage />
                     </Suspense>
                   }
                 />

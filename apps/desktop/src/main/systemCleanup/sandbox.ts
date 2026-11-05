@@ -76,7 +76,7 @@ export function cleanupAvailability(input: SandboxInput): CleanupAvailability {
   if (!folder || !path.isAbsolute(folder)) {
     return {
       enabled: false,
-      reason: 'Disk Cleanup is switched off in test runs, so a test can never touch real caches.',
+      reason: 'Test runs leave it switched off, so a test can never touch real caches.',
       sandbox: null,
     };
   }

@@ -286,9 +286,10 @@ export function createSystemCleanup(deps: RuntimeDeps): SystemCleanupService {
       return exclusive(request.requestId, request.signal, async (signal) => {
         if (!live) throw new CleanRefused('Scan first, then clean up.');
         const ctx = await context();
-        return runClean(
+        const current = live;
+        const result = await runClean(
           {
-            live,
+            live: current,
             safety: ctx.safety,
             now: deps.now,
             sleep: deps.sleep,
@@ -304,6 +305,9 @@ export function createSystemCleanup(deps: RuntimeDeps): SystemCleanupService {
           },
           { ...request, signal },
         );
+        // What was removed shows up as free space, so the disks are read again.
+        current.volumes = await volumesOf(current, deps.volumeOf ?? systemVolumeOf);
+        return { ...result, volumes: current.volumes };
       });
     },
 

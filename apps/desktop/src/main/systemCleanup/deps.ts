@@ -25,20 +25,29 @@ function currentOs(): DevOs {
 export function createRealSystemCleanup(): SystemCleanupService {
   const os = currentOs();
   const log = createDeletionLog(join(app.getPath('userData'), 'logs', 'disk-cleanup.log'));
+  const availability = () =>
+    cleanupAvailability({
+      isE2E,
+      folder: process.env.RUNOVA_CLEANUP_SANDBOX,
+      baseEnv: process.env,
+      os,
+    });
 
   return createSystemCleanup({
-    availability: () =>
-      cleanupAvailability({
-        isE2E,
-        folder: process.env.RUNOVA_CLEANUP_SANDBOX,
-        baseEnv: process.env,
-        os,
-      }),
+    availability,
     os,
     baseEnv: () => process.env,
     homeDir: () => homedir(),
+    // A test sandbox sits in the temp folder, which is protected on a real machine. Inside a
+    // sandbox the stricter rule applies instead: nothing outside the sandbox is touched at all.
     protectedFolders: () =>
-      protectedFolders({ os, env: process.env, getPath: (name) => app.getPath(name as 'home') }),
+      availability().sandbox
+        ? []
+        : protectedFolders({
+            os,
+            env: process.env,
+            getPath: (name) => app.getPath(name as 'home'),
+          }),
     projectFolders: async () =>
       (await store.getProjects()).map((project) => project.folderPath).filter(Boolean),
     findTools,

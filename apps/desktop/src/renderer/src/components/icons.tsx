@@ -21,6 +21,7 @@ import {
   faBoxArchive,
   faBoxOpen,
   faBriefcase,
+  faBroom,
   faBug,
   faBuildingColumns,
   faBurst,
@@ -489,6 +490,7 @@ export const Dice = makeIcon(faDice);
 export const Sliders = makeIcon(faSliders);
 export const HeartPulse = makeIcon(faHeartPulse);
 export const Briefcase = makeIcon(faBriefcase);
+export const Broom = makeIcon(faBroom);
 export const Bank = makeIcon(faBuildingColumns);
 export const ShoppingCart = makeIcon(faCartShopping);
 export const Cloud = makeIcon(faCloud);

@@ -383,7 +383,8 @@ describe('looksLikeCache', () => {
 
   it('looks at a few versions, not all of them', async () => {
     const tree: Record<string, Record<string, Record<string, null>>> = {};
-    for (let index = 0; index < 40; index += 1) tree[`pkg${index}`] = { '1.0.0': { 'x.txt': null } };
+    for (let index = 0; index < 40; index += 1)
+      tree[`pkg${index}`] = { '1.0.0': { 'x.txt': null } };
     const read = memoryReader(tree);
     const items = await enumerateProvider(nuget, read);
     read.reads.length = 0;
@@ -391,4 +392,3 @@ describe('looksLikeCache', () => {
     expect(read.reads.length).toBeLessThanOrEqual(5);
   });
 });
-

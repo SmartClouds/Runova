@@ -205,6 +205,8 @@ export interface CleanResult {
   cancelled: boolean;
   /** The provider as it stands afterwards, so the window can show it without scanning again. */
   provider: ProviderScan;
+  /** The disks as they stand afterwards, since removing files changes how full they are. */
+  volumes?: VolumeUse[];
 }
 
 export type SystemScanEvent =

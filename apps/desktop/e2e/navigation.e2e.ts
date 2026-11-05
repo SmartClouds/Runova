@@ -50,6 +50,12 @@ const DESTINATIONS: Destination[] = [
       page.getByRole('tree', { name: 'Collections' }).or(page.getByText('No collections yet')),
   },
   {
+    // A test run with no sandbox folder leaves it switched off, so it can never touch real caches.
+    label: 'Disk Cleanup',
+    hash: '#/cleanup',
+    landmark: (page) => page.getByText('Disk Cleanup is switched off'),
+  },
+  {
     label: 'Pipelines',
     hash: '#/pipelines',
     landmark: (page) => page.getByRole('button', { name: /^Refresh runs/ }),

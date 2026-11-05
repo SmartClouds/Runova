@@ -252,6 +252,10 @@ export default defineConfig({
             // undone, the sandbox that keeps tests off real caches, and the IPC. Built test-first.
             'src/main/systemCleanup/**': { lines: 90, branches: 80 },
             'src/main/ipc/systemCleanup.ts': { lines: 90, branches: 80 },
+            'src/renderer/src/components/systemCleanup/**': { lines: 90, branches: 80 },
+            'src/renderer/src/lib/systemCleanup/**': { lines: 90, branches: 85 },
+            'src/renderer/src/stores/systemCleanupStore.ts': { lines: 90, branches: 80 },
+            'src/renderer/src/pages/DiskCleanupPage.tsx': { lines: 85, branches: 75 },
             // Error tracking (E24): the Sentry client that holds a token, its store and the IPC.
             'src/main/errorTracking/**': { lines: 90, branches: 80 },
             'src/main/ipc/errorTracking.ts': { lines: 90, branches: 80 },
