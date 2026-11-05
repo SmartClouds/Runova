@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import type { Project, WorktreeInfo } from '@runova/core';
 import type { GitStatus, WorkspaceGitState } from '@shared/apiTypes';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { asWorkspaceProject } from '@/lib/workspace/scope';
+import { resolveConfirm, useConfirmStore } from '@/stores/confirmStore';
 import { useWorktreeDialogStore } from '@/stores/worktreeDialogStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { BranchesSection } from './BranchesSection';
@@ -195,5 +196,92 @@ describe('BranchesSection on GitHub', () => {
     fireEvent.doubleClick(await screen.findByRole('button', { name: /^scratch/ }));
     expect(() => bridge.$fn('git.detectRemote')).toThrow('has not been touched');
     expect(() => bridge.$fn('shell.openExternal')).toThrow('has not been touched');
+  });
+});
+
+describe('BranchesSection deleting a branch', () => {
+  const branches = [
+    { name: 'feat/admin-curalink-theme', local: true, remote: false },
+    { name: 'main', local: true, remote: false },
+  ];
+  const UNMERGED = {
+    ok: false,
+    reason: 'unmerged',
+    message: "'feat/admin-curalink-theme' has commits that are not merged anywhere else.",
+  };
+
+  function renderSection(deleteBranch: unknown) {
+    return renderWithProviders(
+      <BranchesSection
+        project={project}
+        state={state}
+        creating={false}
+        onCreatingChange={() => undefined}
+      />,
+      {
+        bridge: {
+          'git.status': status(branches),
+          'git.deleteBranch': deleteBranch,
+          'projects.list': [project],
+        },
+      },
+    );
+  }
+
+  /** Waits for the next question and answers it. */
+  async function answer(yes: boolean, title: RegExp): Promise<void> {
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
+    expect(useConfirmStore.getState().title).toMatch(title);
+    resolveConfirm(yes);
+  }
+
+  beforeEach(() => resolveConfirm(false));
+
+  it('asks again for an unmerged branch and forces the delete on yes', async () => {
+    const deleteBranch = vi
+      .fn()
+      .mockResolvedValueOnce(UNMERGED)
+      .mockResolvedValueOnce({ ok: true, message: 'Deleted.' });
+    renderSection(deleteBranch);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete feat/admin-curalink-theme' }),
+    );
+    await answer(true, /^Delete feat\/admin-curalink-theme\?$/);
+    await answer(true, /is not merged/);
+    expect(useConfirmStore.getState().confirmLabel).toBe('Delete anyway');
+
+    await waitFor(() => expect(deleteBranch).toHaveBeenCalledTimes(2));
+    expect(deleteBranch).toHaveBeenNthCalledWith(1, {
+      projectId: 'p1',
+      branchName: 'feat/admin-curalink-theme',
+    });
+    expect(deleteBranch).toHaveBeenNthCalledWith(2, {
+      projectId: 'p1',
+      branchName: 'feat/admin-curalink-theme',
+      force: true,
+    });
+  });
+
+  it('keeps the branch when the second question is declined', async () => {
+    const deleteBranch = vi.fn().mockResolvedValue(UNMERGED);
+    renderSection(deleteBranch);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete feat/admin-curalink-theme' }),
+    );
+    await answer(true, /^Delete /);
+    await answer(false, /is not merged/);
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(false));
+    expect(deleteBranch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not force a delete that failed for another reason', async () => {
+    const deleteBranch = vi.fn().mockResolvedValue({ ok: false, message: 'index.lock exists' });
+    renderSection(deleteBranch);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete feat/admin-curalink-theme' }),
+    );
+    await answer(true, /^Delete /);
+    await waitFor(() => expect(deleteBranch).toHaveBeenCalledTimes(1));
+    expect(useConfirmStore.getState().open).toBe(false);
   });
 });

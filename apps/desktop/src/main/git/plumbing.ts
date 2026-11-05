@@ -553,6 +553,24 @@ export async function renameBranch(
   return notes.join(' ');
 }
 
+/**
+ * `git branch -d` refused because the branch has commits that are not on HEAD or its upstream.
+ * The hint names `git branch -D` in every language git is translated to, so that is matched too.
+ */
+function isNotFullyMerged(error: unknown): boolean {
+  const stderr = (error as { stderr?: string } | null)?.stderr ?? '';
+  return /not fully merged|git branch -D/i.test(stderr);
+}
+
+/** Raised instead of git's own text, which tells the user to run a command they can't run here. */
+export class UnmergedBranchError extends Error {
+  readonly reason = 'unmerged' as const;
+  constructor(branch: string) {
+    super(`'${branch}' has commits that are not merged anywhere else. Deleting it loses them.`);
+    this.name = 'UnmergedBranchError';
+  }
+}
+
 export async function deleteBranch(
   cwd: string,
   branchName: string,
@@ -581,7 +599,12 @@ export async function deleteBranch(
 
   const notes: string[] = [];
   if (info.local) {
-    await git(cwd, ['branch', options.force ? '-D' : '-d', sanitized]);
+    try {
+      await git(cwd, ['branch', options.force ? '-D' : '-d', sanitized]);
+    } catch (error) {
+      if (!options.force && isNotFullyMerged(error)) throw new UnmergedBranchError(sanitized);
+      throw error;
+    }
     notes.push(`Deleted local branch '${sanitized}'.`);
   }
 
@@ -735,8 +758,9 @@ export async function runGitOp(fn: () => Promise<string>): Promise<GitOpResult> 
     const output = await fn();
     return { ok: true, message: output.trim() || 'Done.' };
   } catch (error) {
-    const err = error as { stderr?: string; message?: string };
-    return { ok: false, message: (err.stderr || err.message || 'Git command failed.').trim() };
+    const err = error as { stderr?: string; message?: string; reason?: GitOpResult['reason'] };
+    const message = (err.stderr || err.message || 'Git command failed.').trim();
+    return err.reason ? { ok: false, message, reason: err.reason } : { ok: false, message };
   }
 }
 

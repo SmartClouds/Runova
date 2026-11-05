@@ -1544,6 +1544,11 @@ export interface GitStatus {
 export interface GitOpResult {
   ok: boolean;
   message: string;
+  /**
+   * Why it failed, when the caller can do something about it. `unmerged`: a branch delete was
+   * refused because the branch has commits nowhere else, and `force` would delete it anyway.
+   */
+  reason?: 'unmerged';
 }
 
 /** A merge, rebase or similar that stopped part way and is waiting on the user. */

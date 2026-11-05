@@ -40,6 +40,7 @@ type Holder = { kind: 'main' } | { kind: 'worktree'; worktree: WorktreeInfo | nu
  * since git checks a branch out in one place at a time.
  * Double-clicking a branch opens it on GitHub instead.
  * Local branches delete locally; a branch that only exists on the remote is deleted there.
+ * A local branch git won't delete because it is not merged asks again, then is forced.
  * The default branch and master can't be deleted from here.
  */
 export function BranchesSection({
@@ -177,11 +178,33 @@ export function BranchesSection({
     });
     if (!ok) return;
     setBusy(branch.name);
-    const result = await window.runova.git.deleteBranch({
+    let result = await window.runova.git.deleteBranch({
       projectId: project.id,
       branchName: branch.name,
     });
     setBusy(null);
+    // Git only deletes a merged branch on its own. One with work nowhere else needs a second,
+    // clearer yes before it is forced, since those commits are gone afterwards.
+    if (!result.ok && result.reason === 'unmerged') {
+      const force = await confirmDialog({
+        title: `${branch.name} is not merged`,
+        description: result.message,
+        warning: 'The commits only on this branch will be lost.',
+        confirmLabel: 'Delete anyway',
+        variant: 'destructive',
+      });
+      if (!force) {
+        refresh();
+        return;
+      }
+      setBusy(branch.name);
+      result = await window.runova.git.deleteBranch({
+        projectId: project.id,
+        branchName: branch.name,
+        force: true,
+      });
+      setBusy(null);
+    }
     if (result.ok)
       toast.success(onRemote ? `Deleted ${branch.name} on the remote` : `Deleted ${branch.name}`);
     else toast.error(`Could not delete ${branch.name}`, { description: result.message });

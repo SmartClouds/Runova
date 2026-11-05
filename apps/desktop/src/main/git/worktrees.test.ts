@@ -3,7 +3,7 @@ import { existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'no
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hasGit, initGitRepo, tempDir, writeTree } from '../../test/main/fixtures';
-import { checkoutBranch, deleteBranch, listBranches } from './plumbing';
+import { checkoutBranch, deleteBranch, listBranches, runGitOp } from './plumbing';
 import {
   addWorktree,
   copyFiles,
@@ -289,6 +289,53 @@ describe.runIf(hasGit())('git worktrees', () => {
       await expect(
         deleteBranch(repo.dir, 'feat', { deleteRemote: false, force: true }),
       ).rejects.toThrow(/open in the worktree/);
+    });
+  });
+
+  describe('deleteBranch on a branch with unmerged work', () => {
+    /** A branch one commit ahead of main, with main checked out again. */
+    function unmergedBranch() {
+      const { repo } = setup();
+      repo.git('checkout', '-q', '-b', 'feat/admin-theme');
+      writeFileSync(join(repo.dir, 'theme.css'), 'body {}');
+      repo.commitAll('theme');
+      repo.git('checkout', '-q', 'main');
+      return repo;
+    }
+
+    it('refuses with a reason the app can act on, not git’s hint to run -D', async () => {
+      const repo = unmergedBranch();
+      const failure = deleteBranch(repo.dir, 'feat/admin-theme', {
+        deleteRemote: false,
+        force: false,
+      });
+      await expect(failure).rejects.toMatchObject({ reason: 'unmerged' });
+      await expect(failure).rejects.toThrow(/not merged anywhere else/);
+      expect((await listBranches(repo.dir)).map((b) => b.name)).toContain('feat/admin-theme');
+
+      const result = await runGitOp(() =>
+        deleteBranch(repo.dir, 'feat/admin-theme', { deleteRemote: false, force: false }),
+      );
+      expect(result).toMatchObject({ ok: false, reason: 'unmerged' });
+      expect(result.message).not.toMatch(/git branch -D|advice/);
+    });
+
+    it('deletes it when forced', async () => {
+      const repo = unmergedBranch();
+      await expect(
+        runGitOp(() =>
+          deleteBranch(repo.dir, 'feat/admin-theme', { deleteRemote: false, force: true }),
+        ),
+      ).resolves.toEqual({ ok: true, message: "Deleted local branch 'feat/admin-theme'." });
+      expect((await listBranches(repo.dir)).map((b) => b.name)).not.toContain('feat/admin-theme');
+    });
+
+    it('deletes a merged branch without force', async () => {
+      const { repo } = setup();
+      repo.git('branch', 'merged');
+      await expect(
+        deleteBranch(repo.dir, 'merged', { deleteRemote: false, force: false }),
+      ).resolves.toBe("Deleted local branch 'merged'.");
     });
   });
 
