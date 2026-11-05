@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { markersSatisfied, restoreHint, ruleForName } from './rules';
 
+/** Built from its code point, so this file has none of its own. */
+const EM_DASH = String.fromCharCode(0x2014);
+
 const names = (...entries: string[]): ReadonlySet<string> => new Set(entries);
 
 /** The rule for a folder name, or a failing test when there is none. */
@@ -184,7 +187,7 @@ describe('restoreHint', () => {
   it('never uses an em dash in what the user reads', () => {
     for (const name of ['node_modules', 'Pods', '.venv', 'vendor', 'dist', '.turbo']) {
       const hint = restoreHint(rule(name), 'npm');
-      expect(`${hint.label}${hint.command ?? ''}`).not.toContain('—');
+      expect(`${hint.label}${hint.command ?? ''}`).not.toContain(EM_DASH);
     }
   });
 });

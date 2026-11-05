@@ -241,6 +241,13 @@ export default defineConfig({
             // Project healthchecks (E22): the probe that holds a key, its scheduler and the IPC.
             'src/main/health/**': { lines: 90, branches: 80 },
             'src/main/ipc/health.ts': { lines: 90, branches: 80 },
+            // Project cleanup (E49): the rules and checks that decide what may be deleted, the
+            // scan and removal, and the IPC. Built test-first, so it holds its own bar.
+            'src/main/projectCleanup/**': { lines: 90, branches: 85 },
+            'src/main/ipc/projectCleanup.ts': { lines: 90, branches: 80 },
+            'src/renderer/src/components/projects/cleanup/**': { lines: 90, branches: 80 },
+            'src/renderer/src/lib/projectCleanup/**': { lines: 90, branches: 85 },
+            'src/renderer/src/stores/projectCleanupStore.ts': { lines: 90, branches: 80 },
             // Error tracking (E24): the Sentry client that holds a token, its store and the IPC.
             'src/main/errorTracking/**': { lines: 90, branches: 80 },
             'src/main/ipc/errorTracking.ts': { lines: 90, branches: 80 },

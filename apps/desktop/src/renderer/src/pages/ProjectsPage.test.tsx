@@ -3,6 +3,7 @@ import { AGENT_TYPE_LABELS } from '@runova/core';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useProjectCleanupStore } from '@/stores/projectCleanupStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
 /**
@@ -660,5 +661,102 @@ describe('ProjectsPage Run on a project with no run command', () => {
     await user.hover(screen.getByRole('button', { name: 'Run' }));
 
     expect((await screen.findAllByText(/create one with AI/))[0]).toBeTruthy();
+  });
+});
+
+describe('ProjectsPage disk use', () => {
+  const GB = 1024 ** 3;
+
+  function renderList(projects: Project[], bridge: Record<string, unknown> = {}) {
+    return renderWithProviders(
+      <>
+        <ProjectsPage />
+        <LocationProbe />
+      </>,
+      { bridge: { 'projects.list': projects, ...bridge } },
+    );
+  }
+
+  function know(projectId: string, totalBytes: number, reclaimableBytes: number) {
+    useProjectCleanupStore.setState({
+      summaries: { [projectId]: { scannedAt: Date.now(), totalBytes, reclaimableBytes } },
+    });
+  }
+
+  it('offers to check the size of a project nobody has measured yet', async () => {
+    renderList([project()]);
+    expect(
+      await screen.findByRole('button', { name: /check how much space apollo uses/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows what a measured project uses and how much of it could be freed', async () => {
+    know('p1', 3.1 * GB, 1.2 * GB);
+    renderList([project()]);
+    expect(await screen.findByText('3.10 GB')).toBeInTheDocument();
+    expect(screen.getByText('1.20 GB to free')).toBeInTheDocument();
+  });
+
+  it('opens the project on its Cleanup tab from the chip, not on its overview', async () => {
+    know('p1', 3.1 * GB, 1.2 * GB);
+    const { user } = renderList([project()]);
+    await user.click(await screen.findByRole('button', { name: /apollo uses 3\.10 GB/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'Location' })).toHaveTextContent(
+        '/projects/p1?tab=cleanup',
+      ),
+    );
+  });
+
+  it('shows the same chip on a row in the list view', async () => {
+    know('p1', 3.1 * GB, 1.2 * GB);
+    const { user } = renderList([project()]);
+    await screen.findByText('3.10 GB');
+    await user.click(screen.getByRole('button', { name: 'List view' }));
+    expect(await screen.findByText('3.10 GB')).toBeInTheDocument();
+    expect(screen.getByText('1.20 GB to free')).toBeInTheDocument();
+  });
+
+  it('checks the sizes of the projects on screen together, and leaves archived ones out', async () => {
+    const scan = vi.fn(async (projectId: string) => ({
+      projectId,
+      scannedAt: Date.now(),
+      studio: [],
+      locations: [],
+    }));
+    const { user } = renderList(
+      [
+        project({ id: 'p1', name: 'Apollo' }),
+        project({ id: 'p2', name: 'Borealis' }),
+        project({ id: 'p3', name: 'Cassini', archived: true }),
+      ],
+      { 'projectCleanup.scan': scan },
+    );
+    await user.click(await screen.findByRole('button', { name: /check sizes/i }));
+    await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
+    expect(scan.mock.calls.map((call) => call[0])).toEqual(['p1', 'p2']);
+  });
+
+  it('forgets the sizes of projects that are no longer in the list', async () => {
+    useProjectCleanupStore.setState({
+      summaries: {
+        p1: { scannedAt: Date.now(), totalBytes: GB, reclaimableBytes: 0 },
+        gone: { scannedAt: Date.now(), totalBytes: 9 * GB, reclaimableBytes: GB },
+      },
+    });
+    renderList([project()]);
+    await screen.findByRole('button', { name: 'Apollo' });
+    await waitFor(() =>
+      expect(Object.keys(useProjectCleanupStore.getState().summaries)).toEqual(['p1']),
+    );
+  });
+
+  it('keeps every size while the list is still loading', async () => {
+    know('p1', 3.1 * GB, 1.2 * GB);
+    renderWithProviders(<ProjectsPage />, {
+      bridge: { 'projects.list': () => new Promise(() => undefined) },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(Object.keys(useProjectCleanupStore.getState().summaries)).toEqual(['p1']);
   });
 });

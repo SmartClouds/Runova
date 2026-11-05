@@ -330,7 +330,7 @@ describe('ProjectDetailPage sections', () => {
   });
 
   it('mounts every section in the nav without falling over', async () => {
-    // The page is mostly a router between nineteen sections, so the thing worth proving is that
+    // The page is mostly a router between twenty sections, so the thing worth proving is that
     // each one can be reached and rendered with nothing but a project behind the bridge.
     const { user } = renderPage({
       'tools.detectAll': [{ id: 'diffray', installed: true }],
@@ -341,7 +341,7 @@ describe('ProjectDetailPage sections', () => {
     const labels = within(sectionNav())
       .getAllByRole('button')
       .map((button) => button.textContent?.trim() ?? '');
-    expect(labels.length).toBe(19);
+    expect(labels.length).toBe(20);
 
     for (const label of labels) {
       const button = within(sectionNav()).getByRole('button', { name: label });
@@ -378,6 +378,56 @@ describe('ProjectDetailPage sections', () => {
     expect(
       within(sectionNav()).getByRole('button', { name: /^Overview/, current: 'page' }),
     ).toBeTruthy();
+  });
+
+  it('opens the Cleanup section from a link, and scans the project it belongs to', async () => {
+    const MB = 1024 ** 2;
+    const { bridge } = renderWithProviders(<ProjectDetailPage />, {
+      route: '/projects/p1?tab=cleanup',
+      path: 'projects/:projectId',
+      bridge: {
+        ...backgroundTabs,
+        'projects.list': [project()],
+        'projectCleanup.scan': async () => ({
+          projectId: 'p1',
+          scannedAt: Date.now(),
+          studio: [],
+          locations: [
+            {
+              id: 'main',
+              label: 'Project folder',
+              path: 'C:/work/apollo',
+              branch: null,
+              isMain: true,
+              totalBytes: 900 * MB,
+              gitBytes: 0,
+              unreadable: 0,
+              candidates: [
+                {
+                  id: 'main:dist',
+                  locationId: 'main',
+                  relPath: 'dist',
+                  name: 'dist',
+                  category: 'build',
+                  bytes: 300 * MB,
+                  sharedBytes: 0,
+                  files: 10,
+                  modifiedAt: 0,
+                  restore: { label: 'Comes back when you build.', command: null },
+                  locked: null,
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(await screen.findByText(/can be freed/i)).toBeTruthy();
+    expect(
+      within(sectionNav()).getByRole('button', { name: /^Cleanup/, current: 'page' }),
+    ).toBeTruthy();
+    expect(bridge.$fn('projectCleanup.scan')).toHaveBeenCalledWith('p1', expect.any(String));
   });
 
   it('hides the Review section until diffray is installed', async () => {

@@ -157,7 +157,7 @@ The page has a header, a section list on the left (a tab bar on narrow windows) 
 
 ### Sections
 
-The list on the left has two groups. **Work**: Overview, Blueprint, Prompts, Git, Usage, Review, Security, Packages, Docker, Terminal. **Setup**: Bootstrap, Skills, MCP, Hooks, Environments, Config. At the bottom of the list, **Created** and **Updated** show when the project was added and last changed.
+The list on the left has two groups. **Work**: Overview, Blueprint, Prompts, Git, Usage, Review, Security, Packages, Docker, Terminal. **Setup**: Bootstrap, Skills, MCP, Hooks, Environments, Config, Cleanup. At the bottom of the list, **Created** and **Updated** show when the project was added and last changed.
 
 Small badges flag things that need a look: Prompts shows open drafts plus missed scheduled prompts (amber when any was missed), Skills and MCP show how many are installed (Skills turns amber when updates are available), and Security shows how many critical and high findings the last scan found. **Review** only appears once the diffray tool is installed (see [Agent Tools](agent-tools.md)).
 
@@ -370,6 +370,10 @@ Deleting an environment removes its saved files and credentials from Runova only
 ### Config
 
 The Config section edits `.runova/config.json` in the project folder in a JSON editor. Click **Save** to write it. It refuses invalid JSON.
+
+### Cleanup
+
+The Cleanup section shows how much disk space the project takes and which folders it can rebuild (dependencies, build output, caches and the Studio render cache), and deletes the ones you pick. It scans when you open it. The Projects page shows each project's size too, once it has been scanned. See [Project cleanup](project-cleanup.md).
 
 ## Tag a version
 

@@ -24,6 +24,7 @@ import {
   GitBranch,
   GitPullRequest,
   Globe,
+  HardDrive,
   HeartPulse,
   History,
   Key,
@@ -92,6 +93,8 @@ export const PROJECT_SECTION_IDS = [
   'hooks',
   'environments',
   'config',
+  // What the project weighs and the folders it can rebuild (E49).
+  'cleanup',
 ] as const;
 
 export type ProjectSectionId = (typeof PROJECT_SECTION_IDS)[number];
@@ -124,6 +127,7 @@ const SECTIONS: {
   { id: 'hooks', label: 'Hooks', icon: Bell, group: 'setup' },
   { id: 'environments', label: 'Environments', icon: Key, group: 'setup' },
   { id: 'config', label: 'Config', icon: FileCog, group: 'setup' },
+  { id: 'cleanup', label: 'Cleanup', icon: HardDrive, group: 'setup' },
 ];
 
 export type SectionBadge = { count?: number; attention?: boolean };

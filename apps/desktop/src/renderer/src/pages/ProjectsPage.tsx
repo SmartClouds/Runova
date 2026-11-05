@@ -33,6 +33,8 @@ import {
 } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
 import { ChooseFolderButton, needsFolder } from '@/components/projects/ChooseFolderButton';
+import { ProjectStorageChip } from '@/components/projects/cleanup/ProjectStorageChip';
+import { ScanAllButton } from '@/components/projects/cleanup/ScanAllButton';
 import { DiffrayReviewWizardDialog } from '@/components/projects/DiffrayReviewWizard';
 import { ProjectFormDialog, type ProjectFormValues } from '@/components/projects/ProjectFormDialog';
 import { ProjectIcon } from '@/components/projects/ProjectIcon';
@@ -50,6 +52,7 @@ import { persianTextProps } from '@/lib/rtl';
 import { timeAgo } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { usePageHeader } from '@/stores/pageHeaderStore';
+import { useProjectCleanupStore } from '@/stores/projectCleanupStore';
 
 const VIEW_STORAGE_KEY = 'runova.projects.view';
 const MAX_VISIBLE_TAGS = 3;
@@ -229,6 +232,13 @@ export default function ProjectsPage(): React.JSX.Element {
   const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const query = search.trim().toLowerCase();
 
+  // Sizes remembered for a project that was removed would only linger. Waits for the list, since
+  // an empty list that has not loaded yet is not a list of no projects.
+  const forgetProjects = useProjectCleanupStore((state) => state.forgetProjects);
+  useEffect(() => {
+    if (projectsQuery.data) forgetProjects(projectsQuery.data.map((p) => p.id));
+  }, [projectsQuery.data, forgetProjects]);
+
   const activeProjects = useMemo(() => projects.filter((p) => !p.archived), [projects]);
   const archivedProjects = useMemo(() => projects.filter((p) => p.archived), [projects]);
   // The Archived toggle picks which pile the page is looking at. Search and the
@@ -302,6 +312,7 @@ export default function ProjectsPage(): React.JSX.Element {
       motion,
       onNavigate: () => navigate(`/projects/${project.id}`),
       onOpenGit: () => navigate(`/projects/${project.id}?tab=git`),
+      onOpenCleanup: () => navigate(`/projects/${project.id}?tab=cleanup`),
       onRun: () => handleRun(project),
       onBuildPrompt: () => {
         setPromptBuildProject(project);
@@ -377,6 +388,7 @@ export default function ProjectsPage(): React.JSX.Element {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {visible.length > 0 && <ScanAllButton projectIds={visible.map((p) => p.id)} />}
           {archivedProjects.length > 0 && (
             <SimpleTooltip
               label={showArchived ? 'Back to active projects' : 'Show archived projects'}
@@ -744,6 +756,8 @@ interface ProjectItemProps {
   motion: ReorderMotion;
   onNavigate: () => void;
   onOpenGit: () => void;
+  /** Opens the project on its Cleanup tab, from the disk use chip. */
+  onOpenCleanup: () => void;
   onRun: () => void;
   onBuildPrompt: () => void;
   onReview: () => void;
@@ -881,6 +895,11 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
               <TagChip>+{extraTags}</TagChip>
             </SimpleTooltip>
           )}
+          <ProjectStorageChip
+            projectId={project.id}
+            name={project.name}
+            onOpen={props.onOpenCleanup}
+          />
         </div>
       </div>
       <div className={cn(CARD_FOOTER, 'mt-auto')}>
@@ -943,6 +962,13 @@ function ProjectRow(props: ProjectItemProps): React.JSX.Element {
             </span>
           ) : null}
         </div>
+      </div>
+      <div className="hidden shrink-0 lg:block">
+        <ProjectStorageChip
+          projectId={project.id}
+          name={project.name}
+          onOpen={props.onOpenCleanup}
+        />
       </div>
       <div className="hidden shrink-0 md:block">
         <AgentBadge project={project} />

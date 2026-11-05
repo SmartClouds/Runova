@@ -80,6 +80,7 @@ import {
 } from '@/components/projects/BootstrapDescriptionDialog';
 import { BlueprintTab } from '@/components/projects/blueprint/BlueprintTab';
 import { CreateRunWithAiDialog } from '@/components/projects/CreateRunWithAiDialog';
+import { ProjectCleanupTab } from '@/components/projects/cleanup/ProjectCleanupTab';
 import {
   DiffrayReviewLaunchCard,
   DiffrayReviewWizard,
@@ -1237,6 +1238,8 @@ function ProjectDetailView(): React.JSX.Element {
           )}
 
           {section === 'packages' && <PackagesTab project={project} />}
+
+          {section === 'cleanup' && <ProjectCleanupTab key={project.id} project={project} />}
 
           {section === 'docker' && <DockerTab project={project} />}
 
