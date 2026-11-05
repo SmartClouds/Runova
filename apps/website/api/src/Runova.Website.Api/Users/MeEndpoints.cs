@@ -2,10 +2,12 @@ using System.Globalization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
+using Runova.Website.Core.Accounts;
 using Runova.Website.Core.Audit;
 using Runova.Website.Core.Problems;
 using Runova.Website.Core.Users;
@@ -102,7 +104,7 @@ internal static class MeEndpoints
     }
 
     private static async Task<Results<Ok<RecoveryCodesDto>, ValidationProblem, UnauthorizedHttpResult>> ConfirmTwoFactorAsync(
-        TwoFactorConfirmRequest request, HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn)
+        TwoFactorConfirmRequest request, HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn, ActivityLog activity, AppDbContext db)
     {
         if (await users.GetUserAsync(http.User) is not { } user)
         {
@@ -117,6 +119,8 @@ internal static class MeEndpoints
 
         await users.SetTwoFactorEnabledAsync(user, true);
         var codes = await users.GenerateNewTwoFactorRecoveryCodesAsync(user, RecoveryCodeCount);
+        activity.Add(user.Id, ActivityActions.TwoFactorOn);
+        await db.SaveChangesAsync();
         await signIn.RefreshSignInAsync(user);
         return TypedResults.Ok(new RecoveryCodesDto([.. codes!]));
     }
@@ -131,7 +135,9 @@ internal static class MeEndpoints
         UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
         AppDbContext db,
-        AuditLog audit)
+        AuditLog audit,
+        AccountSessions sessions,
+        ActivityLog activity)
     {
         if (await users.GetUserAsync(http.User) is not { } user)
         {
@@ -165,8 +171,12 @@ internal static class MeEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync();
         Succeeded(await users.ChangePasswordAsync(user, request.CurrentPassword!, request.NewPassword!));
         audit.Add(AuditActions.UserUpdate, AuditTargetTypes.User, user.Id, new { passwordChanged = true });
+        activity.Add(user.Id, ActivityActions.PasswordChanged);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
+
+        // Every other browser and computer signs in again with the new password.
+        await sessions.RevokeAllAsync(user.Id, AccountSessions.SessionId(http.User));
         await signIn.RefreshSignInAsync(user);
         return TypedResults.NoContent();
     }
@@ -178,7 +188,8 @@ internal static class MeEndpoints
         UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
         AppDbContext db,
-        AuditLog audit)
+        AuditLog audit,
+        ActivityLog activity)
     {
         if (await users.GetUserAsync(http.User) is not { } user)
         {
@@ -193,6 +204,7 @@ internal static class MeEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync();
         await users.ClearTwoFactorAsync(user);
         audit.Add(AuditActions.UserTwoFactorReset, AuditTargetTypes.User, user.Id);
+        activity.Add(user.Id, ActivityActions.TwoFactorOff);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         await signIn.RefreshSignInAsync(user);

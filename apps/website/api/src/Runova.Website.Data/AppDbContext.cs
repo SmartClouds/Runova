@@ -49,6 +49,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
 
+    public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
+
+    public DbSet<AccountActivity> AccountActivities => Set<AccountActivity>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

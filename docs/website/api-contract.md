@@ -320,6 +320,7 @@ itself. Every anonymous route here answers the same whether or not an address ha
 | POST | `/api/v1/password-resets` | Anonymous (with antiforgery) | `{ "email": string }` | 202; 400; 429 |
 | GET | `/api/v1/accounts/me` | Account | none | 200 `AccountDto`; 401 |
 | PATCH | `/api/v1/accounts/me` | Account | merge patch of `displayName`; `If-Match` | 200 `AccountDto`; 400; 401; 412; 428 |
+| DELETE | `/api/v1/accounts/me` | Account | `StepUpRequest` | 204 (the account and everything only it owns are gone); 400 step-up failed; 401; 409 staff, or a team still needs it |
 
 `RegisterRequest`: `{ "email": string, "password": string (12 or more), "displayName": string (1 to
 100) }`. A new address gets an account with no role and a link to
@@ -353,6 +354,39 @@ password. Setting a password ends every other session.
 
 Emails wait in an outbox saved with the change that sends them and go out over SMTP (`Email__*`
 settings). A sent email keeps its subject but loses its body, which held a one-time link.
+
+### Account sessions and activity
+
+Every browser and every computer signed in to an account is a session. The session cookie (and a
+computer's tokens) name it, and each request checks it is still live, so ending one signs that
+browser or computer out at its next request. Changing or resetting the password ends every other
+session at once. A sign-in from a browser and address the account has not used in 30 days sends
+the owner a "new sign-in" email (not for the very first session).
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/sessions` | Account | none | 200 `{ "items": SessionDto[] }`, this session first; 401 |
+| DELETE | `/api/v1/sessions` | Account | `StepUpRequest` | 204 (every other session ended); 400 step-up failed; 401 |
+| DELETE | `/api/v1/sessions/{id}` | Account | none | 204; 401; 404 not this account's, or ended already |
+| GET | `/api/v1/activities` | Account | query `page`, `pageSize`, `action` | 200 `Page<ActivityDto>`, newest first; 400; 401 |
+
+`SessionDto`: `{ "id": number, "kind": "web" | "desktop", "deviceName": string, "platform": string,
+"appVersion": string | null, "ip": string | null, "createdAt": time, "lastSeenAt": time,
+"current": bool }`. `ip` is the address last seen; `lastSeenAt` is kept to within 5 minutes.
+
+`ActivityDto`: `{ "id": number, "action": string, "teamId": number | null, "ip": string | null,
+"device": string | null, "at": time, "details": object | null }`. Actions: `sign-in`,
+`sign-in-failed`, `sign-out`, `device-sign-in`, `session-ended`, `sessions-ended`,
+`refresh-token-reused`, `email-verified`, `password-changed`, `password-reset`, `two-factor-on`,
+`two-factor-off`, `login-linked`, `login-unlinked`, `account-updated`, `key-set`, `key-changed`,
+`key-reset`, `sync-reset`, `team-created`, `team-updated`, `team-deleted`, `member-invited`,
+`member-joined`, `member-removed`, `member-role-changed`, `team-left`. No entry holds a password,
+code, token or key.
+
+`StepUpRequest`: `{ "password": string | null, "code": string | null }`. An account with a password
+gives it; one with none but two-factor gives a current code; one with neither (Google only) must
+have signed in within the last 10 minutes. A failure is 400 `validation-failed` naming `password`,
+`code` or `signIn`.
 
 ### Audit entries (Admin)
 

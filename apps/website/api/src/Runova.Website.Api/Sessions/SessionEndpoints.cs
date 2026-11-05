@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
+using Runova.Website.Core.Accounts;
 using Runova.Website.Core.Problems;
+using Runova.Website.Data;
 using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Api.Sessions;
@@ -34,7 +37,9 @@ internal static class SessionEndpoints
         UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
         TimeProvider time,
-        HttpContext http)
+        HttpContext http,
+        ActivityLog activity,
+        AppDbContext db)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
         {
@@ -63,6 +68,8 @@ internal static class SessionEndpoints
         var password = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!password.Succeeded)
         {
+            activity.Add(user.Id, ActivityActions.SignInFailed, new { reason = "password" });
+            await db.SaveChangesAsync();
             return ApiProblems.Of(ProblemTypes.Unauthorized, WrongCredentials);
         }
 
@@ -90,6 +97,8 @@ internal static class SessionEndpoints
 
             if (verified is false)
             {
+                activity.Add(user.Id, ActivityActions.SignInFailed, new { reason = "two-factor" });
+                await db.SaveChangesAsync();
                 await users.AccessFailedAsync(user);
                 return ApiProblems.Of(ProblemTypes.TwoFactorRequired, "The code is not right or was already used.");
             }
@@ -100,6 +109,8 @@ internal static class SessionEndpoints
         user.LastSignInAt = time.GetUtcNow();
         await users.UpdateAsync(user);
         await signIn.SignInAsync(user, isPersistent: true);
+        activity.Add(user.Id, ActivityActions.SignIn, new { method = "password" });
+        await db.SaveChangesAsync();
 
         // The antiforgery token belongs to a user, so the one from before sign-in is replaced.
         http.User = await signIn.CreateUserPrincipalAsync(user);
@@ -107,8 +118,15 @@ internal static class SessionEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<NoContent> SignOutAsync(SignInManager<AppUser> signIn)
+    private static async Task<NoContent> SignOutAsync(SignInManager<AppUser> signIn, UserManager<AppUser> users, ActivityLog activity, AppDbContext db, HttpContext http)
     {
+        if (await users.GetUserAsync(http.User) is { } user)
+        {
+            activity.Add(user.Id, ActivityActions.SignOut);
+            await db.SaveChangesAsync();
+        }
+
+        // Ends the account session too (AppSignInManager).
         await signIn.SignOutAsync();
         return TypedResults.NoContent();
     }

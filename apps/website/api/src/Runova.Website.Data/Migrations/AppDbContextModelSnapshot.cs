@@ -998,6 +998,129 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("Releases");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Accounts.AccountActivity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Device")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Ip")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<long?>("SessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeamId", "At");
+
+                    b.HasIndex("UserId", "At");
+
+                    b.ToTable("AccountActivities");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.AccountSession", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("LastIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<byte[]>("PreviousRefreshTokenHash")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("RefreshExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RefreshRotatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("RefreshTokenHash")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviousRefreshTokenHash");
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "RevokedAt");
+
+                    b.ToTable("AccountSessions");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.ApiClients.IdempotencyRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -1531,6 +1654,24 @@ namespace Runova.Website.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CoverMedia");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.AccountActivity", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.AccountSession", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Runova.Website.Data.Identity.SetupLink", b =>

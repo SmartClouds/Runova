@@ -7,6 +7,11 @@ internal static class AccountsSetup
 {
     public static IServiceCollection AddWebsiteAccounts(this IServiceCollection services)
     {
+        services.AddMemoryCache();
+        services.AddHttpContextAccessor();
+        services.AddScoped<AccountSessions>();
+        services.AddScoped<ActivityLog>();
+        services.AddScoped<AccountDeletion>();
         services.AddScoped<UnverifiedAccountsCleanupJob>();
         return services;
     }

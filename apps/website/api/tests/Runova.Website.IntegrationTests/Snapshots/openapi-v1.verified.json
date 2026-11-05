@@ -59,6 +59,53 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "AccountSessionEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AccountSessionEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/sessions/current": {
@@ -226,6 +273,178 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "AccountSessionEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/activities": {
+      "get": {
+        "tags": [
+          "AccountSessionEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageOfActivityDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me": {
+      "delete": {
+        "tags": [
+          "AccountSessionEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "AccountEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "AccountEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDto"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -988,62 +1207,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SetupLinkDto"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/accounts/me": {
-      "get": {
-        "tags": [
-          "AccountEndpoints"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountDto"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "AccountEndpoints"
-        ],
-        "requestBody": {
-          "content": {
-            "application/merge-patch\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/AccountPatch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
                 }
               }
             }
@@ -2189,6 +2352,63 @@
         },
         "additionalProperties": false
       },
+      "ActivityDto": {
+        "required": [
+          "id",
+          "action",
+          "teamId",
+          "ip",
+          "device",
+          "at",
+          "details"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "action": {
+            "type": "string"
+          },
+          "teamId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "ip": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "device": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": [
+              "null",
+              "object"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "AffectedTechnologyDto": {
         "required": [
           "technology",
@@ -3212,6 +3432,57 @@
           "archived"
         ]
       },
+      "PageOfActivityDto": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityDto"
+            }
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalItems": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "PageOfApiClientDto": {
         "required": [
           "items",
@@ -4087,6 +4358,78 @@
           "linux"
         ]
       },
+      "SessionDto": {
+        "required": [
+          "id",
+          "kind",
+          "deviceName",
+          "platform",
+          "appVersion",
+          "ip",
+          "createdAt",
+          "lastSeenAt",
+          "current"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "appVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ip": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionListDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "SetupLinkDto": {
         "required": [
           "url",
@@ -4174,6 +4517,28 @@
           "url": {
             "maxLength": 2000,
             "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "StepUpRequest": {
+        "required": [
+          "password",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
             "type": [
               "null",
               "string"
@@ -4447,6 +4812,9 @@
   "tags": [
     {
       "name": "SessionEndpoints"
+    },
+    {
+      "name": "AccountSessionEndpoints"
     },
     {
       "name": "PasswordSetupEndpoints"

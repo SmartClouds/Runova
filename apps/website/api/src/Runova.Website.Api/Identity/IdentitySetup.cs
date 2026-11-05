@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Core.ApiClients;
 using Runova.Website.Core.Identity;
@@ -61,6 +62,7 @@ internal static class IdentitySetup
                 options.Tokens.AuthenticatorTokenProvider = TokenOptions.DefaultAuthenticatorProvider;
             })
             .AddEntityFrameworkStores<AppDbContext>()
+            .AddSignInManager<AppSignInManager>()
             .AddTokenProvider<OneTimeAuthenticatorTokenProvider>(TokenOptions.DefaultAuthenticatorProvider);
 
         services.ConfigureApplicationCookie(options =>
@@ -76,10 +78,28 @@ internal static class IdentitySetup
             // An API never redirects to a sign-in page; status code pages turn these into problem details.
             options.Events.OnRedirectToLogin = context => SetStatus(context.Response, StatusCodes.Status401Unauthorized);
             options.Events.OnRedirectToAccessDenied = context => SetStatus(context.Response, StatusCodes.Status403Forbidden);
+
+            // The security stamp, then the account session the cookie names (E48).
+            options.Events.OnValidatePrincipal = AccountSessions.ValidatePrincipalAsync;
         });
 
         // A disabled user, or one whose two-factor was reset, loses their session within 5 minutes.
-        services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.FromMinutes(5));
+        // An ended account session stops at once (AccountSessions). A refreshed cookie keeps its session.
+        services.Configure<SecurityStampValidatorOptions>(options =>
+        {
+            options.ValidationInterval = TimeSpan.FromMinutes(5);
+            options.OnRefreshingPrincipal = context =>
+            {
+                if (context.CurrentPrincipal?.FindFirst(AccountSessions.SessionClaim) is { } session
+                    && context.NewPrincipal?.Identity is ClaimsIdentity identity
+                    && !identity.HasClaim(c => c.Type == AccountSessions.SessionClaim))
+                {
+                    identity.AddClaim(new Claim(AccountSessions.SessionClaim, session.Value));
+                }
+
+                return Task.CompletedTask;
+            };
+        });
 
         services.AddAntiforgery(options =>
         {

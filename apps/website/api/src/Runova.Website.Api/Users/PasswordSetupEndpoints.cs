@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
+using Runova.Website.Core.Accounts;
 using Runova.Website.Core.Audit;
 using Runova.Website.Core.Problems;
 using Runova.Website.Data;
@@ -26,7 +28,7 @@ internal static class PasswordSetupEndpoints
     /// the password is accepted, so a too-short one can be retried with the same link.
     /// </summary>
     private static async Task<Results<NoContent, ValidationProblem, ProblemHttpResult>> SetPasswordAsync(
-        PasswordSetupRequest request, UserManager<AppUser> users, AppDbContext db, SetupLinks links, AuditLog audit)
+        PasswordSetupRequest request, UserManager<AppUser> users, AppDbContext db, SetupLinks links, AuditLog audit, AccountSessions sessions, ActivityLog activity)
     {
         if (string.IsNullOrEmpty(request.Password))
         {
@@ -61,8 +63,12 @@ internal static class PasswordSetupEndpoints
         user.LockoutEnd = null;
         Succeeded(await users.AddPasswordAsync(user, request.Password));
         audit.Add(AuditActions.UserUpdate, AuditTargetTypes.User, user.Id, new { passwordChanged = true, emailConfirmed = true }, actorId: user.Id);
+        activity.Add(user.Id, ActivityActions.PasswordReset);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
+
+        // A new password ends every session at once, not at the next stamp check.
+        await sessions.RevokeAllAsync(user.Id, keep: null);
         return TypedResults.NoContent();
     }
 

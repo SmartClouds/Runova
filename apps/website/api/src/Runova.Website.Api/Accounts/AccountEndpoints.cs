@@ -128,7 +128,8 @@ internal static class AccountEndpoints
         AppDbContext db,
         SetupLinks links,
         TimeProvider time,
-        HttpContext http)
+        HttpContext http,
+        ActivityLog activity)
     {
         if (string.IsNullOrEmpty(request.Token))
         {
@@ -151,12 +152,15 @@ internal static class AccountEndpoints
         }
 
         Succeeded(await users.UpdateAsync(user));
+        activity.Add(user.Id, ActivityActions.EmailVerified);
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
 
         if (signedIn)
         {
             await signIn.SignInAsync(user, isPersistent: true);
+            activity.Add(user.Id, ActivityActions.SignIn, new { method = "email-link" });
+            await db.SaveChangesAsync();
             http.User = await signIn.CreateUserPrincipalAsync(user);
             AntiforgeryCheck.IssueToken(http);
         }
@@ -226,7 +230,7 @@ internal static class AccountEndpoints
     }
 
     private static async Task<Results<Ok<AccountDto>, ValidationProblem, ProblemHttpResult, UnauthorizedHttpResult>> UpdateAsync(
-        HttpContext http, UserManager<AppUser> users)
+        HttpContext http, UserManager<AppUser> users, ActivityLog activity, AppDbContext db)
     {
         if (await users.GetUserAsync(http.User) is not { } user)
         {
@@ -270,6 +274,8 @@ internal static class AccountEndpoints
         }
 
         Succeeded(await users.UpdateAsync(user));
+        activity.Add(user.Id, ActivityActions.AccountUpdated, new { fields = body.Select(f => f.Key).ToArray() });
+        await db.SaveChangesAsync();
         Versions.SetETag(http.Response, user.Version);
         return TypedResults.Ok(await users.ToAccountDtoAsync(user));
     }
