@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import './setup/dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Register, SignIn } from '../src/components/account/AuthForms';
 import AuthorizeDevice, { readAuthorizeRequest } from '../src/components/account/AuthorizeDevice';
-import { describeActivity } from '../src/components/account/Panel';
+import { ActivityList, describeActivity } from '../src/components/account/Panel';
+import { groupByDay } from '../src/components/account/ui';
 import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
 
 const noContent = () => new Response(null, { status: 204 });
@@ -223,5 +224,67 @@ describe('describeActivity', () => {
     expect(describeActivity({ ...entry, action: 'something-new', details: null })).toBe(
       'something-new',
     );
+  });
+});
+
+describe('ActivityList', () => {
+  const entry = { teamId: null, ip: null, device: 'Firefox on Windows', details: null };
+
+  it('says what is missing, and why, when a filter finds nothing', () => {
+    render(
+      <ActivityList
+        items={[]}
+        empty={{ title: 'No failed sign-ins', body: 'Nobody has tried a wrong password.' }}
+      />,
+    );
+
+    expect(screen.getByText('No failed sign-ins')).toBeInTheDocument();
+    expect(screen.getByText('Nobody has tried a wrong password.')).toBeInTheDocument();
+  });
+
+  it('puts the entries of each day under that day, and flags the ones worth a look', () => {
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12);
+    render(
+      <ActivityList
+        byDay
+        items={[
+          { ...entry, id: 1, action: 'sign-in', at: now.toISOString() },
+          { ...entry, id: 2, action: 'sign-in-failed', at: yesterday.toISOString() },
+        ]}
+      />,
+    );
+
+    const today = screen.getByRole('region', { name: 'Today' });
+    expect(within(today).getByText('Signed in')).toBeInTheDocument();
+    const before = screen.getByRole('region', { name: 'Yesterday' });
+    expect(within(before).getByText(/Wrong password/)).toHaveTextContent(
+      'Wrong password (worth a look)',
+    );
+  });
+});
+
+describe('groupByDay', () => {
+  it('keeps the order and starts a new group when the day changes', () => {
+    const now = new Date(2026, 10, 6, 15);
+    const at = (day: number, hour: number) => new Date(2026, 10, day, hour).toISOString();
+
+    const groups = groupByDay(
+      [
+        { at: at(6, 9) },
+        { at: at(6, 1) },
+        { at: at(5, 22) },
+        { at: at(1, 8) },
+        { at: new Date(2026, 9, 20, 8).toISOString() },
+      ],
+      now,
+    );
+
+    expect(groups.map((g) => [g.label, g.items.length])).toEqual([
+      ['Today', 2],
+      ['Yesterday', 1],
+      ['Sunday', 1],
+      ['Oct 20, 2026', 1],
+    ]);
   });
 });

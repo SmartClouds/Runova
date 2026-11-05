@@ -23,12 +23,12 @@ const { title, wide = false } = Astro.props;
     <SeoHead title={`${title} | Runova`} description="Sign in to your Runova account." noindex />
   </head>
   <body class="app-surface app-backdrop min-h-dvh">
-    <div class="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
-      <a href="/" class="mb-8 flex items-center gap-2.5 font-display font-semibold text-xl tracking-tight">
+    <div class="flex min-h-dvh flex-col items-center justify-center px-4 py-6 sm:py-10">
+      <a href="/" class="mb-6 flex items-center sm:mb-8 gap-2.5 font-display font-semibold text-xl tracking-tight">
         <img src="/favicon-32.png" alt="" width="30" height="30" class="rounded-[7px]" />
         Runova
       </a>
-      <main id="main" class:list={['app-glass w-full p-6 md:p-8', wide ? 'max-w-xl' : 'max-w-md']}>
+      <main id="main" class:list={['app-glass w-full p-5 sm:p-6 md:p-8', wide ? 'max-w-xl' : 'max-w-md']}>
         <slot />
       </main>
       <p class="mt-6 max-w-md text-center text-muted-foreground text-xs leading-relaxed">

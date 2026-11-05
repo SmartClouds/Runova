@@ -18,12 +18,20 @@ test.use({ storageState: SIGNED_OUT });
 test.describe.configure({ timeout: 120_000 });
 
 /** A browser page signed in as `account`, through the API. */
-async function pageFor(browser: Browser, account: Editor): Promise<Page> {
+async function pageFor(
+  browser: Browser,
+  account: Editor,
+  viewport?: { width: number; height: number },
+): Promise<Page> {
   const api = await newApiContext();
   await signIn(api, account.email, account.password, await nextCode(account));
   const state = await api.storageState();
   await api.dispose();
-  const context = await browser.newContext({ storageState: state, ignoreHTTPSErrors: true });
+  const context = await browser.newContext({
+    storageState: state,
+    ignoreHTTPSErrors: true,
+    ...(viewport ? { viewport, isMobile: true, hasTouch: true } : {}),
+  });
   return context.newPage();
 }
 
@@ -118,4 +126,51 @@ test('makes a team, invites a person as Viewer, and once they join makes them Me
 
   await expect(dialog).toBeHidden();
   await expect(page.getByLabel(`Role of ${invitee.displayName}`)).toHaveValue('member');
+});
+
+test('every account page fits a phone, keeps its tab in view and can sign out', async ({
+  browser,
+  owner,
+}, info) => {
+  const account = await createEditor(owner, info.workerIndex);
+  const page = await pageFor(browser, account, { width: 360, height: 780 });
+  const pages = [
+    ['/account', 'Overview'],
+    ['/account/profile', 'Profile'],
+    ['/account/security', 'Security'],
+    ['/account/sessions', 'Devices and sessions'],
+    ['/account/activity', 'Activity'],
+    ['/account/sync', 'Sync'],
+    ['/account/teams', 'Teams'],
+    ['/account/invitations', null],
+  ] as const;
+
+  for (const [path, tab] of pages) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // The cards fill in after the first paint; wait for the loading bars to go.
+    await expect(page.locator('main .animate-pulse')).toHaveCount(0);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+    if (tab) {
+      const nav = page.getByRole('navigation', { name: 'Account' });
+      await expect(nav.getByRole('link', { name: tab, exact: true })).toBeInViewport();
+    }
+    await shot(page, `phone ${path}`);
+  }
+
+  await page.goto('/account/activity');
+  await page.getByRole('button', { name: 'Failed sign-ins' }).click();
+  await expect(page.getByText('No failed sign-ins')).toBeVisible();
+  await shot(page, 'phone activity empty filter');
+
+  // On a phone the sidebar's name and sign-out are hidden; the avatar menu has them instead.
+  const menu = page.locator('[data-account-menu]');
+  await menu.getByLabel(`Account menu for ${account.displayName}`).click();
+  await expect(menu.getByText(account.email)).toBeVisible();
+  await shot(page, 'phone account menu');
+  await menu.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/account\/sign-in/);
 });

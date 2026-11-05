@@ -30,7 +30,7 @@ export function CardHeader({
     neutral: 'bg-foreground/[0.06] text-foreground/80',
   }[tone];
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 p-5">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 p-4 sm:p-5">
       <div className="flex min-w-[min(100%,16rem)] flex-1 items-start gap-3">
         <div
           className={cn(
@@ -49,15 +49,60 @@ export function CardHeader({
           )}
         </div>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex w-full flex-wrap items-center gap-2 pl-9 sm:w-auto sm:pl-0">
+          {actions}
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * What a card shows when it has nothing in it yet: what is missing, and how it gets there.
+ * Centered with room around it, so it never reads as an empty field.
+ */
+export function EmptyState({
+  icon,
+  title,
+  children,
+  action,
+}: {
+  icon: ReactNode;
+  title: ReactNode;
+  children?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center px-6 py-10 text-center sm:py-12">
+      <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-foreground/[0.05] text-muted-foreground ring-1 ring-foreground/[0.08] ring-inset [&_svg]:size-5">
+        {icon}
+      </div>
+      <p className="font-medium">{title}</p>
+      {children && (
+        <div className="mt-1.5 max-w-sm text-muted-foreground text-sm leading-relaxed">
+          {children}
+        </div>
+      )}
+      {action && <div className="mt-5">{action}</div>}
+    </div>
+  );
+}
+
+/** A small line under a page with an icon, aligned to the first line when it wraps. */
+export function PageHint({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <p className="mt-4 flex items-start gap-2 text-muted-foreground text-xs leading-relaxed [&_svg]:mt-0.5 [&_svg]:size-3.5 [&_svg]:shrink-0">
+      {icon}
+      <span>{children}</span>
+    </p>
   );
 }
 
 /** The hairline row list inside a card. */
 export function Rows({ children }: { children: ReactNode }) {
   return (
-    <ul className="divide-y divide-foreground/[0.07] border-foreground/[0.07] border-t">
+    <ul className="divide-y divide-foreground/[0.07] border-foreground/[0.07] border-t first:border-t-0">
       {children}
     </ul>
   );
@@ -165,14 +210,22 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-4 md:mb-6">
       <div className="min-w-0">
-        <h1 className="font-display font-bold text-[1.75rem] tracking-tight md:text-[2rem]">
+        <h1 className="break-words font-display font-bold text-[1.6rem] leading-tight tracking-tight md:text-[2rem]">
           {title}
         </h1>
-        {description && <p className="mt-1.5 max-w-2xl text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-1.5 max-w-2xl text-[0.95rem] text-muted-foreground md:text-base">
+            {description}
+          </p>
+        )}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
@@ -194,6 +247,34 @@ export function relativeTime(iso: string, now = Date.now()): string {
     if (Math.abs(seconds) >= size) return RELATIVE.format(Math.round(seconds / size), unit);
   }
   return 'just now';
+}
+
+/** "Today", "Yesterday", or the date, for the heading over a day of entries. */
+export function dayLabel(iso: string, now = new Date()): string {
+  const day = new Date(iso);
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((start(now) - start(day)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return new Intl.DateTimeFormat('en', {
+    weekday: days < 7 ? 'long' : undefined,
+    dateStyle: days < 7 ? undefined : 'medium',
+  }).format(day);
+}
+
+/** Entries in order, cut into runs that share a day. */
+export function groupByDay<T extends { at: string }>(
+  items: T[],
+  now = new Date(),
+): { label: string; items: T[] }[] {
+  const groups: { label: string; items: T[] }[] = [];
+  for (const item of items) {
+    const label = dayLabel(item.at, now);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.items.push(item);
+    else groups.push({ label, items: [item] });
+  }
+  return groups;
 }
 
 export function dateTime(iso: string): string {
@@ -315,7 +396,7 @@ export function StepUpDialog({
       onClose={onClose}
       className="app-glass m-auto w-[min(28rem,calc(100vw-2rem))] p-0 text-foreground backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
-      <form onSubmit={submit} className="grid gap-4 p-6">
+      <form onSubmit={submit} className="grid gap-4 p-5 sm:p-6">
         <div>
           <h2 className="font-display font-semibold text-xl">{title}</h2>
           <div className="mt-1.5 text-muted-foreground text-sm leading-relaxed">{description}</div>
@@ -360,7 +441,7 @@ export function StepUpDialog({
             {error}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
