@@ -64,6 +64,7 @@ An empty value turns the feature off and breaks nothing.
 | -------------------------------------- | ------------------------------------------------------------------------ |
 | `SITE_URL`                             | Canonical and Open Graph URLs (default `https://runovahq.com`)           |
 | `WEBSITE_API_URL`                      | The dev proxy target                                                     |
+| `WEBSITE_DEV_CERT`, `WEBSITE_DEV_KEY`  | PEM certificate and key; when both are set, `bun run dev` serves https   |
 | `WEBSITE_API_INTERNAL_URL`             | Server-side API calls: `/download` reads the latest release from it      |
 | `PUBLIC_SENTRY_DSN`                    | Sentry; read at build time for the browser and at runtime for the server |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Sentry environment and release                                           |

@@ -2,8 +2,10 @@
 setlocal
 
 rem Runs the website locally in this terminal: PostgreSQL in Docker, then the .NET API on
-rem http://localhost:5180 and the Astro dev server on http://localhost:4321, their lines marked
+rem http://localhost:5180 and the Astro dev server on https://localhost:4321, their lines marked
 rem [api] and [web] (scripts\website-local.mjs). The dev server sends /api and /media to the API.
+rem The site is https because the API's session and antiforgery cookies are Secure. It uses the
+rem .NET dev certificate; the first run may ask Windows to trust it.
 rem Ctrl+C stops both. The database container keeps running; stop it with:
 rem   docker stop runova-website-dev-db
 
@@ -69,11 +71,34 @@ if errorlevel 1 (
     goto waitdb
 )
 
+rem The dev server's certificate: the .NET dev certificate, trusted for this user and exported as
+rem PEM for Vite. It is exported again every run, so a renewed certificate is picked up.
+set CERT_DIR=%LOCALAPPDATA%\Runova\website-dev\certs
+dotnet dev-certs https --check --trust >nul 2>&1
+if errorlevel 1 (
+    echo Trusting the .NET HTTPS development certificate. Accept the Windows prompt.
+    dotnet dev-certs https --trust
+    if errorlevel 1 (
+        echo Could not trust the development certificate. Run: dotnet dev-certs https --trust
+        pause
+        exit /b 1
+    )
+)
+if not exist "%CERT_DIR%" mkdir "%CERT_DIR%"
+dotnet dev-certs https -ep "%CERT_DIR%\localhost.pem" --format PEM --no-password >nul
+if errorlevel 1 (
+    echo Could not export the development certificate to %CERT_DIR%.
+    pause
+    exit /b 1
+)
+set WEBSITE_DEV_CERT=%CERT_DIR%\localhost.pem
+set WEBSITE_DEV_KEY=%CERT_DIR%\localhost.key
+
 set ASPNETCORE_ENVIRONMENT=Development
 set ASPNETCORE_URLS=http://localhost:5180
 set ConnectionStrings__Default=Host=localhost;Port=%DB_PORT%;Database=runova_website;Username=runova;Password=runova
 set Database__MigrateOnStart=true
-set Website__SiteUrl=http://localhost:4321
+set Website__SiteUrl=https://localhost:4321
 set Website__MediaPath=%LOCALAPPDATA%\Runova\website-dev\media
 
 set WEBSITE_API_URL=http://localhost:5180

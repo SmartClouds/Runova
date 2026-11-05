@@ -1,4 +1,5 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
 import mdx from '@astrojs/mdx';
 import node from '@astrojs/node';
 import react from '@astrojs/react';
@@ -10,6 +11,12 @@ import { contentSecurityPolicy, isDevServer } from './src/lib/security';
 
 const env = process.env;
 const apiUrl = env.WEBSITE_API_URL || 'http://localhost:5180';
+// run-website.bat sets these to the .NET dev certificate, so `astro dev` serves https. The API's
+// session and antiforgery cookies are Secure and it refuses them on a plain http request.
+const devHttps =
+  env.WEBSITE_DEV_CERT && env.WEBSITE_DEV_KEY
+    ? { cert: readFileSync(env.WEBSITE_DEV_CERT), key: readFileSync(env.WEBSITE_DEV_KEY) }
+    : undefined;
 const sentryDsn = env.PUBLIC_SENTRY_DSN || '';
 const site = env.SITE_URL || 'https://runovahq.com';
 
@@ -51,9 +58,12 @@ export default defineConfig({
       'import.meta.env.SENTRY_RELEASE': JSON.stringify(env.SENTRY_RELEASE || ''),
     },
     server: {
+      https: devHttps,
+      // xfwd sends X-Forwarded-Proto, which the API trusts from loopback, so behind an https dev
+      // server it sees an https request even though the proxy reaches it over http.
       proxy: {
-        '/api': { target: apiUrl, changeOrigin: true },
-        '/media': { target: apiUrl, changeOrigin: true },
+        '/api': { target: apiUrl, changeOrigin: true, xfwd: true },
+        '/media': { target: apiUrl, changeOrigin: true, xfwd: true },
       },
     },
   },
