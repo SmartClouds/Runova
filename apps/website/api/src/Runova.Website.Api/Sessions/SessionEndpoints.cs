@@ -10,7 +10,7 @@ using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Api.Sessions;
 
-public sealed record SignInRequest(string? Email, string? Password, string? TwoFactorCode, string? RecoveryCode);
+public sealed record SignInRequest(string? Email, string? Password, string? TwoFactorCode, string? RecoveryCode, string? CaptchaToken = null) : ICaptchaProtected;
 
 public sealed record CsrfTokenDto(string Token);
 
@@ -25,7 +25,7 @@ internal static class SessionEndpoints
     public static RouteGroupBuilder MapSessions(this RouteGroupBuilder api)
     {
         api.MapGet("/csrf-tokens/current", GetCsrfToken).AllowAnonymous();
-        api.MapPost("/sessions", SignInAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
+        api.MapPost("/sessions", SignInAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy).RequireCaptcha(CaptchaActions.SignIn);
         api.MapDelete("/sessions/current", SignOutAsync).RequireAuthorization(Policies.Account);
         return api;
     }

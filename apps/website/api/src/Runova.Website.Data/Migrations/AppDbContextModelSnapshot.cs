@@ -1184,6 +1184,57 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("DeviceAuthorizations");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Accounts.SignInSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("CaptchaEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("GoogleClientId")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("GoogleClientSecretSealed")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("GoogleEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TurnstileSecretSealed")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TurnstileSiteKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SignInSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_SignInSettings_Singleton", "\"Id\" = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CaptchaEnabled = false,
+                            GoogleEnabled = true,
+                            Version = 0u
+                        });
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Accounts.SyncRecord", b =>
                 {
                     b.Property<long>("Id")

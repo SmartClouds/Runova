@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { captchaField, useCaptcha } from '@/components/account/Captcha';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useSignInOptions } from '@/lib/account/signInOptions';
 import { apiRequest, type Problem, safeNextPath } from '@/lib/admin/api';
 import { errorsFor, type FieldErrors } from '@/lib/admin/problems';
 import { ErrorSummary } from './ErrorSummary';
@@ -38,6 +40,8 @@ export default function SignInForm({ navigate = goTo }: SignInFormProps) {
   const [focusNext, setFocusNext] = useState<string | null>(null);
   const submitting = useRef(false);
   const summary = useRef<HTMLDivElement>(null);
+  const options = useSignInOptions();
+  const captcha = useCaptcha(options?.captcha ?? null, 'sign-in');
 
   useEffect(() => {
     if (problem) summary.current?.focus();
@@ -59,6 +63,7 @@ export default function SignInForm({ navigate = goTo }: SignInFormProps) {
         password,
         twoFactorCode: step === 'code' && codeKind === 'totp' ? code.replace(/\s/g, '') : null,
         recoveryCode: step === 'code' && codeKind === 'recovery' ? code.trim() : null,
+        ...captchaField(captcha),
       },
     });
     submitting.current = false;
@@ -67,7 +72,14 @@ export default function SignInForm({ navigate = goTo }: SignInFormProps) {
       navigate(safeNextPath(new URLSearchParams(window.location.search).get('next')));
       return;
     }
+    // A token works once, so every answer needs a fresh check.
+    captcha.reset();
     const failure = response.problem;
+    if (failure.errors.captchaToken) {
+      setProblem(null);
+      captcha.showErrors(failure.errors.captchaToken);
+      return;
+    }
     if (failure.type === 'two-factor-required') {
       setProblem(null);
       if (step === 'password') {
@@ -186,8 +198,11 @@ export default function SignInForm({ navigate = goTo }: SignInFormProps) {
           )}
         </>
       )}
+      {captcha.widget}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Button type="submit">Sign in</Button>
+        <Button type="submit" disabled={captcha.required && !captcha.token}>
+          Sign in
+        </Button>
         {step === 'code' && (
           <>
             <Button type="button" variant="link" className="px-0" onClick={switchCode}>

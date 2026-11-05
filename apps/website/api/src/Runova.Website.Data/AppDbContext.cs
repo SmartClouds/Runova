@@ -65,6 +65,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<SyncRecord> SyncRecords => Set<SyncRecord>();
 
+    public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

@@ -22,6 +22,7 @@ public static class AuditActions
     public const string ApiClientUpdate = "api-client.update";
     public const string ApiClientRevoke = "api-client.revoke";
     public const string ApiClientRotate = "api-client.rotate";
+    public const string SignInSettingsUpdate = "sign-in-settings.update";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -30,6 +31,7 @@ public static class AuditActions
         PostCreate, PostUpdate, PostArchive, PostPublish,
         MediaUpload, MediaDelete,
         ApiClientCreate, ApiClientUpdate, ApiClientRevoke, ApiClientRotate,
+        SignInSettingsUpdate,
     };
 }
 
@@ -51,6 +53,7 @@ public static class AuditTargetTypes
     public const string Post = "post";
     public const string Media = "media";
     public const string ApiClient = "api-client";
+    public const string SignInSettings = "sign-in-settings";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { User, News, Post, Media, ApiClient };
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { User, News, Post, Media, ApiClient, SignInSettings };
 }

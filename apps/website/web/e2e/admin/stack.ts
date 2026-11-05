@@ -4,12 +4,17 @@
 // needs it. Everything stops when Playwright ends the process.
 import { type ChildProcess, spawn } from 'node:child_process';
 import { createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+  createServer as createHttpServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 import { createServer, request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
-import { OWNER, STACK } from './stackConfig.ts';
+import { OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.ts';
 
 const web = resolve(import.meta.dirname, '../..');
 const api = resolve(web, '../api');
@@ -98,6 +103,22 @@ function serveMedia(path: string, reply: ServerResponse) {
   createReadStream(file).pipe(reply);
 }
 
+/**
+ * Cloudflare's siteverify for the captcha spec: every token passes but one. It names no action,
+ * as Cloudflare's own test keys do, so the API takes a token for any form.
+ */
+function siteVerify(request: IncomingMessage, reply: ServerResponse) {
+  let body = '';
+  request.on('data', (chunk) => {
+    body += chunk;
+  });
+  request.on('end', () => {
+    const token = new URLSearchParams(body).get('response');
+    reply.writeHead(200, { 'content-type': 'application/json' });
+    reply.end(JSON.stringify({ success: Boolean(token) && token !== REFUSED_CAPTCHA_TOKEN }));
+  });
+}
+
 function forward(request: IncomingMessage, reply: ServerResponse) {
   const path = (request.url ?? '').split('?')[0];
   if (path.startsWith('/media/')) {
@@ -170,7 +191,9 @@ try {
     Admin__Email: OWNER.email,
     Admin__Password: OWNER.password,
     Admin__DisplayName: OWNER.displayName,
+    Captcha__VerifyUrl: `http://127.0.0.1:${STACK.siteVerifyPort}/siteverify`,
   };
+  createHttpServer(siteVerify).listen(STACK.siteVerifyPort, '127.0.0.1');
   log('migrating');
   await run('dotnet', [dll, 'admin', 'migrate'], { env: apiEnv });
   start('dotnet', [dll], api, apiEnv);

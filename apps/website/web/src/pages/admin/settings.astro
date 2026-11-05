@@ -1,0 +1,11 @@
+---
+import SignInSettingsEditor from '../../components/admin/SignInSettingsEditor';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Sign-in settings">
+  <h1 class="mb-6 font-display font-extrabold text-3xl tracking-tight">Sign-in settings</h1>
+  <SignInSettingsEditor client:only="react" />
+</AdminLayout>

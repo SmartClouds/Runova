@@ -1,6 +1,6 @@
 # Delivery Status
 
-Updated: 2026-11-05
+Updated: 2026-11-06
 Run branch: master (direct, per the user's instruction)
 Plan: docs/ROADMAP.md
 
@@ -82,10 +82,17 @@ Plan: docs/ROADMAP.md
 | E49 | Project cleanup | Complete | see git log | A Cleanup section on every project and a size chip on every card and row of the Projects page. A scan walks the project folder and its worktrees once, totals everything, and finds dependencies, build output, caches and the Studio render cache from an allowlist of folder names that must stand beside the file that explains them; git-tracked folders are never offered and generic names (dist, out, vendor) only when git ignores them; deploy-synced folders are shown locked. Deleting names a location and folder path (never an absolute path), is checked again in the main process, and is permanent after a confirm that names the restore command; Studio clears only scene chunks and media previews, never voice recordings or generated media, and skips a video that is rendering. Built test-first: 206 main tests, 17 Studio, 149 renderer component, logic and store tests, 8 added to the page tests, e2e `projectCleanup.e2e.ts` 4 of 4 on the built app (including forged removal requests through real IPC). Coverage of the new code: main 95.8% lines and 92.4% branches, renderer 97.9% and 92%, with floors set in `vitest.config.mts` |
 
 | E50 | Disk Cleanup | Complete | see git log | A Disk Cleanup page under Build that finds the caches package managers and developer tools keep (NuGet, npm, pnpm, Bun, pip, Cargo, Go, pub, Gradle, Playwright, Electron, node-gyp), shows what each and each version takes, and removes old versions (keep the newest 1 to 3, plus the newest stable) or everything. Caches whose files only their tool understands are cleaned only by the tool's own command. The window never sends a path: it names a cache, a scan and item ids, the main process refuses anything the scan did not report, and every removal is checked again, left alone if it changed since the scan, renamed before it is deleted, and logged; links are never followed and a folder that is not laid out like the cache it is claimed to be is never offered. A test run is switched off unless given a sandbox folder. Measured read-only on a developer machine: all 15 caches found and read, 285 GB in 198 seconds, about 140 GB of it old versions. Built test-first: 261 core tests, 190 main tests (engine, runtime, IPC), 203 renderer tests, e2e `systemCleanup.e2e.ts` 6 of 6 on the built app (scan, clean old versions, review, Clear all, cancelling, requests a window must never make) plus the navigation row. Coverage of the new code: core 98% lines and 91% branches, main 94% and 86%, renderer 97% and 87%, with floors set in `vitest.config.mts` |
+| E52 | Sign-in settings: captcha and Google | Complete | see git log | A Sign-in settings page for Admins (`/admin/settings`) with a switch and keys for a Cloudflare Turnstile captcha and for "Continue with Google", kept in the database (secrets sealed with Data Protection, never returned, never in the audit log) so neither needs a redeploy. The captcha guards account and staff sign-in (both steps), sign-up, forgot password and new confirmation links; a token works once and only on its own form, and the check fails closed when Cloudflare can not be reached. It can only be turned on, or given new keys, after the page's own check passes with those keys and Cloudflare accepts it with the new secret, and `admin captcha-off` turns it off from the server. Google keys saved here win over `Authentication__Google__*`, work without a restart, and Google turned off is gone even with keys in the environment; the page warns how many accounts only have Google. Built test-first: API 750 integration tests (14 Turnstile, 17 settings, 6 providers, 21 enforcement, 1 CLI added) and 314 unit tests, OpenAPI snapshot and contract updated; website 968 unit tests (captcha hook, account forms, staff sign-in, settings editor, Security card), e2e `captcha/signInCaptcha.spec.ts` in its own project after the admin specs, plus the admin project and `security.spec.ts` |
 
 Status values: Not started, In progress, Blocked, Complete.
 
 ## Unverified criteria
+
+**E52 sign-in settings**
+
+- Not tried against Cloudflare itself: the API tests and the e2e use a fake siteverify and a stand-in for Turnstile's script. A real widget (its iframe under the CSP, dark mode, the flexible size on a phone) and Cloudflare's own answers still need a run with real or test keys.
+- Not tried with a real Google OAuth client; the keys path is covered by the fake Google the E48 tests use.
+- The settings page and the widget's place in each form were checked through the DOM in tests, not looked at in a browser.
 
 **E49 project cleanup**
 

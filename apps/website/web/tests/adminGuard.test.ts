@@ -155,6 +155,7 @@ describe('pages for Admins only', () => {
     '/admin/api-clients/new',
     '/admin/users/7',
     '/admin/reports',
+    '/admin/settings',
   ];
   const session = '__Host-runova-session=abc';
 

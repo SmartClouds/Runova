@@ -57,8 +57,16 @@ describe('contentSecurityPolicy', () => {
     expect(directive('font-src')).toBe("font-src 'self' data:");
   });
 
-  it("allows Pagefind's WebAssembly but no other eval", () => {
-    expect(csp.scriptDirective.resources).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+  it("allows Pagefind's WebAssembly and the Turnstile script, but no other eval", () => {
+    expect(csp.scriptDirective.resources).toEqual([
+      "'self'",
+      "'wasm-unsafe-eval'",
+      'https://challenges.cloudflare.com',
+    ]);
+  });
+
+  it('frames only the Turnstile captcha, which renders in an iframe', () => {
+    expect(directive('frame-src')).toBe("frame-src 'self' https://challenges.cloudflare.com");
   });
 
   it('lets inline style attributes through, which React and Radix render', () => {

@@ -1455,6 +1455,67 @@
         }
       }
     },
+    "/api/v1/sign-in-settings": {
+      "get": {
+        "tags": [
+          "SignInSettingsEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "SignInSettingsEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInSettingsPatch"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInSettingsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sync-scopes": {
       "get": {
         "tags": [
@@ -3948,6 +4009,22 @@
         },
         "additionalProperties": false
       },
+      "CaptchaDto": {
+        "required": [
+          "provider",
+          "siteKey"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "siteKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ContentCountsDto": {
         "required": [
           "newsPublished",
@@ -4263,6 +4340,12 @@
         "type": "object",
         "properties": {
           "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "captchaToken": {
             "type": [
               "null",
               "string"
@@ -5898,6 +5981,12 @@
               "null",
               "string"
             ]
+          },
+          "captchaToken": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -6208,7 +6297,8 @@
       },
       "SignInProvidersDto": {
         "required": [
-          "items"
+          "items",
+          "captcha"
         ],
         "type": "object",
         "properties": {
@@ -6217,6 +6307,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "captcha": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaptchaDto"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -6249,6 +6349,140 @@
             ]
           },
           "recoveryCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "captchaToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SignInSettingsDto": {
+        "required": [
+          "captchaEnabled",
+          "turnstileSiteKey",
+          "hasTurnstileSecret",
+          "googleEnabled",
+          "googleActive",
+          "googleClientId",
+          "hasGoogleClientSecret",
+          "googleFromEnvironment",
+          "googleCallbackUrl",
+          "googleOnlyAccounts",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "captchaEnabled": {
+            "type": "boolean"
+          },
+          "turnstileSiteKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasTurnstileSecret": {
+            "type": "boolean"
+          },
+          "googleEnabled": {
+            "type": "boolean"
+          },
+          "googleActive": {
+            "type": "boolean"
+          },
+          "googleClientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasGoogleClientSecret": {
+            "type": "boolean"
+          },
+          "googleFromEnvironment": {
+            "type": "boolean"
+          },
+          "googleCallbackUrl": {
+            "type": "string"
+          },
+          "googleOnlyAccounts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SignInSettingsPatch": {
+        "required": [
+          "captchaEnabled",
+          "turnstileSiteKey",
+          "turnstileSecret",
+          "googleEnabled",
+          "googleClientId",
+          "googleClientSecret",
+          "captchaToken"
+        ],
+        "type": "object",
+        "properties": {
+          "captchaEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "turnstileSiteKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "turnstileSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "googleEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "googleClientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "googleClientSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "captchaToken": {
             "type": [
               "null",
               "string"
@@ -7366,6 +7600,9 @@
     },
     {
       "name": "UserEndpoints"
+    },
+    {
+      "name": "SignInSettingsEndpoints"
     },
     {
       "name": "SyncEndpoints"

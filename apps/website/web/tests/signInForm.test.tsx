@@ -5,7 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SignInForm from '../src/components/admin/SignInForm';
 import SignOutButton from '../src/components/admin/SignOutButton';
-import { fakeFetch, problem } from './helpers/fakeAdminFetch';
+import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
+import { captchaOn, fakeTurnstile } from './helpers/fakeTurnstile';
 
 const noContent = () => new Response(null, { status: 204 });
 const needsCode = (detail = 'Enter the code from your authenticator app, or a recovery code.') =>
@@ -178,5 +179,50 @@ describe('SignOutButton', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be reached');
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('SignInForm with the captcha on', () => {
+  it('waits for the check and sends a fresh token on each step', async () => {
+    const turnstile = fakeTurnstile();
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': json({ items: [], captcha: captchaOn }),
+      'POST /api/v1/sessions': [needsCode(), noContent()],
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<SignInForm navigate={navigate} />);
+    await waitFor(() => expect(turnstile.api.render).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+    turnstile.solve('tok-1', 'sign-in');
+
+    await signIn(user);
+    await user.type(await screen.findByLabelText('Authentication code'), '123456');
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+    turnstile.solve('tok-2', 'sign-in');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin/news'));
+    const [first, second] = api.calls('POST /api/v1/sessions');
+    expect(first.json()).toMatchObject({ captchaToken: 'tok-1' });
+    expect(second.json()).toMatchObject({ twoFactorCode: '123456', captchaToken: 'tok-2' });
+  });
+
+  it('shows a refused check under the widget', async () => {
+    const turnstile = fakeTurnstile();
+    fakeFetch({
+      'GET /api/v1/sign-in-providers': json({ items: [], captcha: captchaOn }),
+      'POST /api/v1/sessions': problem(400, 'validation-failed', {
+        errors: { captchaToken: ['Complete the check that you are a person, then try again.'] },
+      }),
+    });
+    const user = userEvent.setup();
+    render(<SignInForm />);
+    await waitFor(() => expect(turnstile.api.render).toHaveBeenCalled());
+    turnstile.solve('tok-1', 'sign-in');
+
+    await signIn(user);
+
+    expect(await screen.findByText(/Complete the check that you are a person/)).toBeInTheDocument();
   });
 });

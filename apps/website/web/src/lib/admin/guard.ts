@@ -26,7 +26,7 @@ export const FORBIDDEN_PATH = '/admin/forbidden';
 const PUBLIC_PATHS = [SIGN_IN_PATH, SET_PASSWORD_PATH];
 
 export const isAdminOnlyPath = (pathname: string) =>
-  /^\/admin\/(?:api-clients|users|reports)(?:\/|$)/.test(pathname);
+  /^\/admin\/(?:api-clients|users|reports|settings)(?:\/|$)/.test(pathname);
 
 export const isAdmin = (user: AdminUser | undefined) => user?.roles.includes('Admin') === true;
 

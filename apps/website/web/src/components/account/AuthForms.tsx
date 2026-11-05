@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
 import { apiRequest, type Problem, safeAccountPath } from '@/lib/account/api';
+import { type SignInOptions, useSignInOptions } from '@/lib/account/signInOptions';
+import { captchaField, useCaptcha } from './Captcha';
 import { AppInput, PasswordInput } from './fields';
 import { Notice } from './ui';
 
@@ -29,14 +31,8 @@ function GoogleMark() {
 }
 
 /** "Continue with Google", shown only when the API says Google sign-in is set up. */
-function GoogleButton({ next }: { next: string }) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    void apiRequest<{ items: string[] }>('/sign-in-providers').then((r) =>
-      setShown(r.ok && r.value.items.includes('google')),
-    );
-  }, []);
-  if (!shown) return null;
+function GoogleButton({ next, options }: { next: string; options: SignInOptions | null }) {
+  if (!options?.providers.includes('google')) return null;
   return (
     <>
       <Button asChild variant="outline" className="w-full app-field border-0">
@@ -86,6 +82,13 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
   const [resent, setResent] = useState(false);
   const [busy, setBusy] = useState(false);
   const googleError = params.get('error');
+  const options = useSignInOptions();
+  // The code step after Google needs no check: Google already let the person in.
+  const captcha = useCaptcha(googleTwoFactor ? null : (options?.captcha ?? null), 'sign-in');
+  const resendCaptcha = useCaptcha(
+    unverified && !resent ? (options?.captcha ?? null) : null,
+    'verification-email',
+  );
 
   const submit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
@@ -104,6 +107,7 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
             password,
             twoFactorCode: step === 'code' && !useRecovery ? cleaned : null,
             recoveryCode: step === 'code' && useRecovery ? cleaned : null,
+            ...captchaField(captcha),
           },
         });
     setBusy(false);
@@ -111,7 +115,12 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
       navigate(next);
       return;
     }
+    captcha.reset();
     const failure = response.problem;
+    if (failure.errors.captchaToken) {
+      captcha.showErrors(failure.errors.captchaToken);
+      return;
+    }
     if (failure.type === 'two-factor-required' && step === 'password') {
       setStep('code');
       return;
@@ -121,7 +130,15 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
   };
 
   const resend = async () => {
-    await apiRequest('/verification-emails', { method: 'POST', body: { email } });
+    const response = await apiRequest('/verification-emails', {
+      method: 'POST',
+      body: { email, ...captchaField(resendCaptcha) },
+    });
+    resendCaptcha.reset();
+    if (!response.ok && response.problem.errors.captchaToken) {
+      resendCaptcha.showErrors(response.problem.errors.captchaToken);
+      return;
+    }
     setResent(true);
   };
 
@@ -146,16 +163,24 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
             {resent ? (
               <p>A new link is on its way to {email}. Open it to finish.</p>
             ) : (
-              <p>
-                Open the link we sent to {email}.{' '}
-                <button type="button" className="link" onClick={resend}>
-                  Send a new link
-                </button>
-              </p>
+              <div className="grid gap-3">
+                <p>
+                  Open the link we sent to {email}.{' '}
+                  <button
+                    type="button"
+                    className="link disabled:opacity-60"
+                    onClick={resend}
+                    disabled={resendCaptcha.required && !resendCaptcha.token}
+                  >
+                    Send a new link
+                  </button>
+                </p>
+                {resendCaptcha.widget}
+              </div>
             )}
           </Notice>
         )}
-        {step === 'password' && <GoogleButton next={next} />}
+        {step === 'password' && <GoogleButton next={next} options={options} />}
         <form onSubmit={submit} className="grid gap-4">
           {step === 'password' ? (
             <>
@@ -210,7 +235,12 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
               )}
             </Field>
           )}
-          <Button type="submit" disabled={busy} className="w-full">
+          {captcha.widget}
+          <Button
+            type="submit"
+            disabled={busy || (captcha.required && !captcha.token)}
+            className="w-full"
+          >
             {busy ? 'Signing in…' : 'Sign in'}
             {!busy && <ArrowRight />}
           </Button>
@@ -279,21 +309,38 @@ export function Register() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
+  const options = useSignInOptions();
+  const captcha = useCaptcha(sentTo ? null : (options?.captcha ?? null), 'register');
+  const resendCaptcha = useCaptcha(
+    sentTo ? (options?.captcha ?? null) : null,
+    'verification-email',
+  );
 
   const submit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     setBusy(true);
     const response = await apiRequest('/accounts', {
       method: 'POST',
-      body: { email, password, displayName: name },
+      body: { email, password, displayName: name, ...captchaField(captcha) },
     });
     setBusy(false);
     if (response.ok) {
       setSentTo(email);
       return;
     }
+    captcha.reset();
+    captcha.showErrors(response.problem.errors.captchaToken ?? []);
     setErrors(response.problem.errors);
     setProblem(Object.keys(response.problem.errors).length ? null : response.problem);
+  };
+
+  const sendAgain = async (to: string) => {
+    const response = await apiRequest('/verification-emails', {
+      method: 'POST',
+      body: { email: to, ...captchaField(resendCaptcha) },
+    });
+    resendCaptcha.reset();
+    resendCaptcha.showErrors(response.ok ? [] : (response.problem.errors.captchaToken ?? []));
   };
 
   if (sentTo) {
@@ -311,15 +358,15 @@ export function Register() {
           Nothing there after a few minutes? Look in spam, or{' '}
           <button
             type="button"
-            className="link"
-            onClick={() =>
-              apiRequest('/verification-emails', { method: 'POST', body: { email: sentTo } })
-            }
+            className="link disabled:opacity-60"
+            onClick={() => sendAgain(sentTo)}
+            disabled={resendCaptcha.required && !resendCaptcha.token}
           >
             send it again
           </button>
           .
         </p>
+        {resendCaptcha.widget && <div className="w-full">{resendCaptcha.widget}</div>}
       </div>
     );
   }
@@ -330,7 +377,7 @@ export function Register() {
         Make your Runova account
       </Title>
       <div className="grid gap-4">
-        <GoogleButton next="/account" />
+        <GoogleButton next="/account" options={options} />
         {problem && <Notice tone="danger">{problem.detail || problem.title}</Notice>}
         <form onSubmit={submit} className="grid gap-4">
           <Field id="name" label="Your name" errors={errors.displayName}>
@@ -378,7 +425,12 @@ export function Register() {
               </div>
             )}
           </Field>
-          <Button type="submit" disabled={busy} className="w-full">
+          {captcha.widget}
+          <Button
+            type="submit"
+            disabled={busy || (captcha.required && !captcha.token)}
+            className="w-full"
+          >
             {busy ? 'Making your account…' : 'Make account'}
           </Button>
         </form>
@@ -459,11 +511,22 @@ export function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string[] | undefined>();
+  const options = useSignInOptions();
+  const captcha = useCaptcha(options?.captcha ?? null, 'password-reset');
   const submit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
-    const response = await apiRequest('/password-resets', { method: 'POST', body: { email } });
-    if (response.ok) setSent(true);
-    else setError(response.problem.errors.email ?? [response.problem.detail]);
+    const response = await apiRequest('/password-resets', {
+      method: 'POST',
+      body: { email, ...captchaField(captcha) },
+    });
+    if (response.ok) {
+      setSent(true);
+      return;
+    }
+    captcha.reset();
+    const { errors, detail } = response.problem;
+    captcha.showErrors(errors.captchaToken ?? []);
+    setError(errors.captchaToken ? undefined : (errors.email ?? [detail]));
   };
   if (sent) {
     return (
@@ -498,7 +561,8 @@ export function ForgotPassword() {
             />
           )}
         </Field>
-        <Button type="submit" className="w-full">
+        {captcha.widget}
+        <Button type="submit" disabled={captcha.required && !captcha.token} className="w-full">
           Send the link
         </Button>
         <a className="link-muted text-center text-sm" href="/account/sign-in">

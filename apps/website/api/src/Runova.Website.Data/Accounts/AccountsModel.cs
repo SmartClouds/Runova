@@ -9,6 +9,16 @@ internal static class AccountsModel
 {
     public static void ConfigureAccounts(this ModelBuilder builder)
     {
+        builder.Entity<SignInSettings>(settings =>
+        {
+            settings.Property(s => s.Id).ValueGeneratedNever();
+            settings.ToTable(t => t.HasCheckConstraint("CK_SignInSettings_Singleton", $"\"Id\" = {SignInSettings.SingletonId}"));
+            settings.Property(s => s.TurnstileSiteKey).HasMaxLength(100);
+            settings.Property(s => s.GoogleClientId).HasMaxLength(300);
+            settings.Property(s => s.Version).IsRowVersion();
+            settings.HasData(new SignInSettings());
+        });
+
         builder.Entity<EmailMessage>(message =>
         {
             message.Property(m => m.To).HasMaxLength(320);

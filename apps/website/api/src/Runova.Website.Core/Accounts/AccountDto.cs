@@ -17,9 +17,15 @@ public sealed record AccountDto(
     DateTimeOffset? LastSignInAt,
     string Version);
 
-public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName);
+/// <summary>A form the captcha protects while it is on: the widget's token comes with the request.</summary>
+public interface ICaptchaProtected
+{
+    string? CaptchaToken { get; }
+}
 
-public sealed record EmailRequest(string? Email);
+public sealed record RegisterRequest(string? Email, string? Password, string? DisplayName, string? CaptchaToken = null) : ICaptchaProtected;
+
+public sealed record EmailRequest(string? Email, string? CaptchaToken = null) : ICaptchaProtected;
 
 public sealed record TokenRequest(string? Token);
 

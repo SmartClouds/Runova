@@ -21,12 +21,19 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: ['admin/**', 'stack/**'],
+      testIgnore: ['admin/**', 'captcha/**', 'stack/**'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'admin',
       testMatch: 'admin/**/*.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true },
+    },
+    {
+      // Turns the sign-in captcha on for the whole stack, so it runs once every admin spec is done.
+      name: 'admin-captcha',
+      testMatch: 'captcha/**/*.spec.ts',
+      dependencies: ['admin'],
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true },
     },
   ],

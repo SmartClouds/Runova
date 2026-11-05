@@ -35,6 +35,9 @@ export function isDevServer(argv: readonly string[]): boolean {
 }
 
 /** The `security.csp` object for the Astro config. */
+/** Cloudflare Turnstile, the sign-in captcha: its script and the iframe it renders the check in. */
+export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
+
 export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
   const connect = ["'self'"];
   if (sentryDsn) connect.push(new URL(sentryDsn).origin);
@@ -44,6 +47,7 @@ export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
       `img-src 'self' data: ${new URL(site).origin}`,
       // Vite inlines the smallest font subsets as data URLs.
       "font-src 'self' data:",
+      `frame-src 'self' ${TURNSTILE_ORIGIN}`,
       `connect-src ${connect.join(' ')}`,
       "object-src 'none'",
       "base-uri 'self'",
@@ -51,7 +55,7 @@ export function contentSecurityPolicy({ site, sentryDsn }: CspOptions) {
       "frame-ancestors 'none'",
     ],
     // Pagefind runs its search index as WebAssembly.
-    scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] },
+    scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'", TURNSTILE_ORIGIN] },
     // React and Radix set `style` attributes, which only 'unsafe-inline' allows. Astro then leaves
     // the style hashes out, as browsers would ignore 'unsafe-inline' next to them.
     styleDirective: { resources: ["'self'", "'unsafe-inline'"] },

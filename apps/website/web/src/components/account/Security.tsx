@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
 import { type Account, apiRequest } from '@/lib/account/api';
+import { useSignInOptions } from '@/lib/account/signInOptions';
 import { StrengthMeter } from './AuthForms';
 import { AppInput, PasswordInput } from './fields';
 import { Card, CardHeader, Notice, PageHeader, Pill, Shimmer, StepUpDialog, useLoad } from './ui';
@@ -319,14 +320,17 @@ function TwoFactorCard({
   );
 }
 
+/** Linking Google, while the site has it on; an account already linked can always unlink. */
 function GoogleCard({ account, reload }: { account: Account; reload: () => void }) {
   const linked = account.logins.includes('google');
+  const options = useSignInOptions();
   const [problem, setProblem] = useState<string | null>(null);
   const unlink = async () => {
     const response = await apiRequest('/accounts/me/logins/google', { method: 'DELETE' });
     if (response.ok) reload();
     else setProblem(response.problem.detail);
   };
+  if (!linked && !options?.providers.includes('google')) return null;
   return (
     <Card>
       <CardHeader
