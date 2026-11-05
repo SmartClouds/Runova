@@ -11,6 +11,7 @@ import ForbiddenPage from '../src/pages/admin/forbidden.astro';
 import OverviewPage from '../src/pages/admin/index.astro';
 import ReportsPage from '../src/pages/admin/reports.astro';
 import SetPasswordPage from '../src/pages/admin/set-password.astro';
+import SettingsPage from '../src/pages/admin/settings.astro';
 import UserPage from '../src/pages/admin/users/[id].astro';
 import UsersPage from '../src/pages/admin/users/index.astro';
 import NewUserPage from '../src/pages/admin/users/new.astro';
@@ -50,7 +51,7 @@ describe('the admin menu', () => {
     expect(navLinks(html)).toEqual(['/admin/news', '/admin/blog']);
   });
 
-  it('gives an Admin the reports, the users, the API clients and the jobs dashboard too', async () => {
+  it('gives an Admin the reports, the users, the API clients, the settings and the jobs dashboard too', async () => {
     const html = await (await render(AdminLayout, '/admin', ADMIN)).text();
     expect(navLinks(html)).toEqual([
       '/admin/news',
@@ -58,6 +59,7 @@ describe('the admin menu', () => {
       '/admin/reports',
       '/admin/users',
       '/admin/api-clients',
+      '/admin/settings',
       '/hangfire',
     ]);
   });
@@ -85,6 +87,7 @@ describe('the overview', () => {
     expect(main).not.toContain('/admin/api-clients');
     expect(main).not.toContain('/admin/users');
     expect(main).not.toContain('/admin/reports');
+    expect(main).not.toContain('/admin/settings');
     expect(main).not.toContain('/hangfire');
   });
 
@@ -94,6 +97,7 @@ describe('the overview', () => {
     expect(main).toContain('href="/admin/api-clients"');
     expect(main).toContain('href="/admin/users"');
     expect(main).toContain('href="/admin/reports"');
+    expect(main).toContain('href="/admin/settings"');
     expect(main).toContain('href="/hangfire"');
   });
 });
@@ -105,6 +109,7 @@ describe('the admin pages', () => {
     ['/admin/users', UsersPage, 'UserList'],
     ['/admin/users/new', NewUserPage, 'InviteForm'],
     ['/admin/reports', ReportsPage, 'ReportsView'],
+    ['/admin/settings', SettingsPage, 'SignInSettingsEditor'],
   ] as const)('%s renders its island', async (path, page, island) => {
     const response = await render(page, path, ADMIN);
     expect(response.status).toBe(200);

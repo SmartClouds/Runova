@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
 using Runova.Website.Core.Accounts;
@@ -14,32 +16,41 @@ using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Api.Accounts;
 
-public sealed record SignInProvidersDto(IReadOnlyList<string> Items);
+/// <summary>
+/// What the sign-in pages show: the providers to offer, and the captcha widget's public key when
+/// the captcha is on (null when it is off).
+/// </summary>
+public sealed record SignInProvidersDto(IReadOnlyList<string> Items, CaptchaDto? Captcha);
+
+public sealed record CaptchaDto(string Provider, string SiteKey);
 
 public sealed record TwoFactorSignInRequest(string? Code, string? RecoveryCode);
 
-/// <summary>Google sign-in settings, from <c>Authentication__Google__*</c>. Without both, Google is off.</summary>
+/// <summary>
+/// Google sign-in, with the keys an Admin saved in the sign-in settings or, without those,
+/// <c>Authentication__Google__*</c>. Without both keys, or switched off, Google is off.
+/// </summary>
 internal static class GoogleSignIn
 {
     public const string Provider = "google";
     public const string CallbackPath = "/api/oauth/google/callback";
 
-    public static bool IsConfigured(IConfiguration configuration) =>
-        !string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientId"])
-        && !string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientSecret"]);
-
     /// <summary>
-    /// The Google handler, always registered and configured when first used, so settings a host adds
-    /// late are still seen. Google signs in to Identity's external cookie only; the endpoints below
-    /// turn that into an account session. Only a verified email is ever trusted.
+    /// The Google handler, always registered and configured when first used. Its options are made
+    /// again whenever the sign-in settings change, so new keys work without a restart. Google signs
+    /// in to Identity's external cookie only; the endpoints below turn that into an account
+    /// session. Only a verified email is ever trusted.
     /// </summary>
     public static IServiceCollection AddGoogleSignIn(this IServiceCollection services)
     {
         services.AddAuthentication().AddGoogle(_ => { });
-        services.AddOptions<GoogleOptions>(GoogleDefaults.AuthenticationScheme).Configure<IConfiguration>((options, configuration) =>
+        services.AddSingleton<IOptionsChangeTokenSource<GoogleOptions>>(provider =>
+            new SettingsChangeTokenSource(provider.GetRequiredService<SignInSettingsStore>()));
+        services.AddOptions<GoogleOptions>(GoogleDefaults.AuthenticationScheme).Configure<SignInSettingsStore>((options, store) =>
         {
-            options.ClientId = configuration["Authentication:Google:ClientId"] ?? "not-configured";
-            options.ClientSecret = configuration["Authentication:Google:ClientSecret"] ?? "not-configured";
+            var settings = store.Current;
+            options.ClientId = settings.GoogleClientId ?? "not-configured";
+            options.ClientSecret = settings.GoogleClientSecret ?? "not-configured";
             options.CallbackPath = CallbackPath;
             options.SignInScheme = IdentityConstants.ExternalScheme;
             options.SaveTokens = false;
@@ -55,6 +66,13 @@ internal static class GoogleSignIn
             };
         });
         return services;
+    }
+
+    private sealed class SettingsChangeTokenSource(SignInSettingsStore store) : IOptionsChangeTokenSource<GoogleOptions>
+    {
+        public string Name => GoogleDefaults.AuthenticationScheme;
+
+        public IChangeToken GetChangeToken() => store.GetChangeToken();
     }
 }
 
@@ -75,7 +93,7 @@ internal static class ExternalSignInEndpoints
 
     public static RouteGroupBuilder MapExternalSignIns(this RouteGroupBuilder api)
     {
-        api.MapGet("/sign-in-providers", ListProviders).AllowAnonymous();
+        api.MapGet("/sign-in-providers", ListProvidersAsync).AllowAnonymous();
         api.MapGet("/external-sign-ins/{provider}", StartAsync).AllowAnonymous().Produces(StatusCodes.Status302Found);
         api.MapGet("/external-sign-ins/current", FinishAsync).AllowAnonymous().Produces(StatusCodes.Status302Found);
         api.MapPost("/two-factor-sign-ins", TwoFactorAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
@@ -83,8 +101,13 @@ internal static class ExternalSignInEndpoints
         return api;
     }
 
-    private static Ok<SignInProvidersDto> ListProviders(IConfiguration configuration) =>
-        TypedResults.Ok(new SignInProvidersDto(GoogleSignIn.IsConfigured(configuration) ? [GoogleSignIn.Provider] : []));
+    private static async Task<Ok<SignInProvidersDto>> ListProvidersAsync(SignInSettingsStore store, CancellationToken cancellationToken)
+    {
+        var settings = await store.GetAsync(cancellationToken);
+        return TypedResults.Ok(new SignInProvidersDto(
+            settings.GoogleActive ? [GoogleSignIn.Provider] : [],
+            settings.CaptchaActive ? new CaptchaDto("turnstile", settings.TurnstileSiteKey!) : null));
+    }
 
     /// <summary>
     /// A path on this site, or the account page. Never another origin: no backslash and no control
@@ -102,9 +125,9 @@ internal static class ExternalSignInEndpoints
             : DefaultReturn;
 
     private static async Task<Results<ChallengeHttpResult, ProblemHttpResult>> StartAsync(
-        string provider, string? returnUrl, bool? link, HttpContext http, IConfiguration configuration, SignInManager<AppUser> signIn, UserManager<AppUser> users)
+        string provider, string? returnUrl, bool? link, HttpContext http, SignInSettingsStore store, SignInManager<AppUser> signIn, UserManager<AppUser> users)
     {
-        if (provider != GoogleSignIn.Provider || !GoogleSignIn.IsConfigured(configuration))
+        if (provider != GoogleSignIn.Provider || !(await store.GetAsync(http.RequestAborted)).GoogleActive)
         {
             return ApiProblems.Of(ProblemTypes.NotFound, "That sign-in provider is not available here.");
         }

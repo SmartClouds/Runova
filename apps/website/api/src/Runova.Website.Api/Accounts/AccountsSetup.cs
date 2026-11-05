@@ -8,6 +8,11 @@ internal static class AccountsSetup
 {
     public static IServiceCollection AddWebsiteAccounts(this IServiceCollection services)
     {
+        services.AddSingleton<SignInSecrets>();
+        services.AddSingleton<SignInSettingsStore>();
+        services.AddHostedService(provider => provider.GetRequiredService<SignInSettingsStore>());
+        services.AddOptions<CaptchaOptions>().BindConfiguration(CaptchaOptions.Section);
+        services.AddHttpClient<TurnstileVerifier>(TurnstileVerifier.Configure);
         services.AddGoogleSignIn();
         services.AddWebsiteSync();
         services.AddScoped<SyncTombstonesPurgeJob>();

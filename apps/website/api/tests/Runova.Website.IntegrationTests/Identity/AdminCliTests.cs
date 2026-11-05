@@ -95,6 +95,26 @@ public sealed class AdminCliTests(PostgresFixture postgres)
         Assert.False(AdminCli.IsCommand(["--urls", "http://+:8080"]));
     }
 
+    [Fact]
+    public async Task Captcha_off_turns_the_captcha_off_when_its_keys_lock_everyone_out()
+    {
+        var turnstile = new FakeTurnstile();
+        using var factory = new WebsiteApiFactory(await postgres.CreateDatabaseAsync(), services: turnstile.Register);
+        var admin = await TestUsers.CreateAsync(factory.Services, Roles.Admin);
+        await TestSignInSettings.TurnOnCaptchaAsync(await TestUsers.SignedInClientAsync(factory, admin), turnstile);
+        Assert.Equal(HttpStatusCode.BadRequest, (await factory.CreateApiClient().SignInAsync(admin.Email!, TestUsers.Password)).StatusCode);
+
+        var (exitCode, output, _) = await RunAsync(factory, "", "captcha-off");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("off", output, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.NoContent, (await factory.CreateApiClient().SignInAsync(admin.Email!, TestUsers.Password)).StatusCode);
+        var settings = await ApiClient.ReadJsonAsync(
+            await (await TestUsers.SignedInClientAsync(factory, admin)).GetAsync(TestSignInSettings.Path), HttpStatusCode.OK);
+        Assert.False(settings.GetProperty("captchaEnabled").GetBoolean());
+        Assert.True(settings.GetProperty("hasTurnstileSecret").GetBoolean());
+    }
+
     private static async Task<(int ExitCode, string Output, string Error)> RunAsync(WebsiteApiFactory factory, string stdin, params string[] args)
     {
         using var output = new StringWriter();

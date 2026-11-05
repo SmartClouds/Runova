@@ -20,9 +20,10 @@ const ADMIN_PAGES = [
   '/admin/users/new',
   '/admin/users/1',
   '/admin/reports',
+  '/admin/settings',
 ];
 
-const ADMIN_MENU = ['Reports', 'Users', 'API clients', 'Jobs'];
+const ADMIN_MENU = ['Reports', 'Users', 'API clients', 'Settings', 'Jobs'];
 
 test.describe('signed out', () => {
   test.use({ storageState: SIGNED_OUT });

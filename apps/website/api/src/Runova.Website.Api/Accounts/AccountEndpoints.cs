@@ -28,10 +28,10 @@ internal static class AccountEndpoints
 
     public static RouteGroupBuilder MapAccounts(this RouteGroupBuilder api)
     {
-        api.MapPost("/accounts", RegisterAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
+        api.MapPost("/accounts", RegisterAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy).RequireCaptcha(CaptchaActions.Register);
         api.MapPost("/email-verifications", VerifyAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
-        api.MapPost("/verification-emails", ResendVerificationAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
-        api.MapPost("/password-resets", RequestResetAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
+        api.MapPost("/verification-emails", ResendVerificationAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy).RequireCaptcha(CaptchaActions.VerificationEmail);
+        api.MapPost("/password-resets", RequestResetAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy).RequireCaptcha(CaptchaActions.PasswordReset);
 
         var me = api.MapGroup("/accounts/me").RequireAuthorization(Policies.Account);
         me.MapGet("", GetAsync);

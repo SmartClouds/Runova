@@ -28,6 +28,7 @@ internal static class ApiV1
         api.MapAccounts();
         api.MapAccountSessions();
         api.MapExternalSignIns();
+        api.MapSignInSettings();
         api.MapDeviceTokens();
         api.MapSync();
         api.MapTeams();

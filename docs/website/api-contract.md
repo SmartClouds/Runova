@@ -249,7 +249,9 @@ the API's validation and the desktop matcher, and both have table tests over the
 | DELETE | `/api/v1/sessions/current` | Account | none | 204 and the cookie cleared; 401 |
 
 `SignInRequest`: `{ "email": string, "password": string, "twoFactorCode": string | null,
-"recoveryCode": string | null }`. A wrong email and a wrong password give the same 401. Sign-in is
+"recoveryCode": string | null, "captchaToken": string | null }`. `captchaToken` is needed only
+while an Admin has the [captcha](#sign-in-settings-admin) on, on every attempt, the two-factor step
+included. A wrong email and a wrong password give the same 401. Sign-in is
 rate-limited to 10 attempts a minute per IP (429), a limit shared with the account routes that
 send email. An account whose email is not confirmed gets 403 `email-unverified`, and only once its
 password is right.
@@ -327,7 +329,8 @@ itself. Every anonymous route here answers the same whether or not an address ha
 | DELETE | `/api/v1/accounts/me` | Account | `StepUpRequest` | 204 (the account and everything only it owns are gone); 400 step-up failed; 401; 409 staff, or a team still needs it |
 
 `RegisterRequest`: `{ "email": string, "password": string (12 or more), "displayName": string (1 to
-100) }`. A new address gets an account with no role and a link to
+100), "captchaToken": string | null }`. `POST /verification-emails` and `POST /password-resets` also
+take `captchaToken` next to `email`; it is needed only while the captcha is on. A new address gets an account with no role and a link to
 `https://runovahq.com/account/verify-email#token=<token>` (24 hours, one use). An address whose
 account was never confirmed gets a new link, and the password it was registered with before stops
 working. A confirmed address gets an email saying it already has an account, and nothing changes.
@@ -361,12 +364,14 @@ settings). A sent email keeps its subject but loses its body, which held a one-t
 
 ### Continue with Google
 
-Google sign-in for accounts, as browser redirects, when `Authentication__Google__ClientId` and
-`Authentication__Google__ClientSecret` are set. Only an email Google says is verified is trusted.
+Google sign-in for accounts, as browser redirects, when Google has a client id and secret (saved in
+the [sign-in settings](#sign-in-settings-admin), or else `Authentication__Google__ClientId` and
+`Authentication__Google__ClientSecret`) and an Admin has not turned it off. Only an email Google
+says is verified is trusted.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[] }` (`["google"]` when it is set up) |
+| GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[], "captcha": { "provider": "turnstile", "siteKey": string } \| null }` (`["google"]` when it is set up; `captcha` while the captcha is on) |
 | GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add Google to the signed-in account) | 302 to Google; 404 not set up |
 | GET | `/api/v1/external-sign-ins/current` | Anonymous (Google's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
 | POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after Google) | `{ "code": string or null, "recoveryCode": string or null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
@@ -380,6 +385,58 @@ account that started it. An address nobody confirmed goes to the Google owner, a
 was registered with stops working. Errors in the redirect: `google-failed`, `email-unverified`,
 `link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
 Google login). A `returnUrl` that is not a path on this site becomes `/account`.
+
+### Sign-in settings (Admin)
+
+The switches and keys for the sign-in captcha (Cloudflare Turnstile) and Google (E52), kept in the
+database so an Admin can change them without a redeploy. Secrets are sealed with Data Protection
+and never come back; only whether one is saved.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/sign-in-settings` | Admin | none | 200 `SignInSettingsDto`; 401; 403 |
+| PATCH | `/api/v1/sign-in-settings` | Admin | merge patch of `captchaEnabled`, `turnstileSiteKey`, `turnstileSecret`, `googleEnabled`, `googleClientId`, `googleClientSecret`, plus `captchaToken`; `If-Match` | 200 `SignInSettingsDto`; 400; 401; 403; 412; 428 |
+
+`SignInSettingsDto`:
+
+```json
+{
+  "captchaEnabled": true,
+  "turnstileSiteKey": "0x4AAAAAAA...",
+  "hasTurnstileSecret": true,
+  "googleEnabled": true,
+  "googleActive": true,
+  "googleClientId": "123.apps.googleusercontent.com",
+  "hasGoogleClientSecret": true,
+  "googleFromEnvironment": false,
+  "googleCallbackUrl": "https://runovahq.com/api/oauth/google/callback",
+  "googleOnlyAccounts": 3,
+  "updatedAt": "2026-11-06T10:00:00.000Z",
+  "version": "1234"
+}
+```
+
+Rules:
+
+- A secret given replaces the saved one; `null` or an empty string removes it. Keys are trimmed:
+  the site key up to 100 characters, the client id up to 300, a secret up to 200.
+- The captcha can only be on with both keys. Turning it on, or giving it new keys while it is on,
+  needs `captchaToken`: a token the settings page's own widget got with the new site key (action
+  `settings-check`), which Cloudflare must accept with the new secret. Otherwise 400 with
+  `errors.captchaToken`. So a wrong key can never lock everyone out. Turning it off needs nothing.
+- While it is on, `POST /sessions`, `/accounts`, `/verification-emails` and `/password-resets` need
+  a `captchaToken` for their own form (actions `sign-in`, `register`, `verification-email`,
+  `password-reset`). A token works once. Missing, used, for another form, or refused by Cloudflare
+  (an outage included, since the check fails closed): 400 `validation-failed` with
+  `errors.captchaToken`, before anything else about the request is checked. The captcha is checked
+  after the rate limit.
+- `googleActive` is whether "Continue with Google" shows: on, with a client id and secret from here
+  or, for a key left empty here, from the environment (`googleFromEnvironment`). Turned off, Google
+  is gone even with keys in the environment. New keys work without a restart.
+- `googleOnlyAccounts` counts accounts that have a linked login and no password. With Google off,
+  they get back in by setting a password through `POST /password-resets`.
+- Every change writes a `sign-in-settings.update` audit entry naming the fields, never their values.
+- `admin captcha-off` (the CLI) turns the captcha off and keeps its keys, for when nobody can sign in.
 
 ### Desktop sign-in
 
@@ -613,12 +670,9 @@ have signed in within the last 10 minutes. A failure is 400 `validation-failed` 
 `user.delete`, `user.password-reset`, `user.two-factor-reset`, `news.create`, `news.update`,
 `news.archive`, `news.publish`, `post.create`, `post.update`, `post.archive`, `post.publish`,
 `media.upload`, `media.delete`, `api-client.create`, `api-client.update`, `api-client.revoke`,
-`api-client.rotate`. Entries are never changed or deleted through the API. No entry holds a secret,
+`api-client.rotate`, `sign-in-settings.update`. Entries are never changed or deleted through the API. No entry holds a secret,
 token, password or signature.
 
-### News
-
-| Method | Path | Auth | Request | Responses |
 ### Reports (Admin)
 
 | Method | Path | Auth | Request | Responses |
@@ -663,6 +717,9 @@ included. `sessions` counts the sessions not ended and seen in the period, with 
 platforms and app versions (an empty name is a computer that sent none), the eight most common.
 `sync` leaves out deleted items. An Editor gets 403.
 
+### News
+
+| Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/news` | Anonymous | query below | 200 `Page<NewsListItemDto>`, weak `ETag`; 304; 400 |
 | GET | `/api/v1/news/{slug}` | Anonymous | `If-None-Match` | 200 `NewsItemDto`, `ETag`; 304; 404 when missing or not published |

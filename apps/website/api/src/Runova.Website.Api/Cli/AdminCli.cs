@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Runova.Website.Api.Accounts;
+using Runova.Website.Api.Audit;
+using Runova.Website.Core.Audit;
 using Runova.Website.Core.Identity;
 using Runova.Website.Data;
 using Runova.Website.Data.Identity;
@@ -18,7 +21,11 @@ internal static class AdminCli
               Creates the first Admin. Reads the password from the first line of stdin.
           migrate
               Applies the database migrations.
+          captcha-off
+              Turns the sign-in captcha off, keeping its keys. For when wrong keys lock everyone out.
         """;
+
+    private static readonly string[] _captchaField = ["captchaEnabled"];
 
     public static bool IsCommand(string[] args) => args is ["admin", ..];
 
@@ -38,6 +45,8 @@ internal static class AdminCli
 
                 await output.WriteLineAsync("The database is up to date.");
                 return 0;
+            case ["admin", "captcha-off"]:
+                return await CaptchaOffAsync(services, output);
             default:
                 await error.WriteLineAsync(Usage);
                 return 2;
@@ -91,6 +100,31 @@ internal static class AdminCli
 
         await transaction.CommitAsync();
         await output.WriteLineAsync($"Created the Admin {email} (id {user.Id}).");
+        return 0;
+    }
+
+    /// <summary>
+    /// Turns the captcha off straight in the database. A running API sees it within
+    /// <see cref="SignInSettingsStore.MaxAge"/>; the store here is told at once.
+    /// </summary>
+    private static async Task<int> CaptchaOffAsync(IServiceProvider services, TextWriter output)
+    {
+        using (var scope = services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var settings = await db.SignInSettings.SingleAsync();
+            if (settings.CaptchaEnabled)
+            {
+                settings.CaptchaEnabled = false;
+                settings.UpdatedAt = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
+                scope.ServiceProvider.GetRequiredService<AuditLog>().AddBySystem(
+                    AuditActions.SignInSettingsUpdate, AuditTargetTypes.SignInSettings, settings.Id, new { fields = _captchaField });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        await services.GetRequiredService<SignInSettingsStore>().ReloadAsync();
+        await output.WriteLineAsync("The sign-in captcha is off. Its keys are kept; an Admin can turn it on again from the site.");
         return 0;
     }
 

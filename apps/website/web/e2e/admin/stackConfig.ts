@@ -12,7 +12,12 @@ export const STACK = {
   apiHttpPort: port('E2E_ADMIN_API_HTTP_PORT', 4350),
   /** A second site server, reading the real API instead of the fake one. */
   sitePort: port('E2E_ADMIN_SITE_PORT', 4359),
+  /** Stands in for Cloudflare's Turnstile siteverify, so the captcha spec never uses the network. */
+  siteVerifyPort: port('E2E_ADMIN_SITEVERIFY_PORT', 4379),
 };
+
+/** The one token the fake siteverify refuses; every other passes. */
+export const REFUSED_CAPTCHA_TOKEN = 'e2e-refused';
 
 export const ADMIN_BASE_URL = `https://localhost:${STACK.proxyPort}`;
 
