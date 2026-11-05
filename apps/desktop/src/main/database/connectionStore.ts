@@ -28,6 +28,8 @@ export interface StoredDatabaseConnection
   passwordEnvelope: SecretEnvelope | null;
   /** The container card this connection was made from ("server:<id>:<name>"), if any. */
   sourceKey: string | null;
+  /** The team it is shared with through sync (E48). Missing means the person's own. */
+  syncTeamId?: number;
 }
 
 interface FileState {
@@ -83,10 +85,11 @@ const storedSchema = z.object({
   sourceKey: z.string().max(512).nullable(),
   createdAt: z.number().int().nonnegative(),
   lastUsedAt: z.number().int().nonnegative().nullable(),
+  syncTeamId: z.number().int().optional(),
 });
 
 function summary(stored: StoredDatabaseConnection): DatabaseConnection {
-  const { passwordEnvelope, sourceKey: _source, ...rest } = stored;
+  const { passwordEnvelope, sourceKey: _source, syncTeamId: _team, ...rest } = stored;
   return {
     ...rest,
     hasPassword: passwordEnvelope !== null,
@@ -183,6 +186,24 @@ export class DatabaseConnectionStore {
       if (existing) Object.assign(existing, next);
       else state.connections.push(next);
       return summary(next);
+    });
+  }
+
+  /** Every connection as stored, sealed passwords included. For sync (E48). */
+  async all(): Promise<StoredDatabaseConnection[]> {
+    return (await this.read()).connections;
+  }
+
+  /**
+   * Adds a connection as it is, or replaces the one with its id. For sync, which brings whole
+   * records from another computer. Throws for one that does not fit, rather than store it.
+   */
+  async put(connection: StoredDatabaseConnection): Promise<void> {
+    const next = storedSchema.parse(connection) as StoredDatabaseConnection;
+    await this.mutate((state) => {
+      const index = state.connections.findIndex((one) => one.id === next.id);
+      if (index === -1) state.connections.push(next);
+      else state.connections[index] = next;
     });
   }
 

@@ -37,6 +37,7 @@
     "src/preload/ciAutoFix.ts",
     "src/preload/errorTracking.ts",
     "src/preload/sftp.ts",
-    "src/preload/database.ts"
+    "src/preload/database.ts",
+    "src/preload/account.ts"
   ]
 }

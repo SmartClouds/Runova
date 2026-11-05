@@ -29,6 +29,8 @@ import { store } from '../store';
 export interface StoredErrorConnection
   extends Omit<ErrorConnectionSummary, 'locked' | 'canCreateProjects'> {
   tokenEnvelope: SecretEnvelope;
+  /** The team it is shared with through sync (E48). Missing means the person's own. */
+  syncTeamId?: number;
 }
 
 export interface ErrorTrackingState {
@@ -65,6 +67,7 @@ const connectionSchema = z.object({
   checkedAt: time.nullable(),
   problem: z.string().max(2000).nullable(),
   tokenEnvelope: envelopeSchema,
+  syncTeamId: z.number().int().optional(),
 });
 
 const linkSchema = z.object({

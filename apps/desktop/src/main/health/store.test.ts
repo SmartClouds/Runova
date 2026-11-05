@@ -101,6 +101,14 @@ describe('reading and writing', () => {
     expect(await vault.decryptSecret(read.secretEnvelope as never)).toBe(KEY);
   });
 
+  it('keeps the team a target is shared with through sync', async () => {
+    const target = await storedTarget({ syncTeamId: 3 });
+    await health.mutateHealth((state) => {
+      state.targets.push(target);
+    });
+    expect((await health.readHealthTargets())[0]?.syncTeamId).toBe(3);
+  });
+
   it('runs changes one after another so none is lost', async () => {
     const a = await storedTarget({ id: 'a' });
     const b = await storedTarget({ id: 'b' });

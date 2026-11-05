@@ -39,6 +39,8 @@ export interface StoredHealthTarget extends HealthTargetInput {
   paused: boolean;
   secretEnvelope: SecretEnvelope | null;
   secretRotatedAt: number | null;
+  /** The team it is shared with through sync (E48). Missing means the person's own. */
+  syncTeamId?: number;
 }
 
 export interface HealthResultRecord {
@@ -124,6 +126,7 @@ const targetSchema = z.object({
   paused: z.boolean(),
   secretEnvelope: envelopeSchema.nullable(),
   secretRotatedAt: time.nullable(),
+  syncTeamId: z.number().int().optional(),
 });
 
 const probeState = z.enum(['pass', 'warn', 'fail', 'unreachable', 'unauthorized', 'invalid']);

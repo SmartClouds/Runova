@@ -28,6 +28,13 @@ import { DatabaseService, setDatabaseService } from './service';
  * containers through the Containers screen's calls, databases on a server reached over its SSH
  * connection, and every session closed when the app quits.
  */
+let savedConnections: DatabaseConnectionStore | null = null;
+
+/** The one store of saved connections, so cloud sync (E48) writes through its queue too. */
+export function getDatabaseConnections(): DatabaseConnectionStore | null {
+  return savedConnections;
+}
+
 export function registerDatabaseIpc(
   docker: DeployDocker,
   guard: (event: IpcMainInvokeEvent) => boolean,
@@ -36,6 +43,7 @@ export function registerDatabaseIpc(
     join(app.getPath('userData'), 'data', 'databases.json'),
   );
   registerSealedSecretStore(connections.sealed);
+  savedConnections = connections;
   const pool = getSshPool();
   const service = new DatabaseService({
     connections,

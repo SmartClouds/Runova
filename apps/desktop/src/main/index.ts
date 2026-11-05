@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { BLUEPRINT_FILE_SCHEME } from '@runova/core';
 import { app, BrowserWindow, desktopCapturer, protocol, session, shell } from 'electron';
 import { BROWSER_PARTITION } from '../shared/browserGuest';
+import { getAccountRuntime, startAccount, stopAccount } from './account/live';
 import { stopAllRdpTasks } from './agents/rdpTaskRunner';
 import { flushSshTaskHistory, stopAllSshTasks } from './agents/sshTaskRunner';
 import { startAiAccess, stopAiAccess } from './aiAccess/service';
@@ -22,6 +23,7 @@ import { seedExampleRepositoryIfEmpty } from './exampleSkillRepo';
 import { shutdownLocalServer } from './grammar/localServer';
 import { startHealthScheduler, stopHealthScheduler } from './health/scheduler';
 import { pruneOrphanHealthTargets } from './health/store';
+import { registerAccountHandlers } from './ipc/account';
 import { registerActivityHandlers } from './ipc/activity';
 import { registerAgentChatHandlers } from './ipc/agentChat';
 import { registerAgentHandlers } from './ipc/agents';
@@ -414,6 +416,7 @@ function registerAllIpcHandlers(): void {
   registerRelayHandlers();
   // Health targets carry sealed keys, so only the main window's own page may reach them.
   registerNewsHandlers();
+  registerAccountHandlers(getAccountRuntime);
   registerHealthHandlers({
     guard: (event) => {
       const win = getMainWindow();
@@ -567,6 +570,8 @@ app.whenReady().then(async () => {
   startToolUpdateWatcher();
   // A test run reaches no real API: news polls only when an e2e test points it at a fake one.
   if (!isE2E || process.env.RUNOVA_NEWS_API_URL) void startNews();
+  // The same for the account: an e2e run syncs only against a fake server a test names.
+  if (!isE2E || process.env.RUNOVA_ACCOUNT_API_URL) void startAccount();
   startHealthScheduler();
   startScheduledTaskRunner();
   startHourlyUpdateChecks();
@@ -627,6 +632,7 @@ app.on('before-quit', (event) => {
   stopCiAutoFix();
   stopToolUpdateWatcher();
   stopNews();
+  stopAccount();
   stopHealthScheduler();
   stopScheduledTaskRunner();
   shutdownLocalServer();

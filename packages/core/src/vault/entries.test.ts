@@ -74,6 +74,13 @@ describe('VaultEntrySchema', () => {
     ).toBe(false);
   });
 
+  it('keeps the team an entry is shared with, so it survives being written and read back', () => {
+    const entry = applySaveInput(undefined, login(), { now: NOW, newId: () => 'id1' });
+    const parsed = VaultEntrySchema.parse({ ...entry, syncTeamId: 7 });
+    expect(parsed.syncTeamId).toBe(7);
+    expect(VaultEntrySchema.safeParse({ ...entry, syncTeamId: 'team' }).success).toBe(false);
+  });
+
   it('validates the payload envelope', () => {
     expect(
       VaultPayloadSchema.safeParse({ schemaVersion: 1, createdAt: NOW, entries: [] }).success,

@@ -92,6 +92,14 @@ describe('reading and writing', () => {
     expect(await vault.decryptSecret(read.tokenEnvelope)).toBe(TOKEN);
   });
 
+  it('keeps the team a connection is shared with through sync', async () => {
+    const shared = await connection({ syncTeamId: 6 });
+    await errorStore.mutateErrorTracking((state) => {
+      state.connections.push(shared);
+    });
+    expect((await errorStore.readErrorTracking()).connections[0]?.syncTeamId).toBe(6);
+  });
+
   it('runs changes one after another so none is lost', async () => {
     const a = await connection({ id: 'a' });
     const b = await connection({ id: 'b' });

@@ -731,6 +731,100 @@ export const IPC = {
     // main -> renderer: HealthChangedEvent
     onChanged: 'health:changed',
   },
+  /**
+   * The Runova account this computer is signed in to (E48). Signing in happens in the browser;
+   * tokens never reach the renderer.
+   */
+  account: {
+    // () -> AccountStatus
+    status: 'account:status',
+    // () -> AccountStatus, after the browser sign-in finishes (or throws when it is cancelled)
+    signIn: 'account:signIn',
+    // () -> void
+    cancelSignIn: 'account:cancelSignIn',
+    // () -> void, ends this computer's session and forgets the account here
+    signOut: 'account:signOut',
+    // () -> AccountProfile
+    profile: 'account:profile',
+    // () -> AccountSession[]
+    sessions: 'account:sessions',
+    // ({ id }) -> void
+    endSession: 'account:endSession',
+    // (StepUp) -> void, ends every session but this computer's
+    endOtherSessions: 'account:endOtherSessions',
+    // ({ page }) -> AccountActivityPage
+    activities: 'account:activities',
+    // ({ path }) -> void, opens a page of the account panel on runovahq.com
+    openWebsite: 'account:openWebsite',
+    // main -> renderer: AccountStatus
+    onChanged: 'account:changed',
+  },
+  /** Cloud sync of this computer's data (E48): status, keys, the policy and conflicts. */
+  sync: {
+    // () -> SyncOverview
+    overview: 'sync:overview',
+    // () -> SyncOverview, after a sync that runs now
+    syncNow: 'sync:syncNow',
+    // ({ collection, enabled }) -> void
+    setCollectionEnabled: 'sync:setCollectionEnabled',
+    // ({ scopeId, policy }) -> void
+    setPolicy: 'sync:setPolicy',
+    // ({ scopeId }) -> SyncUsageView
+    usage: 'sync:usage',
+    // ({ scopeId, passphrase }) -> { recoveryKey }
+    setKey: 'sync:setKey',
+    // ({ scopeId, passphrase? , recoveryKey? }) -> void
+    unlock: 'sync:unlock',
+    // ({ scopeId, passphrase }) -> void
+    changePassphrase: 'sync:changePassphrase',
+    // ({ scopeId, passphrase }) -> { recoveryKey }
+    rotateKey: 'sync:rotateKey',
+    // ({ scopeId, password?, code? }) -> void
+    resetKey: 'sync:resetKey',
+    // ({ scopeId, password?, code? }) -> void
+    wipeCloud: 'sync:wipeCloud',
+    // () -> SyncConflictView[]
+    conflicts: 'sync:conflicts',
+    // ({ scopeId, collection, itemId, choice }) -> void
+    resolve: 'sync:resolve',
+    // (ShareTarget) -> void, moves an item to a team or back to the person's own
+    share: 'sync:share',
+    // () -> ShareableGroup[], every item that can be shared, with the team it is in
+    shareable: 'sync:shareable',
+    // main -> renderer: SyncOverview
+    onChanged: 'sync:changed',
+  },
+  /** Teams of Runova accounts (E48), straight through to the website API. */
+  teams: {
+    // () -> TeamView[]
+    list: 'teams:list',
+    // ({ name }) -> TeamView
+    create: 'teams:create',
+    // ({ teamId, name }) -> TeamView
+    rename: 'teams:rename',
+    // ({ teamId, password?, code? }) -> void
+    remove: 'teams:remove',
+    // ({ teamId }) -> TeamMemberView[]
+    members: 'teams:members',
+    // ({ teamId, userId, role, password?, code? }) -> TeamMemberView
+    changeRole: 'teams:changeRole',
+    // ({ teamId, userId, password?, code? }) -> void, or leaving when it is this account
+    removeMember: 'teams:removeMember',
+    // ({ teamId }) -> TeamInvitationView[]
+    invitations: 'teams:invitations',
+    // ({ teamId, email, role }) -> TeamInvitationView
+    invite: 'teams:invite',
+    // ({ teamId, invitationId }) -> void
+    withdraw: 'teams:withdraw',
+    // ({ teamId, page }) -> AccountActivityPage
+    activities: 'teams:activities',
+    // () -> MyInvitationView[]
+    myInvitations: 'teams:myInvitations',
+    // ({ id }) -> TeamView
+    accept: 'teams:accept',
+    // ({ id }) -> void
+    decline: 'teams:decline',
+  },
   /** News from runovahq.com (E42), served from the local cache with the local fields added. */
   news: {
     // (NewsListQuery?) -> NewsListResult

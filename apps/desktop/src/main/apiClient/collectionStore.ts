@@ -223,6 +223,40 @@ export const collectionStore = {
     });
   },
 
+  /** Every collection whole, for sync (E48). One whose file can not be read is left out. */
+  all(): Promise<{ meta: CollectionMeta; collection: PostmanCollection }[]> {
+    return serialized(async () => {
+      const out: { meta: CollectionMeta; collection: PostmanCollection }[] = [];
+      for (const meta of (await readIndex()).collections) {
+        try {
+          out.push({ meta, collection: await readCollection(meta.id) });
+        } catch {
+          // The API Client lists it with the reason; there is nothing whole here to sync.
+        }
+      }
+      return out;
+    });
+  },
+
+  /**
+   * Adds a collection that came from sync, or replaces the one with its id where it sits in the
+   * order. The metadata is taken as it is, apart from a tidied name.
+   */
+  async put(meta: CollectionMeta, collection: PostmanCollection): Promise<void> {
+    const parsed = parseCollection(collection);
+    if (!parsed.ok) throw new Error(`The collection could not be read. ${parsed.error}`);
+    const next: CollectionMeta = { ...meta, name: cleanName(meta.name) };
+    const path = collectionPath(next.id);
+    return serialized(async () => {
+      const index = await readIndex();
+      await writeJsonAtomic(path, parsed.collection);
+      const at = index.collections.findIndex((c) => c.id === next.id);
+      if (at === -1) index.collections.push(next);
+      else index.collections[at] = next;
+      await writeJsonAtomic(indexPath(), index);
+    });
+  },
+
   /** Adds the request, or replaces the item with the same id wherever it already sits. */
   saveRequest(input: SaveApiRequestInput): Promise<ApiCollectionSummary> {
     return mutateCollection(input.collectionId, (collection) => {

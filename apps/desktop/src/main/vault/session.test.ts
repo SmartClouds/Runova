@@ -293,6 +293,41 @@ describe('VaultSession entries', () => {
     expect(session.allEntries()).toHaveLength(2);
   });
 
+  it('puts a whole entry under its own id, for sync, and keeps its team', async () => {
+    const { session, files } = makeSession();
+    await session.create(PASSWORD);
+    await session.save(login());
+    const [entry] = session.allEntries();
+    if (!entry) throw new Error('missing');
+    const writes = files.writes;
+
+    await session.put({ ...entry, id: 'synced', title: 'GitLab', syncTeamId: 3 });
+    await session.put({ ...entry, title: 'GitHub, renamed' });
+
+    expect(files.writes).toBe(writes + 2);
+    expect(session.allEntries().map((e) => [e.id, e.title])).toEqual([
+      [entry.id, 'GitHub, renamed'],
+      ['synced', 'GitLab'],
+    ]);
+    await session.lock();
+    await session.unlock(PASSWORD);
+    expect(session.getEntry('synced').syncTeamId).toBe(3);
+  });
+
+  it('puts an entry without a category this vault does not have, and refuses a broken one', async () => {
+    const { session } = makeSession();
+    await session.create(PASSWORD);
+    await session.save(login());
+    const [entry] = session.allEntries();
+    if (!entry) throw new Error('missing');
+
+    await session.put({ ...entry, id: 'synced', categoryId: 'elsewhere' });
+    expect(session.getEntry('synced').categoryId).toBeUndefined();
+
+    await expectCode(session.put({ ...entry, id: 'bad', title: '' }), 'invalid');
+    expect(session.allEntries()).toHaveLength(2);
+  });
+
   it('drops decrypted entries on lock', async () => {
     const { session } = makeSession();
     await session.create(PASSWORD);

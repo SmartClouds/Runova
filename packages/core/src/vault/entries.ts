@@ -45,6 +45,8 @@ const baseShape = {
   icon: icon.optional(),
   /** The category the entry is filed under. Missing means no category. */
   categoryId: id.optional(),
+  /** The team the entry is shared with through sync (E48). Missing means the person's own. */
+  syncTeamId: z.number().int().optional(),
 };
 
 export const VaultCustomFieldSchema = z.object({

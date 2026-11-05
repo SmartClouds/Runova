@@ -133,6 +133,33 @@ describe('DatabaseConnectionStore', () => {
     );
   });
 
+  it('hands sync every stored connection and puts one back whole, its team kept', async () => {
+    const one = store();
+    const saved = await one.save(input());
+    const [stored] = await one.all();
+    if (!stored) throw new Error('missing');
+    expect(stored.passwordEnvelope).not.toBeNull();
+
+    await one.put({ ...stored, id: 'from-sync', name: 'Other', syncTeamId: 4 });
+    await one.put({ ...stored, name: 'Renamed' });
+
+    const all = await store().all();
+    expect(all.map((c) => [c.id, c.name])).toEqual([
+      [saved.id, 'Renamed'],
+      ['from-sync', 'Other'],
+    ]);
+    expect(all[1]?.syncTeamId).toBe(4);
+    expect(await store().password('from-sync')).toBe(PASSWORD);
+  });
+
+  it('refuses to put a connection that does not fit', async () => {
+    const one = store();
+    await expect(
+      one.put({ ...(await validStored()), id: 'bad', name: '' } as never),
+    ).rejects.toThrow();
+    expect(await one.all()).toEqual([]);
+  });
+
   async function validStored() {
     return {
       name: 'Kept',

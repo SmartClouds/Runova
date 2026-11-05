@@ -130,4 +130,47 @@ describe('collectionStore', () => {
       error: expect.stringMatching(/could not be read/),
     });
   });
+
+  it('hands sync every collection whole, skipping one whose file is broken', async () => {
+    const good = await store.create('Good');
+    await store.saveRequest({ collectionId: good.id, parentId: null, item: request('r1') });
+    const bad = await store.create('Bad');
+    writeFileSync(collectionFile(bad.id), '{ not json', 'utf-8');
+
+    const all = await store.all();
+
+    expect(all.map((each) => each.meta.name)).toEqual(['Good']);
+    expect(all[0]?.collection.item.map((item) => item.id)).toEqual(['r1']);
+  });
+
+  it('puts a collection from sync in place, or adds it at the end, metadata and all', async () => {
+    const first = await store.create('First');
+    await store.create('Second');
+    const [synced] = await store.all();
+    if (!synced) throw new Error('missing');
+
+    await store.put({ ...synced.meta, name: 'First, renamed', syncTeamId: 2 } as never, {
+      ...synced.collection,
+      item: [request('r9')],
+    });
+    await store.put(
+      { ...synced.meta, id: 'from-sync', name: 'Third', scriptsTrusted: false },
+      synced.collection,
+    );
+
+    expect((await store.list()).map((c) => c.name)).toEqual(['First, renamed', 'Second', 'Third']);
+    expect((await store.meta(first.id)) as unknown).toMatchObject({ syncTeamId: 2 });
+    expect((await store.get(first.id)).item.map((item) => item.id)).toEqual(['r9']);
+    expect((await store.meta('from-sync')).scriptsTrusted).toBe(false);
+  });
+
+  it('refuses to put a collection that is not a Postman collection', async () => {
+    await expect(
+      store.put(
+        { id: 'x', name: 'X', projectIds: [], scriptsTrusted: false, createdAt: 1, updatedAt: 1 },
+        { nope: true } as never,
+      ),
+    ).rejects.toThrow(/could not be read/);
+    expect(await store.list()).toEqual([]);
+  });
 });

@@ -242,6 +242,28 @@ export class VaultService {
     return this.changed(this.session.duplicate(id));
   }
 
+  /**
+   * Sync (E48) reads and writes entries in the background, so none of it counts as use: the idle
+   * lock keeps counting, and a locked vault simply waits for the next sync.
+   */
+  isUnlocked(): boolean {
+    return this.session.isUnlocked();
+  }
+
+  /** Every entry in full, secrets included. Main only; for sync. */
+  entriesForSync(): VaultEntry[] {
+    return this.session.allEntries();
+  }
+
+  async putFromSync(entry: VaultEntry): Promise<void> {
+    await this.session.put(entry);
+    this.deps.events.entriesChanged();
+  }
+
+  async removeFromSync(id: string): Promise<void> {
+    if (await this.session.remove([id])) this.deps.events.entriesChanged();
+  }
+
   listCategories(): VaultCategory[] {
     const list = this.session.listCategories();
     this.idle.touch();

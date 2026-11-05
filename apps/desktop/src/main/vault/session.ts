@@ -270,6 +270,27 @@ export class VaultSession {
     });
   }
 
+  /**
+   * Adds an entry as it is, or replaces the one with its id. For sync (E48), which brings whole
+   * entries from another computer. A category this vault does not have is dropped, since
+   * categories do not sync.
+   */
+  put(entry: VaultEntry): Promise<void> {
+    const parsed = VaultEntrySchema.safeParse(entry);
+    if (!parsed.success) {
+      return Promise.reject(new VaultError('invalid', describeInvalid(parsed.error)));
+    }
+    return this.mutatePayload(({ entries, categories }) => {
+      const next = parsed.data;
+      if (next.categoryId && !categories.some((c) => c.id === next.categoryId)) {
+        delete next.categoryId;
+      }
+      const index = entries.findIndex((one) => one.id === next.id);
+      if (index === -1) entries.push(next);
+      else entries[index] = next;
+    });
+  }
+
   remove(ids: string[]): Promise<number> {
     const doomed = new Set(ids);
     return this.mutate((entries) => {

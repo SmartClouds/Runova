@@ -89,12 +89,29 @@ function tokensFrom(json: Record<string, unknown>): Omit<LoopbackTokens, 'refres
   return tokens;
 }
 
-/** Runs the whole sign-in and gives back the tokens. */
-export async function signInWithLoopback(
-  deps: LoopbackSignInDeps,
-  request: LoopbackSignInRequest,
-): Promise<LoopbackTokens> {
-  const { provider } = request;
+/** What the browser brought back to the loopback listener, with what the token request needs. */
+export interface LoopbackCode {
+  code: string;
+  redirectUri: string;
+  verifier: string;
+}
+
+export interface LoopbackCodeRequest {
+  /** Names the service in messages: "Google", "Runova". */
+  label: string;
+  /** The page to open, made from the listener's redirect URI, the state and the PKCE challenge. */
+  buildUrl: (input: { redirectUri: string; state: string; challenge: string }) => string;
+}
+
+/**
+ * Opens the browser at a sign-in page and waits for it to come back to a listener on 127.0.0.1
+ * with a code. PKCE (S256) and a random state; the listener answers nothing but its one callback.
+ */
+export async function receiveLoopbackCode(
+  deps: Omit<LoopbackSignInDeps, 'fetch'>,
+  request: LoopbackCodeRequest,
+): Promise<LoopbackCode> {
+  const provider = { label: request.label };
   const verifier = base64url(randomBytes(32));
   const challenge = base64url(createHash('sha256').update(verifier).digest());
   const state = base64url(randomBytes(16));
@@ -155,48 +172,68 @@ export async function signInWithLoopback(
   deps.signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    await deps.openExternal(
-      authorizationUrl(provider, { clientId: request.clientId, redirectUri, state, challenge }),
-    );
-    const received = await code;
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: received,
-      redirect_uri: redirectUri,
-      client_id: request.clientId,
-      code_verifier: verifier,
-      ...(request.clientSecret ? { client_secret: request.clientSecret } : {}),
-    });
-    const response = await deps.fetch(provider.tokenUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-      body: body.toString(),
-    });
-    let json: Record<string, unknown> = {};
-    try {
-      json = (await response.json()) as Record<string, unknown>;
-    } catch {
-      // The status below says enough.
-    }
-    if (!response.ok) {
-      const reason =
-        typeof json.error_description === 'string'
-          ? json.error_description
-          : typeof json.error === 'string'
-            ? json.error
-            : `HTTP ${response.status}`;
-      throw new Error(`${provider.label} refused the sign-in: ${reason}`);
-    }
-    if (typeof json.refresh_token !== 'string' || json.refresh_token.length === 0) {
-      throw new Error(
-        `${provider.label} signed in but gave no refresh token, so Runova could not keep the sign-in. Check that the OAuth client is a desktop app, then try again.`,
-      );
-    }
-    return { refreshToken: json.refresh_token, ...tokensFrom(json) };
+    await deps.openExternal(request.buildUrl({ redirectUri, state, challenge }));
+    return { code: await code, redirectUri, verifier };
   } finally {
     clearTimeout(timer);
     deps.signal?.removeEventListener('abort', onAbort);
     server.closeAllConnections?.();
     server.close();
   }
+}
+
+/** Runs the whole sign-in and gives back the tokens. */
+export async function signInWithLoopback(
+  deps: LoopbackSignInDeps,
+  request: LoopbackSignInRequest,
+): Promise<LoopbackTokens> {
+  const { provider } = request;
+  const {
+    code: received,
+    redirectUri,
+    verifier,
+  } = await receiveLoopbackCode(deps, {
+    label: provider.label,
+    buildUrl: ({ redirectUri: uri, state, challenge }) =>
+      authorizationUrl(provider, {
+        clientId: request.clientId,
+        redirectUri: uri,
+        state,
+        challenge,
+      }),
+  });
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: received,
+    redirect_uri: redirectUri,
+    client_id: request.clientId,
+    code_verifier: verifier,
+    ...(request.clientSecret ? { client_secret: request.clientSecret } : {}),
+  });
+  const response = await deps.fetch(provider.tokenUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+    body: body.toString(),
+  });
+  let json: Record<string, unknown> = {};
+  try {
+    json = (await response.json()) as Record<string, unknown>;
+  } catch {
+    // The status below says enough.
+  }
+  if (!response.ok) {
+    const reason =
+      typeof json.error_description === 'string'
+        ? json.error_description
+        : typeof json.error === 'string'
+          ? json.error
+          : `HTTP ${response.status}`;
+    throw new Error(`${provider.label} refused the sign-in: ${reason}`);
+  }
+  if (typeof json.refresh_token !== 'string' || json.refresh_token.length === 0) {
+    throw new Error(
+      `${provider.label} signed in but gave no refresh token, so Runova could not keep the sign-in. Check that the OAuth client is a desktop app, then try again.`,
+    );
+  }
+  return { refreshToken: json.refresh_token, ...tokensFrom(json) };
 }

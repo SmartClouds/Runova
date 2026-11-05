@@ -523,6 +523,7 @@ import type { PetPipelineMessage, PetSnoozeState, PetWorkArea } from '../shared/
 import type { RemoteInputEvent, RemoteRtcMessage } from '../shared/remoteProtocol';
 import type { EditCommand, SpellcheckMenuPayload } from '../shared/spellcheck';
 import type { SshHostKeyStatus } from '../shared/sshHostKey';
+import { createAccount, createSync, createTeams } from './account';
 import { createCiAutoFix } from './ciAutoFix';
 import { cloudflareServer } from './cloudflareServer';
 import { createDatabase } from './database';
@@ -2064,6 +2065,9 @@ const deployAppStore = {
 const deployRegistry = createDeployRegistry();
 const health = createHealth();
 const news = createNews();
+const account = createAccount();
+const sync = createSync();
+const teams = createTeams();
 const studio = createStudio();
 const studioAi = createStudioAi();
 const studioScenes = createStudioScenes();
@@ -3066,6 +3070,9 @@ const runovaApi = {
   deployRegistry,
   health,
   news,
+  account,
+  sync,
+  teams,
   studio,
   studioAi,
   studioScenes,

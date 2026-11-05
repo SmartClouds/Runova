@@ -267,6 +267,39 @@ describe('VaultService entries', () => {
     expect(events.entriesChanged).toHaveBeenCalledTimes(3);
   });
 
+  it('hands sync whole entries and takes them back, announcing each change', async () => {
+    const { service, events } = setup();
+    expect(service.isUnlocked()).toBe(false);
+    await service.create(PASSWORD);
+    expect(service.isUnlocked()).toBe(true);
+    const saved = await service.save(loginInput());
+    const [entry] = service.entriesForSync();
+    if (!entry) throw new Error('missing');
+    expect(entry).toMatchObject({ id: saved.id, password: 'S3NT1NEL-password' });
+    vi.mocked(events.entriesChanged).mockClear();
+
+    await service.putFromSync({ ...entry, id: 'synced', title: 'GitLab' });
+    await service.removeFromSync(saved.id);
+    await service.removeFromSync('not-here');
+
+    expect(service.list().map((summary) => summary.id)).toEqual(['synced']);
+    expect(events.entriesChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not count a sync as use, so the vault still locks when the person walks away', async () => {
+    const { service } = setup({ settings: { vaultAutoLockMinutes: 1 } });
+    await service.create(PASSWORD);
+    const entry = await service.save(loginInput());
+    const [stored] = service.entriesForSync();
+    if (!stored) throw new Error('missing');
+    await vi.advanceTimersByTimeAsync(50_000);
+    await service.putFromSync({ ...stored, title: 'Synced' });
+    service.entriesForSync();
+    await service.removeFromSync(entry.id);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.waitFor(async () => expect((await service.status()).state).toBe('locked'));
+  });
+
   it('resets the vault and says so', async () => {
     const { service, events, files } = setup();
     await service.create(PASSWORD);
