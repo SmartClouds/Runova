@@ -26,6 +26,7 @@ const ROUTE_FEATURES: Record<string, string> = {
   '/remote-files': 'connect',
   '/vault': 'connect',
   '/settings': 'more',
+  '/account': 'more',
   '/help': 'more',
 };
 

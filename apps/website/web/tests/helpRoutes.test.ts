@@ -20,6 +20,7 @@ describe('featureForArticle', () => {
     expect(featureForArticle('cloudflare', '/deploy?cloudflare=1')).toBe('ship');
     expect(featureForArticle('backup-restore', '/settings?tab=data')).toBe('more');
     expect(featureForArticle('dashboard', '/')).toBe('more');
+    expect(featureForArticle('account-sync', '/account')).toBe('more');
     expect(featureForArticle('token-usage', '/usage')).toBe('token-usage');
   });
 
