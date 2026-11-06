@@ -22,6 +22,7 @@ const KIND: Record<AppNotification['kind'], { kind: ToastHistoryKind; tag?: stri
   'pipeline-autofix-attention': { kind: 'warning', tag: 'Auto-fix' },
   'pipeline-autofix-gave-up': { kind: 'error', tag: 'Auto-fix' },
   'news-security': { kind: 'warning', tag: 'Security' },
+  'dependency-updates': { kind: 'warning', tag: 'Packages' },
 };
 
 /** A page inside the app; anything else in `route` is ignored rather than followed. */

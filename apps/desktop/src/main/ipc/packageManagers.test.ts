@@ -17,7 +17,11 @@ const state = vi.hoisted(() => ({
   dartRuntime: vi.fn(),
   nodeRuntime: vi.fn(),
   detect: vi.fn(),
+  upload: vi.fn(),
 }));
+
+// The new versions go up for dependency alerts; the account itself is not part of these tests.
+vi.mock('../account/live', () => ({ getDependencyAlerts: () => ({ upload: state.upload }) }));
 
 vi.mock('../worktrees/resolve', () => ({
   findProjectScope: async (id: string) => (id === 'p1' ? { id, folderPath: ROOT } : null),
@@ -82,6 +86,22 @@ describe('packages:update', () => {
 
     expect(result).toMatchObject({ ok: false });
     expect(state.nodeUpdate).not.toHaveBeenCalled();
+  });
+
+  it('sends the new package list up for dependency alerts once an update ran', async () => {
+    state.upload.mockResolvedValue({ uploaded: 1, skipped: 0 });
+    state.nodeUpdate.mockResolvedValue({ ok: true, results: [] });
+
+    await invoke(IPC.packages.update, 'p1', [
+      {
+        ecosystem: 'node',
+        name: 'left-pad',
+        targetVersion: '1.3.0',
+        manifestPath: join(ROOT, 'package.json'),
+      },
+    ]);
+
+    expect(state.upload).toHaveBeenCalledTimes(1);
   });
 });
 

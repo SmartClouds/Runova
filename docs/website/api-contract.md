@@ -377,7 +377,7 @@ says is verified is trusted.
 | GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[], "captcha": { "provider": "turnstile", "siteKey": string } \| null }` (`["google"]` when it is set up; `captcha` while the captcha is on) |
 | GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add Google to the signed-in account) | 302 to Google; 404 not set up |
 | GET | `/api/v1/external-sign-ins/current` | Anonymous (Google's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
-| POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after Google) | `{ "code": string \| null, "recoveryCode": string \| null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
+| POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after Google) | `{ "code": string or null, "recoveryCode": string or null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
 | DELETE | `/api/v1/accounts/me/logins/{provider}` | Account | none | 204; 401; 404 not linked; 409 it is the only way in |
 
 Rules: a Google login already linked signs in to its account (two-factor still applies). A new
@@ -556,6 +556,77 @@ string, "role": string, "joinedAt": time }`. `TeamInvitationDto`: `{ "id": numbe
 team's scope at once; the app then suggests rotating the team key. Deleting an account that is the
 only Owner of a team with other members is a 409 until the team has another Owner or is deleted;
 a team of one goes with its account.
+
+### Dependency alerts
+
+The desktop app uploads the direct dependencies of each project (E51) into the sync scope the
+project lives in, by the project's sync `itemId`: only `ecosystem`, `name`, `version` and `dev`,
+never a path or a file. Everyone who can see the scope (the account, or each member of the team)
+hears about it. Once a day, at a time that moves by up to 3 hours either way from one day to the
+next, the server asks npm, NuGet, pub.dev and OSV about each package (once per package for every
+project, through a 6 hour cache) and keeps what holds now as the project's findings. Each person is
+told about the new ones they asked for, once, in the app, on the website and on Telegram when they
+linked a chat. Turning alerts off deletes the inventories in the account's own scope; a team's stay
+for its other members. An upload while alerts are off is a 409.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| PUT | `/api/v1/sync-scopes/{scopeId}/package-inventories/{itemId}` | Account (not a Viewer) | `{ "projectName": string (1 to 200), "packages": [{ "ecosystem": "npm", "nuget" or "pub", "name": string, "version": string (1 to 100), "dev": bool }] }` (up to 5000) | 201 `PackageInventoryDto` (new); 200 `PackageInventoryDto` (replaced, or the same upload again, which changes nothing); 400; 401; 403; 404; 409 alerts are off |
+| DELETE | `/api/v1/sync-scopes/{scopeId}/package-inventories/{itemId}` | Account (not a Viewer) | none | 204; 401; 403; 404 |
+| GET | `/api/v1/dependency-findings` | Account | none | 200 `{ "enabled": bool, "total": int, "items": ProjectFindingsDto[] }`; 401 |
+| GET | `/api/v1/accounts/me/dependency-alert-settings` | Account | none | 200 `DependencyAlertSettingsDto` with an ETag; 401 |
+| PATCH | `/api/v1/accounts/me/dependency-alert-settings` | Account | merge patch of `DependencyAlertSettingsDto`, `If-Match` | 200 `DependencyAlertSettingsDto`; 400; 401; 412; 428 |
+| PUT | `/api/v1/accounts/me/muted-projects/{inventoryId}` | Account | none | 204 (muted); 401; 404 |
+| DELETE | `/api/v1/accounts/me/muted-projects/{inventoryId}` | Account | none | 204 (told again); 401; 404 |
+
+`PackageInventoryDto`: `{ "id": number, "scopeId": number, "itemId": string, "projectName": string,
+"packageCount": int, "uploadedAt": time, "lastCheckedAt": time | null }`.
+`DependencyAlertSettingsDto`: `{ "enabled": bool, "securityMinSeverity": "critical" | "high" |
+"moderate" | "low" | "off", "deprecated": bool, "major": bool, "minor": bool, "patch": bool,
+"inApp": bool, "telegram": bool }`; the defaults are on, `high`, deprecated and major on, minor and
+patch off, both channels on. `ProjectFindingsDto`: `{ "inventoryId": number, "scopeId": number,
+"itemId": string, "projectName": string, "muted": bool, "lastCheckedAt": time | null, "total":
+int (0 when muted), "worstSeverity": string | null, "counts": { "security", "deprecated", "major",
+"minor", "patch" }, "findings": FindingDto[] }`, with only the kinds the settings ask for.
+`FindingDto`: `{ "ecosystem", "name", "kind": "security" | "deprecated" | "major" | "minor" |
+"patch", "currentVersion", "targetVersion": string | null (the fix, or the newer release),
+"advisoryId": string | null, "severity": string | null, "summary": string | null, "firstSeenAt":
+time }`.
+
+### Notifications
+
+Messages for one account, newest first: for now one per project and check, listing what is new
+(`kind: "dependency-updates"`). A connected app hears each one at once on the SignalR hub at
+`/hubs/notifications` (outside `/api/v1`, Account auth: the session cookie, or the device token
+as a bearer header or, on the hub path only, as the `access_token` query value the SignalR clients
+send). The hub sends `NotificationCreated(UserNotificationDto)` and
+`DependencySummaryChanged({ "total": int, "projects": int })`; clients call nothing on it.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/notifications` | Account | query `page`, `pageSize`, `unread` (bool) | 200 `Page<UserNotificationDto>` plus `"unread": int`; 400; 401 |
+| PATCH | `/api/v1/notifications/{id}` | Account | `{ "read": bool }` | 200 `UserNotificationDto`; 400; 401; 404 |
+| POST | `/api/v1/notification-read-markers` | Account | `{ "before": time or null }` (now when null) | 201 `{ "marked": int }`; 400; 401 |
+
+`UserNotificationDto`: `{ "id": number, "kind": string, "title": string, "body": string (one line
+per package), "severity": string | null (the worst advisory in it), "scopeId": number | null,
+"itemId": string | null, "inventoryId": number | null, "createdAt": time, "readAt": time | null }`.
+
+### Telegram
+
+The RunovaHQ bot (`Telegram__BotToken`, `Telegram__BotUsername`, `Telegram__WebhookSecret`) sends
+dependency alerts to a chat the account linked. Without them the bot is off: `available` is false
+and a link code is a 503. The account page asks for a link code, the person opens the `t.me` link
+and presses Start, and the bot's `/start <code>` links that chat; the code works once, for 15
+minutes. `/stop` in the chat unlinks it. A chat that blocks the bot is unlinked on the next send.
+On start the API points the bot's webhook at `/api/v1/telegram-updates`.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/accounts/me/telegram-links/current` | Account | none | 200 `{ "available": bool, "linked": bool, "botUsername": string or null, "chatName": string or null, "linkedAt": time or null }`; 401 |
+| DELETE | `/api/v1/accounts/me/telegram-links/current` | Account | none | 204; 401; 404 none linked |
+| POST | `/api/v1/accounts/me/telegram-link-codes` | Account | none | 201 `{ "url": string, "expiresAt": time }`; 401; 503 the bot is not set up |
+| POST | `/api/v1/telegram-updates` | Anonymous (the `X-Telegram-Bot-Api-Secret-Token` header) | a Telegram update | 200 (always, once the secret matches); 401; 404 the bot is not set up |
 
 ### Account sessions and activity
 

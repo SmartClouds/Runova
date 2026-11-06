@@ -1,0 +1,10 @@
+---
+import Notifications from '../../components/account/Notifications';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Notifications">
+  <Notifications client:only="react" />
+</AccountLayout>

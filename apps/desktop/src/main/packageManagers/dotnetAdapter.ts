@@ -10,6 +10,7 @@ import type {
   RuntimeUpdateRequest,
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
+import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { CliNotFoundError, mapWithConcurrency, runCli, tryParseJson } from './execUtils';
 import { type DotnetChannel, runtimeFeeds } from './runtimeFeeds';
 import {
@@ -456,6 +457,19 @@ async function listSection(folderPath: string): Promise<PackageManagerSection> {
   return { ...base, status: 'ok', message, packages: outcomes.flatMap((o) => o.packages) };
 }
 
+/** Every project's PackageReferences (and packages.config), central versions resolved. */
+async function readInventory(folderPath: string): Promise<InventoryPackage[]> {
+  const projects = await findProjectFiles(folderPath);
+  const found: InventoryPackage[] = [];
+  for (const project of projects) {
+    for (const pkg of await readDeclaredPackages(folderPath, project)) {
+      const version = baseVersion(pkg.version);
+      if (version) found.push({ ecosystem: 'nuget', name: pkg.name, version, dev: false });
+    }
+  }
+  return tidyInventory(found);
+}
+
 async function updatePackages(
   _folderPath: string,
   updates: PackageUpdateRequest[],
@@ -505,6 +519,7 @@ async function updateRuntime(
 export const dotnetAdapter: PackageManagerAdapter = {
   ecosystem: 'dotnet',
   detect,
+  readInventory,
   listPackages: async (folderPath) => [await listSection(folderPath)],
   updatePackages,
   updateRuntime,

@@ -361,7 +361,9 @@ export type AppNotificationKind =
   | 'pipeline-autofix-attention'
   | 'pipeline-autofix-gave-up'
   /** A high or critical security news item that affects a tool installed here (E42). */
-  | 'news-security';
+  | 'news-security'
+  /** The server's daily check found package updates in a project (E51). */
+  | 'dependency-updates';
 
 /** Item ids (as strings) mapped to when it happened, an ISO time. */
 export interface NewsLocalState {

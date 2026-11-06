@@ -36,6 +36,7 @@ import { ChooseFolderButton, needsFolder } from '@/components/projects/ChooseFol
 import { ProjectStorageChip } from '@/components/projects/cleanup/ProjectStorageChip';
 import { ScanAllButton } from '@/components/projects/cleanup/ScanAllButton';
 import { DiffrayReviewWizardDialog } from '@/components/projects/DiffrayReviewWizard';
+import { DependencyAlertsChip } from '@/components/projects/dependencyAlerts/DependencyAlertsChip';
 import { ProjectFormDialog, type ProjectFormValues } from '@/components/projects/ProjectFormDialog';
 import { ProjectIcon } from '@/components/projects/ProjectIcon';
 import { ProjectPromptBuildDialog } from '@/components/projects/ProjectPromptBuildDialog';
@@ -313,6 +314,7 @@ export default function ProjectsPage(): React.JSX.Element {
       onNavigate: () => navigate(`/projects/${project.id}`),
       onOpenGit: () => navigate(`/projects/${project.id}?tab=git`),
       onOpenCleanup: () => navigate(`/projects/${project.id}?tab=cleanup`),
+      onOpenPackages: () => navigate(`/projects/${project.id}?tab=packages`),
       onRun: () => handleRun(project),
       onBuildPrompt: () => {
         setPromptBuildProject(project);
@@ -758,6 +760,8 @@ interface ProjectItemProps {
   onOpenGit: () => void;
   /** Opens the project on its Cleanup tab, from the disk use chip. */
   onOpenCleanup: () => void;
+  /** Opens the project on its Packages tab, from the package alerts chip (E51). */
+  onOpenPackages: () => void;
   onRun: () => void;
   onBuildPrompt: () => void;
   onReview: () => void;
@@ -896,6 +900,7 @@ function ProjectCard(props: ProjectItemProps): React.JSX.Element {
             </SimpleTooltip>
           )}
           <ProjectStorageChip projectId={project.id} onOpen={props.onOpenCleanup} />
+          <DependencyAlertsChip projectId={project.id} onOpen={props.onOpenPackages} />
         </div>
       </div>
       <div className={cn(CARD_FOOTER, 'mt-auto')}>
@@ -958,6 +963,9 @@ function ProjectRow(props: ProjectItemProps): React.JSX.Element {
             </span>
           ) : null}
         </div>
+      </div>
+      <div className="shrink-0">
+        <DependencyAlertsChip projectId={project.id} onOpen={props.onOpenPackages} />
       </div>
       <div className="hidden shrink-0 lg:block">
         <ProjectStorageChip projectId={project.id} onOpen={props.onOpenCleanup} />

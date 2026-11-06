@@ -41,6 +41,7 @@ Each project card or row shows its icon, name, "Updated ..." time, description, 
 - The folder link opens the project folder in your file manager. The globe and branch icons open its website and its repository.
 - **Run** starts the project's run command in a terminal. If the project has several commands it opens a **Run command** dialog to pick one. A command that asks for values opens a short form for them first. If it has none, the project page opens with a dialog that offers to create one with AI. See [Run commands](#run-commands).
 - A small group of three icon buttons: **Open the Git section** (the project's Git tab), **Review with diffray** (the review wizard) and **Build a prompt for this project** (the Build Prompt dialog).
+- When the daily package check found something you asked to hear about, an orange chip says how many updates there are, with a red one before it for security issues. It opens the project's **Packages** section. The **Projects** entry in the menu shows how many projects have such updates. See [Packages](#packages).
 
 An empty list shows "No projects yet" with a **New Project** button. If a search matches nothing, the page says so and offers **Clear filters**.
 
@@ -305,6 +306,16 @@ The Packages section lists the dependencies of the project and which are outdate
 - **Copy** gives an **AI update prompt** (versions and steps, ready to paste at an agent) or just the **Package names**, for the selected packages or for all outdated ones.
 
 If the package manager is not installed, the block says so.
+
+#### Package update alerts
+
+When you are signed in to your Runova account, runovahq.com checks the packages of each project once a day, at a slightly different time each day, even while the app is closed. Only the package names and versions go up, never your code or file paths. A project shared with a team is checked once and every member hears about it.
+
+- A package with a security advisory gets a red **Critical**, **High**, **Moderate** or **Low security issue** badge. Point at it to see the advisory and the version that fixes it. A deprecated package gets a **Deprecated** badge.
+- The **Alerts** switch at the top mutes this project for you: the check still runs, you just hear nothing about it. Teammates are not affected.
+- Updating packages here sends the new versions up at once, so the alerts for them clear at the next check.
+
+What you hear about, and whether Telegram gets it too, is set in **Settings > Notifications > Package updates**.
 
 ### Docker
 

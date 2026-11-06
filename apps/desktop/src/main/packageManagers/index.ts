@@ -1,4 +1,5 @@
 import type { PackageManagerSection } from '../../shared/apiTypes';
+import { type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { dartAdapter } from './dartAdapter';
 import { dotnetAdapter } from './dotnetAdapter';
 import { nodeAdapter } from './nodeAdapter';
@@ -21,6 +22,16 @@ export async function scanProjectPackages(folderPath: string): Promise<PackageMa
     detected.filter((d) => d.matched).map((d) => d.adapter.listPackages(folderPath)),
   );
   return sections.flat();
+}
+
+/** Every ecosystem's direct dependencies in the folder, from the files alone (E51). */
+export async function readProjectInventory(folderPath: string): Promise<InventoryPackage[]> {
+  const found = await Promise.all(
+    PACKAGE_MANAGER_ADAPTERS.map(async (adapter) =>
+      (await adapter.detect(folderPath)) ? adapter.readInventory(folderPath) : [],
+    ),
+  );
+  return tidyInventory(found.flat());
 }
 
 export type { PackageManagerAdapter, UpdateProgressTick } from './types';

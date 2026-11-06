@@ -180,6 +180,10 @@ export const queryKeys = {
   pipelineRefs: (repo: string) => ['pipeline-refs', repo] as const,
   appNotifications: ['app-notifications'] as const,
   appNotificationUnread: ['app-notifications-unread'] as const,
+  /** What the server's daily checks found in each project (E51). */
+  dependencyAlerts: ['dependency-alerts'] as const,
+  dependencyAlertSettings: ['dependency-alerts', 'settings'] as const,
+  telegramLink: ['dependency-alerts', 'telegram'] as const,
   packages: (projectId: string) => ['packages', projectId] as const,
   skillsShSearch: (query: string) => ['skills-sh-search', query] as const,
   skillsShDetail: (id: string) => ['skills-sh-detail', id] as const,

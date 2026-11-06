@@ -25,4 +25,16 @@ internal static class ProblemAssert
         Assert.Matches("^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$", problem.GetProperty("traceId").GetString());
         return problem;
     }
+
+    /// <summary>A problem of this status and type, at whatever path it answered.</summary>
+    public static async Task<JsonElement> IsAsync(HttpResponseMessage response, HttpStatusCode status, string slug)
+    {
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.True(status == response.StatusCode, $"Expected {(int)status}, got {(int)response.StatusCode}: {body}");
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        var problem = document.RootElement.Clone();
+        Assert.Equal(Type(slug), problem.GetProperty("type").GetString());
+        return problem;
+    }
 }

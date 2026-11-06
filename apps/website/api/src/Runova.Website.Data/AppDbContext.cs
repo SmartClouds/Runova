@@ -10,6 +10,7 @@ using Runova.Website.Core.Releases;
 using Runova.Website.Data.Accounts;
 using Runova.Website.Data.ApiClients;
 using Runova.Website.Data.Audit;
+using Runova.Website.Data.Dependencies;
 using Runova.Website.Data.Email;
 using Runova.Website.Data.Identity;
 using Runova.Website.Data.News;
@@ -65,6 +66,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<SyncRecord> SyncRecords => Set<SyncRecord>();
 
+    public DbSet<PackageInventory> PackageInventories => Set<PackageInventory>();
+
+    public DbSet<InventoryPackage> InventoryPackages => Set<InventoryPackage>();
+
+    public DbSet<PackageFacts> PackageFacts => Set<PackageFacts>();
+
+    public DbSet<AdvisoryLookup> AdvisoryLookups => Set<AdvisoryLookup>();
+
+    public DbSet<DependencyFinding> DependencyFindings => Set<DependencyFinding>();
+
+    public DbSet<DependencyAlertSettings> DependencyAlertSettings => Set<DependencyAlertSettings>();
+
+    public DbSet<MutedProject> MutedProjects => Set<MutedProject>();
+
+    public DbSet<DependencyAlertDelivery> DependencyAlertDeliveries => Set<DependencyAlertDelivery>();
+
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+
+    public DbSet<TelegramLink> TelegramLinks => Set<TelegramLink>();
+
+    public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();
+
+    public DbSet<TelegramMessage> TelegramMessages => Set<TelegramMessage>();
+
     public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
 
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
@@ -108,6 +133,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureApiClients();
         builder.ConfigureReleases();
         builder.ConfigureAccounts();
+        builder.ConfigureDependencies();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

@@ -28,6 +28,7 @@ import {
   Workspace,
   Wrench,
 } from '@/components/icons';
+import { useDependencyAlerts } from '@/hooks/useDependencyAlerts';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAgentStatusStore } from '@/stores/agentStatusStore';
 import { openUpdateDialog, useUpdateStore } from '@/stores/updateStore';
@@ -115,6 +116,8 @@ export function useNavBadges(): {
   unread: number;
   workspaceAttention: WorkspaceAttention;
   healthIncidents: number;
+  /** Projects with package updates to hear about (E51), shown on the Projects entry. */
+  projectAlerts: number;
 } {
   const queryClient = useQueryClient();
   const unreadQuery = useQuery({
@@ -151,10 +154,13 @@ export function useNavBadges(): {
     return all.includes('needs-input') ? 'needs-input' : all.includes('done') ? 'done' : null;
   });
 
+  const dependencyAlerts = useDependencyAlerts();
+
   return {
     unread: unreadQuery.data ?? 0,
     workspaceAttention,
     healthIncidents: openIncidentCount(healthQuery.data),
+    projectAlerts: dependencyAlerts.enabled ? dependencyAlerts.projectsWithAlerts : 0,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { projectsWithUpdatesLabel } from '@/hooks/useDependencyAlerts';
 import { cn } from '@/lib/utils';
 import { openAbout } from '@/stores/aboutStore';
 import { UpdateDot, VERSION_CHIP, VersionChipLabel } from './AboutCard';
@@ -39,7 +40,7 @@ const PILL_ACTIVE = 'font-semibold text-primary';
 export function TopMenu(): React.JSX.Element {
   const { pathname } = useLocation();
   const reduceMotion = useReducedMotion();
-  const { unread, workspaceAttention, healthIncidents } = useNavBadges();
+  const { unread, workspaceAttention, healthIncidents, projectAlerts } = useNavBadges();
   const updateCheck = useUpdateCheck();
 
   const pillTransition = reduceMotion
@@ -71,6 +72,7 @@ export function TopMenu(): React.JSX.Element {
               active={isNavItemActive(item, pathname)}
               activePill={activePill}
               attention={item.to === '/workspace' ? workspaceAttention : null}
+              count={item.to === '/projects' ? projectAlerts : 0}
             />
           ))}
           {NAV_GROUPS.map((group) => (
@@ -131,12 +133,15 @@ function Tab({
   activePill,
   attention = null,
   showIcon = false,
+  count = 0,
 }: {
   item: NavItem;
   active: boolean;
   activePill: React.JSX.Element;
   attention?: WorkspaceAttention;
   showIcon?: boolean;
+  /** Projects with package updates, on the Projects tab (E51). */
+  count?: number;
 }): React.JSX.Element {
   return (
     <Link
@@ -160,6 +165,14 @@ function Tab({
           <span className="sr-only">
             {attention === 'needs-input' ? ', an agent needs your input' : ', an agent finished'}
           </span>
+        </>
+      ) : null}
+      {count > 0 ? (
+        <>
+          <span className="relative z-10 rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-semibold leading-none text-warning-foreground">
+            {count > 99 ? '99+' : count}
+          </span>
+          <span className="sr-only">, {projectsWithUpdatesLabel(count)}</span>
         </>
       ) : null}
     </Link>

@@ -170,10 +170,16 @@ export function createAccountClient(deps: AccountClientDeps) {
     return refresh();
   }
 
-  async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options: { headers?: Record<string, string> } = {},
+  ): Promise<T> {
     const init = (token: string): RequestInit & { token: string } => ({
       method,
       token,
+      ...(options.headers ? { headers: options.headers } : {}),
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     let response = await send(path, init(await accessToken()));
@@ -283,6 +289,9 @@ export function createAccountClient(deps: AccountClientDeps) {
 
     /** Any other account route, for the sync and teams clients built on this one. */
     request,
+
+    /** A live access token, refreshed when it is about to run out, for the notifications hub. */
+    accessToken,
   };
 }
 

@@ -13,6 +13,7 @@ import type {
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { getDependencyAlerts } from '../account/live';
 import { getDevSetupService } from '../devSetup/runtime';
 import { PACKAGE_MANAGER_ADAPTERS, scanProjectPackages } from '../packageManagers';
 import type { RuntimeUpdateDeps } from '../packageManagers/runtimeUpdate';
@@ -190,12 +191,22 @@ export function registerPackageManagerHandlers(): void {
 
   ipcMain.handle(
     IPC.packages.update,
-    (event, projectId: string, updates: PackageUpdateRequest[]): Promise<PackageUpdateResult> =>
-      updateProjectPackages(projectId, updates, (progress) => {
+    async (
+      event,
+      projectId: string,
+      updates: PackageUpdateRequest[],
+    ): Promise<PackageUpdateResult> => {
+      const result = await updateProjectPackages(projectId, updates, (progress) => {
         // An update can run for minutes; closing or reloading the window
         // mid-run would otherwise throw from inside the adapter's callback
         // and abort the install partway through.
         sendToContents(event.sender, IPC.packages.onUpdateProgress, progress);
-      }),
+      });
+      // The new versions go up at once, so the alerts for what was just updated clear (E51).
+      if (result.ok) {
+        void Promise.resolve(getDependencyAlerts().upload()).catch(() => undefined);
+      }
+      return result;
+    },
   );
 }

@@ -10,6 +10,7 @@ import type {
   RuntimeUpdateRequest,
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
+import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { CliNotFoundError, mapWithConcurrency, runCli } from './execUtils';
 import { runtimeFeeds } from './runtimeFeeds';
 import {
@@ -376,6 +377,25 @@ interface ProjectScanOutcome {
   runtimes: RuntimeTarget[];
 }
 
+/** Each pubspec's hosted dependencies at their locked version, or the oldest the constraint allows. */
+async function readInventory(folderPath: string): Promise<InventoryPackage[]> {
+  const found: InventoryPackage[] = [];
+  for (const pubspecPath of await findPubspecFiles(folderPath)) {
+    const [pubspecSource, lockSource] = await Promise.all([
+      readFileSafe(pubspecPath),
+      readFileSafe(join(dirname(pubspecPath), 'pubspec.lock')),
+    ]);
+    if (pubspecSource === null) continue;
+    const locked = lockSource ? parsePubspecLock(lockSource) : new Map<string, LockedPackage>();
+    for (const dep of parsePubspec(pubspecSource).dependencies) {
+      if (dep.source !== 'hosted' || dep.customHost) continue;
+      const version = baseVersion(locked.get(dep.name)?.version) ?? baseVersion(dep.constraint);
+      if (version) found.push({ ecosystem: 'pub', name: dep.name, version, dev: dep.isDev });
+    }
+  }
+  return tidyInventory(found);
+}
+
 async function listPackagesForPubspec(
   rootFolder: string,
   pubspecPath: string,
@@ -627,6 +647,7 @@ async function updateRuntime(
 export const dartAdapter: PackageManagerAdapter = {
   ecosystem: 'dart',
   detect,
+  readInventory,
   listPackages: async (folderPath) => [await listSection(folderPath)],
   updatePackages,
   updateRuntime,

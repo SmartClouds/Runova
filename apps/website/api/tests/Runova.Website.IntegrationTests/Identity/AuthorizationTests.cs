@@ -64,6 +64,9 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),
                 ("POST", "/api/v1/sessions", true),
+
+                // Telegram posts the bot's updates with its secret header; it sends no cookie to forge (E51).
+                ("POST", "/api/v1/telegram-updates", false),
                 ("POST", "/api/v1/two-factor-sign-ins", true),
                 ("POST", "/api/v1/verification-emails", true),
             ],

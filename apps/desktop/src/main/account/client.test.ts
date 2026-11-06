@@ -137,6 +137,28 @@ describe('createAccountClient', () => {
     expect(me?.init.credentials).toBe('omit');
   });
 
+  it('sends extra headers a route needs and hands out a live access token', async () => {
+    const state = memoryState();
+    await state.signedIn({ account: ACCOUNT, sessionId: 9, refreshToken: 'refresh-0' });
+    const { fetch, calls } = fakeFetch((url) =>
+      url.endsWith('/device-tokens') ? tokens(1) : Response.json({ enabled: true }),
+    );
+    const client = createAccountClient({ fetch, baseUrl: BASE, userAgent: 'UA', state });
+
+    await client.request(
+      'PATCH',
+      '/accounts/me/dependency-alert-settings',
+      { minor: true },
+      {
+        headers: { 'if-match': '*' },
+      },
+    );
+
+    const patch = calls.find((c) => c.url.endsWith('/dependency-alert-settings'));
+    expect(new Headers(patch?.init.headers).get('if-match')).toBe('*');
+    expect(await client.accessToken()).toBe('access-1');
+  });
+
   it('refreshes once when the access token is refused, then retries', async () => {
     const state = memoryState();
     await state.signedIn({ account: ACCOUNT, sessionId: 9, refreshToken: 'refresh-0' });

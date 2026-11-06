@@ -12,6 +12,7 @@ import type {
   RuntimeUpdateRequest,
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
+import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { stripAnsi } from '../process/spawnStreaming';
 import { CliNotFoundError, mapWithConcurrency, runCli, tryParseJson } from './execUtils';
 import { fetchLatestFromRegistry, runtimeFeeds } from './runtimeFeeds';
@@ -444,6 +445,33 @@ async function listPackages(folderPath: string): Promise<PackageManagerSection[]
   return [...byManager].map(([manager, group]) => sectionFor(manager, group));
 }
 
+/**
+ * Every manifest's direct dependencies at their installed version, or the oldest the range allows.
+ * Workspace members are the project's own code, so they are left out.
+ */
+async function readInventory(folderPath: string): Promise<InventoryPackage[]> {
+  const manifests = await findPackageJsonFiles(folderPath);
+  const parsed = (
+    await Promise.all(manifests.map(async (path) => ({ path, json: await readPackageJson(path) })))
+  ).filter((m): m is { path: string; json: PackageJsonShape } => m.json !== null);
+  const ownNames = new Set(parsed.map((m) => m.json.name).filter((n): n is string => !!n));
+  const found: InventoryPackage[] = [];
+  for (const { path, json } of parsed) {
+    for (const [deps, dev] of [
+      [json.dependencies, false],
+      [json.devDependencies, true],
+    ] as const) {
+      for (const [name, range] of Object.entries(deps ?? {})) {
+        if (ownNames.has(name) || baseVersion(range) === null) continue;
+        const installed = await readInstalledVersion(dirname(path), folderPath, name);
+        const version = baseVersion(installed) ?? baseVersion(range);
+        if (version) found.push({ ecosystem: 'npm', name, version, dev });
+      }
+    }
+  }
+  return tidyInventory(found);
+}
+
 function updateArgsFor(
   manager: PackageManagerKind,
   updates: PackageUpdateRequest[],
@@ -524,6 +552,7 @@ async function updateRuntime(
 export const nodeAdapter: PackageManagerAdapter = {
   ecosystem: 'node',
   detect,
+  readInventory,
   listPackages,
   updatePackages,
   updateRuntime,

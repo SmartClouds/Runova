@@ -1,7 +1,7 @@
 # The public website at runovahq.com, deployed as an app on a server Runova manages (Deploy, Apps).
 # The server's nginx (Deploy, Websites) owns ports 80 and 443 and the Let's Encrypt certificate, and
 # passes every request for the domain to the gateway below on 127.0.0.1:WEBSITE_PORT. The gateway
-# splits the paths the way Caddyfile does for the local stack: /api and /hangfire to the API, /media
+# splits the paths the way Caddyfile does for the local stack: /api, /hangfire and /hubs to the API, /media
 # from the uploads volume, everything else to the site.
 #
 # The API and site images are the ones CD pushes to GitHub Container Registry on every release.
@@ -60,6 +60,10 @@ services:
       Admin__Email: ${ADMIN_EMAIL:-}
       Admin__Password: ${ADMIN_PASSWORD:-}
       Admin__DisplayName: ${ADMIN_NAME:-}
+      # The RunovaHQ Telegram bot for dependency alerts (E51). Without a token Telegram is off.
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
+      Telegram__WebhookSecret: ${TELEGRAM_WEBHOOK_SECRET:-}
       # The healthcheck asks the site container too.
       Website__InternalSiteUrl: http://web:4321/
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
@@ -146,7 +150,7 @@ configs:
       	}
 
       	# /_runova/health is the API's report for Runova's Health page.
-      	@api path /api /api/* /hangfire /hangfire/* /_runova/health
+      	@api path /api /api/* /hangfire /hangfire/* /hubs/* /_runova/health
       	handle @api {
       		reverse_proxy api:8080 {
       			import from_nginx
