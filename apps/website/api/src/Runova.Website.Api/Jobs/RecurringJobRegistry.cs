@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Hangfire;
 using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
+using Runova.Website.Api.Billing;
 using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Email;
 using Runova.Website.Api.News;
@@ -26,6 +27,8 @@ internal static class RecurringJobRegistry
     public const string SyncTombstonesPurge = "sync-tombstones-purge";
     public const string DependencyChecks = "dependency-checks";
     public const string TelegramOutbox = "telegram-outbox";
+    public const string SubscriptionExpiry = "subscription-expiry";
+    public const string RenewalReminders = "renewal-reminders";
 
     public static readonly IReadOnlyDictionary<string, string> Schedules = new Dictionary<string, string>
     {
@@ -39,6 +42,8 @@ internal static class RecurringJobRegistry
         [SyncTombstonesPurge] = Cron.Daily(3),
         [DependencyChecks] = Cron.MinuteInterval(15),
         [TelegramOutbox] = Cron.Minutely(),
+        [SubscriptionExpiry] = Cron.Hourly(),
+        [RenewalReminders] = Cron.Daily(9),
     };
 
     /// <summary>Adds each job, or updates it when its schedule or method changed.</summary>
@@ -54,6 +59,8 @@ internal static class RecurringJobRegistry
         Add<SyncTombstonesPurgeJob>(jobs, SyncTombstonesPurge, job => job.RunAsync(CancellationToken.None));
         Add<DependencyCheckJob>(jobs, DependencyChecks, job => job.RunAsync(CancellationToken.None));
         Add<TelegramOutboxJob>(jobs, TelegramOutbox, job => job.RunAsync(CancellationToken.None));
+        Add<SubscriptionExpiryJob>(jobs, SubscriptionExpiry, job => job.RunAsync(CancellationToken.None));
+        Add<RenewalReminderJob>(jobs, RenewalReminders, job => job.RunAsync(CancellationToken.None));
     }
 
     // Hangfire passes its own shutdown token in place of CancellationToken.None.

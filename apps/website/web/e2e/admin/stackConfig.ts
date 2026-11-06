@@ -14,6 +14,14 @@ export const STACK = {
   sitePort: port('E2E_ADMIN_SITE_PORT', 4359),
   /** Stands in for Cloudflare's Turnstile siteverify, so the captcha spec never uses the network. */
   siteVerifyPort: port('E2E_ADMIN_SITEVERIFY_PORT', 4379),
+  /** Stands in for api.stripe.com and its hosted checkout, so the plan spec never pays anyone. */
+  stripePort: port('E2E_ADMIN_STRIPE_PORT', 4389),
+};
+
+/** The keys the plan spec saves in the payment settings; the fake Stripe takes only this secret key. */
+export const FAKE_STRIPE = {
+  secretKey: 'sk_test_e2e',
+  webhookSecret: 'whsec_e2e',
 };
 
 /** The one token the fake siteverify refuses; every other passes. */

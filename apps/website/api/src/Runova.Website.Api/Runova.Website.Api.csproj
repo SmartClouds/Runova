@@ -21,6 +21,12 @@
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Sentry.AspNetCore" />
     <PackageReference Include="Sentry.OpenTelemetry.Exporter" />
+    <PackageReference Include="Stripe.net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Generator and attributes only; nothing of Mapperly ships at run time. -->
+    <PackageReference Include="Riok.Mapperly" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

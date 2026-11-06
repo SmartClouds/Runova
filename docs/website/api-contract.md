@@ -628,6 +628,88 @@ On start the API points the bot's webhook at `/api/v1/telegram-updates`.
 | POST | `/api/v1/accounts/me/telegram-link-codes` | Account | none | 201 `{ "url": string, "expiresAt": time }`; 401; 503 the bot is not set up |
 | POST | `/api/v1/telegram-updates` | Anonymous (the `X-Telegram-Bot-Api-Secret-Token` header) | a Telegram update | 200 (always, once the secret matches); 401; 404 the bot is not set up |
 
+### Account types and plans
+
+An account's **type** (E53) sets what online monitoring (E55) allows it: how many active online
+monitors (`maxCloudMonitors`, null for unlimited), the shortest interval (`minIntervalSec`), and
+how many days of raw results are kept (`historyDays`). Admins define the types; the seeded ones are
+Free (1, 300 s, 7 days), Go (10, 300 s, 30 days), Pro (50, 60 s, 90 days) and Ultra (unlimited,
+30 s, 365 days). An account without a subscription that is active or past due, inside its period,
+is on Free. A team's scope uses the type of its owner (the most generous one, with several owners).
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/account-types` | Anonymous (Admin for `includeInactive`) | query `includeInactive` (bool) | 200 `AccountTypeDto[]`, cheapest first; 403 |
+| POST | `/api/v1/account-types` | Admin | `AccountTypeWrite` with `key` and `name` | 201 `AccountTypeDto`; 400; 401; 403; 409 the key is taken |
+| GET | `/api/v1/account-types/{id}` | Admin | none | 200 `AccountTypeDto` with an ETag; 401; 403; 404 |
+| PATCH | `/api/v1/account-types/{id}` | Admin | merge patch of `AccountTypeWrite`; `If-Match` | 200 `AccountTypeDto`; 400; 401; 403; 404; 412; 428 |
+| DELETE | `/api/v1/account-types/{id}` | Admin | `If-Match` | 204; 401; 403; 404; 409 it is Free, or accounts had it; 412; 428 |
+| GET | `/api/v1/accounts/me/subscriptions/current` | Account | none | 200 `AccountPlanDto`; 401 |
+| GET | `/api/v1/accounts/me/payments` | Account | query `page`, `pageSize` | 200 `Page<PaymentDto>`; 400; 401 |
+| POST | `/api/v1/accounts/me/checkout-sessions` | Account | `{ "accountTypeId": number, "interval": "month" or "year" }` | 201 `{ "url": string }` (Stripe Checkout); 400; 401; 409 already on a paid type; 503 card payments are not set up, or Stripe failed |
+| POST | `/api/v1/accounts/me/billing-portal-sessions` | Account | none | 201 `{ "url": string }` (the Stripe portal); 401; 404 never paid by card; 503 |
+| POST | `/api/v1/accounts/me/crypto-invoices` | Account | `{ "accountTypeId": number, "months": int }` (one of `cryptoMonths`) | 201 `{ "url": string }` (the NOWPayments invoice); 400; 401; 409 pays by card; 503 crypto payments are not set up, or NOWPayments failed |
+| GET | `/api/v1/users/{id}/subscriptions/current` | Admin | none | 200 `{ "accountType": AccountTypeDto, "subscription": SubscriptionDto or null }`; 401; 403; 404 |
+| PUT | `/api/v1/users/{id}/subscriptions/current` | Admin | `{ "accountTypeId": number, "endsAt": time or null }` | 200 as GET; 400; 401; 403; 404; 409 the account pays by card |
+| DELETE | `/api/v1/users/{id}/subscriptions/current` | Admin | none | 204; 401; 403; 404 none; 409 the account pays by card |
+| GET | `/api/v1/payments` | Admin | query `page`, `pageSize`, `userId`, `status` | 200 `Page<AdminPaymentDto>`; 400; 401; 403 |
+| GET | `/api/v1/payment-settings` | Admin | none | 200 `PaymentSettingsDto`; 401; 403 |
+| PATCH | `/api/v1/payment-settings` | Admin | merge patch of `stripeEnabled`, `stripePublishableKey`, `stripeSecretKey`, `stripeWebhookSecret`, `nowPaymentsEnabled`, `nowPaymentsApiKey`, `nowPaymentsIpnSecret`, `nowPaymentsSandbox`, `cryptoMonths`; `If-Match` | 200 `PaymentSettingsDto`; 400; 401; 403; 412; 428 |
+| POST | `/api/v1/payment-connection-checks` | Admin | `{ "provider": "stripe" or "nowpayments" }` | 200 `{ "provider", "ok": bool, "detail": string }`; 400; 401; 403 |
+| POST | `/api/v1/stripe-events` | Anonymous (the `Stripe-Signature` header) | a Stripe event | 200 (also for an event already handled or not ours); 401; 404 not set up |
+| POST | `/api/v1/nowpayments-events` | Anonymous (the `x-nowpayments-sig` header) | a NOWPayments IPN | 200 (likewise); 401; 404 not set up |
+
+`AccountTypeDto`: `{ "id": number, "key": string, "name": string, "description": string,
+"features": string[], "sortOrder": int, "isFree": bool, "isActive": bool, "highlight": bool,
+"maxCloudMonitors": int | null, "minIntervalSec": int, "historyDays": int, "monthlyPriceCents":
+int | null, "yearlyPriceCents": int | null, "currency": string, "version": string }`.
+`AccountTypeWrite` has the same fields less `id`, `isFree` and `version`; `key` (2 to 32 lower-case
+letters, digits and dashes, starting with a letter) is given once and never changes.
+`AccountPlanDto`: `{ "accountType": AccountTypeDto, "subscription": SubscriptionDto | null,
+"cardPayments": bool, "cryptoPayments": bool, "cryptoMonths": int[], "canManageCard": bool }`.
+`SubscriptionDto`: `{ "id": number, "accountTypeId": number, "provider": "stripe" | "nowpayments" |
+"manual", "status": "active" | "past_due" | "canceled" | "expired", "startedAt": time,
+"currentPeriodEnd": time | null, "cancelAtPeriodEnd": bool, "endedAt": time | null }`.
+`PaymentDto`: `{ "id": number, "provider": string, "accountTypeId": number, "accountTypeName":
+string, "months": int | null, "amountCents": number, "currency": string, "status": "pending" |
+"paid" | "failed" | "expired", "providerStatus": string | null, "invoiceUrl": string | null (while
+pending), "createdAt": time, "paidAt": time | null }`. `AdminPaymentDto` adds `userId`, `email` and
+`orderId` and leaves out `invoiceUrl`. `PaymentSettingsDto`: `{ "stripeEnabled": bool,
+"stripePublishableKey": string | null, "hasStripeSecretKey": bool, "hasStripeWebhookSecret": bool,
+"stripeWebhookUrl": string, "nowPaymentsEnabled": bool, "hasNowPaymentsApiKey": bool,
+"hasNowPaymentsIpnSecret": bool, "nowPaymentsSandbox": bool, "nowPaymentsIpnUrl": string,
+"cryptoMonths": int[], "updatedAt": time | null, "version": string }`.
+
+Rules:
+
+- An account has at most one subscription that gives it a type. A card one (Stripe) renews by
+  itself and is changed or canceled in Stripe's portal; a prepaid one (crypto, or given by an
+  Admin) has an end date. While one is on a paid type, card checkout is a 409; crypto on top of a
+  card subscription is a 409.
+- Card: the first checkout makes the Stripe customer, and the type's product and price; a new
+  price makes a new Stripe price and archives the old one. The subscription's own events
+  (`customer.subscription.created`, `.updated`, `.deleted`) set the type, the status and the
+  period end; `invoice.paid` and `invoice.payment_failed` add to the payments. A card
+  subscription past its period is ended three days later if Stripe said nothing.
+- Crypto: the invoice's price is the monthly price times the months, or the yearly price for 12.
+  Only an IPN with `payment_status` `finished`, our `order_id`, and the invoice's amount and
+  currency credits the account. The same type again adds the months to its end date; another
+  type starts now, with the time left on the old one added at the ratio of their monthly prices.
+- Every webhook event is acted on once (by Stripe's event id, or NOWPayments' payment id and
+  status). A wrong signature is 401 and changes nothing. The Stripe signature has a 5 minute
+  tolerance. The NOWPayments one is HMAC-SHA512, hex, over the body with its keys sorted at every
+  level and no spaces, keyed with the IPN secret.
+- A provider can only be on with its keys: Stripe's secret key and webhook signing secret,
+  NOWPayments' API key and IPN secret. Secrets are write-only, sealed, and never in the audit log.
+  `cryptoMonths` is 1 to 4 different periods of 1 to 24 months.
+- `minIntervalSec` is from `Monitoring__MinIntervalSec` (30 unless set) to 86400; `historyDays` 1
+  to 3650; prices 0 to 10000000 cents or null; Free has no price and can not be archived or
+  removed. A type an account ever had can be archived (`isActive: false`) but not removed.
+- Prepaid crypto plans are reminded a week and a day before they end, once each, in the app, by
+  email and on Telegram (`kind: "plan"`). An ended plan says so the same ways.
+- Changes write `account-type.create`, `account-type.update`, `account-type.delete`,
+  `payment-settings.update`, `subscription.assign` and `subscription.remove` audit entries.
+
 ### Account sessions and activity
 
 Every browser and every computer signed in to an account is a session. The session cookie (and a
@@ -673,7 +755,8 @@ have signed in within the last 10 minutes. A failure is 400 `validation-failed` 
 `user.delete`, `user.password-reset`, `user.two-factor-reset`, `news.create`, `news.update`,
 `news.archive`, `news.publish`, `post.create`, `post.update`, `post.archive`, `post.publish`,
 `media.upload`, `media.delete`, `api-client.create`, `api-client.update`, `api-client.revoke`,
-`api-client.rotate`, `sign-in-settings.update`. Entries are never changed or deleted through the API. No entry holds a secret,
+`api-client.rotate`, `sign-in-settings.update`, `account-type.create`, `account-type.update`,
+`account-type.delete`, `payment-settings.update`, `subscription.assign`, `subscription.remove`. Entries are never changed or deleted through the API. No entry holds a secret,
 token, password or signature.
 
 ### Reports (Admin)

@@ -93,6 +93,7 @@ the worktree `../Runova-website` (tasks T002 to T027) and merged into `master` i
 | Background work | Hangfire on PostgreSQL with every recurring job registered in one class, jobs on `TimeProvider` so tests run them directly | Scheduled publishing, nonce and idempotency purges and the release sync in one visible place |
 | Dashboard news | The desktop's main process polls `GET /api/v1/news` (30 seconds after start, then every 30 minutes, backing off after failures), caches it with its ETag, and matches technologies against detected tool versions on this machine. The request carries no account, machine id or tool list | A developer learns when a security fix applies to them without telling the server what they run |
 | Versions | Latest stable releases, pinned exactly (`bun.lock`, `Directory.Packages.props` with lock files), and the same no-Chinese-publisher rule as the app | Same rules as the rest of the repository |
+| Payments (E53) | Stripe Checkout in subscription mode for cards and NOWPayments invoices for crypto (prepaid 1, 3 or 12 months), keys in an Admin settings row sealed with Data Protection. Webhooks are verified (Stripe's signature, HMAC-SHA512 over the key-sorted IPN) and recorded by event id in the same save as their effect. A team's projects use the team owner's type | No card data touches our server, crypto needs no recurring billing, a replayed or forged webhook changes nothing, and a member never pays for a team |
 
 ## Server core at a glance
 
@@ -262,4 +263,9 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E49](epics/49-project-cleanup.md) | Project cleanup: see what each project takes on disk and delete the folders it can rebuild | Standalone (Build) | E31, E21, E23 |
 | [E50](epics/50-system-cleanup.md) | Disk Cleanup: find the caches package managers and developer tools keep, and remove old versions or everything | Standalone (Build) | E49 |
 | [E51](epics/51-dependency-alerts.md) | Dependency update alerts: a daily check of every project's packages, told in the app, on the website and on Telegram | Standalone (Account) | E41, E48 |
+| [E53](epics/53-account-types-billing.md) | Account types and billing: plans with online monitor limits, bought by card (Stripe) or crypto (NOWPayments) | Standalone (Website) | E48, E51, E52 |
+| [E54](epics/54-monitoring-nodes.md) | Monitoring nodes: a gRPC gateway with mutual TLS, nodes in Docker with SQLite, an internal RabbitMQ through Wolverine | Standalone (Website) | E53 |
+| [E55](epics/55-cloud-monitors.md) | Online monitors on the server: results, history, incidents, alerts in the app and on Telegram, plan limits | Standalone (Website) | E53, E54 |
+| [E56](epics/56-desktop-online-monitors.md) | Desktop online monitors: a monitor runs on this computer or on Runova Cloud, with live results | Standalone (Monitoring) | E22, E55 |
+| [E57](epics/57-website-monitoring-page.md) | Website Monitoring page: a team's and an account's online monitors, live | Standalone (Website) | E55 |
 | [E58](epics/58-studio-pictures.md) | Studio pictures: real screenshots of the project, GPT Image, or prompts in PICTURES.md, built into each scene | Standalone (Studio) | E32, E33, E35, E38 |

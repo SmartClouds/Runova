@@ -1,0 +1,32 @@
+---
+import AccountTypesEditor from '../../../components/admin/AccountTypesEditor';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Account types">
+  <h1 class="mb-2 font-display font-extrabold text-3xl tracking-tight">Plans</h1>
+  <p class="mb-5 max-w-2xl text-muted-foreground">
+    What each account type allows for online monitoring, and what it costs. Every account without a
+    paid type is on Free; a team uses its owner's type.
+  </p>
+  <nav aria-label="Plans and payments" class="mb-6 flex flex-wrap gap-1">
+  {
+    [
+      { href: '/admin/plans', label: 'Account types' },
+      { href: '/admin/plans/payments', label: 'Payments' },
+      { href: '/admin/plans/settings', label: 'Payment settings' },
+    ].map((tab) => (
+      <a
+        href={tab.href}
+        aria-current={Astro.url.pathname === tab.href ? 'page' : undefined}
+        class="rounded-full px-3 py-1.5 font-medium text-muted-foreground text-sm ring-1 ring-transparent ring-inset transition-colors duration-[120ms] hover:text-foreground aria-[current=page]:bg-muted/40 aria-[current=page]:text-foreground aria-[current=page]:ring-border"
+      >
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>
+  <AccountTypesEditor client:only="react" />
+</AdminLayout>

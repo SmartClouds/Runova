@@ -1598,6 +1598,434 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("AuditEntries");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Billing.AccountType", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                    NpgsqlPropertyBuilderExtensions.HasIdentityOptions(b.Property<long>("Id"), 100L, null, null, null, null, null);
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.PrimitiveCollection<string[]>("Features")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("Highlight")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("HistoryDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsFree")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("MaxCloudMonitors")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinIntervalSec")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyPriceCents")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StripeMonthlyPriceCents")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StripeMonthlyPriceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("StripeProductId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("StripeYearlyPriceCents")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StripeYearlyPriceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int?>("YearlyPriceCents")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsFree")
+                        .IsUnique()
+                        .HasFilter("\"IsFree\"");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("AccountTypes");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "usd",
+                            Description = "Try online monitoring on one endpoint.",
+                            Features = new[] { "1 online monitor", "Checks every 5 minutes", "7 days of detailed history", "Alerts in the app and on Telegram" },
+                            Highlight = false,
+                            HistoryDays = 7,
+                            IsActive = true,
+                            IsFree = true,
+                            Key = "free",
+                            MaxCloudMonitors = 1,
+                            MinIntervalSec = 300,
+                            Name = "Free",
+                            SortOrder = 0,
+                            Version = 0u
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "usd",
+                            Description = "For a few projects that should never go quiet.",
+                            Features = new[] { "10 online monitors", "Checks every 5 minutes", "30 days of detailed history", "Alerts in the app and on Telegram" },
+                            Highlight = false,
+                            HistoryDays = 30,
+                            IsActive = true,
+                            IsFree = false,
+                            Key = "go",
+                            MaxCloudMonitors = 10,
+                            MinIntervalSec = 300,
+                            MonthlyPriceCents = 500,
+                            Name = "Go",
+                            SortOrder = 1,
+                            Version = 0u,
+                            YearlyPriceCents = 5000
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "usd",
+                            Description = "Every project you run, checked every minute.",
+                            Features = new[] { "50 online monitors", "Checks every minute", "90 days of detailed history", "Second opinion from another region" },
+                            Highlight = true,
+                            HistoryDays = 90,
+                            IsActive = true,
+                            IsFree = false,
+                            Key = "pro",
+                            MaxCloudMonitors = 50,
+                            MinIntervalSec = 60,
+                            MonthlyPriceCents = 1500,
+                            Name = "Pro",
+                            SortOrder = 2,
+                            Version = 0u,
+                            YearlyPriceCents = 15000
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "usd",
+                            Description = "No limits, and the fastest checks Runova makes.",
+                            Features = new[] { "Unlimited online monitors", "Checks every 30 seconds", "A year of detailed history", "Second opinion from another region" },
+                            Highlight = false,
+                            HistoryDays = 365,
+                            IsActive = true,
+                            IsFree = false,
+                            Key = "ultra",
+                            MinIntervalSec = 30,
+                            MonthlyPriceCents = 4900,
+                            Name = "Ultra",
+                            SortOrder = 3,
+                            Version = 0u,
+                            YearlyPriceCents = 49000
+                        });
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.BillingCustomer", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StripeCustomerId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique();
+
+                    b.ToTable("BillingCustomers");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.Payment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountTypeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("AmountCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("InvoiceUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("Months")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ProviderStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountTypeId");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.HasIndex("Provider", "ProviderPaymentId")
+                        .IsUnique()
+                        .HasFilter("\"ProviderPaymentId\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("Payments");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.PaymentSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<int[]>("CryptoMonths")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<string>("NowPaymentsApiKeySealed")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("NowPaymentsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NowPaymentsIpnSecretSealed")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("NowPaymentsSandbox")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("StripeEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("StripePublishableKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("StripeSecretKeySealed")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StripeWebhookSecretSealed")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaymentSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentSettings_Singleton", "\"Id\" = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CryptoMonths = new[] { 1, 3, 12 },
+                            NowPaymentsEnabled = false,
+                            NowPaymentsSandbox = false,
+                            StripeEnabled = false,
+                            Version = 0u
+                        });
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.ProcessedPaymentEvent", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("EventId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Provider", "EventId");
+
+                    b.ToTable("ProcessedPaymentEvents");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.Subscription", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountTypeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("CancelAtPeriodEnd")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CurrentPeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("GrantedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ProviderRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("RemindedDayAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RemindedWeekAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountTypeId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('active', 'past_due')");
+
+                    b.HasIndex("Provider", "ProviderRef")
+                        .IsUnique()
+                        .HasFilter("\"ProviderRef\" IS NOT NULL");
+
+                    b.HasIndex("Status", "CurrentPeriodEnd");
+
+                    b.ToTable("Subscriptions");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Dependencies.AdvisoryLookup", b =>
                 {
                     b.Property<long>("Id")
@@ -2510,6 +2938,45 @@ namespace Runova.Website.Data.Migrations
                         .WithMany()
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.BillingCustomer", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.Payment", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Billing.AccountType", null)
+                        .WithMany()
+                        .HasForeignKey("AccountTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Billing.Subscription", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Billing.AccountType", null)
+                        .WithMany()
+                        .HasForeignKey("AccountTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Runova.Website.Data.Identity.AppUser", null)

@@ -1,0 +1,10 @@
+---
+import Plan from '../../components/account/Plan';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Plan">
+  <Plan client:only="react" />
+</AccountLayout>

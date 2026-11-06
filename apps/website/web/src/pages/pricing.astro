@@ -1,0 +1,78 @@
+---
+import { Check } from 'lucide-react';
+import { buttonVariants } from '../components/ui/button';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { intervalLabel, monitorsLabel, parseAccountTypes, price, yearlySaving } from '../lib/billing';
+import { apiGetter } from '../lib/websiteApi';
+
+// Rendered per request: the plans come from the API, so a price an Admin changes shows at once.
+export const prerender = false;
+
+const result = await apiGetter(process.env.WEBSITE_API_INTERNAL_URL)('/api/v1/account-types', parseAccountTypes);
+const types = result.ok ? result.value : [];
+Astro.response.headers.set('Cache-Control', result.ok ? 'public, max-age=300, stale-while-revalidate=600' : 'public, max-age=60');
+
+const description =
+  'Runova is free to download and use. Online monitoring checks your apps from Runova servers around the clock; pick how many and how often.';
+---
+
+<BaseLayout title="Pricing" description={description}>
+  <section aria-labelledby="pricing-title" class="pt-12 pb-10 text-center md:pt-20">
+    <h1 id="pricing-title" class="font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05]">Pricing</h1>
+    <p class="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+      The Runova app is free. Plans are for online monitoring: Runova servers check your apps day and
+      night, keep every result, and tell you and your team the moment something goes down.
+    </p>
+  </section>
+  {
+    types.length === 0 ? (
+      <p class="pb-20 text-center text-muted-foreground">The plans could not be loaded right now. Try again in a minute.</p>
+    ) : (
+      <ul class="grid gap-4 pb-20 sm:grid-cols-2 lg:grid-cols-4">
+        {types.map((type) => {
+          const saving = yearlySaving(type);
+          return (
+            <li
+              class:list={[
+                'flex flex-col rounded-box border p-6',
+                type.highlight && 'border-primary/60 bg-primary/[0.06] shadow-[0_18px_50px_-24px_hsl(var(--primary)/0.6)]',
+              ]}
+            >
+              <h2 class="font-bold text-xl">{type.name}</h2>
+              <p class="mt-1 min-h-10 text-muted-foreground text-sm">{type.description}</p>
+              <p class="mt-5">
+                {type.isFree || type.monthlyPriceCents === null ? (
+                  <span class="font-bold text-4xl">{type.isFree ? 'Free' : 'Ask us'}</span>
+                ) : (
+                  <>
+                    <span class="font-bold text-4xl">{price(type.monthlyPriceCents, type.currency)}</span>
+                    <span class="text-muted-foreground text-sm"> a month</span>
+                  </>
+                )}
+              </p>
+              <p class="mt-1 min-h-5 text-muted-foreground text-xs">
+                {saving !== null && type.yearlyPriceCents !== null && `${price(type.yearlyPriceCents, type.currency)} a year, save ${saving}%`}
+              </p>
+              <ul class="mt-5 grid flex-1 content-start gap-2 text-sm">
+                {(type.features.length > 0 ? type.features : [monitorsLabel(type.maxCloudMonitors), `Checks ${intervalLabel(type.minIntervalSec)}`]).map(
+                  (line) => (
+                    <li class="flex items-start gap-2">
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <span>{line}</span>
+                    </li>
+                  ),
+                )}
+              </ul>
+              <a
+                href={type.isFree ? '/account/register' : '/account/plan'}
+                class:list={[buttonVariants({ variant: type.highlight ? 'default' : 'outline' }), 'mt-6 w-full']}
+              >
+                {type.isFree ? 'Start free' : `Get ${type.name}`}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    )
+  }
+</BaseLayout>

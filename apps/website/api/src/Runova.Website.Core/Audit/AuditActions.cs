@@ -23,6 +23,12 @@ public static class AuditActions
     public const string ApiClientRevoke = "api-client.revoke";
     public const string ApiClientRotate = "api-client.rotate";
     public const string SignInSettingsUpdate = "sign-in-settings.update";
+    public const string AccountTypeCreate = "account-type.create";
+    public const string AccountTypeUpdate = "account-type.update";
+    public const string AccountTypeDelete = "account-type.delete";
+    public const string PaymentSettingsUpdate = "payment-settings.update";
+    public const string SubscriptionAssign = "subscription.assign";
+    public const string SubscriptionRemove = "subscription.remove";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -32,6 +38,7 @@ public static class AuditActions
         MediaUpload, MediaDelete,
         ApiClientCreate, ApiClientUpdate, ApiClientRevoke, ApiClientRotate,
         SignInSettingsUpdate,
+        AccountTypeCreate, AccountTypeUpdate, AccountTypeDelete, PaymentSettingsUpdate, SubscriptionAssign, SubscriptionRemove,
     };
 }
 
@@ -54,6 +61,12 @@ public static class AuditTargetTypes
     public const string Media = "media";
     public const string ApiClient = "api-client";
     public const string SignInSettings = "sign-in-settings";
+    public const string AccountType = "account-type";
+    public const string PaymentSettings = "payment-settings";
+    public const string Subscription = "subscription";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { User, News, Post, Media, ApiClient, SignInSettings };
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        User, News, Post, Media, ApiClient, SignInSettings, AccountType, PaymentSettings, Subscription,
+    };
 }

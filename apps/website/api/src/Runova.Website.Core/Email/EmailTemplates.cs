@@ -16,6 +16,8 @@ public static class EmailTemplates
     public const string AlreadyRegisteredKind = "already-registered";
     public const string NewSignInKind = "new-sign-in";
     public const string TeamInvitationKind = "team-invitation";
+    public const string PlanEndingKind = "plan-ending";
+    public const string PlanEndedKind = "plan-ended";
 
     public static EmailContent VerifyEmail(string name, string link) => Build(
         VerifyEmailKind,
@@ -76,6 +78,30 @@ public static class EmailTemplates
         "See the invitation",
         link,
         "If you were not expecting this, you can ignore this email.");
+
+    public static EmailContent PlanEnding(string name, string plan, string endsOn, string link) => Build(
+        PlanEndingKind,
+        $"Your Runova {plan} plan ends on {endsOn}",
+        name,
+        [
+            $"Your {plan} plan was paid up front and ends on {endsOn}. After that this account goes back to Free, and online monitors over its limit are paused.",
+            "Extend it from your Plan page whenever you like. The time you buy is added to the end date.",
+        ],
+        "Extend my plan",
+        link,
+        "You get this email a week before and the day before a prepaid plan ends.");
+
+    public static EmailContent PlanEnded(string name, string plan, string link) => Build(
+        PlanEndedKind,
+        $"Your Runova {plan} plan ended",
+        name,
+        [
+            $"Your {plan} plan ended, so this account is on Free now. Online monitors over the Free limit are paused, and none of their history is lost.",
+            "Renew from your Plan page and they start again.",
+        ],
+        "See plans",
+        link,
+        "You get this email once, when a plan ends.");
 
     private static EmailContent Build(string kind, string subject, string? name, string[] paragraphs, string button, string link, string footer)
     {
