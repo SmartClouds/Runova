@@ -75,6 +75,7 @@ import {
   TOOLBAR,
 } from '@/components/pageKit';
 import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
+import { ALL_TOOLS_ROUTE } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -668,7 +669,7 @@ function UpdatesCard({
               AI CLIs
             </button>{' '}
             or{' '}
-            <button type="button" className={linkClass} onClick={() => navigate('/tools')}>
+            <button type="button" className={linkClass} onClick={() => navigate(ALL_TOOLS_ROUTE)}>
               Agent Tools
             </button>{' '}
             to install one.

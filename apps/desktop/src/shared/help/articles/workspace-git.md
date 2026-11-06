@@ -147,7 +147,7 @@ The **Pull request** section walks the current branch from no pull request, thro
 The section tells you what is missing instead of failing quietly.
 
 - **No remote**: add a GitHub remote and publish the branch.
-- **GitHub CLI not found**: install `gh`. The **Open Agent Tools** button goes to [Agent tools](agent-tools.md).
+- **GitHub CLI not found**: install `gh`. The **Open Agent Tools** button goes to [Dev Setup](agent-tools.md#dev-setup), which installs it.
 - **No GitHub remote**: the repository is not hosted on GitHub.
 - **Sign in to GitHub**: click **Run gh auth login**. A terminal opens with the command typed, ready for `Enter`.
 - On the default branch, it says **Pull requests start from a branch** and offers **New branch**.

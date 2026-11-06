@@ -58,6 +58,7 @@ import {
   Wrench,
 } from '@/components/icons';
 import { SectionEmptyState } from '@/components/projects/ProjectDetailChrome';
+import { ALL_TOOLS_ROUTE } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
@@ -513,7 +514,7 @@ export function DiffrayReviewWizard({
 
   function goToTools(): void {
     onDismiss?.();
-    navigate('/tools');
+    navigate(ALL_TOOLS_ROUTE);
   }
 
   function goToGit(): void {

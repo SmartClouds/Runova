@@ -54,6 +54,7 @@ import {
 import { AI_CLIS_TAB, AiClisPanel } from '@/components/tools/aiClis';
 import { CodeqlInstallCard } from '@/components/tools/CodeqlInstallCard';
 import { DEV_SETUP_TAB, DevSetupPanel } from '@/components/tools/devSetup';
+import { ALL_TOOLS_TAB } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -565,15 +566,16 @@ export default function ToolsPage(): React.JSX.Element {
     return ordered.map((category) => ({ category, count: counts.get(category) ?? 0 }));
   }, []);
 
+  // The page opens on AI CLIs; the tool list has its own `?tab=all`.
   const tabParam = searchParams.get('tab');
   const activeCategory =
-    tabParam === DEV_SETUP_TAB || tabParam === AI_CLIS_TAB
+    tabParam === DEV_SETUP_TAB || tabParam === ALL_TOOLS_TAB
       ? tabParam
       : tabParam === 'security'
         ? SECURITY_TOOL_CATEGORY
         : categories.some((c) => c.category === tabParam)
           ? (tabParam as string)
-          : 'all';
+          : AI_CLIS_TAB;
   const onDevSetup = activeCategory === DEV_SETUP_TAB;
   const onAiClis = activeCategory === AI_CLIS_TAB;
   // The setup tabs bring their own controls; the tool filter and target project are for tool cards.
@@ -583,7 +585,7 @@ export default function ToolsPage(): React.JSX.Element {
     setSearchParams(
       (params) => {
         const updated = new URLSearchParams(params);
-        if (next === 'all') updated.delete('tab');
+        if (next === AI_CLIS_TAB) updated.delete('tab');
         else updated.set('tab', next === SECURITY_TOOL_CATEGORY ? 'security' : next);
         return updated;
       },

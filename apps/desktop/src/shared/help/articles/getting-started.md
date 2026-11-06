@@ -95,7 +95,7 @@ Separately, the **Agents** tab of Settings has a **Default CLI** card. That pick
 
 AI CLIs are the command line agents themselves, for example Claude Code, Codex and Gemini CLI. Runova detects the ones already on your machine.
 
-1. Click **Agent Tools** in the menu, under Agents, then **AI CLIs** in the page's left menu.
+1. Click **Agent Tools** in the menu, under Agents. It opens on **AI CLIs**.
 2. Check which CLIs are detected. If you have some not installed, click **Show all CLIs** to see them.
 3. Install a missing CLI from its card.
 

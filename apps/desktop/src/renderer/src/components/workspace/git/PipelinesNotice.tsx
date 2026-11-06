@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { DEV_SETUP_ROUTE } from '@/components/tools/routes';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { useTerminalStore } from '@/stores/terminalStore';
 import { PanelNotice } from './PanelNotice';
@@ -33,7 +34,7 @@ export function PipelinesNotice({
             label: 'Open Agent Tools',
             run: () => {
               onLeave?.();
-              navigate('/tools');
+              navigate(DEV_SETUP_ROUTE);
             },
           }}
         />

@@ -79,9 +79,10 @@ const DESTINATIONS: Destination[] = [
     landmark: (page) => page.getByLabel('Search MCP servers'),
   },
   {
+    // The page opens on its AI CLIs tab.
     label: 'Agent Tools',
     hash: '#/tools',
-    landmark: (page) => page.getByRole('navigation', { name: 'Tool categories' }),
+    landmark: (page) => page.getByRole('searchbox', { name: 'Filter CLIs' }),
   },
   {
     // Docker may or may not be installed on the machine running the suite, and the page says so
@@ -126,6 +127,10 @@ const HASH_ONLY: { hash: string; landmark: (page: Page) => Locator }[] = [
   {
     hash: '#/prompt-history',
     landmark: (page) => page.getByPlaceholder('Search prompt history…'),
+  },
+  {
+    hash: '#/tools?tab=all',
+    landmark: (page) => page.getByRole('searchbox', { name: 'Filter tools' }),
   },
   {
     hash: '#/tools?tab=ai-clis',
