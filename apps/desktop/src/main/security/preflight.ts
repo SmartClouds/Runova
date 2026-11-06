@@ -87,7 +87,7 @@ async function checkBinary(
   return unmet(
     'binary',
     `${tool?.name ?? scannerId} is installed`,
-    `Install ${tool?.name ?? scannerId} from the Agent Tools page.`,
+    `Install ${tool?.name ?? scannerId} from the Dev Tools page.`,
     { kind: 'install-tool', toolId },
   );
 }
@@ -130,7 +130,7 @@ async function requirementsFor(
           : unmet(
               'binary',
               'CodeQL is installed',
-              'Runova can download CodeQL for you from its card on the Agent Tools page.',
+              'Runova can download CodeQL for you from its card on the Dev Tools page.',
               { kind: 'install-tool', toolId: scanner.toolId },
             ),
       ];
@@ -173,7 +173,7 @@ async function requirementsFor(
             'The SonarQube server is up',
             status === 'starting'
               ? 'SonarQube is still starting. First boot takes a couple of minutes.'
-              : 'Start the SonarQube container from its card on the Agent Tools page.',
+              : 'Start the SonarQube container from its card on the Dev Tools page.',
             { kind: 'start-container', toolId: 'sonarqube' },
             // A starting server is not a blocker: the run polls for it.
             status !== 'starting',

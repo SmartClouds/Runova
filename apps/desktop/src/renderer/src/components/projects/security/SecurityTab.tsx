@@ -82,7 +82,7 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
         <ProjectEmptyState
           icon={Shield}
           title="No security scanners installed yet"
-          description="Install Semgrep, Trivy, CodeQL, Bearer, SonarQube, or Strix from the Agent Tools page, then come back here to scan this project and get one merged report you can hand to an agent."
+          description="Install Semgrep, Trivy, CodeQL, Bearer, SonarQube, or Strix from the Dev Tools page, then come back here to scan this project and get one merged report you can hand to an agent."
           action={
             <Button onClick={() => navigate('/tools?tab=security')}>
               <Shield className="h-4 w-4" /> Browse security tools

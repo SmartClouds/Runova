@@ -159,7 +159,7 @@ The page has a header, a section list on the left (a tab bar on narrow windows) 
 
 The list on the left has two groups. **Work**: Overview, Blueprint, Prompts, Git, Usage, Review, Security, Packages, Docker, Terminal. **Setup**: Bootstrap, Skills, MCP, Hooks, Environments, Config, Cleanup. At the bottom of the list, **Created** and **Updated** show when the project was added and last changed.
 
-Small badges flag things that need a look: Prompts shows open drafts plus missed scheduled prompts (amber when any was missed), Skills and MCP show how many are installed (Skills turns amber when updates are available), and Security shows how many critical and high findings the last scan found. **Review** only appears once the diffray tool is installed (see [Agent Tools](agent-tools.md)).
+Small badges flag things that need a look: Prompts shows open drafts plus missed scheduled prompts (amber when any was missed), Skills and MCP show how many are installed (Skills turns amber when updates are available), and Security shows how many critical and high findings the last scan found. **Review** only appears once the diffray tool is installed (see [Dev Tools](agent-tools.md)).
 
 ### Overview
 
@@ -260,7 +260,7 @@ The cost is an estimate from public list prices, not an invoice, and a subscript
 
 ### Review
 
-The Review section runs diffray, a multi-agent code reviewer, over the project. It only shows once diffray is installed from Agent Tools. It needs a git repository: otherwise it points you to the Git section. A wizard has four steps:
+The Review section runs diffray, a multi-agent code reviewer, over the project. It only shows once diffray is installed from Dev Tools. It needs a git repository: otherwise it points you to the Git section. A wizard has four steps:
 
 1. **Diffs** (what to scan): **Working tree** (uncommitted changes, or the last commit if clean), **Compare to a branch** (pick a **Base branch**), **Last N commits** (a **Commit count** from 1 to 50, with presets), **Changed files** (tick files, and optionally review whole files rather than just the diff), or **Whole codebase** (every source file, with a **Folder**, **Include tests** and **Files per pass**, and a note that large trees cost real tokens).
 2. **Agents** (who looks): **Quality**, **Bugs**, **Security**, **Performance** and **Consistency**. **Select all** or **Clear** change them together.
@@ -271,7 +271,7 @@ The review wizard can also be opened as a dialog from a project card (**Review w
 
 ### Security
 
-The Security section scans the project with security tools and gives one merged report. Scanners are installed from Agent Tools (when none is installed, a **Browse security tools** button goes there), and the section is never hidden so you can see what exists.
+The Security section scans the project with security tools and gives one merged report. Scanners are installed from Dev Tools (when none is installed, a **Browse security tools** button goes there), and the section is never hidden so you can see what exists.
 
 | Scanner | What it covers | Time |
 | --- | --- | --- |
@@ -426,7 +426,7 @@ A chip above the result can size the prompt and suggest a model and effort, in w
 - [Worktrees](worktrees.md)
 - [Prompt Builder](prompt-builder.md)
 - [Scheduled tasks](scheduled-tasks.md)
-- [Agent Tools](agent-tools.md)
+- [Dev Tools](agent-tools.md)
 - [Skills](skills.md)
 - [MCP Servers](mcp-servers.md)
 - [Docker](docker.md)

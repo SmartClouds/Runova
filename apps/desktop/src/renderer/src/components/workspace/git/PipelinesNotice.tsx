@@ -31,7 +31,7 @@ export function PipelinesNotice({
           title="GitHub CLI not found"
           body="Install gh to see workflow runs here."
           action={{
-            label: 'Open Agent Tools',
+            label: 'Open Dev Tools',
             run: () => {
               onLeave?.();
               navigate(DEV_SETUP_ROUTE);

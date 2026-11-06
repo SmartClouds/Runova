@@ -86,7 +86,7 @@ export function createLocalVoices(deps: LocalVoicesDeps) {
     const tools = await deps.tools();
     if (!tools) {
       throw new Error(
-        'Voice profiles need ffmpeg, which is not installed yet. Install it from Agent Tools, Dev Setup (Studio).',
+        'Voice profiles need ffmpeg, which is not installed yet. Install it from Dev Tools, Dev Setup (Studio).',
       );
     }
     const dir = join(await deps.workDir(), 'takes');

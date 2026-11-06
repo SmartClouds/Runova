@@ -137,7 +137,7 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
     await panel.getByRole('combobox', { name: 'Voice engine' }).click();
     await page.getByRole('option', { name: 'Piper (on this computer) (not set up)' }).click();
     await expect(
-      panel.getByText('Install Piper and its voices from Agent Tools, Dev Setup (Studio).'),
+      panel.getByText('Install Piper and its voices from Dev Tools, Dev Setup (Studio).'),
     ).toBeVisible();
     // Its voice library lists every voice from the main process, and asks for Piper first.
     await panel.getByRole('button', { name: 'Get voices' }).click();

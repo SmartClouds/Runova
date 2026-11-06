@@ -46,16 +46,16 @@ services:
       Email__FromName: ${EMAIL_FROM_NAME:-Runova}
       Email__SandboxMode: ${EMAIL_SANDBOX_MODE:-true}
       RUNOVA_HEALTH_TOKEN_SHA256: ${RUNOVA_HEALTH_TOKEN_SHA256:-}
+      # The Admin the API makes (or keeps up to date) on every start. Empty leaves it out.
+      Admin__Email: ${ADMIN_EMAIL:-}
+      Admin__Password: ${ADMIN_PASSWORD:-}
+      Admin__DisplayName: ${ADMIN_NAME:-}
       Website__InternalSiteUrl: http://web:4321/
     volumes:
       - media:/var/lib/runova/media
     depends_on:
       db:
         condition: service_healthy
-      # The Admin the API makes (or keeps up to date) on every start. Empty leaves it out.
-      Admin__Email: ${ADMIN_EMAIL:-}
-      Admin__Password: ${ADMIN_PASSWORD:-}
-      Admin__DisplayName: ${ADMIN_NAME:-}
     restart: unless-stopped
 
   web:

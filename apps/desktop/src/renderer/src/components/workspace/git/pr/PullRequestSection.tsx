@@ -306,7 +306,7 @@ export function PullRequestSection({
       <PanelNotice
         title="GitHub CLI not found"
         body="Install gh to create, review and merge pull requests here."
-        action={{ label: 'Open Agent Tools', run: () => navigate(DEV_SETUP_ROUTE) }}
+        action={{ label: 'Open Dev Tools', run: () => navigate(DEV_SETUP_ROUTE) }}
       />
     );
   }

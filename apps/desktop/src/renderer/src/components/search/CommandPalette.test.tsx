@@ -164,7 +164,7 @@ describe('CommandPalette results', () => {
     await user.keyboard('{Control>}k{/Control}');
 
     expect(await screen.findByText('Dashboard')).toBeTruthy();
-    expect(screen.getByText('Agent Tools')).toBeTruthy();
+    expect(screen.getByText('Dev Tools')).toBeTruthy();
   });
 });
 

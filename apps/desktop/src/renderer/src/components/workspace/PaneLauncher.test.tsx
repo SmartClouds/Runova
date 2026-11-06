@@ -98,8 +98,7 @@ describe('PaneLauncher agent cards', () => {
     );
     await user.hover(gemini);
     expect(
-      (await screen.findAllByText("Gemini CLI isn't installed. Install it from Agent Tools."))
-        .length,
+      (await screen.findAllByText("Gemini CLI isn't installed. Install it from Dev Tools.")).length,
     ).toBeGreaterThan(0);
   });
 

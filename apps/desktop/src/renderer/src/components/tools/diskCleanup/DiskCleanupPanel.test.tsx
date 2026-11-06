@@ -6,11 +6,12 @@ import type {
   SystemCleanupScan,
 } from '@runova/core';
 import { screen, waitFor, within } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import { useSystemCleanupStore } from '@/stores/systemCleanupStore';
-import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
-import DiskCleanupPage from './DiskCleanupPage';
+import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
+import { DiskCleanupPanel } from './DiskCleanupPanel';
 
 const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }),
@@ -101,11 +102,18 @@ function cleanResult(providerId: ProviderScan['id'], over: Partial<CleanResult> 
   };
 }
 
+/** Shows the address, so a test can check what the panel left in it. */
+function LocationProbe(): React.JSX.Element {
+  const location = useLocation();
+  return <span data-testid="address">{`${location.pathname}${location.search}`}</span>;
+}
+
 function page(bridge: Record<string, unknown> = {}, route = '/') {
   return renderWithProviders(
     <>
-      <DiskCleanupPage />
+      <DiskCleanupPanel />
       <ConfirmDialogHost />
+      <LocationProbe />
     </>,
     {
       route,
@@ -153,7 +161,7 @@ function remembered(id: 'nuget' | 'bun', over: Record<string, unknown> = {}) {
   };
 }
 
-describe('DiskCleanupPage, when it is off', () => {
+describe('DiskCleanupPanel, when it is off', () => {
   it('says why and offers nothing to scan', async () => {
     page({ 'systemCleanup.status': async () => ({ enabled: false, reason: 'Off in tests.' }) });
     expect(await screen.findByText('Off in tests.')).toBeInTheDocument();
@@ -161,7 +169,7 @@ describe('DiskCleanupPage, when it is off', () => {
   });
 });
 
-describe('DiskCleanupPage, the first scan', () => {
+describe('DiskCleanupPanel, the first scan', () => {
   it('invites the first scan and does not start one by itself', async () => {
     const view = page();
     expect(await screen.findByText(/see what your tools are keeping/i)).toBeInTheDocument();
@@ -216,7 +224,7 @@ describe('DiskCleanupPage, the first scan', () => {
   });
 });
 
-describe('DiskCleanupPage, what is remembered', () => {
+describe('DiskCleanupPanel, what is remembered', () => {
   it('shows the caches from the last scan at once, and says they are from an earlier scan', async () => {
     const live = scanData().providers[0] as ProviderScan;
     useSystemCleanupStore.setState({
@@ -273,7 +281,7 @@ describe('DiskCleanupPage, what is remembered', () => {
   });
 });
 
-describe('DiskCleanupPage, cleaning old versions', () => {
+describe('DiskCleanupPanel, cleaning old versions', () => {
   it('asks first, and says what goes and what it frees', async () => {
     const view = await scanned();
     await view.user.click(
@@ -373,7 +381,7 @@ describe('DiskCleanupPage, cleaning old versions', () => {
   });
 });
 
-describe('DiskCleanupPage, clearing everything', () => {
+describe('DiskCleanupPanel, clearing everything', () => {
   it('asks with the folder in the question, then clears it all', async () => {
     const view = await scanned({ 'systemCleanup.clean': async () => cleanResult('bun') });
     await view.user.click(within(card('Bun')).getByRole('button', { name: /clear all of bun/i }));
@@ -393,7 +401,7 @@ describe('DiskCleanupPage, clearing everything', () => {
   });
 });
 
-describe('DiskCleanupPage, a cache only its tool cleans', () => {
+describe('DiskCleanupPanel, a cache only its tool cleans', () => {
   it("runs the tool's own command after asking", async () => {
     const view = await scanned({ 'systemCleanup.clean': async () => cleanResult('npm') });
     await view.user.click(
@@ -415,7 +423,7 @@ describe('DiskCleanupPage, a cache only its tool cleans', () => {
   });
 });
 
-describe('DiskCleanupPage, the review', () => {
+describe('DiskCleanupPanel, the review', () => {
   async function review(bridge: Record<string, unknown> = {}) {
     const view = await scanned(bridge);
     await view.user.click(within(card('NuGet')).getByRole('button', { name: /review nuget/i }));
@@ -447,7 +455,33 @@ describe('DiskCleanupPage, the review', () => {
   });
 });
 
-describe('DiskCleanupPage, finding and showing a cache', () => {
+describe('DiskCleanupPanel, as a tab of Dev Tools', () => {
+  it('opens a review and goes back without leaving its tab', async () => {
+    const view = page({}, '/tools?tab=disk-cleanup');
+    await view.user.click(await screen.findByRole('button', { name: /find caches/i }));
+    await view.user.click(
+      within(await screen.findByRole('region', { name: /nuget cache/i })).getByRole('button', {
+        name: /review nuget/i,
+      }),
+    );
+    await screen.findByRole('heading', { level: 2, name: 'NuGet' });
+    expect(screen.getByTestId('address')).toHaveTextContent('/tools?tab=disk-cleanup&cache=nuget');
+
+    await view.user.click(screen.getByRole('button', { name: /all caches/i }));
+    await screen.findByRole('region', { name: /bun cache/i });
+    expect(screen.getByTestId('address')).toHaveTextContent(/^\/tools\?tab=disk-cleanup$/);
+  });
+
+  it('drops a review with no scan behind it, and stays on its tab', async () => {
+    page({}, '/tools?tab=disk-cleanup&cache=nuget');
+    await screen.findByRole('button', { name: /find caches/i });
+    await waitFor(() =>
+      expect(screen.getByTestId('address')).toHaveTextContent(/^\/tools\?tab=disk-cleanup$/),
+    );
+  });
+});
+
+describe('DiskCleanupPanel, finding and showing a cache', () => {
   it('searches caches by name', async () => {
     const view = await scanned();
     await view.user.type(screen.getByRole('searchbox', { name: /search caches/i }), 'bun');
@@ -480,7 +514,7 @@ function holdOpen<T>(key: string, value: () => T) {
   return { bridge: { [key]: () => promise }, release: () => release(value()) };
 }
 
-describe('DiskCleanupPage, while it works', () => {
+describe('DiskCleanupPanel, while it works', () => {
   it('counts the caches read as the main process reports them', async () => {
     const scan = holdOpen('systemCleanup.scan', scanData);
     const view = page(scan.bridge);
@@ -548,7 +582,7 @@ function tidyScan(): SystemCleanupScan {
   return tidy;
 }
 
-describe('DiskCleanupPage, when there is nothing to do', () => {
+describe('DiskCleanupPanel, when there is nothing to do', () => {
   it('says so, and asks nothing, if the fresh look finds nothing old after all', async () => {
     useSystemCleanupStore.setState({ summaries: { nuget: remembered('nuget') } });
     const view = page({ 'systemCleanup.scan': async () => tidyScan() });
@@ -585,7 +619,7 @@ describe('DiskCleanupPage, when there is nothing to do', () => {
   });
 });
 
-describe('DiskCleanupPage, saying no and stopping', () => {
+describe('DiskCleanupPanel, saying no and stopping', () => {
   it('removes nothing when Clear all is cancelled', async () => {
     const view = await scanned({ 'systemCleanup.clean': async () => cleanResult('bun') });
     await view.user.click(within(card('Bun')).getByRole('button', { name: /clear all of bun/i }));
@@ -654,7 +688,7 @@ describe('DiskCleanupPage, saying no and stopping', () => {
   });
 });
 
-describe('DiskCleanupPage, the review in more detail', () => {
+describe('DiskCleanupPanel, the review in more detail', () => {
   it('goes back to the list when the review has no scan behind it', async () => {
     page({}, '/?cache=nuget');
     expect(await screen.findByText(/see what your tools are keeping/i)).toBeInTheDocument();

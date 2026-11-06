@@ -87,7 +87,7 @@ describe('PullRequestSection states', () => {
     expect(screen.getByTestId('pr-loading')).toBeInTheDocument();
   });
 
-  it('points to Agent Tools when gh is missing', () => {
+  it('points to Dev Tools when gh is missing', () => {
     renderSection(status({ cliAvailable: false, pr: null }));
     expect(screen.getByText('GitHub CLI not found')).toBeInTheDocument();
   });

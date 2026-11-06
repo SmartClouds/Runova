@@ -133,7 +133,7 @@ export function createNarrator(deps: NarratorDeps): Narrator {
     const tools = await deps.tools();
     if (!tools)
       throw new Error(
-        'Narration needs ffmpeg, which is not installed yet. Install it from Agent Tools, Dev Setup (Studio).',
+        'Narration needs ffmpeg, which is not installed yet. Install it from Dev Tools, Dev Setup (Studio).',
       );
     return tools;
   }

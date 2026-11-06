@@ -225,7 +225,7 @@ export function RdpAskAiDialog({
             <p className="-mt-1 text-xs text-muted-foreground">
               No installed agent CLI can look at a screenshot, so the AI provider from Settings is
               used, and its model has to be one that can see images. Install Claude Code, Codex, or
-              Gemini from Agent Tools to pick one.
+              Gemini from Dev Tools to pick one.
             </p>
           )}
           <p className="-mt-1 text-xs text-muted-foreground">

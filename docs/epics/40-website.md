@@ -134,11 +134,11 @@ Captured by **T012**:
 | `project-detail` | A project's detail page |
 | `blueprint` | A project's Blueprint, partway through |
 | `prompt-builder` | Prompt Builder with a generated prompt |
-| `cli-manager` | The AI CLIs tab of Agent Tools with several CLIs installed |
+| `cli-manager` | The AI CLIs tab of Dev Tools with several CLIs installed |
 | `skills` | Skills with installed skills |
 | `skill-security` | Skills, Security, with a finished check |
 | `mcp` | MCP Servers |
-| `agent-tools` | Agent Tools with the Dev Setup checklist |
+| `agent-tools` | Dev Tools with the Dev Setup checklist |
 | `vault` | Vault with demo entries |
 | `settings` | Settings, General tab |
 
@@ -182,7 +182,7 @@ Studio has no README bullet; its copy comes from `studio.md` in the help article
 | `token-usage` | Token usage and auto-continue | Token usage and auto-continue | `usage` |
 | `projects` | Projects | Project workspace; Run commands; WordPress projects; Security; Packages; Environments; Setup | `projects`, `project-detail` |
 | `build` | Build | Blueprint; Prompt Builder; Prompt History; Scheduled prompts; Writing check; Ask AI; API Client | `blueprint`, `prompt-builder`, `api-client` |
-| `agents` | Agents | AI CLIs; CLI arguments and launch defaults; Skill Marketplace; Skill Security; MCP Marketplace; Agent Tools | `cli-manager`, `skills`, `skill-security`, `mcp`, `agent-tools` |
+| `agents` | Agents | AI CLIs; CLI arguments and launch defaults; Skill Marketplace; Skill Security; MCP Marketplace; Dev Tools | `cli-manager`, `skills`, `skill-security`, `mcp`, `agent-tools` |
 | `ship` | Ship | Pipelines; Deploy; Monitoring; Docker; Android | `pipelines`, `deploy-overview`, `deploy-containers`, `deploy-app-store`, `deploy-websites`, `deploy-firewall`, `deploy-backups`, `monitoring-uptime`, `monitoring-errors`, `docker` |
 | `connect` | Connect | Remote; SSH; RDP; Vault | `ssh`, `remote-desktop`, `vault` |
 | `studio` | Studio | (none, from the Studio help article) | `studio` |

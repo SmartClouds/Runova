@@ -6,7 +6,7 @@ import { useTerminalStore } from '@/stores/terminalStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
 /**
- * The Agent Tools catalogue. Nothing here runs a command for the user: every install, update,
+ * The Dev Tools catalogue. Nothing here runs a command for the user: every install, update,
  * uninstall and Docker action ends up as text waiting in a terminal they still have to accept,
  * so that is what the tests assert on.
  */
@@ -23,6 +23,9 @@ const toast = vi.hoisted(() =>
 vi.mock('sonner', () => ({ toast, Toaster: () => null }));
 
 const { default: ToolsPage } = await import('./ToolsPage');
+// The page loads the Disk Cleanup tab lazily. Loading it here first means opening the tab only
+// waits on a module that is already there, not on a transform that is slow when the suite is busy.
+await import('@/components/tools/diskCleanup/DiskCleanupPanel');
 
 /** A tool with a plain npm install, a Docker option, settings and an update check. */
 const ROUTER = AGENT_TOOL_REGISTRY.find((tool) => tool.id === '9router');
@@ -745,5 +748,36 @@ describe('ToolsPage Dev Setup tab', () => {
     await screen.findByText(ROUTER.name);
 
     expect(devSetupTab()).not.toHaveTextContent(/to install|All set/);
+  });
+});
+
+describe('ToolsPage Disk Cleanup tab', () => {
+  const cleanupBridge = {
+    'systemCleanup.status': async () => ({ enabled: true }),
+  };
+
+  function diskCleanupTab(): HTMLElement {
+    return within(categoryTabs()).getByRole('button', { name: /^Disk Cleanup/ });
+  }
+
+  it('shows the caches in place of the tool grid', async () => {
+    const { user } = renderPage(cleanupBridge);
+    await screen.findByText(ROUTER.name);
+
+    await user.click(diskCleanupTab());
+
+    expect(await screen.findByRole('button', { name: /find caches/i })).toBeTruthy();
+    expect(diskCleanupTab()).toHaveAttribute('aria-current', 'true');
+    // The tool cards, and the controls that only act on them, are gone.
+    expect(screen.queryByText(ROUTER.name)).toBeNull();
+    expect(screen.queryByRole('searchbox', { name: 'Filter tools' })).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('opens straight to the caches from a link', async () => {
+    renderPage(cleanupBridge, '/tools?tab=disk-cleanup');
+
+    expect(await screen.findByRole('button', { name: /find caches/i })).toBeTruthy();
+    expect(diskCleanupTab()).toHaveAttribute('aria-current', 'true');
   });
 });

@@ -167,7 +167,7 @@ const LOCAL: VoiceEngineView[] = [
     keyIn: 'none',
     local: true,
     pricePerMillionChars: null,
-    problem: 'Install Piper and its voices from Agent Tools, Dev Setup (Studio).',
+    problem: 'Install Piper and its voices from Dev Tools, Dev Setup (Studio).',
   }),
   engine({
     id: 'omnivoice',
@@ -438,7 +438,7 @@ describe('local voices in the panel', () => {
       doc: { ...narrated(), scenario: { ...narrated().scenario, scenes: [] } },
     });
     expect(
-      await screen.findByText('Install Piper and its voices from Agent Tools, Dev Setup (Studio).'),
+      await screen.findByText('Install Piper and its voices from Dev Tools, Dev Setup (Studio).'),
     ).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Open Dev Setup' }));
     expect(onOpenDevSetup).toHaveBeenCalled();

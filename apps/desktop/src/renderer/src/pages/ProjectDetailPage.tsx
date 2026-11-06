@@ -4539,7 +4539,7 @@ function NotificationHookCard({
                 className="underline underline-offset-2 hover:text-foreground"
                 onClick={() => navigate(AI_CLIS_ROUTE)}
               >
-                AI CLIs tab in Agent Tools
+                AI CLIs tab in Dev Tools
               </button>{' '}
               first.
             </p>

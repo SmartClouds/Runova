@@ -33,12 +33,12 @@ beforeEach(() => {
 });
 
 describe('PipelinesNotice', () => {
-  it('sends someone without gh to Agent Tools, leaving the surface first', async () => {
+  it('sends someone without gh to Dev Tools, leaving the surface first', async () => {
     const { user } = renderNotice({ kind: 'no-cli' });
     expect(screen.getByText('GitHub CLI not found')).toBeInTheDocument();
     expect(screen.getByText('Install gh to see workflow runs here.')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Open Agent Tools' }));
+    await user.click(screen.getByRole('button', { name: 'Open Dev Tools' }));
 
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('where')).toHaveTextContent('/tools');

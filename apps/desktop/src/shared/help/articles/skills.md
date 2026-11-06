@@ -185,6 +185,6 @@ Every check is saved on this machine. The **Security** tab shows **Check history
 
 - [AI CLIs](cli-manager.md)
 - [MCP Servers](mcp-servers.md)
-- [Agent Tools](agent-tools.md)
+- [Dev Tools](agent-tools.md)
 - [Projects](projects.md)
 - [Settings](settings.md)

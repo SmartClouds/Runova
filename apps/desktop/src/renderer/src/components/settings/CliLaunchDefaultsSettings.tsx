@@ -73,8 +73,8 @@ export function CliLaunchDefaultsSettings(): React.JSX.Element {
     <div className="space-y-2">
       <p className="text-xs leading-relaxed text-muted-foreground">
         Used only for Workspace tabs and terminals. Background tasks like commit messages and
-        version bumps use the Arguments box on each card in Agent Tools, AI CLIs instead. Alt+click
-        a launcher to start without these.
+        version bumps use the Arguments box on each card in Dev Tools, AI CLIs instead. Alt+click a
+        launcher to start without these.
       </p>
       <div className="overflow-hidden rounded-lg border border-border/70">
         {primary.length ? (

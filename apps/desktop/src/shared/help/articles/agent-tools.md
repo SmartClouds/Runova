@@ -1,17 +1,17 @@
 ---
-title: Agent Tools
+title: Dev Tools
 category: Agents
 order: 40
-summary: A checklist that installs the developer tools a computer needs (Git, Node.js, .NET, Flutter, Android, Docker), plus a curated list of third-party tools that cut agent token spend, add code intelligence or scan your code for security problems.
-keywords: agent tools, tools, dev setup, developer tools, set up, checklist, install everything, git, node, npm, github cli, dotnet, flutter, dart, android sdk, emulator, docker desktop, wsl, winget, homebrew, install, uninstall, update, docker, security scanners, semgrep, trivy, codeql, bearer, sonarqube, strix, rtk, 9router, codegraph, diffray, openclaw, hermes, ponytail, languagetool, token saving
+summary: A checklist that installs the developer tools a computer needs (Git, Node.js, .NET, Flutter, Android, Docker), a cleanup for the caches those tools leave behind, plus a curated list of third-party tools that cut agent token spend, add code intelligence or scan your code for security problems.
+keywords: dev tools, agent tools, tools, dev setup, disk cleanup, caches, free space, developer tools, set up, checklist, install everything, git, node, npm, github cli, dotnet, flutter, dart, android sdk, emulator, docker desktop, wsl, winget, homebrew, install, uninstall, update, docker, security scanners, semgrep, trivy, codeql, bearer, sonarqube, strix, rtk, 9router, codegraph, diffray, openclaw, hermes, ponytail, languagetool, token saving
 route: /tools
 ---
 
-Agent Tools has three jobs. **AI CLIs** finds the AI coding CLIs on this computer (Claude Code, Codex, Gemini CLI and the rest), installs the missing ones and keeps them up to date. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
+Dev Tools has four jobs. **AI CLIs** finds the AI coding CLIs on this computer (Claude Code, Codex, Gemini CLI and the rest), installs the missing ones and keeps them up to date. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. **Disk Cleanup** finds the caches your package managers and developer tools keep and clears out old versions. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
 
 ## Where to find it
 
-Click **Agent Tools** in the sidebar under **Agents**, or open the command palette and type "Agent Tools". The page opens on **AI CLIs**; click **All** under **Categories** for the tool cards. A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
+Click **Dev Tools** in the sidebar under **Agents**, or open the command palette and type "Dev Tools". The page opens on **AI CLIs**; click **All** under **Categories** for the tool cards. A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
 
 ## AI CLIs
 
@@ -75,6 +75,10 @@ After an install, terminals that were already open do not see the new tools, so 
 > [!NOTE]
 > Runova edits your user PATH only to add Flutter's folder when it installs Flutter, or the folder of a tool when you press **Add to PATH**. On Windows it changes your user PATH in the registry and keeps every existing entry as it was. On macOS and Linux it adds one marked block to your shell startup file. If your PATH has an entry in quotes, Runova leaves it alone and asks you to add the folder by hand.
 
+## Disk Cleanup
+
+**Disk Cleanup** finds the caches that package managers and developer tools keep (NuGet, npm, pnpm, Bun, Cargo, Gradle and more), shows how much space each takes, and removes old versions or the whole cache. Open it from **Disk Cleanup** under **Setup** in the page's left menu, or open the page with `?tab=disk-cleanup`. It never scans on its own: click **Find caches**. See [Disk Cleanup](disk-cleanup.md) for the details.
+
 ## The page layout
 
 ### Target project
@@ -83,7 +87,7 @@ The **Target project** picker at the bottom of the left menu chooses a project f
 
 ### Category tabs
 
-The left menu has two groups. **Setup** holds **AI CLIs** and **Dev Setup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=all`, `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
+The left menu has two groups. **Setup** holds **AI CLIs**, **Dev Setup** and **Disk Cleanup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=all`, `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
 
 ### Refresh and update checks
 
@@ -196,6 +200,7 @@ See [Writing, voice and translation](writing-voice-translation.md) for the writi
 ## Related
 
 - [AI CLIs](cli-manager.md)
+- [Disk Cleanup](disk-cleanup.md)
 - [Skills](skills.md)
 - [MCP Servers](mcp-servers.md)
 - [Projects](projects.md)

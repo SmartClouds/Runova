@@ -47,7 +47,7 @@ interface PendingUpdate {
 }
 
 /**
- * The AI CLIs tab of Agent Tools: which coding CLIs this machine has, with install, update,
+ * The AI CLIs tab of Dev Tools: which coding CLIs this machine has, with install, update,
  * default and per-CLI argument controls on each card.
  */
 export function AiClisPanel(): React.JSX.Element {

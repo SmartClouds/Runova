@@ -287,11 +287,11 @@ describe('PipelinesDialog states', () => {
     expect(screen.getByTestId('pipelines-dialog-loading')).toBeInTheDocument();
   });
 
-  it('says what is missing when gh is not installed, and closes before sending you to Agent Tools', async () => {
+  it('says what is missing when gh is not installed, and closes before sending you to Dev Tools', async () => {
     const { user } = renderDialog({ kind: 'notice', notice: { kind: 'no-cli' } });
     expect(screen.getByText('GitHub CLI not found')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Open Agent Tools' }));
+    await user.click(screen.getByRole('button', { name: 'Open Dev Tools' }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(screen.getByTestId('where')).toHaveTextContent('/tools');

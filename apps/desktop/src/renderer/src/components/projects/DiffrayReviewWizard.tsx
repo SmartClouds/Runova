@@ -529,10 +529,10 @@ export function DiffrayReviewWizard({
           inset={compact}
           icon={GitPullRequest}
           title="diffray is not installed yet"
-          description="Install the CLI from Agent Tools, then come back here to review this project's changes with specialized agents."
+          description="Install the CLI from Dev Tools, then come back here to review this project's changes with specialized agents."
           action={
             <Button onClick={goToTools}>
-              <Wrench /> Open Agent Tools
+              <Wrench /> Open Dev Tools
             </Button>
           }
         />

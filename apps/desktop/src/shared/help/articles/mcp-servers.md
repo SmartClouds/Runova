@@ -95,11 +95,11 @@ A project's **MCP** tab (see [Projects](projects.md)) lists the servers installe
 - Start with **Official** servers when you can. They are maintained by the vendor.
 - Install a server into one project first and try it before adding it to others.
 - Check what a server's command does before installing it. Many servers run through `npx`, which downloads and runs a package, so you need Node.js.
-- Pair MCP servers with [Skills](skills.md) and [Agent Tools](agent-tools.md) to shape what your agents can do.
+- Pair MCP servers with [Skills](skills.md) and [Dev Tools](agent-tools.md) to shape what your agents can do.
 
 ## Related
 
 - [Skills](skills.md)
-- [Agent Tools](agent-tools.md)
+- [Dev Tools](agent-tools.md)
 - [AI CLIs](cli-manager.md)
 - [Projects](projects.md)

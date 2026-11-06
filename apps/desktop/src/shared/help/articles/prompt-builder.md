@@ -43,7 +43,7 @@ Who writes it depends on the **Prompt Builder writes with** tiles in **Settings*
 
 The setting covers this page, the Build Prompt dialog and its desktop widget.
 
-If the request box is empty you see "Describe what you want before generating a prompt." If the provider has no model, you see "Set a <provider> model in Settings first." With **Default CLI** and no CLI installed, the error says to install one from the AI CLIs tab in Agent Tools. The button shows **Generating…** while it works.
+If the request box is empty you see "Describe what you want before generating a prompt." If the provider has no model, you see "Set a <provider> model in Settings first." With **Default CLI** and no CLI installed, the error says to install one from the AI CLIs tab in Dev Tools. The button shows **Generating…** while it works.
 
 ### Translate directly
 

@@ -687,7 +687,7 @@ export const IPC = {
     snapshot: 'resourceActivity:snapshot',
     stop: 'resourceActivity:stop',
   },
-  /** Agent Tools > Dev Setup: what developer tools are installed and how to get the rest. */
+  /** Dev Tools > Dev Setup: what developer tools are installed and how to get the rest. */
   devSetup: {
     environment: 'devSetup:environment',
     detect: 'devSetup:detect',

@@ -69,7 +69,7 @@ export function createPiperDownloads(deps: PiperDownloadsDeps) {
   async function download(id: string): Promise<PiperLibraryView> {
     if (!downloads.get(id)?.running) {
       if (!(await deps.installed()).engine) {
-        throw new Error('Install Piper first, from Agent Tools, Dev Setup (Studio).');
+        throw new Error('Install Piper first, from Dev Tools, Dev Setup (Studio).');
       }
       const state: Running = {
         running: true,

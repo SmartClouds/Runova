@@ -304,7 +304,7 @@ describe('runHeadlessCliPrompt finds a CLI the startup PATH missed', () => {
       strictCli: true,
     });
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/^Claude Code.* wasn't found\. .*AI CLIs tab in Agent Tools/);
+    expect(result.error).toMatch(/^Claude Code.* wasn't found\. .*AI CLIs tab in Dev Tools/);
   });
 });
 

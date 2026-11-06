@@ -142,7 +142,7 @@ describe('render channels', () => {
     const tools = await invoke<RenderToolsView>(IPC.studioRender.tools);
     expect(tools.ffmpeg).toEqual({ found: false, version: null });
     expect(tools.codecs.h264).toBe(
-      'ffmpeg is not installed. Install it from Agent Tools, Dev Setup (Studio), then try again.',
+      'ffmpeg is not installed. Install it from Dev Tools, Dev Setup (Studio), then try again.',
     );
   });
 

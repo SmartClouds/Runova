@@ -220,7 +220,7 @@ export function RelayPlannerFields({
       {!detecting && clis.length === 0 ? (
         <p className="text-[11px] leading-snug text-muted-foreground">
           Planning needs an agent CLI that can answer one prompt, such as Claude Code, Codex or
-          Gemini. Install one from Agent Tools.
+          Gemini. Install one from Dev Tools.
         </p>
       ) : null}
     </div>

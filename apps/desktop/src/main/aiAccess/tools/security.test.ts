@@ -91,7 +91,7 @@ vi.mock('../../ipc/security', () => ({
           label: 'CodeQL installed',
           status: 'unmet',
           blocking: true,
-          remedy: 'Install CodeQL from the Agent Tools page.',
+          remedy: 'Install CodeQL from the Dev Tools page.',
           action: { kind: 'none' },
           detail: null,
         },
@@ -182,7 +182,7 @@ describe('security tools', () => {
     const scanners = (await run('security_scanners')).data as Record<string, unknown>[];
     expect(scanners.find((one) => one.id === 'codeql')).toMatchObject({
       ready: false,
-      needs: ['Install CodeQL from the Agent Tools page.'],
+      needs: ['Install CodeQL from the Dev Tools page.'],
     });
     expect(scanners.find((one) => one.id === 'strix')).toMatchObject({ costsMoney: true });
   });

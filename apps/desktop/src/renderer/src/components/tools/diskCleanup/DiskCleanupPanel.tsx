@@ -5,7 +5,7 @@ import {
   type ProviderScan,
   planKeepNewest,
 } from '@runova/core';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CircleInfo, HardDrive, Lock, Trash2 } from '@/components/icons';
@@ -39,18 +39,17 @@ import {
   sortCards,
 } from '@/lib/systemCleanup/view';
 import { confirmDialog } from '@/stores/confirmStore';
-import { usePageHeader } from '@/stores/pageHeaderStore';
 import { useSystemCleanupStore } from '@/stores/systemCleanupStore';
 
 /**
- * Disk Cleanup: the caches package managers and developer tools keep, what each takes, and
- * removing old versions or everything.
+ * The Disk Cleanup tab of Dev Tools: the caches package managers and developer tools keep, what
+ * each takes, and removing old versions or everything.
  *
  * It never scans on its own; reading a large cache takes a minute or more. Until the person
  * asks, it shows what was remembered from the last scan, and a remembered cache is read again
  * (just that cache) before anything is done to it, so a clean-up is always built from a fresh
  * look. What may be removed is decided in the main process and checked again there before each
- * removal. This page only picks from what a scan reported, and asks first.
+ * removal. This tab only picks from what a scan reported, and asks first.
  */
 
 const SORTS: { value: CardSort; label: string }[] = [
@@ -83,11 +82,22 @@ async function ensureLive(id: CacheProviderId): Promise<ProviderScan | null> {
   return liveProvider(id);
 }
 
-export default function DiskCleanupPage(): React.JSX.Element {
-  usePageHeader('Disk Cleanup', 'Find the caches your tools keep and clear out old versions');
-
+export function DiskCleanupPanel(): React.JSX.Element {
   const [params, setParams] = useSearchParams();
   const openId = params.get('cache') as CacheProviderId | null;
+
+  /** Opens one cache's review, or goes back to the list. Leaves the page's `?tab=` alone. */
+  const setOpenCache = useCallback(
+    (id: CacheProviderId | null, options?: { replace?: boolean }) => {
+      setParams((current) => {
+        const next = new URLSearchParams(current);
+        if (id) next.set('cache', id);
+        else next.delete('cache');
+        return next;
+      }, options);
+    },
+    [setParams],
+  );
 
   const availability = useSystemCleanupStore((state) => state.availability);
   const scan = useSystemCleanupStore((state) => state.scan);
@@ -124,8 +134,8 @@ export default function DiskCleanupPage(): React.JSX.Element {
   const openProvider = openId ? liveProvider(openId) : null;
   // A review that no longer has a scan behind it (the app was reloaded) goes back to the list.
   useEffect(() => {
-    if (openId && !openProvider && !busy) setParams({}, { replace: true });
-  }, [openId, openProvider, busy, setParams]);
+    if (openId && !openProvider && !busy) setOpenCache(null, { replace: true });
+  }, [openId, openProvider, busy, setOpenCache]);
 
   const phase: HeroPhase = progress.running
     ? 'scanning'
@@ -214,7 +224,7 @@ export default function DiskCleanupPage(): React.JSX.Element {
   }
 
   async function review(id: CacheProviderId): Promise<void> {
-    if (await ensureLive(id)) setParams({ cache: id });
+    if (await ensureLive(id)) setOpenCache(id);
   }
 
   async function deletePicked(provider: ProviderScan, picked: ReadonlySet<string>): Promise<void> {
@@ -228,11 +238,11 @@ export default function DiskCleanupPage(): React.JSX.Element {
   }
 
   if (availability === null) {
-    return <div className="flex flex-col gap-3 p-2" aria-busy="true" />;
+    return <div className="flex flex-col gap-3" aria-busy="true" />;
   }
   if (!availability.enabled) {
     return (
-      <div className="flex flex-col gap-3 p-2">
+      <div className="flex flex-col gap-3">
         <EmptyState
           card
           icon={HardDrive}
@@ -257,7 +267,7 @@ export default function DiskCleanupPage(): React.JSX.Element {
 
   if (openProvider) {
     return (
-      <div className="flex flex-col gap-3 p-2">
+      <div className="flex flex-col gap-3">
         {notice}
         <ReviewView
           provider={openProvider}
@@ -270,7 +280,7 @@ export default function DiskCleanupPage(): React.JSX.Element {
               : null
           }
           onKeepChange={setKeep}
-          onBack={() => setParams({})}
+          onBack={() => setOpenCache(null)}
           onReveal={() => reveal(openProvider.id)}
           onDelete={(picked) => void deletePicked(openProvider, picked)}
           onRetry={(itemId) =>
@@ -285,7 +295,7 @@ export default function DiskCleanupPage(): React.JSX.Element {
   const toolCount = cards.filter((card) => card.kind === 'opaque').length;
 
   return (
-    <div className="flex flex-col gap-3 p-2">
+    <div className="flex flex-col gap-3">
       <CleanupHero
         phase={phase}
         overview={over}

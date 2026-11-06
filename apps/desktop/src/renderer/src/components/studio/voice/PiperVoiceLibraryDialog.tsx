@@ -169,7 +169,7 @@ export function PiperVoiceLibraryDialog({
                 </Button>
               }
             >
-              Install Piper first, from Agent Tools, Dev Setup (Studio). Then download voices here.
+              Install Piper first, from Dev Tools, Dev Setup (Studio). Then download voices here.
             </Notice>
           )}
           {library.isError ? (

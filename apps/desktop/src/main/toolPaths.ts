@@ -9,7 +9,7 @@ import { delimiter, join } from 'node:path';
  *
  * The case that forced this: `pip install semgrep` drops semgrep.exe into a per-user Scripts
  * folder, and neither the python.org installer nor the Microsoft Store build puts that folder on
- * PATH. The install succeeds, and then the Agent Tools card still reads "Not detected" and the
+ * PATH. The install succeeds, and then the Dev Tools card still reads "Not detected" and the
  * Security tab refuses to run the scan, so from the user's side Semgrep simply cannot be
  * installed. Semgrep also re-execs `pysemgrep` by name from that same folder, so recording the
  * absolute path of semgrep.exe would not be enough: the folder has to be on the PATH the child

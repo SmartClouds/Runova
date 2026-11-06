@@ -44,12 +44,8 @@ describe('voice engine keys', () => {
       ['gemini', 'app', 'Add a Gemini API key in Settings > AI.'],
       ['elevenlabs', 'studio', 'Add an ElevenLabs key in Settings > Studio.'],
       ['azure', 'studio', 'Add an Azure Speech key and region in Settings > Studio.'],
-      ['piper', 'none', 'Install Piper and its voices from Agent Tools, Dev Setup (Studio).'],
-      [
-        'omnivoice',
-        'none',
-        'Install OmniVoice and its model from Agent Tools, Dev Setup (Studio).',
-      ],
+      ['piper', 'none', 'Install Piper and its voices from Dev Tools, Dev Setup (Studio).'],
+      ['omnivoice', 'none', 'Install OmniVoice and its model from Dev Tools, Dev Setup (Studio).'],
     ]);
     expect(engines[0]).toMatchObject({ pricePerMillionChars: 15, retiresOn: '2027-01-06' });
     expect((await voices.keys()).openai).toBe('sk-1');

@@ -85,7 +85,7 @@ Long narration is sent in pieces. If a run stops part way (no connection, a refu
 
 ## Voices on this computer, and your own voice
 
-Two engines run on your computer instead of online. Install them from **Agent Tools > Dev Setup**, in the **Studio** stack (the Voice view's **Open Dev Setup** button goes there). Each one installs into its own Python inside Runova, nothing system-wide. Downloads carry on after a dropped connection or a restart, and every file is checked against its fingerprint before it is used.
+Two engines run on your computer instead of online. Install them from **Dev Tools > Dev Setup**, in the **Studio** stack (the Voice view's **Open Dev Setup** button goes there). Each one installs into its own Python inside Runova, nothing system-wide. Downloads carry on after a dropped connection or a restart, and every file is checked against its fingerprint before it is used.
 
 - **Piper** speaks offline, in 52 languages. **Piper voices** in Dev Setup adds three Persian voices, free for any use, and one English voice for non-commercial use. For any other voice, pick Piper in the Voice view and press **Get voices**: the library lists every Piper voice by language, with its quality, size and license, to download or remove one at a time. A download carries on while the library is closed, and is checked before Studio uses it. Some voices hold many speakers (VCTK has 109), and each speaker is a voice of its own in the Voice list. A voice whose license is non-commercial, or does not say, is marked non-commercial; the link beside it leads to where its recordings came from. Piper is GPL-3.0 software.
 - **OmniVoice** speaks in a voice it clones from a few seconds of recording. Its model is licensed for **non-commercial use only**, and Studio says so wherever it is offered and on every render that uses it. It is quick with an NVIDIA graphics card or a Mac with Apple silicon and slow without one. The model is about 3.3 GB.
@@ -123,7 +123,7 @@ The file goes in the video's `renders` folder, named from the title and format u
 
 A render is drawn in parts of about two seconds, each kept on this computer as it finishes. If Runova closes or crashes in the middle, the render carries on by itself the next time it starts, from the last finished part (turn that off in **Settings > Agents > Studio**). Rendering again after changing one scene draws only that scene again. A notification tells you when a render finishes, fails or is resumed.
 
-Rendering needs **ffmpeg**. If it is missing, Studio says so and **Open Dev Setup** takes you to **Agent Tools > Dev Setup** with the Studio stack switched on, where ffmpeg installs in a click.
+Rendering needs **ffmpeg**. If it is missing, Studio says so and **Open Dev Setup** takes you to **Dev Tools > Dev Setup** with the Studio stack switched on, where ffmpeg installs in a click.
 
 ## AI runs and recipes
 

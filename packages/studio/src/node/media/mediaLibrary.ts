@@ -70,7 +70,7 @@ async function exists(path: string): Promise<boolean> {
 }
 
 const NO_FFMPEG =
-  'Importing needs ffmpeg, which is not installed yet. Install it from Agent Tools, Dev Setup (Studio).';
+  'Importing needs ffmpeg, which is not installed yet. Install it from Dev Tools, Dev Setup (Studio).';
 
 export function createMediaLibrary(deps: MediaLibraryDeps): MediaLibrary {
   const preparing = new Set<string>();

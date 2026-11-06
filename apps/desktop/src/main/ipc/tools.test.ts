@@ -12,7 +12,7 @@ import { tempDir, withPlatform, writeTree } from '../../test/main/fixtures';
 import { invoke, loadIpc, useTempUserData } from '../../test/main/ipcHarness';
 
 /**
- * The Agent Tools card's update and uninstall buttons. The catalog installs most tools with the
+ * The Dev Tools card's update and uninstall buttons. The catalog installs most tools with the
  * vendor's script now, but an old `npm install -g` copy is still what runs on many machines, and
  * the vendor's script would leave that copy in place. These pin that the command typed into the
  * terminal goes to npm in that case, and is the catalog's own otherwise.

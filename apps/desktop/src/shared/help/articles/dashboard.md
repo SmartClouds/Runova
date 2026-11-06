@@ -140,7 +140,7 @@ Add **All agents** and the summary tiles from the **Add card** menu while editin
 
 Below the cards, the **Update AI CLIs & tools** card lists installed AI CLIs and agent tools that have a newer version, with a count badge such as "2 updates". Each row shows the current version and the new one, with an **Update** button. Clicking it opens a terminal with the update command typed. Press `Enter` there to run it. The refresh button, **Re-check for updates**, checks again.
 
-If nothing is installed the card links to the AI CLIs tab and the tool list in Agent Tools. When everything is current it says all installed CLIs and tools are up to date, and it notes how many could not be checked automatically. Update checks wait until the page has finished loading, so they do not slow it down.
+If nothing is installed the card links to the AI CLIs tab and the tool list in Dev Tools. When everything is current it says all installed CLIs and tools are up to date, and it notes how many could not be checked automatically. Update checks wait until the page has finished loading, so they do not slow it down.
 
 ## Customize the layout
 

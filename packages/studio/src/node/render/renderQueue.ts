@@ -196,7 +196,7 @@ export function defaultFileName(document: StudioDocument): string {
 }
 
 const NOT_INSTALLED =
-  'ffmpeg is not installed. Install it from Agent Tools, Dev Setup (Studio), then try again.';
+  'ffmpeg is not installed. Install it from Dev Tools, Dev Setup (Studio), then try again.';
 
 export function createStudioRender(deps: StudioRenderDeps): StudioRender {
   const store = new JsonStore<RendersFile>(

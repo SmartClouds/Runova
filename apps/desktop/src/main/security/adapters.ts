@@ -172,7 +172,7 @@ const semgrep: ScannerAdapter = {
         'Semgrep could not reach its rule registry. Pick a local ruleset (p/security-audit) in the scan options, or check your network.';
     } else if (result.notFound) {
       outcome.error =
-        'Semgrep could not be found. Install it from the Agent Tools page, then press Refresh there.';
+        'Semgrep could not be found. Install it from the Dev Tools page, then press Refresh there.';
     } else {
       outcome.error = 'Semgrep did not produce a report.';
     }
@@ -373,7 +373,7 @@ const codeql: ScannerAdapter = {
     // removed while the app is open.
     const codeqlCommand = await resolveCodeqlCommand();
     if (!codeqlCommand) {
-      outcome.error = 'CodeQL is not installed. Install it from the Agent Tools page.';
+      outcome.error = 'CodeQL is not installed. Install it from the Dev Tools page.';
       return outcome;
     }
 

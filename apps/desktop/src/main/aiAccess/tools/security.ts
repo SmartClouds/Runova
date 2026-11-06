@@ -116,7 +116,7 @@ async function pickScanners(
   const picked = SECURITY_SCANNERS.filter((scanner) => !scanner.costsMoney && ready(scanner.id));
   if (picked.length === 0) {
     throw new Error(
-      'No security scanner is ready. Install Semgrep, Trivy or another scanner from the Agent Tools page first.',
+      'No security scanner is ready. Install Semgrep, Trivy or another scanner from the Dev Tools page first.',
     );
   }
   return picked.map((scanner) => scanner.id);

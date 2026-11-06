@@ -8,7 +8,6 @@ import type { IconProps } from '@/components/icons';
 import {
   Android,
   Blocks,
-  Broom,
   ChartColumn,
   CircleQuestion,
   Clapperboard,
@@ -81,8 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/ask-ai', label: 'Ask AI', icon: MessageSquare, group: 'Build' },
   { to: '/api-client', label: 'API Client', icon: Send, group: 'Build' },
   { to: '/studio', label: 'Studio', icon: Clapperboard, group: 'Build' },
-  { to: '/cleanup', label: 'Disk Cleanup', icon: Broom, group: 'Build' },
-  { to: '/tools', label: 'Agent Tools', icon: Wrench, group: 'Agents' },
+  { to: '/tools', label: 'Dev Tools', icon: Wrench, group: 'Agents' },
   { to: '/skills', label: 'Skills', icon: Blocks, group: 'Agents' },
   { to: '/mcp', label: 'MCP Servers', icon: Plug, group: 'Agents' },
   { to: '/usage', label: 'Token Usage', icon: ChartColumn, group: 'Agents' },

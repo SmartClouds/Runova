@@ -18,6 +18,8 @@ import { RelayProposalHost } from './components/relay/RelayProposalHost';
 import { HostKeyChangedDialogHost } from './components/remote/HostKeyChangedDialog';
 import RemoteSessionRoute from './components/remote/RemoteSessionRoute';
 import { ImageViewerHost } from './components/terminal/ImageViewerHost';
+import { AI_CLIS_ROUTE } from './components/tools/aiClis/route';
+import { DISK_CLEANUP_ROUTE } from './components/tools/diskCleanup/route';
 import { UpdateManager } from './components/UpdateManager';
 import { TooltipProvider } from './components/ui/tooltip';
 import WidgetRoute from './components/usage/WidgetRoute';
@@ -61,8 +63,6 @@ const ApiClientPage = lazy(() => import('./pages/ApiClientPage'));
 const DeployPage = lazy(() => import('./pages/DeployPage'));
 /** Health checks (E22) load on first visit, like Deploy. */
 const HealthPage = lazy(() => import('./pages/HealthPage'));
-/** Disk Cleanup (E50) loads on first visit, since most sessions never open it. */
-const DiskCleanupPage = lazy(() => import('./pages/DiskCleanupPage'));
 const StudioPage = lazy(() => import('./pages/StudioPage'));
 /** Carries the IronRDP WebAssembly engine, which only Remote Desktop session windows need. */
 const RdpSessionRoute = lazy(() => import('./components/rdp/RdpSessionRoute'));
@@ -186,8 +186,10 @@ export default function App(): React.JSX.Element {
               />
               <Route element={<AppShell />}>
                 <Route index element={<DashboardPage />} />
-                {/* The CLI manager is a tab of Agent Tools now; old links and saved routes land there. */}
-                <Route path="cli-manager" element={<Navigate to="/tools?tab=ai-clis" replace />} />
+                {/* The CLI manager and Disk Cleanup are tabs of Dev Tools now; old links and saved
+                    routes land there. */}
+                <Route path="cli-manager" element={<Navigate to={AI_CLIS_ROUTE} replace />} />
+                <Route path="cleanup" element={<Navigate to={DISK_CLEANUP_ROUTE} replace />} />
                 <Route path="prompt-builder" element={<PromptBuilderPage />} />
                 <Route path="prompt-history" element={<PromptHistoryPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
@@ -232,20 +234,6 @@ export default function App(): React.JSX.Element {
                       }
                     >
                       <HealthPage />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path="cleanup"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div className="p-6 text-sm text-muted-foreground">
-                          Loading Disk Cleanup…
-                        </div>
-                      }
-                    >
-                      <DiskCleanupPage />
                     </Suspense>
                   }
                 />

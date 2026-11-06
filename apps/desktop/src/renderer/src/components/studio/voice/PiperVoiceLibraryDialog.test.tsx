@@ -128,7 +128,7 @@ describe('Piper voice library', () => {
   it('asks for Piper first, and downloads nothing until it is there', async () => {
     const { user, onOpenDevSetup } = renderLibrary({ view: library([], [], false) });
     expect(
-      await screen.findByText(/^Install Piper first, from Agent Tools, Dev Setup \(Studio\)/),
+      await screen.findByText(/^Install Piper first, from Dev Tools, Dev Setup \(Studio\)/),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download VCTK, medium' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Open Dev Setup' }));

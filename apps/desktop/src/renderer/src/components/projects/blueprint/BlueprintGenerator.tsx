@@ -279,7 +279,7 @@ export function BlueprintGeneratorFields({
       {!detecting && clis.length === 0 ? (
         <p className="text-[11px] leading-snug text-muted-foreground">
           No agent CLI that can answer a one-shot prompt is installed. Install Claude Code, Codex,
-          or Gemini from Agent Tools to pick a model and effort.
+          or Gemini from Dev Tools to pick a model and effort.
         </p>
       ) : null}
     </div>

@@ -3,7 +3,7 @@ import { type LaunchedApp, launchApp } from './app';
 import { createDevSetupSandbox, type DevSetupSandbox } from './devSetupSandbox';
 
 /**
- * Agent Tools > Dev Setup, against a private set of fake tools (see devSetupSandbox.ts). Git,
+ * Dev Tools > Dev Setup, against a private set of fake tools (see devSetupSandbox.ts). Git,
  * Node.js and npm are "installed", the GitHub CLI is not, and `winget` is a script that installs a
  * fake one. Everything is asserted through the page's roles and text, not screenshots.
  *
@@ -67,10 +67,10 @@ test('shows what is installed and what is missing', async () => {
   await expect(page.getByRole('button', { name: 'Install GitHub CLI' })).toBeVisible();
 });
 
-test('can be reached from the Agent Tools navigation', async () => {
+test('can be reached from the Dev Tools navigation', async () => {
   const { page } = required(launched);
 
-  await page.getByRole('link', { name: 'Agent Tools' }).click();
+  await page.getByRole('link', { name: 'Dev Tools' }).click();
   await page
     .getByRole('navigation', { name: 'Tool categories' })
     .getByRole('button', { name: /^Dev Setup/ })

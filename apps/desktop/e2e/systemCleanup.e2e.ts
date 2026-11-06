@@ -51,12 +51,21 @@ function seedCaches(): { sandbox: string; nuget: string; bun: string } {
   return { sandbox: folder, nuget, bun };
 }
 
+/** Disk Cleanup is a tab of Dev Tools, under Setup in the page's left menu. */
+async function openDiskCleanup(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'Dev Tools' }).click();
+  await page
+    .getByRole('navigation', { name: 'Tool categories' })
+    .getByRole('button', { name: 'Disk Cleanup', exact: true })
+    .click();
+}
+
 async function start(): Promise<{ page: Page; nuget: string; bun: string }> {
   const caches = seedCaches();
   sandbox = caches.sandbox;
   launched = await launchApp({ settings: {}, env: { RUNOVA_CLEANUP_SANDBOX: caches.sandbox } });
   const { page } = launched;
-  await page.getByRole('link', { name: 'Disk Cleanup' }).click();
+  await openDiskCleanup(page);
   return { page, nuget: caches.nuget, bun: caches.bun };
 }
 
@@ -231,7 +240,7 @@ test('requests a window should never make are refused, and nothing is removed', 
 test('without a sandbox folder a test run is switched off and cannot see real caches', async () => {
   launched = await launchApp({ settings: {} });
   const { page } = launched;
-  await page.getByRole('link', { name: 'Disk Cleanup' }).click();
+  await openDiskCleanup(page);
   await expect(page.getByText('Disk Cleanup is switched off')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Find caches' })).toHaveCount(0);
 

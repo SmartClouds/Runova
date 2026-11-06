@@ -1121,7 +1121,7 @@ test('cli-manager', async () => {
     name: 'cli-manager',
     route: '/tools?tab=ai-clis',
     theme: 'dark',
-    alt: 'The AI CLIs tab of Agent Tools with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet.',
+    alt: 'The AI CLIs tab of Dev Tools with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet.',
   });
 });
 
@@ -1187,7 +1187,7 @@ test('agent-tools', async () => {
     name: 'agent-tools',
     route: '/tools?tab=dev-setup',
     theme: 'dark',
-    alt: 'Agent Tools on the Dev Setup checklist: Git, Node.js, npm and the GitHub CLI are installed and ready for the coding agents.',
+    alt: 'Dev Tools on the Dev Setup checklist: Git, Node.js, npm and the GitHub CLI are installed and ready for the coding agents.',
   });
 });
 
@@ -2163,7 +2163,7 @@ const DEMO_RUNS: DemoRun[] = [
 function githubAnswers(now: number): FakeCliAnswer[] {
   const json = (value: unknown): string => `${JSON.stringify(value)}\n`;
   const answers: FakeCliAnswer[] = [
-    // Agent Tools reads the version too, so it stays the one the earlier shots show.
+    // Dev Tools reads the version too, so it stays the one the earlier shots show.
     { match: ['--version'], stdout: 'gh version 2.62.0 (2024-11-14)\n' },
     // No self-hosted runners: every job runs on GitHub's own machines.
     { match: ['/actions/runners'], stdout: json({ total_count: 0, runners: [] }) },

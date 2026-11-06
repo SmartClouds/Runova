@@ -42,7 +42,7 @@ The app is organised around a menu with a few pages at the top and four headed g
 | --- | --- |
 | **Skills** | Find and install skills for your agents. See [Skills](skills.md). |
 | **MCP Servers** | Install MCP servers that give agents extra tools. See [MCP Servers](mcp-servers.md). |
-| **Agent Tools** | See which AI coding CLIs are installed and install the missing ones, set up your developer tools, and add helper tools such as code reviewers and security scanners. See [AI CLIs](cli-manager.md) and [Agent Tools](agent-tools.md). |
+| **Dev Tools** | See which AI coding CLIs are installed and install the missing ones, set up your developer tools, clear out the caches they keep, and add helper tools such as code reviewers and security scanners. See [AI CLIs](cli-manager.md), [Disk Cleanup](disk-cleanup.md) and [Dev Tools](agent-tools.md). |
 | **Token Usage** | Track tokens, cost and limits across your AI providers. See [Token Usage](token-usage.md). |
 
 ### Ship
@@ -95,7 +95,7 @@ Separately, the **Agents** tab of Settings has a **Default CLI** card. That pick
 
 AI CLIs are the command line agents themselves, for example Claude Code, Codex and Gemini CLI. Runova detects the ones already on your machine.
 
-1. Click **Agent Tools** in the menu, under Agents. It opens on **AI CLIs**.
+1. Click **Dev Tools** in the menu, under Agents. It opens on **AI CLIs**.
 2. Check which CLIs are detected. If you have some not installed, click **Show all CLIs** to see them.
 3. Install a missing CLI from its card.
 

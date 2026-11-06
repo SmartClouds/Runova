@@ -15,11 +15,12 @@ import {
 } from '@runova/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Bolt,
+  Broom,
   CircleCheck,
   CloudDownload,
   Code,
@@ -54,6 +55,7 @@ import {
 import { AI_CLIS_TAB, AiClisPanel } from '@/components/tools/aiClis';
 import { CodeqlInstallCard } from '@/components/tools/CodeqlInstallCard';
 import { DEV_SETUP_TAB, DevSetupPanel } from '@/components/tools/devSetup';
+import { DISK_CLEANUP_TAB } from '@/components/tools/diskCleanup/route';
 import { ALL_TOOLS_TAB } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -84,6 +86,13 @@ interface PendingToolUpdate {
   latestVersion: string;
   command: string;
 }
+
+// Disk Cleanup (E50) loads when its tab is first opened, since most sessions never open it.
+const DiskCleanupPanel = lazy(() =>
+  import('@/components/tools/diskCleanup/DiskCleanupPanel').then((module) => ({
+    default: module.DiskCleanupPanel,
+  })),
+);
 
 /**
  * Names the install button after whatever actually runs, rather than assuming npm. Every tool
@@ -569,7 +578,7 @@ export default function ToolsPage(): React.JSX.Element {
   // The page opens on AI CLIs; the tool list has its own `?tab=all`.
   const tabParam = searchParams.get('tab');
   const activeCategory =
-    tabParam === DEV_SETUP_TAB || tabParam === ALL_TOOLS_TAB
+    tabParam === DEV_SETUP_TAB || tabParam === DISK_CLEANUP_TAB || tabParam === ALL_TOOLS_TAB
       ? tabParam
       : tabParam === 'security'
         ? SECURITY_TOOL_CATEGORY
@@ -578,13 +587,16 @@ export default function ToolsPage(): React.JSX.Element {
           : AI_CLIS_TAB;
   const onDevSetup = activeCategory === DEV_SETUP_TAB;
   const onAiClis = activeCategory === AI_CLIS_TAB;
+  const onDiskCleanup = activeCategory === DISK_CLEANUP_TAB;
   // The setup tabs bring their own controls; the tool filter and target project are for tool cards.
-  const onSetupTab = onDevSetup || onAiClis;
+  const onSetupTab = onDevSetup || onAiClis || onDiskCleanup;
 
   function setActiveCategory(next: string): void {
     setSearchParams(
       (params) => {
         const updated = new URLSearchParams(params);
+        // An open Disk Cleanup review belongs to that tab, so it does not follow to another one.
+        updated.delete('cache');
         if (next === AI_CLIS_TAB) updated.delete('tab');
         else updated.set('tab', next === SECURITY_TOOL_CATEGORY ? 'security' : next);
         return updated;
@@ -624,12 +636,14 @@ export default function ToolsPage(): React.JSX.Element {
     : { type: 'spring' as const, stiffness: 420, damping: 32 };
 
   usePageHeader(
-    'Agent Tools',
+    'Dev Tools',
     onDevSetup
       ? 'See what this computer has for development, and install what is missing.'
       : onAiClis
         ? 'The AI coding CLIs on this computer. Install the missing ones, update them and pick your default.'
-        : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
+        : onDiskCleanup
+          ? 'Find the caches your tools keep and clear out old versions.'
+          : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
   );
 
   return (
@@ -696,6 +710,15 @@ export default function ToolsPage(): React.JSX.Element {
                     trailing={<DevSetupBadge missing={devSetupMissing} active={onDevSetup} />}
                   />
                 </li>
+                <li className="shrink-0">
+                  <CategoryNavButton
+                    active={onDiskCleanup}
+                    onSelect={() => setActiveCategory(DISK_CLEANUP_TAB)}
+                    icon={Broom}
+                    label="Disk Cleanup"
+                    pillTransition={pillTransition}
+                  />
+                </li>
               </ul>
 
               <h2 className={cn(SECTION_HEADING, 'hidden px-2.5 pt-2.5 @3xl/tools:block')}>
@@ -759,6 +782,10 @@ export default function ToolsPage(): React.JSX.Element {
             <DevSetupPanel />
           ) : onAiClis ? (
             <AiClisPanel />
+          ) : onDiskCleanup ? (
+            <Suspense fallback={<div className="flex flex-col gap-3" aria-busy="true" />}>
+              <DiskCleanupPanel />
+            </Suspense>
           ) : (
             <>
               <div className={TOOLBAR}>

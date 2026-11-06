@@ -304,7 +304,7 @@ export function PaneLauncher({
             {agents.missing.slice(0, MISSING_SHOWN).map((choice) => (
               <SimpleTooltip
                 key={choice.cli.id}
-                label={`${choice.cli.name} isn't installed. Install it from Agent Tools.`}
+                label={`${choice.cli.name} isn't installed. Install it from Dev Tools.`}
               >
                 <Button
                   asChild
@@ -320,7 +320,7 @@ export function PaneLauncher({
             ))}
             {agents.missing.length > MISSING_SHOWN ? (
               <SimpleTooltip
-                label={`${agents.missing.length - MISSING_SHOWN} more agents you can install from Agent Tools`}
+                label={`${agents.missing.length - MISSING_SHOWN} more agents you can install from Dev Tools`}
               >
                 <Button
                   asChild

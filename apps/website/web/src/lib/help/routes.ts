@@ -12,7 +12,6 @@ const ROUTE_FEATURES: Record<string, string> = {
   '/ask-ai': 'build',
   '/api-client': 'build',
   '/studio': 'studio',
-  '/cleanup': 'build',
   '/skills': 'agents',
   '/mcp': 'agents',
   '/tools': 'agents',

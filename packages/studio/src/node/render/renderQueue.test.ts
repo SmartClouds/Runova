@@ -189,7 +189,7 @@ describe('the render queue', () => {
     const job = await startAndWait(s);
     expect(job.status).toBe('failed');
     expect(job.error).toBe(
-      'ffmpeg is not installed. Install it from Agent Tools, Dev Setup (Studio), then try again.',
+      'ffmpeg is not installed. Install it from Dev Tools, Dev Setup (Studio), then try again.',
     );
     const tools = await s.render.tools();
     expect(tools.ffmpeg).toEqual({ found: false, version: null });

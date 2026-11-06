@@ -174,8 +174,12 @@ describe('App routes inside the shell', () => {
     expect(await pageAt('/notifications')).toBe('Pipelines');
   });
 
-  it('sends the old CLI manager route to Agent Tools', async () => {
+  it('sends the old CLI manager route to Dev Tools', async () => {
     expect(await pageAt('/cli-manager')).toBe('Tools');
+  });
+
+  it('sends the old Disk Cleanup route to Dev Tools', async () => {
+    expect(await pageAt('/cleanup')).toBe('Tools');
   });
 
   it('keeps a query string out of the route match', async () => {

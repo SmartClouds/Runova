@@ -50,12 +50,6 @@ const DESTINATIONS: Destination[] = [
       page.getByRole('tree', { name: 'Collections' }).or(page.getByText('No collections yet')),
   },
   {
-    // A test run with no sandbox folder leaves it switched off, so it can never touch real caches.
-    label: 'Disk Cleanup',
-    hash: '#/cleanup',
-    landmark: (page) => page.getByText('Disk Cleanup is switched off'),
-  },
-  {
     label: 'Pipelines',
     hash: '#/pipelines',
     landmark: (page) => page.getByRole('button', { name: /^Refresh runs/ }),
@@ -80,7 +74,7 @@ const DESTINATIONS: Destination[] = [
   },
   {
     // The page opens on its AI CLIs tab.
-    label: 'Agent Tools',
+    label: 'Dev Tools',
     hash: '#/tools',
     landmark: (page) => page.getByRole('searchbox', { name: 'Filter CLIs' }),
   },
@@ -203,7 +197,7 @@ test('the retired notifications route still lands on Pipelines', async () => {
   await expect(errorCard(page)).toHaveCount(0);
 });
 
-test('the retired CLI manager route lands on the AI CLIs tab of Agent Tools', async () => {
+test('the retired CLI manager route lands on the AI CLIs tab of Dev Tools', async () => {
   launched = await launchApp({ settings: {} });
   const { page } = launched;
 
@@ -212,7 +206,24 @@ test('the retired CLI manager route lands on the AI CLIs tab of Agent Tools', as
   await expect(page.getByRole('searchbox', { name: 'Filter CLIs' })).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole('link', { name: 'Agent Tools' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Dev Tools' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(errorCard(page)).toHaveCount(0);
+});
+
+test('the retired Disk Cleanup route lands on the Disk Cleanup tab of Dev Tools', async () => {
+  launched = await launchApp({ settings: {} });
+  const { page } = launched;
+
+  await goByHash(page, '#/cleanup');
+  await expect
+    .poll(() => page.evaluate(() => window.location.hash))
+    .toBe('#/tools?tab=disk-cleanup');
+  // A test run with no sandbox folder leaves it switched off, so it can never touch real caches.
+  await expect(page.getByText('Disk Cleanup is switched off')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('link', { name: 'Dev Tools' })).toHaveAttribute(
     'aria-current',
     'page',
   );

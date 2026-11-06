@@ -7,11 +7,11 @@ keywords: cli, ai cli, claude code, codex, gemini cli, cursor, opencode, aider, 
 route: /tools?tab=ai-clis
 ---
 
-**AI CLIs** is the tab of [Agent Tools](agent-tools.md) that knows which AI coding agents are installed on your machine. It scans for them, shows their versions, installs the ones you are missing, and tells you when a newer version is out. The agents you manage here are the ones you launch in the Workspace, so this is also where the related settings (default CLI, launch defaults, agent order) are explained.
+**AI CLIs** is the tab of [Dev Tools](agent-tools.md) that knows which AI coding agents are installed on your machine. It scans for them, shows their versions, installs the ones you are missing, and tells you when a newer version is out. The agents you manage here are the ones you launch in the Workspace, so this is also where the related settings (default CLI, launch defaults, agent order) are explained.
 
 ## Where to find it
 
-Click **Agent Tools** in the sidebar under **Agents**, and it opens on **AI CLIs** (under **Setup** in the page's left menu). You can also open the tab with `?tab=ai-clis`. Beside the entry, a number says how many CLIs are installed. The page used to be called AI CLI Manager and had its own menu entry; old links to it open this tab. The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
+Click **Dev Tools** in the sidebar under **Agents**, and it opens on **AI CLIs** (under **Setup** in the page's left menu). You can also open the tab with `?tab=ai-clis`. Beside the entry, a number says how many CLIs are installed. The page used to be called AI CLI Manager and had its own menu entry; old links to it open this tab. The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
 
 ## Supported CLIs
 
@@ -153,7 +153,7 @@ The window refreshes every few seconds while it is open.
 
 ## CLI and tool update notifications
 
-In **Settings** under **General**, the **Check for CLI and tool updates** switch makes Runova check once a day. It looks at every installed CLI here and every installed tool on the [Agent Tools](agent-tools.md) page. When a newer version exists, it adds a notification ("<name> update available", with the old and new version) and rings the notification bell. Each release is announced only once. The check runs in the background, and a laptop that was asleep catches up soon after it wakes.
+In **Settings** under **General**, the **Check for CLI and tool updates** switch makes Runova check once a day. It looks at every installed CLI here and every installed tool on the [Dev Tools](agent-tools.md) page. When a newer version exists, it adds a notification ("<name> update available", with the old and new version) and rings the notification bell. Each release is announced only once. The check runs in the background, and a laptop that was asleep catches up soon after it wakes.
 
 ## Tips
 
@@ -164,7 +164,7 @@ In **Settings** under **General**, the **Check for CLI and tool updates** switch
 ## Related
 
 - [Workspace terminals and agents](workspace-terminals-agents.md)
-- [Agent Tools](agent-tools.md)
+- [Dev Tools](agent-tools.md)
 - [Skills](skills.md)
 - [MCP Servers](mcp-servers.md)
 - [Token Usage](token-usage.md)

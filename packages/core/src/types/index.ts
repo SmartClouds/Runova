@@ -85,7 +85,6 @@ export const STARTUP_PAGES = [
   '/workspace',
   '/api-client',
   '/studio',
-  '/cleanup',
   '/pipelines',
   '/deploy',
   '/monitoring',
@@ -94,9 +93,10 @@ export const STARTUP_PAGES = [
   '/tools',
   '/docker',
   '/android',
-  // No longer in the menu (it is the AI CLIs tab of Agent Tools now). Kept so a startup page
-  // saved before that still opens, and App.tsx sends it on to the tab.
+  // No longer in the menu (they are the AI CLIs and Disk Cleanup tabs of Dev Tools now). Kept so
+  // a startup page saved before that still opens, and App.tsx sends it on to the tab.
   '/cli-manager',
+  '/cleanup',
   '/ask-ai',
   '/remote',
   '/vault',
@@ -854,7 +854,7 @@ export interface AppSettings {
   /** Send a system notification when a container or emulator first goes idle. */
   idleResourceNotify: boolean;
   /**
-   * The stacks shown in Agent Tools > Dev Setup, as `DevStackId`s. Essentials is always first and
+   * The stacks shown in Dev Tools > Dev Setup, as `DevStackId`s. Essentials is always first and
    * always present; the rest are the ones the user switched on.
    */
   devSetupStacks: string[];

@@ -82,8 +82,8 @@ function azureKey(value: string | null): EngineKeys['azure'] {
 }
 
 const NOT_INSTALLED = {
-  piper: 'Install Piper and its voices from Agent Tools, Dev Setup (Studio).',
-  omnivoice: 'Install OmniVoice and its model from Agent Tools, Dev Setup (Studio).',
+  piper: 'Install Piper and its voices from Dev Tools, Dev Setup (Studio).',
+  omnivoice: 'Install OmniVoice and its model from Dev Tools, Dev Setup (Studio).',
 } as const;
 
 export function createVoiceKeys(

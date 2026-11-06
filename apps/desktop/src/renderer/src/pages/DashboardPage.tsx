@@ -670,7 +670,7 @@ function UpdatesCard({
             </button>{' '}
             or{' '}
             <button type="button" className={linkClass} onClick={() => navigate(ALL_TOOLS_ROUTE)}>
-              Agent Tools
+              Dev Tools
             </button>{' '}
             to install one.
           </p>

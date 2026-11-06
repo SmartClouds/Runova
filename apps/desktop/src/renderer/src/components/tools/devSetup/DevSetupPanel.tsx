@@ -48,7 +48,7 @@ function ChecklistSkeleton(): React.JSX.Element {
 }
 
 /**
- * Agent Tools > Dev Setup: pick what you build, see what this machine has and lacks, and get the
+ * Dev Tools > Dev Setup: pick what you build, see what this machine has and lacks, and get the
  * rest in place. Everything is laid out here; what each row says and offers comes from
  * `describeRow`, and the data and actions come from `useDevSetup`.
  */

@@ -45,7 +45,7 @@ Below the themes, **Main menu** chooses where the navigation lives. **Left** put
 
 ### Startup page
 
-**Startup page** decides where Runova opens. **Last opened page** (the default) brings back the page and project you were on, whether you closed the app, it restarted for an update or the computer shut down. You can instead pin one page from the list (Dashboard, Token Usage, Prompt Builder, Projects, Workspace, API Client, Pipelines, Deploy, Skills, MCP Servers, Agent Tools, Docker, Android, Ask AI, Remote, Vault or Settings). The list has its own search box.
+**Startup page** decides where Runova opens. **Last opened page** (the default) brings back the page and project you were on, whether you closed the app, it restarted for an update or the computer shut down. You can instead pin one page from the list (Dashboard, Token Usage, Prompt Builder, Projects, Workspace, API Client, Pipelines, Deploy, Skills, MCP Servers, Dev Tools, Docker, Android, Ask AI, Remote, Vault or Settings). The list has its own search box.
 
 ### Keep terminals running
 

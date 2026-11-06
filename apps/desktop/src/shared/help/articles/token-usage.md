@@ -207,6 +207,6 @@ To hide a provider's item, turn off its switch under **Status bar limits** on th
 - [Dashboard](dashboard.md)
 - [Widgets and the desktop pet](widgets-desktop-pet.md)
 - [Notifications and Telegram](notifications-telegram.md)
-- [Agent Tools](agent-tools.md)
+- [Dev Tools](agent-tools.md)
 - [AI providers](ai-providers.md)
 - [Projects](projects.md#usage): the Usage section of a project's page shows what that project's conversations cost

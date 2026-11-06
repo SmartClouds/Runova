@@ -1,17 +1,17 @@
 ---
 title: Disk Cleanup
-category: Build
-order: 50
+category: Agents
+order: 45
 summary: Find the caches your package managers and developer tools keep (NuGet, npm, pnpm, Bun, Cargo, Gradle and more), see how much space each takes, and remove old versions or everything.
 keywords: disk cleanup, clean up, free space, disk space, cache, caches, nuget, npm, pnpm, bun, cargo, go, gradle, pub, flutter, playwright, electron, node-gyp, pip, package manager, old versions, newest, delete, reclaim, storage
-route: /cleanup
+route: /tools?tab=disk-cleanup
 ---
 
 Package managers and developer tools save what they download so the next install is fast, and they rarely clear it out. Over time that adds up: old versions of the same package, browsers for tests you no longer run, Gradle versions from projects you finished. **Disk Cleanup** finds those caches, shows how much space each one takes, and removes the old versions or the whole cache. It only looks at caches that tools download again. Your projects, your source and your settings are not part of it.
 
 ## Where to find it
 
-Open **Disk Cleanup** in the main menu, under **Build**. To clean the folders inside one project (`node_modules`, build output), use [Project cleanup](project-cleanup.md) instead.
+Click **Dev Tools** in the main menu, under **Agents**, then **Disk Cleanup** under **Setup** in the page's left menu. A link can open it straight away with `/tools?tab=disk-cleanup`. To clean the folders inside one project (`node_modules`, build output), use [Project cleanup](project-cleanup.md) instead.
 
 ## What it looks at
 

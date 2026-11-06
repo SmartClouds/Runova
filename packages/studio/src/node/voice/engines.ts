@@ -135,9 +135,9 @@ function escapeXml(text: string): string {
 
 const LOCAL_MISSING = {
   piper:
-    'Piper is not installed yet. Install Piper and its voices from Agent Tools, Dev Setup (Studio).',
+    'Piper is not installed yet. Install Piper and its voices from Dev Tools, Dev Setup (Studio).',
   omnivoice:
-    'OmniVoice is not installed yet. Install OmniVoice and its model from Agent Tools, Dev Setup (Studio).',
+    'OmniVoice is not installed yet. Install OmniVoice and its model from Dev Tools, Dev Setup (Studio).',
 } as const;
 
 export async function speak(input: SpeakInput): Promise<SpokenAudio> {
