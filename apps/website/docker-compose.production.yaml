@@ -48,6 +48,11 @@ services:
       Sentry__Dsn: ${SENTRY_DSN:-}
       Sentry__Environment: ${SENTRY_ENVIRONMENT:-production}
       GitHub__Token: ${GITHUB_TOKEN:-}
+      # Account emails (verification, password reset, sign-in alerts, team invitations) go out
+      # through SendGrid. With no key they wait in the outbox and the API logs a warning.
+      Email__SendGridApiKey: ${SENDGRID_API_KEY:-}
+      Email__From: ${EMAIL_FROM:-no-reply@runovahq.com}
+      Email__FromName: ${EMAIL_FROM_NAME:-Runova}
       # The SHA-256 of the key Runova sends to /_runova/health. Empty turns the endpoint off.
       RUNOVA_HEALTH_TOKEN_SHA256: ${RUNOVA_HEALTH_TOKEN_SHA256:-}
       # The healthcheck asks the site container too.

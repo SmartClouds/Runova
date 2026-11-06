@@ -106,7 +106,7 @@ public sealed class EmailOutboxTests(PostgresFixture postgres) : IAsyncLifetime
             if (FailNext)
             {
                 FailNext = false;
-                throw new InvalidOperationException("The SMTP server said no.");
+                throw new InvalidOperationException("SendGrid said no.");
             }
 
             Sent.Add(email);

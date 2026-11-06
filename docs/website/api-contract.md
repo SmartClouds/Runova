@@ -356,8 +356,11 @@ password. Setting a password ends every other session.
 }
 ```
 
-Emails wait in an outbox saved with the change that sends them and go out over SMTP (`Email__*`
-settings). A sent email keeps its subject but loses its body, which held a one-time link.
+Emails wait in an outbox saved with the change that sends them and go out through SendGrid's Mail
+Send API (`Email__SendGridApiKey`, `Email__From`, `Email__FromName`, and `Email__SandboxMode` for
+staging). Click and open tracking are off, so one-time links reach the reader as written. A failed
+send is retried with a growing wait, up to ten times. A sent email keeps its subject but loses its
+body, which held a one-time link.
 
 ### Continue with Google
 

@@ -153,5 +153,7 @@ Choices the user made:
 
 ## Needs from the owner
 
-- A Google OAuth web client (id and secret) for runovahq.com and SMTP settings in the production
-  environment (`Authentication__Google__*`, `Email__*`). Tests and development use fakes.
+- A Google OAuth web client (id and secret) for runovahq.com, and a SendGrid API key (Mail Send
+  only) with `no-reply@runovahq.com` or the runovahq.com domain verified in SendGrid, in the
+  production environment (`Authentication__Google__*`, `SENDGRID_API_KEY`). Tests and development
+  use fakes.

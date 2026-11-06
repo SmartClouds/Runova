@@ -39,6 +39,12 @@ services:
       Website__KnownProxies: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       Sentry__Dsn: ${SENTRY_DSN:-}
       GitHub__Token: ${GITHUB_TOKEN:-}
+      # Account emails go out through SendGrid. With no key they wait in the outbox. Sandbox mode
+      # is on here, so SendGrid checks each email but delivers none.
+      Email__SendGridApiKey: ${SENDGRID_API_KEY:-}
+      Email__From: ${EMAIL_FROM:-no-reply@runovahq.com}
+      Email__FromName: ${EMAIL_FROM_NAME:-Runova}
+      Email__SandboxMode: ${EMAIL_SANDBOX_MODE:-true}
       RUNOVA_HEALTH_TOKEN_SHA256: ${RUNOVA_HEALTH_TOKEN_SHA256:-}
       Website__InternalSiteUrl: http://web:4321/
     volumes:

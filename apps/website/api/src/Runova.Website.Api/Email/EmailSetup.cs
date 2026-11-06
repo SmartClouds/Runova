@@ -1,38 +1,33 @@
 using Hangfire;
-using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using MimeKit;
 using Runova.Website.Core.Email;
 using Runova.Website.Data;
 using Runova.Website.Data.Email;
 
 namespace Runova.Website.Api.Email;
 
-/// <summary>SMTP settings, from <c>Email__*</c>. With no host the API keeps emails queued and logs that it can not send.</summary>
+/// <summary>
+/// SendGrid settings, from <c>Email__*</c>. With no API key the API keeps emails queued and logs
+/// that it can not send. The From address, or its domain, has to be verified in SendGrid.
+/// </summary>
 internal sealed class EmailOptions
 {
-    public string? Host { get; set; }
-
-    public int Port { get; set; } = 587;
-
-    public string? UserName { get; set; }
-
-    public string? Password { get; set; }
+    /// <summary>A SendGrid API key. Mail Send is the only permission it needs.</summary>
+    public string? SendGridApiKey { get; set; }
 
     public string From { get; set; } = "no-reply@runovahq.com";
 
     public string FromName { get; set; } = "Runova";
 
-    /// <summary>TLS from the start (port 465) instead of STARTTLS (port 587). Never plain text.</summary>
-    public bool ImplicitTls { get; set; }
+    /// <summary>SendGrid checks each email and answers as usual but delivers none. For staging.</summary>
+    public bool SandboxMode { get; set; }
 }
 
 /// <summary>One email on its way out.</summary>
-internal sealed record OutgoingEmail(string To, string Subject, string TextBody, string? HtmlBody);
+/// <remarks><paramref name="Kind"/> goes to SendGrid as a category, which splits its stats by kind of email.</remarks>
+internal sealed record OutgoingEmail(string To, string Kind, string Subject, string TextBody, string? HtmlBody);
 
-/// <summary>Hands an email to a mail server. Tests swap in a fake.</summary>
+/// <summary>Hands an email to SendGrid. Tests swap in a fake.</summary>
 internal interface IEmailTransport
 {
     Task SendAsync(OutgoingEmail email, CancellationToken cancellationToken);
@@ -43,7 +38,7 @@ internal static class EmailSetup
     public static IServiceCollection AddWebsiteEmail(this IServiceCollection services)
     {
         services.AddOptions<EmailOptions>().BindConfiguration("Email");
-        services.AddSingleton<IEmailTransport, SmtpEmailTransport>();
+        services.AddHttpClient<IEmailTransport, SendGridEmailTransport>(SendGridEmailTransport.Configure);
         services.AddScoped<EmailOutbox>();
         services.AddScoped<EmailOutboxJob>();
         return services;
@@ -121,7 +116,7 @@ internal sealed partial class EmailOutboxJob(AppDbContext db, IEmailTransport tr
         {
             try
             {
-                await transport.SendAsync(new OutgoingEmail(message.To, message.Subject, message.TextBody ?? "", message.HtmlBody), cancellationToken);
+                await transport.SendAsync(new OutgoingEmail(message.To, message.Kind, message.Subject, message.TextBody ?? "", message.HtmlBody), cancellationToken);
                 message.SentAt = time.GetUtcNow();
                 message.TextBody = null;
                 message.HtmlBody = null;
@@ -144,41 +139,4 @@ internal sealed partial class EmailOutboxJob(AppDbContext db, IEmailTransport tr
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Email {Id} ({Kind}) failed on attempt {Attempt}")]
     private static partial void LogFailed(ILogger logger, long id, string kind, int attempt, Exception exception);
-}
-
-/// <summary>SMTP through MailKit, always over TLS. With no host set it refuses, so messages stay queued.</summary>
-internal sealed partial class SmtpEmailTransport(IOptions<EmailOptions> options, ILogger<SmtpEmailTransport> logger) : IEmailTransport
-{
-    public async Task SendAsync(OutgoingEmail email, CancellationToken cancellationToken)
-    {
-        var settings = options.Value;
-        if (string.IsNullOrWhiteSpace(settings.Host))
-        {
-            LogNotConfigured(logger);
-            throw new InvalidOperationException("Email is not configured. Set Email__Host and the other Email__ settings.");
-        }
-
-        using var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(settings.FromName, settings.From));
-        message.To.Add(MailboxAddress.Parse(email.To));
-        message.Subject = email.Subject;
-        message.Body = new BodyBuilder { TextBody = email.TextBody, HtmlBody = email.HtmlBody }.ToMessageBody();
-
-        using var client = new SmtpClient();
-        await client.ConnectAsync(
-            settings.Host,
-            settings.Port,
-            settings.ImplicitTls ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls,
-            cancellationToken);
-        if (!string.IsNullOrEmpty(settings.UserName))
-        {
-            await client.AuthenticateAsync(settings.UserName, settings.Password ?? "", cancellationToken);
-        }
-
-        await client.SendAsync(message, cancellationToken);
-        await client.DisconnectAsync(quit: true, cancellationToken);
-    }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "An email is waiting, but Email__Host is not set, so it stays queued")]
-    private static partial void LogNotConfigured(ILogger logger);
 }
