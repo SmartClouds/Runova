@@ -6,6 +6,7 @@ import type {
   RuntimeUpdateRequest,
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
+import type { InventoryPackage } from '../../shared/dependencyAlerts';
 import type { RuntimeUpdateDeps } from './runtimeUpdate';
 
 export interface UpdateProgressTick {
@@ -20,6 +21,11 @@ export interface PackageManagerAdapter {
   ecosystem: PackageManagerEcosystem;
   /** Filesystem-only check, must not spawn a CLI. */
   detect(folderPath: string): Promise<boolean>;
+  /**
+   * The direct dependencies and their versions, read from the manifests and lock files only: no
+   * CLI and no network, so it is cheap enough to run for every project in the background.
+   */
+  readInventory(folderPath: string): Promise<InventoryPackage[]>;
   /** One section per package manager the folder uses (Node can mix several). */
   listPackages(folderPath: string): Promise<PackageManagerSection[]>;
   updatePackages(

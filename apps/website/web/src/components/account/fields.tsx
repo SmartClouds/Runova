@@ -79,3 +79,18 @@ export function AppRadio({ className, ...props }: Omit<ComponentProps<'input'>, 
     />
   );
 }
+
+/** A checkbox drawn like the app's: a soft rounded square that fills with green and a tick. */
+export function AppCheckbox({ className, ...props }: Omit<ComponentProps<'input'>, 'type'>) {
+  return (
+    <input
+      type="checkbox"
+      className={cn(
+        'size-[18px] shrink-0 cursor-pointer appearance-none rounded-inner border-[1.5px] border-foreground/30 bg-foreground/5 bg-center bg-no-repeat transition-all duration-150 hover:border-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40',
+        "checked:border-primary checked:bg-primary checked:bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E\")] checked:shadow-[0_0_10px_-2px_hsl(var(--primary)/0.7)]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}

@@ -927,3 +927,66 @@ describe('runtime targets', () => {
     expect(readFileSync(manifestPath, 'utf-8')).toContain('bun@1.1.0');
   });
 });
+
+describe('readInventory', () => {
+  it('lists direct dependencies with the installed version, and never runs a CLI', async () => {
+    writeTree(root, {
+      'package.json': MANIFEST,
+      'node_modules/left-pad/package.json': JSON.stringify({ version: '1.2.5' }),
+    });
+
+    const inventory = await nodeAdapter.readInventory(root);
+
+    expect(inventory).toEqual([
+      { ecosystem: 'npm', name: 'left-pad', version: '1.2.5', dev: false },
+      { ecosystem: 'npm', name: 'vitest', version: '3.0.0', dev: true },
+    ]);
+    expect(cliState.calls).toEqual([]);
+  });
+
+  it('skips workspace members and versions that are not from the registry', async () => {
+    writeTree(root, {
+      'package.json': JSON.stringify({
+        name: 'root',
+        workspaces: ['packages/*'],
+        dependencies: {
+          '@acme/ui': 'workspace:*',
+          local: 'file:../local',
+          forked: 'github:someone/forked',
+          tarball: 'https://example.com/x.tgz',
+          '@scope/kit': '~2.1.0',
+        },
+      }),
+      'packages/ui/package.json': JSON.stringify({
+        name: '@acme/ui',
+        dependencies: { react: '^19.1.0' },
+      }),
+    });
+
+    const inventory = await nodeAdapter.readInventory(root);
+
+    expect(inventory.map((p) => `${p.name}@${p.version}`)).toEqual([
+      '@scope/kit@2.1.0',
+      'react@19.1.0',
+    ]);
+  });
+
+  it('lists a package used by two manifests once', async () => {
+    writeTree(root, {
+      'package.json': JSON.stringify({ name: 'a', dependencies: { lodash: '^4.17.20' } }),
+      'docs/package.json': JSON.stringify({ name: 'b', devDependencies: { lodash: '^4.17.21' } }),
+    });
+
+    const inventory = await nodeAdapter.readInventory(root);
+
+    expect(inventory).toEqual([
+      { ecosystem: 'npm', name: 'lodash', version: '4.17.20', dev: false },
+    ]);
+  });
+
+  it('is empty for a folder with no manifest or one that does not parse', async () => {
+    expect(await nodeAdapter.readInventory(root)).toEqual([]);
+    writeTree(root, { 'package.json': '{ not json' });
+    expect(await nodeAdapter.readInventory(root)).toEqual([]);
+  });
+});

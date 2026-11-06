@@ -96,6 +96,7 @@ import { CiAutoFixSettings } from '@/components/settings/CiAutoFixSettings';
 import { CliLaunchDefaultsSettings } from '@/components/settings/CliLaunchDefaultsSettings';
 import { CliOrderSettings } from '@/components/settings/CliOrderSettings';
 import { CommitMessageSettingsForm } from '@/components/settings/CommitMessageSettingsCard';
+import { DependencyAlertSettings } from '@/components/settings/DependencyAlertSettings';
 import { HelpSearchSettings } from '@/components/settings/HelpSearchSettings';
 import { NewsSettings } from '@/components/settings/NewsSettings';
 import { ProxySettings } from '@/components/settings/ProxySettings';
@@ -481,6 +482,12 @@ const SECTIONS = {
     tab: 'notifications',
     title: 'Pipeline failures',
     keywords: PIPELINE_FAILURE_KEYWORDS,
+  },
+  dependencyAlerts: {
+    tab: 'notifications',
+    title: 'Package updates',
+    keywords:
+      'package packages dependency dependencies update updates outdated npm nuget pub dart node dotnet security vulnerability advisory cve critical high deprecated major minor patch telegram bot daily check runovahq team',
   },
   news: {
     tab: 'notifications',
@@ -2797,6 +2804,12 @@ export default function SettingsPage(): React.JSX.Element {
                         />
                       }
                     />
+                  </Card>
+                ) : null}
+
+                {show('dependencyAlerts') ? (
+                  <Card className="glass settings-rows">
+                    <DependencyAlertSettings />
                   </Card>
                 ) : null}
 

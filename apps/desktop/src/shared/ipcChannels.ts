@@ -1847,6 +1847,22 @@ export const IPC = {
     /** main -> every renderer: something was added to or changed in the inbox. */
     onChanged: 'appNotifications:onChanged',
   },
+  /**
+   * Dependency alerts (E51): what the server's daily checks found in each project, the account's
+   * alert settings, project mutes and the Telegram link. The packages go up from main by itself.
+   */
+  dependencyAlerts: {
+    summary: 'dependencyAlerts:summary',
+    refresh: 'dependencyAlerts:refresh',
+    settings: 'dependencyAlerts:settings',
+    updateSettings: 'dependencyAlerts:updateSettings',
+    mute: 'dependencyAlerts:mute',
+    telegramLink: 'dependencyAlerts:telegramLink',
+    telegramConnect: 'dependencyAlerts:telegramConnect',
+    telegramUnlink: 'dependencyAlerts:telegramUnlink',
+    /** main -> every renderer: the findings changed (a check ran, a setting or a mute changed). */
+    onChanged: 'dependencyAlerts:onChanged',
+  },
   /** Git worktrees: a folder and branch per task, each with a workspace of its own. */
   worktrees: {
     list: 'worktrees:list',

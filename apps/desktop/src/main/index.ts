@@ -38,6 +38,7 @@ import { registerBlueprintHandlers } from './ipc/blueprints';
 import { registerBrowserHandlers } from './ipc/browser';
 import { registerCiAutoFixHandlers } from './ipc/ciAutoFix';
 import { registerCliDetectionHandlers } from './ipc/cliDetection';
+import { registerDependencyAlertHandlers } from './ipc/dependencyAlerts';
 import { registerDevSetupHandlers } from './ipc/devSetup';
 import { registerDockerHandlers } from './ipc/docker';
 import { registerEnvironmentHandlers } from './ipc/environments';
@@ -400,6 +401,7 @@ function registerAllIpcHandlers(): void {
   registerGitHandlers();
   registerWorktreeHandlers();
   registerPackageManagerHandlers();
+  registerDependencyAlertHandlers();
   registerRemoteHandlers();
   registerUsageHandlers();
   registerBackupHandlers();

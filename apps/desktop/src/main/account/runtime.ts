@@ -79,6 +79,10 @@ export interface AccountRuntimeOptions {
   dataChanged?: (area: string) => void;
   /** Runs before each sync, such as reading whether the Servers passkey is locked. */
   beforeSync?: () => Promise<void>;
+  /** This computer is signed in now (at start, or after signing in): dependency alerts connect. */
+  onSignedIn?: () => void;
+  /** Signed out, or the session ended: dependency alerts disconnect. */
+  onSignedOut?: () => void;
 }
 
 export function createAccountRuntime(options: AccountRuntimeOptions) {
@@ -93,9 +97,10 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
   let signingIn: AbortController | null = null;
   let needsSignIn = false;
 
+  const baseUrl = accountApiBaseUrl({ isPackaged: app.isPackaged, env: process.env });
   const client: AccountClient = createAccountClient({
     fetch: (input, init) => globalThis.fetch(input, init),
-    baseUrl: accountApiBaseUrl({ isPackaged: app.isPackaged, env: process.env }),
+    baseUrl,
     userAgent: `Runova/${app.getVersion()} (${process.platform})`,
     state,
     device: {
@@ -114,6 +119,7 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
     onNeedsSignIn: () => {
       needsSignIn = true;
       stopTimer();
+      options.onSignedOut?.();
       void announceAccount();
     },
   });
@@ -322,6 +328,7 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
       if ((await status()).state === 'signed-in') {
         startTimer();
         trigger(0);
+        options.onSignedIn?.();
       }
     },
 
@@ -344,6 +351,7 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
       }
       startTimer();
       trigger(0);
+      options.onSignedIn?.();
       return status();
     },
 
@@ -353,12 +361,34 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
 
     async signOut(): Promise<void> {
       stopTimer();
+      options.onSignedOut?.();
       await client.signOut();
       getEngine().reset();
       scopes = [];
       needsSignIn = false;
       await announceAccount();
       await announceSync();
+    },
+
+    /** The site the account lives on, where the notifications hub is. */
+    siteUrl: siteUrlFor(baseUrl),
+
+    /** Any account route, and a live token, for the dependency alerts built on this account (E51). */
+    api: client.request,
+    accessToken: () => client.accessToken(),
+
+    /** Where each project lives now: the account's own scope, or its team's. */
+    async projectPlacements(): Promise<Map<string, { scopeId: number; canWrite: boolean }>> {
+      getEngine();
+      const all = await remote.scopes();
+      const personal = all.find((scope) => scope.kind === 'personal');
+      const projects = adapters.find((adapter) => adapter.collection.id === 'projects');
+      const placements = new Map<string, { scopeId: number; canWrite: boolean }>();
+      for (const item of projects ? await projects.list().catch(() => []) : []) {
+        const scope = item.teamId === null ? personal : all.find((s) => s.teamId === item.teamId);
+        if (scope) placements.set(item.id, { scopeId: scope.id, canWrite: scope.canWrite });
+      }
+      return placements;
     },
 
     profile: () => client.me(),

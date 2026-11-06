@@ -157,6 +157,30 @@ describe('Sidebar navigation', () => {
 });
 
 describe('Sidebar badges', () => {
+  it('counts the projects with package alerts on Projects, and updates when main says', async () => {
+    const summary = {
+      signedIn: true,
+      enabled: true,
+      projectsWithAlerts: 1,
+      total: 2,
+      byProject: {},
+    };
+    const { bridge } = renderSidebar('/', { 'dependencyAlerts.summary': summary });
+
+    const projects = await screen.findByRole('link', {
+      name: /Projects.*1 project with package updates/,
+    });
+    expect(within(projects).getByText('1')).toBeTruthy();
+
+    act(() =>
+      bridge.$emit('dependencyAlerts.onChanged', { ...summary, projectsWithAlerts: 0, total: 0 }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Projects/ }).textContent).toBe('Projects'),
+    );
+  });
+
   it('shows the unread pipeline count on Pipelines', async () => {
     renderSidebar('/', { 'appNotifications.unreadCount': async () => 3 });
 

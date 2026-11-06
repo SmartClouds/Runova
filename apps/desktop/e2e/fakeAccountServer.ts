@@ -58,6 +58,24 @@ export async function startFakeAccountServer() {
   >();
   const sessions: Session[] = [];
   const keys = new Map<number, { version: number; envelope: unknown; setAt: string }>();
+  // Dependency alerts (E51): what the app sent, and what a test says the daily check found.
+  const inventories = new Map<
+    string,
+    { scopeId: number; itemId: string; body: Record<string, unknown> }
+  >();
+  let alertSettings: Record<string, unknown> = {
+    enabled: true,
+    securityMinSeverity: 'high',
+    deprecated: true,
+    major: true,
+    minor: false,
+    patch: false,
+    inApp: true,
+    telegram: true,
+  };
+  let findings: { items: unknown[] } = { items: [] };
+  let notifications: unknown[] = [];
+  const muted = new Set<number>();
 
   const sessionFor = (request: IncomingMessage) => {
     const token = request.headers.authorization?.replace(/^Bearer /, '');
@@ -185,6 +203,66 @@ export async function startFakeAccountServer() {
             totalPages: 0,
           });
         }
+        const inventoryMatch = /^\/api\/v1\/sync-scopes\/(\d+)\/package-inventories\/([^/]+)$/.exec(
+          path,
+        );
+        if (inventoryMatch) {
+          const key = `${inventoryMatch[1]}:${decodeURIComponent(inventoryMatch[2])}`;
+          if (method === 'PUT') {
+            inventories.set(key, {
+              scopeId: Number(inventoryMatch[1]),
+              itemId: decodeURIComponent(inventoryMatch[2]),
+              body: await body(request),
+            });
+            return json(response, 201, { id: 7 });
+          }
+          inventories.delete(key);
+          return json(response, 204);
+        }
+        if (method === 'GET' && path === '/api/v1/dependency-findings') {
+          const enabled = alertSettings.enabled === true;
+          const items = enabled
+            ? (findings.items as { inventoryId: number; total: number }[]).map((item) =>
+                muted.has(item.inventoryId)
+                  ? { ...item, muted: true, total: 0 }
+                  : { ...item, muted: false },
+              )
+            : [];
+          return json(response, 200, {
+            enabled,
+            total: items.reduce((sum, i) => sum + i.total, 0),
+            items,
+          });
+        }
+        if (method === 'GET' && path === '/api/v1/notifications') {
+          return json(response, 200, {
+            items: notifications,
+            page: 1,
+            pageSize: 50,
+            totalItems: notifications.length,
+            totalPages: 1,
+            unread: notifications.length,
+          });
+        }
+        if (path === '/api/v1/accounts/me/dependency-alert-settings') {
+          if (method === 'PATCH') alertSettings = { ...alertSettings, ...(await body(request)) };
+          return json(response, 200, alertSettings);
+        }
+        const muteMatch = /^\/api\/v1\/accounts\/me\/muted-projects\/(\d+)$/.exec(path);
+        if (muteMatch) {
+          if (method === 'PUT') muted.add(Number(muteMatch[1]));
+          else muted.delete(Number(muteMatch[1]));
+          return json(response, 204);
+        }
+        if (method === 'GET' && path === '/api/v1/accounts/me/telegram-links/current') {
+          return json(response, 200, {
+            available: true,
+            linked: false,
+            botUsername: 'RunovaTestBot',
+            chatName: null,
+            linkedAt: null,
+          });
+        }
         if (method === 'GET' && path === '/api/v1/teams') return json(response, 200, { items: [] });
         if (method === 'GET' && path === '/api/v1/invitations')
           return json(response, 200, { items: [] });
@@ -275,6 +353,16 @@ export async function startFakeAccountServer() {
     /** What the server holds, exactly as the apps pushed it. */
     records: (scopeId = 1) => sync.all(scopeId),
     sessions: () => sessions,
+    /** The package lists the app sent, by `scopeId:itemId`. */
+    inventories: () => [...inventories.values()],
+    alertSettings: () => alertSettings,
+    /** What the next read of the findings and the unread messages answer. */
+    setFindings: (items: unknown[]) => {
+      findings = { items };
+    },
+    setNotifications: (items: unknown[]) => {
+      notifications = items;
+    },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }

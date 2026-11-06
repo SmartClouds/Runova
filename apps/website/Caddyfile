@@ -24,7 +24,8 @@ http://{$SITE_ADDRESS:localhost} {
 		file_server
 	}
 
-	@api path /api /api/* /hangfire /hangfire/* /_runova/health
+	# /hubs carries the notifications hub (E51), a WebSocket Caddy passes through as it is.
+	@api path /api /api/* /hangfire /hangfire/* /hubs/* /_runova/health
 	handle @api {
 		reverse_proxy api:8080
 	}

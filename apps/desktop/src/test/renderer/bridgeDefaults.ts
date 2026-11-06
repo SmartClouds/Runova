@@ -53,6 +53,13 @@ export function bridgeDefaults(): Record<string, unknown> {
     'app.getVersion': async () => '0.0.0',
     'appNotifications.list': [],
     'appNotifications.unreadCount': async () => 0,
+    'dependencyAlerts.summary': {
+      signedIn: false,
+      enabled: false,
+      projectsWithAlerts: 0,
+      total: 0,
+      byProject: {},
+    },
     'projects.list': [],
     'projectDrafts.listByProject': [],
     'scheduledTasks.listByProject': [],

@@ -192,6 +192,17 @@ The **Pipeline failures** card at the top of the **Notifications** tab chooses h
 
 You can still open Pipelines yourself from the sidebar at any time. See [Pipelines](pipelines.md#notifications-and-the-unread-badge).
 
+### Package updates
+
+The **Package updates** card says what the daily package check on runovahq.com tells you about. It needs a Runova account; signed out, it says so. The choices belong to the account, so the website's **Notifications** page shows the same ones, and each saves as soon as you change it.
+
+- **Package update alerts** turns the check on or off for your account. Off also removes the package lists of your own projects from the server. A team's projects stay for the other members.
+- **Security issues at** is the lowest advisory severity that tells you: **Critical**, **High and above** (the default), **Moderate and above**, **Any severity** or **Never**.
+- **Also tell me about** has **Deprecated packages** and **Major updates** (on by default), and **Minor updates** and **Patch updates** (off by default).
+- **Telegram** sends the same alerts from the RunovaHQ bot. **Link Telegram** opens the bot in your browser with a one-time link; press **Start** there, then **Check again**. Once linked, a switch turns Telegram alerts on or off and **Unlink Telegram** removes the chat. Sending `/stop` to the bot also unlinks it.
+
+Each alert arrives as one message per project in Recent messages and as a system notification, and clicking it opens the project's **Packages** section. Nothing is told twice: a new release, a new advisory or a worse severity is what makes a new message.
+
 ### News
 
 The **News** card controls the technology news on the Dashboard, and each change saves right away. **Show news** (on by default) turns the Dashboard's News card on or off, and while it is off Runova does not check for news at all. **Categories to show** keeps whole categories out of the card. **Notify me about security fixes at** sets the lowest severity of a security fix, for a tool on this computer, that sends you a notification (**High** by default, or **Never**). See [News](news.md#news-settings).

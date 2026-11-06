@@ -869,3 +869,51 @@ describe('runtime targets', () => {
     expect(readFileSync(manifestPath, 'utf-8')).toContain('^3.13.5');
   });
 });
+
+describe('readInventory', () => {
+  it('takes the locked version of each hosted dependency and skips sdk, path and git ones', async () => {
+    writeTree(root, {
+      'pubspec.yaml': `name: app
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  local_kit:
+    path: ../local_kit
+  forked:
+    git: https://example.com/forked.git
+dev_dependencies:
+  lints: ^4.0.0
+`,
+      'pubspec.lock': `packages:
+  http:
+    dependency: "direct main"
+    description:
+      name: http
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.2"
+  lints:
+    dependency: "direct dev"
+    source: hosted
+    version: "4.0.0"
+`,
+    });
+
+    const inventory = await dartAdapter.readInventory(root);
+
+    expect(inventory).toEqual([
+      { ecosystem: 'pub', name: 'http', version: '1.2.2', dev: false },
+      { ecosystem: 'pub', name: 'lints', version: '4.0.0', dev: true },
+    ]);
+    expect(cliState.calls).toEqual([]);
+  });
+
+  it('falls back to the constraint without a lock file', async () => {
+    writeTree(root, { 'pubspec.yaml': 'name: app\ndependencies:\n  http: ^1.2.0\n' });
+
+    expect(await dartAdapter.readInventory(root)).toEqual([
+      { ecosystem: 'pub', name: 'http', version: '1.2.0', dev: false },
+    ]);
+  });
+});

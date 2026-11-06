@@ -1,5 +1,6 @@
 import type { Project } from '@runova/core';
 import type { PackageInfo, PackageManagerSection, PackageUpdateRequest } from '@shared/apiTypes';
+import type { DependencyFinding } from '@shared/dependencyAlerts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -41,7 +42,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { OverflowScroll } from '@/components/ui/overflow-scroll';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useDependencyAlerts } from '@/hooks/useDependencyAlerts';
 import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
@@ -217,6 +220,49 @@ function PackageVersionTrail({ pkg }: { pkg: PackageInfo }): React.JSX.Element {
   );
 }
 
+const SEVERITY_LABEL: Record<string, string> = {
+  critical: 'Critical',
+  high: 'High',
+  moderate: 'Moderate',
+  low: 'Low',
+};
+
+/** What the daily package check (E51) found on this package: an advisory, or a deprecation. */
+function AlertBadges({
+  findings,
+}: {
+  findings: DependencyFinding[] | undefined;
+}): React.JSX.Element | null {
+  if (!findings?.length) return null;
+  return (
+    <>
+      {findings
+        .filter((f) => f.kind === 'security')
+        .map((f) => (
+          <SimpleTooltip
+            key={f.advisoryId ?? f.summary}
+            label={`${f.summary ?? 'Security advisory'}${f.advisoryId ? ` (${f.advisoryId})` : ''}${f.targetVersion ? `. Fixed in ${f.targetVersion}.` : '.'}`}
+          >
+            <Badge variant="destructive" className="px-1.5 py-0 text-[10px] leading-4">
+              {SEVERITY_LABEL[f.severity ?? ''] ?? 'A'} security issue
+            </Badge>
+          </SimpleTooltip>
+        ))}
+      {findings.some((f) => f.kind === 'deprecated') && (
+        <SimpleTooltip
+          label={
+            findings.find((f) => f.kind === 'deprecated')?.summary ?? 'This package is deprecated.'
+          }
+        >
+          <Badge variant="warning" className="px-1.5 py-0 text-[10px] leading-4">
+            Deprecated
+          </Badge>
+        </SimpleTooltip>
+      )}
+    </>
+  );
+}
+
 function PackageRow({
   pkg,
   selected,
@@ -224,6 +270,7 @@ function PackageRow({
   updating,
   onToggle,
   onUpdate,
+  alerts,
 }: {
   pkg: PackageInfo;
   selected: boolean;
@@ -231,6 +278,8 @@ function PackageRow({
   updating: boolean;
   onToggle: () => void;
   onUpdate: () => void;
+  /** What the daily package check found on it, if anything. */
+  alerts?: DependencyFinding[] | undefined;
 }): React.JSX.Element {
   const bump =
     pkg.isOutdated && pkg.latestVersion ? bumpKind(pkg.currentVersion, pkg.latestVersion) : null;
@@ -258,6 +307,7 @@ function PackageRow({
             Latest unknown
           </Badge>
         )}
+        <AlertBadges findings={alerts} />
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <PackageVersionTrail pkg={pkg} />
@@ -397,6 +447,21 @@ function PackagesCopyMenu({
 export function PackagesTab({ project }: { project: Project }): React.JSX.Element {
   const projectId = project.id;
   const queryClient = useQueryClient();
+  const dependencyAlerts = useDependencyAlerts();
+  const alertEntry = dependencyAlerts.enabled ? dependencyAlerts.byProject[projectId] : undefined;
+  const alertsByName = useMemo(() => {
+    const byName = new Map<string, DependencyFinding[]>();
+    for (const finding of alertEntry?.findings ?? []) {
+      const key = finding.name.toLowerCase();
+      byName.set(key, [...(byName.get(key) ?? []), finding]);
+    }
+    return byName;
+  }, [alertEntry]);
+  const muteMutation = useMutation({
+    mutationFn: (muted: boolean) => window.runova.dependencyAlerts.mute(projectId, muted),
+    onSuccess: (summary) => queryClient.setQueryData(queryKeys.dependencyAlerts, summary),
+    onError: () => toast.error('Could not change the package alerts for this project.'),
+  });
   const [selected, setSelected] = useProjectUiState<Set<string>>(
     'packages.selected',
     () => new Set(),
@@ -536,16 +601,31 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
             </div>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={scanQuery.isFetching}
-          aria-busy={scanQuery.isFetching}
-          onClick={() => void scanQuery.refetch()}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${scanQuery.isFetching ? 'animate-spin' : ''}`} />
-          {scanQuery.isFetching ? 'Scanning…' : 'Refresh'}
-        </Button>
+        <div className="flex shrink-0 items-center gap-3">
+          {alertEntry ? (
+            <SimpleTooltip label="Hear about security issues and new releases of this project's packages from the daily check.">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Switch
+                  checked={!(muteMutation.isPending ? muteMutation.variables : alertEntry.muted)}
+                  disabled={muteMutation.isPending}
+                  onCheckedChange={(on) => muteMutation.mutate(!on)}
+                  aria-label="Package alerts for this project"
+                />
+                Alerts
+              </span>
+            </SimpleTooltip>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={scanQuery.isFetching}
+            aria-busy={scanQuery.isFetching}
+            onClick={() => void scanQuery.refetch()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${scanQuery.isFetching ? 'animate-spin' : ''}`} />
+            {scanQuery.isFetching ? 'Scanning…' : 'Refresh'}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -847,6 +927,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
                             updating={updateMutation.isPending}
                             onToggle={() => toggle(key)}
                             onUpdate={() => runUpdates(section, [pkg])}
+                            alerts={alertsByName.get(pkg.name.toLowerCase())}
                           />
                         );
                       })}

@@ -105,7 +105,7 @@ function forward(request: IncomingMessage, reply: ServerResponse) {
     return;
   }
   // The API also serves the jobs dashboard, as it does behind the production proxy.
-  const toApi = /^\/(?:api|hangfire)(?:\/|$)/.test(path);
+  const toApi = /^\/(?:api|hangfire|hubs)(?:\/|$)/.test(path);
   const send = toApi ? httpsRequest : httpRequest;
   const upstream = send(
     {

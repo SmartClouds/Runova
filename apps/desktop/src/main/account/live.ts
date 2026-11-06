@@ -1,4 +1,6 @@
 import { IPC } from '../../shared/ipcChannels';
+import { liveDependencyAlerts } from '../dependencyAlerts/live';
+import type { DependencyAlerts } from '../dependencyAlerts/service';
 import { broadcastToWindows } from '../ipc/send';
 import { onVaultUnlocked } from '../ssh/vault';
 import { liveSyncAdapters, refreshSecretsState } from '../sync/adapters/live';
@@ -13,6 +15,13 @@ import { type AccountRuntime, createAccountRuntime, syncOnFocus } from './runtim
 
 let runtime: AccountRuntime | null = null;
 let adapters: SyncAdapter[] | null = null;
+let alerts: DependencyAlerts | null = null;
+
+/** Dependency alerts (E51) ride on the account: they connect when it signs in and stop when it signs out. */
+export function getDependencyAlerts(): DependencyAlerts {
+  alerts ??= liveDependencyAlerts(getAccountRuntime());
+  return alerts;
+}
 
 export function getAccountRuntime(): AccountRuntime {
   runtime ??= createAccountRuntime({
@@ -22,6 +31,12 @@ export function getAccountRuntime(): AccountRuntime {
     },
     dataChanged: (area) => broadcastToWindows(IPC.aiAccess.onDataChanged, { area }),
     beforeSync: refreshSecretsState,
+    onSignedIn: () => {
+      void getDependencyAlerts().start();
+    },
+    onSignedOut: () => {
+      void alerts?.stop();
+    },
   });
   return runtime;
 }
@@ -37,4 +52,5 @@ export async function startAccount(): Promise<void> {
 
 export function stopAccount(): void {
   runtime?.stop();
+  void alerts?.stop();
 }

@@ -63,6 +63,8 @@ export default defineConfig({
       // server it sees an https request even though the proxy reaches it over http.
       proxy: {
         '/api': { target: apiUrl, changeOrigin: true, xfwd: true },
+        // The notifications hub (E51): SignalR, over a WebSocket when it can.
+        '/hubs': { target: apiUrl, changeOrigin: true, xfwd: true, ws: true },
         '/media': { target: apiUrl, changeOrigin: true, xfwd: true },
       },
     },

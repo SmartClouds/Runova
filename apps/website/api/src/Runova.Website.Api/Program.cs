@@ -3,6 +3,7 @@ using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Cli;
 using Runova.Website.Api.Database;
+using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Email;
 using Runova.Website.Api.Health;
 using Runova.Website.Api.Http;
@@ -33,6 +34,7 @@ builder.Services.AddWebsiteUsers();
 builder.Services.AddWebsiteNews();
 builder.Services.AddWebsiteMedia();
 builder.Services.AddWebsiteReleases();
+builder.Services.AddWebsiteDependencies();
 builder.Services.AddWebsiteJobs();
 builder.Services.AddWebsiteJson();
 builder.Services.AddHostedService<MigrateOnStart>();
@@ -62,6 +64,7 @@ if (AdminCli.IsCommand(args))
 app.UseForwardedHeaders();
 app.UseWebsiteProblemDetails();
 MediaStorage.UseMediaFiles(app);
+app.UseHubAccessTokens();
 app.UseWebsiteIdentity();
 
 app.MapOpenApi().AllowAnonymous();
@@ -73,6 +76,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 app.MapHealth();
 app.MapRunovaHealth();
 app.MapApiV1();
+app.MapNotificationsHub();
 app.MapJobsDashboard();
 
 await app.RunAsync();

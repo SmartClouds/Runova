@@ -834,3 +834,40 @@ describe('runtime targets', () => {
     );
   });
 });
+
+describe('readInventory', () => {
+  it('lists each PackageReference with its version, central ones included, and runs no CLI', async () => {
+    writeTree(root, {
+      'Directory.Packages.props':
+        '<Project><ItemGroup><PackageVersion Include="Serilog" Version="3.1.1" /></ItemGroup></Project>',
+      'src/Api/Api.csproj': `<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Dapper" Version="[2.1.35]" />
+    <!-- <PackageReference Include="Commented.Out" Version="1.0.0" /> -->
+  </ItemGroup>
+</Project>`,
+      'tests/Api.Tests/Api.Tests.csproj': `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><PackageReference Include="xunit"><Version>2.9.0</Version></PackageReference><PackageReference Include="dapper" Version="2.1.35" /></ItemGroup>
+</Project>`,
+    });
+
+    const inventory = await dotnetAdapter.readInventory(root);
+
+    expect(inventory).toEqual([
+      { ecosystem: 'nuget', name: 'Dapper', version: '2.1.35', dev: false },
+      { ecosystem: 'nuget', name: 'Serilog', version: '3.1.1', dev: false },
+      { ecosystem: 'nuget', name: 'xunit', version: '2.9.0', dev: false },
+    ]);
+    expect(cliState.calls).toEqual([]);
+  });
+
+  it('skips a package whose version can not be told', async () => {
+    writeTree(root, {
+      'App.csproj':
+        '<Project><ItemGroup><PackageReference Include="Floating" Version="*" /><PackageReference Include="NoVersion" /></ItemGroup></Project>',
+    });
+
+    expect(await dotnetAdapter.readInventory(root)).toEqual([]);
+  });
+});

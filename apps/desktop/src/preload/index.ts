@@ -390,6 +390,11 @@ import type {
   TurnstileWithSecret,
 } from '../shared/cloudflareTypes';
 import type {
+  DependencyAlertSettings,
+  DependencyAlertsSummary,
+  TelegramLinkView,
+} from '../shared/dependencyAlerts';
+import type {
   AccountInfo,
   AlertInfo,
   AuditPage,
@@ -2521,6 +2526,24 @@ const packages = {
     subscribe(IPC.packages.onUpdateProgress, cb),
 };
 
+const dependencyAlerts = {
+  summary: (): Promise<DependencyAlertsSummary> => ipcRenderer.invoke(IPC.dependencyAlerts.summary),
+  refresh: (): Promise<DependencyAlertsSummary> => ipcRenderer.invoke(IPC.dependencyAlerts.refresh),
+  settings: (): Promise<DependencyAlertSettings> =>
+    ipcRenderer.invoke(IPC.dependencyAlerts.settings),
+  updateSettings: (patch: Partial<DependencyAlertSettings>): Promise<DependencyAlertSettings> =>
+    ipcRenderer.invoke(IPC.dependencyAlerts.updateSettings, patch),
+  mute: (projectId: string, muted: boolean): Promise<DependencyAlertsSummary> =>
+    ipcRenderer.invoke(IPC.dependencyAlerts.mute, projectId, muted),
+  telegramLink: (): Promise<TelegramLinkView> =>
+    ipcRenderer.invoke(IPC.dependencyAlerts.telegramLink),
+  /** Opens the RunovaHQ bot in the browser with a one-time code that links this account. */
+  telegramConnect: (): Promise<void> => ipcRenderer.invoke(IPC.dependencyAlerts.telegramConnect),
+  telegramUnlink: (): Promise<void> => ipcRenderer.invoke(IPC.dependencyAlerts.telegramUnlink),
+  onChanged: (cb: (summary: DependencyAlertsSummary) => void): (() => void) =>
+    subscribe(IPC.dependencyAlerts.onChanged, cb),
+};
+
 const remote = {
   getState: (): Promise<RemoteState> => ipcRenderer.invoke(IPC.remote.getState),
   listInterfaces: (): Promise<RemoteNetworkInterface[]> =>
@@ -3094,6 +3117,7 @@ const runovaApi = {
   appNotifications,
   apiClient,
   packages,
+  dependencyAlerts,
   remote,
   usage,
   pet,

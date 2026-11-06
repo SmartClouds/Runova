@@ -261,3 +261,4 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E48](epics/48-accounts-sync-teams.md) | Accounts, cloud sync and teams: one account on every computer, shared team workspaces, end-to-end encryption | Standalone (Account) | E40W, E41 |
 | [E49](epics/49-project-cleanup.md) | Project cleanup: see what each project takes on disk and delete the folders it can rebuild | Standalone (Build) | E31, E21, E23 |
 | [E50](epics/50-system-cleanup.md) | Disk Cleanup: find the caches package managers and developer tools keep, and remove old versions or everything | Standalone (Build) | E49 |
+| [E51](epics/51-dependency-alerts.md) | Dependency update alerts: a daily check of every project's packages, told in the app, on the website and on Telegram | Standalone (Account) | E41, E48 |

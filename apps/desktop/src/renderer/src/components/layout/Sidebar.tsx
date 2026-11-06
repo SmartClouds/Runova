@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 // The styles module alone, so the always-loaded menu does not pull the whole kit in with it.
 import { SECTION_HEADING } from '@/components/pageKit/styles';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { projectsWithUpdatesLabel } from '@/hooks/useDependencyAlerts';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/uiStore';
 import { AboutCard } from './AboutCard';
@@ -25,7 +26,7 @@ export function Sidebar(): React.JSX.Element {
   const hidden = sidebarMode === 'hidden';
   const { pathname } = useLocation();
   const reduceMotion = useReducedMotion();
-  const { unread, workspaceAttention, healthIncidents } = useNavBadges();
+  const { unread, workspaceAttention, healthIncidents, projectAlerts } = useNavBadges();
 
   const pillTransition = reduceMotion
     ? { duration: 0 }
@@ -112,6 +113,18 @@ export function Sidebar(): React.JSX.Element {
               {unread > 99 ? '99+' : unread}
             </span>
           )
+        ) : null}
+        {item.to === '/projects' && projectAlerts > 0 ? (
+          <>
+            {collapsed ? (
+              <span className="absolute right-1 top-1 z-10 h-1.5 w-1.5 rounded-full bg-warning" />
+            ) : (
+              <span className="relative z-10 ml-auto rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-semibold leading-none text-warning-foreground">
+                {projectAlerts > 99 ? '99+' : projectAlerts}
+              </span>
+            )}
+            <span className="sr-only">, {projectsWithUpdatesLabel(projectAlerts)}</span>
+          </>
         ) : null}
         {item.to === '/monitoring' && healthIncidents > 0 ? (
           collapsed ? (

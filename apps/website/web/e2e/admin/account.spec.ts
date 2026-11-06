@@ -128,6 +128,30 @@ test('makes a team, invites a person as Viewer, and once they join makes them Me
   await expect(page.getByLabel(`Role of ${invitee.displayName}`)).toHaveValue('member');
 });
 
+test('the Notifications page saves the alert settings on the account', async ({
+  browser,
+  owner,
+}, info) => {
+  const account = await createEditor(owner, info.workerIndex);
+  const page = await pageFor(browser, account);
+
+  await page.goto('/account/notifications');
+  await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+  const minor = page.getByRole('checkbox', { name: 'Minor updates' });
+  await expect(minor).not.toBeChecked();
+  await minor.check();
+  await expect(minor).toBeChecked();
+  await page.getByLabel('Security issues at').selectOption('critical');
+  await expect(page.getByText('No messages yet')).toBeVisible();
+  // The test stack sets up no Telegram bot.
+  await expect(page.getByText(/Telegram is not available/)).toBeVisible();
+  await shot(page, 'notifications');
+
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Minor updates' })).toBeChecked();
+  await expect(page.getByLabel('Security issues at')).toHaveValue('critical');
+});
+
 test('every account page fits a phone, keeps its tab in view and can sign out', async ({
   browser,
   owner,
@@ -141,6 +165,7 @@ test('every account page fits a phone, keeps its tab in view and can sign out', 
     ['/account/sessions', 'Devices and sessions'],
     ['/account/activity', 'Activity'],
     ['/account/sync', 'Sync'],
+    ['/account/notifications', 'Notifications'],
     ['/account/teams', 'Teams'],
     ['/account/invitations', null],
   ] as const;

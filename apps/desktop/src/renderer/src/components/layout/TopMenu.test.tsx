@@ -173,6 +173,31 @@ describe('TopMenu badges', () => {
     expect(within(pipelines).getByText('3')).toBeInTheDocument();
   });
 
+  it('counts the projects with package alerts on the Projects tab, and says so', async () => {
+    renderTopMenu('/', {
+      'dependencyAlerts.summary': {
+        signedIn: true,
+        enabled: true,
+        projectsWithAlerts: 2,
+        total: 5,
+        byProject: {},
+      },
+    });
+
+    const projects = await screen.findByRole('link', {
+      name: /Projects.*2 projects with package updates/,
+    });
+    expect(within(projects).getByText('2')).toBeInTheDocument();
+  });
+
+  it('leaves Projects plain when no project has an alert', async () => {
+    renderTopMenu('/');
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /Projects/ }).textContent).toBe('Projects'),
+    );
+  });
+
   it('leaves Ship plain when nothing is unread', async () => {
     renderTopMenu('/', { 'appNotifications.unreadCount': async () => 0 });
 
