@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CircleCheck, GitBranch, GitMerge, Spinner, X } from '@/components/icons';
 import { EmptyState, Notice } from '@/components/pageKit';
+import { DEV_SETUP_ROUTE } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -305,7 +306,7 @@ export function PullRequestSection({
       <PanelNotice
         title="GitHub CLI not found"
         body="Install gh to create, review and merge pull requests here."
-        action={{ label: 'Open Agent Tools', run: () => navigate('/tools') }}
+        action={{ label: 'Open Agent Tools', run: () => navigate(DEV_SETUP_ROUTE) }}
       />
     );
   }

@@ -41,7 +41,8 @@ function status(overrides: Partial<InstalledAgentTool> & { id: string }): Instal
 /** Only the fields the page reads off a project. */
 const projects = [{ id: 'p1', name: 'Aurora', folderPath: '/code/aurora' }];
 
-function renderPage(bridge: Record<string, unknown> = {}, route = '/tools') {
+/** Most of these tests are about tool cards, so they start on the full list rather than AI CLIs. */
+function renderPage(bridge: Record<string, unknown> = {}, route = '/tools?tab=all') {
   return renderWithProviders(<ToolsPage />, { route, bridge });
 }
 
@@ -600,6 +601,27 @@ describe('ToolsPage AI CLIs tab', () => {
     expect(screen.getByRole('searchbox', { name: 'Filter CLIs' })).toBeTruthy();
     expect(screen.queryByRole('searchbox', { name: 'Filter tools' })).toBeNull();
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('is the tab the page opens on', async () => {
+    renderPage({ 'cli.detectAll': [claude] }, '/tools');
+
+    expect(await screen.findByRole('heading', { name: 'Claude Code CLI' })).toBeTruthy();
+    expect(aiClisTab()).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryByText(ROUTER.name)).toBeNull();
+  });
+
+  it('keeps the tool list one click away, on a link of its own', async () => {
+    const { user } = renderPage({ 'cli.detectAll': [claude] }, '/tools');
+    await screen.findByRole('heading', { name: 'Claude Code CLI' });
+
+    await user.click(within(categoryTabs()).getByRole('button', { name: /^All/ }));
+
+    expect(await screen.findByText(ROUTER.name)).toBeTruthy();
+    expect(within(categoryTabs()).getByRole('button', { name: /^All/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
   });
 
   it('opens straight to the CLIs from a link', async () => {

@@ -11,7 +11,7 @@ route: /tools?tab=ai-clis
 
 ## Where to find it
 
-Click **Agent Tools** in the sidebar under **Agents**, then **AI CLIs** under **Setup** in the page's left menu. You can also open the page with `?tab=ai-clis`. Beside the entry, a number says how many CLIs are installed. The page used to be called AI CLI Manager and had its own menu entry; old links to it open this tab. The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
+Click **Agent Tools** in the sidebar under **Agents**, and it opens on **AI CLIs** (under **Setup** in the page's left menu). You can also open the tab with `?tab=ai-clis`. Beside the entry, a number says how many CLIs are installed. The page used to be called AI CLI Manager and had its own menu entry; old links to it open this tab. The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
 
 ## Supported CLIs
 

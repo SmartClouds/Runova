@@ -11,11 +11,11 @@ Agent Tools has three jobs. **AI CLIs** finds the AI coding CLIs on this compute
 
 ## Where to find it
 
-Click **Agent Tools** in the sidebar under **Agents**, or open the command palette and type "Agent Tools". A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
+Click **Agent Tools** in the sidebar under **Agents**, or open the command palette and type "Agent Tools". The page opens on **AI CLIs**; click **All** under **Categories** for the tool cards. A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
 
 ## AI CLIs
 
-**AI CLIs** lists the coding agents Runova found, each with its version, and installs, updates or reinstalls them in a terminal. It is also where you pick the default CLI and set the arguments Runova passes to each one in the background. Open it from **AI CLIs** under **Setup** in the page's left menu, or open the page with `?tab=ai-clis`. See [AI CLIs](cli-manager.md) for everything on the tab.
+**AI CLIs** lists the coding agents Runova found, each with its version, and installs, updates or reinstalls them in a terminal. It is also where you pick the default CLI and set the arguments Runova passes to each one in the background. It is the tab the page opens on. Come back to it from **AI CLIs** under **Setup** in the page's left menu, or open the page with `?tab=ai-clis`. See [AI CLIs](cli-manager.md) for everything on the tab.
 
 ## Dev Setup
 
@@ -83,7 +83,7 @@ The **Target project** picker at the bottom of the left menu chooses a project f
 
 ### Category tabs
 
-The left menu has two groups. **Setup** holds **AI CLIs** and **Dev Setup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
+The left menu has two groups. **Setup** holds **AI CLIs** and **Dev Setup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=all`, `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
 
 ### Refresh and update checks
 
