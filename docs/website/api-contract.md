@@ -710,6 +710,53 @@ Rules:
 - Changes write `account-type.create`, `account-type.update`, `account-type.delete`,
   `payment-settings.update`, `subscription.assign` and `subscription.remove` audit entries.
 
+### Monitoring nodes (Admin)
+
+Online checks (E54, E55) run on **monitoring nodes**: small services in Docker that connect out to
+the Monitoring Gateway over gRPC with mutual TLS. Nothing else of the website is open to them. An
+Admin adds a node here and gets a one-time enrollment token (24 hours, kept as its SHA-256 only);
+the node makes its own ECDSA key, sends a certificate request with the token to
+`/monitoring-node-enrollments`, and gets a 7 day client certificate from the private Node CA with
+`urn:runova:node:{id}` in its subject alternative name. The private key never leaves the node, and
+the CA's key never leaves the API. A node renews through the gateway with the certificate it has,
+for the key it has.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/monitoring-nodes` | Admin | none | 200 `MonitoringNodeDto[]`, by region then name; 401; 403 |
+| POST | `/api/v1/monitoring-nodes` | Admin | `MonitoringNodeWrite` with `name` and `region` | 201 `{ "node": MonitoringNodeDto, "enrollment": EnrollmentTokenDto }`; 400; 401; 403; 409 the name is taken |
+| GET | `/api/v1/monitoring-nodes/{id}` | Admin | none | 200 `MonitoringNodeDto` with an ETag; 401; 403; 404 |
+| PATCH | `/api/v1/monitoring-nodes/{id}` | Admin | merge patch of `MonitoringNodeWrite`; `If-Match` | 200 `MonitoringNodeDto`; 400; 401; 403; 404; 409 the node is revoked or the name is taken; 412; 428 |
+| DELETE | `/api/v1/monitoring-nodes/{id}` | Admin | `If-Match` | 204; 401; 403; 404; 409 it enrolled and is not revoked; 412; 428 |
+| POST | `/api/v1/monitoring-nodes/{id}/enrollment-tokens` | Admin | none | 201 `EnrollmentTokenDto` (replaces an unused one); 401; 403; 404; 409 the node is revoked |
+| POST | `/api/v1/monitoring-nodes/{id}/revocations` | Admin | none | 200 `MonitoringNodeDto`; 401; 403; 404 |
+| POST | `/api/v1/monitoring-node-enrollments` | Anonymous (the token), rate limited like sign-in | `{ "token": string, "csr": base64 DER PKCS#10 }` | 201 `NodeEnrollmentDto`; 400 the request or its key (ECDSA below P-256, RSA below 3072 bits) is refused; 401 the token is wrong, used or ran out; 429; 503 online monitoring is not set up |
+
+`MonitoringNodeDto`: `{ "id": number, "name": string, "region": string, "capacity": int, "status":
+"pending" | "online" | "offline" | "revoked", "draining": bool, "softwareVersion": string | null,
+"remoteAddress": string | null, "enrolledAt": time | null, "connectedAt": time | null,
+"lastSeenAt": time | null, "monitors": int, "checksLastMinute": int, "queuedResults": int,
+"lagMs": int, "allowedAddresses": string[], "enrollmentTokenExpiresAt": time | null (while a token
+is unused), "certificateExpiresAt": time | null, "createdAt": time, "revokedAt": time | null,
+"version": string }`. A node that sent no heartbeat for 45 seconds shows as `offline` at once;
+the liveness job writes it every minute and moves its monitors.
+`MonitoringNodeWrite`: `{ "name": string (1 to 60), "region": string (2 to 32 lower-case letters,
+digits and dashes), "capacity": int (1 to 10000, 100 is a normal node), "allowedAddresses":
+string[] (IP addresses or CIDR ranges, 20 at most; empty allows any), "draining": bool }`.
+Draining keeps the node connected but gives it nothing to check.
+`EnrollmentTokenDto`: `{ "token": string (starts with rnn_, shown once), "expiresAt": time,
+"apiUrl": string }`.
+`NodeEnrollmentDto`: `{ "nodeId": number, "certificate": base64 DER, "caCertificates": base64 DER[],
+"gatewayAddress": string, "expiresAt": time }`. Enrolling again with a new token revokes the
+node's older certificates.
+
+Revoking a node marks it and all its certificates revoked and tells every gateway, which closes
+its stream at once and refuses those certificates from then on. The gateways and the API talk only
+through Wolverine on the internal RabbitMQ, which has no published port; the gateway acks a node's
+result batch only after the API answered that it has it. All changes write `monitoring-node.create`,
+`monitoring-node.update`, `monitoring-node.enrollment-token`, `monitoring-node.drain`,
+`monitoring-node.revoke` and `monitoring-node.delete` audit entries, which never hold a token.
+
 ### Account sessions and activity
 
 Every browser and every computer signed in to an account is a session. The session cookie (and a
@@ -756,7 +803,9 @@ have signed in within the last 10 minutes. A failure is 400 `validation-failed` 
 `news.archive`, `news.publish`, `post.create`, `post.update`, `post.archive`, `post.publish`,
 `media.upload`, `media.delete`, `api-client.create`, `api-client.update`, `api-client.revoke`,
 `api-client.rotate`, `sign-in-settings.update`, `account-type.create`, `account-type.update`,
-`account-type.delete`, `payment-settings.update`, `subscription.assign`, `subscription.remove`. Entries are never changed or deleted through the API. No entry holds a secret,
+`account-type.delete`, `payment-settings.update`, `subscription.assign`, `subscription.remove`,
+`monitoring-node.create`, `monitoring-node.update`, `monitoring-node.enrollment-token`, `monitoring-node.drain`,
+`monitoring-node.revoke`, `monitoring-node.delete`. Entries are never changed or deleted through the API. No entry holds a secret,
 token, password or signature.
 
 ### Reports (Admin)

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The health protocol as the monitoring nodes speak it (E54): the parser, the two-sample
+       transitions, the interval rules and the public address guard. No dependencies, so the node,
+       the gateway and the API can all use it. -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Runova.Monitoring.Tests" />
+  </ItemGroup>
+</Project>

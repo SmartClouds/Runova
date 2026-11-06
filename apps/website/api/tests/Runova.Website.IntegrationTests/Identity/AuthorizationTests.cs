@@ -62,6 +62,9 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 ("POST", "/api/v1/device-tokens", false),
                 ("POST", "/api/v1/email-verifications", true),
 
+                // A monitoring node trades its one-time token and a CSR for a certificate; it has no cookie (E54).
+                ("POST", "/api/v1/monitoring-node-enrollments", false),
+
                 // NOWPayments and Stripe post signed payment events; they send no cookie to forge (E53).
                 ("POST", "/api/v1/nowpayments-events", false),
                 ("POST", "/api/v1/password-resets", true),

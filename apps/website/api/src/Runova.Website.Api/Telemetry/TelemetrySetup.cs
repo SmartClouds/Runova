@@ -40,6 +40,8 @@ internal static class TelemetrySetup
                 .AddHttpClientInstrumentation()
                 .AddEntityFrameworkCoreInstrumentation()
                 .AddNpgsql()
+                // Wolverine's own spans, for the messages to and from the gateways (E54).
+                .AddSource("Wolverine")
                 .AddProcessor(new DropSqlText()))
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()

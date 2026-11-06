@@ -1,0 +1,48 @@
+# A Runova monitoring node (docs/epics/54-monitoring-nodes.md). Run it on any server with Docker:
+#   1. On runovahq.com, /admin/monitoring-nodes, press Add node and copy the token.
+#   2. Copy .env.example to .env next to this file and paste the token in.
+#   3. docker compose up -d
+# The node makes its own key, enrolls once with the token, and from then on only opens one outbound
+# connection to the gateway. It listens on no port. Its key, certificate and the results waiting to
+# be sent live in the node-data volume; keep it, or make a new token on the node's page.
+name: runova-monitoring-node
+
+services:
+  node:
+    image: ${IMAGE_REGISTRY:-ghcr.io/smartclouds}/runova-website-monitoring-node:${IMAGE_TAG:-latest}
+    pull_policy: always
+    environment:
+      RUNOVA_API_URL: ${RUNOVA_API_URL:-https://runovahq.com}
+      # Only read until the node has enrolled; it is useless afterwards.
+      NODE_ENROLLMENT_TOKEN: ${NODE_ENROLLMENT_TOKEN:-}
+      NODE_CONCURRENCY: ${NODE_CONCURRENCY:-64}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - node-data:/data
+    # Locked down: a non-root user, a read-only file system, no Linux capabilities, no way to gain
+    # privileges, and no published port.
+    user: "1654:1654"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: ${NODE_MEMORY:-512m}
+    cpus: ${NODE_CPUS:-1.0}
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "dotnet", "Runova.Monitoring.Node.dll", "healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  node-data:

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- A monitoring node (E54): enrolls once, then holds one gRPC stream to the gateway over mutual
+       TLS, checks the monitors it is given on its own timer and keeps results in SQLite until the
+       gateway acks them. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId />
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="Sentry.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Runova.Monitoring.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Runova.Monitoring.Contracts\Runova.Monitoring.Contracts.csproj" />
+    <ProjectReference Include="..\Runova.Monitoring.Core\Runova.Monitoring.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -6,6 +6,12 @@
 # Admin by hand with:
 #   echo "$PASSWORD" | docker compose -f apps/website/compose.yaml exec -T api \
 #     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
+#
+# Online monitoring (E54) is the "monitoring" profile: RabbitMQ and the Monitoring Gateway. Neither
+# RabbitMQ nor PostgreSQL ever gets a published port; only the gateway's node port is published.
+# Put the gateway's certificate in apps/website/monitoring-tls (fullchain.pem, privkey.pem), set
+# RABBITMQ_PASSWORD, and start it with:
+#   COMPOSE_PROFILES=monitoring docker compose -f apps/website/compose.yaml up -d --build --wait
 name: runova-website
 
 services:
@@ -51,10 +57,63 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:-}
       Admin__DisplayName: ${ADMIN_NAME:-}
       Website__InternalSiteUrl: http://web:4321/
+      # The internal RabbitMQ the gateway talks to (E54). Empty runs the API without it.
+      RabbitMq__Uri: ${RABBITMQ_URI:-}
+      Monitoring__GatewayAddress: ${MONITORING_GATEWAY_ADDRESS:-}
     volumes:
       - media:/var/lib/runova/media
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  rabbitmq:
+    profiles: [monitoring]
+    # No management plugin, no guest user, and no published port: only the API and the gateway
+    # reach it, on this network.
+    image: rabbitmq:4-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: runova
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-runova}
+    expose:
+      - "5672"
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  monitoring-gateway:
+    profiles: [monitoring]
+    build:
+      context: api
+      dockerfile: Dockerfile.gateway
+      args:
+        VERSION: ${VERSION:-3.3.0}
+    image: runova-website-monitoring-gateway:${VERSION:-3.3.0}
+    environment:
+      RabbitMq__Uri: amqp://runova:${RABBITMQ_PASSWORD:-runova}@rabbitmq:5672
+      Gateway__ServerCertificatePath: /tls/fullchain.pem
+      Gateway__ServerKeyPath: /tls/privkey.pem
+      Sentry__Dsn: ${SENTRY_DSN:-}
+    ports:
+      # Nodes connect here; nothing else of the stack is open to them.
+      - ${MONITORING_GATEWAY_PORT:-7443}:8043
+    volumes:
+      - ./monitoring-tls:/tls:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp
+    depends_on:
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
 
@@ -108,5 +167,6 @@ services:
 volumes:
   db:
   media:
+  rabbitmq:
   caddy-data:
   caddy-config:

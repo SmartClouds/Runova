@@ -22,6 +22,10 @@
     <PackageReference Include="Sentry.AspNetCore" />
     <PackageReference Include="Sentry.OpenTelemetry.Exporter" />
     <PackageReference Include="Stripe.net" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Postgresql" />
+    <PackageReference Include="WolverineFx.RabbitMQ" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,6 +38,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Runova.Monitoring.Contracts\Runova.Monitoring.Contracts.csproj" />
     <ProjectReference Include="..\Runova.Website.Core\Runova.Website.Core.csproj" />
     <ProjectReference Include="..\Runova.Website.Data\Runova.Website.Data.csproj" />
   </ItemGroup>

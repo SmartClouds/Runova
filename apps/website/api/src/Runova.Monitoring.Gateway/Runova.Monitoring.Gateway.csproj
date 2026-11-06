@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The Monitoring Gateway (E54): the only service monitoring nodes can reach. It holds their gRPC
+       streams over mutual TLS and passes what they say to the API through Wolverine on the internal
+       RabbitMQ. It keeps no database. -->
+  <PropertyGroup>
+    <UserSecretsId />
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="Sentry.AspNetCore" />
+    <PackageReference Include="Sentry.OpenTelemetry.Exporter" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.RabbitMQ" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Runova.Monitoring.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Runova.Monitoring.Contracts\Runova.Monitoring.Contracts.csproj" />
+  </ItemGroup>
+</Project>

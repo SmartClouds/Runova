@@ -29,6 +29,12 @@ public static class AuditActions
     public const string PaymentSettingsUpdate = "payment-settings.update";
     public const string SubscriptionAssign = "subscription.assign";
     public const string SubscriptionRemove = "subscription.remove";
+    public const string MonitoringNodeCreate = "monitoring-node.create";
+    public const string MonitoringNodeUpdate = "monitoring-node.update";
+    public const string MonitoringNodeEnrollmentToken = "monitoring-node.enrollment-token";
+    public const string MonitoringNodeDrain = "monitoring-node.drain";
+    public const string MonitoringNodeRevoke = "monitoring-node.revoke";
+    public const string MonitoringNodeDelete = "monitoring-node.delete";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -39,6 +45,7 @@ public static class AuditActions
         ApiClientCreate, ApiClientUpdate, ApiClientRevoke, ApiClientRotate,
         SignInSettingsUpdate,
         AccountTypeCreate, AccountTypeUpdate, AccountTypeDelete, PaymentSettingsUpdate, SubscriptionAssign, SubscriptionRemove,
+        MonitoringNodeCreate, MonitoringNodeUpdate, MonitoringNodeEnrollmentToken, MonitoringNodeDrain, MonitoringNodeRevoke, MonitoringNodeDelete,
     };
 }
 
@@ -64,9 +71,10 @@ public static class AuditTargetTypes
     public const string AccountType = "account-type";
     public const string PaymentSettings = "payment-settings";
     public const string Subscription = "subscription";
+    public const string MonitoringNode = "monitoring-node";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        User, News, Post, Media, ApiClient, SignInSettings, AccountType, PaymentSettings, Subscription,
+        User, News, Post, Media, ApiClient, SignInSettings, AccountType, PaymentSettings, Subscription, MonitoringNode,
     };
 }

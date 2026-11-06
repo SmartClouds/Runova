@@ -468,6 +468,13 @@ jobs:
           - image: web
             context: .
             dockerfile: apps/website/web/Dockerfile
+          # Online monitoring (E54): the gateway nodes connect to, and the node itself.
+          - image: monitoring-gateway
+            context: apps/website/api
+            dockerfile: apps/website/api/Dockerfile.gateway
+          - image: monitoring-node
+            context: apps/website/api
+            dockerfile: apps/website/api/Dockerfile.node
     steps:
       - name: Checkout
         uses: actions/checkout@v7

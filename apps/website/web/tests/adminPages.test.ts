@@ -51,7 +51,7 @@ describe('the admin menu', () => {
     expect(navLinks(html)).toEqual(['/admin/news', '/admin/blog']);
   });
 
-  it('gives an Admin the reports, the users, the plans, the API clients, the settings and the jobs dashboard too', async () => {
+  it('gives an Admin the reports, the users, the plans, the nodes, the API clients, the settings and the jobs dashboard too', async () => {
     const html = await (await render(AdminLayout, '/admin', ADMIN)).text();
     expect(navLinks(html)).toEqual([
       '/admin/news',
@@ -59,6 +59,7 @@ describe('the admin menu', () => {
       '/admin/reports',
       '/admin/users',
       '/admin/plans',
+      '/admin/monitoring-nodes',
       '/admin/api-clients',
       '/admin/settings',
       '/hangfire',

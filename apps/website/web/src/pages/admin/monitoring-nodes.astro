@@ -1,0 +1,16 @@
+---
+import MonitoringNodesBoard from '../../components/admin/MonitoringNodesBoard';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Monitoring nodes">
+  <h1 class="mb-2 font-display font-extrabold text-3xl tracking-tight">Monitoring nodes</h1>
+  <p class="mb-6 max-w-2xl text-muted-foreground">
+    The servers that run online checks. Each one connects out to the gateway with its own
+    certificate and gets its share of the monitors; one that goes quiet for 45 seconds is offline
+    and its monitors move to the others.
+  </p>
+  <MonitoringNodesBoard client:only="react" />
+</AdminLayout>

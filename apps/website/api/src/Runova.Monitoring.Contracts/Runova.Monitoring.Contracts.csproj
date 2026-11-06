@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- What the nodes, the gateway and the API say to each other (E54): node.proto for the gRPC link
+       between a node and the gateway, and the records the gateway and the API exchange through
+       Wolverine on the internal RabbitMQ. -->
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Core.Api" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\node.proto" GrpcServices="Both" />
+  </ItemGroup>
+</Project>

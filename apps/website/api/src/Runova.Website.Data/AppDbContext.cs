@@ -14,6 +14,7 @@ using Runova.Website.Data.Billing;
 using Runova.Website.Data.Dependencies;
 using Runova.Website.Data.Email;
 using Runova.Website.Data.Identity;
+using Runova.Website.Data.Monitoring;
 using Runova.Website.Data.News;
 using Runova.Website.Data.Posts;
 using Runova.Website.Data.Releases;
@@ -105,6 +106,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<PaymentSettings> PaymentSettings => Set<PaymentSettings>();
 
+    public DbSet<MonitoringNode> MonitoringNodes => Set<MonitoringNode>();
+
+    public DbSet<NodeCertificate> NodeCertificates => Set<NodeCertificate>();
+
+    public DbSet<NodeAuthority> NodeAuthorities => Set<NodeAuthority>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -148,6 +155,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureAccounts();
         builder.ConfigureDependencies();
         builder.ConfigureBilling();
+        builder.ConfigureMonitoring();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

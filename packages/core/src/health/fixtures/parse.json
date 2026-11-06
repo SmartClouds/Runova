@@ -1,0 +1,653 @@
+[
+  {
+    "name": "normalizes a passing report",
+    "input": {
+      "json": {
+        "status": "pass",
+        "version": "1",
+        "releaseId": "1.4.2+abc",
+        "serviceId": "curalink-api",
+        "description": "CuraLink API",
+        "checks": {
+          "postgres:connection": [
+            {
+              "componentId": "db",
+              "componentType": "datastore",
+              "status": "pass",
+              "observedValue": 12,
+              "observedUnit": "ms"
+            }
+          ],
+          "uptime": [
+            {
+              "componentType": "system",
+              "status": "pass",
+              "observedValue": 3600,
+              "observedUnit": "s"
+            }
+          ]
+        },
+        "runova": { "protocol": "runova-health/1" }
+      }
+    },
+    "expect": {
+      "state": "pass",
+      "httpStatus": 200,
+      "latencyMs": 42,
+      "checkedAt": 1760000000000,
+      "serviceId": "curalink-api",
+      "description": "CuraLink API",
+      "releaseId": "1.4.2+abc",
+      "version": "1",
+      "output": null,
+      "problem": null,
+      "services": [
+        {
+          "key": "postgres:connection",
+          "name": "postgres",
+          "measurement": "connection",
+          "componentId": "db",
+          "componentType": "datastore",
+          "status": "pass",
+          "observedValue": 12,
+          "observedUnit": "ms",
+          "time": null,
+          "error": null
+        },
+        {
+          "key": "uptime",
+          "name": "uptime",
+          "measurement": null,
+          "componentId": null,
+          "componentType": "system",
+          "status": "pass",
+          "observedValue": 3600,
+          "observedUnit": "s"
+        }
+      ],
+      "rawContains": ["\"curalink-api\""]
+    }
+  },
+  {
+    "name": "keeps every component under one check key as its own service",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": {
+          "cache:responseTime": [
+            { "componentId": "redis-1", "status": "pass" },
+            { "componentId": "redis-2", "status": "pass" }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "state": "pass",
+      "serviceKeys": ["cache:responseTime#redis-1", "cache:responseTime#redis-2"]
+    }
+  },
+  {
+    "name": "adds no suffix for a component with an empty id",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": { "cache": [{ "componentId": "", "status": "pass" }, { "status": "pass" }] }
+      }
+    },
+    "expect": { "state": "pass", "serviceKeys": ["cache", "cache"] }
+  },
+  {
+    "name": "reads a failing service with its Runova error details",
+    "input": {
+      "httpStatus": 503,
+      "json": {
+        "status": "fail",
+        "checks": {
+          "postgres:connection": [
+            {
+              "status": "fail",
+              "time": "2026-10-17T10:00:00Z",
+              "output": "connect ECONNREFUSED 10.0.0.5:5432",
+              "runova": {
+                "errorCode": "ECONNREFUSED",
+                "detail": "Pool exhausted after 3 retries",
+                "stack": "Error: connect ECONNREFUSED\n    at Pool.connect (pool.js:10)",
+                "hint": "Is the database container running?",
+                "since": "2026-10-17T09:58:00Z"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "state": "fail",
+      "httpStatus": 503,
+      "problem": null,
+      "services": [
+        {
+          "key": "postgres:connection",
+          "status": "fail",
+          "time": "2026-10-17T10:00:00Z",
+          "error": {
+            "message": "connect ECONNREFUSED 10.0.0.5:5432",
+            "code": "ECONNREFUSED",
+            "detail": "Pool exhausted after 3 retries",
+            "stack": "Error: connect ECONNREFUSED\n    at Pool.connect (pool.js:10)",
+            "hint": "Is the database container running?",
+            "since": "2026-10-17T09:58:00Z"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "reads the error details an endpoint built before the rename sends (legacy-name)",
+    "input": {
+      "httpStatus": 503,
+      "body": "{\"status\":\"fail\",\"checks\":{\"queue\":[{\"status\":\"fail\",\"output\":\"broker down\",\"agentmate\":{\"errorCode\":\"E_BROKER\",\"hint\":\"Start RabbitMQ\"}}]},\"note\":\"legacy-name\"}"
+    },
+    "expect": {
+      "state": "fail",
+      "services": [
+        {
+          "key": "queue",
+          "error": {
+            "message": "broker down",
+            "code": "E_BROKER",
+            "detail": null,
+            "hint": "Start RabbitMQ"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "falls back to the old details when the runova ones are malformed (legacy-name)",
+    "input": {
+      "httpStatus": 503,
+      "body": "{\"status\":\"fail\",\"checks\":{\"queue\":[{\"status\":\"fail\",\"runova\":{\"detail\":5},\"agentmate\":{\"hint\":\"old\"}}]},\"note\":\"legacy-name\"}"
+    },
+    "expect": {
+      "state": "fail",
+      "services": [
+        {
+          "key": "queue",
+          "error": { "message": "Reported as failing with no error message.", "hint": "old" }
+        }
+      ]
+    }
+  },
+  {
+    "name": "drops runova details that are not an object",
+    "input": {
+      "httpStatus": 503,
+      "json": {
+        "status": "fail",
+        "checks": {
+          "a": [{ "status": "fail", "runova": [1] }],
+          "b": [{ "status": "fail", "runova": null }],
+          "c": [{ "status": "fail", "runova": { "errorCode": true, "hint": "lost" } }]
+        }
+      }
+    },
+    "expect": {
+      "state": "fail",
+      "services": [
+        { "key": "a", "error": { "code": null, "hint": null } },
+        { "key": "b", "error": { "code": null, "hint": null } },
+        { "key": "c", "error": { "code": null, "hint": null } }
+      ]
+    }
+  },
+  {
+    "name": "writes a numeric error code the way JavaScript prints it",
+    "input": {
+      "httpStatus": 503,
+      "body": "{\"status\":\"fail\",\"checks\":{\"a\":[{\"status\":\"fail\",\"runova\":{\"errorCode\":42}}],\"b\":[{\"status\":\"fail\",\"runova\":{\"errorCode\":0}}],\"c\":[{\"status\":\"fail\",\"runova\":{\"errorCode\":1.50}}],\"d\":[{\"status\":\"fail\",\"runova\":{\"errorCode\":1e21}}],\"e\":[{\"status\":\"fail\",\"runova\":{\"errorCode\":\"\"}}]}}"
+    },
+    "expect": {
+      "state": "fail",
+      "services": [
+        { "key": "a", "error": { "code": "42" } },
+        { "key": "b", "error": { "code": "0" } },
+        { "key": "c", "error": { "code": "1.5" } },
+        { "key": "d", "error": { "code": "1e+21" } },
+        { "key": "e", "error": { "code": null } }
+      ]
+    }
+  },
+  {
+    "name": "gives a failing service with no output a message anyway",
+    "input": {
+      "httpStatus": 503,
+      "json": { "status": "fail", "checks": { "queue": [{ "status": "fail" }] } }
+    },
+    "expect": {
+      "state": "fail",
+      "services": [
+        { "key": "queue", "error": { "message": "Reported as failing with no error message." } }
+      ]
+    }
+  },
+  {
+    "name": "gives a degraded service with an empty output a message",
+    "input": {
+      "json": { "status": "warn", "checks": { "mail": [{ "status": "warn", "output": "" }] } }
+    },
+    "expect": {
+      "state": "warn",
+      "services": [
+        {
+          "key": "mail",
+          "status": "warn",
+          "error": {
+            "message": "Reported as degraded with no message.",
+            "code": null,
+            "stack": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "accepts ok as pass",
+    "input": { "json": { "status": "ok" } },
+    "expect": { "state": "pass" }
+  },
+  {
+    "name": "accepts UP as pass",
+    "input": { "json": { "status": "UP" } },
+    "expect": { "state": "pass" }
+  },
+  {
+    "name": "trims the status word",
+    "input": { "json": { "status": "  Pass " } },
+    "expect": { "state": "pass" }
+  },
+  {
+    "name": "accepts down as fail",
+    "input": { "httpStatus": 503, "json": { "status": "down" } },
+    "expect": { "state": "fail" }
+  },
+  {
+    "name": "accepts error as fail",
+    "input": { "httpStatus": 503, "json": { "status": "error" } },
+    "expect": { "state": "fail" }
+  },
+  {
+    "name": "reads warn",
+    "input": { "json": { "status": "warn" } },
+    "expect": { "state": "warn", "problem": null }
+  },
+  {
+    "name": "believes a fail on a 200 response",
+    "input": { "json": { "status": "fail" } },
+    "expect": { "state": "fail", "httpStatus": 200 }
+  },
+  {
+    "name": "turns a pass with a failing check into warn, so a problem is never hidden",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": { "mail": [{ "status": "fail", "output": "SMTP timeout" }] }
+      }
+    },
+    "expect": {
+      "state": "warn",
+      "services": [{ "key": "mail", "status": "fail", "error": { "message": "SMTP timeout" } }]
+    }
+  },
+  {
+    "name": "treats a pass on a 5xx response as a failure",
+    "input": { "httpStatus": 500, "json": { "status": "pass" } },
+    "expect": { "state": "fail", "problem": null }
+  },
+  {
+    "name": "marks 401 as unauthorized without reading the body",
+    "input": { "httpStatus": 401, "body": "" },
+    "expect": {
+      "state": "unauthorized",
+      "httpStatus": 401,
+      "problem": "The endpoint rejected Runova's credentials (HTTP 401). Check that the key or password on the server matches this target.",
+      "raw": null,
+      "serviceKeys": []
+    }
+  },
+  {
+    "name": "marks 403 as unauthorized even with a passing body",
+    "input": { "httpStatus": 403, "json": { "status": "pass" } },
+    "expect": {
+      "state": "unauthorized",
+      "problem": "The endpoint rejected Runova's credentials (HTTP 403). Check that the key or password on the server matches this target.",
+      "raw": null
+    }
+  },
+  {
+    "name": "refuses a redirect",
+    "input": { "httpStatus": 302, "body": "" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The endpoint answered with a redirect (HTTP 302). Runova does not follow redirects, so its credentials are never sent to another address. Use the final URL.",
+      "raw": null
+    }
+  },
+  {
+    "name": "says when there is no healthcheck at the address",
+    "input": { "httpStatus": 404, "contentType": "text/html", "body": "<html>Not found</html>" },
+    "expect": {
+      "state": "invalid",
+      "problem": "There is no healthcheck at this address (HTTP 404).",
+      "raw": "<html>Not found</html>"
+    }
+  },
+  {
+    "name": "marks a body that is not JSON as invalid on success",
+    "input": { "contentType": "text/html", "body": "<html>hello</html>" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The endpoint answered, but the body is not JSON, so it does not follow the Runova Health Protocol.",
+      "raw": "<html>hello</html>"
+    }
+  },
+  {
+    "name": "marks a body that is not JSON as a failure on 5xx",
+    "input": { "httpStatus": 500, "contentType": "text/plain", "body": "Internal Server Error" },
+    "expect": {
+      "state": "fail",
+      "problem": "The endpoint failed with HTTP 500 and a body that is not JSON.",
+      "raw": "Internal Server Error"
+    }
+  },
+  {
+    "name": "marks a 503 with no body as a failure",
+    "input": { "httpStatus": 503, "body": "" },
+    "expect": {
+      "state": "fail",
+      "problem": "The endpoint failed with HTTP 503 and no health report.",
+      "raw": null
+    }
+  },
+  {
+    "name": "says when a success has an empty body",
+    "input": { "httpStatus": 204, "body": "  \n\t " },
+    "expect": {
+      "state": "invalid",
+      "problem": "The endpoint answered HTTP 204 with an empty body.",
+      "raw": null
+    }
+  },
+  {
+    "name": "does not read JSON with a trailing comma",
+    "input": { "body": "{\"status\":\"pass\",}" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The endpoint answered, but the body is not JSON, so it does not follow the Runova Health Protocol.",
+      "raw": "{\"status\":\"pass\",}"
+    }
+  },
+  {
+    "name": "says the status field is missing",
+    "input": { "json": { "checks": {} } },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report has no \"status\" field. It must be \"pass\", \"warn\" or \"fail\".",
+      "raw": "{\n  \"checks\": {}\n}"
+    }
+  },
+  {
+    "name": "says which status word it does not know",
+    "input": { "json": { "status": "great" } },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report's status \"great\" is not one of \"pass\", \"warn\" or \"fail\"."
+    }
+  },
+  {
+    "name": "prints a null status the way JavaScript does",
+    "input": { "json": { "status": null } },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report's status \"null\" is not one of \"pass\", \"warn\" or \"fail\"."
+    }
+  },
+  {
+    "name": "prints a numeric status the way JavaScript does",
+    "input": { "body": "{\"status\":1.5e-7}" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report's status \"1.5e-7\" is not one of \"pass\", \"warn\" or \"fail\".",
+      "raw": "{\n  \"status\": 1.5e-7\n}"
+    }
+  },
+  {
+    "name": "prints an array status the way JavaScript does",
+    "input": { "json": { "status": [1, null, "x"] } },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report's status \"1,,x\" is not one of \"pass\", \"warn\" or \"fail\"."
+    }
+  },
+  {
+    "name": "prints an object status the way JavaScript does",
+    "input": { "json": { "status": { "value": "pass" } } },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report's status \"[object Object]\" is not one of \"pass\", \"warn\" or \"fail\"."
+    }
+  },
+  {
+    "name": "refuses a JSON array",
+    "input": { "json": [1, 2] },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report must be a JSON object with a \"status\" field.",
+      "raw": "[\n  1,\n  2\n]"
+    }
+  },
+  {
+    "name": "refuses a JSON string",
+    "input": { "body": "\"pass\"" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report must be a JSON object with a \"status\" field.",
+      "raw": "\"pass\""
+    }
+  },
+  {
+    "name": "refuses JSON null",
+    "input": { "body": "null" },
+    "expect": {
+      "state": "invalid",
+      "problem": "The report must be a JSON object with a \"status\" field.",
+      "raw": "null"
+    }
+  },
+  {
+    "name": "lets the last of a repeated key win, as JSON.parse does",
+    "input": { "body": "{\"status\":\"fail\",\"status\":\"pass\"}" },
+    "expect": { "state": "pass", "raw": "{\n  \"status\": \"pass\"\n}" }
+  },
+  {
+    "name": "pretty prints the raw body the way JSON.stringify does",
+    "input": {
+      "body": "{\"b\":1,\"status\":\"warn\",\"1\":[true,null,\"x\\ny\"],\"e\":{},\"a\":[],\"n\":1.50,\"m\":-0,\"big\":1E25,\"small\":0.000001}"
+    },
+    "expect": {
+      "state": "warn",
+      "raw": "{\n  \"1\": [\n    true,\n    null,\n    \"x\\ny\"\n  ],\n  \"b\": 1,\n  \"status\": \"warn\",\n  \"e\": {},\n  \"a\": [],\n  \"n\": 1.5,\n  \"m\": 0,\n  \"big\": 1e+25,\n  \"small\": 0.000001\n}"
+    }
+  },
+  {
+    "name": "orders check keys the way JavaScript orders object keys",
+    "input": {
+      "body": "{\"status\":\"pass\",\"checks\":{\"b\":[{\"status\":\"pass\"}],\"10\":[{\"status\":\"pass\"}],\"2\":[{\"status\":\"pass\"}],\"01\":[{\"status\":\"pass\"}]}}"
+    },
+    "expect": { "state": "pass", "serviceKeys": ["2", "10", "b", "01"] }
+  },
+  {
+    "name": "splits the key into a name and a measurement at the first colon",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": { "a:b:c": [{ "status": "pass" }], "d:": [{ "status": "pass" }] }
+      }
+    },
+    "expect": {
+      "state": "pass",
+      "services": [
+        { "key": "a:b:c", "name": "a", "measurement": "b:c" },
+        { "key": "d:", "name": "d", "measurement": "" }
+      ]
+    }
+  },
+  {
+    "name": "skips check entries that are malformed rather than rejecting the whole report",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": {
+          "good": [{ "status": "pass" }],
+          "bad": "nope",
+          "worse": [{ "status": "meh" }, 7],
+          "nullId": [{ "status": "fail", "componentId": null }],
+          "objectValue": [{ "status": "fail", "observedValue": { "ms": 3 } }],
+          "numberOutput": [{ "status": "fail", "output": 500 }],
+          "noStatus": [{ "output": "x" }],
+          "array": [[{ "status": "fail" }]]
+        }
+      }
+    },
+    "expect": { "state": "pass", "serviceKeys": ["good"] }
+  },
+  {
+    "name": "ignores checks that are not an object",
+    "input": { "json": { "status": "pass", "checks": [{ "status": "fail" }] } },
+    "expect": { "state": "pass", "serviceKeys": [] }
+  },
+  {
+    "name": "keeps string, boolean and null observed values",
+    "input": {
+      "json": {
+        "status": "pass",
+        "checks": {
+          "a": [{ "status": "pass", "observedValue": "eu-west" }],
+          "b": [{ "status": "pass", "observedValue": true }],
+          "c": [{ "status": "pass", "observedValue": null }],
+          "d": [{ "status": "pass", "observedValue": "password=hunter22" }]
+        }
+      }
+    },
+    "expect": {
+      "state": "pass",
+      "services": [
+        { "key": "a", "observedValue": "eu-west" },
+        { "key": "b", "observedValue": true },
+        { "key": "c", "observedValue": null },
+        { "key": "d", "observedValue": "password=[redacted]" }
+      ]
+    }
+  },
+  {
+    "name": "reads only string top-level fields",
+    "input": {
+      "json": {
+        "status": "pass",
+        "serviceId": 7,
+        "description": "",
+        "version": true,
+        "releaseId": "r1",
+        "output": "fine"
+      }
+    },
+    "expect": {
+      "state": "pass",
+      "serviceId": null,
+      "description": null,
+      "version": null,
+      "releaseId": "r1",
+      "output": "fine"
+    }
+  },
+  {
+    "name": "redacts secrets everywhere they can appear",
+    "input": {
+      "httpStatus": 503,
+      "json": {
+        "status": "fail",
+        "output": "DATABASE_URL=postgres://u:pw1234@db/app",
+        "checks": {
+          "db": [
+            {
+              "status": "fail",
+              "output": "postgres://u:pw1234@db/app refused",
+              "runova": {
+                "detail": "password=pw1234",
+                "stack": "at token=pw1234",
+                "hint": "pw1234"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "state": "fail",
+      "output": "DATABASE_URL=postgres://u:[redacted]@db/app",
+      "services": [
+        {
+          "key": "db",
+          "error": {
+            "message": "postgres://u:[redacted]@db/app refused",
+            "detail": "password=[redacted]",
+            "stack": "at token=[redacted]",
+            "hint": "pw1234"
+          }
+        }
+      ],
+      "excludes": ["pw1234@", "password=pw1234", "token=pw1234"],
+      "rawExcludes": ["pw1234@"]
+    }
+  },
+  {
+    "name": "masks a literal secret the caller knows, such as the key it sent",
+    "input": {
+      "httpStatus": 503,
+      "contentType": "application/json",
+      "latencyMs": 1,
+      "json": {
+        "status": "fail",
+        "output": "bad header rnh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      },
+      "knownSecrets": ["rnh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"]
+    },
+    "expect": {
+      "state": "fail",
+      "latencyMs": 1,
+      "output": "bad header [redacted]",
+      "excludes": ["rnh_kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"]
+    }
+  },
+  {
+    "name": "masks a known secret in a body that is not JSON",
+    "input": {
+      "httpStatus": 500,
+      "body": "header was Bearer s3cr3t-value-123 and s3cr3t-value-123",
+      "knownSecrets": ["s3cr3t-value-123"]
+    },
+    "expect": {
+      "state": "fail",
+      "raw": "header was Bearer [redacted] and [redacted]"
+    }
+  },
+  {
+    "name": "accepts a plain application/json content type",
+    "input": { "contentType": "application/json; charset=utf-8", "json": { "status": "pass" } },
+    "expect": { "state": "pass" }
+  },
+  {
+    "name": "reads a body with no content type",
+    "input": { "contentType": null, "json": { "status": "pass" } },
+    "expect": { "state": "pass" }
+  }
+]

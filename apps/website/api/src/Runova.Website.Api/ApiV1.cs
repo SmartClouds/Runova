@@ -4,6 +4,7 @@ using Runova.Website.Api.Audit;
 using Runova.Website.Api.Billing;
 using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Media;
+using Runova.Website.Api.Monitoring;
 using Runova.Website.Api.News;
 using Runova.Website.Api.Posts;
 using Runova.Website.Api.Releases;
@@ -43,6 +44,7 @@ internal static class ApiV1
         api.MapReports();
         api.MapDependencies();
         api.MapBilling();
+        api.MapMonitoring();
         return api;
     }
 }

@@ -141,12 +141,20 @@ test('the Notifications page saves the alert settings on the account', async ({
   await expect(minor).not.toBeChecked();
   await minor.check();
   await expect(minor).toBeChecked();
+  // The page saves each change in the background; the reload below must come after the last one.
+  const lastSave = page.waitForResponse(
+    (response) =>
+      response.url().includes('/dependency-alert-settings') &&
+      response.request().method() === 'PATCH' &&
+      (response.request().postData() ?? '').includes('critical'),
+  );
   await page.getByLabel('Security issues at').selectOption('critical');
   await expect(page.getByText('No messages yet')).toBeVisible();
   // The test stack sets up no Telegram bot.
   await expect(page.getByText(/Telegram is not available/)).toBeVisible();
   await shot(page, 'notifications');
 
+  expect((await lastSave).ok()).toBe(true);
   await page.reload();
   await expect(page.getByRole('checkbox', { name: 'Minor updates' })).toBeChecked();
   await expect(page.getByLabel('Security issues at')).toHaveValue('critical');

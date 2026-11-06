@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+# A monitoring node (docs/epics/54-monitoring-nodes.md): enrolls once, then checks the monitors the
+# website gives it and sends the results to the gateway. Chiseled .NET runtime: no shell, no package
+# manager, a non-root user, nothing listening. Build from this folder:
+#   docker build -f Dockerfile.node -t runova-website-monitoring-node apps/website/api
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+ARG VERSION=3.3.0
+ARG SOURCE_REVISION=
+
+COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
+COPY src/Runova.Monitoring.Contracts/Runova.Monitoring.Contracts.csproj src/Runova.Monitoring.Contracts/packages.lock.json src/Runova.Monitoring.Contracts/
+COPY src/Runova.Monitoring.Core/Runova.Monitoring.Core.csproj src/Runova.Monitoring.Core/packages.lock.json src/Runova.Monitoring.Core/
+COPY src/Runova.Monitoring.Node/Runova.Monitoring.Node.csproj src/Runova.Monitoring.Node/packages.lock.json src/Runova.Monitoring.Node/
+RUN dotnet restore src/Runova.Monitoring.Node/Runova.Monitoring.Node.csproj --locked-mode
+
+COPY src/Runova.Monitoring.Contracts/ src/Runova.Monitoring.Contracts/
+COPY src/Runova.Monitoring.Core/ src/Runova.Monitoring.Core/
+COPY src/Runova.Monitoring.Node/ src/Runova.Monitoring.Node/
+RUN dotnet publish src/Runova.Monitoring.Node/Runova.Monitoring.Node.csproj --no-restore --configuration Release \
+    --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
+
+# The data folder (key, certificate, outbox), owned by the runtime image's app user (APP_UID, 1654),
+# so a new volume mounted there starts with that owner. The chiseled image has no shell to make it in.
+RUN mkdir -p /data
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled AS runtime
+ARG VERSION=3.3.0
+WORKDIR /app
+COPY --from=build --chown=1654:1654 /data /data
+COPY --from=build /app ./
+ENV NODE_DATA_PATH=/data \
+    Sentry__Release=${VERSION} \
+    DOTNET_EnableDiagnostics=0
+USER 1654
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["dotnet", "Runova.Monitoring.Node.dll", "healthz"]
+ENTRYPOINT ["dotnet", "Runova.Monitoring.Node.dll"]

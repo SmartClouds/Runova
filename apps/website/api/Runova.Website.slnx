@@ -3,9 +3,14 @@
     <Project Path="src/Runova.Website.Api/Runova.Website.Api.csproj" />
     <Project Path="src/Runova.Website.Core/Runova.Website.Core.csproj" />
     <Project Path="src/Runova.Website.Data/Runova.Website.Data.csproj" />
+    <Project Path="src/Runova.Monitoring.Core/Runova.Monitoring.Core.csproj" />
+    <Project Path="src/Runova.Monitoring.Contracts/Runova.Monitoring.Contracts.csproj" />
+    <Project Path="src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.csproj" />
+    <Project Path="src/Runova.Monitoring.Node/Runova.Monitoring.Node.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Runova.Website.Tests/Runova.Website.Tests.csproj" />
     <Project Path="tests/Runova.Website.IntegrationTests/Runova.Website.IntegrationTests.csproj" />
+    <Project Path="tests/Runova.Monitoring.Tests/Runova.Monitoring.Tests.csproj" />
   </Folder>
 </Solution>

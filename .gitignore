@@ -34,6 +34,10 @@ apps/server-core/artifacts/
 apps/website/api/**/bin/
 apps/website/api/**/obj/
 apps/website/api/**/*.received.*
+# The local Monitoring Gateway certificate (apps/website/compose.yaml, monitoring profile).
+apps/website/monitoring-tls/
+# A monitoring node's settings, which hold its one-time enrollment token.
+apps/website/monitoring-node/.env
 
 # WordPress connector plugin: Composer dev tools, PHPUnit cache, and the file activation writes
 apps/wordpress-connector/vendor/

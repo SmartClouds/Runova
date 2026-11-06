@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+# The Monitoring Gateway (docs/epics/54-monitoring-nodes.md): the one service monitoring nodes
+# reach, over gRPC with client certificates. Chiseled ASP.NET Core runtime: no shell, no package
+# manager, a non-root user. Build from this folder:
+#   docker build -f Dockerfile.gateway -t runova-website-monitoring-gateway apps/website/api
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+ARG VERSION=3.3.0
+ARG SOURCE_REVISION=
+
+COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
+COPY src/Runova.Monitoring.Contracts/Runova.Monitoring.Contracts.csproj src/Runova.Monitoring.Contracts/packages.lock.json src/Runova.Monitoring.Contracts/
+COPY src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.csproj src/Runova.Monitoring.Gateway/packages.lock.json src/Runova.Monitoring.Gateway/
+RUN dotnet restore src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.csproj --locked-mode
+
+COPY src/Runova.Monitoring.Contracts/ src/Runova.Monitoring.Contracts/
+COPY src/Runova.Monitoring.Gateway/ src/Runova.Monitoring.Gateway/
+RUN dotnet publish src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.csproj --no-restore --configuration Release \
+    --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+ARG VERSION=3.3.0
+WORKDIR /app
+COPY --from=build /app ./
+ENV Gateway__NodePort=8043 \
+    Gateway__HealthPort=8080 \
+    Sentry__Release=${VERSION} \
+    DOTNET_EnableDiagnostics=0
+USER 1654
+# 8043 is for nodes (TLS 1.3, client certificates); 8080 only answers /healthz on the internal network.
+EXPOSE 8043 8080
+ENTRYPOINT ["dotnet", "Runova.Monitoring.Gateway.dll"]

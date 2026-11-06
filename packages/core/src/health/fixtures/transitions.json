@@ -1,0 +1,91 @@
+[
+  {
+    "name": "confirms a first good sample at once and opens nothing",
+    "states": ["pass"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "believes a first warn at once too",
+    "states": ["warn"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "waits for a second bad sample",
+    "states": ["pass", "fail"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 1, "pending": true }
+  },
+  {
+    "name": "opens an incident only after the problem repeats",
+    "states": ["pass", "fail", "unreachable"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "ignores a single blip",
+    "states": ["pass", "fail", "pass", "fail", "pass"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "waits for the recovery to repeat",
+    "states": ["pass", "fail", "fail", "pass"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 1, "pending": true }
+  },
+  {
+    "name": "resolves after the target recovers for the same number of samples",
+    "states": ["pass", "fail", "fail", "pass", "warn"],
+    "expect": { "events": ["opened", "resolved"], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "needs confirmation for a problem on the very first sample",
+    "states": ["fail"],
+    "expect": { "events": [], "confirmed": null, "streak": 1, "pending": true }
+  },
+  {
+    "name": "opens on the second bad sample when the first was bad too",
+    "states": ["fail", "fail"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "believes a good sample at once after a first bad one",
+    "states": ["invalid", "pass"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "opens at once when confirmation is set to one sample",
+    "confirm": 1,
+    "states": ["pass", "fail"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "treats a confirmation of zero as one",
+    "confirm": 0,
+    "states": ["pass", "unauthorized"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "counts three samples when confirmation is three",
+    "confirm": 3,
+    "states": ["pass", "fail", "fail"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 2, "pending": true }
+  },
+  {
+    "name": "opens on the third sample when confirmation is three",
+    "confirm": 3,
+    "states": ["pass", "fail", "fail", "invalid"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "does not open twice while it stays down",
+    "states": ["fail", "fail", "fail", "fail"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 0, "pending": false }
+  },
+  {
+    "name": "does not count warn as down",
+    "states": ["pass", "warn", "warn", "warn"],
+    "expect": { "events": [], "confirmed": "ok", "streak": 0, "pending": false }
+  },
+  {
+    "name": "resets the streak when a sample agrees again",
+    "states": ["fail", "fail", "pass", "fail", "pass"],
+    "expect": { "events": ["opened"], "confirmed": "problem", "streak": 1, "pending": true }
+  }
+]

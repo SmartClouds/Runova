@@ -15,6 +15,11 @@
 # compose project):
 #   echo "$PASSWORD" | docker compose -p <app name> exec -T api \
 #     dotnet Runova.Website.Api.dll admin create-owner --email <email> --name "<display name>"
+#
+# Online monitoring (E54) is the "monitoring" profile (COMPOSE_PROFILES=monitoring): an internal
+# RabbitMQ with no published port, and the Monitoring Gateway on 127.0.0.1:MONITORING_GATEWAY_PORT,
+# which the server's nginx passes nodes.runovahq.com to by SNI without ending TLS (the gateway must
+# see the nodes' client certificates). See docs/epics/54-monitoring-nodes.md, Setting it up.
 name: runova-website
 
 services:
@@ -73,10 +78,66 @@ services:
       RateLimits__ApiClients__TokenLimit: ${API_CLIENT_TOKEN_LIMIT:-20}
       RateLimits__ApiClients__TokensPerPeriod: ${API_CLIENT_TOKENS_PER_PERIOD:-1}
       RateLimits__ApiClients__ReplenishmentPeriod: ${API_CLIENT_REPLENISHMENT_PERIOD:-00:00:01}
+      # The internal RabbitMQ for the monitoring gateways (E54), such as
+      # amqp://runova:<RABBITMQ_PASSWORD>@rabbitmq:5672. Empty runs the API without it.
+      RabbitMq__Uri: ${RABBITMQ_URI:-}
+      Monitoring__GatewayAddress: ${MONITORING_GATEWAY_ADDRESS:-}
     volumes:
       - media:/var/lib/runova/media
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  rabbitmq:
+    profiles: [monitoring]
+    # No management plugin, no guest user, no published port: only the API and the gateway reach it.
+    image: rabbitmq:4-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: runova
+      # Required with the monitoring profile; checked here only by RabbitMQ refusing an empty one.
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
+    expose:
+      - "5672"
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  monitoring-gateway:
+    profiles: [monitoring]
+    image: ${IMAGE_REGISTRY:-ghcr.io/smartclouds}/runova-website-monitoring-gateway:${IMAGE_TAG:-latest}
+    pull_policy: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      RabbitMq__Uri: amqp://runova:${RABBITMQ_PASSWORD:-}@rabbitmq:5672
+      Gateway__ServerCertificatePath: /tls/fullchain.pem
+      Gateway__ServerKeyPath: /tls/privkey.pem
+      Sentry__Dsn: ${SENTRY_DSN:-}
+      Sentry__Environment: ${SENTRY_ENVIRONMENT:-production}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports:
+      # Loopback only: nginx passes nodes.runovahq.com:443 here by SNI.
+      - 127.0.0.1:${MONITORING_GATEWAY_PORT:-8043}:8043
+    volumes:
+      # The node address's certificate, readable by uid 1654 (copied there by a certbot deploy hook).
+      - ${MONITORING_TLS_DIR:-/etc/runova/monitoring-tls}:/tls:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
 
@@ -167,3 +228,4 @@ configs:
 volumes:
   db:
   media:
+  rabbitmq:

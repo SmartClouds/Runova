@@ -2705,6 +2705,168 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("SetupLinks");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.MonitoringNode", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.PrimitiveCollection<string[]>("AllowedAddresses")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<long>("AssignmentVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ChecksLastMinute")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Draining")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("EnrolledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EnrollmentTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("EnrollmentTokenHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("GatewayId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("LagMs")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Monitors")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("QueuedResults")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RemoteAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SoftwareVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnrollmentTokenHash")
+                        .IsUnique()
+                        .HasFilter("\"EnrollmentTokenHash\" IS NOT NULL");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("MonitoringNodes", t =>
+                        {
+                            t.HasCheckConstraint("CK_MonitoringNodes_Status", "\"Status\" IN ('pending', 'online', 'offline', 'revoked')");
+                        });
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.NodeAuthority", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("Certificate")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SealedPrivateKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NodeAuthorities", t =>
+                        {
+                            t.HasCheckConstraint("CK_NodeAuthority_Singleton", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.NodeCertificate", b =>
+                {
+                    b.Property<string>("Serial")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("NodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("NotAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("NotBefore")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("PublicKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Serial");
+
+                    b.HasIndex("NodeId");
+
+                    b.ToTable("NodeCertificates");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<long>", b =>
                 {
                     b.HasOne("Runova.Website.Data.Identity.AppRole", null)
@@ -3078,6 +3240,15 @@ namespace Runova.Website.Data.Migrations
                     b.HasOne("Runova.Website.Data.Identity.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.NodeCertificate", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.MonitoringNode", null)
+                        .WithMany()
+                        .HasForeignKey("NodeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
