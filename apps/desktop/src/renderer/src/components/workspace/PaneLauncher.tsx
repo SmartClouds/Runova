@@ -5,6 +5,7 @@ import { CliLogo } from '@/components/cliLogos';
 import { Download, GitBranch, Globe, Sparkles, TerminalSquare } from '@/components/icons';
 import { Chip, EmptyState, GLASS_CARD, SECTION_HEADING } from '@/components/pageKit';
 import { ProjectIcon } from '@/components/projects/ProjectIcon';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -151,8 +152,8 @@ export function PaneLauncher({
             description="Install Claude Code, Codex, Gemini or another agent to run it here."
             action={
               <Button asChild variant="soft" size="sm">
-                <Link to="/cli-manager">
-                  <Download /> Open the CLI manager
+                <Link to={AI_CLIS_ROUTE}>
+                  <Download /> Install an agent CLI
                 </Link>
               </Button>
             }
@@ -303,7 +304,7 @@ export function PaneLauncher({
             {agents.missing.slice(0, MISSING_SHOWN).map((choice) => (
               <SimpleTooltip
                 key={choice.cli.id}
-                label={`${choice.cli.name} isn't installed. Install it from the AI CLI Manager.`}
+                label={`${choice.cli.name} isn't installed. Install it from Agent Tools.`}
               >
                 <Button
                   asChild
@@ -311,7 +312,7 @@ export function PaneLauncher({
                   size="icon-sm"
                   className="opacity-60 grayscale transition hover:opacity-100 hover:grayscale-0 focus-visible:opacity-100 focus-visible:grayscale-0"
                 >
-                  <Link to="/cli-manager" aria-label={`Install ${choice.cli.name}`}>
+                  <Link to={AI_CLIS_ROUTE} aria-label={`Install ${choice.cli.name}`}>
                     <CliLogo cliId={choice.cli.id} className="h-3.5 w-3.5" />
                   </Link>
                 </Button>
@@ -319,7 +320,7 @@ export function PaneLauncher({
             ))}
             {agents.missing.length > MISSING_SHOWN ? (
               <SimpleTooltip
-                label={`${agents.missing.length - MISSING_SHOWN} more agents you can install from the AI CLI Manager`}
+                label={`${agents.missing.length - MISSING_SHOWN} more agents you can install from Agent Tools`}
               >
                 <Button
                   asChild
@@ -328,7 +329,7 @@ export function PaneLauncher({
                   className="opacity-60 hover:opacity-100 focus-visible:opacity-100"
                 >
                   <Link
-                    to="/cli-manager"
+                    to={AI_CLIS_ROUTE}
                     aria-label={`${agents.missing.length - MISSING_SHOWN} more agents to install`}
                   >
                     +{agents.missing.length - MISSING_SHOWN}

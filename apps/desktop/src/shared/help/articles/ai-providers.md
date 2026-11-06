@@ -85,7 +85,7 @@ Translation, voice input and the writing check do not use these providers. They 
 
 ## How this differs from AI CLIs
 
-AI CLIs (Claude Code, Codex, Gemini CLI and the others) are separate programs that Runova launches in a terminal. They read and edit your files, run commands and use their own login or subscription. You manage them in [AI CLI Manager](cli-manager.md).
+AI CLIs (Claude Code, Codex, Gemini CLI and the others) are separate programs that Runova launches in a terminal. They read and edit your files, run commands and use their own login or subscription. You manage them in [AI CLIs](cli-manager.md).
 
 AI providers are plain model calls with an API key or a local server. They answer a question or write some text and do nothing else: no file access, no commands. They are billed to your API account (OpenAI, Gemini) or run free on your hardware (Ollama).
 
@@ -95,7 +95,7 @@ Some features use a CLI and never touch these providers:
 - The **Recommended run** panel in Prompt Builder asks your default AI CLI (**Settings**, **Agents**, **Default CLI**, or the first installed one) to size a prompt.
 - Agents you open in the Workspace are CLIs.
 
-If a feature says it needs a CLI, install and sign in to one in [AI CLI Manager](cli-manager.md). If it says it needs a provider, set one up on this page.
+If a feature says it needs a CLI, install and sign in to one in [AI CLIs](cli-manager.md). If it says it needs a provider, set one up on this page.
 
 ## Privacy and proxies
 
@@ -112,6 +112,6 @@ Your keys are saved in Runova's settings on this computer. OpenAI and Gemini req
 - [Ask AI](ask-ai.md)
 - [Prompt Builder](prompt-builder.md)
 - [Writing, voice and translation](writing-voice-translation.md)
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Settings](settings.md)
 - [Help center](help-center.md)

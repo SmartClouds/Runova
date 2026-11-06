@@ -101,5 +101,5 @@ A project's **MCP** tab (see [Projects](projects.md)) lists the servers installe
 
 - [Skills](skills.md)
 - [Agent Tools](agent-tools.md)
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Projects](projects.md)

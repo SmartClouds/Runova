@@ -35,7 +35,7 @@ export const ADE_POINTS: AdePoint[] = [
   },
 ];
 
-/** Agent CLIs named in the README that the AI CLI Manager detects and installs. */
+/** Agent CLIs named in the README that Agent Tools detects and installs. */
 export const AGENT_CLIS = [
   'Claude Code',
   'Codex',
@@ -93,7 +93,7 @@ export const HIGHLIGHTS: Highlight[] = [
     shot: 'cli-manager',
     eyebrow: 'Agents',
     title: 'Every AI CLI, installed and up to date',
-    body: 'The AI CLI Manager finds the coding CLIs on your machine and installs or updates the missing ones in one click. Save each one’s flags, model and effort, and check a skill for risky instructions before an agent reads it.',
+    body: 'Agent Tools finds the coding CLIs on your machine and installs or updates the missing ones in one click. Save each one’s flags, model and effort, and check a skill for risky instructions before an agent reads it.',
   },
   {
     slug: 'ship',

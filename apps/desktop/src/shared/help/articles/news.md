@@ -51,7 +51,7 @@ Runova compares against what it already knows about this computer. It runs no ex
 
 - Runova itself, and the Electron and Node.js versions built into it.
 - Node.js, Git, the .NET SDK and Docker, as found by Dev Setup.
-- The AI CLIs found by the [AI CLI Manager](cli-manager.md).
+- The AI CLIs found by the [AI CLIs](cli-manager.md).
 
 A tool that is not installed, or whose version could not be read, never matches. When the tool list changes, for example after you update a CLI, the badges are checked again.
 

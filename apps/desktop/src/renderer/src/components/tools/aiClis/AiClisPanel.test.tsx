@@ -2,10 +2,10 @@ import { CLI_REGISTRY, type InstalledCli } from '@runova/core';
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useTerminalStore } from '@/stores/terminalStore';
-import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
+import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 
 /**
- * The CLI Manager is a catalogue with side effects: it decides which of the registry's CLIs are
+ * The AI CLIs tab is a catalogue with side effects: it decides which of the registry's CLIs are
  * on this machine, and every button either opens a terminal with a command in it or writes a
  * setting. Both of those are asserted through the bridge rather than the component.
  */
@@ -22,7 +22,7 @@ const toast = vi.hoisted(() =>
 );
 vi.mock('sonner', () => ({ toast }));
 
-const { default: CliManagerPage } = await import('./CliManagerPage');
+const { AiClisPanel } = await import('./AiClisPanel');
 
 function detected(overrides: Partial<InstalledCli> & { id: string }): InstalledCli {
   return {
@@ -55,10 +55,10 @@ function cliCard(name: string): HTMLElement {
 }
 
 function renderPage(bridge: Record<string, unknown> = {}) {
-  return renderWithProviders(<CliManagerPage />, { route: '/cli-manager', bridge });
+  return renderWithProviders(<AiClisPanel />, { route: '/tools?tab=ai-clis', bridge });
 }
 
-describe('CliManagerPage detection', () => {
+describe('AiClisPanel detection', () => {
   it('renders with nothing detected and offers the full catalogue instead', async () => {
     renderPage();
 
@@ -156,7 +156,7 @@ describe('CliManagerPage detection', () => {
   });
 });
 
-describe('CliManagerPage install', () => {
+describe('AiClisPanel install', () => {
   it('puts the install command in a terminal for the user to confirm', async () => {
     const { user, bridge } = renderPage({
       'cli.detectAll': [claudeInstalled],
@@ -222,7 +222,7 @@ describe('CliManagerPage install', () => {
   });
 });
 
-describe('CliManagerPage broken install', () => {
+describe('AiClisPanel broken install', () => {
   const claudeBroken = detected({
     id: 'claude-code',
     version: null,
@@ -275,7 +275,7 @@ describe('CliManagerPage broken install', () => {
   });
 });
 
-describe('CliManagerPage settings', () => {
+describe('AiClisPanel settings', () => {
   it('saves the arguments typed for a CLI and previews the command they build', async () => {
     const { user, bridge } = renderPage({ 'cli.detectAll': [claudeInstalled] });
     await screen.findByRole('heading', { name: 'Claude Code CLI' });
@@ -312,7 +312,7 @@ describe('CliManagerPage settings', () => {
   });
 });
 
-describe('CliManagerPage updates', () => {
+describe('AiClisPanel updates', () => {
   it('has nothing to check when no CLI is installed', async () => {
     const { user } = renderPage();
     await screen.findByText(/No AI CLIs installed yet/);

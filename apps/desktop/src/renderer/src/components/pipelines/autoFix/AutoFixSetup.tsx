@@ -18,6 +18,7 @@ import { EffortPicker } from '@/components/cli/RunSettingsFields';
 import { cliOptionIcon } from '@/components/cliLogos';
 import { Minus, Plus, Spinner, Wand2 } from '@/components/icons';
 import { Notice } from '@/components/pageKit';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { queryKeys } from '@/lib/queryKeys';
@@ -155,8 +156,8 @@ export function AutoFixSetup({
           tone="warning"
           size="sm"
           action={
-            <Button size="xs" variant="soft" onClick={() => navigate('/cli-manager')}>
-              Open CLI Manager
+            <Button size="xs" variant="soft" onClick={() => navigate(AI_CLIS_ROUTE)}>
+              Open AI CLIs
             </Button>
           }
         >

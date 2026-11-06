@@ -74,6 +74,7 @@ import {
   TileHeader,
   TOOLBAR,
 } from '@/components/pageKit';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -663,8 +664,8 @@ function UpdatesCard({
         {installedCount === 0 && !checking ? (
           <p className="text-sm text-muted-foreground">
             No AI CLIs or agent tools detected yet. Visit the{' '}
-            <button type="button" className={linkClass} onClick={() => navigate('/cli-manager')}>
-              CLI Manager
+            <button type="button" className={linkClass} onClick={() => navigate(AI_CLIS_ROUTE)}>
+              AI CLIs
             </button>{' '}
             or{' '}
             <button type="button" className={linkClass} onClick={() => navigate('/tools')}>

@@ -45,7 +45,7 @@ Below the themes, **Main menu** chooses where the navigation lives. **Left** put
 
 ### Startup page
 
-**Startup page** decides where Runova opens. **Last opened page** (the default) brings back the page and project you were on, whether you closed the app, it restarted for an update or the computer shut down. You can instead pin one page from the list (Dashboard, Token Usage, Prompt Builder, Projects, Workspace, API Client, Pipelines, Deploy, Skills, MCP Servers, Agent Tools, Docker, Android, AI CLI Manager, Ask AI, Remote, Vault or Settings). The list has its own search box.
+**Startup page** decides where Runova opens. **Last opened page** (the default) brings back the page and project you were on, whether you closed the app, it restarted for an update or the computer shut down. You can instead pin one page from the list (Dashboard, Token Usage, Prompt Builder, Projects, Workspace, API Client, Pipelines, Deploy, Skills, MCP Servers, Agent Tools, Docker, Android, Ask AI, Remote, Vault or Settings). The list has its own search box.
 
 ### Keep terminals running
 
@@ -73,7 +73,7 @@ Stopping a project's run does not stop the Docker containers it brought up. **Do
 
 ### Check for CLI and tool updates
 
-**Check for CLI and tool updates** (on by default) checks every installed CLI and tool for a newer version once a day and adds an entry to **Recent messages** (the bell in the header) when it finds one. It does not install anything. To update a CLI, open [AI CLI Manager](cli-manager.md).
+**Check for CLI and tool updates** (on by default) checks every installed CLI and tool for a newer version once a day and adds an entry to **Recent messages** (the bell in the header) when it finds one. It does not install anything. To update a CLI, open [AI CLIs](cli-manager.md).
 
 ### Workspace terminal background
 
@@ -105,7 +105,7 @@ The **Agents** tab covers which CLI starts, how each one launches and how agents
 
 ### Default CLI
 
-**Default CLI** is the agent Runova uses when a feature needs an AI provider without asking you. Pick one from the list, or clear it to have none. When one is selected a **Background task arguments** box appears for that CLI. Those flags are used only when Runova runs the CLI in the background (commit messages, tag suggestions, version bumps and skill audits), never for terminals. Press `Enter` or click away to save them. Every CLI has the same box in [AI CLI Manager](cli-manager.md).
+**Default CLI** is the agent Runova uses when a feature needs an AI provider without asking you. Pick one from the list, or clear it to have none. When one is selected a **Background task arguments** box appears for that CLI. Those flags are used only when Runova runs the CLI in the background (commit messages, tag suggestions, version bumps and skill audits), never for terminals. Press `Enter` or click away to save them. Every CLI has the same box in [AI CLIs](cli-manager.md).
 
 ### Launch defaults
 

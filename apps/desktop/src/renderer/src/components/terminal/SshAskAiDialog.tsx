@@ -408,7 +408,7 @@ export function SshAskAiDialog({
           {cliQuery.isFetched && promptClis.length === 0 && (
             <p className="-mt-1 text-xs text-muted-foreground">
               No agent CLI with a non-interactive mode is installed, so the AI provider from
-              Settings is used. Install Claude Code, Codex, or Gemini from CLI Manager to pick one.
+              Settings is used. Install Claude Code, Codex, or Gemini from Agent Tools to pick one.
             </p>
           )}
 

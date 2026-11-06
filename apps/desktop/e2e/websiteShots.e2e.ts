@@ -607,7 +607,7 @@ function seedHome(home: string): void {
   mkdirSync(join(home, 'AppData', 'Local'), { recursive: true });
 }
 
-/** AI CLIs the CLI Manager finds installed, next to the scripted `claude` the launcher writes. */
+/** AI CLIs the AI CLIs tab finds installed, next to the scripted `claude` the launcher writes. */
 const FAKE_CLIS: Record<string, string> = {
   codex: 'codex-cli 0.58.0',
   gemini: '0.16.0',
@@ -1114,14 +1114,14 @@ test('prompt-builder', async () => {
 
 test('cli-manager', async () => {
   const p = page();
-  await openRoute(p, '/cli-manager');
+  await openRoute(p, '/tools?tab=ai-clis');
   await expect(p.getByText('0.58.0').first()).toBeVisible({ timeout: 30_000 });
   await expect(p.getByText('2.0.62').first()).toBeVisible();
   await capture(p, secrets, {
     name: 'cli-manager',
-    route: '/cli-manager',
+    route: '/tools?tab=ai-clis',
     theme: 'dark',
-    alt: 'The AI CLI Manager with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet.',
+    alt: 'The AI CLIs tab of Agent Tools with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet.',
   });
 });
 

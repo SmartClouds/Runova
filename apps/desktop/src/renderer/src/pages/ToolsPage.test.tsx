@@ -567,6 +567,49 @@ describe('ToolsPage target project', () => {
   });
 });
 
+describe('ToolsPage AI CLIs tab', () => {
+  const claude = {
+    id: 'claude-code',
+    installed: true,
+    version: '1.2.3',
+    executablePath: '/usr/local/bin/claude',
+    lastCheckedAt: '2026-09-01T10:00:00.000Z',
+  };
+
+  function aiClisTab(): HTMLElement {
+    return within(categoryTabs()).getByRole('button', { name: /^AI CLIs/ });
+  }
+
+  it('sits under Setup and counts the installed CLIs', async () => {
+    renderPage({ 'cli.detectAll': [claude] });
+    await screen.findByText(ROUTER.name);
+
+    await waitFor(() => expect(aiClisTab()).toHaveTextContent('1 installed'));
+  });
+
+  it('shows the CLI cards in place of the tool grid', async () => {
+    const { user } = renderPage({ 'cli.detectAll': [claude] });
+    await screen.findByText(ROUTER.name);
+
+    await user.click(aiClisTab());
+
+    expect(await screen.findByRole('heading', { name: 'Claude Code CLI' })).toBeTruthy();
+    expect(aiClisTab()).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryByText(ROUTER.name)).toBeNull();
+    // Its own filter replaces the tool filter, and no target project is asked for.
+    expect(screen.getByRole('searchbox', { name: 'Filter CLIs' })).toBeTruthy();
+    expect(screen.queryByRole('searchbox', { name: 'Filter tools' })).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('opens straight to the CLIs from a link', async () => {
+    renderPage({ 'cli.detectAll': [claude] }, '/tools?tab=ai-clis');
+
+    expect(await screen.findByRole('heading', { name: 'Claude Code CLI' })).toBeTruthy();
+    expect(aiClisTab()).toHaveAttribute('aria-current', 'true');
+  });
+});
+
 describe('ToolsPage Dev Setup tab', () => {
   const WIN = { os: 'win32', arch: 'x64', packageManagers: ['winget'] };
   const found = (version: string) => ({ state: 'found', version, path: null, onPath: true });

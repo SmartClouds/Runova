@@ -95,7 +95,7 @@ When you choose **Restore the Vault**, Runova locks the Vault, sets your current
 1. On the old computer export a backup with **Include project environments** (set a password) and **Include the Vault**.
 2. Install Runova on the new one and copy the file over.
 3. Restore it as described above. The project folders themselves are not in the backup, so make sure each project's folder exists at the same path, or fix the folder on the project afterwards.
-4. Reinstall your AI CLIs from [AI CLI Manager](cli-manager.md).
+4. Reinstall your AI CLIs from [AI CLIs](cli-manager.md).
 
 ## Tips
 

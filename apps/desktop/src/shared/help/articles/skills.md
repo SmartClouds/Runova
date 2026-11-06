@@ -156,7 +156,7 @@ The dialog also lists **Earlier checks** for that skill. Click one to reopen it,
 
 ### Deep review with an agent CLI
 
-Turn on **Deep review with an agent CLI** to send the skill's text to an installed CLI for a second opinion. It is slower and can only make the verdict stricter. Choose a CLI from the list (**Default CLI (from Settings)** or any installed CLI that can answer a one-off prompt). Findings from the review are tagged **CLI review**, and the CLI's own summary is shown in the report. If no suitable CLI is detected, install one from [AI CLI Manager](cli-manager.md).
+Turn on **Deep review with an agent CLI** to send the skill's text to an installed CLI for a second opinion. It is slower and can only make the verdict stricter. Choose a CLI from the list (**Default CLI (from Settings)** or any installed CLI that can answer a one-off prompt). Findings from the review are tagged **CLI review**, and the CLI's own summary is shown in the report. If no suitable CLI is detected, install one from [AI CLIs](cli-manager.md).
 
 ### Check any skill
 
@@ -179,11 +179,11 @@ Every check is saved on this machine. The **Security** tab shows **Check history
 - Run a security check on any community skill before you install it, especially one with few installs.
 - Use **Install globally** for skills you want everywhere, and a project install for skills that only make sense in one codebase.
 - Keep favorites for the skills you reinstall often.
-- Use [AI CLI Manager](cli-manager.md) to install the CLI you want for deep reviews.
+- Use [AI CLIs](cli-manager.md) to install the CLI you want for deep reviews.
 
 ## Related
 
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [MCP Servers](mcp-servers.md)
 - [Agent Tools](agent-tools.md)
 - [Projects](projects.md)

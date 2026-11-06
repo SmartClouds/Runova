@@ -203,7 +203,7 @@ To hide a provider's item, turn off its switch under **Status bar limits** on th
 
 ## Related
 
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Dashboard](dashboard.md)
 - [Widgets and the desktop pet](widgets-desktop-pet.md)
 - [Notifications and Telegram](notifications-telegram.md)

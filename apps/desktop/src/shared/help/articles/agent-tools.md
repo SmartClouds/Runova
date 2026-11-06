@@ -7,11 +7,15 @@ keywords: agent tools, tools, dev setup, developer tools, set up, checklist, ins
 route: /tools
 ---
 
-Agent Tools has two jobs. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
+Agent Tools has three jobs. **AI CLIs** finds the AI coding CLIs on this computer (Claude Code, Codex, Gemini CLI and the rest), installs the missing ones and keeps them up to date. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
 
 ## Where to find it
 
 Click **Agent Tools** in the sidebar under **Agents**, or open the command palette and type "Agent Tools". A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
+
+## AI CLIs
+
+**AI CLIs** lists the coding agents Runova found, each with its version, and installs, updates or reinstalls them in a terminal. It is also where you pick the default CLI and set the arguments Runova passes to each one in the background. Open it from **AI CLIs** under **Setup** in the page's left menu, or open the page with `?tab=ai-clis`. See [AI CLIs](cli-manager.md) for everything on the tab.
 
 ## Dev Setup
 
@@ -75,11 +79,11 @@ After an install, terminals that were already open do not see the new tools, so 
 
 ### Target project
 
-The **Target project** picker at the bottom of the left menu chooses a project for actions that work inside a codebase, such as initializing a tool in a project or writing its config file. Docker and global setup actions do not need one. If an action needs a project and none is chosen, Runova says "Choose a target project first." The picker and the filter box only act on tool cards, so they are hidden on **Dev Setup**.
+The **Target project** picker at the bottom of the left menu chooses a project for actions that work inside a codebase, such as initializing a tool in a project or writing its config file. Docker and global setup actions do not need one. If an action needs a project and none is chosen, Runova says "Choose a target project first." The picker and the filter box only act on tool cards, so they are hidden on **AI CLIs** and **Dev Setup**.
 
 ### Category tabs
 
-The left menu has two groups. **Setup** holds **Dev Setup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=security` or `?tab=dev-setup`.
+The left menu has two groups. **Setup** holds **AI CLIs** and **Dev Setup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
 
 ### Refresh and update checks
 
@@ -112,7 +116,7 @@ After installing, click **Refresh**. Tools installed with pipx, or into `~/.loca
 - Click the cloud icon (**Check for updates**) on an installed tool's card. Runova asks npm, PyPI or GitHub Releases for the latest version.
 - If there is a newer version, an **Update <name>?** dialog shows the current version, the latest version and the command. Click **Update** to open a terminal with the command typed in (press `Enter` to run it) or **Cancel**. With **Check all for updates**, the dialog steps through each tool that has an update.
 
-Once a day Runova can also check in the background and ring the notification bell when a CLI or tool has a new version. That is the **Check for CLI and tool updates** switch in **Settings** under **General**. See [AI CLI Manager](cli-manager.md#cli-and-tool-update-notifications).
+Once a day Runova can also check in the background and ring the notification bell when a CLI or tool has a new version. That is the **Check for CLI and tool updates** switch in **Settings** under **General**. See [AI CLIs](cli-manager.md#cli-and-tool-update-notifications).
 
 ## Configure a tool
 
@@ -191,7 +195,7 @@ See [Writing, voice and translation](writing-voice-translation.md) for the writi
 
 ## Related
 
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Skills](skills.md)
 - [MCP Servers](mcp-servers.md)
 - [Projects](projects.md)

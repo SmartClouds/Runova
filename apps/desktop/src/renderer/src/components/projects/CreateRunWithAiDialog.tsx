@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Spinner, Wand2 } from '@/components/icons';
 import { FilterChip, Notice, SECTION_HEADING } from '@/components/pageKit';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -226,15 +227,15 @@ export function CreateRunWithAiDialog({
                   variant="soft"
                   onClick={() => {
                     onOpenChange(false);
-                    navigate('/cli-manager');
+                    navigate(AI_CLIS_ROUTE);
                   }}
                 >
-                  Open AI CLI Manager
+                  Open AI CLIs
                 </Button>
               }
             >
-              {cliLabel} is not installed on this computer. Install it from AI CLI Manager, then
-              come back.
+              {cliLabel} is not installed on this computer. Install it from the AI CLIs tab in Agent
+              Tools, then come back.
             </Notice>
           ) : null}
         </div>

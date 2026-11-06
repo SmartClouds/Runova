@@ -61,9 +61,9 @@
   },
   {
     "name": "cli-manager",
-    "route": "/cli-manager",
+    "route": "/tools?tab=ai-clis",
     "theme": "dark",
-    "alt": "The AI CLI Manager with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet."
+    "alt": "The AI CLIs tab of Agent Tools with Claude Code, Codex, Gemini CLI, OpenCode and GitHub Copilot CLI installed, each with its version, next to the CLIs that are not installed yet."
   },
   {
     "name": "skills",

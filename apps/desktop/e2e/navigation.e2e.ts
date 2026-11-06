@@ -100,11 +100,6 @@ const DESTINATIONS: Destination[] = [
       page.getByRole('button', { name: 'Refresh' }).or(page.getByText('Android SDK not found')),
   },
   {
-    label: 'AI CLI Manager',
-    hash: '#/cli-manager',
-    landmark: (page) => page.getByRole('button', { name: /^Check(ing)? (all for )?updates/ }),
-  },
-  {
     label: 'Ask AI',
     hash: '#/ask-ai',
     landmark: (page) => page.getByRole('button', { name: 'Clear history' }),
@@ -131,6 +126,10 @@ const HASH_ONLY: { hash: string; landmark: (page: Page) => Locator }[] = [
   {
     hash: '#/prompt-history',
     landmark: (page) => page.getByPlaceholder('Search prompt history…'),
+  },
+  {
+    hash: '#/tools?tab=ai-clis',
+    landmark: (page) => page.getByRole('searchbox', { name: 'Filter CLIs' }),
   },
   {
     hash: '#/remote-files',
@@ -196,6 +195,22 @@ test('the retired notifications route still lands on Pipelines', async () => {
   await goByHash(page, '#/notifications');
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/pipelines');
   await expect(page.getByRole('button', { name: /^Refresh runs/ })).toBeVisible();
+  await expect(errorCard(page)).toHaveCount(0);
+});
+
+test('the retired CLI manager route lands on the AI CLIs tab of Agent Tools', async () => {
+  launched = await launchApp({ settings: {} });
+  const { page } = launched;
+
+  await goByHash(page, '#/cli-manager');
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/tools?tab=ai-clis');
+  await expect(page.getByRole('searchbox', { name: 'Filter CLIs' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('link', { name: 'Agent Tools' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await expect(errorCard(page)).toHaveCount(0);
 });
 
