@@ -24,7 +24,7 @@ Before you type anything it shows these groups, and typing filters all of them.
 
 | Group | What is in it |
 | --- | --- |
-| **Go to** | Every page in the menu (Dashboard, Workspace, Projects, Prompt Builder, Ask AI, API Client, Dev Tools, Skills, MCP Servers, Token Usage, Pipelines, Deploy, Docker, Android, Remote, Vault, Settings), plus **Recent messages**, which opens the message history, and **Running CLIs**, which opens the dialog with CPU and memory for every terminal. |
+| **Go to** | Every page in the menu (Dashboard, Workspace, Projects, Prompt Builder, Ask AI, API Client, Token Usage, Skills, Dev Tools, Pipelines, Deploy, Docker, Android, Remote, Vault, Settings), plus **Recent messages**, which opens the message history, and **Running CLIs**, which opens the dialog with CPU and memory for every terminal. |
 | **Vault** | Shown once you have set up a Vault. While the Vault is locked, a single **Unlock Vault** entry takes you to the Vault page. While it is unlocked, there is a **Lock Vault** entry and one entry per saved item, shown by title. Choosing an item opens it in the Vault. Nothing is listed if the Vault has not been created yet. |
 | **Projects** | Every project, with its name and folder path. Choosing one opens its project page. |
 | **Prompt History** | Your earlier prompts and translations. Choosing one opens it in Prompt History. |

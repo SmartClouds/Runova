@@ -1166,7 +1166,7 @@ test('skill-security', async () => {
 
 test('mcp', async () => {
   const p = page();
-  const route = `/mcp?projectId=${projectIds.storefront}`;
+  const route = `/tools?tab=mcp&projectId=${projectIds.storefront}`;
   await openRoute(p, route);
   await p.getByRole('button', { name: /^Installed \(4\)/ }).click();
   await expect(p.getByText(/Sentry/).first()).toBeVisible({ timeout: 30_000 });

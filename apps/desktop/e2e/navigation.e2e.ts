@@ -68,11 +68,6 @@ const DESTINATIONS: Destination[] = [
     landmark: (page) => page.getByRole('navigation', { name: 'Skill views' }),
   },
   {
-    label: 'MCP Servers',
-    hash: '#/mcp',
-    landmark: (page) => page.getByLabel('Search MCP servers'),
-  },
-  {
     // The page opens on its AI CLIs tab.
     label: 'Dev Tools',
     hash: '#/tools',
@@ -223,6 +218,20 @@ test('the retired Disk Cleanup route lands on the Disk Cleanup tab of Dev Tools'
     .toBe('#/tools?tab=disk-cleanup');
   // A test run with no sandbox folder leaves it switched off, so it can never touch real caches.
   await expect(page.getByText('Disk Cleanup is switched off')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('link', { name: 'Dev Tools' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(errorCard(page)).toHaveCount(0);
+});
+
+test('the retired MCP route lands on the MCP Servers tab of Dev Tools', async () => {
+  launched = await launchApp({ settings: {} });
+  const { page } = launched;
+
+  await goByHash(page, '#/mcp');
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/tools?tab=mcp');
+  await expect(page.getByLabel('Search MCP servers')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('link', { name: 'Dev Tools' })).toHaveAttribute(
     'aria-current',
     'page',

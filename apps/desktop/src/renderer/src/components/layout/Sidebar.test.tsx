@@ -58,9 +58,9 @@ describe('Sidebar navigation', () => {
   });
 
   it('marks the entry for the page being shown', () => {
-    renderSidebar('/mcp');
+    renderSidebar('/skills');
 
-    expect(currentLink().textContent).toContain('MCP Servers');
+    expect(currentLink().textContent).toContain('Skills');
   });
 
   it('keeps a nested route under its own entry', () => {

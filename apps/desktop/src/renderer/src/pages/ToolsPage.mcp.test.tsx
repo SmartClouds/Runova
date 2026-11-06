@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
 /**
- * The MCP marketplace: pick a project, pick a repository, then install a server into that
- * project. Nearly everything here is a bridge call with a project id attached, so the tests
+ * The MCP Servers tab of Dev Tools: pick a target project, pick a repository, then install a
+ * server into that project. Nearly everything here is a bridge call with a project id attached, so the tests
  * follow what the page asks the bridge for rather than what it draws.
  */
 
@@ -24,7 +24,7 @@ vi.mock('sonner', () => ({ toast, Toaster: () => null }));
 const confirm = vi.hoisted(() => ({ confirmDialog: vi.fn(async () => true) }));
 vi.mock('@/stores/confirmStore', () => confirm);
 
-const { default: McpPage } = await import('./McpPage');
+const { default: ToolsPage } = await import('./ToolsPage');
 
 function server(overrides: Partial<McpServer> & { id: string; name: string }): McpServer {
   return {
@@ -93,8 +93,9 @@ const projects = [
   { id: 'p2', name: 'Borealis', folderPath: '/code/borealis' },
 ];
 
-function renderPage(bridge: Record<string, unknown> = {}, route = '/mcp') {
-  return renderWithProviders(<McpPage />, { route, bridge });
+/** Dev Tools on its MCP Servers tab, so the repositories and target project are the page's own. */
+function renderPage(bridge: Record<string, unknown> = {}, route = '/tools?tab=mcp') {
+  return renderWithProviders(<ToolsPage />, { route, bridge });
 }
 
 /** The card a server's name heads, so a click lands on the intended server. */
@@ -117,12 +118,12 @@ const withCatalog = {
   }),
 };
 
-describe('McpPage catalogue', () => {
+describe('Dev Tools MCP Servers, catalogue', () => {
   it('renders against an empty bridge and asks for a repository', async () => {
     renderPage();
 
     expect(await screen.findByText('No servers yet')).toBeTruthy();
-    expect(screen.getByText('Choose a project to install servers into it.')).toBeTruthy();
+    expect(screen.getByText('Choose a target project to install servers into it.')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Add repository/ }).length).toBeGreaterThan(0);
   });
 
@@ -176,7 +177,7 @@ describe('McpPage catalogue', () => {
     await screen.findByText('Filesystem');
 
     // Categories are rows in the sidebar, and each one says how many servers it holds.
-    const categories = within(screen.getByRole('group', { name: 'Categories' }));
+    const categories = within(screen.getByRole('group', { name: 'Server categories' }));
     await user.click(categories.getByRole('button', { name: /^Databases/ }));
     await waitFor(() => expect(screen.queryByText('Filesystem')).toBeNull());
     expect(categories.getByRole('button', { name: /^Databases/ })).toHaveAttribute(
@@ -203,7 +204,42 @@ describe('McpPage catalogue', () => {
   });
 });
 
-describe('McpPage repositories', () => {
+describe('Dev Tools MCP Servers, in the page menu', () => {
+  it('lists its repositories in the Dev Tools menu, with the tool categories still there', async () => {
+    renderPage(withCatalog);
+    await screen.findByText('Filesystem');
+
+    const menu = within(screen.getByRole('complementary', { name: 'Tool filters' }));
+    expect(menu.getByRole('button', { name: 'MCP Servers' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(
+      within(menu.getByRole('navigation', { name: 'Repositories' })).getByRole('button', {
+        name: 'Community repository',
+      }),
+    ).toBeTruthy();
+    expect(menu.getByRole('group', { name: 'Server categories' })).toBeTruthy();
+    // One project picker, the page's own.
+    expect(menu.getByRole('combobox', { name: 'Target project' })).toBeTruthy();
+    expect(screen.getAllByRole('combobox', { name: /project/i })).toHaveLength(1);
+    // The tool cards are a click away.
+    expect(menu.getByRole('button', { name: /^All\s*\d/ })).toBeTruthy();
+    expect(menu.getByRole('button', { name: /^All servers/ })).toBeTruthy();
+  });
+
+  it('takes its repositories out of the menu when another tab opens', async () => {
+    const { user } = renderPage(withCatalog);
+    await screen.findByText('Filesystem');
+
+    await user.click(screen.getByRole('button', { name: 'Dev Setup' }));
+
+    expect(screen.queryByRole('navigation', { name: 'Repositories' })).toBeNull();
+    expect(screen.queryByText('Filesystem')).toBeNull();
+  });
+});
+
+describe('Dev Tools MCP Servers, repositories', () => {
   it('adds a repository from the dialog and reports it', async () => {
     const { bridge, user } = renderPage({ 'mcp.listRepositories': [] });
     await screen.findByText('No servers yet');
@@ -310,7 +346,7 @@ describe('McpPage repositories', () => {
   });
 });
 
-describe('McpPage install and remove', () => {
+describe('Dev Tools MCP Servers, install and remove', () => {
   it('cannot install until a project is chosen', async () => {
     renderPage({
       'mcp.listRepositories': [community],
@@ -327,8 +363,8 @@ describe('McpPage install and remove', () => {
     const { bridge, user } = renderPage(withCatalog);
     await screen.findByText('Filesystem');
 
-    // The first combobox is the project picker, the second is the repository.
-    await user.click(screen.getAllByRole('combobox')[0]);
+    // The page's target project is where servers are installed.
+    await user.click(screen.getByRole('combobox', { name: 'Target project' }));
     await user.click(await screen.findByText('Aurora'));
     await user.click(within(serverCard('Filesystem')).getByRole('button', { name: /Install/ }));
 
@@ -346,7 +382,7 @@ describe('McpPage install and remove', () => {
   it('asks for the secrets a server needs before installing it', async () => {
     const { bridge, user } = renderPage(withCatalog);
     await screen.findByText('Postgres');
-    await user.click(screen.getAllByRole('combobox')[0]);
+    await user.click(screen.getByRole('combobox', { name: 'Target project' }));
     await user.click(await screen.findByText('Aurora'));
 
     await user.click(within(serverCard('Postgres')).getByRole('button', { name: /Install/ }));
@@ -375,7 +411,7 @@ describe('McpPage install and remove', () => {
       'mcp.install': () => Promise.reject(new Error('.mcp.json is read-only')),
     });
     await screen.findByText('Filesystem');
-    await user.click(screen.getAllByRole('combobox')[0]);
+    await user.click(screen.getByRole('combobox', { name: 'Target project' }));
     await user.click(await screen.findByText('Aurora'));
 
     await user.click(within(serverCard('Filesystem')).getByRole('button', { name: /Install/ }));
@@ -396,7 +432,7 @@ describe('McpPage install and remove', () => {
       ],
     });
     await screen.findByText('Filesystem');
-    await user.click(screen.getAllByRole('combobox')[0]);
+    await user.click(screen.getByRole('combobox', { name: 'Target project' }));
     await user.click(await screen.findByText('Aurora'));
 
     const card = serverCard('Filesystem');
@@ -436,7 +472,7 @@ describe('McpPage install and remove', () => {
     // The filter is meaningless without a project, so it only appears with one.
     expect(screen.queryByRole('button', { name: /^Installed/ })).toBeNull();
 
-    await user.click(screen.getAllByRole('combobox')[0]);
+    await user.click(screen.getByRole('combobox', { name: 'Target project' }));
     await user.click(await screen.findByText('Aurora'));
 
     await user.click(await screen.findByRole('button', { name: 'Installed (1)' }));
@@ -472,7 +508,7 @@ describe('McpPage install and remove', () => {
   });
 
   it('starts with the project the URL came in with', async () => {
-    const { bridge } = renderPage(withCatalog, '/mcp?projectId=p2');
+    const { bridge } = renderPage(withCatalog, '/tools?tab=mcp&projectId=p2');
 
     await screen.findByText('Filesystem');
     await waitFor(() => expect(bridge.$fn('mcp.listInstalled')).toHaveBeenCalledWith('p2'));

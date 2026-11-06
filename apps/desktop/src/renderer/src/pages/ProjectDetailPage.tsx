@@ -138,6 +138,7 @@ import {
 } from '@/components/skills/SkillSecurityDialog';
 import { ProjectStudioSection } from '@/components/studio/project/ProjectStudioSection';
 import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
+import { mcpRouteFor } from '@/components/tools/mcp/route';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1161,7 +1162,7 @@ function ProjectDetailView(): React.JSX.Element {
               title="MCP servers"
               description="MCP servers installed into this project."
               actions={
-                <Button variant="soft" onClick={() => navigate(`/mcp?projectId=${project.id}`)}>
+                <Button variant="soft" onClick={() => navigate(mcpRouteFor(project.id))}>
                   <Plug /> Browse marketplace
                 </Button>
               }
@@ -1194,7 +1195,7 @@ function ProjectDetailView(): React.JSX.Element {
                   title="No MCP servers installed"
                   description="Install servers from the marketplace to give this project's agents extra tools."
                   action={
-                    <Button onClick={() => navigate(`/mcp?projectId=${project.id}`)}>
+                    <Button onClick={() => navigate(mcpRouteFor(project.id))}>
                       <Plug /> Browse marketplace
                     </Button>
                   }

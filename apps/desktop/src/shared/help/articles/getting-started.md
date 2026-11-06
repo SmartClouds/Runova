@@ -40,10 +40,9 @@ The app is organised around a menu with a few pages at the top and four headed g
 
 | Page | What it is for |
 | --- | --- |
-| **Skills** | Find and install skills for your agents. See [Skills](skills.md). |
-| **MCP Servers** | Install MCP servers that give agents extra tools. See [MCP Servers](mcp-servers.md). |
-| **Dev Tools** | See which AI coding CLIs are installed and install the missing ones, set up your developer tools, clear out the caches they keep, and add helper tools such as code reviewers and security scanners. See [AI CLIs](cli-manager.md), [Disk Cleanup](disk-cleanup.md) and [Dev Tools](agent-tools.md). |
 | **Token Usage** | Track tokens, cost and limits across your AI providers. See [Token Usage](token-usage.md). |
+| **Skills** | Find and install skills for your agents. See [Skills](skills.md). |
+| **Dev Tools** | See which AI coding CLIs are installed and install the missing ones, set up your developer tools, clear out the caches they keep, install MCP servers into a project, and add helper tools such as code reviewers and security scanners. See [AI CLIs](cli-manager.md), [Disk Cleanup](disk-cleanup.md), [MCP Servers](mcp-servers.md) and [Dev Tools](agent-tools.md). |
 
 ### Ship
 

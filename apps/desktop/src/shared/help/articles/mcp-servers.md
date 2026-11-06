@@ -4,36 +4,36 @@ category: Agents
 order: 30
 summary: Browse a catalog of MCP servers and install them into a project in one click, so the agents working there get extra tools.
 keywords: mcp, mcp servers, model context protocol, mcp marketplace, .mcp.json, install mcp, tools for agents, stdio, http, api key, env, repository, bowora
-route: /mcp
+route: /tools?tab=mcp
 ---
 
-MCP (Model Context Protocol) servers give an AI agent extra tools, such as talking to GitHub, a database or a payment API. The MCP Servers page is a marketplace: you pick a project, pick a server, and Runova writes the server into that project's `.mcp.json` file, which MCP-aware agents like Claude Code read. You can also add your own repositories of servers.
+MCP (Model Context Protocol) servers give an AI agent extra tools, such as talking to GitHub, a database or a payment API. The MCP Servers tab of [Dev Tools](agent-tools.md) is a marketplace: you pick a project, pick a server, and Runova writes the server into that project's `.mcp.json` file, which MCP-aware agents like Claude Code read. You can also add your own repositories of servers.
 
 ## Where to find it
 
-Click **MCP Servers** in the sidebar under **Agents**, or open the command palette and type "MCP". The page title reads **MCP Marketplace**. You can also open it from a project: the project's **MCP** tab has a **Browse marketplace** button that opens this page with that project already chosen.
+Click **Dev Tools** in the sidebar under **Agents**, then **MCP Servers** under **Setup** in the page's left menu. A link can open it straight away with `/tools?tab=mcp`. You can also open it from a project: the project's **MCP** tab has a **Browse marketplace** button that opens this tab with that project already chosen.
 
 ## How it works
 
-Installing a server is project-based. Runova adds an entry for the server to the `.mcp.json` file in the project's folder and keeps a small record of what it installed (the server, the repository it came from and the version). Removing a server deletes that entry again. Servers are not installed globally from this page, so choose the project you want first.
+Installing a server is project-based. Runova adds an entry for the server to the `.mcp.json` file in the project's folder and keeps a small record of what it installed (the server, the repository it came from and the version). Removing a server deletes that entry again. Servers are not installed globally from here, so choose the project you want first.
 
-## The page
+## The tab
 
 ### Choose a project
 
-Use the **Project** picker at the top left. Until you choose one, the project box is outlined in a warning color, a hint says "Choose a project to install servers into it", and every **Install** button is disabled. Once a project is chosen, installed servers show an **Installed** badge and a green outline.
+Use the **Target project** picker at the bottom of the left menu, the same one the tool cards use. Until you choose one, a hint says "Choose a target project to install servers into it" and every **Install** button is disabled. Once a project is chosen, installed servers show an **Installed** badge and a green outline.
 
 ### Choose a repository
 
-The **Repository** picker selects where the catalog comes from. The first repository is selected for you.
+While the tab is open, the left menu lists your repositories under **Repositories**, below the **Setup** entries. Pick one to see its servers. The first repository is selected for you, and the **+** next to the heading adds another.
 
 - **Bowora MCP Directory** is built in. It is bundled with Runova (47 servers, mostly under Developer Tools, plus a few DevOps and Infrastructure ones), so it works offline and cannot be refreshed or removed. It carries a **Built-in** badge.
-- Any repository you add yourself shows a refresh button and a remove button next to the picker.
+- Any repository you add yourself shows a refresh button and a remove button in the header above its servers.
 
 ### Search and filters
 
 - The **Search** box matches name, description, category, author and tags.
-- When a repository has more than one category, a row of chips lets you filter by category (**All** plus each category).
+- When a repository has more than one category, the left menu lists them under **Server categories** (**All servers** plus each category, with a count).
 - **Official** shows only servers maintained by the vendor behind them. Official servers carry a blue check mark on their card.
 - **Installed (N)** appears once a project is chosen and shows only the servers already installed in it.
 - A counter on the right shows how many servers match (for example "12 of 47") and how many are in the chosen project.
@@ -53,7 +53,7 @@ A card marked **Manual setup** has no command or URL that Runova could parse, so
 
 ## Install a server
 
-1. Choose a **Project** at the top.
+1. Choose a **Target project** in the left menu.
 2. Find the server (search or filter) and click **Install**.
 3. If the server needs secrets, a **Configure <server>** dialog appears. Fill in every field (they are masked, like passwords) and click **Install**. The values are written into the project's `.mcp.json` under that server's `env`, so be careful not to commit that file to a public repository. **Install** stays disabled until every field has a value.
 4. When the toast says "MCP server installed", restart or reload the agent in that project so it picks up the new server.

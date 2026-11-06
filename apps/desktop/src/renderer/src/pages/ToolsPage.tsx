@@ -31,6 +31,7 @@ import {
   Globe,
   Package,
   Play,
+  Plug,
   RefreshCw,
   Server,
   Shield,
@@ -56,6 +57,8 @@ import { AI_CLIS_TAB, AiClisPanel } from '@/components/tools/aiClis';
 import { CodeqlInstallCard } from '@/components/tools/CodeqlInstallCard';
 import { DEV_SETUP_TAB, DevSetupPanel } from '@/components/tools/devSetup';
 import { DISK_CLEANUP_TAB } from '@/components/tools/diskCleanup/route';
+import { McpPanel } from '@/components/tools/mcp/McpPanel';
+import { MCP_TAB } from '@/components/tools/mcp/route';
 import { ALL_TOOLS_TAB } from '@/components/tools/routes';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
@@ -246,7 +249,12 @@ export default function ToolsPage(): React.JSX.Element {
   const openSession = useTerminalStore((s) => s.openSession);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  // A link can arrive with the project already picked, as the project page's MCP links do.
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    () => searchParams.get('projectId') ?? '',
+  );
+  // The slot in the left menu that the MCP Servers tab draws its repositories into.
+  const [mcpRail, setMcpRail] = useState<HTMLDivElement | null>(null);
   const [settingsTool, setSettingsTool] = useState<AgentToolDefinition | null>(null);
   const [settingsValues, setSettingsValues] = useState<ToolSettingsValues>({});
   const [checkingToolId, setCheckingToolId] = useState<string | null>(null);
@@ -578,7 +586,10 @@ export default function ToolsPage(): React.JSX.Element {
   // The page opens on AI CLIs; the tool list has its own `?tab=all`.
   const tabParam = searchParams.get('tab');
   const activeCategory =
-    tabParam === DEV_SETUP_TAB || tabParam === DISK_CLEANUP_TAB || tabParam === ALL_TOOLS_TAB
+    tabParam === DEV_SETUP_TAB ||
+    tabParam === DISK_CLEANUP_TAB ||
+    tabParam === MCP_TAB ||
+    tabParam === ALL_TOOLS_TAB
       ? tabParam
       : tabParam === 'security'
         ? SECURITY_TOOL_CATEGORY
@@ -588,8 +599,11 @@ export default function ToolsPage(): React.JSX.Element {
   const onDevSetup = activeCategory === DEV_SETUP_TAB;
   const onAiClis = activeCategory === AI_CLIS_TAB;
   const onDiskCleanup = activeCategory === DISK_CLEANUP_TAB;
-  // The setup tabs bring their own controls; the tool filter and target project are for tool cards.
-  const onSetupTab = onDevSetup || onAiClis || onDiskCleanup;
+  const onMcp = activeCategory === MCP_TAB;
+  // The setup tabs bring their own controls; the tool filter is for tool cards. The target
+  // project is for tool cards too, and for MCP Servers, which installs into it.
+  const onSetupTab = onDevSetup || onAiClis || onDiskCleanup || onMcp;
+  const showTargetProject = !onSetupTab || onMcp;
 
   function setActiveCategory(next: string): void {
     setSearchParams(
@@ -643,7 +657,9 @@ export default function ToolsPage(): React.JSX.Element {
         ? 'The AI coding CLIs on this computer. Install the missing ones, update them and pick your default.'
         : onDiskCleanup
           ? 'Find the caches your tools keep and clear out old versions.'
-          : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
+          : onMcp
+            ? 'Plug extra tools into a project from a repository of MCP servers.'
+            : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
   );
 
   return (
@@ -654,10 +670,12 @@ export default function ToolsPage(): React.JSX.Element {
           aria-label="Tool filters"
           className={cn(
             GLASS_CARD,
-            'flex shrink-0 flex-col gap-2 p-2 @3xl/tools:sticky @3xl/tools:top-2 @3xl/tools:w-56',
+            // Taller than the window (MCP Servers adds its repositories), it scrolls on its own, as
+            // the Help page's topic rail does, so the target project at the bottom stays reachable.
+            'rail-scroll flex shrink-0 flex-col gap-2 p-2 @3xl/tools:sticky @3xl/tools:top-2 @3xl/tools:max-h-[calc(100vh-9.5rem)] @3xl/tools:w-56 @3xl/tools:overflow-y-auto',
           )}
         >
-          {/* The filter and the target project only act on tool cards, which the setup tabs have none of. */}
+          {/* The filter only acts on tool cards, which the setup tabs have none of. */}
           {!onSetupTab && (
             <SearchPill
               type="search"
@@ -719,7 +737,19 @@ export default function ToolsPage(): React.JSX.Element {
                     pillTransition={pillTransition}
                   />
                 </li>
+                <li className="shrink-0">
+                  <CategoryNavButton
+                    active={onMcp}
+                    onSelect={() => setActiveCategory(MCP_TAB)}
+                    icon={Plug}
+                    label="MCP Servers"
+                    pillTransition={pillTransition}
+                  />
+                </li>
               </ul>
+
+              {/* MCP Servers draws its repositories and server categories here, under its entry. */}
+              {onMcp && <div ref={setMcpRail} className="flex flex-col gap-1" />}
 
               <h2 className={cn(SECTION_HEADING, 'hidden px-2.5 pt-2.5 @3xl/tools:block')}>
                 Categories
@@ -756,7 +786,7 @@ export default function ToolsPage(): React.JSX.Element {
           </nav>
 
           {/* The project the "in a project" actions write to, under a hairline of its own. */}
-          {!onSetupTab && (
+          {showTargetProject && (
             <div className="space-y-1.5 px-0.5 pb-0.5 pt-2.5 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]">
               <h2 className={cn(SECTION_HEADING, 'px-2')}>Target project</h2>
               <Combobox
@@ -770,8 +800,9 @@ export default function ToolsPage(): React.JSX.Element {
                 clearable
               />
               <p className="px-2 text-[11px] leading-relaxed text-muted-foreground">
-                Initializing a tool in a project or writing its config needs one. Docker and global
-                setup actions don't.
+                {onMcp
+                  ? "MCP servers are installed into this project's .mcp.json."
+                  : "Initializing a tool in a project or writing its config needs one. Docker and global setup actions don't."}
               </p>
             </div>
           )}
@@ -786,6 +817,8 @@ export default function ToolsPage(): React.JSX.Element {
             <Suspense fallback={<div className="flex flex-col gap-3" aria-busy="true" />}>
               <DiskCleanupPanel />
             </Suspense>
+          ) : onMcp ? (
+            <McpPanel projectId={selectedProjectId} railTarget={mcpRail} />
           ) : (
             <>
               <div className={TOOLBAR}>

@@ -89,14 +89,14 @@ export const STARTUP_PAGES = [
   '/deploy',
   '/monitoring',
   '/skills',
-  '/mcp',
   '/tools',
   '/docker',
   '/android',
-  // No longer in the menu (they are the AI CLIs and Disk Cleanup tabs of Dev Tools now). Kept so
-  // a startup page saved before that still opens, and App.tsx sends it on to the tab.
+  // No longer in the menu (they are the AI CLIs, Disk Cleanup and MCP Servers tabs of Dev Tools
+  // now). Kept so a startup page saved before that still opens, and App.tsx sends it on to the tab.
   '/cli-manager',
   '/cleanup',
+  '/mcp',
   '/ask-ai',
   '/remote',
   '/vault',

@@ -94,7 +94,7 @@ An IDE is built around a person typing code. An ADE is built around agents writi
 
 ## Features
 
-The menu is grouped the way the work goes: **Build** (Prompt Builder, Ask AI, API Client), **Agents** (Dev Tools, Skills, MCP Servers, Token Usage), **Ship** (Pipelines, Deploy, Monitoring, Docker, Android) and **Connect** (Remote, Vault), with Dashboard, Workspace and Projects above them and Help and Settings below. Prefer a bar along the top? Settings has a switch for that.
+The menu is grouped the way the work goes: **Build** (Prompt Builder, Ask AI, API Client), **Agents** (Token Usage, Skills, Dev Tools), **Ship** (Pipelines, Deploy, Monitoring, Docker, Android) and **Connect** (Remote, Vault), with Dashboard, Workspace and Projects above them and Help and Settings below. Prefer a bar along the top? Settings has a switch for that.
 
 Seven things make up the core:
 
@@ -147,7 +147,7 @@ Everything else is support around that, so you don't leave the app to go and get
 - **CLI arguments and launch defaults**: save the flags, model and reasoning effort each CLI should launch with. The background calls Runova makes for you (commit messages, branch names, tag suggestions, version bumps, run sizing, skill deep reviews) build their command line the same way, so they use the model you picked.
 - **Skill Marketplace**: install agent skills from configurable repositories or skills.sh, including into a project's agent folders, with favorites, usage tracking, and update detection.
 - **Skill Security**: check what a skill actually does before you let an agent read it. A static scan over 14 risk categories, an optional deep review by an installed agent CLI, and a saved history of every check. See [Skill security](#skill-security).
-- **MCP Marketplace**: install MCP servers into a project from configurable repositories.
+- **MCP Marketplace**: a tab of Dev Tools that installs MCP servers into a project from configurable repositories.
 - **Dev Tools**: the page that holds the AI CLIs tab, a Dev Setup checklist that finds and installs what a machine needs to build (Git, Node.js, the .NET SDK, Flutter with the Android tools, Docker), a Disk Cleanup tab that finds the caches package managers keep (NuGet, npm, pnpm, Bun, Cargo, Gradle and more) and clears out old versions, plus curated third-party tools that cut agent token spend or improve code quality, including Diffray, the security scanners, and LanguageTool for offline writing checks.
 
 ### Ship

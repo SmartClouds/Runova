@@ -79,7 +79,7 @@
   },
   {
     "name": "mcp",
-    "route": "/mcp?projectId=d468ccf6-3193-4ee5-afbe-871a65aa26e3",
+    "route": "/tools?tab=mcp&projectId=d468ccf6-3193-4ee5-afbe-871a65aa26e3",
     "theme": "dark",
     "alt": "The MCP directory filtered to the four servers installed in the storefront project: Sentry, Linear, Figma and a copy-paste detector."
   },

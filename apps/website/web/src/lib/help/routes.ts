@@ -13,7 +13,6 @@ const ROUTE_FEATURES: Record<string, string> = {
   '/api-client': 'build',
   '/studio': 'studio',
   '/skills': 'agents',
-  '/mcp': 'agents',
   '/tools': 'agents',
   '/usage': 'token-usage',
   '/pipelines': 'ship',
@@ -41,6 +40,12 @@ function pathOf(route: string): string {
   return route.split(/[?#]/)[0] || '/';
 }
 
+/** The `?tab=` a route opens, or null when it names none. */
+function tabOf(route: string): string | null {
+  const query = route.split('#')[0]?.split('?')[1];
+  return query ? new URLSearchParams(query).get('tab') : null;
+}
+
 /** The features slug an article links to, or nothing for an article without a known route. */
 export function featureForArticle(slug: string, route: string | undefined): string | undefined {
   if (!route) return undefined;
@@ -55,8 +60,8 @@ export interface ShotRoute {
 
 /**
  * The Dark screenshot for an article: one named after it, or else the one taken on its route
- * (the same route, then the same path, then a page under the path, such as one project's
- * workspace for `/workspace`).
+ * (the same route, then the same path on the same `?tab=`, then the same path, then a page
+ * under the path, such as one project's workspace for `/workspace`).
  */
 export function screenshotForArticle(
   slug: string,
@@ -68,8 +73,12 @@ export function screenshotForArticle(
   if (named) return named.name;
   if (!route) return undefined;
   const path = pathOf(route);
+  const tab = tabOf(route);
   const match =
     dark.find((shot) => shot.route === route) ??
+    (tab === null
+      ? undefined
+      : dark.find((shot) => pathOf(shot.route) === path && tabOf(shot.route) === tab)) ??
     dark.find((shot) => pathOf(shot.route) === path) ??
     dark.find((shot) => path !== '/' && pathOf(shot.route).startsWith(`${path}/`));
   return match?.name;

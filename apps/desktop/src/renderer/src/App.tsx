@@ -1,6 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  HashRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useSearchParams,
+} from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import { AiAccessApprovalHost } from './components/aiAccess/AiAccessApprovalHost';
 import { ConfirmDialogHost } from './components/ConfirmDialog';
@@ -20,6 +27,7 @@ import RemoteSessionRoute from './components/remote/RemoteSessionRoute';
 import { ImageViewerHost } from './components/terminal/ImageViewerHost';
 import { AI_CLIS_ROUTE } from './components/tools/aiClis/route';
 import { DISK_CLEANUP_ROUTE } from './components/tools/diskCleanup/route';
+import { MCP_TAB } from './components/tools/mcp/route';
 import { UpdateManager } from './components/UpdateManager';
 import { TooltipProvider } from './components/ui/tooltip';
 import WidgetRoute from './components/usage/WidgetRoute';
@@ -33,7 +41,6 @@ import AskAiPage from './pages/AskAiPage';
 import DashboardPage from './pages/DashboardPage';
 import DockerPage from './pages/DockerPage';
 import HelpPage from './pages/HelpPage';
-import McpPage from './pages/McpPage';
 import PipelinesPage from './pages/PipelinesPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -74,6 +81,17 @@ const SftpWindowRoute = lazy(() => import('./components/sftp/SftpWindowRoute'));
 /* Glass toasts: richColors is off on purpose. It paints an opaque per-type
    background that would defeat the frosted surface. The type accents live in
    index.css under .toaster-glass instead. */
+/**
+ * Sends a retired page on to its tab of Dev Tools, keeping the rest of its query (such as the
+ * project an MCP link picked), so old links and saved routes still land where they meant to.
+ */
+function ToDevToolsTab({ tab }: { tab: string }): React.JSX.Element {
+  const [params] = useSearchParams();
+  const next = new URLSearchParams(params);
+  next.set('tab', tab);
+  return <Navigate to={`/tools?${next.toString()}`} replace />;
+}
+
 function AppToaster(): React.JSX.Element {
   const isDark = useIsDarkMode();
   return (
@@ -186,10 +204,11 @@ export default function App(): React.JSX.Element {
               />
               <Route element={<AppShell />}>
                 <Route index element={<DashboardPage />} />
-                {/* The CLI manager and Disk Cleanup are tabs of Dev Tools now; old links and saved
-                    routes land there. */}
+                {/* The CLI manager, Disk Cleanup and MCP Servers are tabs of Dev Tools now; old
+                    links and saved routes land there. */}
                 <Route path="cli-manager" element={<Navigate to={AI_CLIS_ROUTE} replace />} />
                 <Route path="cleanup" element={<Navigate to={DISK_CLEANUP_ROUTE} replace />} />
+                <Route path="mcp" element={<ToDevToolsTab tab={MCP_TAB} />} />
                 <Route path="prompt-builder" element={<PromptBuilderPage />} />
                 <Route path="prompt-history" element={<PromptHistoryPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
@@ -269,7 +288,6 @@ export default function App(): React.JSX.Element {
                     </Suspense>
                   }
                 />
-                <Route path="mcp" element={<McpPage />} />
                 <Route path="tools" element={<ToolsPage />} />
                 <Route path="docker" element={<DockerPage />} />
                 <Route path="android" element={<AndroidPage />} />

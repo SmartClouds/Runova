@@ -68,6 +68,14 @@ describe('screenshotForArticle', () => {
     expect(screenshotForArticle('dashboard', '/', manifest)).toBe('dashboard');
   });
 
+  it('prefers a shot of the same tab over another tab of the page', () => {
+    // The MCP shot also picks a project, so its route is not the article's exactly.
+    expect(screenshotForArticle('mcp-servers', '/tools?tab=mcp', manifest)).toBe('mcp');
+    expect(screenshotForArticle('dev-setup-article', '/tools?tab=dev-setup', manifest)).toBe(
+      'agent-tools',
+    );
+  });
+
   it('gives nothing when no shot fits', () => {
     expect(screenshotForArticle('android', '/android', manifest)).toBeUndefined();
     expect(screenshotForArticle('getting-started', undefined, manifest)).toBeUndefined();

@@ -36,7 +36,6 @@ vi.mock('./pages/ProjectsPage', () => stub('Projects'));
 vi.mock('./pages/ProjectDetailPage', () => stub('Project Detail'));
 vi.mock('./pages/PipelinesPage', () => stub('Pipelines'));
 vi.mock('./pages/SkillsPage', () => stub('Skills'));
-vi.mock('./pages/McpPage', () => stub('MCP'));
 vi.mock('./pages/ToolsPage', () => stub('Tools'));
 vi.mock('./pages/DockerPage', () => stub('Docker'));
 vi.mock('./pages/AndroidPage', () => stub('Android'));
@@ -151,7 +150,6 @@ describe('App routes inside the shell', () => {
     ['/workspace/abc', 'Workspace'],
     ['/pipelines', 'Pipelines'],
     ['/skills', 'Skills'],
-    ['/mcp', 'MCP'],
     ['/tools', 'Tools'],
     ['/docker', 'Docker'],
     ['/android', 'Android'],
@@ -180,6 +178,11 @@ describe('App routes inside the shell', () => {
 
   it('sends the old Disk Cleanup route to Dev Tools', async () => {
     expect(await pageAt('/cleanup')).toBe('Tools');
+  });
+
+  it('sends the old MCP route to Dev Tools, keeping the project it picked', async () => {
+    expect(await pageAt('/mcp?projectId=p1')).toBe('Tools');
+    expect(window.location.hash).toBe('#/tools?projectId=p1&tab=mcp');
   });
 
   it('keeps a query string out of the route match', async () => {

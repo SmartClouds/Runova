@@ -103,9 +103,11 @@ describe('TopMenu group menus', () => {
     expect(labels).toEqual(
       NAV_ITEMS.filter((item) => item.group === 'Agents').map((item) => item.label),
     );
-    expect(within(menu).getByRole('menuitem', { name: /MCP Servers/ })).toHaveAttribute(
+    // MCP Servers is a tab of Dev Tools, not an entry of its own.
+    expect(labels).toEqual(['Token Usage', 'Skills', 'Dev Tools']);
+    expect(within(menu).getByRole('menuitem', { name: /Skills/ })).toHaveAttribute(
       'href',
-      '/mcp',
+      '/skills',
     );
   });
 
@@ -113,9 +115,9 @@ describe('TopMenu group menus', () => {
     const { user } = renderTopMenu('/');
 
     await user.click(screen.getByRole('button', { name: /Agents/ }));
-    await user.click(await screen.findByRole('menuitem', { name: /MCP Servers/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /Skills/ }));
 
-    expect(screen.getByTestId('path')).toHaveTextContent('/mcp');
+    expect(screen.getByTestId('path')).toHaveTextContent('/skills');
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   });
 
@@ -133,7 +135,7 @@ describe('TopMenu group menus', () => {
   });
 
   it('marks the group holding the page being shown', () => {
-    renderTopMenu('/mcp');
+    renderTopMenu('/skills');
 
     expect(screen.getByRole('button', { name: /Agents/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: /Build/ })).not.toHaveAttribute('aria-current');

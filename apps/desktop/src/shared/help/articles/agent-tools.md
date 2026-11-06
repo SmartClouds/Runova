@@ -7,7 +7,7 @@ keywords: dev tools, agent tools, tools, dev setup, disk cleanup, caches, free s
 route: /tools
 ---
 
-Dev Tools has four jobs. **AI CLIs** finds the AI coding CLIs on this computer (Claude Code, Codex, Gemini CLI and the rest), installs the missing ones and keeps them up to date. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. **Disk Cleanup** finds the caches your package managers and developer tools keep and clears out old versions. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
+Dev Tools has five jobs. **AI CLIs** finds the AI coding CLIs on this computer (Claude Code, Codex, Gemini CLI and the rest), installs the missing ones and keeps them up to date. **Dev Setup** is a checklist of the developer tools a computer needs, with a button to install each one that is missing. **Disk Cleanup** finds the caches your package managers and developer tools keep and clears out old versions. **MCP Servers** installs MCP servers into a project, so its agents get extra tools. The rest of the page is a catalog of outside tools that make AI coding agents cheaper, smarter or safer. They are not MCP servers or skills (those have their own pages). Each tool has a card where you can install it, configure it, update it, run its Docker container and open its website or GitHub page. The security scanners you install here are the ones a project's **Security** tab runs.
 
 ## Where to find it
 
@@ -79,6 +79,10 @@ After an install, terminals that were already open do not see the new tools, so 
 
 **Disk Cleanup** finds the caches that package managers and developer tools keep (NuGet, npm, pnpm, Bun, Cargo, Gradle and more), shows how much space each takes, and removes old versions or the whole cache. Open it from **Disk Cleanup** under **Setup** in the page's left menu, or open the page with `?tab=disk-cleanup`. It never scans on its own: click **Find caches**. See [Disk Cleanup](disk-cleanup.md) for the details.
 
+## MCP Servers
+
+**MCP Servers** browses repositories of MCP servers and installs them into the target project's `.mcp.json`. Open it from **MCP Servers** under **Setup** in the page's left menu, or open the page with `?tab=mcp`. While it is open, the left menu also lists its **Repositories** and **Server categories**, and **Target project** is where servers are installed. See [MCP Servers](mcp-servers.md) for the details.
+
 ## The page layout
 
 ### Target project
@@ -87,7 +91,7 @@ The **Target project** picker at the bottom of the left menu chooses a project f
 
 ### Category tabs
 
-The left menu has two groups. **Setup** holds **AI CLIs**, **Dev Setup** and **Disk Cleanup**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=all`, `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
+The left menu has two groups. **Setup** holds **AI CLIs**, **Dev Setup**, **Disk Cleanup** and **MCP Servers**. **Categories** filters the cards, each with a count: **All**, **Security**, **Agent Behavior**, **Agent Runtimes**, **Code Intelligence**, **Token & Cost** and **Writing**. **Security** comes first after **All**. You can also jump straight to a tab by opening the page with `?tab=all`, `?tab=security`, `?tab=ai-clis` or `?tab=dev-setup`.
 
 ### Refresh and update checks
 
