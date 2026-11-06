@@ -198,7 +198,7 @@ describe('a live run without auto-fix', () => {
     expect(more).toBeDisabled();
   });
 
-  it('points to the CLI Manager when no agent CLI is installed', async () => {
+  it('points to the AI CLIs tab when no agent CLI is installed', async () => {
     const { user } = render({ bridge: { 'cli.detectAll': installed() } });
     await user.click(await screen.findByRole('button', { name: 'Auto-fix this run if it fails' }));
     expect(await screen.findByText(/No agent CLI is installed/)).toBeVisible();

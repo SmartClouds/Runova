@@ -28,7 +28,6 @@ import { installToastHistoryCapture } from './lib/toastHistory';
 import AccountPage from './pages/AccountPage';
 import AndroidPage from './pages/AndroidPage';
 import AskAiPage from './pages/AskAiPage';
-import CliManagerPage from './pages/CliManagerPage';
 import DashboardPage from './pages/DashboardPage';
 import DockerPage from './pages/DockerPage';
 import HelpPage from './pages/HelpPage';
@@ -187,7 +186,8 @@ export default function App(): React.JSX.Element {
               />
               <Route element={<AppShell />}>
                 <Route index element={<DashboardPage />} />
-                <Route path="cli-manager" element={<CliManagerPage />} />
+                {/* The CLI manager is a tab of Agent Tools now; old links and saved routes land there. */}
+                <Route path="cli-manager" element={<Navigate to="/tools?tab=ai-clis" replace />} />
                 <Route path="prompt-builder" element={<PromptBuilderPage />} />
                 <Route path="prompt-history" element={<PromptHistoryPage />} />
                 <Route path="projects" element={<ProjectsPage />} />

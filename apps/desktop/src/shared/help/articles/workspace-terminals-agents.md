@@ -25,7 +25,7 @@ An empty pane shows **Start an agent** (or **Open in this pane** in a split pane
 
 - The installed agents get numbers (the welcome screen of an empty workspace shows up to nine tiles, a split pane shows up to six). With the pane focused and no text box active, press the number to start that agent.
 - The project's own agent is marked **Project default** on the full-size welcome tiles.
-- If no AI CLI is installed, the pane says **No agent CLIs installed yet** with a link, **Open the CLI manager**. Agents that are not installed show as small gray logos under **Not installed:**, and each one links to [AI CLI Manager](cli-manager.md).
+- If no AI CLI is installed, the pane says **No agent CLIs installed yet** with a link, **Install an agent CLI**. Agents that are not installed show as small gray logos under **Not installed:**, and each one links to [AI CLIs](cli-manager.md).
 - Under the tiles, **Build a prompt first** turns a rough request into a prompt and then opens it in an agent. See [Prompt Builder](prompt-builder.md).
 - Below that you can open a shell, or a **Browser**.
 
@@ -41,7 +41,7 @@ Claude Code, Codex, Gemini, Grok and Cursor also have an arrow at the right of t
 
 ### Which agents are offered
 
-Runova knows these CLIs: Claude Code CLI, Gemini CLI, OpenCode, OpenClaude, Codex CLI, Grok CLI, Cursor CLI, GitHub Copilot CLI, FreeBuff CLI, Qwen CLI, Aider, Goose, Cline CLI, Continue CLI, Pi and Muse Code CLI. Only the ones installed on your computer show up in the launchers. Install and update them from [AI CLI Manager](cli-manager.md).
+Runova knows these CLIs: Claude Code CLI, Gemini CLI, OpenCode, OpenClaude, Codex CLI, Grok CLI, Cursor CLI, GitHub Copilot CLI, FreeBuff CLI, Qwen CLI, Aider, Goose, Cline CLI, Continue CLI, Pi and Muse Code CLI. Only the ones installed on your computer show up in the launchers. Install and update them from [AI CLIs](cli-manager.md).
 
 ### Which agent is the default
 
@@ -53,7 +53,7 @@ In **Settings**, on the **Agents** tab, **Agent order** lists every agent. Drag 
 
 ### Launch defaults: model, effort and mode
 
-In **Settings**, on the **Agents** tab, **Launch defaults** lets you choose the model, effort and permission mode each agent starts with. Anything left on **Not set** adds no flag, so the CLI uses its own default. These apply only to workspace tabs and terminals. Background tasks such as commit messages use the Arguments box in AI CLI Manager instead. See [Settings](settings.md#launch-defaults).
+In **Settings**, on the **Agents** tab, **Launch defaults** lets you choose the model, effort and permission mode each agent starts with. Anything left on **Not set** adds no flag, so the CLI uses its own default. These apply only to workspace tabs and terminals. Background tasks such as commit messages use the Arguments box on the AI CLIs tab instead. See [Settings](settings.md#launch-defaults).
 
 When at least one launch default is set, launchers show **Alt+click: skip launch defaults**. Hold `Alt` while clicking a tile or menu item (or while pressing its number key in the menu or on an empty pane) to start the agent bare, without those flags. That tab's tooltip then says **Without launch defaults**. If you hold `Alt` on a model or effort in the **+** menu, the model and effort you picked are kept and only the other defaults are dropped.
 
@@ -206,6 +206,6 @@ For where each button lives, see [Git in the Workspace](workspace-git.md) (confl
 - [Files and editor](workspace-files-editor.md)
 - [Git in the Workspace](workspace-git.md)
 - [Browser and tests](workspace-browser-tests.md)
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Prompt Builder](prompt-builder.md)
 - [Settings](settings.md)

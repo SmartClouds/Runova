@@ -38,7 +38,6 @@ import { openCommandTerminal } from '@/lib/openCommandTerminal';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { useCliStore } from '@/stores/cliStore';
-import { usePageHeader } from '@/stores/pageHeaderStore';
 
 interface PendingUpdate {
   cli: CliDefinition;
@@ -47,7 +46,11 @@ interface PendingUpdate {
   command: string;
 }
 
-export default function CliManagerPage(): React.JSX.Element {
+/**
+ * The AI CLIs tab of Agent Tools: which coding CLIs this machine has, with install, update,
+ * default and per-CLI argument controls on each card.
+ */
+export function AiClisPanel(): React.JSX.Element {
   const queryClient = useQueryClient();
   const defaultCliId = useCliStore((s) => s.defaultCliId);
   const setDefaultCliId = useCliStore((s) => s.setDefaultCliId);
@@ -190,13 +193,8 @@ export default function CliManagerPage(): React.JSX.Element {
     }
   }
 
-  usePageHeader(
-    'AI CLI Manager',
-    'Detected AI coding CLIs on this machine. Install missing ones with one click.',
-  );
-
   return (
-    <div className="flex flex-col gap-2 p-2">
+    <div className="flex flex-col gap-2">
       <div className={TOOLBAR}>
         <SearchPill
           type="search"
@@ -261,119 +259,126 @@ export default function CliManagerPage(): React.JSX.Element {
           <NoMatches query={query} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {cliQuery.isPending &&
-            Array.from({ length: 6 }, (_, i) => <CliCardSkeleton key={`skeleton-${i}`} />)}
-          {visibleClis.map((cli) => {
-            const status = cliQuery.data?.find((c) => c.id === cli.id);
-            const isDefault = defaultCliId === cli.id;
-            const title = <h3 className="truncate text-sm font-semibold">{cli.name}</h3>;
+        // Columns follow the width this area has, since the page's side nav takes a share of it.
+        <div className="@container/cligrid">
+          <div className="grid grid-cols-1 gap-2 @2xl/cligrid:grid-cols-2 @5xl/cligrid:grid-cols-3">
+            {cliQuery.isPending &&
+              Array.from({ length: 6 }, (_, i) => <CliCardSkeleton key={`skeleton-${i}`} />)}
+            {visibleClis.map((cli) => {
+              const status = cliQuery.data?.find((c) => c.id === cli.id);
+              const isDefault = defaultCliId === cli.id;
+              const title = <h3 className="truncate text-sm font-semibold">{cli.name}</h3>;
 
-            return (
-              <div
-                key={cli.id}
-                className={cn(GLASS_CARD, 'flex flex-col', isDefault && 'ring-1 ring-primary/35')}
-              >
-                <div className="flex items-start gap-3 p-4 pb-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.05] ring-1 ring-inset ring-foreground/[0.06]">
-                    <CliLogo cliId={cli.id} className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex min-h-5 items-center gap-2">
-                      {status?.installed ? (
-                        <SimpleTooltip label={`Open ${cli.name} in the terminal`}>
-                          <button
-                            type="button"
-                            className="min-w-0 cursor-pointer rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={() => openCliInTerminal({ cliId: cli.id })}
+              return (
+                <div
+                  key={cli.id}
+                  className={cn(GLASS_CARD, 'flex flex-col', isDefault && 'ring-1 ring-primary/35')}
+                >
+                  <div className="flex items-start gap-3 p-4 pb-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.05] ring-1 ring-inset ring-foreground/[0.06]">
+                      <CliLogo cliId={cli.id} className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex min-h-5 items-center gap-2">
+                        {status?.installed ? (
+                          <SimpleTooltip label={`Open ${cli.name} in the terminal`}>
+                            <button
+                              type="button"
+                              className="min-w-0 cursor-pointer rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={() => openCliInTerminal({ cliId: cli.id })}
+                            >
+                              {title}
+                            </button>
+                          </SimpleTooltip>
+                        ) : (
+                          title
+                        )}
+                        {status?.runError ? (
+                          <Chip className="ml-auto" tone="warning">
+                            Won't run
+                          </Chip>
+                        ) : (
+                          <Chip
+                            className="ml-auto"
+                            tone={status?.installed ? 'success' : 'neutral'}
                           >
-                            {title}
-                          </button>
-                        </SimpleTooltip>
-                      ) : (
-                        title
-                      )}
-                      {status?.runError ? (
-                        <Chip className="ml-auto" tone="warning">
-                          Won't run
-                        </Chip>
-                      ) : (
-                        <Chip className="ml-auto" tone={status?.installed ? 'success' : 'neutral'}>
-                          {status?.installed ? (status.version ?? 'Installed') : 'Not installed'}
-                        </Chip>
-                      )}
+                            {status?.installed ? (status.version ?? 'Installed') : 'Not installed'}
+                          </Chip>
+                        )}
+                      </div>
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {cli.description}
+                      </p>
                     </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      {cli.description}
-                    </p>
                   </div>
-                </div>
 
-                {status?.runError && (
-                  <Notice tone="warning" size="sm" className="mx-4 mb-3">
-                    <p>
-                      Found at <span className="break-all font-mono">{status.executablePath}</span>{' '}
-                      but it fails to start. Reinstalling it usually fixes this.
-                    </p>
-                    <p className="mt-1 break-words text-muted-foreground">{status.runError}</p>
-                  </Notice>
-                )}
+                  {status?.runError && (
+                    <Notice tone="warning" size="sm" className="mx-4 mb-3">
+                      <p>
+                        Found at{' '}
+                        <span className="break-all font-mono">{status.executablePath}</span> but it
+                        fails to start. Reinstalling it usually fixes this.
+                      </p>
+                      <p className="mt-1 break-words text-muted-foreground">{status.runError}</p>
+                    </Notice>
+                  )}
 
-                <div className="mt-auto flex flex-wrap items-center gap-1.5 px-4 pb-4">
-                  {status?.runError ? (
-                    <Button size="sm" onClick={() => void handleReinstall(cli.id, cli.name)}>
-                      <TerminalSquare /> Reinstall
-                    </Button>
-                  ) : status?.installed ? (
-                    <>
-                      <Button
-                        variant={isDefault ? 'tint' : 'soft'}
-                        size="sm"
-                        onClick={() => setDefaultCliId(isDefault ? null : cli.id)}
-                      >
-                        {isDefault && <Check />}
-                        {isDefault ? 'Default CLI' : 'Set as default'}
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 px-4 pb-4">
+                    {status?.runError ? (
+                      <Button size="sm" onClick={() => void handleReinstall(cli.id, cli.name)}>
+                        <TerminalSquare /> Reinstall
                       </Button>
-                      <SimpleTooltip label="Check for updates">
+                    ) : status?.installed ? (
+                      <>
+                        <Button
+                          variant={isDefault ? 'tint' : 'soft'}
+                          size="sm"
+                          onClick={() => setDefaultCliId(isDefault ? null : cli.id)}
+                        >
+                          {isDefault && <Check />}
+                          {isDefault ? 'Default CLI' : 'Set as default'}
+                        </Button>
+                        <SimpleTooltip label="Check for updates">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled={checkingCliId === cli.id}
+                            onClick={() => void handleCheckForUpdate(cli, status.version)}
+                          >
+                            <CloudDownload
+                              className={checkingCliId === cli.id ? 'animate-pulse' : undefined}
+                            />
+                          </Button>
+                        </SimpleTooltip>
+                      </>
+                    ) : (
+                      <Button size="sm" onClick={() => void handleInstall(cli.id, cli.name)}>
+                        <TerminalSquare /> Install
+                      </Button>
+                    )}
+                    {cli.homepageUrl && (
+                      <SimpleTooltip label="Open homepage">
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          disabled={checkingCliId === cli.id}
-                          onClick={() => void handleCheckForUpdate(cli, status.version)}
+                          onClick={() => void window.runova.shell.openExternal(cli.homepageUrl!)}
                         >
-                          <CloudDownload
-                            className={checkingCliId === cli.id ? 'animate-pulse' : undefined}
-                          />
+                          <ExternalLink />
                         </Button>
                       </SimpleTooltip>
-                    </>
-                  ) : (
-                    <Button size="sm" onClick={() => void handleInstall(cli.id, cli.name)}>
-                      <TerminalSquare /> Install
-                    </Button>
-                  )}
-                  {cli.homepageUrl && (
-                    <SimpleTooltip label="Open homepage">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => void window.runova.shell.openExternal(cli.homepageUrl!)}
-                      >
-                        <ExternalLink />
-                      </Button>
-                    </SimpleTooltip>
+                    )}
+                  </div>
+
+                  {/* The flags sit under a hairline, as the card's own settings row. */}
+                  {status?.installed && (
+                    <div className="px-4 pb-4 pt-3 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]">
+                      <CliArgsField cliId={cli.id} />
+                    </div>
                   )}
                 </div>
-
-                {/* The flags sit under a hairline, as the card's own settings row. */}
-                {status?.installed && (
-                  <div className="px-4 pb-4 pt-3 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]">
-                    <CliArgsField cliId={cli.id} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 

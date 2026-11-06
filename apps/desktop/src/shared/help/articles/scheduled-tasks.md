@@ -90,4 +90,4 @@ If the bot token or the scheduled tasks chat ID is missing, the task is still cr
 - [Prompt Builder](prompt-builder.md)
 - [Notifications and Telegram](notifications-telegram.md)
 - [Settings](settings.md)
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)

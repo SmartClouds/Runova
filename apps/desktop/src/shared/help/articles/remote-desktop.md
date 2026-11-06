@@ -195,5 +195,5 @@ The **History** button on the status row opens a list of every task the AI ran i
 - [Remote files](remote-files.md)
 - [Ask AI](ask-ai.md)
 - [AI providers](ai-providers.md)
-- [CLI manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Troubleshooting](troubleshooting.md)

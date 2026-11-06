@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { CliLogo } from '@/components/cliLogos';
 import { Globe, Keyboard, SettingsIcon, Sparkles, TerminalSquare } from '@/components/icons';
 import { Chip } from '@/components/pageKit';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -181,7 +182,7 @@ export function LauncherMenu({
           {browserKey ? <Kbd>{browserKey}</Kbd> : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate('/cli-manager')}>
+        <DropdownMenuItem onSelect={() => navigate(AI_CLIS_ROUTE)}>
           <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-muted-foreground">Manage CLIs</span>
         </DropdownMenuItem>

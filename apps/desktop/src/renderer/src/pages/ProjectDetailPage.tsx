@@ -137,6 +137,7 @@ import {
   type SkillSecurityTarget,
 } from '@/components/skills/SkillSecurityDialog';
 import { ProjectStudioSection } from '@/components/studio/project/ProjectStudioSection';
+import { AI_CLIS_ROUTE } from '@/components/tools/aiClis/route';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -4536,9 +4537,9 @@ function NotificationHookCard({
               <button
                 type="button"
                 className="underline underline-offset-2 hover:text-foreground"
-                onClick={() => navigate('/cli-manager')}
+                onClick={() => navigate(AI_CLIS_ROUTE)}
               >
-                CLI Manager
+                AI CLIs tab in Agent Tools
               </button>{' '}
               first.
             </p>

@@ -121,7 +121,7 @@ The **News** card lists technology news from runovahq.com and marks the security
 
 | Tile | What it shows |
 | --- | --- |
-| **Installed CLIs** | How many AI CLIs are installed out of all the CLIs Runova knows about, shown as a fraction. See [AI CLI Manager](cli-manager.md). |
+| **Installed CLIs** | How many AI CLIs are installed out of all the CLIs Runova knows about, shown as a fraction. See [AI CLIs](cli-manager.md). |
 | **Active Projects** | The number of projects that are not archived. See [Projects](projects.md). |
 | **Skill Repositories** | How many skill repositories you have added. See [Skills](skills.md). |
 | **Your Location** | A flag and your public IP address. Click the address to copy it ("IP address copied."), and use the refresh button to look it up again. It says **Unavailable** if the lookup fails. |
@@ -140,7 +140,7 @@ Add **All agents** and the summary tiles from the **Add card** menu while editin
 
 Below the cards, the **Update AI CLIs & tools** card lists installed AI CLIs and agent tools that have a newer version, with a count badge such as "2 updates". Each row shows the current version and the new one, with an **Update** button. Clicking it opens a terminal with the update command typed. Press `Enter` there to run it. The refresh button, **Re-check for updates**, checks again.
 
-If nothing is installed the card links to the AI CLI Manager and Agent Tools. When everything is current it says all installed CLIs and tools are up to date, and it notes how many could not be checked automatically. Update checks wait until the page has finished loading, so they do not slow it down.
+If nothing is installed the card links to the AI CLIs tab and the tool list in Agent Tools. When everything is current it says all installed CLIs and tools are up to date, and it notes how many could not be checked automatically. Update checks wait until the page has finished loading, so they do not slow it down.
 
 ## Customize the layout
 
@@ -187,7 +187,7 @@ A built-in chart added by a later version of Runova shows up on its own once. If
 - [Docker](docker.md)
 - [Android](android.md)
 - [Projects](projects.md)
-- [AI CLI Manager](cli-manager.md)
+- [AI CLIs](cli-manager.md)
 - [Token Usage](token-usage.md)
 - [News](news.md)
 - [Pipelines](pipelines.md)

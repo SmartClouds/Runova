@@ -1,17 +1,17 @@
 ---
-title: AI CLI Manager
+title: AI CLIs
 category: Agents
 order: 10
 summary: See which AI coding CLIs (Claude Code, Codex, Gemini CLI, Cursor and more) are installed, install or update them, and choose your default CLI, launch defaults and agent order.
 keywords: cli, ai cli, claude code, codex, gemini cli, cursor, opencode, aider, goose, copilot, muse code, install, update, version, default cli, launch defaults, agent order, running clis, npm, pipx, node.js, native installer, homebrew, winget
-route: /cli-manager
+route: /tools?tab=ai-clis
 ---
 
-AI CLI Manager is the page that knows which AI coding agents are installed on your machine. It scans for them, shows their versions, installs the ones you are missing, and tells you when a newer version is out. The agents you manage here are the ones you launch in the Workspace, so this is also where the related settings (default CLI, launch defaults, agent order) are explained.
+**AI CLIs** is the tab of [Agent Tools](agent-tools.md) that knows which AI coding agents are installed on your machine. It scans for them, shows their versions, installs the ones you are missing, and tells you when a newer version is out. The agents you manage here are the ones you launch in the Workspace, so this is also where the related settings (default CLI, launch defaults, agent order) are explained.
 
 ## Where to find it
 
-Click **AI CLI Manager** in the sidebar under **Agents**, or open the command palette and type "AI CLI Manager". The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
+Click **Agent Tools** in the sidebar under **Agents**, then **AI CLIs** under **Setup** in the page's left menu. You can also open the page with `?tab=ai-clis`. Beside the entry, a number says how many CLIs are installed. The page used to be called AI CLI Manager and had its own menu entry; old links to it open this tab. The related settings live in **Settings** under the **Agents** group (see [Settings](settings.md)).
 
 ## Supported CLIs
 
@@ -49,13 +49,13 @@ When you open the page, Runova looks for each CLI on your `PATH` and runs its ve
 
 Results are cached for a few minutes, so moving between pages does not rescan every time. If something is missing, the scan result is only kept for about 20 seconds, so a CLI you just installed shows up quickly.
 
-## The page
+## The tab
 
 ### Installed and not installed CLIs
 
-By default the page shows only the CLIs it found. Each card has the CLI's logo and name, a version badge (green with the version number when installed, **Not installed** otherwise) and a short description.
+By default the tab shows only the CLIs it found. Each card has the CLI's logo and name, a version badge (green with the version number when installed, **Not installed** otherwise) and a short description.
 
-- If nothing is installed yet, the page says "No AI CLIs installed yet" and points you to **Show all CLIs**.
+- If nothing is installed yet, the tab says "No AI CLIs installed yet" and points you to **Show all CLIs**.
 - Click **Show all CLIs (N not installed)** at the top to list every supported CLI, including the missing ones. The button then reads **Hide not installed**.
 
 ### Open a CLI in a terminal

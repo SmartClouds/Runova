@@ -94,6 +94,8 @@ export const STARTUP_PAGES = [
   '/tools',
   '/docker',
   '/android',
+  // No longer in the menu (it is the AI CLIs tab of Agent Tools now). Kept so a startup page
+  // saved before that still opens, and App.tsx sends it on to the tab.
   '/cli-manager',
   '/ask-ai',
   '/remote',

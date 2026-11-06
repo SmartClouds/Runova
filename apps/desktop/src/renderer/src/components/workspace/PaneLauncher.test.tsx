@@ -83,26 +83,23 @@ describe('PaneLauncher agent cards', () => {
     expect(codexCard).toHaveAttribute('aria-keyshortcuts', '2');
   });
 
-  it('links each missing agent to the CLI manager and says it is not installed', async () => {
+  it('links each missing agent to the AI CLIs tab and says it is not installed', async () => {
     const { user } = renderWithProviders(
       <PaneLauncher project={withAgent} groupId="g1" hero focused={false} />,
       { bridge: { 'cli.detectAll': [claude], platform: 'win32' } },
     );
     const gemini = await screen.findByRole('link', { name: 'Install Gemini CLI' });
-    expect(gemini).toHaveAttribute('href', '/cli-manager');
+    expect(gemini).toHaveAttribute('href', '/tools?tab=ai-clis');
     // Fifteen are missing: eight show as icons and the rest fold into one link.
     expect(screen.getAllByRole('link', { name: /^Install / })).toHaveLength(8);
     expect(screen.getByRole('link', { name: '7 more agents to install' })).toHaveAttribute(
       'href',
-      '/cli-manager',
+      '/tools?tab=ai-clis',
     );
     await user.hover(gemini);
     expect(
-      (
-        await screen.findAllByText(
-          "Gemini CLI isn't installed. Install it from the AI CLI Manager.",
-        )
-      ).length,
+      (await screen.findAllByText("Gemini CLI isn't installed. Install it from Agent Tools."))
+        .length,
     ).toBeGreaterThan(0);
   });
 

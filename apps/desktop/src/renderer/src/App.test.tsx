@@ -30,7 +30,6 @@ function stub(name: string) {
 }
 
 vi.mock('./pages/DashboardPage', () => stub('Dashboard'));
-vi.mock('./pages/CliManagerPage', () => stub('CLI Manager'));
 vi.mock('./pages/PromptBuilderPage', () => stub('Prompt Builder'));
 vi.mock('./pages/PromptHistoryPage', () => stub('Prompt History'));
 vi.mock('./pages/ProjectsPage', () => stub('Projects'));
@@ -144,7 +143,6 @@ afterEach(() => {
 describe('App routes inside the shell', () => {
   const routes: [string, string][] = [
     ['/', 'Dashboard'],
-    ['/cli-manager', 'CLI Manager'],
     ['/prompt-builder', 'Prompt Builder'],
     ['/prompt-history', 'Prompt History'],
     ['/projects', 'Projects'],
@@ -174,6 +172,10 @@ describe('App routes inside the shell', () => {
 
   it('sends the old notifications route to Pipelines', async () => {
     expect(await pageAt('/notifications')).toBe('Pipelines');
+  });
+
+  it('sends the old CLI manager route to Agent Tools', async () => {
+    expect(await pageAt('/cli-manager')).toBe('Tools');
   });
 
   it('keeps a query string out of the route match', async () => {

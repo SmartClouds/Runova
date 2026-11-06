@@ -88,7 +88,7 @@ export function SkillDeepReviewOptions({
           />
           {cliQuery.isFetched && installedPromptClis.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              No CLI with a non-interactive mode was detected. Install one from CLI Manager, or
+              No CLI with a non-interactive mode was detected. Install one from Agent Tools, or
               leave the deep review off and rely on the static scan.
             </p>
           )}

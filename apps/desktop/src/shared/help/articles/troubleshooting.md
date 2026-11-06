@@ -43,10 +43,10 @@ When a helper runs an agent CLI in the background, you may see "(CLI) was still 
 
 ## An AI CLI is not detected
 
-[AI CLI Manager](cli-manager.md) marks a CLI **Not installed** when it cannot find its program on your `PATH`.
+[AI CLIs](cli-manager.md) marks a CLI **Not installed** when it cannot find its program on your `PATH`.
 
 1. Install it with the **Install** button on its card, or from the CLI's own instructions.
-2. Click **Refresh** at the top of AI CLI Manager. It re-scans and skips the saved result.
+2. Click **Refresh** at the top of the AI CLIs tab. It re-scans and skips the saved result.
 3. If it is still missing, close and reopen Runova so it sees the updated `PATH`. A program installed to a folder that is not on your `PATH` will not be found.
 4. If it shows as installed but the version looks slow to appear, wait. Some CLIs take over ten seconds to answer `--version`, and being slow does not make a CLI count as missing.
 

@@ -124,7 +124,7 @@ The **+** button after the last tab in a pane (**New tab**) opens a menu with:
 - **Agents**, the installed AI CLIs, in your chosen order. Claude Code, Codex, Gemini, Grok and Cursor open a list of models (and efforts) when you hover them, to start that tab on a specific model.
 - **Shells**, such as **PowerShell**, **PowerShell 7** and **Command Prompt** on Windows, or zsh, bash and fish elsewhere.
 - **Browser** for a web page, usually your dev server.
-- **Manage CLIs**, which opens [AI CLI Manager](cli-manager.md), and **Keyboard shortcuts**, which opens the shortcuts tab in Settings.
+- **Manage CLIs**, which opens [AI CLIs](cli-manager.md), and **Keyboard shortcuts**, which opens the shortcuts tab in Settings.
 
 `Ctrl+Shift+T` opens this menu for the focused pane. An empty pane shows the same choices as large tiles. All the detail on launching agents is in [Terminals and agents](workspace-terminals-agents.md).
 

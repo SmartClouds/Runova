@@ -51,6 +51,7 @@ import {
   TOOLBAR,
   UpdateSummary,
 } from '@/components/pageKit';
+import { AI_CLIS_TAB, AiClisPanel } from '@/components/tools/aiClis';
 import { CodeqlInstallCard } from '@/components/tools/CodeqlInstallCard';
 import { DEV_SETUP_TAB, DevSetupPanel } from '@/components/tools/devSetup';
 import { Button } from '@/components/ui/button';
@@ -301,6 +302,14 @@ export default function ToolsPage(): React.JSX.Element {
     // A partial answer would show a number that is too low, so wait for the whole list.
     devSetupMissing = summary.checking > 0 ? null : summary.missing;
   }
+
+  // The same scan the AI CLIs tab shows, so its nav count and its cards never disagree.
+  const cliQuery = useQuery({
+    queryKey: queryKeys.cliStatus,
+    queryFn: () => window.runova.cli.detectAll(),
+    meta: { silentLoading: true },
+  });
+  const installedCliCount = cliQuery.data?.filter((cli) => cli.installed).length ?? null;
 
   const selectedProject = projectsQuery.data?.find((p) => p.id === selectedProjectId);
 
@@ -558,14 +567,17 @@ export default function ToolsPage(): React.JSX.Element {
 
   const tabParam = searchParams.get('tab');
   const activeCategory =
-    tabParam === DEV_SETUP_TAB
-      ? DEV_SETUP_TAB
+    tabParam === DEV_SETUP_TAB || tabParam === AI_CLIS_TAB
+      ? tabParam
       : tabParam === 'security'
         ? SECURITY_TOOL_CATEGORY
         : categories.some((c) => c.category === tabParam)
           ? (tabParam as string)
           : 'all';
   const onDevSetup = activeCategory === DEV_SETUP_TAB;
+  const onAiClis = activeCategory === AI_CLIS_TAB;
+  // The setup tabs bring their own controls; the tool filter and target project are for tool cards.
+  const onSetupTab = onDevSetup || onAiClis;
 
   function setActiveCategory(next: string): void {
     setSearchParams(
@@ -613,7 +625,9 @@ export default function ToolsPage(): React.JSX.Element {
     'Agent Tools',
     onDevSetup
       ? 'See what this computer has for development, and install what is missing.'
-      : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
+      : onAiClis
+        ? 'The AI coding CLIs on this computer. Install the missing ones, update them and pick your default.'
+        : 'Curated third-party tools that cut agent token spend or improve code quality. Install, configure, and run them from here.',
   );
 
   return (
@@ -627,8 +641,8 @@ export default function ToolsPage(): React.JSX.Element {
             'flex shrink-0 flex-col gap-2 p-2 @3xl/tools:sticky @3xl/tools:top-2 @3xl/tools:w-56',
           )}
         >
-          {/* The filter and the target project only act on tool cards, which Dev Setup has none of. */}
-          {!onDevSetup && (
+          {/* The filter and the target project only act on tool cards, which the setup tabs have none of. */}
+          {!onSetupTab && (
             <SearchPill
               type="search"
               value={query}
@@ -646,6 +660,30 @@ export default function ToolsPage(): React.JSX.Element {
                 Setup
               </h2>
               <ul className="flex flex-wrap gap-0.5 @3xl/tools:flex-col @3xl/tools:flex-nowrap @3xl/tools:gap-px">
+                <li className="shrink-0">
+                  <CategoryNavButton
+                    active={onAiClis}
+                    onSelect={() => setActiveCategory(AI_CLIS_TAB)}
+                    icon={TerminalSquare}
+                    label="AI CLIs"
+                    pillTransition={pillTransition}
+                    trailing={
+                      installedCliCount === null ? null : (
+                        <span
+                          className={cn(
+                            'relative rounded-full px-1.5 text-[10px] font-medium leading-4 tabular-nums',
+                            onAiClis
+                              ? 'bg-primary/15 text-primary'
+                              : 'bg-foreground/[0.06] text-muted-foreground',
+                          )}
+                        >
+                          {installedCliCount}
+                          <span className="sr-only"> installed</span>
+                        </span>
+                      )
+                    }
+                  />
+                </li>
                 <li className="shrink-0">
                   <CategoryNavButton
                     active={onDevSetup}
@@ -693,7 +731,7 @@ export default function ToolsPage(): React.JSX.Element {
           </nav>
 
           {/* The project the "in a project" actions write to, under a hairline of its own. */}
-          {!onDevSetup && (
+          {!onSetupTab && (
             <div className="space-y-1.5 px-0.5 pb-0.5 pt-2.5 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]">
               <h2 className={cn(SECTION_HEADING, 'px-2')}>Target project</h2>
               <Combobox
@@ -717,6 +755,8 @@ export default function ToolsPage(): React.JSX.Element {
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {onDevSetup ? (
             <DevSetupPanel />
+          ) : onAiClis ? (
+            <AiClisPanel />
           ) : (
             <>
               <div className={TOOLBAR}>

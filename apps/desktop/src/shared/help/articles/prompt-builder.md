@@ -39,11 +39,11 @@ First your request is translated to English, whatever language you wrote it in. 
 Who writes it depends on the **Prompt Builder writes with** tiles in **Settings**, **AI**, **Providers**:
 
 - **OpenAI**, **Gemini** or **Ollama** (OpenAI is the default): that provider, with its key and model.
-- **Default CLI**: your default AI CLI (**Settings**, **Agents**, **Default CLI**, or the first installed one) writes it with the model it is set up with. No API key is needed, but the CLI has to be installed and signed in (see [AI CLI Manager](cli-manager.md)). A CLI can take longer than an API call, and it is stopped after 5 minutes.
+- **Default CLI**: your default AI CLI (**Settings**, **Agents**, **Default CLI**, or the first installed one) writes it with the model it is set up with. No API key is needed, but the CLI has to be installed and signed in (see [AI CLIs](cli-manager.md)). A CLI can take longer than an API call, and it is stopped after 5 minutes.
 
 The setting covers this page, the Build Prompt dialog and its desktop widget.
 
-If the request box is empty you see "Describe what you want before generating a prompt." If the provider has no model, you see "Set a <provider> model in Settings first." With **Default CLI** and no CLI installed, the error says to install one from CLI Manager. The button shows **Generating…** while it works.
+If the request box is empty you see "Describe what you want before generating a prompt." If the provider has no model, you see "Set a <provider> model in Settings first." With **Default CLI** and no CLI installed, the error says to install one from the AI CLIs tab in Agent Tools. The button shows **Generating…** while it works.
 
 ### Translate directly
 
@@ -77,7 +77,7 @@ See [Projects](projects.md) and [Scheduled tasks](scheduled-tasks.md) for where 
 
 ## Recommended run
 
-Under the generated prompt, the **Recommended run** panel tells you how heavy the task is and which model and effort level to use, so you do not overspend on a small job. After **Generate Prompt** or **Translate** finishes, Runova automatically asks your default AI CLI to read the prompt and size it. This uses a CLI, not your API provider, so one must be installed and signed in (see [AI CLI Manager](cli-manager.md)). Sizing can take a short while and is stopped after 2 minutes. In the Build Prompt dialog this can be switched off, see the dialog section below.
+Under the generated prompt, the **Recommended run** panel tells you how heavy the task is and which model and effort level to use, so you do not overspend on a small job. After **Generate Prompt** or **Translate** finishes, Runova automatically asks your default AI CLI to read the prompt and size it. This uses a CLI, not your API provider, so one must be installed and signed in (see [AI CLIs](cli-manager.md)). Sizing can take a short while and is stopped after 2 minutes. In the Build Prompt dialog this can be switched off, see the dialog section below.
 
 When a result is ready the panel shows:
 

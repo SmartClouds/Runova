@@ -371,7 +371,7 @@ export async function prepareHeadlessRun(
       cliName: name ?? null,
       error:
         `${name ?? 'The chosen CLI'} wasn't found. Check that it runs in a new terminal, then ` +
-        'refresh CLI Manager, or pick another AI for this task.',
+        'press Refresh on the AI CLIs tab in Agent Tools, or pick another AI for this task.',
     });
   }
 
@@ -380,7 +380,7 @@ export async function prepareHeadlessRun(
       cliName: null,
       error:
         'No installed CLI supports non-interactive prompts. Install one (Claude Code, Codex, Gemini, …) ' +
-        'from CLI Manager and pick it as your default CLI in Settings.',
+        'from the AI CLIs tab in Agent Tools and pick it as your default CLI in Settings.',
     });
   }
 
