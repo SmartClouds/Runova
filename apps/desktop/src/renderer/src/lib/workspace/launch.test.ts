@@ -27,6 +27,8 @@ const settingsUpdate = vi.fn((_patch: unknown) => Promise.resolve({}));
 
 const aiAccessArgs = { current: [] as string[] };
 
+const terminalWrite = vi.fn((_id: string, _data: string) => Promise.resolve());
+
 function stubRunova(hookPath: string | null = null): void {
   vi.stubGlobal('window', {
     runova: {
@@ -34,6 +36,7 @@ function stubRunova(hookPath: string | null = null): void {
       settings: { update: settingsUpdate },
       agents: { statusHookSettings: vi.fn(() => Promise.resolve(hookPath)) },
       aiAccess: { launchArgs: vi.fn(() => Promise.resolve(aiAccessArgs.current)) },
+      terminal: { write: terminalWrite },
     },
   });
 }
@@ -65,6 +68,7 @@ beforeEach(() => {
   aiAccessArgs.current = [];
   addTerminal.mockClear();
   settingsUpdate.mockClear();
+  terminalWrite.mockClear();
   stubRunova();
 });
 
@@ -201,6 +205,34 @@ describe('launchPromptTab', () => {
       runArgs: ['--model', 'opus', '--effort', 'high'],
     });
     expect(typed()).toBe('claude --permission-mode auto --model opus --effort high\r');
+  });
+
+  it('leaves the prompt unsent, for the user to read and start', async () => {
+    const { launchPromptTab, PROMPT_SUBMIT_DELAY_MS } = await load();
+    const { terminalRuntime } = await import('@/lib/terminal/terminalRuntime');
+    vi.useFakeTimers();
+    try {
+      launchPromptTab(project, { cliId: 'claude-code', prompt: 'hello' });
+      await vi.advanceTimersByTimeAsync(PROMPT_SUBMIT_DELAY_MS * 2);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(terminalRuntime.deliverPrompt).toHaveBeenCalledWith('tab-1', 'hello');
+    expect(terminalWrite).not.toHaveBeenCalled();
+  });
+
+  it('presses Enter after the paste when asked to submit', async () => {
+    const { launchPromptTab, PROMPT_SUBMIT_DELAY_MS } = await load();
+    vi.useFakeTimers();
+    try {
+      launchPromptTab(project, { cliId: 'claude-code', prompt: 'hello', submit: true });
+      await vi.advanceTimersByTimeAsync(PROMPT_SUBMIT_DELAY_MS - 1);
+      expect(terminalWrite).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(terminalWrite).toHaveBeenCalledWith('tab-1', '\r');
   });
 });
 

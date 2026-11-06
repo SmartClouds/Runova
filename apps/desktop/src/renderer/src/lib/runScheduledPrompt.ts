@@ -3,22 +3,27 @@ import {
   type EffortLevel,
   getCliDefinition,
   launchDefaultArgs,
+  type Project,
 } from '@runova/core';
+import { launchPromptTab } from '@/lib/workspace/launch';
 import { useCliStore } from '@/stores/cliStore';
-import { useTerminalStore } from '@/stores/terminalStore';
-import { cliLaunchCommand } from './openCli';
 
 export interface PromptRun {
-  projectId: string;
-  /** Project folder the CLI starts in. */
-  cwd?: string;
   content: string;
-  /** Names the scratch file the prompt is written to, so reruns overwrite the same one. */
-  fileKey: string;
   targetAI: string;
   cliId?: string;
   model?: string;
   effort?: EffortLevel;
+  /**
+   * Press Enter once the prompt is in. Off for the Run button, where the user reads the prompt
+   * over in the CLI and starts it themselves. On for a scheduled prompt that came due on its own.
+   */
+  submit: boolean;
+}
+
+export interface StartedPromptRun {
+  cliName: string;
+  tabId: string;
 }
 
 /** The task's own CLI, then the app default, then whichever CLI its target AI belongs to. */
@@ -28,30 +33,24 @@ export function resolveRunCliId(cliId: string | undefined, targetAI: string): st
 }
 
 /**
- * Opens a terminal tab in the project folder that starts the CLI with this prompt and presses
- * Enter. The prompt goes through a scratch file because it's usually too long and too full of
- * quotes to pass on the command line directly. Returns the CLI name, or null when there's no
- * CLI to run it in.
+ * Opens an agent tab in the project's workspace that starts the CLI with the task's model and
+ * effort, and pastes the prompt into it once the CLI is ready. Returns null when there's no CLI
+ * to run it in.
  */
-export async function runPromptInTerminal(run: PromptRun): Promise<string | null> {
+export function runPromptInWorkspace(project: Project, run: PromptRun): StartedPromptRun | null {
   const cliId = resolveRunCliId(run.cliId, run.targetAI);
   const cli = cliId ? getCliDefinition(cliId) : undefined;
   if (!cliId || !cli) return null;
 
-  const filePath = await window.runova.fs.writeScratchFile(`${run.fileKey}.md`, run.content);
   // Model and effort only make sense for the CLI they were picked for.
   const runArgs =
     run.cliId === cliId ? launchDefaultArgs(cliId, { model: run.model, effort: run.effort }) : [];
-  const launch = cliLaunchCommand(cliId, runArgs) ?? cli.executableNames[0];
-  const command =
-    window.runova.platform === 'win32'
-      ? `& ${launch} (Get-Content -Raw -LiteralPath "${filePath}")`
-      : `${launch} "$(cat '${filePath}')"`;
-  useTerminalStore.getState().openSession({
-    title: cli.name,
-    cwd: run.cwd,
-    projectId: run.projectId,
-    initialInput: `${command}\r`,
+  const tabId = launchPromptTab(project, {
+    cliId,
+    prompt: run.content,
+    runArgs,
+    runLabel: 'Scheduled prompt',
+    submit: run.submit,
   });
-  return cli.name;
+  return tabId ? { cliName: cli.name, tabId } : null;
 }

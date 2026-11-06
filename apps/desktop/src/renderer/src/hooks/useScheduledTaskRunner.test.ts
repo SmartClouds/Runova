@@ -3,22 +3,37 @@ import { waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCliStore } from '@/stores/cliStore';
 import { useTerminalStore } from '@/stores/terminalStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { renderHookWithProviders } from '../../../test/renderer/renderWithProviders';
 import { useScheduledTaskRunner } from './useScheduledTaskRunner';
 
 /**
- * Main decides when an automatic prompt is due; the renderer only opens it. The tab has to start
- * in the task's project folder, and the lists refresh so the card moves to Done.
+ * Main decides when an automatic prompt is due; the renderer only opens it. It opens as an agent
+ * tab in the task's project workspace (not the terminal drawer) and is submitted, and the lists
+ * refresh so the card moves to Done.
  */
 
 const toasts = vi.hoisted(() => ({ success: [] as unknown[], error: [] as unknown[] }));
+const launch = vi.hoisted(() => ({ calls: [] as unknown[][] }));
 
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn((message: unknown) => toasts.success.push(message)),
     error: vi.fn((message: unknown) => toasts.error.push(message)),
+    warning: vi.fn(),
   },
 }));
+
+vi.mock('@/lib/workspace/launch', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/workspace/launch')>();
+  return {
+    ...actual,
+    launchPromptTab: (...args: Parameters<typeof actual.launchPromptTab>) => {
+      launch.calls.push(args);
+      return actual.launchPromptTab(...args);
+    },
+  };
+});
 
 const task: ScheduledTask = {
   id: 't1',
@@ -37,33 +52,52 @@ const task: ScheduledTask = {
 beforeEach(() => {
   toasts.success = [];
   toasts.error = [];
+  launch.calls = [];
   useCliStore.setState({ cliArgs: {}, cliLaunchDefaults: {}, defaultCliId: null });
   useTerminalStore.setState({ sessions: [], activeSessionId: null, isOpen: false });
+  useWorkspaceStore.setState({ workspaces: {}, railProjectIds: [], activeProjectId: null });
 });
 
 function renderRunner() {
   return renderHookWithProviders(() => useScheduledTaskRunner(), {
     bridge: {
       'projects.list': [{ id: 'p1', name: 'Apollo', folderPath: 'C:\\code\\apollo' }],
-      'fs.writeScratchFile': async () => 'C:\\tmp\\scheduled-task-t1.md',
     },
   });
 }
 
 describe('useScheduledTaskRunner', () => {
-  it('opens a due task in its project folder', async () => {
+  it('opens a due task in its project workspace and submits it', async () => {
     const { bridge, queryClient } = renderRunner();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
 
     bridge.$emit('scheduledTasks.onDue', task);
 
-    await waitFor(() => expect(useTerminalStore.getState().sessions).toHaveLength(1));
-    expect(useTerminalStore.getState().sessions[0]).toMatchObject({
-      cwd: 'C:\\code\\apollo',
-      projectId: 'p1',
+    await waitFor(() => expect(launch.calls).toHaveLength(1));
+    expect(launch.calls[0]?.[1]).toMatchObject({
+      cliId: 'claude-code',
+      prompt: 'bump deps',
+      submit: true,
     });
+    const tabs = Object.values(useWorkspaceStore.getState().workspaces.p1?.tabs ?? {});
+    expect(tabs).toEqual([
+      expect.objectContaining({ kind: 'terminal', cliId: 'claude-code', cwd: 'C:\\code\\apollo' }),
+    ]);
+    // The terminal drawer stays out of it.
+    expect(useTerminalStore.getState().sessions).toHaveLength(0);
     expect(toasts.success).toEqual(['Scheduled prompt started in Claude Code CLI']);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['scheduled-tasks'] });
+  });
+
+  it('says so when the task project is gone', async () => {
+    const { bridge } = renderRunner();
+
+    bridge.$emit('scheduledTasks.onDue', { ...task, projectId: 'gone' });
+
+    await waitFor(() =>
+      expect(toasts.error).toEqual(['A scheduled prompt was due, but its project is gone.']),
+    );
+    expect(launch.calls).toHaveLength(0);
   });
 
   it('refreshes the lists when main changes tasks on its own', () => {

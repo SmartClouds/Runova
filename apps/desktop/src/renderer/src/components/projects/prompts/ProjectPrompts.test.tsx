@@ -4,6 +4,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCliStore } from '@/stores/cliStore';
 import { useTerminalStore } from '@/stores/terminalStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 
 /**
@@ -102,7 +103,6 @@ function renderSection(route = '/projects/p1?tab=prompts', bridge: Record<string
       'scheduledTasks.listByProject': [missedTask],
       'projects.list': [project],
       'cli.detectAll': [{ id: 'claude-code', installed: true }],
-      'fs.writeScratchFile': async () => 'C:\\tmp\\scheduled-task-t1.md',
       ...bridge,
     },
   });
@@ -111,6 +111,7 @@ function renderSection(route = '/projects/p1?tab=prompts', bridge: Record<string
 beforeEach(() => {
   useCliStore.setState({ cliArgs: {}, cliLaunchDefaults: {}, defaultCliId: null });
   useTerminalStore.setState({ sessions: [], activeSessionId: null, isOpen: false });
+  useWorkspaceStore.setState({ workspaces: {}, railProjectIds: [], activeProjectId: null });
 });
 
 describe('ProjectPrompts', () => {
@@ -146,16 +147,19 @@ describe('ProjectPrompts', () => {
     expect(await screen.findByText('In progress')).toBeTruthy();
   });
 
-  it('runs a missed prompt in the project folder and records the run', async () => {
+  it('opens a missed prompt in the project workspace, unsent, and records the run', async () => {
     const { user, bridge } = renderSection('/projects/p1?tab=prompts&view=scheduled');
 
     await user.click(await screen.findByRole('button', { name: /Run now/ }));
 
     await waitFor(() => expect(bridge.$fn('scheduledTasks.markRan')).toHaveBeenCalledWith('t1'));
-    const [session] = useTerminalStore.getState().sessions;
-    expect(session).toMatchObject({ cwd: 'C:\\code\\apollo', projectId: 'p1' });
-    expect(session.initialInput).toContain('--model opus');
-    expect(session.initialInput?.endsWith('\r')).toBe(true);
+    const tabs = Object.values(useWorkspaceStore.getState().workspaces.p1?.tabs ?? {});
+    expect(tabs).toHaveLength(1);
+    const [tab] = tabs;
+    expect(tab).toMatchObject({ kind: 'terminal', cliId: 'claude-code', cwd: 'C:\\code\\apollo' });
+    // The CLI starts with the task's model, and the prompt is only pasted, never submitted.
+    expect(tab?.kind === 'terminal' && tab.launchInput).toContain('--model opus');
+    expect(useTerminalStore.getState().sessions).toHaveLength(0);
   });
 
   it('edits a draft in place', async () => {

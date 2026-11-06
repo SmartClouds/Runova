@@ -126,13 +126,21 @@ export interface PromptLaunch {
   runArgs?: string[];
   /** Shown on the tab, e.g. "Opus 5.5 · High". */
   runLabel?: string;
+  /**
+   * Press Enter for the user once the prompt is in. Only for runs nobody is there to start, like
+   * a scheduled prompt that came due on its own.
+   */
+  submit?: boolean;
 }
+
+/** How long after the paste the Enter goes in, so the CLI has taken the whole paste first. */
+export const PROMPT_SUBMIT_DELAY_MS = 500;
 
 /**
  * Opens an agent tab and starts the CLI right away, with the model and effort it was given.
  * The prompt is not part of the command: it is pasted into the CLI's own input box once the CLI
  * has finished starting, exactly as if the user had pasted it, and left unsubmitted so they read
- * it over and press Enter.
+ * it over and press Enter (unless `submit` asks for the Enter too).
  */
 export function launchPromptTab(
   project: Project,
@@ -163,7 +171,12 @@ export function launchPromptTab(
   // Nothing is typed into a shell that never got the CLI up: the prompt would run as commands.
   // It goes to the clipboard instead, so the user can paste it once they have sorted the CLI out.
   void terminalRuntime.deliverPrompt(tabId, launch.prompt).then((delivered) => {
-    if (delivered) return;
+    if (delivered) {
+      if (launch.submit) {
+        setTimeout(() => void window.runova.terminal.write(tabId, '\r'), PROMPT_SUBMIT_DELAY_MS);
+      }
+      return;
+    }
     void navigator.clipboard.writeText(launch.prompt);
     toast.warning(`${cli.name} did not come up`, {
       description: 'The prompt is on your clipboard, ready to paste once the CLI is running.',

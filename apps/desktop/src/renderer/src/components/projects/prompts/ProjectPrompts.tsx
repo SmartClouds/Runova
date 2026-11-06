@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
-import { runPromptInTerminal } from '@/lib/runScheduledPrompt';
+import { runPromptInWorkspace } from '@/lib/runScheduledPrompt';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
 import { SectionEmptyState } from '../ProjectDetailChrome';
@@ -243,20 +243,23 @@ export function ProjectPrompts({ project }: { project: Project }): React.JSX.Ele
   }
 
   async function runTask(task: ScheduledTask): Promise<void> {
-    const cliName = await runPromptInTerminal({
-      projectId,
-      cwd: project.folderPath,
+    // By hand the prompt is only put in the CLI's input box. The user reads it and presses Enter.
+    const started = runPromptInWorkspace(project, {
       content: taskPromptText(task),
-      fileKey: `scheduled-task-${task.id}`,
       targetAI: task.targetAI,
       cliId: task.cliId,
       model: task.model,
       effort: task.effort,
+      submit: false,
     });
-    if (!cliName) {
+    if (!started) {
       toast.error('No CLI available for this prompt. Pick one, or set a default CLI in Settings.');
       return;
     }
+    navigate(`/workspace/${projectId}`);
+    toast.success(`Starting ${started.cliName}`, {
+      description: 'The prompt goes in once it is ready. Press Enter in the tab to run it.',
+    });
     await window.runova.scheduledTasks.markRan(task.id);
     refreshTasks();
   }

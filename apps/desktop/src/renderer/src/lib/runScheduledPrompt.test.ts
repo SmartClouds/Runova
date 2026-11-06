@@ -1,33 +1,30 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import type { Project } from '@runova/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCliStore } from '@/stores/cliStore';
-import { useTerminalStore } from '@/stores/terminalStore';
-import { type FakeBridge, installRunovaBridge } from '../../../test/renderer/runovaBridge';
-import { resolveRunCliId, runPromptInTerminal } from './runScheduledPrompt';
+import { resolveRunCliId, runPromptInWorkspace } from './runScheduledPrompt';
 
 /**
- * A scheduled prompt has to start in the project folder, in the CLI it was scheduled for, with
- * its model and effort, and actually be submitted. Before this helper the Run button opened the
- * terminal in the home folder and left the command sitting unsent.
+ * A scheduled prompt runs in an agent tab of its project's workspace, never in the terminal
+ * drawer, in the CLI it was scheduled for with its model and effort. Run by hand it is only
+ * pasted, so the user starts it; a scheduled run that came due on its own is submitted too.
  */
 
-let bridge: FakeBridge;
+const launchPromptTab = vi.hoisted(() => vi.fn((..._args: unknown[]): string | null => 'tab-1'));
+
+vi.mock('@/lib/workspace/launch', () => ({ launchPromptTab }));
+
+const project = { id: 'p1', name: 'Apollo', folderPath: 'C:\\code\\apollo' } as Project;
 
 beforeEach(() => {
-  bridge = installRunovaBridge({
-    platform: 'win32',
-    'fs.writeScratchFile': async () => 'C:\\tmp\\scheduled-task-t1.md',
-  });
+  launchPromptTab.mockClear();
   useCliStore.setState({ cliArgs: {}, cliLaunchDefaults: {}, defaultCliId: null });
-  useTerminalStore.setState({ sessions: [], activeSessionId: null, isOpen: false });
 });
 
-function run(overrides: Partial<Parameters<typeof runPromptInTerminal>[0]> = {}) {
-  return runPromptInTerminal({
-    projectId: 'p1',
-    cwd: 'C:\\code\\apollo',
+function run(overrides: Partial<Parameters<typeof runPromptInWorkspace>[1]> = {}) {
+  return runPromptInWorkspace(project, {
     content: 'fix the login bug',
-    fileKey: 'scheduled-task-t1',
     targetAI: 'Claude Code',
+    submit: false,
     ...overrides,
   });
 }
@@ -46,41 +43,37 @@ describe('resolveRunCliId', () => {
   });
 });
 
-describe('runPromptInTerminal', () => {
-  it('opens the CLI in the project folder with its model and effort, and submits it', async () => {
-    const name = await run({ cliId: 'claude-code', model: 'opus', effort: 'high' });
+describe('runPromptInWorkspace', () => {
+  it('opens the CLI in the workspace with its model and effort, leaving the prompt unsent', () => {
+    const started = run({ cliId: 'claude-code', model: 'opus', effort: 'high' });
 
-    expect(name).toBe('Claude Code CLI');
-    expect(bridge.$fn('fs.writeScratchFile')).toHaveBeenCalledWith(
-      'scheduled-task-t1.md',
-      'fix the login bug',
-    );
-    const [session] = useTerminalStore.getState().sessions;
-    expect(session).toMatchObject({ cwd: 'C:\\code\\apollo', projectId: 'p1' });
-    expect(session.initialInput).toContain('--model opus');
-    expect(session.initialInput).toContain('--effort high');
-    expect(session.initialInput).toContain(
-      'Get-Content -Raw -LiteralPath "C:\\tmp\\scheduled-task-t1.md"',
-    );
-    expect(session.initialInput?.endsWith('\r')).toBe(true);
+    expect(started).toEqual({ cliName: 'Claude Code CLI', tabId: 'tab-1' });
+    expect(launchPromptTab).toHaveBeenCalledWith(project, {
+      cliId: 'claude-code',
+      prompt: 'fix the login bug',
+      runArgs: ['--model', 'opus', '--effort', 'high'],
+      runLabel: 'Scheduled prompt',
+      submit: false,
+    });
   });
 
-  it('drops model and effort when it falls back to a different CLI', async () => {
+  it('asks for the Enter when the run should start on its own', () => {
+    run({ cliId: 'claude-code', submit: true });
+
+    expect(launchPromptTab.mock.calls[0]?.[1]).toMatchObject({ submit: true });
+  });
+
+  it('drops model and effort when it falls back to a different CLI', () => {
     useCliStore.setState({ defaultCliId: 'codex-cli' });
 
-    await run({ model: 'opus', effort: 'high' });
+    run({ model: 'opus', effort: 'high' });
 
-    const [session] = useTerminalStore.getState().sessions;
-    expect(session.initialInput).not.toContain('opus');
+    expect(launchPromptTab.mock.calls[0]?.[1]).toMatchObject({ cliId: 'codex-cli', runArgs: [] });
   });
 
-  it('uses a POSIX shell line off Windows', async () => {
-    bridge.$set('platform', 'darwin');
-    bridge.$set('fs.writeScratchFile', async () => '/tmp/scheduled-task-t1.md');
+  it('reports nothing started when the tab could not open', () => {
+    launchPromptTab.mockReturnValueOnce(null);
 
-    await run({ cliId: 'claude-code' });
-
-    const [session] = useTerminalStore.getState().sessions;
-    expect(session.initialInput).toContain(`"$(cat '/tmp/scheduled-task-t1.md')"`);
+    expect(run({ cliId: 'claude-code' })).toBeNull();
   });
 });
