@@ -1,6 +1,7 @@
 using Runova.Website.Api;
 using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
+using Runova.Website.Api.Billing;
 using Runova.Website.Api.Cli;
 using Runova.Website.Api.Database;
 using Runova.Website.Api.Dependencies;
@@ -35,6 +36,7 @@ builder.Services.AddWebsiteNews();
 builder.Services.AddWebsiteMedia();
 builder.Services.AddWebsiteReleases();
 builder.Services.AddWebsiteDependencies();
+builder.Services.AddWebsiteBilling();
 builder.Services.AddWebsiteJobs();
 builder.Services.AddWebsiteJson();
 builder.Services.AddHostedService<MigrateOnStart>();

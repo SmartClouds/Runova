@@ -61,9 +61,13 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 // The desktop app trades a code or refresh token; it sends no cookie to forge.
                 ("POST", "/api/v1/device-tokens", false),
                 ("POST", "/api/v1/email-verifications", true),
+
+                // NOWPayments and Stripe post signed payment events; they send no cookie to forge (E53).
+                ("POST", "/api/v1/nowpayments-events", false),
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),
                 ("POST", "/api/v1/sessions", true),
+                ("POST", "/api/v1/stripe-events", false),
 
                 // Telegram posts the bot's updates with its secret header; it sends no cookie to forge (E51).
                 ("POST", "/api/v1/telegram-updates", false),

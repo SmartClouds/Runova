@@ -20,6 +20,10 @@
     <!-- Continue with Google for Runova accounts (E48.3). -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup Label="Billing">
+    <!-- Card payments: Checkout, the customer portal and webhook signatures (E53). -->
+    <PackageVersion Include="Stripe.net" Version="53.0.0" />
+  </ItemGroup>
   <ItemGroup Label="OpenAPI">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <!-- The reference page at /scalar, in Development and Staging only. -->

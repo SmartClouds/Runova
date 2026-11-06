@@ -14,7 +14,7 @@ import { createServer, request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
-import { OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.ts';
+import { FAKE_STRIPE, OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.ts';
 
 const web = resolve(import.meta.dirname, '../..');
 const api = resolve(web, '../api');
@@ -119,6 +119,45 @@ function siteVerify(request: IncomingMessage, reply: ServerResponse) {
   });
 }
 
+/**
+ * api.stripe.com for the plan spec: customers, products, prices and checkout sessions with fresh
+ * ids, and a hosted checkout page that only says where the browser landed. Any other key is 401.
+ */
+let stripeIds = 0;
+function fakeStripe(request: IncomingMessage, reply: ServerResponse) {
+  const path = (request.url ?? '').split('?')[0];
+  const json = (status: number, body: unknown) => {
+    reply.writeHead(status, { 'content-type': 'application/json' });
+    reply.end(JSON.stringify(body));
+  };
+  if (path.startsWith('/checkout/')) {
+    reply.writeHead(200, { 'content-type': 'text/html' });
+    reply.end('<!doctype html><title>Fake Stripe checkout</title><h1>Fake Stripe checkout</h1>');
+    return;
+  }
+  if (request.headers.authorization !== `Bearer ${FAKE_STRIPE.secretKey}`) {
+    json(401, { error: { type: 'invalid_request_error', message: 'Invalid API Key provided.' } });
+    return;
+  }
+  request.resume();
+  request.on('end', () => {
+    stripeIds += 1;
+    const id = stripeIds;
+    if (path === '/v1/customers') json(200, { id: `cus_${id}`, object: 'customer' });
+    else if (path === '/v1/products') json(200, { id: `prod_${id}`, object: 'product' });
+    else if (path === '/v1/prices') json(200, { id: `price_${id}`, object: 'price' });
+    else if (path.startsWith('/v1/prices/')) json(200, { id: path.slice(11), object: 'price' });
+    else if (path === '/v1/balance') json(200, { object: 'balance', livemode: false });
+    else if (path === '/v1/checkout/sessions')
+      json(200, {
+        id: `cs_${id}`,
+        object: 'checkout.session',
+        url: `http://127.0.0.1:${STACK.stripePort}/checkout/cs_${id}`,
+      });
+    else json(404, { error: { type: 'invalid_request_error', message: `Unknown path ${path}` } });
+  });
+}
+
 function forward(request: IncomingMessage, reply: ServerResponse) {
   const path = (request.url ?? '').split('?')[0];
   if (path.startsWith('/media/')) {
@@ -192,8 +231,10 @@ try {
     Admin__Password: OWNER.password,
     Admin__DisplayName: OWNER.displayName,
     Captcha__VerifyUrl: `http://127.0.0.1:${STACK.siteVerifyPort}/siteverify`,
+    Billing__StripeApiBase: `http://127.0.0.1:${STACK.stripePort}`,
   };
   createHttpServer(siteVerify).listen(STACK.siteVerifyPort, '127.0.0.1');
+  createHttpServer(fakeStripe).listen(STACK.stripePort, '127.0.0.1');
   log('migrating');
   await run('dotnet', [dll, 'admin', 'migrate'], { env: apiEnv });
   start('dotnet', [dll], api, apiEnv);

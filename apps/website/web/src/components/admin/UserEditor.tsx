@@ -18,6 +18,7 @@ import { ErrorSummary } from './ErrorSummary';
 import { Field } from './Field';
 import { RoleField } from './RoleField';
 import { SetupLinkPanel } from './SetupLinkPanel';
+import { UserPlanPanel } from './UserPlanPanel';
 import { formatTime } from './useAdminList';
 
 const FIELDS = ['displayName', 'roles'];
@@ -244,6 +245,7 @@ export default function UserEditor({ id }: { id: number }) {
             </div>
             {link && <SetupLinkPanel id="user-link" label={link.kind} link={link.link} />}
           </section>
+          <UserPlanPanel userId={user.id} />
         </>
       )}
     </div>

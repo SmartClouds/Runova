@@ -39,7 +39,8 @@ public sealed class UsersTests : IDisposable
             .SelectMany(e => e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods
                 .Select(method => (Method: method, Path: e.RoutePattern.RawText!.Replace("{id:long}", "1", StringComparison.Ordinal))))
             .ToList();
-        Assert.Equal(8, routes.Count);
+        // Eight for the users themselves, three for the plan an Admin gives one (E53).
+        Assert.Equal(11, routes.Count);
         var editor = await TestUsers.SignedInClientAsync(_factory, await TestUsers.CreateAsync(_factory.Services));
 
         foreach (var (method, path) in routes)

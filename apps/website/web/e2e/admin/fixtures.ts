@@ -26,7 +26,7 @@ export const SIGNED_OUT: StorageState = { cookies: [], origins: [] };
 export const newApiContext = () =>
   request.newContext({ baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true });
 
-async function antiforgeryToken(context: APIRequestContext): Promise<string> {
+export async function antiforgeryToken(context: APIRequestContext): Promise<string> {
   const { cookies } = await context.storageState();
   const cookie = cookies.find((each) => each.name === 'XSRF-TOKEN');
   if (cookie) return decodeURIComponent(cookie.value);
