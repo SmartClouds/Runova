@@ -40,6 +40,7 @@ export const STAGE_LABELS: Record<GenerationView['stage'], string> = {
   scenario: 'Scenario',
   edit: 'Edit by typing',
   scene: 'Scene animation',
+  pictures: 'Pictures plan',
 };
 
 function took(g: GenerationView): string | null {

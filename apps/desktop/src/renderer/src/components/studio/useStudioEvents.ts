@@ -19,6 +19,8 @@ function listen(queryClient: QueryClient): () => void {
     } else if (event.type === 'gen-changed') {
       void queryClient.invalidateQueries({ queryKey: studioKeys.genJobs(event.videoId) });
       void queryClient.invalidateQueries({ queryKey: studioKeys.media(event.videoId) });
+    } else if (event.type === 'pictures-changed') {
+      void queryClient.invalidateQueries({ queryKey: studioKeys.pictures(event.videoId) });
     } else if (event.type === 'narration-changed') {
       void queryClient.invalidateQueries({ queryKey: studioKeys.narrationJobs(event.videoId) });
     } else if (event.type === 'media-changed') {

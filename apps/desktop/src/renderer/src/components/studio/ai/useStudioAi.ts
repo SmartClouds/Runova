@@ -1,7 +1,7 @@
 import type { EditResponse, GenerationView } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
-import { studioAiClient, studioScenesClient } from '../client';
+import { studioAiClient, studioPicturesClient, studioScenesClient } from '../client';
 import { errorMessage } from '../format';
 import { type RunSettings, toast, useStudioAiOutputStore } from '../kit';
 import { studioKeys } from '../queryKeys';
@@ -21,6 +21,8 @@ export interface StudioAi {
   startEdit: (instruction: string, run: RunSettings) => Promise<boolean>;
   /** Animates a scene, or changes its animation when given what to change. */
   startScene: (sceneId: string, run: RunSettings, instruction?: string) => Promise<boolean>;
+  /** Plans each scene's pictures, reading the linked project when there is one. */
+  startPictures: (run: RunSettings, instruction?: string) => Promise<boolean>;
   cancel: (generationId: string) => Promise<void>;
   retry: (generationId: string) => Promise<void>;
   applyProposal: (generationId: string) => Promise<boolean>;
@@ -93,6 +95,10 @@ export function useStudioAi(
           instruction,
           run: toRunInput(runSettings),
         }),
+      )) !== null,
+    startPictures: async (runSettings, instruction) =>
+      (await attempt(() =>
+        studioPicturesClient().plan({ videoId, instruction, run: toRunInput(runSettings) }),
       )) !== null,
     cancel: async (id) => {
       await attempt(() => client().cancel(videoId, id));

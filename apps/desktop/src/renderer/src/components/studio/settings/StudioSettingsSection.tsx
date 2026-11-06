@@ -6,10 +6,19 @@ import { errorMessage } from '../format';
 import { Button, Input, Label, Skeleton, Switch, toast } from '../kit';
 import { studioKeys } from '../queryKeys';
 import { StorageLocationField } from '../storage/StorageLocationField';
+import { PictureSettingsFields } from './PictureSettingsFields';
 import { VoiceKeysFields } from './VoiceKeysFields';
 
-/** Studio's settings: the library folder, the working cache, render defaults and voice keys. */
-export function StudioSettingsSection(): React.JSX.Element {
+/**
+ * Studio's settings: the library folder, the working cache, render defaults, how pictures are
+ * made, and voice keys.
+ */
+export function StudioSettingsSection({
+  onOpenKeys,
+}: {
+  /** Opens the AI providers card, where the OpenAI and Gemini keys are. */
+  onOpenKeys?: () => void;
+} = {}): React.JSX.Element {
   const id = useId();
   const queryClient = useQueryClient();
   const settings = useQuery({
@@ -122,6 +131,12 @@ export function StudioSettingsSection(): React.JSX.Element {
           onCheckedChange={(checked) => update.mutate({ hwEncode: checked })}
         />
       </label>
+
+      <PictureSettingsFields
+        data={data}
+        onChange={(patch) => update.mutate(patch)}
+        onOpenKeys={onOpenKeys}
+      />
 
       <VoiceKeysFields />
     </div>

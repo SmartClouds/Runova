@@ -1004,6 +1004,44 @@ export const IPC = {
     removeProfile: 'studioAudio:removeProfile',
   },
   /** Studio generated media (E38): pictures and clips made by online models, after a confirmation. */
+  /**
+   * Studio's Pictures step (E58): the AI plans each scene's pictures, then Studio runs the linked
+   * project and captures it, the image model makes the rest, or the user drops files in.
+   */
+  studioPictures: {
+    // (StartPicturesInput) -> GenerationView, an AI run that plans the pictures
+    plan: 'studioPictures:plan',
+    // ({ videoId }) -> PicturesView
+    view: 'studioPictures:view',
+    // ({ videoId, runCommandId?, url? }) -> PicturesAppView
+    setApp: 'studioPictures:setApp',
+    // ({ videoId }) -> PicturesAppView; a failure to start shows on the app
+    startApp: 'studioPictures:startApp',
+    stopApp: 'studioPictures:stopApp',
+    // ({ videoId }) -> void, opens the app in a window to sign in once
+    signIn: 'studioPictures:signIn',
+    // ({ videoId, pictureIds? }) -> PicturesJobView, then pictures-changed events
+    capture: 'studioPictures:capture',
+    cancelCapture: 'studioPictures:cancelCapture',
+    // () -> CaptureWindowView[], the open windows for a desktop app's shots
+    windows: 'studioPictures:windows',
+    // ({ videoId, pictureId, sourceId }) -> void
+    captureWindow: 'studioPictures:captureWindow',
+    // ({ videoId, pictureIds? }) -> { usd, count, label, basis }
+    estimate: 'studioPictures:estimate',
+    // ({ videoId, pictureIds?, confirmedUsd }) -> void; refused unless it is the estimate
+    generate: 'studioPictures:generate',
+    // ({ videoId }) -> PicturesFolderResult, after writing PICTURES.md
+    writeMarkdown: 'studioPictures:writeMarkdown',
+    // ({ videoId }) -> PicturesFolderResult
+    checkFolder: 'studioPictures:checkFolder',
+    // ({ videoId }) -> void, opens the pictures folder in the file manager
+    openFolder: 'studioPictures:openFolder',
+    // ({ videoId, pictureId, path }) -> void
+    setFile: 'studioPictures:setFile',
+    // ({ videoId, pictureId }) -> boolean, after the user picks a picture; false when they cancel
+    pickFile: 'studioPictures:pickFile',
+  },
   studioGen: {
     // ({ videoId, kind, engine, prompt, size?, quality?, aspectRatio? }) -> GenEstimateView
     estimate: 'studioGen:estimate',

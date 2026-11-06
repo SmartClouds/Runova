@@ -23,7 +23,7 @@ import { type ProgressDecoder, progressDecoderFor } from './progressFormat';
 const MAX_ANSWER_CHARS = 10 * 1024 * 1024;
 
 export interface StreamPromptOptions
-  extends Omit<HeadlessPromptOptions, 'requestId' | 'timeoutMs' | 'images'> {
+  extends Omit<HeadlessPromptOptions, 'requestId' | 'timeoutMs'> {
   signal: AbortSignal;
   /** Each line the CLI prints, on either stream, with color codes removed. */
   onLine: (line: string) => void;

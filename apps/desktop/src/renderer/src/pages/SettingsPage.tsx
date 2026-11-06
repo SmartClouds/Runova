@@ -434,7 +434,7 @@ const SECTIONS = {
     tab: 'agents',
     title: 'Studio',
     keywords:
-      'studio video videos library folder storage location cache render resume gpu encode voice narration elevenlabs azure speech key region',
+      'studio video videos library folder storage location cache render resume gpu encode voice narration elevenlabs azure speech key region pictures picture screenshots screenshot gpt image openai gemini image generation prompts',
   },
   reviewCommands: {
     tab: 'agents',
@@ -2314,9 +2314,9 @@ export default function SettingsPage(): React.JSX.Element {
                   <SettingsCard
                     icon={Clapperboard}
                     title="Studio"
-                    description="Where your videos are kept, how much room working files may take, and how renders run."
+                    description="Where your videos are kept, how much room working files may take, how renders run, and how pictures are made."
                   >
-                    <StudioSettingsSection />
+                    <StudioSettingsSection onOpenKeys={() => selectTab('ai')} />
                   </SettingsCard>
                 )}
 

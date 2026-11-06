@@ -1,5 +1,6 @@
 import type {
   ApplyResult,
+  CaptureWindowView,
   CreateVideoInput,
   EditOp,
   EditResponse,
@@ -14,6 +15,10 @@ import type {
   MoveResult,
   NarrationJobView,
   OpenVideoResult,
+  PicturesAppView,
+  PicturesFolderResult,
+  PicturesJobView,
+  PicturesView,
   PiperLibraryView,
   ProjectStorageView,
   ProposalChange,
@@ -27,6 +32,7 @@ import type {
   SceneCheckView,
   SceneCodeView,
   StartEditInput,
+  StartPicturesInput,
   StartRenderInput,
   StartScenarioInput,
   StartSceneInput,
@@ -234,6 +240,52 @@ export function createStudioGen() {
     jobs: (videoId: string): Promise<GenJobView[]> =>
       ipcRenderer.invoke(IPC.studioGen.jobs, { videoId }),
     cancel: (jobId: string): Promise<void> => ipcRenderer.invoke(IPC.studioGen.cancel, { jobId }),
+  };
+}
+
+/** Studio's Pictures step (E58): plan, capture, generate, and the pictures folder. */
+export function createStudioPictures() {
+  const video = (videoId: string) => ({ videoId });
+  return {
+    plan: (input: StartPicturesInput): Promise<GenerationView> =>
+      ipcRenderer.invoke(IPC.studioPictures.plan, input),
+    view: (videoId: string): Promise<PicturesView> =>
+      ipcRenderer.invoke(IPC.studioPictures.view, video(videoId)),
+    setApp: (input: {
+      videoId: string;
+      runCommandId?: string | null;
+      url?: string | null;
+    }): Promise<PicturesAppView> => ipcRenderer.invoke(IPC.studioPictures.setApp, input),
+    startApp: (videoId: string): Promise<PicturesAppView> =>
+      ipcRenderer.invoke(IPC.studioPictures.startApp, video(videoId)),
+    stopApp: (videoId: string): Promise<PicturesAppView> =>
+      ipcRenderer.invoke(IPC.studioPictures.stopApp, video(videoId)),
+    signIn: (videoId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.signIn, video(videoId)),
+    capture: (videoId: string, pictureIds?: string[]): Promise<PicturesJobView> =>
+      ipcRenderer.invoke(IPC.studioPictures.capture, { videoId, pictureIds }),
+    cancelCapture: (videoId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.cancelCapture, video(videoId)),
+    windows: (): Promise<CaptureWindowView[]> => ipcRenderer.invoke(IPC.studioPictures.windows),
+    captureWindow: (videoId: string, pictureId: string, sourceId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.captureWindow, { videoId, pictureId, sourceId }),
+    estimate: (
+      videoId: string,
+      pictureIds?: string[],
+    ): Promise<{ usd: number; count: number; label: string; provider: string; basis: string }> =>
+      ipcRenderer.invoke(IPC.studioPictures.estimate, { videoId, pictureIds }),
+    generate: (videoId: string, confirmedUsd: number, pictureIds?: string[]): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.generate, { videoId, pictureIds, confirmedUsd }),
+    writeMarkdown: (videoId: string): Promise<PicturesFolderResult> =>
+      ipcRenderer.invoke(IPC.studioPictures.writeMarkdown, video(videoId)),
+    checkFolder: (videoId: string): Promise<PicturesFolderResult> =>
+      ipcRenderer.invoke(IPC.studioPictures.checkFolder, video(videoId)),
+    openFolder: (videoId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.openFolder, video(videoId)),
+    setFile: (videoId: string, pictureId: string, path: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.studioPictures.setFile, { videoId, pictureId, path }),
+    pickFile: (videoId: string, pictureId: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC.studioPictures.pickFile, { videoId, pictureId }),
   };
 }
 

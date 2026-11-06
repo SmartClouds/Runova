@@ -36,6 +36,10 @@ export function studioGenClient() {
   return window.runova.studioGen;
 }
 
+export function studioPicturesClient() {
+  return window.runova.studioPictures;
+}
+
 /** Where a file dropped onto the window is on disk; empty for one that is not a file on disk. */
 export function pathForFile(file: File): string {
   return window.runova.shell.pathForFile(file);

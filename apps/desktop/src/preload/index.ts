@@ -555,6 +555,7 @@ import {
   createStudioAudio,
   createStudioGen,
   createStudioMedia,
+  createStudioPictures,
   createStudioRender,
   createStudioScenes,
 } from './studio';
@@ -2082,6 +2083,7 @@ const studioRender = createStudioRender();
 const studioMedia = createStudioMedia();
 const studioAudio = createStudioAudio();
 const studioGen = createStudioGen();
+const studioPictures = createStudioPictures();
 const relay = createRelay();
 const ciAutoFix = createCiAutoFix();
 const errorTracking = createErrorTracking();
@@ -3107,6 +3109,7 @@ const runovaApi = {
   studioMedia,
   studioAudio,
   studioGen,
+  studioPictures,
   relay,
   errorTracking,
   deployRecaptcha,

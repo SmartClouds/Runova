@@ -71,6 +71,9 @@ export function settings(overrides: Partial<StudioSettingsView> = {}): StudioSet
     cacheCapGb: 20,
     autoResumeRenders: true,
     hwEncode: true,
+    pictureEngine: 'openai',
+    pictureQuality: 'medium',
+    captureScale: 2,
     ...overrides,
   };
 }

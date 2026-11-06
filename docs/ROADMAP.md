@@ -262,3 +262,4 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E49](epics/49-project-cleanup.md) | Project cleanup: see what each project takes on disk and delete the folders it can rebuild | Standalone (Build) | E31, E21, E23 |
 | [E50](epics/50-system-cleanup.md) | Disk Cleanup: find the caches package managers and developer tools keep, and remove old versions or everything | Standalone (Build) | E49 |
 | [E51](epics/51-dependency-alerts.md) | Dependency update alerts: a daily check of every project's packages, told in the app, on the website and on Telegram | Standalone (Account) | E41, E48 |
+| [E58](epics/58-studio-pictures.md) | Studio pictures: real screenshots of the project, GPT Image, or prompts in PICTURES.md, built into each scene | Standalone (Studio) | E32, E33, E35, E38 |

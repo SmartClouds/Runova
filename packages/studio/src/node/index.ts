@@ -7,6 +7,8 @@ export * from './gen/genJobs.js';
 export * from './gen/providers.js';
 export * from './media/derivatives.js';
 export * from './media/mediaLibrary.js';
+export * from './pictures/imageSize.js';
+export * from './pictures/pictureJobs.js';
 export * from './project/lock.js';
 export * from './project/storageRoot.js';
 export * from './project/videoStore.js';

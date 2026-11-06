@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { CLI_REGISTRY, launchPickArgs } from '@runova/core';
+import {
+  CLI_REGISTRY,
+  configuredRunCommands,
+  launchPickArgs,
+  supportsPromptImages,
+} from '@runova/core';
 import type { StudioEvent } from '@runova/studio';
 import { checkScene, type StudioHost, type StudioService } from '@runova/studio/node';
 import { app, nativeImage, net } from 'electron';
@@ -12,6 +17,7 @@ import { getDevSetupService } from '../devSetup/runtime';
 import { broadcastToWindows } from '../ipc/send';
 import { transcribeSamples } from '../ipc/speech';
 import { showOsNotification } from '../notifications/osNotification';
+import { killProcessTree } from '../process/spawnStreaming';
 import {
   decryptSecret,
   encryptSecret,
@@ -20,7 +26,9 @@ import {
 } from '../ssh/vault';
 import { store } from '../store';
 import { isE2E } from '../testMode';
+import { withToolPath } from '../toolPaths';
 import { createOffscreenSource, sceneWindowsMemoryBytes } from './capture/offscreenSource';
+import { createProjectCapture } from './capture/projectCapture';
 import { openBetterSqlite } from './db';
 import { findLocalVoiceTools, wavToWhisperSamples } from './localTools';
 import { createStudioSecrets } from './secrets';
@@ -76,7 +84,12 @@ export function createDesktopStudioHost(service: () => StudioService): StudioHos
       async get(id) {
         const project = (await store.getProjects()).find((p) => p.id === id);
         return project
-          ? { id: project.id, name: project.name, folderPath: project.folderPath }
+          ? {
+              id: project.id,
+              name: project.name,
+              folderPath: project.folderPath,
+              runCommands: configuredRunCommands(project),
+            }
           : null;
       },
     },
@@ -151,9 +164,18 @@ export function createDesktopStudioHost(service: () => StudioService): StudioHos
         return { ...result, thumbnailPng };
       },
     },
+    // The Pictures step runs the linked project and takes its pictures (E58).
+    capture: createProjectCapture({ env: () => withToolPath(), killTree: killProcessTree }),
     ai: {
       async run(request, signal, onLine) {
-        const result = await streamHeadlessCliPrompt(request.prompt, request.cwd, {
+        // Pictures go only to a CLI that can look at them; another runs from the text alone.
+        const cliId = request.cliId ?? (await store.getSettings()).defaultCliId ?? null;
+        const picked = CLI_REGISTRY.find((c) => c.id === cliId);
+        const images =
+          request.images?.length && picked && supportsPromptImages(picked) ? request.images : [];
+        // A Pictures run reads the linked project, so it runs there and is never told to trust it.
+        const cwd = request.runIn ?? request.cwd;
+        const result = await streamHeadlessCliPrompt(request.prompt, cwd, {
           preferredCliId: request.cliId,
           // A CLI the user picked is the one that runs, or none; the model flags only fit it.
           strictCli: request.cliId !== null,
@@ -166,7 +188,11 @@ export function createDesktopStudioHost(service: () => StudioService): StudioHos
           timeoutMs: request.timeoutMs,
           pointerPrompt: request.pointerPrompt,
           // The run's work folder is Studio's own, never a git repository or a trusted folder.
-          trustCwd: true,
+          trustCwd: !request.runIn,
+          // Images are paths in the work folder, which a run in the project reaches absolutely.
+          ...(images.length > 0
+            ? { images: images.map((image) => join(request.cwd, image)), imagesWithTools: false }
+            : {}),
           signal,
           onLine,
         });

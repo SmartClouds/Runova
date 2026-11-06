@@ -19,12 +19,14 @@ const WORKING: Record<GenerationView['stage'], string> = {
   scenario: 'Writing the scenario',
   edit: 'Working on your change',
   scene: 'Animating the scene',
+  pictures: 'Planning the pictures',
 };
 
 const FAILED: Record<GenerationView['stage'], string> = {
   scenario: 'The scenario was not written.',
   edit: 'The change was not made.',
   scene: 'The scene was not animated.',
+  pictures: 'The pictures were not planned.',
 };
 
 function elapsed(ms: number): string {

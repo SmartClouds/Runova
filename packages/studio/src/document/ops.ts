@@ -164,6 +164,8 @@ function applyOne(doc: StudioDocument, op: EditOp): EditOp[] {
     case 'scene.update': {
       const scene = scenes[findIndex(scenes, op.sceneId, 'scene')] as Scene;
       const old = previous(scene, op.patch);
+      // A scene from before the Pictures step has none; its undo needs a value JSON keeps.
+      if ('pictures' in op.patch && old.pictures === undefined) old.pictures = [];
       Object.assign(scene, structuredClone(op.patch));
       return [{ op: 'scene.update', sceneId: op.sceneId, patch: old }];
     }

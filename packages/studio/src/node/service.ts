@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { ProposalChange } from '../ai/edit/answer.js';
 import type {
   ApplyResult,
+  CaptureWindowView,
   CreateVideoInput,
   EditResponse,
   GenEstimateView,
@@ -20,6 +21,10 @@ import type {
   MoveResult,
   NarrationJobView,
   OpenVideoResult,
+  PicturesAppView,
+  PicturesFolderResult,
+  PicturesJobView,
+  PicturesView,
   ProjectStorageView,
   RecipeView,
   RenderEstimateView,
@@ -31,6 +36,7 @@ import type {
   SceneCheckView,
   SceneCodeView,
   StartEditInput,
+  StartPicturesInput,
   StartRenderInput,
   StartScenarioInput,
   StartSceneInput,
@@ -46,6 +52,7 @@ import type {
   VoiceProfileView,
   VoiceView,
 } from '../api.js';
+import { PICTURE_ENGINES } from '../api.js';
 import type { EditOp } from '../document/ops.js';
 import type { StudioDocument } from '../document/schema.js';
 import { type Aspect, DESIGN_SIZES } from '../document/schema.js';
@@ -66,6 +73,8 @@ import type { OpenSqlDriver } from './db/sqlDriver.js';
 import { createGenJobs } from './gen/genJobs.js';
 import { seedBranch } from './history/branch.js';
 import { createMediaLibrary } from './media/mediaLibrary.js';
+import { imageSize } from './pictures/imageSize.js';
+import { createPictureJobs, engineLabel, type StudioCaptureHost } from './pictures/pictureJobs.js';
 import { acquireVideoLock, type HeldLock, LOCK_FILE, type LockOptions } from './project/lock.js';
 import { checkStorageRoot } from './project/storageRoot.js';
 import {
@@ -97,6 +106,8 @@ export interface HostProject {
   id: string;
   name: string;
   folderPath: string;
+  /** How the project starts, as set up in the app; the Pictures step runs one to capture it. */
+  runCommands?: { id: string; label: string; command: string }[];
 }
 
 export interface StudioHost {
@@ -121,6 +132,8 @@ export interface StudioHost {
   render?: StudioRenderHost;
   /** Keys and network for the voice engines. Without it, narration says voices are unavailable. */
   voice?: StudioVoiceHost;
+  /** Runs the linked project and takes its screenshots. Without it, pictures come another way. */
+  capture?: StudioCaptureHost;
   /**
    * Where Studio's own files (fonts, style scenes, the runtime) are. A host that bundles this
    * package says where it shipped them; others leave it to the package folder.
@@ -142,6 +155,17 @@ const settingsSchema = z.object({
   projectRoots: z.record(z.string(), z.string()),
   // Added in E33; older settings files have none, which is the safe default.
   projectSceneHosts: z.record(z.string(), z.array(z.string())).default({}),
+  // Added with the Pictures step (E58). Nothing is generated without a price confirmation.
+  pictureEngine: z.enum(PICTURE_ENGINES).default('openai'),
+  pictureQuality: z.enum(['low', 'medium', 'high']).default('medium'),
+  captureScale: z.union([z.literal(1), z.literal(2)]).default(2),
+  /** Each project's app for screenshots: which run command starts it and where it answers. */
+  projectApps: z
+    .record(
+      z.string(),
+      z.object({ runCommandId: z.string().nullable(), url: z.string().nullable() }),
+    )
+    .default({}),
 });
 type SettingsFile = z.infer<typeof settingsSchema>;
 
@@ -235,6 +259,41 @@ export interface StudioService {
   /** Adds the recipe in a `.amrecipe.json` file's text as a new recipe. */
   importRecipe(input: { text: string }): Promise<RecipeView>;
   startScene(input: StartSceneInput): Promise<GenerationView>;
+  /** Plans each scene's pictures with the AI, reading the linked project when there is one. */
+  startPictures(input: StartPicturesInput): Promise<GenerationView>;
+  pictures(input: { videoId: string }): Promise<PicturesView>;
+  setPicturesApp(input: {
+    videoId: string;
+    runCommandId?: string | null;
+    url?: string | null;
+  }): Promise<PicturesAppView>;
+  /** Starts the project's app, or finds it already running; failures show on the app. */
+  startPicturesApp(input: { videoId: string }): Promise<PicturesAppView>;
+  /** Stops the app if Studio started it. */
+  stopPicturesApp(input: { videoId: string }): Promise<PicturesAppView>;
+  /** Opens the app in the capture's session, for the user to sign in once. */
+  picturesSignIn(input: { videoId: string }): Promise<void>;
+  /** Takes the route screenshots one at a time; progress comes as pictures-changed events. */
+  capturePictures(input: { videoId: string; pictureIds?: string[] }): Promise<PicturesJobView>;
+  cancelCapture(input: { videoId: string }): Promise<void>;
+  captureWindows(): Promise<CaptureWindowView[]>;
+  captureWindow(input: { videoId: string; pictureId: string; sourceId: string }): Promise<void>;
+  /** What making these pictures with the image model costs, before anything is sent. */
+  picturesEstimate(input: {
+    videoId: string;
+    pictureIds?: string[];
+  }): Promise<{ usd: number; count: number; label: string; provider: string; basis: string }>;
+  /** Makes them; `confirmedUsd` is the estimate the user agreed to. It bills their account. */
+  generatePictures(input: {
+    videoId: string;
+    pictureIds?: string[];
+    confirmedUsd: number;
+  }): Promise<void>;
+  writePicturesMarkdown(input: { videoId: string }): Promise<PicturesFolderResult>;
+  /** Fills pictures from files saved in the pictures folder under their names. */
+  checkPicturesFolder(input: { videoId: string }): Promise<PicturesFolderResult>;
+  setPictureFile(input: { videoId: string; pictureId: string; path: string }): Promise<void>;
+  picturesFolder(input: { videoId: string }): Promise<string>;
   sceneCode(input: { videoId: string; sceneId: string }): Promise<SceneCodeView>;
   saveSceneFiles(input: SaveSceneFilesInput): Promise<EditResponse>;
   useCodeRevision(input: {
@@ -430,6 +489,10 @@ export function createStudioService(host: StudioHost): StudioService {
       hwEncode: true,
       projectRoots: {},
       projectSceneHosts: {},
+      pictureEngine: 'openai',
+      pictureQuality: 'medium',
+      captureScale: 2,
+      projectApps: {},
     }),
     now,
   );
@@ -477,6 +540,9 @@ export function createStudioService(host: StudioHost): StudioService {
       cacheCapGb: file.cacheCapGb,
       autoResumeRenders: file.autoResumeRenders,
       hwEncode: file.hwEncode,
+      pictureEngine: file.pictureEngine,
+      pictureQuality: file.pictureQuality,
+      captureScale: file.captureScale,
     };
   }
 
@@ -653,7 +719,43 @@ export function createStudioService(host: StudioHost): StudioService {
     afterEdit,
     styleReference: assets.styleReference,
     onIdle: (videoId) => closeIfIdle(videoId),
+    project: async (videoId) => {
+      const project = await linkedProject(videoId);
+      return project
+        ? { name: project.name, folderPath: project.folderPath, runCommands: project.runCommands }
+        : null;
+    },
+    imageModel: async () => {
+      const file = await settingsStore.read();
+      if (file.pictureEngine === 'off') return null;
+      const keys = (await host.voice?.appKeys()) ?? {};
+      if (!keys[file.pictureEngine]?.trim()) return null;
+      return engineLabel(file.pictureEngine);
+    },
+    onPicturesPlanned: async (videoId, app) => {
+      const project = await linkedProject(videoId);
+      if (!project) return;
+      // What the AI worked out fills in only what the user has not set.
+      await settingsStore.mutate((file) => {
+        const current = file.projectApps[project.id] ?? { runCommandId: null, url: null };
+        const knownCommand = project.runCommands.some((c) => c.id === app.runCommandId);
+        file.projectApps[project.id] = {
+          runCommandId: current.runCommandId ?? (knownCommand ? app.runCommandId : null),
+          url: current.url ?? app.url,
+        };
+      });
+    },
   });
+
+  /** The project an open video belongs to, with its run commands, or null. */
+  async function linkedProject(
+    videoId: string,
+  ): Promise<(HostProject & { runCommands: NonNullable<HostProject['runCommands']> }) | null> {
+    const projectId = session(videoId).store.manifest.linkedProjectId;
+    if (!projectId) return null;
+    const project = await host.projects.get(projectId);
+    return project ? { ...project, runCommands: project.runCommands ?? [] } : null;
+  }
 
   /** Videos with a render running, whose code the scene server serves even when they are closed. */
   const rendering = new Map<string, { blobs: BlobStore; holds: number }>();
@@ -823,13 +925,56 @@ export function createStudioService(host: StudioHost): StudioService {
     async importFile(videoId, file) {
       const open = sessions.get(videoId);
       if (!open) return null;
+      // A picture Studio can read needs no ffmpeg: its size is in the file.
+      if (/\.(png|jpe?g|webp)$/i.test(file)) {
+        const bytes = await readFile(file);
+        if (imageSize(bytes)) {
+          const made = await media.importPicture(videoId, open.store, {
+            bytes,
+            name: basename(file),
+          });
+          return { hash: made.hash, name: made.name };
+        }
+      }
       const result = await media.importFiles(videoId, open.store, [file]);
       const made = result.imported[0];
       if (!made) throw new Error(result.skipped[0]?.reason ?? 'Studio could not take that file.');
       return { hash: made.hash, name: made.name };
     },
     notify: host.notify,
+    onChange: (job) => void pictures.genChanged(job).catch(() => undefined),
     newId,
+    now,
+  });
+
+  const pictures = createPictureJobs({
+    capture: host.capture,
+    store: (videoId) => session(videoId).store,
+    project: async (videoId) => linkedProject(videoId),
+    async appConfig(projectId) {
+      return (
+        (await settingsStore.read()).projectApps[projectId] ?? { runCommandId: null, url: null }
+      );
+    },
+    async saveAppConfig(projectId, patch) {
+      await settingsStore.mutate((file) => {
+        const current = file.projectApps[projectId] ?? { runCommandId: null, url: null };
+        file.projectApps[projectId] = { ...current, ...patch };
+      });
+    },
+    async settings() {
+      const file = await settingsStore.read();
+      return {
+        engine: file.pictureEngine,
+        quality: file.pictureQuality,
+        captureScale: file.captureScale,
+      };
+    },
+    keys: async () => (await host.voice?.appKeys()) ?? {},
+    media,
+    gen,
+    afterEdit,
+    notify: host.notify,
     now,
   });
 
@@ -885,6 +1030,11 @@ export function createStudioService(host: StudioHost): StudioService {
         narrator.cancel(videoId, speaking.id);
         await narrator.idle(videoId);
       }
+      const projectId = open.store.manifest.linkedProjectId;
+      const stillOpen = [...sessions.entries()].some(
+        ([other, s]) => other !== videoId && s.store.manifest.linkedProjectId === projectId,
+      );
+      await pictures.videoClosed(videoId, projectId, stillOpen).catch(() => undefined);
       sessions.delete(videoId);
       try {
         await open.store.close();
@@ -957,6 +1107,8 @@ export function createStudioService(host: StudioHost): StudioService {
           if (!known.has(id)) delete file.projectRoots[id];
         for (const id of Object.keys(file.projectSceneHosts))
           if (!known.has(id)) delete file.projectSceneHosts[id];
+        for (const id of Object.keys(file.projectApps))
+          if (!known.has(id)) delete file.projectApps[id];
       });
     },
 
@@ -1244,6 +1396,25 @@ export function createStudioService(host: StudioHost): StudioService {
     assets,
 
     startScene: (input) => ai.startScene(input),
+    startPictures: (input) => ai.startPictures(input),
+    pictures: ({ videoId }) => pictures.view(videoId),
+    setPicturesApp: ({ videoId, ...patch }) => pictures.setApp(videoId, patch),
+    startPicturesApp: ({ videoId }) => pictures.startApp(videoId),
+    stopPicturesApp: ({ videoId }) => pictures.stopApp(videoId),
+    picturesSignIn: ({ videoId }) => pictures.signIn(videoId),
+    capturePictures: ({ videoId, pictureIds }) => pictures.capture(videoId, pictureIds),
+    cancelCapture: ({ videoId }) => pictures.cancelCapture(videoId),
+    captureWindows: () => pictures.windows(),
+    captureWindow: ({ videoId, pictureId, sourceId }) =>
+      pictures.captureWindow(videoId, pictureId, sourceId),
+    picturesEstimate: ({ videoId, pictureIds }) => pictures.generateEstimate(videoId, pictureIds),
+    async generatePictures({ videoId, pictureIds, confirmedUsd }) {
+      await pictures.generate(videoId, pictureIds, confirmedUsd);
+    },
+    writePicturesMarkdown: ({ videoId }) => pictures.writeMarkdown(videoId),
+    checkPicturesFolder: ({ videoId }) => pictures.checkFolder(videoId),
+    setPictureFile: ({ videoId, pictureId, path }) => pictures.setFile(videoId, pictureId, path),
+    picturesFolder: ({ videoId }) => pictures.folder(videoId),
 
     styleReference: (input) => styleReference(input),
 
@@ -1574,6 +1745,7 @@ export function createStudioService(host: StudioHost): StudioService {
     },
 
     async shutdown() {
+      await pictures.shutdown();
       await gen.shutdown();
       await narrator.shutdown();
       await localVoices.stop();

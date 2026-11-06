@@ -71,6 +71,9 @@ describe('settings and storage folders', () => {
       cacheCapGb: 20,
       autoResumeRenders: true,
       hwEncode: true,
+      pictureEngine: 'openai',
+      pictureQuality: 'medium',
+      captureScale: 2,
     });
   });
 

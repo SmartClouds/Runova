@@ -1,7 +1,13 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EffortLevel } from '@runova/core';
 import { type EditMedia, type EditProposal, readEditAnswer } from '../../ai/edit/answer.js';
+import { type PicturesPlan, readPicturesAnswer } from '../../ai/pictures/answer.js';
+import {
+  buildPicturesRequest,
+  type PicturesProject,
+  picturesPointerPrompt,
+} from '../../ai/pictures/prompt.js';
 import {
   buildEditRequest,
   buildRepairRequest,
@@ -16,7 +22,11 @@ import {
   scenarioToOps,
 } from '../../ai/scenario/answer.js';
 import { type FencedFile, parseFencedFiles } from '../../ai/scene/files.js';
-import { buildSceneFixRequest, buildSceneRequest } from '../../ai/scene/prompt.js';
+import {
+  buildSceneFixRequest,
+  buildSceneRequest,
+  type ScenePictureFile,
+} from '../../ai/scene/prompt.js';
 import type {
   GenerationAttempt,
   GenerationDetail,
@@ -25,12 +35,14 @@ import type {
   GenerationView,
   RunSettingsInput,
   StartEditInput,
+  StartPicturesInput,
   StartScenarioInput,
   StartSceneInput,
   StudioEvent,
 } from '../../api.js';
 import { type EditOp, OpError } from '../../document/ops.js';
 import { DESIGN_SIZES, type StudioDocument, UNTITLED_TITLE } from '../../document/schema.js';
+import { PICTURES_DIR, scenePictures } from '../../pictures/pictures.js';
 import { sceneConfig } from '../../scenes/config.js';
 import { sceneUrl } from '../../scenes/url.js';
 import { flicksToSeconds } from '../../time/flicks.js';
@@ -59,6 +71,16 @@ export interface AiRunRequest {
   /** What CLIs that take the prompt as an argument get instead; they read `request.md`. */
   pointerPrompt: string;
   timeoutMs: number;
+  /**
+   * Where the CLI runs, when not in the work folder: the linked project, which a Pictures run
+   * reads (and never changes). The request stays in `cwd`.
+   */
+  runIn?: string;
+  /**
+   * Pictures for the CLI to look at, as paths in `cwd`. The host attaches them only for a CLI
+   * that can look at images; others run without them.
+   */
+  images?: string[];
 }
 
 export interface AiRunResult {
@@ -107,6 +129,12 @@ export interface StudioAiDeps {
   onIdle?: (videoId: string) => void;
   /** A style's reference scene, shown to the AI as an example. */
   styleReference?: (styleId: string) => Promise<{ path: string; content: Uint8Array }[]>;
+  /** The project a video is about, with what a Pictures run needs to know of it. */
+  project?: (videoId: string) => Promise<PicturesProject | null>;
+  /** The image model pictures can be made with now, or null when the user makes them. */
+  imageModel?: () => Promise<string | null>;
+  /** Keeps the app a Pictures run worked out (its run command and address) for the capture. */
+  onPicturesPlanned?: (videoId: string, app: PicturesPlan['app']) => Promise<void>;
   maxRepairs?: number;
   outputFlushMs?: number;
 }
@@ -116,6 +144,7 @@ const BASE_TIMEOUT: Record<GenerationStage, number> = {
   scenario: 10 * MINUTE,
   edit: 5 * MINUTE,
   scene: 20 * MINUTE,
+  pictures: 10 * MINUTE,
 };
 const EFFORT_TIME: Record<EffortLevel, number> = { low: 1, medium: 1, high: 1.5, xhigh: 2, max: 3 };
 const MAX_LINES_PER_EVENT = 200;
@@ -145,6 +174,10 @@ interface Plan<T> {
   accept: (value: T, store: VideoStore, generationId: string) => Promise<void>;
   /** A fix round's request; the default quotes the answer back with the problems. */
   repair?: (original: string, text: string, issues: string[]) => string;
+  /** The folder the CLI runs in instead of the work folder. */
+  runIn?: string | null;
+  /** Puts files into the work folder before the first round; returns the images among them. */
+  prepare?: (workDir: string, store: VideoStore) => Promise<string[]>;
 }
 
 /** What a scene run hands over once its code passed the checks. */
@@ -154,6 +187,40 @@ interface SceneAnswer {
 }
 
 const TEXT_FILE = /\.(html|js|mjs|css|json|svg|txt)$/i;
+
+/** A scene's ready pictures, as files for its code tree. */
+interface ScenePictureBlob extends ScenePictureFile {
+  hash: string;
+}
+
+function scenePictureBlobs(store: VideoStore, sceneId: string): ScenePictureBlob[] {
+  const scene = store.document.scenario.scenes.find((s) => s.id === sceneId);
+  if (!scene) return [];
+  return scenePictures(scene).flatMap((p) => {
+    if (p.status !== 'ready' || !p.mediaHash) return [];
+    const media = store.media(p.mediaHash);
+    if (!media) return [];
+    return [
+      {
+        path: `${PICTURES_DIR}/${p.fileName}`,
+        width: media.info.width,
+        height: media.info.height,
+        purpose: p.purpose,
+        screenshot: p.source === 'screenshot',
+        hash: p.mediaHash,
+      },
+    ];
+  });
+}
+
+/** The files of a tree that are not text (pictures, fonts), carried into the next version. */
+async function binaryFilesOfTree(
+  store: VideoStore,
+  treeHash: string,
+): Promise<{ path: string; hash: string }[]> {
+  const manifest = await readTree(store.blobs, treeHash);
+  return manifest.files.filter((f) => !TEXT_FILE.test(f.path));
+}
 
 /** The video's imported files, as edits by typing name them. */
 function editMedia(store: VideoStore): EditMedia[] {
@@ -215,6 +282,7 @@ export function createStudioAi(deps: StudioAiDeps) {
 
     try {
       await mkdir(workDir, { recursive: true });
+      const images = plan.prepare ? await plan.prepare(workDir, store) : [];
       const original = plan.request(store.document, store);
       let request = original;
       for (let round = 0; round <= maxRepairs; round++) {
@@ -242,8 +310,12 @@ export function createStudioAi(deps: StudioAiDeps) {
                 effort,
                 cwd: workDir,
                 prompt: request,
-                pointerPrompt: POINTER_PROMPT,
+                pointerPrompt: plan.runIn
+                  ? picturesPointerPrompt(join(workDir, REQUEST_FILE))
+                  : POINTER_PROMPT,
                 timeoutMs,
+                ...(plan.runIn ? { runIn: plan.runIn } : {}),
+                ...(images.length > 0 ? { images } : {}),
               },
               job.controller.signal,
               output.push,
@@ -344,9 +416,15 @@ export function createStudioAi(deps: StudioAiDeps) {
     return store.generation(id) as GenerationView;
   }
 
+  /** The project a video is about, by name, for the scenario writer. */
+  async function projectName(videoId: string): Promise<string | null> {
+    return deps.project ? ((await deps.project(videoId))?.name ?? null) : null;
+  }
+
   function scenarioPlan(
     input: Omit<StartScenarioInput, 'videoId'>,
     parentId: string | null,
+    project: string | null,
   ): Plan<ScenarioAnswer> {
     return {
       stage: 'scenario',
@@ -365,6 +443,7 @@ export function createStudioAi(deps: StudioAiDeps) {
           targetSeconds: input.targetSeconds,
           styleId: input.styleId,
           customStyle: input.customStyle,
+          projectName: project,
         }),
       read: (text, doc) => readScenarioAnswer(text, doc.language),
       accept: async (answer, store, generationId) => {
@@ -438,9 +517,20 @@ export function createStudioAi(deps: StudioAiDeps) {
     parentId: string | null,
     current: FencedFile[] | undefined,
     example: FencedFile[] | undefined,
+    pictures: ScenePictureBlob[],
+    carried: { path: string; hash: string }[],
   ): Plan<SceneAnswer> {
     let lastFiles: FencedFile[] = [];
     return {
+      // A CLI that can look at pictures sees the scene's, to know where to point.
+      prepare: async (workDir, store) => {
+        if (pictures.length === 0) return [];
+        await mkdir(join(workDir, PICTURES_DIR), { recursive: true });
+        for (const picture of pictures) {
+          await copyFile(store.blobs.path(picture.hash), join(workDir, picture.path));
+        }
+        return pictures.map((p) => p.path);
+      },
       stage: 'scene',
       instruction: input.instruction ?? 'Animate this scene.',
       params: { sceneId: input.sceneId },
@@ -453,6 +543,7 @@ export function createStudioAi(deps: StudioAiDeps) {
           instruction: input.instruction,
           current,
           example,
+          pictures,
         }),
       read: async (text, doc) => {
         const files = parseFencedFiles(text);
@@ -468,9 +559,24 @@ export function createStudioAi(deps: StudioAiDeps) {
         const scene = doc.scenario.scenes.find((s) => s.id === input.sceneId);
         if (!scene) throw new Error('That scene is not in the video any more.');
         const store = deps.store(doc.id);
+        // Studio's files go last, so the answer can never replace a picture with its own.
+        const ours = new Set(pictures.map((p) => p.path));
+        const extra = [
+          ...carried.filter((f) => !ours.has(f.path) && !f.path.startsWith(`${PICTURES_DIR}/`)),
+          ...pictures,
+        ];
+        const added = await Promise.all(
+          extra.map(async (f) => ({
+            path: f.path,
+            content: new Uint8Array(await store.blobs.bytes(f.hash)),
+          })),
+        );
         let tree: Awaited<ReturnType<typeof treeFromFiles>>;
         try {
-          tree = await treeFromFiles(files, store.blobs);
+          tree = await treeFromFiles(
+            [...files.filter((f) => !ours.has(f.path.replace(/^\.\//, ''))), ...added],
+            store.blobs,
+          );
         } catch (error) {
           return { ok: false, issues: [error instanceof Error ? error.message : String(error)] };
         }
@@ -536,7 +642,73 @@ export function createStudioAi(deps: StudioAiDeps) {
             )
             .catch(() => undefined)
         : undefined;
-    return start(videoId, scenePlan(input, parentId, current, example));
+    // A change keeps the files the code has besides its text: fonts, models, and its pictures.
+    const carried =
+      input.instruction && scene.code.treeHash
+        ? await binaryFilesOfTree(store, scene.code.treeHash)
+        : [];
+    const pictures = scenePictureBlobs(store, input.sceneId);
+    return start(videoId, scenePlan(input, parentId, current, example, pictures, carried));
+  }
+
+  async function picturesPlan(
+    videoId: string,
+    input: Omit<StartPicturesInput, 'videoId'>,
+    parentId: string | null,
+  ): Promise<Plan<PicturesPlan>> {
+    const project = deps.project ? await deps.project(videoId) : null;
+    const imageModel = deps.imageModel ? await deps.imageModel() : null;
+    const options = { hasProject: project !== null, canGenerate: imageModel !== null };
+    return {
+      stage: 'pictures',
+      instruction: input.instruction ?? 'Plan the pictures.',
+      params: {},
+      run: input.run,
+      parentId,
+      runIn: project?.folderPath ?? null,
+      request: (doc) =>
+        buildPicturesRequest({
+          document: doc,
+          project,
+          imageModel,
+          instruction: input.instruction,
+        }),
+      read: (text, doc) => readPicturesAnswer(text, doc, { ...options, newId: deps.newId }),
+      accept: async (plan, store, generationId) => {
+        let resultSeq: number | null = null;
+        if (plan.ops.length > 0) {
+          resultSeq = store.apply({
+            baseSeq: store.seq,
+            ops: plan.ops,
+            label:
+              plan.count === 0
+                ? 'AI found no pictures to add'
+                : `AI planned ${plan.count} ${plan.count === 1 ? 'picture' : 'pictures'}`,
+            actor: 'ai',
+            generationId,
+          }).seq;
+        }
+        if (project) await deps.onPicturesPlanned?.(videoId, plan.app);
+        store.updateGeneration(generationId, {
+          status: 'done',
+          resultSeq,
+          finishedAt: deps.now(),
+        });
+        await deps.afterEdit(store.manifest.id, store);
+      },
+    };
+  }
+
+  async function startPictures(
+    videoId: string,
+    input: Omit<StartPicturesInput, 'videoId'>,
+    parentId: string | null,
+  ): Promise<GenerationView> {
+    const store = deps.store(videoId);
+    if (store.document.scenario.scenes.length === 0) {
+      throw new Error('Write the scenario first; pictures are planned scene by scene.');
+    }
+    return start(videoId, await picturesPlan(videoId, input, parentId));
   }
 
   function proposed(videoId: string, generationId: string) {
@@ -557,12 +729,15 @@ export function createStudioAi(deps: StudioAiDeps) {
   }
 
   return {
-    startScenario: ({ videoId, ...input }: StartScenarioInput) =>
-      start(videoId, scenarioPlan(input, null)),
+    startScenario: async ({ videoId, ...input }: StartScenarioInput) =>
+      start(videoId, scenarioPlan(input, null, await projectName(videoId))),
 
     startEdit: ({ videoId, ...input }: StartEditInput) => start(videoId, editPlan(input, null)),
 
     startScene: ({ videoId, ...input }: StartSceneInput) => startScene(videoId, input, null),
+
+    startPictures: ({ videoId, ...input }: StartPicturesInput) =>
+      startPictures(videoId, input, null),
 
     /** Runs a finished generation again with the same request and AI picks, as a new record. */
     async retry({ videoId, generationId }: { videoId: string; generationId: string }) {
@@ -577,6 +752,10 @@ export function createStudioAi(deps: StudioAiDeps) {
       }
       if (old.stage === 'edit')
         return start(videoId, editPlan({ instruction: old.instruction, run }, old.id));
+      if (old.stage === 'pictures') {
+        const instruction = old.instruction === 'Plan the pictures.' ? undefined : old.instruction;
+        return startPictures(videoId, { instruction, run }, old.id);
+      }
       return start(
         videoId,
         scenarioPlan(
@@ -588,6 +767,7 @@ export function createStudioAi(deps: StudioAiDeps) {
             run,
           },
           old.id,
+          await projectName(videoId),
         ),
       );
     },

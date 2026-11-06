@@ -4,6 +4,7 @@ import type { ImportResult, MediaVariant, MediaView, StudioEvent } from '../../a
 import { secondsToFlicks } from '../../time/flicks.js';
 import type { BlobStore } from '../blobs/blobStore.js';
 import type { MediaRecord } from '../db/history.js';
+import { imageSize } from '../pictures/imageSize.js';
 import { type FfmpegTools, probeMedia } from '../render/ffmpegTool.js';
 import {
   DERIVATIVE_FILES,
@@ -45,6 +46,16 @@ export interface MediaLibraryDeps {
 
 export interface MediaLibrary {
   importFiles(videoId: string, store: MediaStore, paths: readonly string[]): Promise<ImportResult>;
+  /**
+   * Takes a PNG, JPEG or WebP picture without ffprobe: its size is read from the file itself.
+   * Pictures of the Pictures step come in this way, so they need no ffmpeg. `name` is what the
+   * media list shows.
+   */
+  importPicture(
+    videoId: string,
+    store: MediaStore,
+    input: { bytes: Uint8Array; name: string },
+  ): Promise<MediaView>;
   list(videoId: string, store: MediaStore): Promise<MediaView[]>;
   /** A file to serve for the preview, or null when the video has no such media or file yet. */
   file(
@@ -204,6 +215,31 @@ export function createMediaLibrary(deps: MediaLibraryDeps): MediaLibrary {
       }
       if (imported.length > 0) deps.notify({ type: 'media-changed', videoId });
       return { imported, skipped };
+    },
+
+    async importPicture(videoId, store, { bytes, name }) {
+      const size = imageSize(bytes);
+      if (!size) throw new Error(`${name} is not a PNG, JPEG or WebP picture Studio can read.`);
+      const hash = await store.blobs.put(bytes);
+      const record =
+        store.media(hash) ??
+        store.addMedia({
+          hash,
+          name,
+          kind: 'image',
+          info: {
+            duration: null,
+            width: size.width,
+            height: size.height,
+            fps: null,
+            hasAudio: false,
+            hasVideo: true,
+          },
+          bytes: bytes.length,
+          importedAt: deps.now(),
+        });
+      deps.notify({ type: 'media-changed', videoId });
+      return view(videoId, record);
     },
 
     async list(videoId, store) {

@@ -114,6 +114,8 @@ export interface ScenarioRequestInput {
   styleId?: string | null;
   /** The look in the user's own words, when no preset is picked. */
   customStyle?: string | null;
+  /** The project the video is about, whose real screens the Pictures step captures. */
+  projectName?: string | null;
 }
 
 export function buildScenarioRequest(input: ScenarioRequestInput): string {
@@ -145,6 +147,11 @@ export function buildScenarioRequest(input: ScenarioRequestInput): string {
       '- Open with a hook in the first scene and end with a clear close or call to action.',
       '- On-screen text is a few words per line, never whole narration sentences.',
       '- The visual brief tells an animator what to draw and how it moves, in the visual style above. Use original graphics: no real people, logos or copyrighted characters.',
+      ...(input.projectName
+        ? [
+            `- The video is about the project "${input.projectName}". Screenshots of its real screens are taken in a later step and animated into the scenes, so a visual brief may name the screen to show (for example "the Settings page, pointing at the AI tab").`,
+          ]
+        : []),
     ].join('\n'),
     doc.scenario.scenes.length > 0
       ? `## The current scenario\nThe video already has this scenario. Write a new one that does what the user asks; reuse what still fits.\n\`\`\`json\n${JSON.stringify(currentScenario(doc))}\n\`\`\``

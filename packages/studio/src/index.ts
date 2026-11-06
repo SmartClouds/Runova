@@ -2,6 +2,8 @@
 export * from './ai/answerShapes.js';
 export * from './ai/edit/answer.js';
 export * from './ai/extractJson.js';
+export * from './ai/pictures/answer.js';
+export * from './ai/pictures/prompt.js';
 export * from './ai/prompts.js';
 export * from './ai/scenario/answer.js';
 export * from './ai/scene/files.js';
@@ -13,6 +15,8 @@ export * from './document/undo.js';
 export * from './gen/estimate.js';
 export * from './history/compare.js';
 export * from './media/url.js';
+export * from './pictures/markdown.js';
+export * from './pictures/pictures.js';
 export * from './render/ffmpeg.js';
 export * from './render/plan.js';
 export * from './runtime/motion.js';

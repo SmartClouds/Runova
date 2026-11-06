@@ -30,6 +30,8 @@ export interface GenJobsDeps {
   /** Puts a finished file into the video's media; null while the video is not open. */
   importFile(videoId: string, file: string): Promise<{ hash: string; name: string } | null>;
   notify(event: StudioEvent): void;
+  /** Hears every change of a job, as the Pictures step does for the pictures it asked for. */
+  onChange?(job: GenJobView): void;
   newId(): string;
   now(): number;
   pollMs?: number;
@@ -109,6 +111,7 @@ export function createGenJobs(deps: GenJobsDeps) {
     });
     if (!next) throw new Error('That generation is not there any more.');
     deps.notify({ type: 'gen-changed', videoId: next.videoId, jobId: id });
+    deps.onChange?.(view(next));
     return next;
   }
 

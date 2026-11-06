@@ -1,10 +1,11 @@
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import {
   studioAiInputs,
   studioAudioInputs,
   studioGenInputs,
   studioInputs,
   studioMediaInputs,
+  studioPicturesInputs,
   studioRenderInputs,
 } from '@runova/studio';
 import { IMPORT_EXTENSIONS } from '@runova/studio/node';
@@ -297,6 +298,75 @@ export function registerStudioHandlers(
   handle(IPC.studioAudio.removeProfile, (value) =>
     service().removeVoiceProfile(parse(studioAudioInputs.profileRef, value)),
   );
+  // The Pictures step (E58).
+  const pictures = studioPicturesInputs;
+  handle(IPC.studioPictures.plan, (value) =>
+    service().startPictures(parse(studioAiInputs.startPictures, value)),
+  );
+  handle(IPC.studioPictures.view, (value) => service().pictures(parse(pictures.videoRef, value)));
+  handle(IPC.studioPictures.setApp, (value) =>
+    service().setPicturesApp(parse(pictures.setApp, value)),
+  );
+  handle(IPC.studioPictures.startApp, (value) =>
+    service().startPicturesApp(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.stopApp, (value) =>
+    service().stopPicturesApp(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.signIn, (value) =>
+    service().picturesSignIn(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.capture, (value) =>
+    service().capturePictures(parse(pictures.capture, value)),
+  );
+  handle(IPC.studioPictures.cancelCapture, (value) =>
+    service().cancelCapture(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.windows, () => service().captureWindows());
+  handle(IPC.studioPictures.captureWindow, (value) =>
+    service().captureWindow(parse(pictures.captureWindow, value)),
+  );
+  handle(IPC.studioPictures.estimate, (value) =>
+    service().picturesEstimate(parse(pictures.generateEstimate, value)),
+  );
+  handle(IPC.studioPictures.generate, (value) =>
+    service().generatePictures(parse(pictures.generate, value)),
+  );
+  handle(IPC.studioPictures.writeMarkdown, (value) =>
+    service().writePicturesMarkdown(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.checkFolder, (value) =>
+    service().checkPicturesFolder(parse(pictures.videoRef, value)),
+  );
+  handle(IPC.studioPictures.openFolder, async (value) => {
+    const folder = await service().picturesFolder(parse(pictures.videoRef, value));
+    await mkdir(folder, { recursive: true });
+    const error = await shell.openPath(folder);
+    if (error) throw new Error(error);
+  });
+  handle(IPC.studioPictures.setFile, (value) =>
+    service().setPictureFile(parse(pictures.setFile, value)),
+  );
+  handle(IPC.studioPictures.pickFile, async (value, event) => {
+    const input = parse(
+      z.object({ videoId: z.string().min(1).max(64), pictureId: z.string().min(1).max(64) }),
+      value,
+    );
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: 'Pick a picture',
+      properties: ['openFile' as const],
+      filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options);
+    const path = result.filePaths[0];
+    if (result.canceled || !path) return false;
+    await service().setPictureFile({ ...input, path });
+    return true;
+  });
+
   handle(IPC.studioGen.estimate, (value) =>
     service().genEstimate(parse(studioGenInputs.estimate, value)),
   );

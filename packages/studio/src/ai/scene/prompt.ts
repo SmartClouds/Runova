@@ -40,7 +40,7 @@ Studio.scene({
 - The page has no network: no CDN, no web fonts, no fetch. Fonts that are there: ${SCENE_FONTS.map((f) => `"${f}"`).join(', ')}.
   Use "Vazirmatn" for Persian, Arabic and Urdu, "Inter" for other text.
 - Draw everything yourself with HTML, CSS, SVG, canvas or WebGL. No images from outside the files you
-  return.
+  return, except the pictures listed for the scene, when it has any.
 - Put the on-screen text in the page exactly as given, with \`lang\` and \`dir\` set on its element.
 `;
 
@@ -53,6 +53,39 @@ export interface SceneRequestInput {
   current?: FencedFile[];
   /** The style's reference scene, shown as a worked example of the look and of the runtime. */
   example?: FencedFile[];
+  /** The scene's ready pictures, which Studio puts in its files at these paths. */
+  pictures?: ScenePictureFile[];
+}
+
+export interface ScenePictureFile {
+  /** The path in the scene's files, like pictures/scene-02-settings.png. */
+  path: string;
+  width: number | null;
+  height: number | null;
+  purpose: string;
+  /** A real screen of the product, which must stay readable. */
+  screenshot: boolean;
+}
+
+function picturesSection(pictures: ScenePictureFile[]): string {
+  if (pictures.length === 0) return '';
+  const list = pictures
+    .map(
+      (p) =>
+        `- \`${p.path}\`${p.width && p.height ? ` (${p.width}x${p.height})` : ''}${p.screenshot ? ', a screenshot of the real product' : ''}: ${p.purpose.replace(/\s+/g, ' ').trim()}`,
+    )
+    .join('\n');
+  return [
+    '## Pictures for this scene',
+    'Studio puts these files in the scene next to yours. Show each one with an `<img>` at its path, as its purpose says, and build the motion around it. Do not return these files yourself.',
+    list,
+    [
+      '- Frame a screenshot the way a product video does: a browser window or a device, on the style background, with a soft shadow.',
+      '- Move with purpose: zoom or pan to the part the purpose names, and point at it with a highlight, a ring, a cursor or a callout in the style. Never crop that part away.',
+      '- Keep a screenshot sharp: scale it down rather than up, and do not blur or distort it.',
+      '- Keep the on-screen text clear of the picture, or on a panel over it.',
+    ].join('\n'),
+  ].join('\n\n');
 }
 
 function quoted(text: string): string {
@@ -89,6 +122,7 @@ export function buildSceneRequest(input: SceneRequestInput): string {
     `What the narrator says (for timing only; it is not shown on screen):\n${quoted(scene.narration || '(no narration)')}`,
     `On-screen text, shown exactly as written:\n${quoted(scene.onScreenText.join('\n') || '(none)')}`,
     `What the viewer sees:\n${quoted(scene.visualBrief || '(not given; design it from the narration)')}`,
+    picturesSection(input.pictures ?? []),
     look?.kind === 'preset'
       ? `## Visual style: ${look.style.name}\n\n${look.style.summary}\n- Palette: ${look.style.palette.join(', ')} (background first).\n- Motion: ${look.style.motion}\n- Do: ${look.style.dos.join('; ')}.\n- Avoid: ${look.style.donts.join('; ')}.`
       : '',

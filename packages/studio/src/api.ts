@@ -30,6 +30,10 @@ const id = z
 const folderPath = z.string().min(1).max(4096);
 const projectId = z.string().min(1).max(200);
 
+/** What makes the pictures a project cannot show; "off" leaves them to the user. */
+export const PICTURE_ENGINES = ['openai', 'gemini', 'off'] as const;
+export type PictureEngine = (typeof PICTURE_ENGINES)[number];
+
 export const studioInputs = {
   videoRef: z.object({ videoId: id }),
   /** The library's videos in the order the user put them, highest priority first. */
@@ -75,6 +79,9 @@ export const studioInputs = {
       cacheCapGb: z.number().int().min(1).max(2000),
       autoResumeRenders: z.boolean(),
       hwEncode: z.boolean(),
+      pictureEngine: z.enum(PICTURE_ENGINES),
+      pictureQuality: z.enum(['low', 'medium', 'high']),
+      captureScale: z.union([z.literal(1), z.literal(2)]),
     })
     .partial()
     .strict(),
@@ -128,6 +135,12 @@ export const studioAiInputs = {
   startEdit: z.object({
     videoId: id,
     instruction: z.string().trim().min(1).max(20_000),
+    run: runSettingsSchema,
+  }),
+  startPictures: z.object({
+    videoId: id,
+    /** Anything particular the user wants shown; without it the AI plans from the scenario. */
+    instruction: z.string().trim().min(1).max(20_000).optional(),
     run: runSettingsSchema,
   }),
   startScene: z.object({
@@ -229,6 +242,7 @@ export interface SceneCheckView {
 export type StartScenarioInput = z.infer<typeof studioAiInputs.startScenario>;
 export type StartEditInput = z.infer<typeof studioAiInputs.startEdit>;
 export type StartSceneInput = z.infer<typeof studioAiInputs.startScene>;
+export type StartPicturesInput = z.infer<typeof studioAiInputs.startPictures>;
 export type SaveRecipeInput = z.infer<typeof studioAiInputs.saveRecipe>;
 
 /** A saved way of making a video: the brief, the look, the format and the AI picks per stage. */
@@ -271,6 +285,11 @@ export interface StudioSettingsView {
   cacheCapGb: number;
   autoResumeRenders: boolean;
   hwEncode: boolean;
+  /** What makes the pictures a project cannot show; "off" writes their prompts to PICTURES.md. */
+  pictureEngine: PictureEngine;
+  pictureQuality: 'low' | 'medium' | 'high';
+  /** Screenshots are taken at this many pixels per CSS pixel. */
+  captureScale: 1 | 2;
 }
 
 export interface VideoSummary {
@@ -382,7 +401,7 @@ export interface MoveResult {
   oldFolder: string;
 }
 
-export type GenerationStage = 'scenario' | 'edit' | 'scene';
+export type GenerationStage = 'scenario' | 'edit' | 'scene' | 'pictures';
 
 export type GenerationStatus =
   | 'running'
@@ -788,6 +807,8 @@ export type StudioEvent =
   | { type: 'narration-changed'; videoId: string; jobId: string }
   /** A Piper voice started or stopped downloading, or was removed (the voice library). */
   | { type: 'piper-voices-changed' }
+  /** The Pictures step moved on: the project's app started or stopped, a capture went on. */
+  | { type: 'pictures-changed'; videoId: string }
   /** A generated picture or clip moved on: waiting, downloading, imported, failed. */
   | { type: 'gen-changed'; videoId: string; jobId: string }
   /** A video's media changed: a file imported, or its preview files made. */
@@ -803,3 +824,77 @@ export type StudioEvent =
       done: number;
       total: number;
     };
+
+const pictureIds = z.array(id).min(1).max(500).optional();
+
+export const studioPicturesInputs = {
+  videoRef: z.object({ videoId: id }),
+  /** The run command and address the video's project is captured from. */
+  setApp: z.object({
+    videoId: id,
+    runCommandId: z.string().min(1).max(200).nullable().optional(),
+    url: z.string().trim().max(500).nullable().optional(),
+  }),
+  /** Takes the route screenshots among these pictures, or all of them that are not ready. */
+  capture: z.object({ videoId: id, pictureIds }),
+  captureWindow: z.object({ videoId: id, pictureId: id, sourceId: z.string().min(1).max(500) }),
+  generateEstimate: z.object({ videoId: id, pictureIds }),
+  /** Makes these pictures with the image model; `confirmedUsd` is the estimate the user agreed to. */
+  generate: z.object({ videoId: id, pictureIds, confirmedUsd: z.number().nonnegative() }),
+  /** Puts a file the user picked on a picture. */
+  setFile: z.object({ videoId: id, pictureId: id, path: z.string().min(1).max(4096) }),
+};
+
+export type PictureAppStatus = 'stopped' | 'starting' | 'running' | 'failed';
+
+/** The project's app, as the Pictures tab shows it. */
+export interface PicturesAppView {
+  project: {
+    id: string;
+    name: string;
+    runCommands: { id: string; label: string; command: string }[];
+  } | null;
+  runCommandId: string | null;
+  url: string | null;
+  status: PictureAppStatus;
+  /** Studio started it, so Studio stops it; an app that was already running is left alone. */
+  startedByStudio: boolean;
+  error: string | null;
+  /** The last lines the app printed, to see why it did not start. */
+  output: string[];
+}
+
+/** A capture going through the video's screenshots one at a time. */
+export interface PicturesJobView {
+  running: boolean;
+  done: number;
+  total: number;
+  /** The picture being captured now. */
+  current: { pictureId: string; label: string } | null;
+  failed: number;
+}
+
+export interface PicturesView {
+  app: PicturesAppView;
+  job: PicturesJobView | null;
+  engine: PictureEngine;
+  /** The engine has the key it needs. */
+  engineReady: boolean;
+  engineLabel: string | null;
+  folder: string;
+}
+
+export interface CaptureWindowView {
+  id: string;
+  name: string;
+  /** A small PNG of the window, as a data URL. */
+  thumbnail: string;
+}
+
+export interface PicturesFolderResult {
+  /** Pictures a file in the folder filled. */
+  filled: number;
+  /** Files in the folder that fit no picture. */
+  unknown: string[];
+  markdownPath: string;
+}

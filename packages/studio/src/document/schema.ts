@@ -95,6 +95,73 @@ const direction = z.enum(['auto', 'ltr', 'rtl']);
 const transition = z.object({ kind: z.enum(TRANSITIONS), duration: positiveFlicks });
 export type TransitionSpec = z.infer<typeof transition>;
 
+export const PICTURE_SOURCES = ['screenshot', 'generate', 'file'] as const;
+export type PictureSource = (typeof PICTURE_SOURCES)[number];
+export const PICTURE_STATUSES = ['planned', 'ready', 'failed'] as const;
+export const MAX_SCENE_PICTURES = 6;
+export const MAX_SHOT_STEPS = 8;
+
+const shotStep = z.discriminatedUnion('do', [
+  z.object({ do: z.literal('click'), selector: z.string().min(1).max(300) }),
+  z.object({
+    do: z.literal('type'),
+    selector: z.string().min(1).max(300),
+    text: z.string().max(500),
+  }),
+  z.object({ do: z.literal('scroll'), selector: z.string().max(300).optional(), y: z.number() }),
+  z.object({ do: z.literal('wait'), ms: z.number().int().min(0).max(10_000) }),
+]);
+export type ShotStep = z.infer<typeof shotStep>;
+
+/**
+ * How a screenshot is taken: a page of the project's web app, opened at a route, or a window of a
+ * desktop app, which the user brings to the right screen before Studio captures it.
+ */
+export const shotSchema = z.discriminatedUnion('target', [
+  z.object({
+    target: z.literal('route'),
+    /** The path and query after the app's address, like /settings?tab=ai. */
+    path: z.string().max(1000),
+    /** A CSS selector that must be on the page before the picture is taken. */
+    waitFor: z.string().max(300).optional(),
+    steps: z.array(shotStep).max(MAX_SHOT_STEPS).optional(),
+    viewport: z.enum(['desktop', 'mobile']),
+    theme: z.enum(['light', 'dark']).optional(),
+  }),
+  z.object({
+    target: z.literal('window'),
+    /** What the user does to get the app to this screen. */
+    instructions: z.string().max(2000),
+  }),
+]);
+export type Shot = z.infer<typeof shotSchema>;
+
+/**
+ * A picture a scene shows: a screenshot of the linked project, one made by an image model, or a
+ * file the user makes. Once it is ready it is in the video's media, and the scene's animation is
+ * built around it.
+ */
+export const scenePictureSchema = z.object({
+  id,
+  /** What the picture shows and why, for the animator and for the person making it. */
+  purpose: z.string().max(1000),
+  source: z.enum(PICTURE_SOURCES),
+  status: z.enum(PICTURE_STATUSES),
+  shot: shotSchema.optional(),
+  /** What an image model is asked for, or what the user is asked to make. */
+  prompt: z.string().max(4000).optional(),
+  /** The name the picture has in the scene's files and in the pictures folder. */
+  fileName: z
+    .string()
+    .max(120)
+    .regex(/^[a-z0-9][a-z0-9-]*\.(png|jpg|jpeg|webp)$/),
+  mediaHash: sha256.nullable(),
+  /** The image job making it, while GPT Image works on it. */
+  genJobId: id.nullable().optional(),
+  error: z.string().max(2000).nullable(),
+});
+export type ScenePicture = z.infer<typeof scenePictureSchema>;
+
 export const sceneSchema = z.object({
   id,
   title: shortText,
@@ -113,6 +180,8 @@ export const sceneSchema = z.object({
   notes: longText,
   code: z.object({ treeHash: sha256.nullable() }),
   params: z.record(z.string().max(64), z.union([z.string().max(2000), z.number(), z.boolean()])),
+  /** Added with the Pictures step; older videos have none. */
+  pictures: z.array(scenePictureSchema).max(MAX_SCENE_PICTURES).optional(),
 });
 export type Scene = z.infer<typeof sceneSchema>;
 

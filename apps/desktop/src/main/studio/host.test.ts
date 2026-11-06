@@ -59,6 +59,7 @@ describe('createDesktopStudioHost', () => {
       id: 'p1',
       name: 'Shop',
       folderPath: join(userData.dir, 'shop'),
+      runCommands: [],
     });
     expect(await host.projects.get('ghost')).toBeNull();
     expect(await liveProjectIds()).toEqual(new Set(['p1']));

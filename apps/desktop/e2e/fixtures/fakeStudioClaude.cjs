@@ -5,6 +5,8 @@
 //     first gets JSON cut off half-way, so the repair round has something to fix;
 //   - a repair request answers with the good scenario;
 //   - an edit request renames the first scene it finds in the request;
+//   - a pictures request plans a screenshot of /settings for the first scene and a file for the
+//     second (e2e/studioPictures.e2e.ts);
 //   - a scene request answers with a small scene page showing the scene's title, except that a
 //     change asking for NETWORK gets a scene that tries to fetch, so its check fails and the fix
 //     round (which gets the good scene) has something to repair.
@@ -82,6 +84,36 @@ function scenePage(title, extra) {
 }
 
 function answer() {
+  if (request.includes('# Plan the pictures of a video')) {
+    const ids = [...request.matchAll(/"sceneId":\s*"([A-Za-z0-9_-]+)"/g)].map((m) => m[1]);
+    return JSON.stringify({
+      app: { kind: 'web', runCommandId: 'dev', url: null },
+      scenes: [
+        {
+          sceneId: ids[0],
+          pictures: [
+            {
+              purpose: 'The settings page, pointing at Save.',
+              label: 'settings',
+              source: 'screenshot',
+              shot: { target: 'route', path: '/settings', waitFor: '#settings-form' },
+            },
+          ],
+        },
+        {
+          sceneId: ids[1],
+          pictures: [
+            {
+              purpose: 'A photo of the team.',
+              label: 'team',
+              source: 'file',
+              prompt: 'A small team around a table, warm light, no text.',
+            },
+          ],
+        },
+      ],
+    });
+  }
   if (request.includes('# Fix the scene')) {
     const title = /Scene \d+ of \d+: (.+)/.exec(request)?.[1] ?? 'صحنه';
     return scenePage(title, '');

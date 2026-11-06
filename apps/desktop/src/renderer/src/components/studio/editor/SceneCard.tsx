@@ -89,7 +89,11 @@ export function SceneCard({
     apply([{ op: 'scene.update', sceneId: scene.id, patch }], label);
 
   return (
-    <section className={cn(GLASS_CARD, 'space-y-3 p-3')} aria-label={`Scene ${number}`}>
+    <section
+      id={`scene-${scene.id}`}
+      className={cn(GLASS_CARD, 'scroll-mt-4 space-y-3 p-3')}
+      aria-label={`Scene ${number}`}
+    >
       <div className="flex items-center gap-2">
         <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-foreground/[0.06] px-2 text-xs font-semibold tabular-nums">
           {number}

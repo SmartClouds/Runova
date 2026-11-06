@@ -1,4 +1,4 @@
-import type { GenerationView } from '@runova/studio';
+import { DESIGN_SIZES, type GenerationView } from '@runova/studio';
 import { useEffect, useState } from 'react';
 import { AskAiBar } from '../ai/AskAiBar';
 import { BriefCard } from '../ai/BriefCard';
@@ -38,6 +38,10 @@ import {
   Undo,
   Video,
 } from '../kit';
+import { PicturesView } from '../pictures/PicturesView';
+import { ScenePicturesStrip } from '../pictures/ScenePicturesStrip';
+import { StepBar, type StudioStep } from '../pictures/StepBar';
+import { usePictures } from '../pictures/usePictures';
 import { RenderDialog } from '../render/RenderDialog';
 import { RenderStrip } from '../render/RenderStrip';
 import { SceneCodeDialog } from '../scenes/SceneCodeDialog';
@@ -53,6 +57,8 @@ export interface StudioEditorProps {
   videoId: string;
   onBack: () => void;
   onOpenDevSetup: () => void;
+  /** Opens a tab of Settings: Studio's own settings, or the AI keys. */
+  onOpenSettings?: (tab: 'agents' | 'ai') => void;
   /** Opens another video: one started from a version of this one. */
   onOpenVideo?: (videoId: string) => void;
 }
@@ -65,7 +71,13 @@ function typingInField(target: EventTarget | null): boolean {
 
 const SHOWN_WHEN = new Set<GenerationView['status']>(['running', 'failed', 'interrupted']);
 
-const VIEW_LABELS = { scenario: 'Scenario', voice: 'Voice', timeline: 'Timeline' } as const;
+const VIEW_LABELS = {
+  scenario: 'Scenario',
+  pictures: 'Pictures',
+  voice: 'Voice',
+  timeline: 'Timeline',
+} as const;
+type EditorView = keyof typeof VIEW_LABELS;
 
 /**
  * One video, open for editing: the scenario written by AI from a brief or by hand, edited by hand
@@ -77,6 +89,7 @@ export function StudioEditor({
   videoId,
   onBack,
   onOpenDevSetup,
+  onOpenSettings,
   onOpenVideo,
 }: StudioEditorProps): React.JSX.Element {
   const video = useStudioVideo(videoId);
@@ -85,6 +98,8 @@ export function StudioEditor({
   const [scenarioRun, setScenarioRun] = useRunSettings('scenario');
   const [editRun, setEditRun] = useRunSettings('edit');
   const [sceneRun, setSceneRun] = useRunSettings('scene');
+  const [picturesRun, setPicturesRun] = useRunSettings('pictures');
+  const pictures = usePictures(videoId);
   const [codeSceneId, setCodeSceneId] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [recipeFrom, setRecipeFrom] = useState<GenerationView | null>(null);
@@ -94,7 +109,7 @@ export function StudioEditor({
   const [applying, setApplying] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [rendering, setRendering] = useState(false);
-  const [mode, setMode] = useState<'scenario' | 'voice' | 'timeline'>('scenario');
+  const [mode, setMode] = useState<EditorView>('scenario');
   const [title, setTitle] = useState('');
   const openTitle = view.state === 'open' ? view.document.title : '';
   useEffect(() => setTitle(openTitle), [openTitle]);
@@ -220,6 +235,33 @@ export function StudioEditor({
       };
   const hasScenes = document.scenario.scenes.length > 0;
   const busy = ai.running !== null;
+  const designSize = DESIGN_SIZES[document.renderSettings.aspect];
+  const aspect = `${designSize.width} / ${designSize.height}`;
+  /** Opens the Pictures tab at one scene's pictures. */
+  const openScenePictures = (sceneId: string) => {
+    setMode('pictures');
+    requestAnimationFrame(() =>
+      globalThis.document
+        .getElementById(`pictures-${sceneId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  };
+  const openStep = (step: StudioStep) => {
+    if (step === 'pictures') {
+      setMode('pictures');
+      return;
+    }
+    setMode('scenario');
+    if (step === 'animation') {
+      const next = document.scenario.scenes.find((s) => s.code.treeHash === null);
+      if (next)
+        requestAnimationFrame(() =>
+          globalThis.document
+            .getElementById(`scene-${next.id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+        );
+    }
+  };
   const settle = (generationId: string) => setSettled((ids) => new Set(ids).add(generationId));
   const applyProposal = async (generationId: string) => {
     setApplying(true);
@@ -251,7 +293,7 @@ export function StudioEditor({
       <div className={TOOLBAR}>
         {back}
         <div className={SEGMENT_TRACK} role="radiogroup" aria-label="View">
-          {(['scenario', 'voice', 'timeline'] as const).map((value) => (
+          {(['scenario', 'pictures', 'voice', 'timeline'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -340,6 +382,11 @@ export function StudioEditor({
           </Button>
         </div>
       </div>
+      <StepBar
+        document={document}
+        current={mode === 'scenario' || mode === 'pictures' ? mode : null}
+        onOpen={openStep}
+      />
       <ErrorBoundary title="Render">
         <RenderStrip videoId={videoId} onOpen={() => setRendering(true)} />
       </ErrorBoundary>
@@ -377,6 +424,22 @@ export function StudioEditor({
           />
         )}
       </ErrorBoundary>
+      {mode === 'pictures' && (
+        <ErrorBoundary title="Pictures">
+          <PicturesView
+            videoId={videoId}
+            document={document}
+            apply={video.apply}
+            pictures={pictures}
+            busy={busy}
+            planning={ai.running?.stage === 'pictures'}
+            run={picturesRun}
+            onRunChange={setPicturesRun}
+            onPlan={(instruction) => ai.startPictures(picturesRun, instruction)}
+            onOpenSettings={(tab) => onOpenSettings?.(tab)}
+          />
+        </ErrorBoundary>
+      )}
       {mode === 'voice' && (
         <ErrorBoundary title="Voice">
           <VoicePanel
@@ -420,17 +483,26 @@ export function StudioEditor({
               />
             }
             renderMotion={(scene, index) => (
-              <SceneMotion
-                videoId={videoId}
-                document={document}
-                scene={scene}
-                index={index}
-                busy={busy}
-                run={sceneRun}
-                onRunChange={setSceneRun}
-                onAnimate={(instruction) => ai.startScene(scene.id, sceneRun, instruction)}
-                onOpenCode={() => setCodeSceneId(scene.id)}
-              />
+              <>
+                <ScenePicturesStrip
+                  videoId={videoId}
+                  scene={scene}
+                  index={index}
+                  aspect={aspect}
+                  onOpen={() => openScenePictures(scene.id)}
+                />
+                <SceneMotion
+                  videoId={videoId}
+                  document={document}
+                  scene={scene}
+                  index={index}
+                  busy={busy}
+                  run={sceneRun}
+                  onRunChange={setSceneRun}
+                  onAnimate={(instruction) => ai.startScene(scene.id, sceneRun, instruction)}
+                  onOpenCode={() => setCodeSceneId(scene.id)}
+                />
+              </>
             )}
           />
         </ErrorBoundary>

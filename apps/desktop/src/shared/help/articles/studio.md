@@ -46,6 +46,20 @@ Type what you want changed in **Ask AI** above the scenario, for example "make t
 
 The AI answers with a proposal: every change spelled out, with the text before and after. **Apply** makes all of it as one entry in the history, so one **Undo** takes it all back. **Discard** leaves the video as it is. If you edit the scenario before applying, and the proposal no longer fits, Studio says so; ask again.
 
+## Pictures
+
+A video about a project should show the project. Switch the editor to **Pictures** (the step bar under the toolbar shows how far each step is) and press **Plan pictures with AI**. The AI reads the scenario and, when the video belongs to a project, the project's code (read only: it changes nothing and runs nothing), and picks the pictures each scene needs. Type a note first if you want something particular shown.
+
+Each picture comes one of three ways:
+
+- **Screenshot**: a real screen of the project. Studio starts the app with the project's run command (pick it, or enter the address of one already running), opens each page in a hidden window, waits until it has stopped changing, and takes it. **Sign in first** opens the app in a window that keeps your sign-in for the screenshots. For a desktop app, **Capture the window** asks you to bring the app to the right screen, pick its window, and takes it after three seconds. Studio stops the app when you close the video, unless it was already running.
+- **GPT Image**: a picture the app cannot show, made from the AI's prompt with your OpenAI key. Studio shows the price of all of them and asks once before anything is sent. Choose GPT Image, Gemini or Off in **Settings > Studio > Pictures**, with the quality.
+- **Your file**: **Write PICTURES.md** puts every picture still needed in the video's `pictures` folder, with its file name, its size and a prompt to paste into any image tool. Save a picture there under its name and it lands on its scene by itself (or press **Check the folder**). **Use a file instead** works on any picture.
+
+Click a picture to see it large, change what it is for, its page, screen size, theme or prompt, switch where it comes from, take it again, or remove it. Every change is in the history. The pictures of each scene also show on its card in the Scenario view.
+
+When a scene is animated, its ready pictures go into its files, and the AI builds the motion around them: framed in a browser or a device, zooming to what each picture is for. A CLI that can look at pictures sees them too.
+
 ## Animate the scenes
 
 Each scene card has an animation section. **Animate with AI** asks the CLI to write the scene's motion graphics as a small web page, in the video's style if it has one. Studio then checks the page in a hidden window before using it: it must load, draw something on every frame, draw the same picture each time it is asked for the same moment, and make no errors. A page that fails is sent back with the problems, up to two times. The button beside it shows which AI animates the scenes.
