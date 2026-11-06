@@ -156,12 +156,16 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
         var noProof = await TestSignInSettings.PatchAsync(admin, keys);
         var otherSecret = await TestSignInSettings.PatchAsync(admin, new
         {
-            keys.captchaEnabled, keys.turnstileSiteKey, keys.turnstileSecret,
+            keys.captchaEnabled,
+            keys.turnstileSiteKey,
+            keys.turnstileSecret,
             captchaToken = _turnstile.Issue(CaptchaActions.SettingsCheck, secret: "0x4AAAAAAAoldsecret"),
         });
         var otherForm = await TestSignInSettings.PatchAsync(admin, new
         {
-            keys.captchaEnabled, keys.turnstileSiteKey, keys.turnstileSecret,
+            keys.captchaEnabled,
+            keys.turnstileSiteKey,
+            keys.turnstileSecret,
             captchaToken = _turnstile.Issue(CaptchaActions.SignIn),
         });
 

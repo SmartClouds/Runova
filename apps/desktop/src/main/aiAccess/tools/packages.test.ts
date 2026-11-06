@@ -25,6 +25,12 @@ vi.mock('../../packageManagers', () => ({
 
 vi.mock('../../devSetup/runtime', () => ({ getDevSetupService: () => ({ detect: vi.fn() }) }));
 
+// The IPC module asks for the dependency alerts after an update (E51). The real one loads the
+// whole account and sync runtime, and these tests import the tools again before each test.
+vi.mock('../../account/live', () => ({
+  getDependencyAlerts: () => ({ upload: vi.fn() }),
+}));
+
 /** The package tools: what the Packages tab lists, what is out of date, and updating packages. */
 
 function pkg(overrides: Partial<PackageInfo>): PackageInfo {

@@ -41,7 +41,7 @@ const NOTIFICATION = {
 const page = (items: unknown[], unread = items.length) =>
   json({ items, page: 1, pageSize: 20, totalItems: items.length, totalPages: 1, unread });
 
-function routes(overrides: Record<string, Response | Response[] | ((r: never) => Response)> = {}) {
+function routes(overrides: Parameters<typeof fakeFetch>[0] = {}) {
   return fakeFetch({
     'GET /api/v1/accounts/me/dependency-alert-settings': json(SETTINGS, {
       headers: { etag: '"41"' },
