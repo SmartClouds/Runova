@@ -352,6 +352,7 @@ export function StudioEditor({
           <AskAiBar
             run={editRun}
             onRunChange={setEditRun}
+            language={document.language}
             busy={busy}
             onAsk={(instruction) => ai.startEdit(instruction, editRun)}
           />

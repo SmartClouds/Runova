@@ -59,9 +59,7 @@ describe('ProjectStudioSection', () => {
     expect(bridge.$fn('studio.list')).toHaveBeenCalledWith({ projectId: 'p1' });
     await user.click(screen.getAllByRole('button', { name: /New video/ })[0] as HTMLElement);
     expect(await screen.findByRole('dialog', { name: 'New video' })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByText(storage().root, { selector: 'span' })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByLabelText('Saved in')).toHaveValue(storage().root));
   });
 });
 

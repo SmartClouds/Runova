@@ -47,6 +47,8 @@ export const studioInputs = {
     projectId: projectId.nullable(),
     language: z.string().refine(isContentLanguage, 'Pick one of the offered languages.'),
     aspect: z.enum(ASPECTS),
+    /** A folder the user picked for this one video; the project's or the library's when left out. */
+    root: folderPath.optional(),
   }),
   checkRoot: z.object({ path: folderPath, projectId: projectId.nullable() }),
   setProjectRoot: z.object({ projectId, path: folderPath.nullable() }),

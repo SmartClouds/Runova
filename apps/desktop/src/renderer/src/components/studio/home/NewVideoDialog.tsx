@@ -3,11 +3,12 @@ import {
   type Aspect,
   CONTENT_LANGUAGES,
   type RecipeView,
+  type RootCheckView,
   UNTITLED_TITLE,
   type VideoSummary,
 } from '@runova/studio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { BriefFields, type BriefValue, customStyleOf, styleReady } from '../ai/BriefFields';
 import {
   fromRunInput,
@@ -22,6 +23,7 @@ import { DIALOG_BODY, errorMessage } from '../format';
 import {
   appQueryKeys,
   Button,
+  Checkbox,
   Combobox,
   cn,
   Dialog,
@@ -38,6 +40,7 @@ import {
   segmentClass,
 } from '../kit';
 import { studioKeys } from '../queryKeys';
+import { StorageLocationField } from '../storage/StorageLocationField';
 
 /** The format picker's words for each aspect ratio. */
 export const ASPECT_LABELS: Record<Aspect, string> = {
@@ -78,6 +81,7 @@ export function NewVideoDialog({
   const queryClient = useQueryClient();
   const titleId = useId();
   const aiId = useId();
+  const keepId = useId();
   const [savedRun, setSavedRun] = useRunSettings('scenario');
   const [title, setTitle] = useState('');
   const [owner, setOwner] = useState(projectId ?? STANDALONE);
@@ -86,6 +90,12 @@ export function NewVideoDialog({
   const [recipe, setRecipe] = useState(BLANK);
   const [picked, setPicked] = useState<RecipeView | null>(null);
   const [useAi, setUseAi] = useState(true);
+  // The folder starts as the project's (or the library's) and follows it until the user edits it.
+  const [folder, setFolder] = useState('');
+  const [folderEdited, setFolderEdited] = useState(false);
+  const [keepForProject, setKeepForProject] = useState(false);
+  const [folderCheck, setFolderCheck] = useState<RootCheckView | null>(null);
+  const onFolderCheck = useCallback((value: RootCheckView | null) => setFolderCheck(value), []);
   const [brief, setBrief] = useState<BriefValue>({
     brief: '',
     targetSeconds: 60,
@@ -120,6 +130,8 @@ export function NewVideoDialog({
     if (!open) return;
     setTitle('');
     setOwner(projectId ?? STANDALONE);
+    setFolderEdited(false);
+    setKeepForProject(false);
     setRecipe(BLANK);
     setBrief((current) => ({ ...current, brief: '', run: savedRun }));
   }, [open, projectId]);
@@ -155,14 +167,31 @@ export function NewVideoDialog({
     enabled: open && chosenProject === null,
   });
 
+  const where = chosenProject ? storage.data?.root : settings.data?.standaloneRoot;
+  useEffect(() => {
+    if (!folderEdited) setFolder(where ?? '');
+  }, [where, folderEdited]);
+  const typedFolder = folder.trim();
+  /** A folder the user chose that is not the one this video would go to anyway. */
+  const customFolder =
+    folderEdited && typedFolder.length > 0 && typedFolder !== where ? typedFolder : null;
+  const keep = keepForProject && chosenProject !== null && customFolder !== null;
+
   const create = useMutation({
-    mutationFn: () =>
-      studioClient().create({
+    mutationFn: async () => {
+      // Kept for the project, the folder becomes the project's own, so the video goes there anyway.
+      if (keep && chosenProject && customFolder) {
+        const view = await studioClient().setProjectRoot(chosenProject, customFolder);
+        queryClient.setQueryData(studioKeys.projectStorage(chosenProject), view);
+      }
+      return studioClient().create({
         title: title.trim() || UNTITLED_TITLE,
         projectId: chosenProject,
         language,
         aspect,
-      }),
+        ...(customFolder && !keep ? { root: customFolder } : {}),
+      });
+    },
     onSuccess: (video) => {
       void queryClient.invalidateQueries({ queryKey: studioKeys.videos });
       // Every stage choice the recipe kept, not only the scenario's (E39).
@@ -205,8 +234,9 @@ export function NewVideoDialog({
     { value: BLANK, label: 'A blank video' },
     ...(recipes.data ?? []).map((r) => ({ value: r.id, label: r.name, keywords: [r.brief] })),
   ];
-  const where = chosenProject ? storage.data?.root : settings.data?.standaloneRoot;
-  const blocked = chosenProject !== null && storage.data?.check.ok === false;
+  const projectFolderBlocked =
+    !folderEdited && chosenProject !== null && storage.data?.check.ok === false;
+  const blocked = projectFolderBlocked || folderCheck?.ok === false;
   const ready = useAi
     ? brief.brief.trim().length > 0 && styleReady(brief)
     : title.trim().length > 0;
@@ -265,7 +295,10 @@ export function NewVideoDialog({
                   ariaLabel="Belongs to"
                   options={owners}
                   value={owner}
-                  onChange={setOwner}
+                  onChange={(value) => {
+                    setOwner(value);
+                    setFolderEdited(false);
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
@@ -308,15 +341,47 @@ export function NewVideoDialog({
                 onSubmit={submit}
               />
             )}
-            {where && (
-              <p className="text-xs text-muted-foreground">
-                Saved in <span className="break-all font-mono">{where}</span>
-              </p>
+            <StorageLocationField
+              label="Saved in"
+              value={folder}
+              onChange={(value) => {
+                setFolder(value);
+                setFolderEdited(true);
+              }}
+              projectId={chosenProject}
+              onCheck={onFolderCheck}
+            />
+            {customFolder && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {chosenProject && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={keepId}
+                      checked={keepForProject}
+                      onCheckedChange={(value) => setKeepForProject(value === true)}
+                    />
+                    <Label htmlFor={keepId} className="text-xs font-normal">
+                      Use this folder for the project's next videos too
+                    </Label>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setFolderEdited(false);
+                    setKeepForProject(false);
+                  }}
+                >
+                  Use the {chosenProject ? "project's" : 'default'} folder
+                </Button>
+              </div>
             )}
-            {blocked && (
+            {projectFolderBlocked && !folderCheck && (
               <Notice tone="destructive" size="sm">
-                {storage.data?.check.problems.find((p) => p.level === 'error')?.message} Change the
-                folder in the project's Studio tab first.
+                {storage.data?.check.problems.find((p) => p.level === 'error')?.message} Pick
+                another folder above.
               </Notice>
             )}
             {error && (

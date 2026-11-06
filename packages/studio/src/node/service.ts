@@ -843,6 +843,8 @@ export function createStudioService(host: StudioHost): StudioService {
     } else {
       root = view(await settingsStore.read()).standaloneRoot;
     }
+    // A folder picked in the New video dialog passes the same checks as the project's own.
+    if (input.root?.trim()) root = input.root.trim();
     const result = await check(root, projectFolder);
     if (!result.ok) throw new Error(firstError(result));
     const { folder, manifest } = await createVideoFolder(

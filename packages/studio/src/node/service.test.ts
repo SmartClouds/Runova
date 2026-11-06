@@ -217,6 +217,27 @@ describe('creating and listing videos', () => {
     await expect(newVideo(service, 'p1')).rejects.toThrow(/inside the project/);
   });
 
+  it('puts a video in a folder the user picked for it, after checking that folder', async () => {
+    const { service, base, projectFolder, host } = await setup();
+    const picked = join(base, 'Elsewhere', 'Teasers');
+    const create = (root: string) =>
+      service.create({
+        title: 'Shop teaser',
+        projectId: 'p1',
+        language: 'fa',
+        aspect: '16:9',
+        root,
+      });
+    const video = await create(picked);
+    expect(video.folder.startsWith(picked)).toBe(true);
+    expect(video.linkedProjectId).toBe('p1');
+    // The pick is for this video only; the project keeps its own folder.
+    expect((await service.projectStorage({ projectId: 'p1' })).root).toBe(
+      join(host.defaultLibraryRoot, 'Projects', 'Shop-App'),
+    );
+    await expect(create(join(projectFolder, 'videos'))).rejects.toThrow(/inside the project/);
+  });
+
   it('tells the UI the library changed', async () => {
     const { service, events } = await setup();
     await newVideo(service);

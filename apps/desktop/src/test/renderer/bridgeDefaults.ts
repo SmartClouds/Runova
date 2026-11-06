@@ -139,6 +139,7 @@ export function bridgeDefaults(): Record<string, unknown> {
       autoResumeRenders: true,
       hwEncode: false,
     },
+    'studio.checkRoot': { ok: true, resolved: '', problems: [] },
     'studioRender.jobs': [],
     'studioAi.generations': [],
     'studioAudio.engines': [],

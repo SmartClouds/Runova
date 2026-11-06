@@ -285,3 +285,26 @@ export function buildBriefRewriteRequest(note: string, language: string): string
     ].join(' '),
   ].join('\n\n');
 }
+
+/**
+ * What "Write it for me" in the editor's Ask AI box sends to the user's prompt AI: a rough note
+ * about what to change becomes a clear edit instruction for the scenario. Like the brief, it stays
+ * in the note's own language.
+ */
+export function buildEditRewriteRequest(note: string, language: string): string {
+  const { name, native } = languageName(language);
+  return [
+    `You help a user tell an AI how to change the scenario of a short video. The video is in ${name} (${native}). The user wrote a rough note about what should change, possibly incomplete.`,
+    "## The user's note",
+    quoted(note.trim()),
+    [
+      'Rewrite it as a clear instruction for the edit: which scenes or parts it is about, what should change in them, and the result the user wants.',
+      'Write it in the same language as the note.',
+      'Keep names, numbers, scene titles and any wording the user wants said exactly as they are.',
+      'Do not add changes the note does not ask for.',
+      'Keep it short: a sentence or two, or a short list when the note asks for several changes.',
+      'Never use Chinese characters.',
+      'Output ONLY the instruction, with no preamble, quotes or commentary.',
+    ].join(' '),
+  ].join('\n\n');
+}

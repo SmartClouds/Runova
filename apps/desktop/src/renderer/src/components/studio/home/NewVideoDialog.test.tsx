@@ -61,7 +61,9 @@ beforeEach(() => {
 describe('NewVideoDialog', () => {
   it('creates a Persian video and hands the brief to the editor to write the scenario', async () => {
     const { user, bridge, onCreated, onOpenChange } = renderDialog();
-    expect(await screen.findByText(settings().standaloneRoot)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('Saved in')).toHaveValue(settings().standaloneRoot),
+    );
     expect(screen.getByRole('button', { name: 'Create and write' })).toBeDisabled();
     await user.type(screen.getByLabelText('What is the video about?'), 'معرفی محصول تازه');
     await user.click(screen.getByRole('radio', { name: '30 s' }));
@@ -218,7 +220,7 @@ describe('NewVideoDialog', () => {
 
   it("uses the project's folder when opened from a project", async () => {
     const { user, bridge } = renderDialog('p1');
-    expect(await screen.findByText(storage().root)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Saved in')).toHaveValue(storage().root));
     await user.type(screen.getByLabelText('What is the video about?'), 'Teaser');
     await user.click(screen.getByRole('button', { name: 'Create and write' }));
     await waitFor(() =>
@@ -231,10 +233,65 @@ describe('NewVideoDialog', () => {
   it('will not create a project video while its folder is not allowed, and says why', async () => {
     const { user } = renderDialog('p1', {
       'studio.projectStorage': async () => storage({ check: ok([INSIDE_PROJECT]) }),
+      'studio.checkRoot': async () => ok([INSIDE_PROJECT]),
     });
     expect(await screen.findByText(/inside the project's folder/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('What is the video about?'), 'Teaser');
     expect(screen.getByRole('button', { name: 'Create and write' })).toBeDisabled();
+  });
+
+  it('saves the video in a folder the user types or pastes, for this video only', async () => {
+    const { user, bridge } = renderDialog('p1');
+    const field = await screen.findByLabelText('Saved in');
+    await waitFor(() => expect(field).toHaveValue(storage().root));
+    await user.clear(field);
+    await user.click(field);
+    await user.paste('D:\Media\Teasers');
+    await waitFor(() =>
+      expect(bridge.$fn('studio.checkRoot')).toHaveBeenCalledWith('D:\Media\Teasers', 'p1'),
+    );
+    await user.type(screen.getByLabelText('What is the video about?'), 'Teaser');
+    await user.click(screen.getByRole('button', { name: 'Create and write' }));
+    await waitFor(() =>
+      expect(bridge.$fn('studio.create')).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'p1', root: 'D:\Media\Teasers' }),
+      ),
+    );
+  });
+
+  it('picks the folder with Browse and can keep it for the project', async () => {
+    const { user, bridge } = renderDialog('p1', {
+      'studio.pickFolder': async () => 'E:\Shop videos',
+      'studio.setProjectRoot': async () => storage({ root: 'E:\Shop videos', isCustom: true }),
+    });
+    await waitFor(() => expect(screen.getByLabelText('Saved in')).toHaveValue(storage().root));
+    await user.click(screen.getByRole('button', { name: 'Browse' }));
+    expect(screen.getByLabelText('Saved in')).toHaveValue('E:\Shop videos');
+    await user.click(
+      screen.getByRole('checkbox', { name: "Use this folder for the project's next videos too" }),
+    );
+    await user.type(screen.getByLabelText('What is the video about?'), 'Teaser');
+    await user.click(screen.getByRole('button', { name: 'Create and write' }));
+    await waitFor(() =>
+      expect(bridge.$fn('studio.setProjectRoot')).toHaveBeenCalledWith('p1', 'E:\Shop videos'),
+    );
+    // The project's folder is now that one, so the video goes there without a folder of its own.
+    await waitFor(() => expect(bridge.$fn('studio.create')).toHaveBeenCalled());
+    expect(bridge.$fn('studio.create').mock.calls[0]?.[0]).not.toHaveProperty('root');
+  });
+
+  it('goes back to the default folder on request', async () => {
+    const { user, bridge } = renderDialog();
+    const field = await screen.findByLabelText('Saved in');
+    await waitFor(() => expect(field).toHaveValue(settings().standaloneRoot));
+    await user.clear(field);
+    await user.type(field, 'D:\Clips');
+    await user.click(screen.getByRole('button', { name: 'Use the default folder' }));
+    expect(field).toHaveValue(settings().standaloneRoot);
+    await user.type(screen.getByLabelText('What is the video about?'), 'Film');
+    await user.click(screen.getByRole('button', { name: 'Create and write' }));
+    await waitFor(() => expect(bridge.$fn('studio.create')).toHaveBeenCalled());
+    expect(bridge.$fn('studio.create').mock.calls[0]?.[0]).not.toHaveProperty('root');
   });
 
   it('shows what went wrong when the video could not be made', async () => {

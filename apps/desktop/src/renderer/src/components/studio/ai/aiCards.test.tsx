@@ -1,5 +1,7 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { generation, proposal } from '../testing/aiFixtures';
 import { document } from '../testing/fixtures';
@@ -244,7 +246,13 @@ describe('AskAiBar', () => {
   it('sends what to change and clears the field once it is on its way', async () => {
     const onAsk = vi.fn(async () => true);
     const { user } = renderWithProviders(
-      <AskAiBar run={{ cliId: 'claude-code' }} onRunChange={vi.fn()} busy={false} onAsk={onAsk} />,
+      <AskAiBar
+        run={{ cliId: 'claude-code' }}
+        onRunChange={vi.fn()}
+        language="fa"
+        busy={false}
+        onAsk={onAsk}
+      />,
     );
     const field = screen.getByLabelText('What should change');
     await user.type(field, 'صحنه‌ی اول را کوتاه‌تر کن{Enter}');
@@ -254,22 +262,70 @@ describe('AskAiBar', () => {
 
   it('keeps the text when the request did not go out, and waits while AI is busy', async () => {
     const onAsk = vi.fn(async () => false);
-    const { user, rerender } = renderWithProviders(
-      <AskAiBar run={{}} onRunChange={vi.fn()} busy={false} onAsk={onAsk} />,
+    const { user, rerender, queryClient } = renderWithProviders(
+      <AskAiBar run={{}} onRunChange={vi.fn()} language="fa" busy={false} onAsk={onAsk} />,
     );
     await user.type(screen.getByLabelText('What should change'), 'shorter{Enter}');
     expect(screen.getByLabelText('What should change')).toHaveValue('shorter');
-    rerender(<AskAiBar run={{}} onRunChange={vi.fn()} busy onAsk={onAsk} />);
+    // The box reads the app settings, so the rerender keeps the query client.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AskAiBar run={{}} onRunChange={vi.fn()} language="fa" busy onAsk={onAsk} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
     expect(screen.getByRole('button', { name: /AI is busy/ })).toBeDisabled();
   });
 
   it('shows which AI makes the change and lets the user pick another', async () => {
     const { user } = renderWithProviders(
-      <AskAiBar run={{}} onRunChange={vi.fn()} busy={false} onAsk={vi.fn()} />,
+      <AskAiBar run={{}} onRunChange={vi.fn()} language="fa" busy={false} onAsk={vi.fn()} />,
     );
     await user.click(screen.getByRole('button', { name: /Default CLI/ }));
     expect(await screen.findByText('Which AI makes the change')).toBeInTheDocument();
     expect(screen.getByText('CLI')).toBeInTheDocument();
+  });
+
+  it('takes several lines, with Shift+Enter starting a new one', async () => {
+    const onAsk = vi.fn(async () => true);
+    const { user } = renderWithProviders(
+      <AskAiBar run={{}} onRunChange={vi.fn()} language="en" busy={false} onAsk={onAsk} />,
+    );
+    const field = screen.getByLabelText('What should change');
+    expect(field.tagName).toBe('TEXTAREA');
+    await user.type(field, 'Shorter opening{Shift>}{Enter}{/Shift}Warmer tone');
+    expect(onAsk).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+    expect(onAsk).toHaveBeenCalledWith('Shorter opening\nWarmer tone');
+  });
+
+  it('turns a rough note into an edit instruction, and offers English for a Persian one', async () => {
+    const ask = vi.fn(async (_input: { prompt: string }) => ({
+      ok: true,
+      text: 'صحنه‌ی اول را به نصف کوتاه کن.',
+    }));
+    const { user } = renderWithProviders(
+      <AskAiBar run={{}} onRunChange={vi.fn()} language="fa" busy={false} onAsk={vi.fn()} />,
+      {
+        bridge: {
+          'settings.get': async () => ({
+            promptBuilderProvider: 'openai',
+            openaiModel: 'gpt-test',
+            speechLanguage: 'fa',
+            speechModel: 'large-v3-turbo',
+          }),
+          'ai.ask': ask,
+        },
+      },
+    );
+    const field = screen.getByLabelText('What should change');
+    await user.type(field, 'اول کوتاه تر');
+    expect(screen.getByRole('button', { name: 'Translate to English' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Write it for me/ }));
+    await waitFor(() => expect(field).toHaveValue('صحنه‌ی اول را به نصف کوتاه کن.'));
+    expect(ask.mock.calls[0]?.[0].prompt).toContain('change the scenario of a short video');
+    expect(ask.mock.calls[0]?.[0].prompt).toContain('Persian');
   });
 });
 
