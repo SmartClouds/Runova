@@ -19,8 +19,8 @@ import {
   TriangleAlert,
   X,
 } from '@/components/icons';
+import { EmptyState } from '@/components/pageKit';
 import { PackagesUpdateDialog } from '@/components/projects/PackagesUpdateDialog';
-import { SectionEmptyState } from '@/components/projects/ProjectDetailChrome';
 import {
   type BumpKind,
   buildPackageNames,
@@ -50,6 +50,20 @@ import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 
 type PackageFilter = 'all' | 'outdated' | 'dev';
+
+/**
+ * The tab's "nothing to list" message. It fills the rest of the window under the toolbar and sits
+ * in the middle of it, so an empty list reads as a state of the page rather than a stray line.
+ */
+function CenteredEmptyState(
+  props: Omit<React.ComponentProps<typeof EmptyState>, 'size' | 'card'>,
+): React.JSX.Element {
+  return (
+    <div className="flex min-h-[max(18rem,calc(100vh-22rem))] items-center justify-center">
+      <EmptyState size="lg" {...props} />
+    </div>
+  );
+}
 type PackageTick = { status: 'running' | 'done' | 'error'; message?: string };
 
 const FILTERS: { id: PackageFilter; label: string }[] = [
@@ -634,7 +648,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
     return (
       <div className="space-y-4">
         {toolbar}
-        <SectionEmptyState
+        <CenteredEmptyState
           icon={Package}
           title="No package manifests in this folder"
           description="Runova looks for package.json, yarn.lock, pnpm-lock.yaml, bun.lock, pubspec.yaml, and .NET project files."
@@ -953,15 +967,44 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
         />
       )}
 
-      {noVisibleMatches && (
-        <p className="text-sm text-muted-foreground">
-          {search
-            ? `No packages match "${search}".`
-            : filter === 'outdated'
-              ? 'Everything here is current.'
-              : 'No dev dependencies in this project.'}
-        </p>
-      )}
+      {noVisibleMatches &&
+        (search ? (
+          <CenteredEmptyState
+            icon={Search}
+            title={`No packages match "${search}"`}
+            description="Try another name, or clear the search to see every package."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+                <X className="h-3.5 w-3.5" />
+                Clear search
+              </Button>
+            }
+          />
+        ) : filter === 'outdated' ? (
+          <CenteredEmptyState
+            icon={Check}
+            title="Everything is up to date"
+            description="Every package in this project is on its latest version. Refresh after you change a manifest to check again."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
+                <ListUnordered className="h-3.5 w-3.5" />
+                Show all packages
+              </Button>
+            }
+          />
+        ) : (
+          <CenteredEmptyState
+            icon={Package}
+            title="No dev dependencies"
+            description="This project does not declare any development-only packages."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
+                <ListUnordered className="h-3.5 w-3.5" />
+                Show all packages
+              </Button>
+            }
+          />
+        ))}
     </div>
   );
 }

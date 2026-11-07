@@ -132,6 +132,30 @@ describe('PackagesTab', () => {
     await user.type(screen.getByRole('textbox', { name: 'Search packages' }), 'http');
     expect(screen.queryByText('Dart SDK')).not.toBeInTheDocument();
   });
+
+  it('says everything is up to date under Outdated and goes back to All from there', async () => {
+    const { user } = renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: {
+        'packages.list': { projectId: 'p1', sections: [bunSection] },
+        'devSetup.detect': async () => ({
+          state: 'found',
+          version: '1.3.2',
+          path: 'x',
+          onPath: true,
+        }),
+        'devSetup.updates': async (ids: string[]) =>
+          Object.fromEntries(ids.map((id) => [id, { state: 'current' }])),
+      },
+    });
+    await screen.findByText('Bun', { selector: 'p' });
+
+    await user.click(screen.getByRole('radio', { name: /Outdated/ }));
+    expect(screen.getByText('Everything is up to date')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Show all packages' }));
+    expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
+    expect(screen.queryByText('Everything is up to date')).not.toBeInTheDocument();
+  });
 });
 
 /**
