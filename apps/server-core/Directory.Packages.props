@@ -17,6 +17,10 @@
     <PackageVersion Include="Tapper.Attributes" Version="1.14.0" />
     <PackageVersion Include="TypedSignalR.Client.TypeScript.Attributes" Version="1.17.0" />
   </ItemGroup>
+  <ItemGroup Label="Mapping">
+    <!-- A source generator: mappers are plain code at build time, no reflection at run time. -->
+    <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
+  </ItemGroup>
   <ItemGroup Label="Docker">
     <!-- The Testcontainers fork of Docker.DotNet (Engine API 29), over the Unix socket. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />

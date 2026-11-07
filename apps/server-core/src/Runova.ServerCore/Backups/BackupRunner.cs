@@ -387,7 +387,7 @@ internal sealed class BackupRunner(
 
         var held = await destination.ListAsync(cancellationToken);
         var doomed = RetentionPlanner.ToDelete(
-            held.Select(m => new StoredBackup(m.BackupId, m.PlanId, m.CreatedAtUnixMs)),
+            held.Select(BackupMapper.ToStored),
             planId,
             new RetentionRule(plan.KeepLast, plan.KeepDays),
             justUploaded,

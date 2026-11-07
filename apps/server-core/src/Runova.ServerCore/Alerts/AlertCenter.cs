@@ -138,7 +138,7 @@ internal sealed partial class AlertCenter(
             alerts = alerts.Where(a => a.ResolvedAt == null);
         }
 
-        return [.. (await alerts.OrderByDescending(a => a.Revision).Take(limit).ToListAsync(cancellationToken)).Select(ToInfo)];
+        return [.. (await alerts.OrderByDescending(a => a.Revision).Take(limit).ToListAsync(cancellationToken)).Select(AlertMapper.ToInfo)];
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ internal sealed partial class AlertCenter(
         var alerts = afterRevision is long after
             ? db.Alerts.AsNoTracking().Where(a => a.Revision > after)
             : db.Alerts.AsNoTracking().Where(a => a.ResolvedAt == null);
-        return [.. (await alerts.OrderBy(a => a.Revision).Take(Math.Clamp(limit, 1, MaxListed)).ToListAsync(cancellationToken)).Select(ToInfo)];
+        return [.. (await alerts.OrderBy(a => a.Revision).Take(Math.Clamp(limit, 1, MaxListed)).ToListAsync(cancellationToken)).Select(AlertMapper.ToInfo)];
     }
 
     /// <summary>The revision of the last change so far, or 0 before any.</summary>
@@ -166,7 +166,7 @@ internal sealed partial class AlertCenter(
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         return [.. (await db.Alerts.AsNoTracking()
             .Where(a => a.Kind == kind && a.ResolvedAt == null)
-            .ToListAsync(cancellationToken)).Select(ToInfo)];
+            .ToListAsync(cancellationToken)).Select(AlertMapper.ToInfo)];
     }
 
     /// <summary>
@@ -239,13 +239,13 @@ internal sealed partial class AlertCenter(
 
             if (!db.ChangeTracker.HasChanges())
             {
-                return ToInfo(alert);
+                return AlertMapper.ToInfo(alert);
             }
 
             alert.Revision = (await db.Alerts.MaxAsync(a => (long?)a.Revision, cancellationToken) ?? 0) + 1;
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            var info = ToInfo(alert);
+            var info = AlertMapper.ToInfo(alert);
             Publish(info);
             return info;
         }
@@ -274,20 +274,6 @@ internal sealed partial class AlertCenter(
 
     private static string Clip(string message) =>
         message.Length <= MaxMessageLength ? message : message[..(MaxMessageLength - 1)] + "…";
-
-    private static AlertInfo ToInfo(Alert alert) => new(
-        alert.Id,
-        alert.Revision,
-        alert.Kind,
-        alert.Severity,
-        alert.Resource,
-        alert.Message,
-        alert.FirstSeenAt,
-        alert.LastSeenAt,
-        alert.Occurrences,
-        alert.AcknowledgedAt,
-        alert.AcknowledgedByName,
-        alert.ResolvedAt);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "An alert subscriber fell too far behind; its stream was ended so it can resubscribe.")]
     private static partial void LogSubscriberDropped(ILogger logger);

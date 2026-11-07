@@ -60,14 +60,7 @@ internal sealed partial class DockerEngine(Uri endpoint, ILogger<DockerEngine> l
             async client =>
             {
                 var info = await client.System.GetSystemInfoAsync(cancellationToken);
-                var backing = info.DriverStatus?
-                    .FirstOrDefault(pair => pair is { Length: 2 } && pair[0] == "Backing Filesystem")?[1];
-                return new EngineInfo(
-                    string.IsNullOrEmpty(info.Driver) ? null : info.Driver,
-                    int.TryParse(info.CgroupVersion, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgroup) ? cgroup : null,
-                    info.NCPU > 0 ? (int)info.NCPU : null,
-                    info.MemTotal > 0 ? info.MemTotal : null,
-                    string.IsNullOrEmpty(backing) ? null : backing);
+                return DockerMapping.ToInfo(info);
             },
             cancellationToken);
 

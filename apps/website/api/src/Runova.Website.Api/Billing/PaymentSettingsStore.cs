@@ -64,16 +64,10 @@ internal sealed class PaymentSettingsStore(AppDbContext db, PaymentSecrets secre
         return From(row);
     }
 
-    public PaymentConfig From(PaymentSettings row) => new(
-        row.StripeEnabled,
-        Blank(row.StripePublishableKey),
+    public PaymentConfig From(PaymentSettings row) => PaymentSettingsMapper.ToConfig(
+        row,
         secrets.Unseal(row.StripeSecretKeySealed),
         secrets.Unseal(row.StripeWebhookSecretSealed),
-        row.NowPaymentsEnabled,
         secrets.Unseal(row.NowPaymentsApiKeySealed),
-        secrets.Unseal(row.NowPaymentsIpnSecretSealed),
-        row.NowPaymentsSandbox,
-        row.CryptoMonths);
-
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        secrets.Unseal(row.NowPaymentsIpnSecretSealed));
 }

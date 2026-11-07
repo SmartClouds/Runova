@@ -290,18 +290,11 @@ internal static class AccountEndpoints
     {
         var roles = await users.GetRolesAsync(user);
         var logins = await users.GetLoginsAsync(user);
-        return new AccountDto(
-            user.Id,
-            user.Email ?? "",
-            user.DisplayName,
-            user.EmailConfirmed,
+        return AccountMapper.ToDto(
+            user,
             await users.HasPasswordAsync(user),
-            user.TwoFactorEnabled,
             [.. logins.Select(l => l.LoginProvider.ToLowerInvariant()).Order(StringComparer.Ordinal)],
-            roles.Contains(Roles.Admin) || roles.Contains(Roles.Editor),
-            user.CreatedAt,
-            user.LastSignInAt,
-            user.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            roles.Contains(Roles.Admin) || roles.Contains(Roles.Editor));
     }
 
     /// <summary>A plain address with an @ and a dot in the domain, as MailAddress reads it, and nothing else around it.</summary>

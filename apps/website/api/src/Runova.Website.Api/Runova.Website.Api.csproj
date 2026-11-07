@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Runova.Website.IntegrationTests" />
+    <InternalsVisibleTo Include="Runova.Website.Tests" />
   </ItemGroup>
 
   <ItemGroup>

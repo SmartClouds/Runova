@@ -21,13 +21,7 @@ internal sealed partial class DockerEngine
                 var users = containers.GroupBy(c => c.ImageID, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
                 return [.. images
                     .OrderByDescending(image => image.Created)
-                    .Select(image => new ImageInfo(
-                        image.ID,
-                        [.. (image.RepoTags ?? []).Where(tag => tag != "<none>:<none>")],
-                        [.. (image.RepoDigests ?? []).Where(digest => digest != "<none>@<none>")],
-                        DockerMapping.UnixMs(image.Created),
-                        image.Size,
-                        users.GetValueOrDefault(image.ID)))];
+                    .Select(image => DockerMapping.ToInfo(image, users.GetValueOrDefault(image.ID)))];
             },
             cancellationToken);
 
@@ -50,7 +44,7 @@ internal sealed partial class DockerEngine
                     new Reporter<JSONMessage>(message =>
                     {
                         failure ??= message.Error?.Message;
-                        progress(new PullProgress(message.ID, message.Status, message.Progress?.Current, message.Progress?.Total, message.Error?.Message));
+                        progress(DockerMapping.ToProgress(message));
                     }),
                     cancellationToken);
                 if (failure is not null)
@@ -72,14 +66,7 @@ internal sealed partial class DockerEngine
                 var containers = await AllContainersAsync(client, cancellationToken);
                 return [.. (volumes.Volumes ?? [])
                     .OrderBy(volume => volume.Name, StringComparer.Ordinal)
-                    .Select(volume => new VolumeInfo(
-                        volume.Name,
-                        volume.Driver ?? "local",
-                        volume.Mountpoint ?? string.Empty,
-                        containers.Count(c => c.Mounts?.Any(m => m.Name == volume.Name) == true),
-                        DockerTime.ToUnixMs(volume.CreatedAt),
-                        volume.UsageData is { Size: >= 0 } usage ? usage.Size : null,
-                        DockerMapping.Label(volume.Labels, DockerMapping.ProjectLabel)))];
+                    .Select(volume => DockerMapping.ToInfo(volume, containers.Count(c => c.Mounts?.Any(m => m.Name == volume.Name) == true)))];
             },
             cancellationToken);
 
@@ -94,16 +81,7 @@ internal sealed partial class DockerEngine
                 var containers = await AllContainersAsync(client, cancellationToken);
                 return [.. networks
                     .OrderBy(network => network.Name, StringComparer.Ordinal)
-                    .Select(network => new NetworkInfo(
-                        network.ID,
-                        network.Name,
-                        network.Driver ?? string.Empty,
-                        network.Scope ?? "local",
-                        network.Internal,
-                        network.Name is "bridge" or "host" or "none",
-                        [.. (network.IPAM?.Config ?? []).Select(config => config.Subnet).Where(subnet => !string.IsNullOrEmpty(subnet))],
-                        containers.Count(c => c.NetworkSettings?.Networks?.ContainsKey(network.Name) == true),
-                        DockerMapping.Label(network.Labels, DockerMapping.ProjectLabel)))];
+                    .Select(network => DockerMapping.ToInfo(network, containers.Count(c => c.NetworkSettings?.Networks?.ContainsKey(network.Name) == true)))];
             },
             cancellationToken);
 

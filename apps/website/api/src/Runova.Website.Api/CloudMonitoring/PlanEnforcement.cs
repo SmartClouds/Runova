@@ -59,7 +59,7 @@ internal sealed class PlanEnforcement(
             }
 
             var entitlement = await entitlements.ForScopeAsync(scopeId, ct);
-            var result = CloudMonitorRules.Enforce(entitlement, [.. monitors.Select(m => new EnforcedMonitor(m.Id, m.CreatedAt, m.IntervalSec, m.Paused))]);
+            var result = CloudMonitorRules.Enforce(entitlement, [.. monitors.Select(CloudMonitorMapper.ToEnforced)]);
             if (!result.Changed)
             {
                 continue;

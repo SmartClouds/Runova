@@ -349,15 +349,12 @@ internal sealed partial class CoreHub
             long? lockedUntil = !disabled && user.LockoutEnabled && user.LockoutEnd is { } end && end > now
                 ? end.ToUnixTimeMilliseconds()
                 : null;
-            return new UserInfo(
-                user.Id,
-                user.UserName ?? string.Empty,
+            return AccountMapper.ToInfo(
+                user,
                 CoreRoles.Highest(roles.Where(r => r.UserId == user.Id).Select(r => r.Name)),
-                user.TwoFactorEnabled,
                 disabled,
                 lockedUntil,
                 signIns.TryGetValue(user.Id, out var last) ? last : null,
-                user.CreatedAt,
                 devices.GetValueOrDefault(user.Id),
                 user.Id == UserId);
         })];

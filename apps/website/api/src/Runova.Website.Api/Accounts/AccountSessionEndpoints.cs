@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -46,7 +45,8 @@ internal static class AccountSessionEndpoints
             .Where(s => s.UserId == user.Id && s.RevokedAt == null)
             .OrderByDescending(s => s.LastSeenAt).ThenByDescending(s => s.Id)
             .Take(200)
-            .Select(s => new SessionDto(s.Id, s.Kind, s.DeviceName, s.Platform, s.AppVersion, s.LastIp, s.CreatedAt, s.LastSeenAt, s.Id == current))
+            .Select(s => new SessionRow { Session = s, Current = s.Id == current })
+            .ProjectToDto()
             .ToListAsync();
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new SessionListDto([.. sessions.OrderByDescending(s => s.Current)]));
@@ -126,16 +126,13 @@ internal static class AccountSessionEndpoints
             .OrderByDescending(a => a.At).ThenByDescending(a => a.Id)
             .Skip(request.Skip).Take(request.Size)
             .ToListAsync();
-        var items = rows.Select(ToDto).ToList();
+        var items = rows.Select(AccountMapper.ToDto).ToList();
 
         var result = Page.Of(items, request, total);
         PageLinks.Set(http, result);
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(result);
     }
-
-    internal static ActivityDto ToDto(Data.Accounts.AccountActivity a) =>
-        new(a.Id, a.Action, a.TeamId, a.Ip, a.Device, a.At, a.Details is null ? null : JsonSerializer.Deserialize<Dictionary<string, object?>>(a.Details));
 
     /// <summary>
     /// Deletes the account and everything that belongs only to it: sessions, activity, links, and

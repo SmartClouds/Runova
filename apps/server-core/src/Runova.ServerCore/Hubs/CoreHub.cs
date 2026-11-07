@@ -165,14 +165,7 @@ internal sealed partial class CoreHub(
         var names = await users.Users
             .Where(u => owners.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.UserName ?? string.Empty);
-        return [.. devices.Select(d => new DeviceInfo(
-            d.Id,
-            names.GetValueOrDefault(d.UserId, string.Empty),
-            d.Name,
-            d.CreatedAt,
-            d.LastSeenAt,
-            d.RevokedAt is not null,
-            d.Id == DeviceId))];
+        return [.. devices.Select(d => AccountMapper.ToInfo(d, names.GetValueOrDefault(d.UserId, string.Empty), d.Id == DeviceId))];
     }
 
     [Authorize(Policy = CorePolicies.Viewer)]
@@ -209,14 +202,7 @@ internal sealed partial class CoreHub(
         var names = await db.Devices
             .Where(d => deviceIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, d => d.Name);
-        return [.. sessions.Select(s => new SessionInfo(
-            s.Id,
-            s.DeviceId,
-            names.GetValueOrDefault(s.DeviceId, string.Empty),
-            s.CreatedAt,
-            s.LastRenewedAt,
-            s.ExpiresAt,
-            s.Id == SessionId))];
+        return [.. sessions.Select(s => AccountMapper.ToInfo(s, names.GetValueOrDefault(s.DeviceId, string.Empty), s.Id == SessionId))];
     }
 
     [Authorize(Policy = CorePolicies.Viewer)]
@@ -402,16 +388,8 @@ internal sealed partial class CoreHub(
             .Where(d => deviceIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, d => d.Name);
         return new AuditPage(
-            [.. shown.Select(e => new AuditEventInfo(
-                e.Id,
-                e.At,
-                e.ActorUserId,
-                e.DeviceId,
-                e.PeerUid,
-                e.Action,
-                e.Target,
-                e.Parameters,
-                e.Result,
+            [.. shown.Select(e => AuditMapper.ToInfo(
+                e,
                 e.ActorUserId is Guid actor ? actorNames.GetValueOrDefault(actor) : null,
                 e.DeviceId is Guid device ? deviceNames.GetValueOrDefault(device) : null))],
             more ? shown[^1].Id : null);
@@ -421,7 +399,7 @@ internal sealed partial class CoreHub(
     public async Task<AuditVerificationInfo> VerifyAudit()
     {
         var verification = await audit.VerifyAsync(Context.ConnectionAborted);
-        return new AuditVerificationInfo(verification.Intact, verification.Checked, verification.BrokenAt);
+        return AuditMapper.ToInfo(verification);
     }
 
     /// <summary>

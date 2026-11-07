@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Runova.Website.Api\Runova.Website.Api.csproj" />
     <ProjectReference Include="..\..\src\Runova.Website.Core\Runova.Website.Core.csproj" />
   </ItemGroup>
 

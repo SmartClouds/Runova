@@ -238,7 +238,7 @@ internal sealed class AddressRebinder(IDbContextFactory<CoreDbContext> contexts,
         List<SiteHostname> sites;
         await using (var db = await contexts.CreateDbContextAsync(cancellationToken))
         {
-            sites = await db.SiteDomains.AsNoTracking().OrderBy(d => d.SiteId).ThenBy(d => d.Position).Select(d => new SiteHostname(d.SiteId, d.Domain)).ToListAsync(cancellationToken);
+            sites = await BackupMapper.ToHostnames(db.SiteDomains.AsNoTracking().OrderBy(d => d.SiteId).ThenBy(d => d.Position)).ToListAsync(cancellationToken);
         }
 
         var records = new List<(CloudflareAddressRecord, string, string)>();

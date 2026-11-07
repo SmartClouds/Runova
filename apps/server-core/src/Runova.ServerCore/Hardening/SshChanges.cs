@@ -145,15 +145,7 @@ internal sealed class SshChangeFiles(string dataDirectory, Guid id)
             SshDecision.Reverted => SshHardeningState.RolledBack,
             _ => SshHardeningState.AwaitingConfirmation,
         };
-        return new SshHardeningChangeInfo(
-            snapshot.Id,
-            state,
-            snapshot.Summary,
-            snapshot.CreatedAtUnixMs,
-            snapshot.DeadlineUnixMs,
-            snapshot.RequestedBy,
-            result?.AtUnixMs,
-            result?.Error);
+        return SshChangeMapper.ToInfo(snapshot, state, result?.AtUnixMs, result?.Error);
     }
 
     private static T? Read<T>(string path, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)

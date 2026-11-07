@@ -64,6 +64,12 @@ public class PostMapperTests
     }
 
     [Fact]
+    public void A_tag_takes_its_post_count_from_the_caller()
+    {
+        Assert.Equal(new TagDto("docker", "Docker", 4), PostMapper.ToTagDto(new Tag { Id = 1, Slug = "docker", Name = "Docker" }, 4));
+    }
+
+    [Fact]
     public void A_media_file_maps_to_its_dto()
     {
         var file = new MediaFile

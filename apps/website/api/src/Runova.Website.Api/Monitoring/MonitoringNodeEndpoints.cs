@@ -530,11 +530,7 @@ internal static partial class MonitoringNodeEndpoints
         var status = node.Status == NodeStatuses.Online && (node.LastSeenAt is null || now - node.LastSeenAt.Value > options.OfflineAfter)
             ? NodeStatuses.Offline
             : node.Status;
-        return new MonitoringNodeDto(
-            node.Id, node.Name, node.Region, node.Capacity, status, node.Draining, node.SoftwareVersion, node.RemoteAddress,
-            node.EnrolledAt, node.ConnectedAt, node.LastSeenAt, node.Monitors, node.ChecksLastMinute, node.QueuedResults, node.LagMs,
-            node.AllowedAddresses, node.EnrollmentTokenHash is null ? null : node.EnrollmentTokenExpiresAt, certificateExpires,
-            node.CreatedAt, node.RevokedAt, node.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return MonitoringNodeMapper.ToDto(node, status, certificateExpires);
     }
 
     private static ProblemHttpResult NotFound() => ApiProblems.Of(ProblemTypes.NotFound, "There is no such monitoring node.");

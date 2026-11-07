@@ -93,7 +93,7 @@ internal static class TeamEndpoints
     {
         var count = await db.TeamMembers.CountAsync(m => m.TeamId == team.Id);
         var scope = await db.SyncScopes.Where(s => s.TeamId == team.Id).Select(s => s.Id).SingleAsync();
-        return new TeamDto(team.Id, team.Name, role, count, scope, team.CreatedAt);
+        return TeamMapper.ToDto(team, role, count, scope);
     }
 
     private static string? NameProblem(string? name) =>
@@ -218,7 +218,8 @@ internal static class TeamEndpoints
         }
 
         var members = await db.TeamMembers.Where(m => m.TeamId == id)
-            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new TeamMemberDto(u.Id, u.Email ?? "", u.DisplayName, m.Role, m.JoinedAt))
+            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new TeamMemberRow { Member = m, User = u })
+            .ProjectToDto()
             .ToListAsync();
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new TeamMemberListDto([.. members.OrderBy(m => TeamRoles.All.ToList().IndexOf(m.Role)).ThenBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)]));
@@ -291,7 +292,7 @@ internal static class TeamEndpoints
         }
 
         var user = await db.Users.SingleAsync(u => u.Id == userId);
-        return TypedResults.Ok(new TeamMemberDto(user.Id, user.Email ?? "", user.DisplayName, target.Role, target.JoinedAt));
+        return TypedResults.Ok(TeamMapper.ToDto(new TeamMemberRow { Member = target, User = user }));
     }
 
     /// <summary>Removes a member, or leaves when it is the caller. Their access to the team's items ends at once.</summary>
@@ -362,7 +363,7 @@ internal static class TeamEndpoints
         var now = time.GetUtcNow();
         var items = await db.TeamInvitations.Where(i => i.TeamId == id && i.ExpiresAt > now)
             .OrderBy(i => i.CreatedAt)
-            .Select(i => new TeamInvitationDto(i.Id, i.Email, i.Role, i.CreatedAt, i.ExpiresAt))
+            .ProjectToDto()
             .ToListAsync();
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new TeamInvitationListDto(items));
@@ -434,7 +435,7 @@ internal static class TeamEndpoints
         activity.Add(me, ActivityActions.MemberInvited, new { email, role = request.Role }, id);
         await db.SaveChangesAsync();
         outbox.SendSoon();
-        return TypedResults.Created((string?)null, new TeamInvitationDto(invitation.Id, invitation.Email, invitation.Role, invitation.CreatedAt, invitation.ExpiresAt));
+        return TypedResults.Created((string?)null, TeamMapper.ToDto(invitation));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> WithdrawAsync(
@@ -477,7 +478,7 @@ internal static class TeamEndpoints
         var query = db.AccountActivities.AsNoTracking().Where(a => a.TeamId == id);
         var total = await query.CountAsync();
         var rows = await query.OrderByDescending(a => a.At).ThenByDescending(a => a.Id).Skip(request.Skip).Take(request.Size).ToListAsync();
-        var result = Page.Of(rows.Select(AccountSessionEndpoints.ToDto).ToList(), request, total);
+        var result = Page.Of(rows.Select(AccountMapper.ToDto).ToList(), request, total);
         PageLinks.Set(http, result);
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(result);
@@ -496,7 +497,8 @@ internal static class TeamEndpoints
     {
         var items = await (await OpenForAsync(http, db, users, time))
             .Join(db.Teams, i => i.TeamId, t => t.Id, (i, t) => new { i, t })
-            .Join(db.Users, x => x.i.InvitedBy, u => u.Id, (x, u) => new MyInvitationDto(x.i.Id, x.t.Id, x.t.Name, x.i.Role, u.DisplayName, x.i.ExpiresAt))
+            .Join(db.Users, x => x.i.InvitedBy, u => u.Id, (x, u) => new MyInvitationRow { Invitation = x.i, Team = x.t, Inviter = u })
+            .ProjectToDto()
             .ToListAsync();
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new MyInvitationListDto(items));

@@ -183,21 +183,6 @@ internal static partial class SyncEndpoints
         return api;
     }
 
-    internal static SyncScopeDto ToDto(ScopeAccess access) => new(
-        access.Scope.Id,
-        access.Scope.Kind,
-        access.Scope.TeamId,
-        access.Name,
-        access.CanWrite,
-        access.CanManage,
-        access.Scope.LatestRevision,
-        access.Scope.Epoch,
-        access.Scope.KeyVersion,
-        new SyncPolicyDto(access.Scope.EncryptServers, access.Scope.EncryptEnvironments, access.Scope.EncryptEverything));
-
-    private static SyncRecordDto ToDto(SyncRecord r) =>
-        new(r.Collection, r.ItemId, r.Revision, r.Deleted, r.Encryption, r.KeyVersion, r.Payload, r.UpdatedAt);
-
     private static ProblemHttpResult NotFound() => ApiProblems.Of(ProblemTypes.NotFound, "There is no such sync scope for this account.");
 
     private static ProblemHttpResult NotManager() =>
@@ -210,7 +195,7 @@ internal static partial class SyncEndpoints
     {
         var scopes = await access.ListAsync(UserId(http));
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new SyncScopeListDto([.. scopes.Select(ToDto)]));
+        return TypedResults.Ok(new SyncScopeListDto([.. scopes.Select(SyncMapper.ToDto)]));
     }
 
     private static async Task<Results<Ok<SyncScopeDto>, ValidationProblem, ProblemHttpResult>> PatchAsync(
@@ -259,7 +244,7 @@ internal static partial class SyncEndpoints
 
         activity.Add(UserId(http), ActivityActions.SyncPolicyChanged, new { scopeId = id, policy = new { found.Scope.EncryptServers, found.Scope.EncryptEnvironments, found.Scope.EncryptEverything } }, found.Scope.TeamId);
         await db.SaveChangesAsync();
-        return TypedResults.Ok(ToDto(found));
+        return TypedResults.Ok(SyncMapper.ToDto(found));
     }
 
     private static async Task<Results<Ok<SyncChangesDto>, ValidationProblem, ProblemHttpResult>> ChangesAsync(
@@ -284,7 +269,7 @@ internal static partial class SyncEndpoints
             .ToListAsync();
         var page = rows.Take(take).ToList();
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new SyncChangesDto([.. page.Select(ToDto)], page.Count > 0 ? page[^1].Revision : from, rows.Count > take));
+        return TypedResults.Ok(new SyncChangesDto([.. page.Select(SyncMapper.ToDto)], page.Count > 0 ? page[^1].Revision : from, rows.Count > take));
     }
 
     private static async Task<Results<Ok<SyncPushResultDto>, ValidationProblem, ProblemHttpResult>> PushAsync(
@@ -388,7 +373,7 @@ internal static partial class SyncEndpoints
             {
                 if (current is not null)
                 {
-                    conflicts.Add(ToDto(current));
+                    conflicts.Add(SyncMapper.ToDto(current));
                 }
 
                 continue;
@@ -416,7 +401,7 @@ internal static partial class SyncEndpoints
                 db.SyncRecords.Add(record);
             }
 
-            accepted.Add(new SyncAcceptedDto(record.Collection, record.ItemId, record.Revision));
+            accepted.Add(SyncMapper.ToAcceptedDto(record));
         }
 
         await db.SaveChangesAsync();

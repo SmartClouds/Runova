@@ -22,6 +22,9 @@ public static partial class PostMapper
     [MapPropertyFromSource(nameof(PostAdminDto.Author), Use = nameof(Author))]
     public static partial PostAdminDto ToAdminDto(Post post, string url, CoverImageDto? coverImage, NewsCreatorDto? createdBy);
 
+    /// <summary>The caller counts the posts that carry the tag.</summary>
+    public static partial TagDto ToTagDto(Tag tag, int postCount);
+
     private static partial PostTagDto ToDto(Tag tag);
 
     private static PostAuthorDto Author(Post post) => new(post.AuthorName);

@@ -50,9 +50,6 @@ internal static class NotificationEndpoints
         return api;
     }
 
-    internal static UserNotificationDto ToDto(UserNotification n) =>
-        new(n.Id, n.Kind, n.Title, n.Body, n.Severity, n.ScopeId, n.ItemId, n.InventoryId, n.CreatedAt, n.ReadAt);
-
     private static async Task<Results<Ok<NotificationPageDto>, ValidationProblem>> ListAsync(
         int? page, int? pageSize, bool? unread, HttpContext http, AppDbContext db)
     {
@@ -70,7 +67,7 @@ internal static class NotificationEndpoints
         var rows = await listed.OrderByDescending(n => n.CreatedAt).ThenByDescending(n => n.Id)
             .Skip(request.Skip).Take(request.Size)
             .ToListAsync();
-        var result = Page.Of([.. rows.Select(ToDto)], request, total);
+        var result = Page.Of([.. rows.Select(NotificationMapper.ToDto)], request, total);
         PageLinks.Set(http, result);
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new NotificationPageDto(result.Items, result.Number, result.PageSize, result.TotalItems, result.TotalPages, unreadCount));
@@ -102,7 +99,7 @@ internal static class NotificationEndpoints
 
         notification.ReadAt = read ? notification.ReadAt ?? time.GetUtcNow() : null;
         await db.SaveChangesAsync();
-        return TypedResults.Ok(ToDto(notification));
+        return TypedResults.Ok(NotificationMapper.ToDto(notification));
     }
 
     /// <summary>Marks every message read, or only those made before <c>before</c> so one that came in meanwhile stays new.</summary>

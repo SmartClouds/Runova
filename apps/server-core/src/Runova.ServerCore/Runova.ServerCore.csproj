@@ -61,6 +61,8 @@
     <PackageReference Include="SSH.NET" />
     <PackageReference Include="OpenTelemetry" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <!-- Generator and attributes only; nothing of Mapperly ships at run time. -->
+    <PackageReference Include="Riok.Mapperly" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Tapper.Attributes" />
     <PackageReference Include="TypedSignalR.Client.TypeScript.Attributes" />
     <PackageReference Include="WTelegramClient" />

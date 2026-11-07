@@ -194,19 +194,10 @@ internal sealed partial class AcmeIssuer(
     public async Task<AcmeCertificateRecord> RenewAsync(string name, IProgress<AcmeIssueProgress>? progress, CancellationToken cancellationToken)
     {
         var existing = await LoadCertificateAsync(name, cancellationToken);
-        return await IssueAsync(
-            new AcmeIssueRequest
-            {
-                Name = existing.Name,
-                Domains = existing.Domains,
-                KeyType = existing.KeyType,
-                PreferredChain = existing.PreferredChain,
 
-                // A certificate from another CA (staging, say) is not this CA's to replace.
-                Replaces = existing.DirectoryUrl == client.DirectoryUrl ? existing.CertificateId : null,
-            },
-            progress,
-            cancellationToken);
+        // A certificate from another CA (staging, say) is not this CA's to replace.
+        var replaces = existing.DirectoryUrl == client.DirectoryUrl ? existing.CertificateId : null;
+        return await IssueAsync(AcmeMapper.ToRenewal(existing, replaces), progress, cancellationToken);
     }
 
     /// <summary>The CA's suggested renewal window for the stored certificate (RFC 9773).</summary>

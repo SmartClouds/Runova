@@ -50,7 +50,7 @@ internal sealed class AlertSettingsStore(AppDbContext db)
     public static AlertPreferences ToPreferences(DependencyAlertSettings? settings) =>
         settings is null
             ? AlertPreferences.Defaults
-            : new AlertPreferences(settings.Enabled, settings.SecurityMinSeverity, settings.Deprecated, settings.Major, settings.Minor, settings.Patch);
+            : DependencyMapper.ToPreferences(settings);
 }
 
 /// <summary>When an inventory is checked. Tests replace <see cref="Next"/> to pin the times down.</summary>

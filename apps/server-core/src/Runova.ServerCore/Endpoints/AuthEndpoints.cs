@@ -106,7 +106,7 @@ internal static class AuthEndpoints
             return Refuse(AuthErrorCode.RateLimited, "Too many sign-ins at once. Try again shortly.", StatusCodes.Status429TooManyRequests);
         }
 
-        return TypedResults.Ok(new ChallengeResponse(issued.Id, issued.Nonce, issued.ExpiresAt));
+        return TypedResults.Ok(AuthMapper.ToResponse(issued));
     }
 
     private static async Task<Results<Ok<SignedInResponse>, JsonHttpResult<AuthError>>> LoginAsync(
@@ -392,7 +392,7 @@ internal static class AuthEndpoints
             sessionId,
             token,
             expiresAt,
-            new SignedInUser(user.Id, user.UserName ?? string.Empty, roles, await users.GetTwoFactorEnabledAsync(user)));
+            AuthMapper.ToSignedInUser(user, roles, await users.GetTwoFactorEnabledAsync(user)));
     }
 
     /// <summary>A 64-byte P1363 signature in base64 or base64url, or null.</summary>

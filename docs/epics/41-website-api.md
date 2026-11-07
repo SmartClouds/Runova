@@ -139,10 +139,14 @@ A package outside this list is fine when a task needs it, under the package rule
 
 ## Mapping
 
-Riok.Mapperly mappers live in Runova.Website.Core, one `[Mapper]` partial class per resource, with
-`RequiredMappingStrategy = Target` so a new DTO property without a source fails the build. Mapping
-to DTOs never includes password hashes, security stamps, tokens, secret hashes or signing keys; a
-unit test per mapper fails when a property with one of those names appears in its output.
+Riok.Mapperly mappers live next to their DTOs, in Runova.Website.Core or Runova.Website.Api, one
+`[Mapper]` partial class per resource, with `RequiredMappingStrategy = Target` (set for each
+assembly) so a new DTO property without a source fails the build. Values the source does not hold
+are extra parameters of the mapper method. A query that returns DTOs uses the mapper's `IQueryable`
+projection, so it still runs in SQL; a join projects a small row record holding the joined
+entities. Mapping to DTOs never includes password hashes, security stamps, tokens, secret hashes or
+signing keys; a unit test per mapper fails when a property with one of those names appears in its
+output.
 
 ## Content
 

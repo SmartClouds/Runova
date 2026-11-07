@@ -65,7 +65,7 @@ public sealed class FirewallEvaluationTests
     [Fact]
     public void The_app_gets_rules_as_plain_records()
     {
-        var info = FirewallEvaluation.ToInfo(Allow(5432, "10.0.0.0/8") with { Comment = "db", ReadOnlyReason = "made by hand" });
+        var info = FirewallMapper.ToInfo(Allow(5432, "10.0.0.0/8") with { Comment = "db", ReadOnlyReason = "made by hand" });
 
         Assert.Equal(FirewallAction.Allow, info.Action);
         Assert.Equal(5432, info.Port);

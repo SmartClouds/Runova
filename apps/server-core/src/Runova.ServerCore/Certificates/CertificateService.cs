@@ -46,7 +46,7 @@ internal sealed partial class CertificateService(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var rows = await db.Certificates.AsNoTracking().OrderBy(c => c.SiteId).ToListAsync(cancellationToken);
-        return [.. rows.Select(row => CertificateViews.ToInfo(row, time.GetUtcNow()))];
+        return [.. rows.Select(row => CertificateMapper.ToInfo(row, time.GetUtcNow()))];
     }
 
     /// <summary>Starts the issuance job. Refused at once when the site does not exist.</summary>
@@ -153,7 +153,7 @@ internal sealed partial class CertificateService(
         {
             try
             {
-                await issuers.For(new Uri(directory)).RevokeAsync(row.SiteId, ToAcme(request.Reason), cancellationToken);
+                await issuers.For(new Uri(directory)).RevokeAsync(row.SiteId, CertificateMapper.ToAcme(request.Reason), cancellationToken);
             }
             catch (AcmeProblemException error) when (error.ErrorType == AcmeErrorType.AlreadyRevoked)
             {
@@ -369,14 +369,6 @@ internal sealed partial class CertificateService(
     }
 
     private static string Detail(AcmeValidationException error) => error.Problem?.Describe() ?? "no detail";
-
-    private static AcmeRevocationReason ToAcme(CertificateRevocationReason reason) => reason switch
-    {
-        CertificateRevocationReason.KeyCompromise => AcmeRevocationReason.KeyCompromise,
-        CertificateRevocationReason.Superseded => AcmeRevocationReason.Superseded,
-        CertificateRevocationReason.CessationOfOperation => AcmeRevocationReason.CessationOfOperation,
-        _ => AcmeRevocationReason.Unspecified,
-    };
 
     [LoggerMessage(Level = LogLevel.Information, Message = "The certificate of {SiteId} was already revoked at the CA.")]
     private static partial void LogAlreadyRevoked(ILogger logger, string siteId);

@@ -177,18 +177,7 @@ internal sealed partial class JobEngine(
         AcquireLocks(id, request.Locks);
         try
         {
-            var row = new Job
-            {
-                Id = id,
-                Kind = request.Kind,
-                Title = request.Title,
-                State = JobState.Running,
-                Resource = request.Resource,
-                RequestedBy = request.RequestedBy,
-                RequestedByName = request.RequestedByName,
-                CreatedAt = Now,
-                Cancellable = request.Cancellable,
-            };
+            var row = JobMapper.ToRow(request, id, Now);
             await using (var db = await contexts.CreateDbContextAsync(cancellationToken))
             {
                 db.Jobs.Add(row);
@@ -235,7 +224,7 @@ internal sealed partial class JobEngine(
 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var row = await db.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
-        return row is null ? null : ToInfo(row, row.LogLines);
+        return row is null ? null : JobMapper.ToInfo(row, row.LogLines);
     }
 
     /// <summary>The job's final state once it has one.</summary>
@@ -266,7 +255,7 @@ internal sealed partial class JobEngine(
 
         var page = await rows.OrderByDescending(j => j.CreatedAt).Take(limit + 1).ToListAsync(cancellationToken);
         var shown = page.Take(limit)
-            .Select(row => _running.TryGetValue(row.Id, out var running) ? running.Snapshot() : ToInfo(row, row.LogLines))
+            .Select(row => _running.TryGetValue(row.Id, out var running) ? running.Snapshot() : JobMapper.ToInfo(row, row.LogLines))
             .ToArray();
         return new JobPage(shown, page.Count > limit ? shown[^1].CreatedAtUnixMs : null);
     }
@@ -435,7 +424,7 @@ internal sealed partial class JobEngine(
     {
         job.Log.Dispose();
         var finishedAt = Now;
-        var final = ToInfo(job.Row, job.Log.Count) with
+        var final = JobMapper.ToInfo(job.Row, job.Log.Count) with
         {
             State = state,
             FinishedAtUnixMs = finishedAt,
@@ -553,20 +542,6 @@ internal sealed partial class JobEngine(
     internal static string KindName<T>(T value)
         where T : struct, Enum => JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
 
-    private static JobInfo ToInfo(Job row, long logLines) => new(
-        row.Id,
-        row.Kind,
-        row.Title,
-        row.State,
-        row.CreatedAt,
-        logLines,
-        row.Cancellable && row.State == JobState.Running,
-        row.Resource,
-        row.RequestedByName,
-        row.FinishedAt,
-        row.ExitCode,
-        row.Error);
-
     private static string Clip(string text) => text.Length <= MaxErrorLength ? text : text[..(MaxErrorLength - 1)] + "…";
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Marked {Count} jobs interrupted: they were running when the core last stopped.")]
@@ -606,7 +581,7 @@ internal sealed partial class JobEngine(
 
         public JobInfo? Final { get; set; }
 
-        public JobInfo Snapshot() => Final ?? ToInfo(Row, Log.Count);
+        public JobInfo Snapshot() => Final ?? JobMapper.ToInfo(Row, Log.Count);
     }
 }
 

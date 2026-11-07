@@ -13,7 +13,7 @@ internal sealed class StoredBackups(BackupCenter center, IBackupDestinationFacto
         var manifests = await opened.ListAsync(cancellationToken);
         return [.. manifests
             .OrderByDescending(m => m.CreatedAtUnixMs)
-            .Select(m => new StoredBackupInfo(m.BackupId, destinationId, m.PlanId, m.ServerName, m.CreatedAtUnixMs, m.SizeBytes, m.Parts.Count, m.CoreVersion, m.KeyId))];
+            .Select(m => BackupMapper.ToStoredInfo(m, destinationId))];
     }
 
     public async Task<bool> DeleteAsync(Guid destinationId, Guid backupId, CancellationToken cancellationToken)

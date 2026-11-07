@@ -108,7 +108,7 @@ internal sealed partial class StackOperations(
             .ToArray();
         return new StackDetails(
             Info(stack, rows.Count, lastDeployed, containers),
-            [.. rows.Take(MaxRevisionsShown).Select(ToInfo)],
+            [.. rows.Take(MaxRevisionsShown).Select(StackMapper.ToInfo)],
             services);
     }
 
@@ -190,7 +190,7 @@ internal sealed partial class StackOperations(
             await AcknowledgmentAuditAsync(caller, stack.Name, row.Number, id, cancellationToken);
         }
 
-        return ToInfo(row);
+        return StackMapper.ToInfo(row);
     }
 
     internal async Task<StackRevisionRecord> RevisionAsync(Guid stackId, int number, CancellationToken cancellationToken)
@@ -236,48 +236,7 @@ internal sealed partial class StackOperations(
                 : running == containers.Count && containers.All(c => c.Health != ContainerHealth.Unhealthy)
                     ? StackStatus.Running
                     : running > 0 ? StackStatus.Degraded : StackStatus.Stopped;
-        return new StackInfo(
-            stack.Id,
-            stack.Name,
-            status,
-            stack.CreatedAt,
-            stack.UpdatedAt,
-            revisionCount,
-            stack.LiveRevision,
-            stack.Description,
-            SourceOf(stack.ProjectId, stack.ProjectName, stack.ComposePath, stack.EnvironmentId, stack.EnvironmentName),
-            running,
-            containers.Count,
-            holder?.Id);
-    }
-
-    internal static StackRevisionInfo ToInfo(StackRevisionRecord row)
-    {
-        var findings = Read<StackRisk[]>(row.Findings);
-        var acknowledged = Read<string[]>(row.AcknowledgedRisks);
-        return new StackRevisionInfo(
-            row.StackId,
-            row.Number,
-            Enum.Parse<StackRevisionState>(row.State),
-            row.CreatedAt,
-            row.ComposeSha256,
-            Read<string[]>(row.EnvKeys),
-            Read<string[]>(row.Services),
-            Read<string[]>(row.ProxiedServices),
-            row.HasBuildContext,
-            Read<StackDeployStep[]>(row.Steps),
-            findings,
-            acknowledged,
-            Unacknowledged(findings, acknowledged),
-            Read<StackPortBinding[]>(row.Bindings),
-            row.CreatedBy,
-            row.JobId,
-            row.DeployedAt,
-            row.FinishedAt,
-            row.RollbackOf,
-            row.Error,
-            SourceOf(row.ProjectId, row.ProjectName, row.ComposePath, row.EnvironmentId, row.EnvironmentName),
-            Read<StackServiceLimits[]>(row.Limits));
+        return StackMapper.ToInfo(stack, status, revisionCount, running, containers.Count, holder?.Id);
     }
 
     internal static string[] Unacknowledged(IEnumerable<StackRisk> findings, IEnumerable<string> acknowledged)
@@ -285,11 +244,6 @@ internal sealed partial class StackOperations(
         var done = acknowledged.ToHashSet(StringComparer.Ordinal);
         return [.. findings.Where(f => ComposeConfigLint.NeedsAcknowledgment(f.Severity) && !done.Contains(f.Id)).Select(f => f.Id)];
     }
-
-    private static StackSource? SourceOf(string? projectId, string? projectName, string? composePath, string? environmentId, string? environmentName) =>
-        projectId is null && projectName is null && composePath is null && environmentId is null && environmentName is null
-            ? null
-            : new StackSource(projectId, projectName, composePath, environmentId, environmentName);
 
     private static void CheckSource(StackSource? source)
     {
