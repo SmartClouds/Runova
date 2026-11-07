@@ -3,7 +3,16 @@ import { getSecurityScanner, SECURITY_SCANNERS } from '@runova/core';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, History, Play, RefreshCw, Shield } from '@/components/icons';
+import {
+  ArrowLeft,
+  ChevronDown,
+  History,
+  Play,
+  RefreshCw,
+  Shield,
+  Trash2,
+  TriangleAlert,
+} from '@/components/icons';
 import { ProjectEmptyState } from '@/components/projects/ProjectDetailChrome';
 import { SECURITY_SETUP_ROUTE } from '@/components/tools/routes';
 import { Badge } from '@/components/ui/badge';
@@ -30,8 +39,8 @@ import { useSecurityScan } from './useSecurityScan';
  * The project's Security section: pick scanners, run them, read one merged report, hand it to an
  * agent to fix.
  *
- * The section is never hidden when nothing is installed. Someone who has not installed a scanner
- * is exactly the person who needs to be told these exist.
+ * Never hidden when nothing is installed. Someone who has not installed a scanner is exactly the
+ * person who needs to be told these exist.
  */
 export function SecurityTab({ project }: { project: Project }): React.JSX.Element {
   const navigate = useNavigate();
@@ -39,19 +48,25 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
   const {
     preflight,
     preflightLoading,
+    preflightError,
     refreshPreflight,
     report,
     reportLoading,
+    viewingOldScan,
+    viewScan,
+    backToLatest,
+    deleteScan,
     history,
     config,
+    configLoading,
     saveConfig,
     selection,
     toggleScanner,
     running,
+    runScannerIds,
     progress,
     runScan,
     cancel,
-    loadScan,
   } = useSecurityScan(project.id);
 
   const anyReady = preflight.some((p) => p.ready);
@@ -72,12 +87,63 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
       });
       if (!confirmed) return;
     }
-    runScan({ scannerIds: selection });
+    runScan();
   }
 
-  // `running` guards this too: a scan started here keeps going in the main process, and a tool
-  // uninstalled mid-run must not replace a live scan with an empty state.
-  if (!anyReady && !preflightLoading && !report && !running) {
+  const picker = (
+    <ScannerPicker
+      preflight={preflight}
+      loading={preflightLoading}
+      selection={selection}
+      onToggle={toggleScanner}
+      onConfigure={setSetupScanner}
+      onRecheck={() => void refreshPreflight()}
+      disabled={running}
+      configLoading={configLoading}
+    />
+  );
+
+  const setupDialog = (
+    <ScannerSetupDialog
+      // Keyed so each scanner's form starts from that scanner's saved settings rather than
+      // inheriting a draft from whichever dialog was opened last.
+      key={setupScanner ?? 'none'}
+      scannerId={setupScanner}
+      config={config}
+      projectName={project.name}
+      onClose={() => setSetupScanner(null)}
+      onSave={(patch) => {
+        saveConfig.mutate(patch, {
+          onSuccess: () => toast.success('Scanner settings saved.'),
+        });
+      }}
+      onSuggestLanguage={() => window.runova.security.suggestCodeqlLanguage(project.id)}
+    />
+  );
+
+  // A failed check says nothing about what is installed, so it never shows the "install a scanner"
+  // empty state. `running` guards this too: a scan started here keeps going in the main process.
+  if (preflightError && !running) {
+    return (
+      <div className="space-y-4">
+        <Card className="glass border-destructive/40">
+          <CardContent className="flex flex-wrap items-start gap-3 p-4">
+            <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">Could not check the scanners</p>
+              <p className="mt-0.5 break-words text-xs text-muted-foreground">{preflightError}</p>
+            </div>
+            <Button variant="outline" onClick={() => void refreshPreflight()}>
+              <RefreshCw className="h-4 w-4" /> Try again
+            </Button>
+          </CardContent>
+        </Card>
+        {report && <SecurityReport record={report} />}
+      </div>
+    );
+  }
+
+  if (!anyReady && !preflightLoading && !reportLoading && !report && !running) {
     return (
       <div className="space-y-4">
         <ProjectEmptyState
@@ -95,29 +161,8 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
             </div>
           }
         />
-        <ScannerPicker
-          preflight={preflight}
-          loading={preflightLoading}
-          selection={selection}
-          onToggle={toggleScanner}
-          onConfigure={setSetupScanner}
-          disabled={running}
-        />
-        <ScannerSetupDialog
-          // Keyed so each scanner's form starts from that scanner's saved settings rather than
-          // inheriting a draft from whichever dialog was opened last.
-          key={setupScanner ?? 'none'}
-          scannerId={setupScanner}
-          config={config}
-          projectName={project.name}
-          onClose={() => setSetupScanner(null)}
-          onSave={(patch) => {
-            saveConfig.mutate(patch, {
-              onSuccess: () => toast.success('Scanner settings saved.'),
-            });
-          }}
-          onSuggestLanguage={() => window.runova.security.suggestCodeqlLanguage(project.id)}
-        />
+        {picker}
+        {setupDialog}
       </div>
     );
   }
@@ -150,18 +195,31 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
                     <ChevronDown className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel>Previous scans</DropdownMenuLabel>
-                  {history.map((entry) => (
-                    <DropdownMenuItem key={entry.id} onClick={() => void loadScan(entry.id)}>
-                      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                        <span className="truncate text-xs">
-                          {new Date(entry.createdAt).toLocaleString()}
-                        </span>
-                        <Badge variant="outline">{entry.score}</Badge>
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
+                  {history.map((entry) => {
+                    const when = new Date(entry.createdAt).toLocaleString();
+                    return (
+                      <div key={entry.id} className="flex items-center gap-1">
+                        <DropdownMenuItem
+                          className="min-w-0 flex-1"
+                          onClick={() => void viewScan(entry.id)}
+                        >
+                          <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                            <span className="truncate text-xs">{when}</span>
+                            <Badge variant="outline">{entry.score}</Badge>
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          aria-label={`Delete scan from ${when}`}
+                          className="shrink-0 px-2 text-muted-foreground"
+                          onClick={() => void deleteScan(entry.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </DropdownMenuItem>
+                      </div>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -181,7 +239,7 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
             {report && !running && <SecurityCopyMenu record={report} />}
 
             <SimpleTooltip
-              label={selection.length === 0 ? 'Select at least one scanner first' : ''}
+              label={selection.length === 0 ? 'Select at least one ready scanner first' : ''}
               wrapTrigger
             >
               <Button disabled={!canRun} onClick={() => void startScan()}>
@@ -193,16 +251,22 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
         </CardContent>
       </Card>
 
-      <ScannerPicker
-        preflight={preflight}
-        loading={preflightLoading}
-        selection={selection}
-        onToggle={toggleScanner}
-        onConfigure={setSetupScanner}
-        disabled={running}
-      />
+      {picker}
 
-      {running && <ScanProgressPanel selection={selection} progress={progress} onCancel={cancel} />}
+      {running && (
+        <ScanProgressPanel selection={runScannerIds} progress={progress} onCancel={cancel} />
+      )}
+
+      {viewingOldScan && report && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            Viewing a scan from {new Date(report.createdAt).toLocaleString()}.
+          </p>
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={backToLatest}>
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to latest
+          </Button>
+        </div>
+      )}
 
       {/* A report is a result, not a starting state, so the card shimmers in its own shape rather
           than blanking the page. */}
@@ -223,21 +287,7 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
         />
       ) : null}
 
-      <ScannerSetupDialog
-        // Keyed so each scanner's form starts from that scanner's saved settings rather than
-        // inheriting a draft from whichever dialog was opened last.
-        key={setupScanner ?? 'none'}
-        scannerId={setupScanner}
-        config={config}
-        projectName={project.name}
-        onClose={() => setSetupScanner(null)}
-        onSave={(patch) => {
-          saveConfig.mutate(patch, {
-            onSuccess: () => toast.success('Scanner settings saved.'),
-          });
-        }}
-        onSuggestLanguage={() => window.runova.security.suggestCodeqlLanguage(project.id)}
-      />
+      {setupDialog}
     </div>
   );
 }

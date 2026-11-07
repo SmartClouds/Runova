@@ -23,10 +23,16 @@ import type { ActiveScan } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { broadcastToWindows } from '../ipc/send';
 import { securityScanDb } from '../securityScanDb';
-import { SCANNER_ADAPTERS, type SecurityScannerConfig } from './adapters';
+import {
+  type AdapterOutcome,
+  SCANNER_ADAPTERS,
+  type ScanContext,
+  type ScannerAdapter,
+  type SecurityScannerConfig,
+} from './adapters';
 import type { ScanCancelToken } from './exec';
 import { trimLog } from './exec';
-import { checkAllPreflight, clearPreflightCache } from './preflight';
+import { checkScannerPreflight, clearPreflightCache, type PreflightInput } from './preflight';
 
 /**
  * Orchestrates one security scan.
@@ -67,6 +73,7 @@ const runningScans = new Map<string, RunState>();
 const cancelledBeforeStart = new Set<string>();
 
 const GLOBAL_BUDGET_MS = 90 * 60_000;
+const CANCEL_BEFORE_START_TTL_MS = 60_000;
 
 export interface RunScanInput {
   projectId: string;
@@ -79,7 +86,11 @@ export interface RunScanInput {
 export function cancelSecurityScan(runId: string): boolean {
   const state = runningScans.get(runId);
   if (!state) {
+    // The run may still be on its way (the renderer makes the id before main starts it). One that
+    // never shows up is forgotten after a minute, so a stray id neither leaks nor cancels a later
+    // run that happens to reuse it.
     cancelledBeforeStart.add(runId);
+    setTimeout(() => cancelledBeforeStart.delete(runId), CANCEL_BEFORE_START_TTL_MS).unref?.();
     return true;
   }
   state.cancelled = true;
@@ -146,6 +157,38 @@ function skippedRun(scannerId: SecurityScannerId, reason: string): ScannerRunRes
     warnings: [],
     log: null,
   };
+}
+
+/** The phase a finished scanner's row ends on, so a timeout never reads as a crash. */
+const PHASE_FOR_STATUS: Record<ScannerRunResult['status'], ScanPhase> = {
+  ok: 'done',
+  failed: 'failed',
+  'timed-out': 'timed-out',
+  cancelled: 'cancelled',
+  skipped: 'skipped',
+};
+
+/**
+ * An adapter that throws (a missing folder, a parser bug) becomes one failed scanner. Letting it
+ * reject would take down the phase's Promise.all, and with it every other scanner's findings.
+ */
+async function runAdapter(adapter: ScannerAdapter, ctx: ScanContext): Promise<AdapterOutcome> {
+  try {
+    return await adapter.run(ctx);
+  } catch (error) {
+    return {
+      findings: [],
+      exitCode: null,
+      truncated: false,
+      warnings: [],
+      transport: 'native',
+      toolVersion: null,
+      log: '',
+      timedOut: false,
+      cancelled: ctx.token.cancelled,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function runSecurityScan(
@@ -227,37 +270,46 @@ export async function runSecurityScan(
     await mkdir(workspaceDir, { recursive: true });
 
     emit(null, 'preflight', 'Checking requirements');
-    const preflight = await checkAllPreflight({
+    const preflightInput: PreflightInput = {
       projectPath: input.projectPath,
       config: input.config,
       codeqlLanguage: input.options.codeqlLanguage,
       codeqlBuildCommand: input.options.codeqlBuildCommand,
       sonarProjectKey: input.options.sonarProjectKey,
-    });
+    };
 
+    // Every phase is walked even after a cancel: runOne skips each remaining scanner and says so,
+    // which is what moves its row off "Queued".
     for (const phase of [1, 2, 3] as const) {
-      if (state.cancelled) break;
       const inPhase = selected.filter((s) => s.phase === phase);
       if (inPhase.length === 0) continue;
 
       const runOne = async (scannerId: SecurityScannerId): Promise<void> => {
+        // A scanner the run never reached still says so, or its row would sit on "Queued".
+        const skip = (reason: string): void => {
+          const run = skippedRun(scannerId, reason);
+          runs.push(run);
+          emit(scannerId, 'skipped', reason, run);
+        };
         if (state.cancelled) {
-          runs.push(skippedRun(scannerId, 'Cancelled before this scanner started.'));
+          skip('Cancelled before this scanner started.');
           return;
         }
         if (Date.now() - startedAt > GLOBAL_BUDGET_MS) {
-          runs.push(skippedRun(scannerId, 'The overall time budget for this scan ran out.'));
+          skip('The overall time budget for this scan ran out.');
           return;
         }
 
-        // Re-check right before starting rather than trusting the top-of-run result: Docker can
-        // be stopped, and the Sonar container can die, during a 45-minute CodeQL phase.
-        const check = preflight.find((p) => p.scannerId === scannerId);
-        const blocker = check?.requirements.find((r) => r.status === 'unmet' && r.blocking);
+        // Checked right before starting, never from the cache: Docker can be stopped, and the
+        // Sonar container can die, during a 45-minute CodeQL phase.
+        const check = await checkScannerPreflight(scannerId, preflightInput);
+        const blocker = check.requirements.find((r) => r.status === 'unmet' && r.blocking);
         if (blocker) {
-          const run = skippedRun(scannerId, blocker.remedy);
-          runs.push(run);
-          emit(scannerId, 'skipped', blocker.remedy, run);
+          skip(blocker.remedy);
+          return;
+        }
+        if (state.cancelled) {
+          skip('Cancelled before this scanner started.');
           return;
         }
 
@@ -271,7 +323,7 @@ export async function runSecurityScan(
         const token: ScanCancelToken = { cancelled: state.cancelled, child: null };
         state.tokens.add(token);
 
-        const outcome = await adapter.run({
+        const outcome = await runAdapter(adapter, {
           scannerId,
           projectPath: input.projectPath,
           workDir,
@@ -310,7 +362,7 @@ export async function runSecurityScan(
         };
         runs.push(run);
         findings.push(...outcome.findings);
-        emit(scannerId, status === 'ok' ? 'done' : 'failed', run.error ?? 'Done', run);
+        emit(scannerId, PHASE_FOR_STATUS[status], run.error ?? 'Done', run);
       };
 
       // Phase 1 is the only one that overlaps; everything after it is serialized on purpose.

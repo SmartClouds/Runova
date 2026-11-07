@@ -40,6 +40,8 @@ export function useSecurityScan(projectId: string) {
   const queryClient = useQueryClient();
   const [runId, setRunId] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, ScannerProgressState>>({});
+  /** An older scan opened from History. Kept apart from the latest, which drives the nav badge. */
+  const [viewed, setViewed] = useState<SecurityScanRecord | null>(null);
   const [selectedScanners, setSelectedScanners] = useProjectUiState<SecurityScannerId[] | null>(
     'security.scanners',
     null,
@@ -86,6 +88,8 @@ export function useSecurityScan(projectId: string) {
   });
 
   const active: ActiveScan | null = activeQuery.data ?? null;
+  const activeRef = useRef<ActiveScan | null>(null);
+  activeRef.current = active;
   const wasActive = useRef(false);
 
   /**
@@ -109,7 +113,8 @@ export function useSecurityScan(projectId: string) {
     if (!active) return;
     runIdRef.current = active.runId;
     setRunId(active.runId);
-    setSelectedScanners(active.scannerIds);
+    // The run's own scanner list goes to the progress panel (runScannerIds below). The saved
+    // selection belongs to the user and is left alone.
     setProgress((current) => {
       // Only seed from the snapshot; live events are more current than a poll.
       if (Object.keys(current).length > 0) return current;
@@ -141,18 +146,24 @@ export function useSecurityScan(projectId: string) {
     [preflight],
   );
 
-  const selection = selectedScanners ?? defaultSelection;
+  /**
+   * Only scanners that can run right now count. A saved selection can name one that has since
+   * been uninstalled. It is not shown as ticked, does not enable Run, and is never sent to a scan.
+   */
+  const selection = useMemo(() => {
+    const isReady = (id: SecurityScannerId) => preflight.some((p) => p.scannerId === id && p.ready);
+    return (selectedScanners ?? defaultSelection).filter(isReady);
+  }, [selectedScanners, defaultSelection, preflight]);
 
   const toggleScanner = useCallback(
     (scannerId: SecurityScannerId) => {
-      setSelectedScanners((current) => {
-        const base = current ?? defaultSelection;
-        return base.includes(scannerId)
-          ? base.filter((id) => id !== scannerId)
-          : [...base, scannerId];
-      });
+      setSelectedScanners(
+        selection.includes(scannerId)
+          ? selection.filter((id) => id !== scannerId)
+          : [...selection, scannerId],
+      );
     },
-    [defaultSelection],
+    [selection, setSelectedScanners],
   );
 
   // Live progress. Subscribed for the life of the tab rather than only during a run, so a scan
@@ -160,6 +171,11 @@ export function useSecurityScan(projectId: string) {
   useEffect(() => {
     return window.runova.security.onScanProgress((payload) => {
       if (payload.projectId !== projectId) return;
+      // A run this tab did not start (an agent can start one through AI access): fetch the
+      // active-scan snapshot so the tab adopts it instead of offering a second Run.
+      if (payload.runId !== runIdRef.current && !activeRef.current) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.securityActive(projectId) });
+      }
       if (runIdRef.current && payload.runId !== runIdRef.current) return;
       if (!payload.scannerId) return;
 
@@ -196,7 +212,14 @@ export function useSecurityScan(projectId: string) {
       return window.runova.security.runScan(projectId, options, id);
     },
     onSuccess: (record) => {
-      queryClient.setQueryData(queryKeys.securityLatest(projectId), record);
+      // A cancelled run with nothing in it is not saved by main, so it must not stand in for the
+      // latest report either: it would read as a clean result and vanish on the next reload.
+      if (record.status === 'cancelled' && record.findings.length === 0) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.securityLatest(projectId) });
+      } else {
+        queryClient.setQueryData(queryKeys.securityLatest(projectId), record);
+        setViewed(null);
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.securityHistory(projectId) });
       const failed = record.runs.filter((r) => r.status === 'failed' || r.status === 'timed-out');
       if (record.status === 'cancelled') toast.info('Scan cancelled.');
@@ -231,6 +254,9 @@ export function useSecurityScan(projectId: string) {
       // A new token or language changes what preflight says, so it has to be re-run.
       void queryClient.invalidateQueries({ queryKey: queryKeys.securityPreflight(projectId) });
     },
+    onError: (error) => {
+      toast.error(`Could not save the scanner settings: ${errorMessage(error)}`);
+    },
     ...QUIET,
   });
 
@@ -238,32 +264,85 @@ export function useSecurityScan(projectId: string) {
     if (runId) void window.runova.security.cancelScan(runId);
   }, [runId]);
 
-  const loadScan = useCallback(
-    async (id: string) => {
+  const latest = latestQuery.data ?? null;
+
+  /** Opens an older scan from History without touching the latest one. */
+  const viewScan = useCallback(async (id: string) => {
+    try {
       const record = await window.runova.security.getScan(id);
-      if (record) queryClient.setQueryData(queryKeys.securityLatest(projectId), record);
+      if (record) setViewed(record);
+      else toast.error('That scan is no longer in the history.');
+    } catch (error) {
+      toast.error(`Could not open that scan: ${errorMessage(error)}`);
+    }
+  }, []);
+
+  const backToLatest = useCallback(() => setViewed(null), []);
+
+  const deleteScan = useCallback(
+    async (id: string) => {
+      try {
+        await window.runova.security.deleteScan(id);
+      } catch (error) {
+        toast.error(`Could not delete that scan: ${errorMessage(error)}`);
+        return;
+      }
+      setViewed((current) => (current?.id === id ? null : current));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.securityHistory(projectId) });
+      if (latest?.id === id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.securityLatest(projectId) });
+      }
     },
-    [projectId, queryClient],
+    [latest?.id, projectId, queryClient],
   );
+
+  /** Re-probes every scanner, past the main process's 30 second cache. */
+  const refreshPreflight = useCallback(async () => {
+    try {
+      const fresh = await window.runova.security.preflight(projectId, { force: true });
+      queryClient.setQueryData(queryKeys.securityPreflight(projectId), fresh);
+    } catch (error) {
+      toast.error(`Could not check the scanners: ${errorMessage(error)}`);
+    }
+  }, [projectId, queryClient]);
+
+  const runScan = useCallback(
+    (options: Partial<SecurityScanOptions> = {}) =>
+      runMutation.mutate({ scannerIds: selection, ...options }),
+    [runMutation, selection],
+  );
+
+  const running = runMutation.isPending || active !== null;
 
   return {
     preflight,
     preflightLoading: preflightQuery.isPending,
-    refreshPreflight: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.securityPreflight(projectId) }),
-    report: latestQuery.data ?? null,
+    preflightError: preflightQuery.error ? errorMessage(preflightQuery.error) : null,
+    refreshPreflight,
+    report: viewed ?? latest,
     reportLoading: latestQuery.isPending,
+    viewingOldScan: viewed !== null && viewed.id !== latest?.id,
+    viewScan,
+    backToLatest,
+    deleteScan,
     history: historyQuery.data ?? [],
     config: configQuery.data ?? {},
+    configLoading: configQuery.isPending,
     saveConfig,
     selection,
     toggleScanner,
-    running: runMutation.isPending || active !== null,
+    running,
+    /** The scanners of the run in progress, which may differ from the current selection. */
+    runScannerIds:
+      active?.scannerIds ?? runMutation.variables?.scannerIds ?? (running ? selection : []),
     progress,
-    runScan: runMutation.mutate,
+    runScan,
     cancel,
-    loadScan,
   };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function preflightFor(

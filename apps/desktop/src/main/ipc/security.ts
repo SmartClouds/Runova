@@ -79,9 +79,17 @@ function resolveOptions(
   };
 }
 
-/** Which scanners can run on the project right now, with the project's saved scanner settings. */
-export async function securityPreflight(projectId: string): Promise<ScannerPreflight[]> {
+/**
+ * Which scanners can run on the project right now, with the project's saved scanner settings.
+ * `force` skips the 30 second cache, for the Refresh button: someone who just installed a scanner
+ * or started Docker expects the tab to see it straight away.
+ */
+export async function securityPreflight(
+  projectId: string,
+  request: { force?: boolean } = {},
+): Promise<ScannerPreflight[]> {
   const project = await getProject(projectId);
+  if (request.force) clearPreflightCache();
   const saved = await getScannerSettings(projectId);
   const options = resolveOptions({}, saved);
   return checkAllPreflight({
@@ -102,6 +110,12 @@ export async function startSecurityScan(
   requested: Partial<SecurityScanOptions>,
   runId: string,
 ): Promise<SecurityScanRecord> {
+  // One scan per project: two runs would share a snapshot slot, and the first one to finish would
+  // wipe the other's progress. The tab disables Run while a scan is live, but an agent can start
+  // one through AI access while the tab is open.
+  if (getActiveScan(projectId)) {
+    throw new Error('A scan is already running for this project. Wait for it or cancel it first.');
+  }
   const project = await getProject(projectId);
   const saved = await getScannerSettings(projectId);
   const options = resolveOptions(requested, saved);
@@ -120,7 +134,8 @@ export async function startSecurityScan(
 export function registerSecurityHandlers(): void {
   ipcMain.handle(
     IPC.security.preflight,
-    (_event, projectId: string): Promise<ScannerPreflight[]> => securityPreflight(projectId),
+    (_event, projectId: string, options?: { force?: boolean }): Promise<ScannerPreflight[]> =>
+      securityPreflight(projectId, options),
   );
 
   ipcMain.handle(

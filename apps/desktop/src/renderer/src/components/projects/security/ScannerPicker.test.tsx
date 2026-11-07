@@ -49,4 +49,91 @@ describe('ScannerPicker', () => {
 
     expect(navigate).toHaveBeenCalledWith('/tools?tab=dev-setup&stack=security');
   });
+
+  it('opens settings for a scanner that is already ready', async () => {
+    const onConfigure = vi.fn();
+    const { user } = renderWithProviders(
+      <ScannerPicker
+        preflight={[readySemgrep]}
+        loading={false}
+        selection={['semgrep']}
+        onToggle={vi.fn()}
+        onConfigure={onConfigure}
+        disabled={false}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Semgrep settings' }));
+
+    expect(onConfigure).toHaveBeenCalledWith('semgrep');
+  });
+
+  it('has no settings button for a scanner with nothing to set', () => {
+    renderWithProviders(
+      <ScannerPicker
+        preflight={[{ scannerId: 'bearer', ready: true, requirements: [] }]}
+        loading={false}
+        selection={[]}
+        onToggle={vi.fn()}
+        onConfigure={vi.fn()}
+        disabled={false}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Bearer settings' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Semgrep settings' })).toBeInTheDocument();
+  });
+
+  it('keeps settings closed until the saved settings have loaded', () => {
+    renderWithProviders(
+      <ScannerPicker
+        preflight={[readySemgrep]}
+        loading={false}
+        selection={[]}
+        onToggle={vi.fn()}
+        onConfigure={vi.fn()}
+        disabled={false}
+        configLoading
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Semgrep settings' })).toBeDisabled();
+  });
+
+  it('offers a fresh check once Docker has been started', async () => {
+    const onRecheck = vi.fn();
+    const { user } = renderWithProviders(
+      <ScannerPicker
+        preflight={[dockerDown]}
+        loading={false}
+        selection={[]}
+        onToggle={vi.fn()}
+        onConfigure={vi.fn()}
+        onRecheck={onRecheck}
+        disabled={false}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+
+    expect(onRecheck).toHaveBeenCalledTimes(1);
+  });
 });
+
+const readySemgrep: ScannerPreflight = { scannerId: 'semgrep', ready: true, requirements: [] };
+
+const dockerDown: ScannerPreflight = {
+  scannerId: 'bearer',
+  ready: false,
+  requirements: [
+    {
+      id: 'docker-running',
+      label: 'Docker is available',
+      status: 'unmet',
+      blocking: true,
+      remedy: 'Docker is installed but not running. Start Docker Desktop.',
+      action: { kind: 'start-docker' },
+      detail: null,
+    },
+  ],
+};

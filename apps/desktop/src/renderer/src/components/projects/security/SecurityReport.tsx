@@ -46,6 +46,18 @@ const VERDICT_STYLE: Record<SecurityVerdict, { frame: string; blurb: string }> =
   },
 };
 
+const INCOMPLETE_COPY: Record<'failed' | 'cancelled', { title: string; blurb: string }> = {
+  failed: {
+    title: 'The scan did not complete',
+    blurb:
+      'None of the scanners finished, so this says nothing about the code. The reasons are below.',
+  },
+  cancelled: {
+    title: 'The scan was cancelled',
+    blurb: 'It stopped before any scanner reported, so there is nothing to read yet. Run it again.',
+  },
+};
+
 /** How many findings to render per severity group before making the user ask for the rest. */
 const GROUP_RENDER_CAP = 50;
 
@@ -63,6 +75,12 @@ export function SecurityReport({ record }: { record: SecurityScanRecord }): Reac
 
   const style = VERDICT_STYLE[record.verdict];
   const total = record.findings.length;
+  // A scan whose scanners never ran has nothing to say about the code, so it gets no verdict and no
+  // score: an empty failed run would otherwise read "Nothing serious found, 100/100".
+  const incomplete =
+    record.status === 'failed' || (record.status === 'cancelled' && total === 0)
+      ? INCOMPLETE_COPY[record.status]
+      : null;
 
   const scannersWithFindings = useMemo(
     () => [...new Set(record.findings.map((f) => f.scannerId))],
@@ -87,27 +105,37 @@ export function SecurityReport({ record }: { record: SecurityScanRecord }): Reac
 
   return (
     <div className="space-y-4">
-      <div className={cn('flex items-center gap-4 rounded-lg border px-4 py-3', style.frame)}>
-        {record.verdict === 'safe' ? (
-          <CircleCheck className="h-7 w-7 shrink-0 text-foreground" />
-        ) : (
-          <Shield className="h-7 w-7 shrink-0 text-foreground" />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              {SECURITY_VERDICT_LABEL[record.verdict]}
-            </span>
-            <Badge variant="outline">Score {record.score}/100</Badge>
-            {record.status !== 'complete' && (
-              <SimpleTooltip label="Some scanners did not finish, so this report may be incomplete.">
-                <Badge variant="warning">{record.status}</Badge>
-              </SimpleTooltip>
-            )}
+      {incomplete ? (
+        <div className="flex items-center gap-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <TriangleAlert className="h-7 w-7 shrink-0 text-foreground" />
+          <div className="min-w-0 flex-1">
+            <span className="text-sm font-semibold text-foreground">{incomplete.title}</span>
+            <p className="mt-0.5 text-xs text-muted-foreground">{incomplete.blurb}</p>
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">{style.blurb}</p>
         </div>
-      </div>
+      ) : (
+        <div className={cn('flex items-center gap-4 rounded-lg border px-4 py-3', style.frame)}>
+          {record.verdict === 'safe' ? (
+            <CircleCheck className="h-7 w-7 shrink-0 text-foreground" />
+          ) : (
+            <Shield className="h-7 w-7 shrink-0 text-foreground" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                {SECURITY_VERDICT_LABEL[record.verdict]}
+              </span>
+              <Badge variant="outline">Score {record.score}/100</Badge>
+              {record.status !== 'complete' && (
+                <SimpleTooltip label="Some scanners did not finish, so this report may be incomplete.">
+                  <Badge variant="warning">{record.status}</Badge>
+                </SimpleTooltip>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{style.blurb}</p>
+          </div>
+        </div>
+      )}
 
       <SeverityBar counts={record.counts} total={total} />
 

@@ -1042,8 +1042,8 @@ const mcp = {
 };
 
 const security = {
-  preflight: (projectId: string): Promise<ScannerPreflight[]> =>
-    ipcRenderer.invoke(IPC.security.preflight, projectId),
+  preflight: (projectId: string, options?: { force?: boolean }): Promise<ScannerPreflight[]> =>
+    ipcRenderer.invoke(IPC.security.preflight, projectId, options),
   runScan: (
     projectId: string,
     options: Partial<SecurityScanOptions>,

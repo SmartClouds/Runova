@@ -234,7 +234,7 @@ export interface SecurityScanRecord {
   createdAt: string;
 }
 
-/** Live progress while a scan is in flight. Streamed from main on the invoking sender. */
+/** Live progress while a scan is in flight. Broadcast from main to every window. */
 export type ScanPhase =
   | 'queued'
   | 'preflight'
@@ -249,7 +249,8 @@ export type ScanPhase =
   | 'done'
   | 'failed'
   | 'skipped'
-  | 'cancelled';
+  | 'cancelled'
+  | 'timed-out';
 
 export const SCAN_PHASE_LABEL: Record<ScanPhase, string> = {
   queued: 'Queued',
@@ -266,6 +267,7 @@ export const SCAN_PHASE_LABEL: Record<ScanPhase, string> = {
   failed: 'Failed',
   skipped: 'Skipped',
   cancelled: 'Cancelled',
+  'timed-out': 'Timed out',
 };
 
 export interface SecurityScanProgress {

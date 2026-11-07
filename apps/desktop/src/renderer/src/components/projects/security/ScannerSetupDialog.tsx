@@ -2,12 +2,15 @@ import type { SecurityScannerId, SecurityScannerSettings } from '@runova/core';
 import {
   CODEQL_LANGUAGES,
   codeqlLanguageNeedsBuild,
+  DEFAULT_SCAN_OPTIONS,
   getSecurityScanner,
   SEMGREP_RULESETS,
   STRIX_DEFAULT_MODEL,
 } from '@runova/core';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import {
   Dialog,
@@ -20,9 +23,60 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+type TrivyScanner = 'vuln' | 'secret' | 'misconfig';
+
+/** What Trivy can look for, in the order it is always stored. */
+const TRIVY_SCANNERS: { value: TrivyScanner; label: string; hint: string }[] = [
+  {
+    value: 'vuln',
+    label: 'Vulnerable dependencies',
+    hint: 'Known CVEs in lockfiles and manifests.',
+  },
+  { value: 'secret', label: 'Secrets', hint: 'Keys and tokens committed to the code.' },
+  {
+    value: 'misconfig',
+    label: 'Misconfigurations',
+    hint: 'Dockerfiles, Kubernetes and Terraform settings. Slower.',
+  },
+];
+
+const DEFAULT_SONAR_URL = 'http://localhost:9000';
+
+/** The scanners this dialog has something for. Bearer runs as it is. */
+const SCANNERS_WITH_SETTINGS: ReadonlySet<SecurityScannerId> = new Set([
+  'semgrep',
+  'trivy',
+  'codeql',
+  'sonarqube',
+  'strix',
+]);
+
+export function scannerHasSettings(scannerId: SecurityScannerId): boolean {
+  return SCANNERS_WITH_SETTINGS.has(scannerId);
+}
+
 /**
- * Per-scanner setup. Only three of the six need anything: Semgrep picks a ruleset, CodeQL needs a
- * language (and a build command for compiled ones), SonarQube and Strix need credentials.
+ * Fills in what the form showed as a default but the user never typed over, so the saved settings
+ * match the screen. Without this a Strix model shown in the field was never stored, and preflight
+ * kept asking for one.
+ */
+function withShownDefaults(
+  scannerId: SecurityScannerId | null,
+  draft: SecurityScannerSettings,
+): SecurityScannerSettings {
+  if (scannerId === 'strix' && !draft.strixModel?.trim()) {
+    return { ...draft, strixModel: STRIX_DEFAULT_MODEL };
+  }
+  if (scannerId === 'sonarqube' && !draft.sonarUrl?.trim()) {
+    return { ...draft, sonarUrl: DEFAULT_SONAR_URL };
+  }
+  return draft;
+}
+
+/**
+ * Per-scanner setup. Semgrep picks a ruleset, Trivy what it looks for, CodeQL needs a language
+ * (and a build command for compiled ones), SonarQube and Strix need credentials. Bearer has
+ * nothing to set.
  *
  * Secrets typed here go to settings.json in plaintext, which is the same convention the Token
  * Usage page's API keys already use. They are handed to scanners through the environment rather
@@ -50,8 +104,24 @@ export function ScannerSetupDialog({
   // each time it resolves.
   const [draft, setDraft] = useState<SecurityScannerSettings>(config);
   const [suggesting, setSuggesting] = useState(false);
+  const id = useId();
+  const field = (name: string) => `${id}-${name}`;
 
   const scanner = scannerId ? getSecurityScanner(scannerId) : null;
+  const trivyScanners = (draft.trivyScanners ??
+    DEFAULT_SCAN_OPTIONS.trivyScanners) as TrivyScanner[];
+  const canSave = scannerId !== 'trivy' || trivyScanners.length > 0;
+
+  function toggleTrivy(value: TrivyScanner): void {
+    const next = trivyScanners.includes(value)
+      ? trivyScanners.filter((entry) => entry !== value)
+      : [...trivyScanners, value];
+    patch({
+      trivyScanners: TRIVY_SCANNERS.map((entry) => entry.value).filter((entry) =>
+        next.includes(entry),
+      ),
+    });
+  }
 
   function patch(update: Partial<SecurityScannerSettings>): void {
     setDraft((current) => ({ ...current, ...update }));
@@ -62,6 +132,11 @@ export function ScannerSetupDialog({
     try {
       const language = await onSuggestLanguage();
       if (language) patch({ codeqlLanguage: language });
+      else toast('Runova could not tell which language matters most here. Pick one from the list.');
+    } catch (error) {
+      toast.error(
+        `Could not detect the language: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setSuggesting(false);
     }
@@ -92,6 +167,33 @@ export function ScannerSetupDialog({
             </div>
           )}
 
+          {scannerId === 'trivy' && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">What to look for</legend>
+              {TRIVY_SCANNERS.map((entry) => (
+                <label
+                  key={entry.value}
+                  htmlFor={field(`trivy-${entry.value}`)}
+                  className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-card/60 px-3 py-2"
+                >
+                  <Checkbox
+                    id={field(`trivy-${entry.value}`)}
+                    checked={trivyScanners.includes(entry.value)}
+                    onCheckedChange={() => toggleTrivy(entry.value)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm text-foreground">{entry.label}</span>
+                    <span className="text-xs text-muted-foreground">{entry.hint}</span>
+                  </span>
+                </label>
+              ))}
+              {trivyScanners.length === 0 && (
+                <p className="text-xs text-destructive">Pick at least one.</p>
+              )}
+            </fieldset>
+          )}
+
           {scannerId === 'codeql' && (
             <>
               <div className="space-y-1.5">
@@ -120,8 +222,9 @@ export function ScannerSetupDialog({
 
               {codeqlLanguageNeedsBuild(draft.codeqlLanguage ?? null) && (
                 <div className="space-y-1.5">
-                  <Label>Build command</Label>
+                  <Label htmlFor={field('codeql-build')}>Build command</Label>
                   <Input
+                    id={field('codeql-build')}
                     value={draft.codeqlBuildCommand ?? ''}
                     onChange={(event) => patch({ codeqlBuildCommand: event.target.value })}
                     placeholder="e.g. dotnet build, mvn -B clean install"
@@ -138,24 +241,27 @@ export function ScannerSetupDialog({
           {scannerId === 'sonarqube' && (
             <>
               <div className="space-y-1.5">
-                <Label>Server URL</Label>
+                <Label htmlFor={field('sonar-url')}>Server URL</Label>
                 <Input
-                  value={draft.sonarUrl ?? 'http://localhost:9000'}
+                  id={field('sonar-url')}
+                  value={draft.sonarUrl ?? DEFAULT_SONAR_URL}
                   onChange={(event) => patch({ sonarUrl: event.target.value })}
-                  placeholder="http://localhost:9000"
+                  placeholder={DEFAULT_SONAR_URL}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Project key</Label>
+                <Label htmlFor={field('sonar-key')}>Project key</Label>
                 <Input
+                  id={field('sonar-key')}
                   value={draft.sonarProjectKey ?? ''}
                   onChange={(event) => patch({ sonarProjectKey: event.target.value })}
                   placeholder="my-project"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Token</Label>
+                <Label htmlFor={field('sonar-token')}>Token</Label>
                 <Input
+                  id={field('sonar-token')}
                   type="password"
                   value={draft.sonarToken ?? ''}
                   onChange={(event) => patch({ sonarToken: event.target.value })}
@@ -172,16 +278,18 @@ export function ScannerSetupDialog({
           {scannerId === 'strix' && (
             <>
               <div className="space-y-1.5">
-                <Label>Model</Label>
+                <Label htmlFor={field('strix-model')}>Model</Label>
                 <Input
+                  id={field('strix-model')}
                   value={draft.strixModel ?? STRIX_DEFAULT_MODEL}
                   onChange={(event) => patch({ strixModel: event.target.value })}
                   placeholder={STRIX_DEFAULT_MODEL}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>LLM API key</Label>
+                <Label htmlFor={field('strix-key')}>LLM API key</Label>
                 <Input
+                  id={field('strix-key')}
                   type="password"
                   value={draft.strixApiKey ?? ''}
                   onChange={(event) => patch({ strixApiKey: event.target.value })}
@@ -202,8 +310,9 @@ export function ScannerSetupDialog({
             Cancel
           </Button>
           <Button
+            disabled={!canSave}
             onClick={() => {
-              onSave(draft);
+              onSave(withShownDefaults(scannerId, draft));
               onClose();
             }}
           >

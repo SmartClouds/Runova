@@ -13,7 +13,7 @@ import { getSonarStatus, validateSonarToken } from './sonarApi';
  * "start Docker" instead of just reporting a failure the user has to go diagnose.
  */
 
-interface PreflightInput {
+export interface PreflightInput {
   projectPath: string;
   config: SecurityScannerConfig;
   codeqlLanguage: string | null;
@@ -230,6 +230,22 @@ async function requirementsFor(
   }
 }
 
+/**
+ * One scanner, checked now, never from the cache. The runner calls this right before each scanner
+ * starts, since Docker can be stopped or the Sonar container can die during a long CodeQL phase.
+ */
+export async function checkScannerPreflight(
+  scannerId: SecurityScannerId,
+  input: PreflightInput,
+): Promise<ScannerPreflight> {
+  const requirements = await requirementsFor(scannerId, input);
+  return {
+    scannerId,
+    ready: !requirements.some((r) => r.status === 'unmet' && r.blocking),
+    requirements,
+  };
+}
+
 export async function checkAllPreflight(input: PreflightInput): Promise<ScannerPreflight[]> {
   // Probing six scanners means a dozen child processes and two HTTP calls, so a short cache keeps
   // the tab responsive when the user toggles scanners on and off.
@@ -237,14 +253,7 @@ export async function checkAllPreflight(input: PreflightInput): Promise<ScannerP
   if (cache && cache.key === key && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
 
   const value = await Promise.all(
-    SECURITY_SCANNERS.map(async (scanner): Promise<ScannerPreflight> => {
-      const requirements = await requirementsFor(scanner.id, input);
-      return {
-        scannerId: scanner.id,
-        ready: !requirements.some((r) => r.status === 'unmet' && r.blocking),
-        requirements,
-      };
-    }),
+    SECURITY_SCANNERS.map((scanner) => checkScannerPreflight(scanner.id, input)),
   );
 
   cache = { at: Date.now(), key, value };

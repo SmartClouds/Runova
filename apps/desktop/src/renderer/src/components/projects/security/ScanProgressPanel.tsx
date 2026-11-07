@@ -23,6 +23,9 @@ export function ScanProgressPanel({
   onCancel: () => void;
 }): React.JSX.Element {
   const [openLog, setOpenLog] = useState<string | null>(null);
+  // Stopping takes a moment (process trees and containers have to go), so the button says it
+  // heard the click and does not take a second one.
+  const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   // One shared timer rather than one per row: the elapsed counters only need second resolution.
@@ -36,8 +39,17 @@ export function ScanProgressPanel({
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-foreground">Scanning</p>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={onCancel}>
-            <StopCircle className="h-3.5 w-3.5" /> Cancel
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={cancelling}
+            onClick={() => {
+              setCancelling(true);
+              onCancel();
+            }}
+          >
+            <StopCircle className="h-3.5 w-3.5" /> {cancelling ? 'Cancelling...' : 'Cancel'}
           </Button>
         </div>
 
@@ -47,7 +59,11 @@ export function ScanProgressPanel({
             const state = progress[scannerId];
             const phase = state?.phase ?? 'queued';
             const done = phase === 'done';
-            const failed = phase === 'failed' || phase === 'skipped' || phase === 'cancelled';
+            const failed =
+              phase === 'failed' ||
+              phase === 'skipped' ||
+              phase === 'cancelled' ||
+              phase === 'timed-out';
             const active = !done && !failed && Boolean(state);
             const elapsed = state ? Math.max(0, Math.round((now - state.startedAt) / 1000)) : 0;
             const isOpen = openLog === scannerId;

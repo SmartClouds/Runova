@@ -1,7 +1,7 @@
 import type { ScannerPreflight, ScannerRequirement, SecurityScannerId } from '@runova/core';
 import { SECURITY_SCANNER_KIND_LABEL, SECURITY_SCANNERS } from '@runova/core';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Download, SettingsIcon, TriangleAlert } from '@/components/icons';
+import { Clock, Download, RefreshCw, SettingsIcon, TriangleAlert } from '@/components/icons';
 import { SECURITY_SETUP_ROUTE } from '@/components/tools/routes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { scannerHasSettings } from './ScannerSetupDialog';
 
 /**
  * The scanner picker. Every scanner is always shown, installed or not, because the list itself is
@@ -21,14 +22,20 @@ export function ScannerPicker({
   selection,
   onToggle,
   onConfigure,
+  onRecheck,
   disabled,
+  configLoading = false,
 }: {
   preflight: ScannerPreflight[];
   loading: boolean;
   selection: SecurityScannerId[];
   onToggle: (id: SecurityScannerId) => void;
   onConfigure: (id: SecurityScannerId) => void;
+  /** Re-probes past the cache, for a blocker the user fixes outside Runova (starting Docker). */
+  onRecheck?: () => void;
   disabled: boolean;
+  /** The saved settings are still loading, so a settings dialog would open empty. */
+  configLoading?: boolean;
 }): React.JSX.Element {
   const navigate = useNavigate();
 
@@ -70,6 +77,22 @@ export function ScannerPicker({
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">{scanner.covers}</p>
               </div>
+              {/* Settings stay reachable once a scanner works: a ruleset, a language or a token
+                  can need changing long after the first setup. */}
+              {scannerHasSettings(scanner.id) && (
+                <SimpleTooltip label={`${scanner.name} settings`}>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0"
+                    aria-label={`${scanner.name} settings`}
+                    disabled={configLoading || disabled}
+                    onClick={() => onConfigure(scanner.id)}
+                  >
+                    <SettingsIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </SimpleTooltip>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
@@ -95,6 +118,8 @@ export function ScannerPicker({
                 blocker={blocker}
                 onInstall={() => navigate(SECURITY_SETUP_ROUTE)}
                 onConfigure={() => onConfigure(scanner.id)}
+                onRecheck={onRecheck}
+                configLoading={configLoading}
               />
             )}
           </div>
@@ -123,10 +148,14 @@ function BlockedLine({
   blocker,
   onInstall,
   onConfigure,
+  onRecheck,
+  configLoading,
 }: {
   blocker: ScannerRequirement | undefined;
   onInstall: () => void;
   onConfigure: () => void;
+  onRecheck?: () => void;
+  configLoading: boolean;
 }): React.JSX.Element {
   if (!blocker) return <Badge variant="outline">Not available</Badge>;
 
@@ -144,10 +173,16 @@ function BlockedLine({
           variant="outline"
           size="sm"
           className="gap-1 px-2.5"
+          disabled={action.kind === 'configure' && configLoading}
           onClick={action.kind === 'configure' ? onConfigure : onInstall}
         >
           <SettingsIcon className="h-3 w-3" />
           {action.kind === 'configure' ? 'Set up' : 'Open its card'}
+        </Button>
+      )}
+      {action.kind === 'start-docker' && onRecheck && (
+        <Button variant="outline" size="sm" className="gap-1 px-2.5" onClick={onRecheck}>
+          <RefreshCw className="h-3 w-3" /> Check again
         </Button>
       )}
     </div>
