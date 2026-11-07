@@ -38,16 +38,103 @@ vi.mock('../cli/headlessPrompt', () => ({
   cancelHeadlessPrompt: cli.cancel,
 }));
 
-// No account is signed in here. The real runtime brings the whole sync engine with it, which took
-// a cold CI machine past the test's time limit to load, and the online monitors only ask it whether
-// someone is signed in.
+/**
+ * The account, signed out unless a test signs it in, with a small website API for the online
+ * monitors. The real runtime brings the whole sync engine with it, which took a cold CI machine
+ * past the test's time limit to load, and the online monitors only need these three things of it.
+ */
+const account = vi.hoisted(() => {
+  type Monitor = Record<string, unknown> & { id: number; itemId: string };
+  const state = {
+    signedIn: false,
+    monitors: new Map<number, Monitor>(),
+    calls: [] as { method: string; path: string; body?: unknown }[],
+    nextId: 41,
+  };
+  const status = {
+    verdict: 'unknown',
+    state: null,
+    lastCheckedAt: null,
+    latencyMs: null,
+    httpStatus: null,
+    problem: null,
+    region: null,
+    confirming: false,
+    openIncident: null,
+    uptime24h: null,
+  };
+  async function api(method: string, path: string, body?: unknown): Promise<unknown> {
+    if (!state.signedIn) throw new Error('Sign in to your Runova account first.');
+    state.calls.push({ method, path, body });
+    if (method === 'GET' && path === '/cloud-monitors') {
+      return { items: [...state.monitors.values()] };
+    }
+    if (method === 'GET' && path === '/cloud-monitors/usage') {
+      return {
+        scopes: [
+          {
+            scopeId: 5,
+            name: 'Personal',
+            canWrite: true,
+            accountTypeName: 'Go',
+            maxMonitors: 10,
+            minIntervalSec: 300,
+            active: state.monitors.size,
+          },
+        ],
+      };
+    }
+    if (method === 'GET' && path === '/accounts/me/telegram-links/current') {
+      return { linked: false };
+    }
+    if (method === 'POST' && path === '/cloud-monitors') {
+      const sent = body as Record<string, unknown> & { itemId: string };
+      const made: Monitor = {
+        ...sent,
+        id: state.nextId++,
+        scopeId: 5,
+        suspendedReason: null,
+        muted: false,
+        canWrite: true,
+        status,
+        version: '1',
+      };
+      state.monitors.set(made.id, made);
+      return made;
+    }
+    const one = /^\/cloud-monitors\/(\d+)(\/.*)?$/.exec(path);
+    const monitor = one ? state.monitors.get(Number(one[1])) : undefined;
+    if (!one || !monitor) throw new Error(`No route for ${method} ${path}`);
+    const rest = one[2] ?? '';
+    if (method === 'DELETE' && rest === '') {
+      state.monitors.delete(monitor.id);
+      return undefined;
+    }
+    if (method === 'PATCH' && rest === '') {
+      const updated = { ...monitor, ...(body as object) };
+      state.monitors.set(monitor.id, updated);
+      return updated;
+    }
+    if (rest === '/samples' || rest === '/hours' || rest.startsWith('/incidents')) {
+      return { items: [] };
+    }
+    return undefined;
+  }
+  return { state, api };
+});
+
 vi.mock('../account/live', () => ({
   getAccountRuntime: () => ({
-    status: async () => ({ state: 'signed-out', deviceId: 'test-device' }),
-    api: async () => {
-      throw new Error('Sign in to your Runova account first.');
-    },
-    projectPlacements: async () => new Map(),
+    status: async () =>
+      account.state.signedIn
+        ? { state: 'signed-in', deviceId: 'test-device' }
+        : { state: 'signed-out', deviceId: 'test-device' },
+    api: account.api,
+    projectPlacements: async () =>
+      new Map([
+        ['p1', { scopeId: 5, canWrite: true }],
+        ['p2', { scopeId: 5, canWrite: true }],
+      ]),
   }),
 }));
 
@@ -99,6 +186,10 @@ const failing = {
 };
 
 beforeEach(async () => {
+  account.state.signedIn = false;
+  account.state.monitors.clear();
+  account.state.calls.length = 0;
+  account.state.nextId = 41;
   respond = { status: 200, body: { status: 'pass' } };
   sent.length = 0;
   endpoint = await startHttpServer((request, response) => {
@@ -504,10 +595,120 @@ describe('Runova Cloud (E56), with no account signed in', () => {
     expect(local).toMatchObject({ runMode: 'local', cloud: null });
   });
 
+  it('asks about a monitor not saved yet by its project and address', async () => {
+    const plan = await invoke<{ signedIn: boolean; action: string | null }>(IPC.health.cloudPlan, {
+      projectId: 'p1',
+      url: 'https://shop.example.com/_runova/health',
+    });
+    expect(plan).toMatchObject({ signedIn: false, action: 'sign-in' });
+  });
+
   it('refuses a malformed online setup', async () => {
     const { target } = await create();
     await expect(
       invoke(IPC.health.cloudEnable, target.id, { consent: true, intervalSec: 5 }),
     ).rejects.toThrow(/not valid/);
+  });
+});
+
+describe('Runova Cloud (E56), signed in', () => {
+  const ONLINE = { consent: true, intervalSec: 300, notifyInApp: true, notifyTelegram: false };
+  const publicUrl = 'https://shop.example.com/_runova/health';
+
+  function sentTo(method: string, path: string) {
+    return account.state.calls.filter((call) => call.method === method && call.path === path);
+  }
+
+  async function online() {
+    account.state.signedIn = true;
+    const { target } = await create({ url: publicUrl });
+    const summary = await invoke<HealthTargetSummary>(IPC.health.cloudEnable, target.id, ONLINE);
+    return { target, summary };
+  }
+
+  it('turns a monitor online with its key, and lists it as online', async () => {
+    const { target, summary } = await online();
+
+    expect(summary).toMatchObject({ runMode: 'cloud', cloud: { monitorId: 41, signedIn: true } });
+    const [posted] = sentTo('POST', '/cloud-monitors');
+    expect(posted.body).toMatchObject({
+      itemId: target.id,
+      name: 'API',
+      projectName: 'Shop',
+      environmentName: 'Production',
+      url: publicUrl,
+      intervalSec: 300,
+    });
+    const [listed] = await invoke<HealthTargetSummary[]>(IPC.health.list);
+    expect(listed).toMatchObject({ runMode: 'cloud', cloud: { monitorId: 41 } });
+  });
+
+  it('sends the server only what changed in the dialog', async () => {
+    const { target } = await online();
+
+    await invoke(IPC.health.update, target.id, {
+      name: 'Storefront API',
+      url: 'https://store.example.com/_runova/health',
+      intervalSec: 600,
+      timeoutSec: 10,
+      allowInsecure: true,
+      projectId: 'p2',
+      environmentId: null,
+    });
+    await invoke(IPC.health.update, target.id, { name: 'Store API' });
+
+    expect(sentTo('PATCH', '/cloud-monitors/41').map((call) => call.body)).toEqual([
+      {
+        name: 'Storefront API',
+        url: 'https://store.example.com/_runova/health',
+        intervalSec: 600,
+        timeoutSec: 10,
+        allowInsecure: true,
+        environmentName: null,
+        projectName: 'Blog',
+      },
+      { name: 'Store API' },
+    ]);
+  });
+
+  it('pauses, rotates, mutes and checks on the server instead of here', async () => {
+    const { target } = await online();
+
+    await invoke(IPC.health.setPaused, target.id, true);
+    const rotated = await invoke<HealthSecretReveal>(IPC.health.rotateSecret, target.id);
+    const muted = await invoke<HealthTargetSummary>(IPC.health.cloudSettings, target.id, {
+      muted: true,
+    });
+    const checked = await invoke<HealthTargetDetail>(IPC.health.checkNow, target.id);
+
+    expect(sentTo('PATCH', '/cloud-monitors/41').map((call) => call.body)).toEqual([
+      { paused: true },
+    ]);
+    const keys = sentTo('PUT', '/cloud-monitors/41/secrets/current');
+    expect(keys).toHaveLength(1);
+    expect(JSON.stringify(keys)).toContain(rotated.secret);
+    expect(sentTo('PUT', '/cloud-monitors/41/mutes/me')).toHaveLength(1);
+    expect(muted.runMode).toBe('cloud');
+    expect(checked.target.runMode).toBe('cloud');
+    // This computer sent nothing to the endpoint: the check is the server's.
+    expect(sent).toEqual([]);
+  });
+
+  it('removes the monitor from the server when it is deleted here', async () => {
+    const { target } = await online();
+
+    await invoke(IPC.health.remove, target.id);
+
+    expect(sentTo('DELETE', '/cloud-monitors/41')).toHaveLength(1);
+    expect(account.state.monitors.size).toBe(0);
+  });
+
+  it('turns it back to this computer', async () => {
+    const { target } = await online();
+
+    const local = await invoke<HealthTargetSummary>(IPC.health.cloudDisable, target.id);
+
+    expect(local).toMatchObject({ runMode: 'local', cloud: null });
+    expect(account.state.monitors.size).toBe(0);
   });
 });

@@ -115,12 +115,17 @@ public sealed class GatewayTests : IAsyncLifetime
         using var certificate = _pki.Node(7);
         var client = cold.Client(certificate, _pki, out _);
 
-        await Assert.ThrowsAsync<RpcException>(async () =>
+        // The refusal comes in the TLS handshake, so like the other refusals it shows either as a
+        // failed call or as a connection the server closed before HTTP/2 began.
+        var refused = await Record.ExceptionAsync(async () =>
         {
             using var call = client.Connect(cancellationToken: TestContext.Current.CancellationToken);
             await call.RequestStream.WriteAsync(Hello(), TestContext.Current.CancellationToken);
             await call.ResponseStream.MoveNext(TestContext.Current.CancellationToken);
         });
+
+        Assert.True(refused is RpcException or HttpRequestException or HttpIOException or IOException, $"Not refused: {refused}");
+        Assert.Empty(cold.Link.Of<NodeConnected>());
         Assert.False(cold.Trust.Ready);
     }
 
