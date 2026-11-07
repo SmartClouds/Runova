@@ -441,6 +441,64 @@ Rules:
 - Every change writes a `sign-in-settings.update` audit entry naming the fields, never their values.
 - `admin captcha-off` (the CLI) turns the captcha off and keeps its keys, for when nobody can sign in.
 
+### Analytics settings (Admin)
+
+The tracking tags and site verifications of the public site (E59), kept in the database so an
+Admin can change them without a rebuild: Google Analytics 4, Google Ads, Google Tag Manager,
+Microsoft Clarity, the Microsoft Advertising (Bing) UET tag, Search Console and Bing Webmaster
+verification, and a cookie consent banner. The pages are prerendered, so the browser reads the tags
+through the site's `/nav/analytics.json` (which reads `GET /site-analytics`) and loads them itself.
+The site serves the verifications as `/<googleSiteVerification>.html` and `/BingSiteAuth.xml`. The
+admin pages and the account panel never load a tag.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/analytics-settings` | Admin | none | 200 `AnalyticsSettingsDto`; 401; 403 |
+| PATCH | `/api/v1/analytics-settings` | Admin | merge patch of any field of `AnalyticsSettingsDto` but `updatedAt` and `version`; `If-Match` | 200 `AnalyticsSettingsDto`; 400; 401; 403; 412; 428 |
+| GET | `/api/v1/site-analytics` | Anonymous | none | 200 `SiteAnalyticsDto` |
+
+`AnalyticsSettingsDto`:
+
+```json
+{
+  "tagsEnabled": true,
+  "googleAnalyticsIds": ["G-ABC123XYZ9"],
+  "googleAdsIds": ["AW-123456789"],
+  "googleTagManagerId": "GTM-ABC1234",
+  "clarityProjectId": "abcd1234ef",
+  "bingUetTagId": "187654321",
+  "googleSiteVerification": "google1234567890abcdef",
+  "bingSiteVerification": "0123456789ABCDEF0123456789ABCDEF",
+  "consentBannerEnabled": true,
+  "updatedAt": "2026-11-07T10:00:00.000Z",
+  "version": "1234"
+}
+```
+
+`SiteAnalyticsDto`: `{ "googleAnalyticsIds": string[], "googleAdsIds": string[],
+"googleTagManagerId": string | null, "clarityProjectId": string | null, "bingUetTagId": string |
+null, "consentRequired": boolean, "googleSiteVerification": string | null,
+"bingSiteVerification": string | null }`. The tags are empty and `consentRequired` is false while
+the tags are off; the verifications are there either way.
+
+Rules:
+
+- Every value is trimmed; `null` or an empty string removes it, and a list is replaced whole (blanks
+  and repeats dropped, at most 5). The shapes, after tidying: `googleAnalyticsIds` `G-` and 4 to 20
+  letters or digits (upper case); `googleAdsIds` `AW-` and 6 to 15 digits; `googleTagManagerId`
+  `GTM-` and 4 to 12 letters or digits; `clarityProjectId` 6 to 20 letters or digits (lower case);
+  `bingUetTagId` 4 to 12 digits; `googleSiteVerification` the name of Search Console's HTML file
+  (`google` and 8 to 54 letters or digits, a leading `/` and a trailing `.html` dropped);
+  `bingSiteVerification` 16 to 64 letters or digits. Anything else: 400 with `errors.<field>`.
+- `tagsEnabled` needs at least one tag (the verifications are not tags); otherwise 400 with
+  `errors.tagsEnabled`.
+- With `consentBannerEnabled`, the site loads no tag until the visitor allows it, and tells Google
+  and Clarity that they did.
+- `GET /site-analytics` is cached for 30 seconds by the API and sent with
+  `Cache-Control: public, max-age=60, stale-while-revalidate=300`, so a change reaches visitors
+  within a few minutes. A save clears the API's copy at once.
+- Every change writes an `analytics-settings.update` audit entry naming the fields.
+
 ### Desktop sign-in
 
 The desktop app signs in the way RFC 8252 describes for a native app: it opens
@@ -882,7 +940,7 @@ have signed in within the last 10 minutes. A failure is 400 `validation-failed` 
 `api-client.rotate`, `sign-in-settings.update`, `account-type.create`, `account-type.update`,
 `account-type.delete`, `payment-settings.update`, `subscription.assign`, `subscription.remove`,
 `monitoring-node.create`, `monitoring-node.update`, `monitoring-node.enrollment-token`, `monitoring-node.drain`,
-`monitoring-node.revoke`, `monitoring-node.delete`. Entries are never changed or deleted through the API. No entry holds a secret,
+`monitoring-node.revoke`, `monitoring-node.delete`, `analytics-settings.update`. Entries are never changed or deleted through the API. No entry holds a secret,
 token, password or signature.
 
 ### Reports (Admin)

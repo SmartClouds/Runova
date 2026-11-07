@@ -1459,6 +1459,73 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("TeamMembers");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Analytics.AnalyticsSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BingSiteVerification")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("BingUetTagId")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<string>("ClarityProjectId")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("ConsentBannerEnabled")
+                        .HasColumnType("boolean");
+
+                    b.PrimitiveCollection<string[]>("GoogleAdsIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<string[]>("GoogleAnalyticsIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("GoogleSiteVerification")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("GoogleTagManagerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool>("TagsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AnalyticsSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_AnalyticsSettings_Singleton", "\"Id\" = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            ConsentBannerEnabled = false,
+                            GoogleAdsIds = new string[0],
+                            GoogleAnalyticsIds = new string[0],
+                            TagsEnabled = false,
+                            Version = 0u
+                        });
+                });
+
             modelBuilder.Entity("Runova.Website.Data.ApiClients.IdempotencyRecord", b =>
                 {
                     b.Property<long>("Id")

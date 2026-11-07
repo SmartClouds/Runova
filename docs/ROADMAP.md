@@ -273,3 +273,4 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E56](epics/56-desktop-online-monitors.md) | Desktop online monitors: a monitor runs on this computer or on Runova Cloud, with live results | Standalone (Monitoring) | E22, E55 |
 | [E57](epics/57-website-monitoring-page.md) | Website Monitoring page: a team's and an account's online monitors, live | Standalone (Website) | E55 |
 | [E58](epics/58-studio-pictures.md) | Studio pictures: real screenshots of the project, GPT Image, or prompts in PICTURES.md, built into each scene | Standalone (Studio) | E32, E33, E35, E38 |
+| [E59](epics/59-tracking-tags.md) | Tracking tags and site verification: Google Analytics, Ads and Tag Manager, Microsoft Clarity and UET, Search Console and Bing Webmaster verification, and a cookie consent banner, set from the admin panel | Standalone (Website) | E41, E52 |

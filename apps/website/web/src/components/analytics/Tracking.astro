@@ -1,0 +1,40 @@
+---
+// The tracking tags and the consent banner they wait on when an Admin turned it on (E59). The
+// banner stays hidden until tracking.ts finds the tags need it.
+---
+
+<section
+  data-consent-banner
+  hidden
+  aria-labelledby="consent-title"
+  class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-lg rounded-box border bg-card p-5 shadow-lg"
+>
+  <p id="consent-title" class="font-semibold">Cookies on this site</p>
+  <p class="mt-1 text-muted-foreground text-sm">
+    We would like to see how visitors use the site, with Google and Microsoft analytics. Their
+    cookies are only set if you allow them, and you can change your mind under Cookie settings at
+    the bottom of every page.
+  </p>
+  <div class="mt-4 flex flex-wrap gap-2">
+    <button
+      type="button"
+      data-consent-choice="granted"
+      class="rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground text-sm"
+    >
+      Allow
+    </button>
+    <button
+      type="button"
+      data-consent-choice="denied"
+      class="rounded-full border bg-background px-4 py-2 font-medium text-sm"
+    >
+      Decline
+    </button>
+  </div>
+</section>
+
+<script>
+  import { startTracking } from './tracking';
+
+  void startTracking();
+</script>

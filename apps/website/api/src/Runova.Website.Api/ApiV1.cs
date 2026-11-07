@@ -1,4 +1,5 @@
 using Runova.Website.Api.Accounts;
+using Runova.Website.Api.Analytics;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Billing;
@@ -32,6 +33,7 @@ internal static class ApiV1
         api.MapAccountSessions();
         api.MapExternalSignIns();
         api.MapSignInSettings();
+        api.MapAnalyticsSettings();
         api.MapDeviceTokens();
         api.MapSync();
         api.MapTeams();

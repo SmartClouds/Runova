@@ -8,6 +8,7 @@ using Runova.Website.Core.News;
 using Runova.Website.Core.Posts;
 using Runova.Website.Core.Releases;
 using Runova.Website.Data.Accounts;
+using Runova.Website.Data.Analytics;
 using Runova.Website.Data.ApiClients;
 using Runova.Website.Data.Audit;
 using Runova.Website.Data.Billing;
@@ -94,6 +95,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<SignInSettings> SignInSettings => Set<SignInSettings>();
 
+    public DbSet<AnalyticsSettings> AnalyticsSettings => Set<AnalyticsSettings>();
+
     public DbSet<AccountType> AccountTypes => Set<AccountType>();
 
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
@@ -169,6 +172,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureBilling();
         builder.ConfigureMonitoring();
         builder.ConfigureCloudMonitors();
+        builder.ConfigureAnalytics();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

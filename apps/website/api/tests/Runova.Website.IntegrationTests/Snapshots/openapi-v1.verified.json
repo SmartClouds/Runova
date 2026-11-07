@@ -579,6 +579,25 @@
         }
       }
     },
+    "/api/v1/site-analytics": {
+      "get": {
+        "tags": [
+          "AnalyticsSettingsEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteAnalyticsDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/device-authorizations": {
       "post": {
         "tags": [
@@ -1765,6 +1784,67 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SignInSettingsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics-settings": {
+      "get": {
+        "tags": [
+          "AnalyticsSettingsEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "AnalyticsSettingsEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsSettingsPatch"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsSettingsDto"
                 }
               }
             }
@@ -5908,6 +5988,160 @@
             "type": [
               "null",
               "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnalyticsSettingsDto": {
+        "required": [
+          "tagsEnabled",
+          "googleAnalyticsIds",
+          "googleAdsIds",
+          "googleTagManagerId",
+          "clarityProjectId",
+          "bingUetTagId",
+          "googleSiteVerification",
+          "bingSiteVerification",
+          "consentBannerEnabled",
+          "updatedAt",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "tagsEnabled": {
+            "type": "boolean"
+          },
+          "googleAnalyticsIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleAdsIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleTagManagerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clarityProjectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingUetTagId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "googleSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "consentBannerEnabled": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnalyticsSettingsPatch": {
+        "required": [
+          "tagsEnabled",
+          "googleAnalyticsIds",
+          "googleAdsIds",
+          "googleTagManagerId",
+          "clarityProjectId",
+          "bingUetTagId",
+          "googleSiteVerification",
+          "bingSiteVerification",
+          "consentBannerEnabled"
+        ],
+        "type": "object",
+        "properties": {
+          "tagsEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "googleAnalyticsIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleAdsIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleTagManagerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clarityProjectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingUetTagId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "googleSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "consentBannerEnabled": {
+            "type": [
+              "null",
+              "boolean"
             ]
           }
         },
@@ -10598,6 +10832,67 @@
         },
         "additionalProperties": false
       },
+      "SiteAnalyticsDto": {
+        "required": [
+          "googleAnalyticsIds",
+          "googleAdsIds",
+          "googleTagManagerId",
+          "clarityProjectId",
+          "bingUetTagId",
+          "consentRequired",
+          "googleSiteVerification",
+          "bingSiteVerification"
+        ],
+        "type": "object",
+        "properties": {
+          "googleAnalyticsIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleAdsIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "googleTagManagerId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clarityProjectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingUetTagId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "consentRequired": {
+            "type": "boolean"
+          },
+          "googleSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bingSiteVerification": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "SourceLinkDto": {
         "required": [
           "title",
@@ -11922,6 +12217,9 @@
     },
     {
       "name": "ExternalSignInEndpoints"
+    },
+    {
+      "name": "AnalyticsSettingsEndpoints"
     },
     {
       "name": "DeviceTokenEndpoints"

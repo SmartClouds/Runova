@@ -5,11 +5,18 @@ import '../styles/global.css';
 import bricolageLatin from '@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url';
 import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
 import type { ComponentProps } from 'astro/types';
+import Tracking from '../components/analytics/Tracking.astro';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
 import SeoHead from '../components/SeoHead.astro';
+import { TRACKING_CSP } from '../lib/analytics';
 
 type Props = ComponentProps<typeof SeoHead>;
+
+// The public pages may load the tracking tags an Admin sets. The admin pages and the account panel
+// have layouts of their own, so their CSP never allows them. Undefined when the CSP is off (astro dev).
+for (const source of TRACKING_CSP.scriptSrc) Astro.csp?.insertScriptResource(source);
+for (const directive of TRACKING_CSP.directives) Astro.csp?.insertDirective(directive);
 ---
 
 <!doctype html>
@@ -37,5 +44,6 @@ type Props = ComponentProps<typeof SeoHead>;
       <slot />
     </main>
     <Footer />
+    <Tracking />
   </body>
 </html>

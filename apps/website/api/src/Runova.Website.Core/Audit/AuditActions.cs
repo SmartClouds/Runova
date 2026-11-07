@@ -35,6 +35,7 @@ public static class AuditActions
     public const string MonitoringNodeDrain = "monitoring-node.drain";
     public const string MonitoringNodeRevoke = "monitoring-node.revoke";
     public const string MonitoringNodeDelete = "monitoring-node.delete";
+    public const string AnalyticsSettingsUpdate = "analytics-settings.update";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -46,6 +47,7 @@ public static class AuditActions
         SignInSettingsUpdate,
         AccountTypeCreate, AccountTypeUpdate, AccountTypeDelete, PaymentSettingsUpdate, SubscriptionAssign, SubscriptionRemove,
         MonitoringNodeCreate, MonitoringNodeUpdate, MonitoringNodeEnrollmentToken, MonitoringNodeDrain, MonitoringNodeRevoke, MonitoringNodeDelete,
+        AnalyticsSettingsUpdate,
     };
 }
 
@@ -72,9 +74,10 @@ public static class AuditTargetTypes
     public const string PaymentSettings = "payment-settings";
     public const string Subscription = "subscription";
     public const string MonitoringNode = "monitoring-node";
+    public const string AnalyticsSettings = "analytics-settings";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        User, News, Post, Media, ApiClient, SignInSettings, AccountType, PaymentSettings, Subscription, MonitoringNode,
+        User, News, Post, Media, ApiClient, SignInSettings, AccountType, PaymentSettings, Subscription, MonitoringNode, AnalyticsSettings,
     };
 }

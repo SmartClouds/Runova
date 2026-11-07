@@ -1,0 +1,12 @@
+---
+import AnalyticsSettingsEditor from '../../../components/admin/AnalyticsSettingsEditor';
+import SettingsNav from '../../../components/admin/SettingsNav.astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+export const prerender = false;
+---
+
+<AdminLayout title="Analytics settings">
+  <SettingsNav />
+  <AnalyticsSettingsEditor client:only="react" />
+</AdminLayout>

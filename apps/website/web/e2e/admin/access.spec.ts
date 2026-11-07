@@ -21,6 +21,7 @@ const ADMIN_PAGES = [
   '/admin/users/1',
   '/admin/reports',
   '/admin/settings',
+  '/admin/settings/analytics',
   '/admin/plans',
   '/admin/plans/payments',
   '/admin/plans/settings',

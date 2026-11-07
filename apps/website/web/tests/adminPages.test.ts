@@ -11,6 +11,7 @@ import ForbiddenPage from '../src/pages/admin/forbidden.astro';
 import OverviewPage from '../src/pages/admin/index.astro';
 import ReportsPage from '../src/pages/admin/reports.astro';
 import SetPasswordPage from '../src/pages/admin/set-password.astro';
+import AnalyticsSettingsPage from '../src/pages/admin/settings/analytics.astro';
 import SettingsPage from '../src/pages/admin/settings.astro';
 import UserPage from '../src/pages/admin/users/[id].astro';
 import UsersPage from '../src/pages/admin/users/index.astro';
@@ -112,6 +113,7 @@ describe('the admin pages', () => {
     ['/admin/users/new', NewUserPage, 'InviteForm'],
     ['/admin/reports', ReportsPage, 'ReportsView'],
     ['/admin/settings', SettingsPage, 'SignInSettingsEditor'],
+    ['/admin/settings/analytics', AnalyticsSettingsPage, 'AnalyticsSettingsEditor'],
   ] as const)('%s renders its island', async (path, page, island) => {
     const response = await render(page, path, ADMIN);
     expect(response.status).toBe(200);
@@ -151,5 +153,28 @@ describe('the admin pages', () => {
     const html = await response.text();
     expect(html).toMatch(/<h1[^>]*>[^<]*Admins/);
     expect(navLinks(html)).toEqual(['/admin/news', '/admin/blog']);
+  });
+});
+
+describe('the settings tabs', () => {
+  const tabs = (html: string) => {
+    const nav = html.match(/<nav aria-label="Settings"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    return [...nav.matchAll(/<a href="([^"]+)"( aria-current="page")?/g)].map(
+      (m) => `${m[1]}${m[2] ? ' (current)' : ''}`,
+    );
+  };
+
+  it.each([
+    ['/admin/settings', SettingsPage],
+    ['/admin/settings/analytics', AnalyticsSettingsPage],
+  ] as const)('link sign-in and analytics on %s, marking that page', async (path, page) => {
+    const html = await (await render(page, path, ADMIN)).text();
+    expect(html).toMatch(/<h1[^>]*>Settings<\/h1>/);
+    expect(tabs(html)).toEqual(
+      ['/admin/settings', '/admin/settings/analytics'].map((href) =>
+        href === path ? `${href} (current)` : href,
+      ),
+    );
+    expect(html).toMatch(/<a href="\/admin\/settings" aria-current="page"[^>]*>\s*Settings/);
   });
 });
