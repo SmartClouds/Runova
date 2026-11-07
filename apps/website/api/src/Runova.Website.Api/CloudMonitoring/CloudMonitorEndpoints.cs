@@ -392,7 +392,8 @@ internal static partial class CloudMonitorEndpoints
                           orderby s.CheckedAt descending
                           join n in db.MonitoringNodes on s.NodeId equals n.Id into nodes
                           from n in nodes.DefaultIfEmpty()
-                          select new CloudMonitorSampleDto(s.CheckedAt, s.State, s.LatencyMs, s.HttpStatus, n == null ? null : n.Region, s.Problem))
+                          select new CloudMonitorSampleRow { Sample = s, Node = n })
+            .ProjectToDto()
             .Take(MaxSamples).ToListAsync(http.RequestAborted);
         rows.Reverse();
         http.Response.Headers.CacheControl = HttpCaching.Private;
@@ -418,10 +419,7 @@ internal static partial class CloudMonitorEndpoints
             .OrderBy(h => h.Hour)
             .ToListAsync(http.RequestAborted);
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new CloudMonitorHourListDto([.. rows.Select(h => new CloudMonitorHourDto(
-            h.Hour, h.Checks, h.Failures, h.Warnings,
-            h.LatencyCount == 0 ? null : (int)Math.Round((double)h.LatencySumMs / h.LatencyCount),
-            h.LatencyCount == 0 ? null : h.LatencyMaxMs))]));
+        return TypedResults.Ok(new CloudMonitorHourListDto([.. rows.Select(CloudMonitorMapper.ToDto)]));
     }
 
     private static async Task<Results<Ok<Page<CloudMonitorIncidentDto>>, ValidationProblem, ProblemHttpResult>> IncidentsAsync(

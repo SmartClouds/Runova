@@ -66,20 +66,12 @@ internal sealed class AuditLog(IDbContextFactory<CoreDbContext> contexts, TimePr
                 ? await db.AuditAnchors.AsNoTracking().FirstOrDefaultAsync(cancellationToken)
                 : null;
 
-            var stored = new AuditEvent
-            {
-                Id = (last?.Id ?? anchor?.LastPrunedId ?? 0) + 1,
-                At = time.GetUtcNow().ToUnixTimeMilliseconds(),
-                ActorUserId = entry.ActorUserId,
-                DeviceId = entry.DeviceId,
-                PeerUid = entry.PeerUid,
-                Action = entry.Action,
-                Target = entry.Target,
-                Parameters = redactor.Serialize(entry.Parameters),
-                Result = entry.Result,
-                PrevHash = last?.Hash ?? anchor?.LastPrunedHash ?? Genesis,
-                Hash = string.Empty,
-            };
+            var stored = AuditMapper.ToEvent(
+                entry,
+                (last?.Id ?? anchor?.LastPrunedId ?? 0) + 1,
+                time.GetUtcNow().ToUnixTimeMilliseconds(),
+                redactor.Serialize(entry.Parameters),
+                last?.Hash ?? anchor?.LastPrunedHash ?? Genesis);
             stored.Hash = HashOf(stored);
             db.AuditEvents.Add(stored);
             await db.SaveChangesAsync(cancellationToken);

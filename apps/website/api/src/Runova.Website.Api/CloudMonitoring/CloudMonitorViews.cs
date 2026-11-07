@@ -62,7 +62,7 @@ internal sealed class CloudMonitorViews(AppDbContext db, TimeProvider time)
         {
             var status = statuses.GetValueOrDefault(m.Id);
             var open = status?.OpenIncidentId is { } openId ? incidents.FirstOrDefault(i => i.Id == openId) : null;
-            return ToDto(m, Status(m, status, open, uptime.GetValueOrDefault(m.Id)), muted.Contains(m.Id), canWrite.GetValueOrDefault(m.ScopeId));
+            return CloudMonitorMapper.ToDto(m, Status(m, status, open, uptime.GetValueOrDefault(m.Id)), muted.Contains(m.Id), canWrite.GetValueOrDefault(m.ScopeId));
         })];
     }
 
@@ -73,7 +73,7 @@ internal sealed class CloudMonitorViews(AppDbContext db, TimeProvider time)
     public async Task<IReadOnlyList<CloudMonitorLiveDto>> LiveAsync(IReadOnlyCollection<long> ids, CancellationToken ct = default)
     {
         var all = await ListAsync(db.CloudMonitors.Where(m => ids.Contains(m.Id)), 0, new Dictionary<long, bool>(), ct);
-        return [.. all.Select(m => new CloudMonitorLiveDto(m.Id, m.ScopeId, m.ItemId, m.Paused, m.Status))];
+        return [.. all.Select(CloudMonitorMapper.ToLiveDto)];
     }
 
     /// <summary>Incidents with the regions of the nodes that saw and confirmed them.</summary>
@@ -83,10 +83,7 @@ internal sealed class CloudMonitorViews(AppDbContext db, TimeProvider time)
                from seen in seenBy.DefaultIfEmpty()
                join confirmed in db.MonitoringNodes on i.ConfirmedByNodeId equals confirmed.Id into confirmedBy
                from confirmed in confirmedBy.DefaultIfEmpty()
-               select new CloudMonitorIncidentDto(
-                   i.Id, i.MonitorId, i.OpenedAt, i.ResolvedAt, i.State, i.Problem,
-                   seen == null ? null : seen.Region,
-                   confirmed == null ? null : confirmed.Region)).ToListAsync(ct);
+               select new CloudMonitorIncidentRow { Incident = i, SeenBy = seen, ConfirmedBy = confirmed }).ProjectToDto().ToListAsync(ct);
 
     public static CloudMonitorStatusDto Status(CloudMonitor monitor, CloudMonitorStatus? status, CloudMonitorIncidentDto? open, double? uptime)
     {
@@ -107,10 +104,4 @@ internal sealed class CloudMonitorViews(AppDbContext db, TimeProvider time)
             open,
             uptime is { } u ? Math.Round(u, 4) : null);
     }
-
-    public static CloudMonitorDto ToDto(CloudMonitor m, CloudMonitorStatusDto status, bool muted, bool canWrite) =>
-        new(
-            m.Id, m.ScopeId, m.ItemId, m.Name, m.ProjectName, m.EnvironmentName, m.Url, m.IntervalSec, m.TimeoutSec, m.AuthMode,
-            m.SealedSecret is not null, m.SecretChangedAt, m.AllowInsecure, m.Paused, m.SuspendedReason, m.NotifyInApp, m.NotifyTelegram,
-            muted, canWrite, status, m.CreatedAt, m.UpdatedAt, m.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
 }

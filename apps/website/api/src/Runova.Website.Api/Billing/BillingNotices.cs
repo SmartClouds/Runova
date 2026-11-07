@@ -54,7 +54,7 @@ internal sealed partial class BillingNotices(
         {
             try
             {
-                await hub.Clients.User(notification.UserId.ToString(CultureInfo.InvariantCulture)).NotificationCreated(NotificationEndpoints.ToDto(notification));
+                await hub.Clients.User(notification.UserId.ToString(CultureInfo.InvariantCulture)).NotificationCreated(NotificationMapper.ToDto(notification));
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {

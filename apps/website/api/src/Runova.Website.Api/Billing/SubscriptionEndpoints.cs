@@ -111,9 +111,8 @@ internal static class SubscriptionEndpoints
         var rows = await (from p in mine
                           join t in db.AccountTypes on p.AccountTypeId equals t.Id
                           orderby p.CreatedAt descending, p.Id descending
-                          select new PaymentDto(
-                              p.Id, p.Provider, p.AccountTypeId, t.Name, p.Months, p.AmountCents, p.Currency, p.Status, p.ProviderStatus,
-                              p.Status == PaymentStatuses.Pending ? p.InvoiceUrl : null, p.CreatedAt, p.PaidAt))
+                          select new PaymentRow { Payment = p, AccountType = t })
+            .ProjectToDto()
             .Skip(request.Skip).Take(request.Size).ToListAsync();
         var result = Page.Of(rows, request, total);
         PageLinks.Set(http, result);
@@ -219,9 +218,8 @@ internal static class SubscriptionEndpoints
                           join t in db.AccountTypes on p.AccountTypeId equals t.Id
                           join u in db.Users on p.UserId equals u.Id
                           orderby p.CreatedAt descending, p.Id descending
-                          select new AdminPaymentDto(
-                              p.Id, p.UserId, u.Email, p.Provider, p.OrderId, p.AccountTypeId, t.Name, p.Months, p.AmountCents, p.Currency,
-                              p.Status, p.ProviderStatus, p.CreatedAt, p.PaidAt))
+                          select new AdminPaymentRow { Payment = p, AccountType = t, User = u })
+            .ProjectToDto()
             .Skip(request.Skip).Take(request.Size).ToListAsync();
         var result = Page.Of(rows, request, total);
         PageLinks.Set(http, result);

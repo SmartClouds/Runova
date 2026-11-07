@@ -24,7 +24,7 @@ internal sealed class MetricsStore(IDbContextFactory<CoreDbContext> contexts)
         await db.MetricSamples
             .Where(row => row.Resolution == resolution && row.At == average.AtUnixMs)
             .ExecuteDeleteAsync(cancellationToken);
-        db.MetricSamples.Add(ToRow(resolution, average));
+        db.MetricSamples.Add(MetricsMapper.ToRow(average, resolution));
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -43,7 +43,7 @@ internal sealed class MetricsStore(IDbContextFactory<CoreDbContext> contexts)
             .OrderByDescending(row => row.At)
             .Take(limit)
             .ToListAsync(cancellationToken);
-        return [.. rows.OrderBy(row => row.At).Select(ToSample)];
+        return [.. rows.OrderBy(row => row.At).Select(MetricsMapper.ToSample)];
     }
 
     public async Task<int> PruneAsync(DateTimeOffset now, CancellationToken cancellationToken)
@@ -55,45 +55,4 @@ internal sealed class MetricsStore(IDbContextFactory<CoreDbContext> contexts)
             .Where(row => (row.Resolution == Minute && row.At < minutes) || (row.Resolution == QuarterHour && row.At < quarters))
             .ExecuteDeleteAsync(cancellationToken);
     }
-
-    private static MetricSample ToRow(int resolution, MetricsSample sample) => new()
-    {
-        Resolution = resolution,
-        At = sample.AtUnixMs,
-        CpuPercent = sample.CpuPercent,
-        CpuIowaitPercent = sample.CpuIowaitPercent,
-        CpuStealPercent = sample.CpuStealPercent,
-        Load1 = sample.Load1,
-        Load5 = sample.Load5,
-        Load15 = sample.Load15,
-        MemoryTotalBytes = sample.MemoryTotalBytes,
-        MemoryUsedBytes = sample.MemoryUsedBytes,
-        SwapTotalBytes = sample.SwapTotalBytes,
-        SwapUsedBytes = sample.SwapUsedBytes,
-        NetworkReceiveBytesPerSecond = sample.NetworkReceiveBytesPerSecond,
-        NetworkTransmitBytesPerSecond = sample.NetworkTransmitBytesPerSecond,
-        DiskReadBytesPerSecond = sample.DiskReadBytesPerSecond,
-        DiskWriteBytesPerSecond = sample.DiskWriteBytesPerSecond,
-        DiskTotalBytes = sample.DiskTotalBytes,
-        DiskUsedBytes = sample.DiskUsedBytes,
-    };
-
-    private static MetricsSample ToSample(MetricSample row) => new(
-        row.At,
-        row.CpuPercent,
-        row.CpuIowaitPercent,
-        row.CpuStealPercent,
-        row.Load1,
-        row.Load5,
-        row.Load15,
-        row.MemoryTotalBytes,
-        row.MemoryUsedBytes,
-        row.SwapTotalBytes,
-        row.SwapUsedBytes,
-        row.NetworkReceiveBytesPerSecond,
-        row.NetworkTransmitBytesPerSecond,
-        row.DiskReadBytesPerSecond,
-        row.DiskWriteBytesPerSecond,
-        row.DiskTotalBytes,
-        row.DiskUsedBytes);
 }

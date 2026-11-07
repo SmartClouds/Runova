@@ -147,7 +147,7 @@ internal static class PostWriteEndpoints
             return precondition;
         }
 
-        var before = JsonSerializer.SerializeToNode(ToWriteDto(post), json)!.AsObject();
+        var before = JsonSerializer.SerializeToNode(PostWriteMapper.ToWriteDto(post), json)!.AsObject();
         var errors = new Dictionary<string, string[]>();
         var dto = await ReadAsync(http, db, json, merge ? before : null, errors);
         if (dto is null)
@@ -162,7 +162,7 @@ internal static class PostWriteEndpoints
 
         var now = time.GetUtcNow();
         await ApplyAsync(dto, post, db, renderer, now);
-        var after = JsonSerializer.SerializeToNode(ToWriteDto(post), json)!.AsObject();
+        var after = JsonSerializer.SerializeToNode(PostWriteMapper.ToWriteDto(post), json)!.AsObject();
         var changed = after.Where(p => !JsonNode.DeepEquals(p.Value, before[p.Key])).Select(p => p.Key).ToList();
 
         // A write that changes nothing saves nothing, so the version and the audit log stay as they are.
@@ -301,18 +301,6 @@ internal static class PostWriteEndpoints
             post.Tags = [.. slugs.Select(slug => known[slug])];
         }
     }
-
-    private static PostWriteDto ToWriteDto(Post post) => new()
-    {
-        Slug = post.Slug,
-        Title = post.Title,
-        Excerpt = post.Excerpt,
-        BodyMarkdown = post.BodyMarkdown,
-        CoverMediaId = post.CoverMediaId,
-        Tags = [.. post.Tags.OrderBy(t => t.Slug, StringComparer.Ordinal).Select(t => t.Name)],
-        Status = post.Status,
-        PublishedAt = post.PublishedAt,
-    };
 
     private static async Task<PostAdminDto> ToAdminDtoAsync(AppDbContext db, IConfiguration configuration, Post post)
     {

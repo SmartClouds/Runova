@@ -34,7 +34,7 @@ internal sealed class DnsCredentials(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var rows = await db.DnsCredentials.AsNoTracking().OrderBy(c => c.Zone).ToListAsync(cancellationToken);
-        return [.. rows.Select(ToInfo)];
+        return [.. rows.Select(DnsCredentialMapper.ToInfo)];
     }
 
     public async Task<DnsCredentialSaveResult> SaveAsync(DnsCredentialRequest? request, Requester who, CancellationToken cancellationToken)
@@ -97,7 +97,7 @@ internal sealed class DnsCredentials(
         row.CreatedBy = who.UserName;
         row.LastError = null;
         await db.SaveChangesAsync(cancellationToken);
-        return new DnsCredentialSaveResult([], ToInfo(row));
+        return new DnsCredentialSaveResult([], DnsCredentialMapper.ToInfo(row));
     }
 
     public async Task<bool> RemoveAsync(string? zone, CancellationToken cancellationToken)
@@ -122,7 +122,7 @@ internal sealed class DnsCredentials(
         var row = zones
             .Where(c => name == c.Zone || name.EndsWith("." + c.Zone, StringComparison.Ordinal))
             .MaxBy(c => c.Zone.Length);
-        return row is null ? null : new DnsZoneToken(row.Zone, row.ZoneId, _tokens.Unprotect(row.ProtectedToken));
+        return row is null ? null : DnsCredentialMapper.ToZoneToken(row, _tokens.Unprotect(row.ProtectedToken));
     }
 
     /// <summary>Records a use, and what went wrong with it if anything did.</summary>
@@ -134,7 +134,4 @@ internal sealed class DnsCredentials(
             update => update.SetProperty(c => c.LastUsedAt, Now).SetProperty(c => c.LastError, clipped),
             CancellationToken.None);
     }
-
-    private static DnsCredentialInfo ToInfo(DnsCredential row) =>
-        new(row.Zone, row.ZoneId, row.Provider, row.CreatedAt, row.UpdatedAt, row.TokenId, row.CreatedBy, row.LastUsedAt, row.LastError);
 }

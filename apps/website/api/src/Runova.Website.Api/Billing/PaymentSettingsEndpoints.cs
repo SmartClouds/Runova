@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -197,20 +196,7 @@ internal static class PaymentSettingsEndpoints
         var api = SiteUrl.From(configuration) + ApiV1.Prefix;
         Versions.SetETag(http.Response, row.Version);
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new PaymentSettingsDto(
-            row.StripeEnabled,
-            row.StripePublishableKey,
-            row.StripeSecretKeySealed is not null,
-            row.StripeWebhookSecretSealed is not null,
-            api + StripeEventsPath,
-            row.NowPaymentsEnabled,
-            row.NowPaymentsApiKeySealed is not null,
-            row.NowPaymentsIpnSecretSealed is not null,
-            row.NowPaymentsSandbox,
-            api + NowPaymentsEventsPath,
-            row.CryptoMonths,
-            row.UpdatedAt,
-            row.Version.ToString(CultureInfo.InvariantCulture)));
+        return TypedResults.Ok(PaymentSettingsMapper.ToDto(row, api + StripeEventsPath, api + NowPaymentsEventsPath));
     }
 
     private static bool Switch(JsonObject body, string name, bool? value, bool current, Dictionary<string, string[]> errors)

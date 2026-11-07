@@ -124,7 +124,7 @@ internal sealed partial class DockerOperations(
     public async Task<ContainerEnvVariable[]> RevealEnvironmentAsync(string container, CancellationToken cancellationToken)
     {
         var inspection = await engine.InspectContainerAsync(container, cancellationToken);
-        return [.. inspection.Environment.Select(entry => new ContainerEnvVariable(entry.Key, entry.Value))];
+        return [.. inspection.Environment.Select(DockerMapping.ToVariable)];
     }
 
     public Task<EngineInfo> InfoAsync(CancellationToken cancellationToken) => engine.GetInfoAsync(cancellationToken);

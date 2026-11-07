@@ -103,7 +103,7 @@ internal static class AuditEntryEndpoints
         var items = await query
             .OrderByDescending(e => e.At).ThenByDescending(e => e.Id)
             .Skip(request.Skip).Take(request.Size)
-            .Select(e => new AuditEntryDto(e.Id, e.At, e.ActorKind, e.ActorId, e.Action, e.TargetType, e.TargetId, e.Ip))
+            .ProjectToDto()
             .ToListAsync();
 
         var result = Page.Of(items, request, total);

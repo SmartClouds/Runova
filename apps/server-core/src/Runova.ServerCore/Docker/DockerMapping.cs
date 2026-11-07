@@ -1,12 +1,19 @@
 using System.Globalization;
 using System.Text.Json;
 using Docker.DotNet.Models;
+using Riok.Mapperly.Abstractions;
 using Runova.ServerCore.Contracts;
+using VolumeInfo = Runova.ServerCore.Contracts.VolumeInfo;
 
 namespace Runova.ServerCore.Docker;
 
-/// <summary>Docker.DotNet's models to the core's own types.</summary>
-internal static class DockerMapping
+/// <summary>
+/// Docker.DotNet's models to the core's own types. The list and info responses map member by
+/// member through Mapperly. Containers, inspections, stats and events are put together from
+/// several nested parts and labels, with fallbacks for older engines, so those stay written out.
+/// </summary>
+[Mapper]
+internal static partial class DockerMapping
 {
     /// <summary>
     /// Go's os.FileMode (what the archive API's stat header carries) as a POSIX st_mode: the
@@ -171,6 +178,50 @@ internal static class DockerMapping
             message.Actor?.Attributes is { } attributes ? new Dictionary<string, string>(attributes, StringComparer.Ordinal) : _noLabels);
     }
 
+    /// <summary>An environment variable the app asked to see, value and all.</summary>
+    [MapProperty(nameof(KeyValuePair<string, string>.Key), nameof(ContainerEnvVariable.Name))]
+    public static partial ContainerEnvVariable ToVariable(KeyValuePair<string, string> entry);
+
+    /// <summary>One message of a pull's progress stream.</summary>
+    [MapProperty(nameof(JSONMessage.ID), nameof(PullProgress.Layer))]
+    [MapProperty([nameof(JSONMessage.Progress), nameof(JSONProgress.Current)], nameof(PullProgress.Current))]
+    [MapProperty([nameof(JSONMessage.Progress), nameof(JSONProgress.Total)], nameof(PullProgress.Total))]
+    [MapProperty([nameof(JSONMessage.Error), nameof(JSONError.Message)], nameof(PullProgress.Error))]
+    public static partial PullProgress ToProgress(JSONMessage message);
+
+    /// <summary>An image without the placeholder tags and digests of an untagged one; the containers using it are counted by the caller.</summary>
+    [MapProperty(nameof(ImagesListResponse.ID), nameof(ImageInfo.Id))]
+    [MapProperty(nameof(ImagesListResponse.RepoTags), nameof(ImageInfo.Tags), Use = nameof(RealTags))]
+    [MapProperty(nameof(ImagesListResponse.RepoDigests), nameof(ImageInfo.Digests), Use = nameof(RealDigests))]
+    [MapProperty(nameof(ImagesListResponse.Created), nameof(ImageInfo.CreatedAtUnixMs), Use = nameof(UnixMs))]
+    [MapProperty(nameof(ImagesListResponse.Size), nameof(ImageInfo.SizeBytes))]
+    public static partial ImageInfo ToInfo(ImagesListResponse image, int containers);
+
+    /// <summary>A volume, with its size only when the engine measured it; the containers using it are counted by the caller.</summary>
+    [MapProperty(nameof(VolumeResponse.Driver), nameof(VolumeInfo.Driver), Use = nameof(DriverOrLocal))]
+    [MapProperty(nameof(VolumeResponse.Mountpoint), nameof(VolumeInfo.Mountpoint), Use = nameof(OrEmpty))]
+    [MapProperty(nameof(VolumeResponse.CreatedAt), nameof(VolumeInfo.CreatedAtUnixMs), Use = nameof(CreatedAt))]
+    [MapPropertyFromSource(nameof(VolumeInfo.SizeBytes), Use = nameof(MeasuredSize))]
+    [MapProperty(nameof(VolumeResponse.Labels), nameof(VolumeInfo.ComposeProject), Use = nameof(ComposeProject))]
+    public static partial VolumeInfo ToInfo(VolumeResponse volume, int containers);
+
+    /// <summary>A network; bridge, host and none are built in. The containers on it are counted by the caller.</summary>
+    [MapProperty(nameof(NetworkResponse.ID), nameof(NetworkInfo.Id))]
+    [MapProperty(nameof(NetworkResponse.Driver), nameof(NetworkInfo.Driver), Use = nameof(OrEmpty))]
+    [MapProperty(nameof(NetworkResponse.Scope), nameof(NetworkInfo.Scope), Use = nameof(ScopeOrLocal))]
+    [MapProperty(nameof(NetworkResponse.Name), nameof(NetworkInfo.BuiltIn), Use = nameof(IsBuiltIn))]
+    [MapProperty(nameof(NetworkResponse.IPAM), nameof(NetworkInfo.Subnets), Use = nameof(Subnets))]
+    [MapProperty(nameof(NetworkResponse.Labels), nameof(NetworkInfo.ComposeProject), Use = nameof(ComposeProject))]
+    public static partial NetworkInfo ToInfo(NetworkResponse network, int containers);
+
+    /// <summary>What the engine says about itself, each value only when it gave one.</summary>
+    [MapProperty(nameof(SystemInfoResponse.Driver), nameof(EngineInfo.StorageDriver), Use = nameof(Blank))]
+    [MapProperty(nameof(SystemInfoResponse.CgroupVersion), nameof(EngineInfo.CgroupVersion), Use = nameof(CgroupVersion))]
+    [MapProperty(nameof(SystemInfoResponse.NCPU), nameof(EngineInfo.Cpus), Use = nameof(Cpus))]
+    [MapProperty(nameof(SystemInfoResponse.MemTotal), nameof(EngineInfo.MemoryBytes), Use = nameof(MemoryBytes))]
+    [MapProperty(nameof(SystemInfoResponse.DriverStatus), nameof(EngineInfo.BackingFilesystem), Use = nameof(BackingFilesystem))]
+    public static partial EngineInfo ToInfo(SystemInfoResponse info);
+
     public static string? Label(IDictionary<string, string>? labels, string name) =>
         labels is not null && labels.TryGetValue(name, out var value) && value.Length > 0 ? value : null;
 
@@ -249,6 +300,36 @@ internal static class DockerMapping
     }
 
     private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    private static string OrEmpty(string? value) => value ?? string.Empty;
+
+    private static string[] RealTags(IList<string>? tags) => [.. (tags ?? []).Where(tag => tag != "<none>:<none>")];
+
+    private static string[] RealDigests(IList<string>? digests) => [.. (digests ?? []).Where(digest => digest != "<none>@<none>")];
+
+    private static string DriverOrLocal(string? driver) => driver ?? "local";
+
+    private static long? CreatedAt(string? createdAt) => DockerTime.ToUnixMs(createdAt);
+
+    private static long? MeasuredSize(VolumeResponse volume) => volume.UsageData is { Size: >= 0 } usage ? usage.Size : null;
+
+    private static string? ComposeProject(IDictionary<string, string>? labels) => Label(labels, ProjectLabel);
+
+    private static string ScopeOrLocal(string? scope) => scope ?? "local";
+
+    private static bool IsBuiltIn(string name) => name is "bridge" or "host" or "none";
+
+    private static string[] Subnets(IPAM? ipam) => [.. (ipam?.Config ?? []).Select(config => config.Subnet).Where(subnet => !string.IsNullOrEmpty(subnet))];
+
+    private static int? CgroupVersion(string? version) =>
+        int.TryParse(version, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgroup) ? cgroup : null;
+
+    private static int? Cpus(long count) => count > 0 ? (int)count : null;
+
+    private static long? MemoryBytes(long total) => total > 0 ? total : null;
+
+    private static string? BackingFilesystem(IList<string[]>? driverStatus) =>
+        Blank(driverStatus?.FirstOrDefault(pair => pair is { Length: 2 } && pair[0] == "Backing Filesystem")?[1]);
 
     /// <summary>
     /// The names other containers on the network reach this one by (DNSNames from API 1.45, the

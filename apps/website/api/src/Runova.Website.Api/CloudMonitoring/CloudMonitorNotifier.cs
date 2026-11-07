@@ -64,7 +64,7 @@ internal sealed partial class CloudMonitorNotifier(
             foreach (var change in scope)
             {
                 var monitor = change.Monitor;
-                var label = new MonitorLabel(monitor.Name, monitor.ProjectName, monitor.EnvironmentName);
+                var label = CloudMonitorMapper.ToLabel(monitor);
                 var message = change.Down
                     ? CloudMonitorMessages.Down(label, change.Incident.State, change.Incident.Problem, change.SeenFrom, change.ConfirmedFrom)
                     : CloudMonitorMessages.Recovered(label, (change.Incident.ResolvedAt ?? now) - change.Incident.OpenedAt);
@@ -104,7 +104,7 @@ internal sealed partial class CloudMonitorNotifier(
         telegram.SendSoon();
         foreach (var notification in created)
         {
-            await SendAsync(notification.UserId, client => client.NotificationCreated(NotificationEndpoints.ToDto(notification)));
+            await SendAsync(notification.UserId, client => client.NotificationCreated(NotificationMapper.ToDto(notification)));
         }
 
         if (monitorIds.Count == 0)

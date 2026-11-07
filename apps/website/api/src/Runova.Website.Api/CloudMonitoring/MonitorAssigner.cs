@@ -51,7 +51,7 @@ internal sealed class MonitorAssigner(
                 .Where(n => n.Status != NodeStatuses.Revoked && n.Status != NodeStatuses.Pending)
                 .ToListAsync(ct);
             var fresh = time.GetUtcNow() - options.Value.OfflineAfter;
-            var slots = nodes.Select(n => new NodeSlot(n.Id, n.Region, n.Capacity, Eligible(n, fresh))).ToList();
+            var slots = nodes.Select(n => CloudMonitorMapper.ToSlot(n, Eligible(n, fresh))).ToList();
 
             // Locked in id order, as ingestion locks them, so the two never wait on each other in a circle.
             var statuses = await db.CloudMonitorStatuses
@@ -141,17 +141,8 @@ internal sealed class MonitorAssigner(
         return [.. monitors.Select(Definition)];
     }
 
-    public MonitorDefinition Definition(CloudMonitor monitor) => new()
-    {
-        Id = monitor.Id,
-        Version = monitor.DefinitionVersion,
-        Url = monitor.Url,
-        IntervalSec = monitor.IntervalSec,
-        TimeoutSec = monitor.TimeoutSec,
-        AuthMode = monitor.AuthMode == CloudAuthModes.None ? "" : monitor.AuthMode,
-        Secret = secrets.Open(monitor.SealedSecret) ?? "",
-        AllowInsecure = monitor.AllowInsecure,
-    };
+    public MonitorDefinition Definition(CloudMonitor monitor) =>
+        CloudMonitorMapper.ToDefinition(monitor, secrets.Open(monitor.SealedSecret) ?? "");
 
     /// <summary>
     /// A node takes monitors while it is not drained and was heard from lately. One that just

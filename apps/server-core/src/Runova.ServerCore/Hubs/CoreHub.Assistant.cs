@@ -58,7 +58,7 @@ internal sealed partial class CoreHub
     {
         var issued = assistant.Approvals.Issue(SessionId, DeviceId)
             ?? throw new HubException("Too many approvals are waiting. Approve or skip the ones open first.");
-        return Task.FromResult(new ExecApprovalNonce(issued.Id, issued.Nonce, issued.ExpiresAt));
+        return Task.FromResult(AssistantMapper.ToNonce(issued));
     }
 
     [Authorize(Policy = CorePolicies.Admin)]
@@ -189,7 +189,7 @@ internal sealed partial class CoreHub
         }
 
         var seeded = await assistant.Secrets.RedactorAsync(cancellationToken);
-        var query = new JournalQuery(request.Unit, request.Lines ?? JournalUnits.DefaultLines, request.SinceUnixMs, request.Follow);
+        var query = AssistantMapper.ToQuery(request);
         var lines = Channel.CreateBounded<JournalLine>(new BoundedChannelOptions(4_096) { FullMode = BoundedChannelFullMode.DropOldest });
         var reading = Task.Run(
             async () =>

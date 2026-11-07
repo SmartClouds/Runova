@@ -54,7 +54,7 @@ internal sealed class TelegramFiles(ITelegramAccount account) : ICloudFiles
             .Where(document => BackupNaming.HasPrefix(document.FileName)
                 || document.FileName.StartsWith(".runova", StringComparison.Ordinal)
                 || document.FileName.StartsWith(LegacyNames.BackupProbePrefix, StringComparison.Ordinal))
-            .Select(document => new CloudFile(document.MessageId.ToString(System.Globalization.CultureInfo.InvariantCulture), document.FileName, document.Size))];
+            .Select(DestinationMapper.ToCloudFile)];
 
     public async Task PutAsync(string name, Stream content, long length, IProgress<long>? progress, CancellationToken cancellationToken)
     {

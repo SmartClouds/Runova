@@ -37,7 +37,7 @@ internal sealed class RegistryCredentials(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var rows = await db.RegistryCredentials.AsNoTracking().ToListAsync(cancellationToken);
-        return [.. rows.OrderBy(r => r.Registry, StringComparer.Ordinal).Select(ToInfo)];
+        return [.. rows.OrderBy(r => r.Registry, StringComparer.Ordinal).Select(RegistryCredentialMapper.ToInfo)];
     }
 
     public async Task<RegistryCredentialInfo> SaveAsync(SaveRegistryCredentialRequest? request, StackCaller caller, CancellationToken cancellationToken)
@@ -61,16 +61,7 @@ internal sealed class RegistryCredentials(
                 throw new RegistryRefusedException($"This server already stores {MaxStored} registry credentials. Remove one first.");
             }
 
-            row = new RegistryCredentialRecord
-            {
-                Id = Guid.NewGuid(),
-                Registry = login.Registry,
-                Username = login.Username,
-                SealedSecret = Seal(login.Secret),
-                CreatedAt = Now,
-                UpdatedAt = Now,
-                CreatedBy = caller.UserName,
-            };
+            row = RegistryCredentialMapper.ToRecord(login, Guid.NewGuid(), Seal(login.Secret), Now, Now, caller.UserName);
             db.RegistryCredentials.Add(row);
         }
         else
@@ -89,7 +80,7 @@ internal sealed class RegistryCredentials(
             login.Registry,
             new Dictionary<string, string?> { ["username"] = login.Username, ["replaced"] = replaced ? "true" : "false" },
             cancellationToken);
-        return ToInfo(row);
+        return RegistryCredentialMapper.ToInfo(row);
     }
 
     public async Task DeleteAsync(Guid id, StackCaller caller, CancellationToken cancellationToken)
@@ -126,7 +117,7 @@ internal sealed class RegistryCredentials(
         {
             try
             {
-                logins.Add(new RegistryLogin(row.Registry, row.Username, Unseal(row.SealedSecret), RegistryLoginSource.Stored));
+                logins.Add(RegistryCredentialMapper.ToLogin(row, Unseal(row.SealedSecret)));
             }
             catch (System.Security.Cryptography.CryptographicException)
             {
@@ -196,9 +187,6 @@ internal sealed class RegistryCredentials(
     private string Seal(string secret) => Convert.ToBase64String(_protector.Protect(Encoding.UTF8.GetBytes(secret)));
 
     private string Unseal(string sealedSecret) => Encoding.UTF8.GetString(_protector.Unprotect(Convert.FromBase64String(sealedSecret)));
-
-    private static RegistryCredentialInfo ToInfo(RegistryCredentialRecord row) =>
-        new(row.Id, row.Registry, row.Username, row.CreatedAt, row.UpdatedAt, row.CreatedBy, row.LastUsedAt);
 
     private static string? Clip(string? value) => value is null ? null : value.Length > 100 ? value[..100] : value;
 

@@ -116,7 +116,7 @@ internal sealed partial class EmailOutboxJob(AppDbContext db, IEmailTransport tr
         {
             try
             {
-                await transport.SendAsync(new OutgoingEmail(message.To, message.Kind, message.Subject, message.TextBody ?? "", message.HtmlBody), cancellationToken);
+                await transport.SendAsync(EmailMapper.ToOutgoing(message), cancellationToken);
                 message.SentAt = time.GetUtcNow();
                 message.TextBody = null;
                 message.HtmlBody = null;

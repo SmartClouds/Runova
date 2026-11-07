@@ -152,7 +152,7 @@ internal sealed class ServerRestorer(
                 await StepAsync($"Put back volume {volume.Name}", async () =>
                 {
                     await using var file = File.OpenRead(Path.Combine(Folder, "volumes", volume.File));
-                    await docker.ImportVolumeAsync(new BackupVolume(volume.Name, volume.Driver, volume.Labels), file, cancellationToken);
+                    await docker.ImportVolumeAsync(BackupMapper.ToVolume(volume), file, cancellationToken);
                     return null;
                 });
             }

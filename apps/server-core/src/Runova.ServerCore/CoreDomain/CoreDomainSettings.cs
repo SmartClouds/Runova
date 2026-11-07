@@ -86,7 +86,7 @@ internal sealed class CoreDomainStore(CoreDirectories directories)
             var path = Path;
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
             var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
-            var stored = new CoreDomainSettings.Stored(settings.Enabled, settings.Domain, settings.Port, settings.Key, settings.Sources, settings.ChangedAt, settings.ChangedBy, settings.Mode);
+            var stored = CoreDomainMapper.ToStored(settings);
             File.WriteAllText(temporary, JsonSerializer.Serialize(stored, CoreJson.Options));
             if (!OperatingSystem.IsWindows())
             {
@@ -117,7 +117,7 @@ internal sealed class CoreDomainStore(CoreDirectories directories)
 
             // On without a port or a key is not a state the core can serve; it reads as off.
             var enabled = stored.Enabled && stored.Port > 0 && stored.Key is not null && stored.Domain is not null;
-            return new CoreDomainSettings(enabled, stored.Domain, stored.Port, stored.Key, sources, stored.ChangedAt, stored.ChangedBy, stored.Mode ?? Contracts.CoreDomainMode.Direct);
+            return CoreDomainMapper.ToSettings(stored, enabled, sources);
         }
         catch (JsonException)
         {

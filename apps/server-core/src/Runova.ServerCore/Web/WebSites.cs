@@ -253,7 +253,7 @@ internal sealed partial class WebSites(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var rows = await db.StreamProxies.AsNoTracking().OrderBy(p => p.Id).ToListAsync(cancellationToken);
-        return [.. rows.Select(ToInfo)];
+        return [.. rows.Select(SiteMapping.ToInfo)];
     }
 
     public async Task<StreamProxySaveResult> SaveStreamAsync(StreamProxySettings settings, CancellationToken cancellationToken)
@@ -298,7 +298,7 @@ internal sealed partial class WebSites(
         existing.Settings = SiteMapping.Serialize(settings with { AllowFrom = settings.AllowFrom ?? [] });
         existing.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
-        return new StreamProxySaveResult([], ToInfo(existing));
+        return new StreamProxySaveResult([], SiteMapping.ToInfo(existing));
     }
 
     public async Task<bool> DeleteStreamAsync(string id, CancellationToken cancellationToken)
@@ -344,9 +344,7 @@ internal sealed partial class WebSites(
     async Task<IReadOnlyList<SiteSnippetRow>> INginxMoveData.SnippetsAsync(CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        return await db.Sites.AsNoTracking()
-            .Select(site => new SiteSnippetRow(site.Id, site.ServerSnippet, site.LocationSnippet))
-            .ToListAsync(cancellationToken);
+        return await SiteMapping.ToSnippetRows(db.Sites.AsNoTracking()).ToListAsync(cancellationToken);
     }
 
     async Task INginxMoveData.SetSnippetsAsync(IReadOnlyList<SiteSnippetRow> snippets, CancellationToken cancellationToken)
@@ -472,17 +470,10 @@ internal sealed partial class WebSites(
             .Where(problem => problem.Field.StartsWith(field, StringComparison.Ordinal))];
     }
 
-    private SiteInfo ToInfo(Site site, SiteCertificate? certificate) => new(
-        SiteMapping.Deserialize<SiteSettings>(site.Settings),
+    private SiteInfo ToInfo(Site site, SiteCertificate? certificate) => SiteMapping.ToInfo(
+        site,
         site.AppliedFingerprint == SiteFingerprint(site, certificate is { RevokedAt: null } ? certificate : null),
-        site.CreatedAt,
-        site.UpdatedAt,
-        site.ServerSnippet,
-        site.LocationSnippet,
-        certificate is null ? null : CertificateViews.ToInfo(certificate, time.GetUtcNow()));
-
-    private static StreamProxyInfo ToInfo(StreamProxy row) =>
-        new(SiteMapping.Deserialize<StreamProxySettings>(row.Settings), row.AppliedFingerprint == SiteMapping.Fingerprint(row.Settings), row.UpdatedAt);
+        certificate is null ? null : CertificateMapper.ToInfo(certificate, time.GetUtcNow()));
 
     private static string SiteFingerprint(Site site, SiteCertificate? certificate) =>
         SiteMapping.Fingerprint(site.Settings, site.BasicAuthHashes, site.ServerSnippet, site.LocationSnippet, certificate?.ChainPem);

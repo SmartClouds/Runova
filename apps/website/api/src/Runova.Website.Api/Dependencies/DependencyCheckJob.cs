@@ -63,7 +63,7 @@ internal sealed partial class DependencyCheckJob(
         {
             var findings = packages[inventory.Id]
                 .SelectMany(p => FindingRules.For(
-                    new InventoryItem(p.Ecosystem, p.Name, p.Version, p.Dev),
+                    DependencyMapper.ToItem(p),
                     facts.GetValueOrDefault((p.Ecosystem, Key(p.Ecosystem, p.Name))),
                     advisories.GetValueOrDefault((p.Ecosystem, Key(p.Ecosystem, p.Name), p.Version)) ?? []))
                 .GroupBy(f => AlertPolicy.DedupeKey(inventory.Id, f))
@@ -154,14 +154,14 @@ internal sealed partial class DependencyCheckJob(
                 }
             }
 
-            result[(ecosystem, name)] = row is { Found: true } ? new PackageFactsView(row.LatestVersion, row.Deprecated) : null;
+            result[(ecosystem, name)] = row is { Found: true } ? DependencyMapper.ToView(row) : null;
         }
 
         await db.SaveChangesAsync(cancellationToken);
         return result;
     }
 
-    private sealed record StoredAdvisory(string Id, string Severity, string Summary, string? FixedVersion);
+    internal sealed record StoredAdvisory(string Id, string Severity, string Summary, string? FixedVersion);
 
     private async Task<Dictionary<(string, string, string), IReadOnlyList<AdvisoryView>>> AdvisoriesAsync(IReadOnlyList<InventoryPackage> packages, CancellationToken cancellationToken)
     {
@@ -190,10 +190,8 @@ internal sealed partial class DependencyCheckJob(
                     var found = ids[i]
                         .Select(id => details.GetValueOrDefault(id))
                         .OfType<OsvClient.Advisory>()
-                        .Select(a => new StoredAdvisory(
-                            a.Id,
-                            a.Severity,
-                            a.Summary,
+                        .Select(a => DependencyMapper.ToStored(
+                            a,
                             FindingRules.FirstFixAfter(version, a.Fixes
                                 .Where(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))
                                 .Select(f => f.Fixed))))
@@ -221,7 +219,7 @@ internal sealed partial class DependencyCheckJob(
         foreach (var (key, row) in cached)
         {
             var stored = JsonSerializer.Deserialize<List<StoredAdvisory>>(row.Advisories, _json) ?? [];
-            result[key] = [.. stored.Select(s => new AdvisoryView(s.Id, s.Severity, s.Summary, s.FixedVersion))];
+            result[key] = [.. stored.Select(DependencyMapper.ToView)];
         }
 
         return result;

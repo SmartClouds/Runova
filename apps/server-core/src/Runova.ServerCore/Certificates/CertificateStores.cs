@@ -23,11 +23,7 @@ internal sealed class EfAcmeAccountStore(IDbContextFactory<CoreDbContext> contex
         var pkcs8 = keys.UnprotectAccountKey(row.ProtectedKey);
         try
         {
-            return new AcmeAccount(new Uri(row.DirectoryUrl), new Uri(row.Url), AcmeAccountKey.FromPkcs8(pkcs8))
-            {
-                Status = AcmeStatuses.Parse(row.Status),
-                Contact = JsonSerializer.Deserialize<string[]>(row.Contact, CoreJson.Options) ?? [],
-            };
+            return CertificateMapper.ToAccount(row, AcmeAccountKey.FromPkcs8(pkcs8));
         }
         finally
         {
@@ -89,22 +85,7 @@ internal sealed class EfAcmeCertificateStore(IDbContextFactory<CoreDbContext> co
             return null;
         }
 
-        return new AcmeCertificateRecord
-        {
-            Name = row.SiteId,
-            DirectoryUrl = new Uri(row.DirectoryUrl),
-            Domains = CertificateViews.DomainsOf(row),
-            KeyType = Enum.Parse<AcmeCertificateKeyType>(row.KeyType),
-            ChainPem = row.ChainPem,
-            PrivateKeyPkcs8 = keys.UnprotectCertificateKey(row.ProtectedKey),
-            CertificateId = row.CertificateId,
-            NotBefore = DateTimeOffset.FromUnixTimeMilliseconds(row.NotBefore),
-            NotAfter = DateTimeOffset.FromUnixTimeMilliseconds(row.NotAfter),
-            IssuedAt = DateTimeOffset.FromUnixTimeMilliseconds(row.IssuedAt),
-            Replaced = row.Replaced,
-            PreferredChain = row.PreferredChain,
-            RevokedAt = row.RevokedAt is { } revoked ? DateTimeOffset.FromUnixTimeMilliseconds(revoked) : null,
-        };
+        return CertificateMapper.ToRecord(row, keys.UnprotectCertificateKey(row.ProtectedKey));
     }
 
     public async Task SaveAsync(AcmeCertificateRecord record, CancellationToken cancellationToken)

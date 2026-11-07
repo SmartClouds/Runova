@@ -76,13 +76,13 @@ internal sealed partial class FirewallManager(
             state.DefaultIncoming,
             state.DefaultOutgoing,
             state.Ipv6,
-            [.. state.Rules.Select(FirewallEvaluation.ToInfo)],
+            [.. state.Rules.Select(FirewallMapper.ToInfo)],
             [.. state.Warnings],
             ssh,
             WindowSeconds,
             Now,
             state.Zone,
-            pending is null ? null : ToInfo(pending),
+            pending is null ? null : FirewallMapper.ToInfo(pending),
             error);
     }
 
@@ -97,7 +97,7 @@ internal sealed partial class FirewallManager(
             .OrderByDescending(change => change.CreatedAt)
             .Take(limit)
             .ToListAsync(cancellationToken);
-        return [.. rows.Select(ToInfo)];
+        return [.. rows.Select(FirewallMapper.ToInfo)];
     }
 
     public async Task<FirewallChangePreview> PreviewAsync(FirewallChangeRequest request, FirewallCaller caller, CancellationToken cancellationToken)
@@ -108,7 +108,7 @@ internal sealed partial class FirewallManager(
             prepared.Plan.Summary,
             [.. prepared.Steps.Select(step => step.Display)],
             [.. prepared.Plan.Notes],
-            [.. prepared.Plan.Result.Rules.Select(FirewallEvaluation.ToInfo)],
+            [.. prepared.Plan.Result.Rules.Select(FirewallMapper.ToInfo)],
             prepared.Plan.Result.Active,
             prepared.Plan.Result.DefaultIncoming,
             prepared.Verdict,
@@ -189,7 +189,7 @@ internal sealed partial class FirewallManager(
             var row = await FindAsync(changeSetId, cancellationToken);
             if (row.State == FirewallChangeState.Confirmed)
             {
-                return ToInfo(row);
+                return FirewallMapper.ToInfo(row);
             }
 
             if (row.State != FirewallChangeState.AwaitingConfirmation)
@@ -235,7 +235,7 @@ internal sealed partial class FirewallManager(
             await FinishAsync(row.Id, FirewallChangeState.Confirmed, cause: null, error: null);
             await alerts.ResolveAsync(AlertKind.FirewallRolledBack, AlertResource, CancellationToken.None);
             await alerts.ResolveAsync(AlertKind.FirewallRollbackFailed, AlertResource, CancellationToken.None);
-            return ToInfo(await FindAsync(row.Id, CancellationToken.None));
+            return FirewallMapper.ToInfo(await FindAsync(row.Id, CancellationToken.None));
         }
         finally
         {
@@ -252,7 +252,7 @@ internal sealed partial class FirewallManager(
             var row = await FindAsync(changeSetId, cancellationToken);
             if (row.State == FirewallChangeState.RolledBack)
             {
-                return ToInfo(row);
+                return FirewallMapper.ToInfo(row);
             }
 
             if (row.State != FirewallChangeState.AwaitingConfirmation)
@@ -273,7 +273,7 @@ internal sealed partial class FirewallManager(
                 default:
                     await DisarmQuietlyAsync(row.Id);
                     await FinishAsync(row.Id, FirewallChangeState.RolledBack, FirewallRollbackCause.User, error: null);
-                    return ToInfo(await FindAsync(row.Id, CancellationToken.None));
+                    return FirewallMapper.ToInfo(await FindAsync(row.Id, CancellationToken.None));
             }
         }
         finally
@@ -396,7 +396,7 @@ internal sealed partial class FirewallManager(
                 Target: id.ToString("D"),
                 Parameters: new Dictionary<string, string?> { ["summary"] = plan.Summary, ["unattended"] = requestedBy }),
             token);
-        return ToInfo(await FindAsync(id, token));
+        return FirewallMapper.ToInfo(await FindAsync(id, token));
     }
 
     private static bool IsAllowFor(FirewallRule rule, IReadOnlyCollection<int> ports) =>
@@ -602,7 +602,7 @@ internal sealed partial class FirewallManager(
         }
 
         await UpdateAsync(id, row => row.State = FirewallChangeState.AwaitingConfirmation);
-        return ToInfo(await FindAsync(id, token));
+        return FirewallMapper.ToInfo(await FindAsync(id, token));
     }
 
     /// <summary>Reads the firewall back and checks the change is there; anything missing fails the change.</summary>
@@ -815,21 +815,6 @@ internal sealed partial class FirewallManager(
         });
 
     private FirewallChangeFiles Files(Guid id) => new(directories.Data, id);
-
-    private static FirewallChangeSetInfo ToInfo(FirewallChangeSet row) => new(
-        row.Id,
-        row.State,
-        row.Backend,
-        row.Summary,
-        JsonSerializer.Deserialize<string[]>(row.Commands, CoreJson.Options) ?? [],
-        row.CreatedAt,
-        row.GuardOverridden,
-        row.DeadlineAt,
-        row.FinishedAt,
-        row.RequestedByName,
-        row.AppliedFrom,
-        row.RolledBackBy,
-        row.Error);
 
     private static string StateWords(FirewallChangeSet row) => row.State switch
     {

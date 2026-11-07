@@ -73,7 +73,7 @@ internal sealed partial class StackOperations
             });
         }
 
-        var waiting = ToInfo(row).UnacknowledgedRisks;
+        var waiting = StackMapper.ToInfo(row).UnacknowledgedRisks;
         if (waiting.Length > 0)
         {
             await AuditAsync("stack.deploy", AuditResult.Denied, caller, stack.Name, new(Revision(number)) { ["unacknowledged"] = string.Join(' ', waiting) }, cancellationToken);

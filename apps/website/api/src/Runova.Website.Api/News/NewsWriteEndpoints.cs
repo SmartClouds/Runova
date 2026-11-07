@@ -145,7 +145,7 @@ internal static class NewsWriteEndpoints
             return precondition;
         }
 
-        var before = JsonSerializer.SerializeToNode(ToWriteDto(item), json)!.AsObject();
+        var before = JsonSerializer.SerializeToNode(NewsWriteMapper.ToWriteDto(item), json)!.AsObject();
         var errors = new Dictionary<string, string[]>();
         var dto = await ReadAsync(http, json, merge ? before : null, errors);
         if (dto is null)
@@ -160,7 +160,7 @@ internal static class NewsWriteEndpoints
 
         var now = time.GetUtcNow();
         Apply(dto, item, renderer, now);
-        var after = JsonSerializer.SerializeToNode(ToWriteDto(item), json)!.AsObject();
+        var after = JsonSerializer.SerializeToNode(NewsWriteMapper.ToWriteDto(item), json)!.AsObject();
         var changed = after.Where(p => !JsonNode.DeepEquals(p.Value, before[p.Key])).Select(p => p.Key).ToList();
 
         // A write that changes nothing saves nothing, so the version and the audit log stay as they are.
@@ -293,23 +293,6 @@ internal static class NewsWriteEndpoints
             item.Tags = [.. dto.Tags ?? []];
         }
     }
-
-    private static NewsItemWriteDto ToWriteDto(NewsItem item) => new()
-    {
-        Slug = item.Slug,
-        Title = item.Title,
-        Summary = item.Summary,
-        BodyMarkdown = item.BodyMarkdown,
-        Category = item.Category,
-        Severity = item.Severity,
-        Technologies = [.. item.Technologies.Select(t => new AffectedTechnologyWriteDto { Technology = t.Technology, VersionRange = t.VersionRange, FixedIn = t.FixedIn })],
-        CveIds = [.. item.CveIds],
-        CvssScore = item.CvssScore,
-        SourceLinks = [.. item.SourceLinks.Select(l => new SourceLinkWriteDto { Title = l.Title, Url = l.Url })],
-        Tags = [.. item.Tags],
-        Status = item.Status,
-        PublishedAt = item.PublishedAt,
-    };
 
     private static async Task<NewsItemAdminDto> ToAdminDtoAsync(AppDbContext db, IConfiguration configuration, NewsItem item)
     {

@@ -137,7 +137,7 @@ internal sealed class FullBackupComposer(CoreDirectories directories, IBackupDoc
         RequireRoom(scratch, size);
         await tar.WriteEntryAsync(spool, $"{ServerSnapshot.VolumesFolder}/{file}", cancellationToken);
         File.Delete(spool);
-        return new VolumeEntry(volume.Name, volume.Driver, volume.Labels, file, size);
+        return BackupMapper.ToEntry(volume, file, size);
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ internal sealed class FullBackupComposer(CoreDirectories directories, IBackupDoc
     {
         if (!save)
         {
-            return new ImageEntry(image.Id, image.Tags, image.RepoDigests, null);
+            return BackupMapper.ToEntry(image, null);
         }
 
         var id = BackupNaming.FileSafe(image.Id.Replace("sha256:", string.Empty, StringComparison.Ordinal));
@@ -187,7 +187,7 @@ internal sealed class FullBackupComposer(CoreDirectories directories, IBackupDoc
         RequireRoom(scratch, new FileInfo(spool).Length);
         await tar.WriteEntryAsync(spool, $"{ServerSnapshot.ImagesFolder}/{file}", cancellationToken);
         File.Delete(spool);
-        return new ImageEntry(image.Id, image.Tags, image.RepoDigests, file);
+        return BackupMapper.ToEntry(image, file);
     }
 
     private void RequireRoom(string folder, long needed)

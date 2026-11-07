@@ -71,15 +71,12 @@ internal static class AlertSettingsEndpoints
         return api;
     }
 
-    internal static DependencyAlertSettingsDto ToDto(DependencyAlertSettings s) =>
-        new(s.Enabled, s.SecurityMinSeverity, s.Deprecated, s.Major, s.Minor, s.Patch, s.InApp, s.Telegram);
-
     private static async Task<Ok<DependencyAlertSettingsDto>> GetAsync(HttpContext http, AlertSettingsStore store)
     {
         var settings = await store.GetAsync(CurrentAccount.Id(http));
         Versions.SetETag(http.Response, settings.Version);
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(ToDto(settings));
+        return TypedResults.Ok(DependencyMapper.ToDto(settings));
     }
 
     private static async Task<Results<Ok<DependencyAlertSettingsDto>, ValidationProblem, ProblemHttpResult>> PatchAsync(
@@ -155,7 +152,7 @@ internal static class AlertSettingsEndpoints
         await transaction.CommitAsync();
         await notifier.SummaryChangedAsync([userId]);
         Versions.SetETag(http.Response, settings.Version);
-        return TypedResults.Ok(ToDto(settings));
+        return TypedResults.Ok(DependencyMapper.ToDto(settings));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> MuteAsync(
@@ -233,28 +230,21 @@ internal sealed class FindingsReader(AppDbContext db, SyncAccess access)
         foreach (var inventory in inventories)
         {
             var wanted = findings[inventory.Id]
-                .Select(f => (Row: f, Finding: ToFinding(f)))
+                .Select(f => (Row: f, Finding: DependencyMapper.ToFinding(f)))
                 .Where(f => AlertPolicy.Wants(preferences, f.Finding))
                 .OrderBy(f => FindingKinds.Order(f.Row.Kind)).ThenByDescending(f => Severities.Rank(f.Row.Severity)).ThenBy(f => f.Row.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             var isMuted = muted.Contains(inventory.Id);
             int Count(string kind) => wanted.Count(f => f.Row.Kind == kind);
-            items.Add(new ProjectFindingsDto(
-                inventory.Id,
-                inventory.ScopeId,
-                inventory.ItemId,
-                inventory.ProjectName,
+            items.Add(DependencyMapper.ToDto(
+                inventory,
                 isMuted,
-                inventory.LastCheckedAt,
                 isMuted ? 0 : wanted.Count,
                 isMuted ? null : AlertPolicy.WorstSeverity(wanted.Select(f => f.Finding)),
                 new FindingCountsDto(Count(FindingKinds.Security), Count(FindingKinds.Deprecated), Count(FindingKinds.Major), Count(FindingKinds.Minor), Count(FindingKinds.Patch)),
-                [.. wanted.Select(f => new FindingDto(f.Row.Ecosystem, f.Row.Name, f.Row.Kind, f.Row.CurrentVersion, f.Row.TargetVersion, f.Row.AdvisoryId, f.Row.Severity, f.Row.Summary, f.Row.FirstSeenAt))]));
+                [.. wanted.Select(f => DependencyMapper.ToDto(f.Row))]));
         }
 
         return new DependencyFindingsDto(true, items.Sum(i => i.Total), items);
     }
-
-    internal static Finding ToFinding(DependencyFinding f) =>
-        new(f.Ecosystem, f.Name, f.Kind, f.CurrentVersion, f.TargetVersion, f.AdvisoryId, f.Severity, f.Summary);
 }

@@ -37,6 +37,6 @@ internal sealed class ServerStateReader(ISystemInfoSource info, FirewallManager 
             status.DefaultIncoming,
             [.. status.Rules
                 .Where(rule => rule.Editable && !rule.Outgoing)
-                .Select(rule => new FirewallRuleSpec(rule.Action, rule.Protocol, rule.Port, rule.PortTo, rule.Source, rule.Comment))]);
+                .Select(FirewallMapper.ToSpec)]);
     }
 }

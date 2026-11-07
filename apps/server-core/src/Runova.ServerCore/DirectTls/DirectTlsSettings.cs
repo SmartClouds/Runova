@@ -111,7 +111,7 @@ internal sealed record DirectTlsSettings(bool Enabled, int Port, string[] Source
                 return Off;
             }
 
-            return new DirectTlsSettings(stored.Enabled, stored.Port, sources, stored.ChangedAt, stored.ChangedBy);
+            return DirectTlsMapper.ToSettings(stored, sources);
         }
         catch (JsonException)
         {
@@ -126,7 +126,7 @@ internal sealed record DirectTlsSettings(bool Enabled, int Port, string[] Source
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(new Stored(Enabled, Port, Sources, ChangedAt, ChangedBy), CoreJson.Options));
+        File.WriteAllText(temporary, JsonSerializer.Serialize(DirectTlsMapper.ToStored(this), CoreJson.Options));
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -135,5 +135,6 @@ internal sealed record DirectTlsSettings(bool Enabled, int Port, string[] Source
         File.Move(temporary, path, overwrite: true);
     }
 
-    private sealed record Stored(bool Enabled, int Port, string[]? Sources, long? ChangedAt, string? ChangedBy);
+    /// <summary>The file as written.</summary>
+    internal sealed record Stored(bool Enabled, int Port, string[]? Sources, long? ChangedAt, string? ChangedBy);
 }

@@ -72,7 +72,7 @@ internal sealed class CloudMonitorIngestor(
             await AddToHoursAsync(fresh, ct);
 
             var now = time.GetUtcNow();
-            var eligible = nodes.Select(n => new NodeSlot(n.Id, n.Region, n.Capacity, MonitorAssigner.Eligible(n, now - options.Value.OfflineAfter))).ToList();
+            var eligible = nodes.Select(n => CloudMonitorMapper.ToSlot(n, MonitorAssigner.Eligible(n, now - options.Value.OfflineAfter))).ToList();
             foreach (var result in fresh)
             {
                 await ApplyAsync(result, batch.NodeId, monitors[result.MonitorId], statuses[result.MonitorId], region, eligible, now, changes, confirms, ct);

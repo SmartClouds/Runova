@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -160,19 +159,8 @@ internal static class SignInSettingsEndpoints
         var googleOnly = await db.Users.CountAsync(u => u.PasswordHash == null && db.UserLogins.Any(l => l.UserId == u.Id));
         Versions.SetETag(http.Response, row.Version);
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new SignInSettingsDto(
-            row.CaptchaEnabled,
-            row.TurnstileSiteKey,
-            row.TurnstileSecretSealed is not null,
-            row.GoogleEnabled,
-            effective.GoogleActive,
-            row.GoogleClientId,
-            row.GoogleClientSecretSealed is not null,
-            effective.GoogleFromEnvironment,
-            SiteUrl.From(configuration) + GoogleSignIn.CallbackPath,
-            googleOnly,
-            row.UpdatedAt,
-            row.Version.ToString(CultureInfo.InvariantCulture)));
+        return TypedResults.Ok(SignInSettingsMapper.ToDto(
+            row, effective.GoogleActive, effective.GoogleFromEnvironment, SiteUrl.From(configuration) + GoogleSignIn.CallbackPath, googleOnly));
     }
 
     /// <summary>A switch the patch names, or the current value. null is not a switch.</summary>

@@ -106,7 +106,8 @@ internal static class ReportEndpoints
         var newest = await users
             .OrderByDescending(u => u.CreatedAt).ThenByDescending(u => u.Id)
             .Take(NewestUsers)
-            .Select(u => new NewUserDto(u.Id, u.DisplayName, u.Email!, db.UserRoles.Any(ur => ur.UserId == u.Id), u.CreatedAt))
+            .Select(u => new NewUserRow { User = u, Staff = db.UserRoles.Any(ur => ur.UserId == u.Id) })
+            .ProjectToDto()
             .ToListAsync();
 
         var live = db.AccountSessions.AsNoTracking().Where(s => s.RevokedAt == null && s.LastSeenAt >= since);

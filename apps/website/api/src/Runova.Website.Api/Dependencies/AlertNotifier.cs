@@ -67,7 +67,7 @@ internal sealed partial class AlertNotifier(
 
             var news = current
                 .Where(f => !told.Contains((userId, f.Key)))
-                .Select(f => (Row: f, Finding: FindingsReader.ToFinding(f)))
+                .Select(f => (Row: f, Finding: DependencyMapper.ToFinding(f)))
                 .Where(f => AlertPolicy.Wants(preferences, f.Finding))
                 .ToList();
             if (news.Count == 0)
@@ -110,7 +110,7 @@ internal sealed partial class AlertNotifier(
 
         foreach (var notification in created)
         {
-            await PushAsync(notification.UserId, client => client.NotificationCreated(NotificationEndpoints.ToDto(notification)));
+            await PushAsync(notification.UserId, client => client.NotificationCreated(NotificationMapper.ToDto(notification)));
         }
 
         await SummaryChangedAsync(members, cancellationToken);

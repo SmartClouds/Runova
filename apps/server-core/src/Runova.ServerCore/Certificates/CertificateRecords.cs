@@ -3,7 +3,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Runova.ServerCore.Certificates.Acme;
 using Runova.ServerCore.Compatibility;
-using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Data;
 
 namespace Runova.ServerCore.Certificates;
@@ -49,39 +48,6 @@ internal static class CertificateViews
 
     /// <summary>A certificate with less than this left shows as expiring.</summary>
     public static readonly TimeSpan ExpiringSoon = TimeSpan.FromDays(14);
-
-    public static CertificateInfo ToInfo(SiteCertificate row, DateTimeOffset now)
-    {
-        ArgumentNullException.ThrowIfNull(row);
-        var nowMs = now.ToUnixTimeMilliseconds();
-        var state = row.RevokedAt is not null ? CertificateState.Revoked
-            : row.NotAfter <= nowMs ? CertificateState.Expired
-            : row.NotAfter - nowMs < (long)ExpiringSoon.TotalMilliseconds ? CertificateState.ExpiringSoon
-            : CertificateState.Valid;
-        return new CertificateInfo(
-            row.SiteId,
-            row.Source switch
-            {
-                UploadedSource => CertificateSource.Uploaded,
-                CloudflareOriginSource => CertificateSource.CloudflareOrigin,
-                _ => CertificateSource.Acme,
-            },
-            state,
-            DomainsOf(row),
-            row.Issuer,
-            row.NotBefore,
-            row.NotAfter,
-            row.AutoRenew,
-            row.DirectoryUrl is { } directory && IsStaging(new Uri(directory)),
-            row.RenewAt,
-            row.LastAttemptAt,
-            row.LastError,
-            row.LastJobId,
-            row.FailedAttempts,
-            row.NextAttemptAt,
-            row.RevokedAt,
-            row.ExplanationUrl);
-    }
 
     public static string[] DomainsOf(SiteCertificate row) => JsonSerializer.Deserialize<string[]>(row.Domains, CoreJson.Options) ?? [];
 

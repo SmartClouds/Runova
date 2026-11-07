@@ -163,27 +163,6 @@ internal static class FirewallEvaluation
             : text;
     }
 
-    public static FirewallRuleInfo ToInfo(FirewallRule rule)
-    {
-        ArgumentNullException.ThrowIfNull(rule);
-        return new FirewallRuleInfo(
-            rule.Id,
-            rule.Action,
-            rule.Protocol,
-            rule.Families,
-            Describe(rule),
-            rule.Editable,
-            rule.Ports?.From,
-            rule.Ports is { IsSingle: false } range ? range.To : null,
-            rule.Source is { } source && !rule.SourceNegated ? FirewallAddresses.Format(source) : null,
-            rule.Comment,
-            rule.Service,
-            rule.Interface,
-            rule.Destination is { } destination ? FirewallAddresses.Format(destination) : null,
-            rule.Outgoing,
-            rule.ReadOnlyReason ?? rule.Unknown);
-    }
-
     public static bool Blocks(FirewallRule rule) => rule.Action is FirewallAction.Deny or FirewallAction.Reject;
 
     public static string Word(FirewallPolicy policy) => policy switch

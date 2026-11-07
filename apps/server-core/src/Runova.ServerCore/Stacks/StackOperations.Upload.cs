@@ -123,7 +123,7 @@ internal sealed partial class StackOperations
             _gate.Release();
         }
 
-        return upload.BuildContext ? ToInfo(row) : await ValidateAsync(stack, row.Number, cancellationToken);
+        return upload.BuildContext ? StackMapper.ToInfo(row) : await ValidateAsync(stack, row.Number, cancellationToken);
     }
 
     /// <summary>
@@ -231,7 +231,7 @@ internal sealed partial class StackOperations
                 cancellationToken);
         row.State = state;
         row.Error = error;
-        return ToInfo(row);
+        return StackMapper.ToInfo(row);
     }
 
     /// <param name="Registries">The registries of the images a pull fetches (E08), canonical hosts.</param>

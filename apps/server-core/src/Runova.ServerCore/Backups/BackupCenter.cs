@@ -61,7 +61,7 @@ internal sealed class BackupCenter(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var ring = await db.BackupKeyRing.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
-        return ring is null ? null : ToKeyRing(ring);
+        return ring is null ? null : BackupMapper.ToKeyRing(ring);
     }
 
     public async Task<BackupSecretStatus> SetSecretAsync(SetBackupSecretRequest? request, CancellationToken cancellationToken)
@@ -72,14 +72,7 @@ internal sealed class BackupCenter(
         if (stored is null)
         {
             var ring = BackupKeyRing.Create(next, Now);
-            db.BackupKeyRing.Add(new BackupKeyRingRecord
-            {
-                KeyId = ring.KeyId,
-                PublicKey = ring.PublicKey,
-                Slot = JsonSerializer.Serialize(ring.Slot, BackupStoreJson.Default.BackupKeySlot),
-                CreatedAt = Now,
-                UpdatedAt = Now,
-            });
+            db.BackupKeyRing.Add(BackupMapper.ToRecord(ring, Now, Now));
         }
         else
         {
@@ -91,7 +84,7 @@ internal sealed class BackupCenter(
             BackupKeyRing changed;
             try
             {
-                changed = ToKeyRing(stored).WithSecret(request.CurrentSecret, next);
+                changed = BackupMapper.ToKeyRing(stored).WithSecret(request.CurrentSecret, next);
             }
             catch (BackupRefusedException error) when (error.Message.Contains("is wrong", StringComparison.Ordinal))
             {
@@ -349,7 +342,7 @@ internal sealed class BackupCenter(
         var runs = await db.BackupRuns.AsNoTracking().OrderByDescending(r => r.StartedAt).Take(Math.Clamp(limit, 1, 200)).ToListAsync(cancellationToken);
         var ids = runs.Select(r => r.Id).ToList();
         var targets = await db.BackupRunTargets.AsNoTracking().Where(t => ids.Contains(t.RunId)).ToListAsync(cancellationToken);
-        return [.. runs.Select(run => ToInfo(run, targets.Where(t => t.RunId == run.Id)))];
+        return [.. runs.Select(run => BackupMapper.ToInfo(run, targets.Where(t => t.RunId == run.Id)))];
     }
 
     public async Task<BackupRunInfo?> FindRunAsync(Guid id, CancellationToken cancellationToken)
@@ -362,22 +355,8 @@ internal sealed class BackupCenter(
         }
 
         var targets = await db.BackupRunTargets.AsNoTracking().Where(t => t.RunId == id).ToListAsync(cancellationToken);
-        return ToInfo(run, targets);
+        return BackupMapper.ToInfo(run, targets);
     }
-
-    internal static BackupRunInfo ToInfo(BackupRunRecord run, IEnumerable<BackupRunTargetRecord> targets) =>
-        new(
-            run.Id,
-            run.PlanId,
-            run.PlanName,
-            run.Trigger,
-            run.State,
-            run.StartedAt,
-            run.FinishedAt,
-            run.SizeBytes,
-            run.Error,
-            run.RequestedByName,
-            [.. targets.OrderBy(t => t.DestinationName).Select(t => new BackupRunTargetInfo(t.DestinationId, t.DestinationName, t.State, t.Attempts, t.Pruned, t.Error))]);
 
     private async Task<BackupPlanInfo> ToInfoAsync(CoreDbContext db, BackupPlanRecord plan, CancellationToken cancellationToken)
     {
@@ -387,11 +366,11 @@ internal sealed class BackupCenter(
         if (last is not null)
         {
             var targets = await db.BackupRunTargets.AsNoTracking().Where(t => t.RunId == last.Id).ToListAsync(cancellationToken);
-            lastRun = ToInfo(last, targets);
+            lastRun = BackupMapper.ToInfo(last, targets);
         }
 
         var next = plan.Enabled ? BackupPlanScheduler.NextRuns(plan.Cron, plan.TimeZone, time.GetUtcNow(), 1) : [];
-        return new BackupPlanInfo(plan.Id, plan.Name, plan.Enabled, plan.Cron, plan.TimeZone, plan.KeepLast, plan.KeepDays, destinations, next.Count > 0 ? next[0] : null, lastRun);
+        return BackupMapper.ToInfo(plan, destinations, next.Count > 0 ? next[0] : null, lastRun);
     }
 
     private ResolvedDestination Resolve(BackupDestinationRecord row)
@@ -416,16 +395,7 @@ internal sealed class BackupCenter(
     private static BackupDestinationInfo ToInfo(BackupDestinationRecord row)
     {
         var settings = ReadSettings(row);
-        return new BackupDestinationInfo(
-            row.Id,
-            row.Name,
-            row.Kind,
-            BackupDestinationRules.Summary(row.Kind, settings),
-            settings,
-            row.ProtectedSecret is not null,
-            row.MaxPartBytes,
-            row.LastTestedAt,
-            row.LastError);
+        return BackupMapper.ToInfo(row, settings, BackupDestinationRules.Summary(row.Kind, settings));
     }
 
     private static BackupDestinationSettings ReadSettings(BackupDestinationRecord row) =>
@@ -444,7 +414,4 @@ internal sealed class BackupCenter(
             _ => settings,
         };
     }
-
-    private static BackupKeyRing ToKeyRing(BackupKeyRingRecord row) =>
-        new(row.KeyId, row.PublicKey, JsonSerializer.Deserialize(row.Slot, BackupStoreJson.Default.BackupKeySlot)!, row.CreatedAt);
 }

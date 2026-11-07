@@ -115,11 +115,11 @@ internal static class PostEndpoints
     {
         var now = time.GetUtcNow();
         var counted = await db.Tags.AsNoTracking()
-            .Select(t => new { t.Slug, t.Name, Count = t.Posts.Count(p => p.Status == NewsStatus.Published && p.PublishedAt <= now) })
+            .Select(t => new { Tag = t, Count = t.Posts.Count(p => p.Status == NewsStatus.Published && p.PublishedAt <= now) })
             .Where(t => t.Count > 0)
-            .OrderBy(t => t.Slug)
+            .OrderBy(t => t.Tag.Slug)
             .ToListAsync();
-        var tags = counted.Select(t => new TagDto(t.Slug, t.Name, t.Count)).ToList();
+        var tags = counted.Select(t => PostMapper.ToTagDto(t.Tag, t.Count)).ToList();
 
         var etag = ETags.ForContent(string.Join('\n', tags.Select(t => $"{t.Slug}\t{t.Name}\t{t.PostCount}")));
         if (HttpCaching.IsNotModified(http, etag, HttpCaching.PublicList))

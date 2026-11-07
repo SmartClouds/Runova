@@ -48,10 +48,7 @@ internal sealed class DockerBackupEngine(Uri endpoint) : IBackupDocker, IDisposa
     public async Task<IReadOnlyList<BackupVolume>> ListVolumesAsync(CancellationToken cancellationToken)
     {
         var listed = await Client.Volumes.ListAsync(cancellationToken);
-        return [.. (listed.Volumes ?? []).Select(volume => new BackupVolume(
-            volume.Name,
-            volume.Driver ?? "local",
-            (IReadOnlyDictionary<string, string>?)volume.Labels?.ToDictionary(StringComparer.Ordinal) ?? new Dictionary<string, string>()))];
+        return [.. (listed.Volumes ?? []).Select(BackupMapper.ToVolume)];
     }
 
     public async Task ExportVolumeAsync(string volume, Stream output, CancellationToken cancellationToken)
@@ -105,11 +102,7 @@ internal sealed class DockerBackupEngine(Uri endpoint) : IBackupDocker, IDisposa
     public async Task<IReadOnlyList<BackupImage>> ListImagesAsync(CancellationToken cancellationToken)
     {
         var images = await Client.Images.ListImagesAsync(new ImagesListParameters { All = false }, cancellationToken);
-        return [.. images
-            .Select(image => new BackupImage(
-                image.ID,
-                [.. (image.RepoTags ?? []).Where(tag => tag != "<none>:<none>")],
-                [.. image.RepoDigests ?? []]))];
+        return [.. images.Select(BackupMapper.ToImage)];
     }
 
     public async Task SaveImagesAsync(IReadOnlyList<string> images, Stream output, CancellationToken cancellationToken)

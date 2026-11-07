@@ -124,7 +124,7 @@ internal static partial class InventoryEndpoints
         }
 
         var rows = packages
-            .Select(p => new InventoryPackage { Ecosystem = p.Ecosystem!, Name = p.Name!.Trim(), Version = p.Version!.Trim(), Dev = p.Dev })
+            .Select(DependencyMapper.ToPackage)
             .DistinctBy(p => (p.Ecosystem, p.Name.ToLowerInvariant()))
             .ToList();
         var hash = Hash(projectName, rows);
@@ -139,7 +139,7 @@ internal static partial class InventoryEndpoints
         }
         else if (inventory.ContentHash == hash)
         {
-            return TypedResults.Ok(ToDto(inventory, rows.Count));
+            return TypedResults.Ok(DependencyMapper.ToDto(inventory, rows.Count));
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -159,7 +159,7 @@ internal static partial class InventoryEndpoints
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
 
-        var dto = ToDto(inventory, rows.Count);
+        var dto = DependencyMapper.ToDto(inventory, rows.Count);
         return created ? TypedResults.Created((string?)null, dto) : TypedResults.Ok(dto);
     }
 
@@ -179,9 +179,6 @@ internal static partial class InventoryEndpoints
         var deleted = await db.PackageInventories.Where(i => i.ScopeId == scopeId && i.ItemId == itemId).ExecuteDeleteAsync();
         return deleted == 0 ? NotFound() : TypedResults.NoContent();
     }
-
-    internal static PackageInventoryDto ToDto(PackageInventory inventory, int packageCount) =>
-        new(inventory.Id, inventory.ScopeId, inventory.ItemId, inventory.ProjectName, packageCount, inventory.UploadedAt, inventory.LastCheckedAt);
 
     private static string Hash(string projectName, IEnumerable<InventoryPackage> packages)
     {
