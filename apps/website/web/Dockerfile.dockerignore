@@ -4,6 +4,8 @@
 !apps/website/web
 !apps/desktop/package.json
 !apps/desktop/src/shared/help
+# The node compose file the monitoring nodes page shows to an Admin (E54).
+!apps/website/monitoring-node/compose.yaml
 
 apps/website/web/node_modules
 apps/website/web/dist

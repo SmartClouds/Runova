@@ -21,6 +21,8 @@ RUN bun install --frozen-lockfile
 
 COPY apps/desktop/package.json /repo/apps/desktop/package.json
 COPY apps/desktop/src/shared/help /repo/apps/desktop/src/shared/help
+# The monitoring nodes page shows the node's compose file as it is (E54).
+COPY apps/website/monitoring-node/compose.yaml /repo/apps/website/monitoring-node/compose.yaml
 COPY apps/website/web ./
 RUN bun run build
 

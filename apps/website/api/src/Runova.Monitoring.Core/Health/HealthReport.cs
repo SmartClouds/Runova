@@ -15,7 +15,7 @@ public static class HealthProtocol
     public const string CheckKey = "runova";
 
     /// <summary>
-    /// The key endpoints built before the app was renamed from AgentMate put the details under.
+    /// The key endpoints built before the app was renamed put the details under.
     /// Still read, so those endpoints keep working.
     /// </summary>
     public const string LegacyCheckKey = "agentmate"; // legacy-name
