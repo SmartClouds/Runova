@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
@@ -39,22 +40,22 @@ internal static class NewsEndpoints
     }
 
     private static async Task<Results<Ok<Page<NewsListItemDto>>, StatusCodeHttpResult, ValidationProblem, ProblemHttpResult>> ListAsync(
-        string[]? category,
-        string[]? severity,
-        string? minSeverity,
-        string[]? technology,
-        string[]? tag,
-        string? since,
-        string? q,
-        string? sort,
-        string[]? status,
-        int? page,
-        int? pageSize,
         AppDbContext db,
         TimeProvider time,
         IAuthorizationService authorization,
         IConfiguration configuration,
-        HttpContext http)
+        HttpContext http,
+        [FromQuery] string[]? category = null,
+        [FromQuery] string[]? severity = null,
+        string? minSeverity = null,
+        [FromQuery] string[]? technology = null,
+        [FromQuery] string[]? tag = null,
+        string? since = null,
+        string? q = null,
+        string? sort = null,
+        [FromQuery] string[]? status = null,
+        int? page = null,
+        int? pageSize = null)
     {
         var query = NewsListQuery.Parse(
             new NewsListParameters(category, severity, minSeverity, technology, tag, since, q, sort, status, page, pageSize),

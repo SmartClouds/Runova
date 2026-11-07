@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
@@ -36,16 +37,16 @@ internal static class PostEndpoints
     }
 
     private static async Task<Results<Ok<Page<PostListItemDto>>, StatusCodeHttpResult, ValidationProblem, ProblemHttpResult>> ListAsync(
-        string[]? tag,
-        string? q,
-        string[]? status,
-        int? page,
-        int? pageSize,
         AppDbContext db,
         TimeProvider time,
         IAuthorizationService authorization,
         IConfiguration configuration,
-        HttpContext http)
+        HttpContext http,
+        [FromQuery] string[]? tag = null,
+        string? q = null,
+        [FromQuery] string[]? status = null,
+        int? page = null,
+        int? pageSize = null)
     {
         var query = PostListQuery.Parse(tag, q, status, page, pageSize, out var errors);
         if (errors.Count > 0)

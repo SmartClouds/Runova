@@ -3,6 +3,9 @@
     <UserSecretsId />
     <!-- An API serves no static web assets of its own; media come from the proxy. -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- The minimal API handlers are generated at build time, so a new host (every integration
+         test starts one) does not build them again at its first request. -->
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
   </PropertyGroup>
 
   <ItemGroup>

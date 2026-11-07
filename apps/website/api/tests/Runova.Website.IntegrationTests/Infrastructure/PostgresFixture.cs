@@ -10,12 +10,15 @@ namespace Runova.Website.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// One PostgreSQL container for the whole test assembly. Its default database is migrated once
-/// and shared; a test that needs a database to itself asks <see cref="CreateDatabaseAsync"/>.
+/// and shared; a test that needs a database to itself asks <see cref="CreateDatabaseAsync"/>,
+/// which copies a template migrated at start rather than migrating every new database again.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
     /// <summary>The official image at the major version compose runs.</summary>
     public const string Image = "postgres:18";
+
+    private const string TemplateName = "runova_template";
 
     private readonly PostgreSqlContainer _container = Create();
 
@@ -27,6 +30,14 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         await StartAsync(_container);
         await MigrateAsync(ConnectionString);
+
+        // Postgres copies a database only while nobody is connected to it, so the template's
+        // pooled connections are closed once it is migrated and nothing opens it again.
+        await ExecuteAsync($"CREATE DATABASE \"{TemplateName}\"");
+        var template = DatabaseConnectionString(TemplateName);
+        await MigrateAsync(template);
+        using var connection = new NpgsqlConnection(template);
+        NpgsqlConnection.ClearPool(connection);
     }
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();
@@ -34,22 +45,21 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>A new database in the shared container, migrated unless asked not to.</summary>
     public async Task<string> CreateDatabaseAsync(bool migrate = true)
     {
-        var cancel = TestContext.Current.CancellationToken;
         var name = "test_" + Guid.NewGuid().ToString("N");
-        await using (var connection = new NpgsqlConnection(ConnectionString))
-        {
-            await connection.OpenAsync(cancel);
-            await using var command = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", connection);
-            await command.ExecuteNonQueryAsync(cancel);
-        }
+        await ExecuteAsync(migrate ? $"CREATE DATABASE \"{name}\" TEMPLATE \"{TemplateName}\"" : $"CREATE DATABASE \"{name}\"");
+        return DatabaseConnectionString(name);
+    }
 
-        var connectionString = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ConnectionString;
-        if (migrate)
-        {
-            await MigrateAsync(connectionString);
-        }
+    private string DatabaseConnectionString(string database) =>
+        new NpgsqlConnectionStringBuilder(ConnectionString) { Database = database }.ConnectionString;
 
-        return connectionString;
+    private async Task ExecuteAsync(string sql)
+    {
+        var cancel = TestContext.Current.CancellationToken;
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync(cancel);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(cancel);
     }
 
     /// <summary>Starts a container, or fails with a message that says Docker is needed.</summary>
