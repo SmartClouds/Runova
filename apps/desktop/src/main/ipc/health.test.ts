@@ -38,6 +38,19 @@ vi.mock('../cli/headlessPrompt', () => ({
   cancelHeadlessPrompt: cli.cancel,
 }));
 
+// No account is signed in here. The real runtime brings the whole sync engine with it, which took
+// a cold CI machine past the test's time limit to load, and the online monitors only ask it whether
+// someone is signed in.
+vi.mock('../account/live', () => ({
+  getAccountRuntime: () => ({
+    status: async () => ({ state: 'signed-out', deviceId: 'test-device' }),
+    api: async () => {
+      throw new Error('Sign in to your Runova account first.');
+    },
+    projectPlacements: async () => new Map(),
+  }),
+}));
+
 const userData = useTempUserData();
 // onChanged is main to renderer, checked through the windows' sent messages instead.
 expectChannelsCovered(IPC.health, [IPC.health.onChanged]);

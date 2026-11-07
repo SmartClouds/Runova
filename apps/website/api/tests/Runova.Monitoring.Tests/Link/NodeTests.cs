@@ -152,13 +152,15 @@ public sealed class NodeTests : IDisposable
 
             Assert.Equal(2, probe.Running);
 
-            // The clock moves at most 10 seconds here, far from the next round, and the wait is on
-            // real time, so a slow machine only takes longer.
+            // The scheduler starts checks on its ticks, which come only as the clock moves, so the
+            // clock moves a tick whenever a slot is free and waits on real time while both are busy.
+            // It moves at most 10 seconds, far from the next round, so a slow machine only takes
+            // longer.
             probe.Open();
             var opened = TimeSpan.Zero;
             await Eventually.TrueAsync(() =>
             {
-                if (opened < TimeSpan.FromSeconds(10))
+                if (scheduler.InFlight < 2 && opened < TimeSpan.FromSeconds(10))
                 {
                     clock.Advance(TimeSpan.FromMilliseconds(250));
                     opened += TimeSpan.FromMilliseconds(250);
@@ -181,6 +183,8 @@ public sealed class NodeTests : IDisposable
             Assert.Equal(before, probe.Calls.Count);
             // The first checks ran within 11 seconds of each other and of now, so each is due again
             // by 63 seconds from now (the interval plus 5 percent) and none a third time before 109.
+            // Past 75 seconds every one is due, and the clock only moves a tick for a free slot, the
+            // way it did for the first round, never past 105.
             var later = TimeSpan.FromSeconds(30);
             await Eventually.TrueAsync(() =>
             {
@@ -188,6 +192,11 @@ public sealed class NodeTests : IDisposable
                 {
                     clock.Advance(TimeSpan.FromSeconds(3));
                     later += TimeSpan.FromSeconds(3);
+                }
+                else if (scheduler.InFlight < 2 && later < TimeSpan.FromSeconds(105))
+                {
+                    clock.Advance(TimeSpan.FromMilliseconds(250));
+                    later += TimeSpan.FromMilliseconds(250);
                 }
 
                 return probe.Calls.Count >= before + 5;
