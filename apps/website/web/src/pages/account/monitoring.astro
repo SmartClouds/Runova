@@ -1,0 +1,10 @@
+---
+import Monitoring from '../../components/account/monitoring/Monitoring';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+
+export const prerender = false;
+---
+
+<AccountLayout title="Monitoring">
+  <Monitoring client:only="react" />
+</AccountLayout>

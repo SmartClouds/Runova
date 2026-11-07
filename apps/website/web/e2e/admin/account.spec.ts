@@ -174,6 +174,7 @@ test('every account page fits a phone, keeps its tab in view and can sign out', 
     ['/account/activity', 'Activity'],
     ['/account/sync', 'Sync'],
     ['/account/notifications', 'Notifications'],
+    ['/account/monitoring', 'Monitoring'],
     ['/account/teams', 'Teams'],
     ['/account/invitations', null],
   ] as const;

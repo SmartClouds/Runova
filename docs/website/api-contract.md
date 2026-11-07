@@ -831,7 +831,8 @@ type's `historyDays`; hours and incidents are kept for good. The notifications h
 `CloudMonitorUpdated(CloudMonitorLiveDto)` after each result, with `{ "id": number, "scopeId":
 number, "itemId": string, "paused": bool, "status": CloudMonitorStatusDto }`, and
 `CloudMonitorsChanged({ "scopeId": number })` when a scope's monitors were added, changed or
-removed.
+removed. The website connects to the hub with its session cookie; the negotiation is a POST, so it
+carries the antiforgery header.
 
 ### Account sessions and activity
 

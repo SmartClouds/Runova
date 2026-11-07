@@ -13,6 +13,7 @@ import {
 import { createServer, request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
 import { FAKE_STRIPE, OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.ts';
 
@@ -189,6 +190,50 @@ function forward(request: IncomingMessage, reply: ServerResponse) {
   request.pipe(upstream);
 }
 
+/**
+ * The notifications hub's WebSocket (E57): the upgrade goes to the API and the two sockets are
+ * joined, as Caddy does in production. Anything else that asks to upgrade is refused.
+ */
+function forwardUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer) {
+  const path = (request.url ?? '').split('?')[0];
+  if (!/^\/hubs(?:\/|$)/.test(path)) {
+    socket.destroy();
+    return;
+  }
+  const upstream = httpsRequest({
+    host: '127.0.0.1',
+    port: STACK.apiHttpsPort,
+    method: request.method,
+    path: request.url,
+    headers: request.headers,
+    rejectUnauthorized: false,
+  });
+  upstream.on('upgrade', (answer, upstreamSocket, upstreamHead) => {
+    const lines = [
+      `HTTP/1.1 ${answer.statusCode ?? 101} ${answer.statusMessage ?? 'Switching Protocols'}`,
+    ];
+    for (let i = 0; i < answer.rawHeaders.length; i += 2) {
+      lines.push(`${answer.rawHeaders[i]}: ${answer.rawHeaders[i + 1]}`);
+    }
+    socket.write(`${lines.join('\r\n')}\r\n\r\n`);
+    if (upstreamHead.length > 0) socket.write(upstreamHead);
+    if (head.length > 0) upstreamSocket.write(head);
+    upstreamSocket.pipe(socket);
+    socket.pipe(upstreamSocket);
+    const close = () => {
+      upstreamSocket.destroy();
+      socket.destroy();
+    };
+    upstreamSocket.on('error', close);
+    socket.on('error', close);
+  });
+  upstream.on('response', (answer) => {
+    socket.end(`HTTP/1.1 ${answer.statusCode ?? 502} ${answer.statusMessage ?? ''}\r\n\r\n`);
+  });
+  upstream.on('error', () => socket.destroy());
+  upstream.end();
+}
+
 let stopping = false;
 async function stop(code: number) {
   if (stopping) return;
@@ -259,6 +304,7 @@ try {
     { pfx: readFileSync(certificate), passphrase: certificatePassword },
     forward,
   );
+  proxy.on('upgrade', forwardUpgrade);
   proxy.listen(STACK.proxyPort, '127.0.0.1');
   log(`ready at https://localhost:${STACK.proxyPort}`);
 } catch (error) {

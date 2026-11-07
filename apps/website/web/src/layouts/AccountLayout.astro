@@ -2,7 +2,7 @@
 import '@fontsource-variable/inter/wght.css';
 import '@fontsource-variable/jetbrains-mono/wght.css';
 import '../styles/global.css';
-import { Activity, Bell, CloudCog, Gauge, KeyRound, LayoutDashboard, MonitorSmartphone, UserRound, Users, Zap } from 'lucide-react';
+import { Activity, Bell, CloudCog, Gauge, HeartPulse, KeyRound, LayoutDashboard, MonitorSmartphone, UserRound, Users, Zap } from 'lucide-react';
 import SignOutLink from '../components/account/SignOutLink';
 import SeoHead from '../components/SeoHead.astro';
 
@@ -31,6 +31,7 @@ const groups = [
   {
     label: 'Data',
     links: [
+      { href: '/account/monitoring', label: 'Monitoring', section: 'monitoring', Icon: HeartPulse },
       { href: '/account/sync', label: 'Sync', section: 'sync', Icon: CloudCog },
       { href: '/account/teams', label: 'Teams', section: 'teams', Icon: Users },
     ],

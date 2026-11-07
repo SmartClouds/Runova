@@ -38,6 +38,7 @@ export function problem(
 
 /**
  * Replaces the global fetch with routes keyed by `METHOD /path` (the query is part of the path).
+ * A key may end in `*` to match every path starting with it (a query with a time in it).
  * A route holds one reply, or a list answered in turn with the last one repeated. Unknown routes
  * answer 404 and fail the test that expects otherwise.
  */
@@ -58,7 +59,14 @@ export function fakeFetch(routes: Record<string, Reply | Reply[]>) {
     };
     seen.push(request);
 
-    const key = `${method} ${request.path}`;
+    // A key ending in * matches any path that starts with what comes before it.
+    const exact = `${method} ${request.path}`;
+    const key =
+      exact in routes
+        ? exact
+        : (Object.keys(routes).find(
+            (one) => one.endsWith('*') && exact.startsWith(one.slice(0, -1)),
+          ) ?? exact);
     const route = routes[key];
     if (!route) return new Response(null, { status: 404 });
     const replies = Array.isArray(route) ? route : [route];

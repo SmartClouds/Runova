@@ -7,7 +7,7 @@
 export const API_BASE = '/api/v1';
 
 const XSRF_COOKIE = 'XSRF-TOKEN';
-const XSRF_HEADER = 'X-XSRF-TOKEN';
+export const XSRF_HEADER = 'X-XSRF-TOKEN';
 
 /** An RFC 9457 problem from the API, or `network` when no answer came at all. */
 export interface Problem {
@@ -54,7 +54,7 @@ function readCookie(name: string): string | null {
 }
 
 /** The token from the readable cookie, or a new one from the API when the cookie is not set yet. */
-async function antiforgeryToken(): Promise<string | null> {
+export async function antiforgeryToken(): Promise<string | null> {
   const cookie = readCookie(XSRF_COOKIE);
   if (cookie) return cookie;
   const response = await apiRequest<{ token: string }>('/csrf-tokens/current');
