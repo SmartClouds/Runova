@@ -197,14 +197,13 @@ internal sealed partial class StackOperations
     {
         var folder = RevisionFolder(stack.Id, number);
         var row = await RevisionAsync(stack.Id, number, cancellationToken);
-        var proxied = Read<string[]>(row.ProxiedServices);
-        var limits = Read<StackServiceLimits[]>(row.Limits);
+        var shape = new RevisionShape(Read<string[]>(row.ProxiedServices), Read<StackServiceLimits[]>(row.Limits), Read<StackServiceNetworks[]>(row.Networks));
         var seeded = redactor.With(await EnvValuesAsync(folder, cancellationToken));
         string state;
         string? error = null;
         try
         {
-            var checkedConfig = await CheckAsync(stack, folder, proxied, limits, null, cancellationToken);
+            var checkedConfig = await CheckAsync(stack, folder, shape, null, cancellationToken);
             row.Services = Write(checkedConfig.Services);
             row.Builds = checkedConfig.Builds;
             row.Findings = Write(checkedConfig.Findings);
@@ -237,20 +236,27 @@ internal sealed partial class StackOperations
     /// <param name="Registries">The registries of the images a pull fetches (E08), canonical hosts.</param>
     internal sealed record CheckedConfig(string[] Services, bool Builds, List<StackRisk> Findings, IReadOnlyList<StackPortBinding> Bindings, string[] Registries);
 
+    /// <summary>What a revision asks of its services beyond the compose file: loopback ports, caps and joined networks.</summary>
+    internal sealed record RevisionShape(
+        IReadOnlyCollection<string> Proxied,
+        IReadOnlyCollection<StackServiceLimits> Limits,
+        IReadOnlyCollection<StackServiceNetworks> Networks);
+
     /// <summary>
     /// docker compose config on the revision, the override written from it (proxied ports on
-    /// loopback, resource caps checked against the server), and Compose's reading again with the
-    /// override, which must leave every proxied port on 127.0.0.1. Throws
-    /// <see cref="ComposeConfigException"/> with Compose's own words when it refuses the files.
+    /// loopback, resource caps checked against the server, joined networks checked against the
+    /// server's networks), and Compose's reading again with the override, which must leave every
+    /// proxied port on 127.0.0.1. Throws <see cref="ComposeConfigException"/> with Compose's own
+    /// words when it refuses the files.
     /// </summary>
     internal async Task<CheckedConfig> CheckAsync(
         StackRecord stack,
         string folder,
-        IReadOnlyCollection<string> proxied,
-        IReadOnlyCollection<StackServiceLimits> limits,
+        RevisionShape shape,
         Action<string>? note,
         CancellationToken cancellationToken)
     {
+        var (proxied, limits, networks) = shape;
         var version = DockerRepository.ParseComposeVersion(await compose.VersionAsync(cancellationToken));
         if (version is null)
         {
@@ -279,7 +285,12 @@ internal sealed partial class StackOperations
             ResourceLimits.Check(limits, [.. config.Services.Select(service => service.Name)], await EngineInfoAsync(cancellationToken));
         }
 
-        var rendered = LoopbackOverride.Render(config, proxied, limits);
+        if (networks.Count > 0)
+        {
+            JoinedNetworks.Check(networks, config, plain.Name, await ServerNetworksAsync(cancellationToken));
+        }
+
+        var rendered = LoopbackOverride.Render(config, proxied, limits, networks);
         if (rendered.Text is null)
         {
             var findings = ComposeConfigLint.Lint(config, proxied, plain.ProjectDirectory, directories.Data);
@@ -307,6 +318,19 @@ internal sealed partial class StackOperations
         try
         {
             return await engine.GetInfoAsync(cancellationToken);
+        }
+        catch (DockerUnavailableException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The networks on the server, for the joined ones; null when Docker does not answer (Compose will say why).</summary>
+    private async Task<IReadOnlyList<NetworkInfo>?> ServerNetworksAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await engine.ListNetworksAsync(cancellationToken);
         }
         catch (DockerUnavailableException)
         {

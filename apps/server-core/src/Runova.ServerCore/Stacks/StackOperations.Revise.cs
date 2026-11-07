@@ -77,6 +77,7 @@ internal sealed partial class StackOperations
                 ? Write(risks.Distinct(StringComparer.Ordinal).ToArray())
                 : source.AcknowledgedRisks;
             var limits = request.Limits is { } caps ? Write(ResourceLimits.Kept(caps)) : source.Limits;
+            var networks = request.Networks is { } joined ? Write(JoinedNetworks.Kept(joined)) : source.Networks;
             tracked.LastRevision = number;
             tracked.UpdatedAt = Now;
             db.StackRevisions.Add(new StackRevisionRecord
@@ -91,6 +92,7 @@ internal sealed partial class StackOperations
                 Services = source.Services,
                 ProxiedServices = Write(request.ProxiedServices.Distinct(StringComparer.Ordinal).ToArray()),
                 Limits = limits,
+                Networks = networks,
                 Findings = source.Findings,
                 AcknowledgedRisks = acknowledged,
                 Bindings = source.Bindings,
@@ -121,6 +123,7 @@ internal sealed partial class StackOperations
                 ["compose"] = request.Compose is null ? "kept" : "replaced",
                 ["proxied"] = string.Join(' ', request.ProxiedServices.Distinct(StringComparer.Ordinal)),
                 ["limits"] = request.Limits is { } named ? Describe(ResourceLimits.Kept(named)) : "kept",
+                ["networks"] = request.Networks is { } joining ? Describe(JoinedNetworks.Kept(joining)) : "kept",
             },
             cancellationToken);
         if (request.AcknowledgedRisks is { } listed)
@@ -162,6 +165,7 @@ internal sealed partial class StackOperations
         StackRevisionPurpose.MakePrivate => "make-private",
         StackRevisionPurpose.Update => "update",
         StackRevisionPurpose.Limits => "limits",
+        StackRevisionPurpose.Networks => "networks",
         _ => "edit",
     };
 
@@ -177,6 +181,12 @@ internal sealed partial class StackOperations
                 limit.MemoryMb is { } memory ? $"memoryMb={memory.ToString(CultureInfo.InvariantCulture)}" : null,
                 limit.DiskGb is { } disk ? $"diskGb={disk.ToString(CultureInfo.InvariantCulture)}" : null,
             }.OfType<string>())));
+
+    /// <summary>The joined networks as the audit trail shows them: "web=shop_default,cache".</summary>
+    private static string Describe(StackServiceNetworks[] networks) =>
+        networks.Length == 0
+            ? "none"
+            : string.Join("; ", networks.Select(entry => $"{entry.Service}={string.Join(',', entry.Networks)}"));
 
     private static string CheckRevise(ReviseStackRequest request)
     {
@@ -203,8 +213,12 @@ internal sealed partial class StackOperations
             }
         }
 
-        return request.AcknowledgedRisks is { } risks && (risks.Length > StackRules.MaxAcknowledgments || !risks.All(StackRules.IsRiskId))
-            ? $"Acknowledge at most {StackRules.MaxAcknowledgments} findings, by the ids the linter gave them."
-            : ResourceLimits.CheckShape(request.Limits);
+        if (request.AcknowledgedRisks is { } risks && (risks.Length > StackRules.MaxAcknowledgments || !risks.All(StackRules.IsRiskId)))
+        {
+            return $"Acknowledge at most {StackRules.MaxAcknowledgments} findings, by the ids the linter gave them.";
+        }
+
+        var limits = ResourceLimits.CheckShape(request.Limits);
+        return limits.Length > 0 ? limits : JoinedNetworks.CheckShape(request.Networks);
     }
 }

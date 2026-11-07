@@ -1,5 +1,6 @@
 import type {
   JobInfo,
+  NetworkInfo,
   StackDetails,
   StackInfo,
   StackRevisionInfo,
@@ -98,6 +99,7 @@ export function sampleRevision(extra: Partial<StackRevisionInfo> = {}): StackRev
     jobId: JOB_ID,
     deployedAtUnixMs: T0,
     finishedAtUnixMs: T0 + 10_000,
+    networks: [],
     ...extra,
   };
 }
@@ -248,6 +250,29 @@ export function uploadResult(revision: Partial<StackRevisionInfo> = {}): DeployS
   };
 }
 
+/** The networks on the server: Docker's own, the shop app's, two other apps' and one made by hand. */
+export function sampleNetworks(): NetworkInfo[] {
+  const network = (name: string, extra: Partial<NetworkInfo> = {}): NetworkInfo => ({
+    id: `net-${name}`,
+    name,
+    driver: 'bridge',
+    scope: 'local',
+    internal: false,
+    builtIn: false,
+    subnets: ['172.20.0.0/16'],
+    containers: 0,
+    ...extra,
+  });
+  return [
+    network('bridge', { builtIn: true }),
+    network('host', { builtIn: true, driver: 'host', subnets: [] }),
+    network('shop_default', { composeProject: 'shop', containers: 2 }),
+    network('ollama_default', { composeProject: 'ollama', containers: 1 }),
+    network('monitoring_default', { composeProject: 'monitoring', containers: 3 }),
+    network('shared', {}),
+  ];
+}
+
 export function appsBridge(roles: string[] = ['owner']): Record<string, unknown> {
   return {
     'deploy.access': signedIn(roles),
@@ -265,6 +290,7 @@ export function appsBridge(roles: string[] = ['owner']): Record<string, unknown>
     'deployJobs.unwatch': async () => true,
     'deployDocker.listContainers': { groups: [] },
     'deployDocker.status': sampleDockerStatus(),
+    'deployDocker.listNetworks': sampleNetworks(),
     'projects.list': [
       { id: 'proj-1', name: 'Shop', folderPath: 'C:\\work\\Shop' },
       { id: 'proj-2', name: 'Blog', folderPath: 'C:\\work\\blog' },

@@ -442,6 +442,7 @@ import type {
   DeployMakePrivateInput,
   DeployRevisionResult,
   DeployStackLimitsInput,
+  DeployStackNetworksInput,
 } from '../shared/deployAppStoreTypes';
 import type {
   DeployFirewallApplyInput,
@@ -2047,6 +2048,9 @@ const deployStacks = {
   /** New resource caps on the app's services: the live revision copied with them and deployed. */
   setLimits: (input: DeployStackLimitsInput): Promise<DeployRevisionResult> =>
     ipcRenderer.invoke(IPC.deployStacks.setLimits, input),
+  /** Other networks for the app's services to join: the live revision copied with them and deployed. */
+  setNetworks: (input: DeployStackNetworksInput): Promise<DeployRevisionResult> =>
+    ipcRenderer.invoke(IPC.deployStacks.setNetworks, input),
   onUploadProgress: (cb: (event: DeployStackUploadProgress) => void): (() => void) =>
     subscribe(IPC.deployStacks.onUploadProgress, cb),
 };

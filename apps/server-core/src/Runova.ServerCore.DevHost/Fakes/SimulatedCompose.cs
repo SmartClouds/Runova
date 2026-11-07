@@ -133,9 +133,20 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
 
                 break;
             case "up":
+                var declared = model["networks"] as JsonObject ?? [];
+                var existing = (await engine.ListNetworksAsync(cancellationToken)).Select(n => n.Name).ToHashSet(StringComparer.Ordinal);
+                foreach (var (key, value) in declared)
+                {
+                    if (value?["external"]?.GetValue<bool>() == true && !existing.Contains(value["name"]?.GetValue<string>() ?? key))
+                    {
+                        await Say($"network {value["name"]?.GetValue<string>() ?? key} declared as external, but could not be found");
+                        return new ProcessResult(1, string.Empty, errors.ToString(), false, false);
+                    }
+                }
+
                 await Say($" Network {project.Name}_default  Creating");
                 await Say($" Network {project.Name}_default  Created");
-                var changed = engine.ComposeUp(project.Name, [.. services.Select(s => Spec(project.Name, s.Key, s.Value!.AsObject()))]);
+                var changed = engine.ComposeUp(project.Name, [.. services.Select(s => Spec(project.Name, s.Key, s.Value!.AsObject(), declared))]);
                 foreach (var name in changed)
                 {
                     await Say($" Container {name}  Created");
@@ -176,7 +187,7 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
         return new ProcessResult(0, output.ToString(), errors.ToString(), false, false);
     }
 
-    private static ComposeContainerSpec Spec(string project, string name, JsonObject service)
+    private static ComposeContainerSpec Spec(string project, string name, JsonObject service, JsonObject declared)
     {
         var ports = new List<ContainerPort>();
         var next = 32768;
@@ -198,7 +209,25 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
         var health = service["healthcheck"] is JsonObject check && check["disable"]?.GetValue<bool>() != true;
         var image = service["image"]?.GetValue<string>() ?? $"{project}-{name}";
         var cpus = double.TryParse(service["cpus"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var cores) ? (long?)Math.Round(cores * 1e9) : null;
-        return new ComposeContainerSpec(name, image, ports, environment, volumes, health, cpus, Bytes(service["mem_limit"]?.ToString()));
+        return new ComposeContainerSpec(name, image, ports, environment, volumes, health, cpus, Bytes(service["mem_limit"]?.ToString()), NetworksOf(project, service, declared));
+    }
+
+    /// <summary>
+    /// The Docker networks a service ends up on: the project's default one when it names none, an
+    /// external network by its own name, and any other key as the project's network.
+    /// </summary>
+    private static List<string>? NetworksOf(string project, JsonObject service, JsonObject declared)
+    {
+        if (service["networks"] is not JsonObject named || named.Count == 0)
+        {
+            return null;
+        }
+
+        return [.. named.Select(entry => entry.Key == "default"
+            ? $"{project}_default"
+            : declared[entry.Key] is JsonObject network && network["external"]?.GetValue<bool>() == true
+                ? network["name"]?.GetValue<string>() ?? entry.Key
+                : $"{project}_{entry.Key}")];
     }
 
     /// <summary>A Compose size such as 512m or 2g, in bytes.</summary>

@@ -10,6 +10,7 @@ import { IPC } from '../../shared/ipcChannels';
 import type { DeployStacks } from '../deploy/stacks/service';
 import { type DeployIpcRegistry, object, serverId } from './deploy';
 import { limitsInput } from './limits';
+import { networksInput } from './networks';
 
 /**
  * The Apps' invoke channels (E07). Like the rest of Deploy they answer only the main window and
@@ -205,5 +206,10 @@ export function registerDeployStacksHandlers(deps: DeployStacksHandlerDeps): voi
     const input = ref(value);
     const limits = limitsInput(object(value, 'the resource caps').limits);
     return stacks.setLimits({ ...input, limits });
+  });
+  handle(IPC.deployStacks.setNetworks, (value) => {
+    const input = ref(value);
+    const networks = networksInput(object(value, 'the networks to join').networks);
+    return stacks.setNetworks({ ...input, networks });
   });
 }

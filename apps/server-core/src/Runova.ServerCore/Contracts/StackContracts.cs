@@ -167,7 +167,8 @@ public sealed record StackRevisionInfo(
     int? RollbackOf = null,
     string? Error = null,
     StackSource? Source = null,
-    StackServiceLimits[]? Limits = null);
+    StackServiceLimits[]? Limits = null,
+    StackServiceNetworks[]? Networks = null);
 
 /// <summary>
 /// Resource caps on one service of an app; a field left null is no cap. Cores and share are kept
@@ -180,6 +181,14 @@ public sealed record StackRevisionInfo(
 /// <param name="DiskGb">The container's writable layer, on storage drivers that can cap it.</param>
 [TranspilationSource]
 public sealed record StackServiceLimits(string Service, int? CpuCores = null, int? CpuPercent = null, int? MemoryMb = null, int? DiskGb = null);
+
+/// <summary>
+/// Docker networks one service of an app joins besides its own, by name, such as another app's
+/// default network so the two reach each other by service name. The core writes them into the
+/// override file as external networks, so every redeploy and rollback of the revision keeps them.
+/// </summary>
+[TranspilationSource]
+public sealed record StackServiceNetworks(string Service, string[] Networks);
 
 [TranspilationSource]
 public sealed record StackServiceInfo(string Name, ContainerSummary[] Containers, StackPortBinding[] Ports, string? Image = null);
@@ -233,13 +242,16 @@ public enum StackRevisionPurpose
 
     /// <summary>The same files with other resource caps on its services.</summary>
     Limits,
+
+    /// <summary>The same files with its services on other networks besides their own.</summary>
+    Networks,
 }
 
 /// <summary>
 /// A new revision copied from Revision on the server, its .env and project files included, so
 /// no env value travels. Compose replaces the compose file when set (an App Store update);
-/// ProxiedServices replaces the loopback set; AcknowledgedRisks and Limits default to the
-/// source's. The revision is validated like an upload and deployed with DeployStack.
+/// ProxiedServices replaces the loopback set; AcknowledgedRisks, Limits and Networks default to
+/// the source's. The revision is validated like an upload and deployed with DeployStack.
 /// </summary>
 [TranspilationSource]
 public sealed record ReviseStackRequest(
@@ -249,7 +261,8 @@ public sealed record ReviseStackRequest(
     string? Compose = null,
     string[]? AcknowledgedRisks = null,
     StackRevisionPurpose Purpose = StackRevisionPurpose.Edit,
-    StackServiceLimits[]? Limits = null);
+    StackServiceLimits[]? Limits = null,
+    StackServiceNetworks[]? Networks = null);
 
 /// <summary>One entry of a revision's .env. Only RevealStackEnv returns these (Admin, step-up).</summary>
 [TranspilationSource]

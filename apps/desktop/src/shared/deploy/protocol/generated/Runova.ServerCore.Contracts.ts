@@ -2685,6 +2685,8 @@ export type StackRevisionInfo = {
     source?: StackSource;
     /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
     limits?: StackServiceLimits[];
+    /** Transpiled from Runova.ServerCore.Contracts.StackServiceNetworks[]? */
+    networks?: StackServiceNetworks[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits */
@@ -2699,6 +2701,14 @@ export type StackServiceLimits = {
     memoryMb?: number;
     /** Transpiled from int */
     diskGb?: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.StackServiceNetworks */
+export type StackServiceNetworks = {
+    /** Transpiled from string */
+    service: string;
+    /** Transpiled from string[] */
+    networks: string[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackServiceInfo */
@@ -2790,7 +2800,7 @@ export type StackRevisionUpload = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackRevisionPurpose */
-export type StackRevisionPurpose = "edit" | "makePrivate" | "update" | "limits";
+export type StackRevisionPurpose = "edit" | "makePrivate" | "update" | "limits" | "networks";
 
 /** Transpiled from Runova.ServerCore.Contracts.ReviseStackRequest */
 export type ReviseStackRequest = {
@@ -2808,6 +2818,8 @@ export type ReviseStackRequest = {
     purpose: StackRevisionPurpose;
     /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
     limits?: StackServiceLimits[];
+    /** Transpiled from Runova.ServerCore.Contracts.StackServiceNetworks[]? */
+    networks?: StackServiceNetworks[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackEnvEntry */

@@ -1556,6 +1556,8 @@ export const IPC = {
     makePrivate: 'deployStacks:makePrivate',
     /** (DeployStackLimitsInput) -> DeployRevisionResult: the live revision with new resource caps. */
     setLimits: 'deployStacks:setLimits',
+    /** (DeployStackNetworksInput) -> DeployRevisionResult: the live revision with other joined networks. */
+    setNetworks: 'deployStacks:setNetworks',
     /** main -> renderer: DeployStackUploadProgress while files go up. */
     onUploadProgress: 'deployStacks:onUploadProgress',
   },

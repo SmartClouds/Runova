@@ -32,7 +32,7 @@ internal static class LoopbackOverride
 
     private const string Header =
         "# Written by Runova: services behind the proxy publish their ports on 127.0.0.1 only,\n"
-        + "# and services with resource caps get them here.\n"
+        + "# and services with resource caps or networks they join get them here.\n"
         + "# !override replaces their ports rather than adding to them (Docker Compose 2.24.4 or later).\n";
 
     public sealed record Result(string? Text, IReadOnlyList<StackPortBinding> Bindings);
@@ -42,10 +42,15 @@ internal static class LoopbackOverride
         && (hostIp.StartsWith("127.", StringComparison.Ordinal) || hostIp == "::1" || hostIp.StartsWith("::ffff:127.", StringComparison.Ordinal));
 
     /// <summary>
-    /// The override text (null when no proxied service publishes a port and nothing is capped)
-    /// and every binding once it applies. The caps were checked against the services already.
+    /// The override text (null when no proxied service publishes a port, nothing is capped and
+    /// nothing joins another network) and every binding once it applies. The caps and networks
+    /// were checked against the services already.
     /// </summary>
-    public static Result Render(ComposeConfig config, IReadOnlyCollection<string> proxiedServices, IReadOnlyCollection<StackServiceLimits>? limits = null)
+    public static Result Render(
+        ComposeConfig config,
+        IReadOnlyCollection<string> proxiedServices,
+        IReadOnlyCollection<StackServiceLimits>? limits = null,
+        IReadOnlyCollection<StackServiceNetworks>? networks = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(proxiedServices);
@@ -60,6 +65,7 @@ internal static class LoopbackOverride
         var text = new StringBuilder(Header).Append("services:\n");
         var written = false;
         var bindings = new List<StackPortBinding>();
+        var joined = new List<string>();
         foreach (var service in config.Services)
         {
             var entry = new StringBuilder();
@@ -95,6 +101,12 @@ internal static class LoopbackOverride
                 ResourceLimits.Append(entry, capped);
             }
 
+            if (networks?.FirstOrDefault(n => n.Service == service.Name) is { Networks.Length: > 0 } joining)
+            {
+                JoinedNetworks.Append(entry, service, joining);
+                joined.AddRange(joining.Networks);
+            }
+
             if (entry.Length > 0)
             {
                 written = true;
@@ -102,6 +114,7 @@ internal static class LoopbackOverride
             }
         }
 
+        JoinedNetworks.AppendDeclarations(text, joined);
         return new Result(written ? text.ToString() : null, bindings);
     }
 }

@@ -3,6 +3,7 @@ import type {
   JobInfo,
   StackInfo,
   StackRevisionInfo,
+  StackServiceNetworks,
 } from './deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployStepUpInput } from './deployTypes';
 
@@ -87,4 +88,12 @@ export interface DeployStackLimitsInput {
   stackId: string;
   /** Every cap the app should have from now on; a service left out is uncapped. */
   limits: ServiceLimits[];
+}
+
+/** Networks an app's services join besides their own: a copy of the live revision with them, deployed. */
+export interface DeployStackNetworksInput {
+  serverId: string;
+  stackId: string;
+  /** Every joined network the app should have from now on; a service left out joins none. */
+  networks: StackServiceNetworks[];
 }

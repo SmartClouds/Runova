@@ -181,6 +181,135 @@ describe('AppDetail', () => {
     );
   });
 
+  it('shows the other networks each service joins from the live revision', async () => {
+    renderDetail({
+      'deployStacks.get': sampleDetails({
+        revisions: [
+          sampleRevision({
+            networks: [{ service: 'web', networks: ['ollama_default', 'shared'] }],
+          }),
+        ],
+      }),
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    const joined = within(within(services).getByRole('listitem', { name: 'web' })).getByRole(
+      'list',
+      { name: 'Networks web joins' },
+    );
+    expect(
+      within(joined)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['ollama_default', 'shared']);
+    expect(
+      within(within(services).getByRole('listitem', { name: 'db' })).queryByRole('list', {
+        name: 'Networks db joins',
+      }),
+    ).toBeNull();
+  });
+
+  it("adds a service to another app's network and deploys the copy with it", async () => {
+    const setNetworks = vi.fn(async () => ({
+      revision: sampleRevision({ number: 3 }),
+      job: sampleJob(),
+    }));
+    const { user } = renderDetail({
+      'deployStacks.setNetworks': setNetworks,
+      'deployStacks.get': sampleDetails({
+        revisions: [sampleRevision({ networks: [{ service: 'db', networks: ['shared'] }] })],
+      }),
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    await user.click(await within(dialog).findByRole('combobox', { name: 'Network to join' }));
+    // Not Docker's own networks, and not the app's own one.
+    const options = await screen.findAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual([
+      'monitoring_defaultApp monitoring · 3 containers',
+      'ollama_defaultApp ollama · 1 container',
+      'sharedNo containers',
+    ]);
+    await user.click(screen.getByRole('option', { name: /ollama_default/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(setNetworks).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        stackId: STACK_ID,
+        networks: [
+          { service: 'db', networks: ['shared'] },
+          { service: 'web', networks: ['ollama_default'] },
+        ],
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Networks of web' })).not.toBeInTheDocument(),
+    );
+    expect(toast.success).toHaveBeenCalledWith('web joins ollama_default in revision 3.');
+  });
+
+  it('takes a service off a network it joined, after asking', async () => {
+    const setNetworks = vi.fn(async () => ({
+      revision: sampleRevision({ number: 3 }),
+      job: sampleJob(),
+    }));
+    const { user } = renderDetail({
+      'deployStacks.setNetworks': setNetworks,
+      'deployStacks.get': sampleDetails({
+        revisions: [
+          sampleRevision({
+            networks: [{ service: 'web', networks: ['ollama_default', 'shared'] }],
+          }),
+        ],
+      }),
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    const joined = within(dialog).getByRole('list', { name: 'Joined networks' });
+    expect(within(joined).getAllByRole('listitem')).toHaveLength(2);
+    await user.click(within(joined).getByRole('button', { name: 'Remove ollama_default' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Take web off ollama_default?' });
+    await user.click(within(confirm).getByRole('button', { name: 'Leave the network' }));
+    await waitFor(() =>
+      expect(setNetworks).toHaveBeenCalledWith({
+        serverId: SERVER.id,
+        stackId: STACK_ID,
+        networks: [{ service: 'web', networks: ['shared'] }],
+      }),
+    );
+  });
+
+  it('keeps the error in the networks dialog when the core refuses', async () => {
+    const { user } = renderDetail({
+      'deployStacks.setNetworks': async () => {
+        throw new Error('There is no network called ollama_default on the server any more.');
+      },
+    });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    await user.click(within(services).getByRole('button', { name: 'Networks of web' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Networks of web' });
+    await user.click(await within(dialog).findByRole('combobox', { name: 'Network to join' }));
+    await user.click(await screen.findByRole('option', { name: /ollama_default/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'There is no network called ollama_default',
+    );
+  });
+
+  it('keeps the networks read-only for a Viewer', async () => {
+    renderDetail({}, ['viewer']);
+    const services = await screen.findByRole('list', { name: 'Services' });
+    expect(within(services).getByRole('button', { name: 'Networks of web' })).toBeDisabled();
+  });
+
+  it('asks for a core update before networks can be joined on an old server', async () => {
+    const { networks: _old, ...revision } = sampleRevision();
+    renderDetail({ 'deployStacks.get': sampleDetails({ revisions: [revision] }) });
+    const services = await screen.findByRole('list', { name: 'Services' });
+    expect(within(services).getByRole('button', { name: 'Networks of web' })).toBeDisabled();
+  });
+
   it('says when the app did not load and tries again', async () => {
     let calls = 0;
     const { user, onBack } = renderDetail({

@@ -11,7 +11,8 @@ internal sealed record ComposeContainerSpec(
     IReadOnlyList<string> Volumes,
     bool HasHealthcheck,
     long? NanoCpus = null,
-    long? MemoryLimit = null);
+    long? MemoryLimit = null,
+    IReadOnlyList<string>? Networks = null);
 
 /// <summary>
 /// What the simulated docker compose (DevHost and tests) does to the pretend engine: a project's
@@ -35,6 +36,15 @@ internal sealed partial class InMemoryDockerEngine
                 _networks.Add(new NetworkEntry(network, "172.30.0.0/16", project));
             }
 
+            // The project's other networks are made like its default one; external ones were checked by the caller.
+            foreach (var own in services.SelectMany(s => s.Networks ?? []).Where(n => n.StartsWith(project + "_", StringComparison.Ordinal)).Distinct(StringComparer.Ordinal))
+            {
+                if (_networks.All(n => n.Name != own))
+                {
+                    _networks.Add(new NetworkEntry(own, "172.31.0.0/16", project));
+                }
+            }
+
             foreach (var volume in services.SelectMany(s => s.Volumes).Distinct(StringComparer.Ordinal))
             {
                 var name = $"{project}_{volume}";
@@ -55,8 +65,10 @@ internal sealed partial class InMemoryDockerEngine
             {
                 var name = $"{project}-{spec.Service}-1";
                 var existing = _containers.FirstOrDefault(c => c.Name == name);
+                var networks = spec.Networks is { Count: > 0 } named ? named.Order(StringComparer.Ordinal).ToList() : [network];
                 if (existing is not null && existing.Image == spec.Image && existing.Ports.SequenceEqual(spec.Ports) && existing.Environment.SequenceEqual(spec.Environment)
-                    && existing.NanoCpus == spec.NanoCpus && existing.MemoryLimit == spec.MemoryLimit)
+                    && existing.NanoCpus == spec.NanoCpus && existing.MemoryLimit == spec.MemoryLimit
+                    && (existing.ComposeNetworks ?? [network]).SequenceEqual(networks))
                 {
                     if (existing.State != ContainerState.Running)
                     {
@@ -83,7 +95,10 @@ internal sealed partial class InMemoryDockerEngine
                     MemoryBase = 24L * 1024 * 1024,
                     NanoCpus = spec.NanoCpus,
                     MemoryLimit = spec.MemoryLimit,
+                    ComposeNetworks = networks,
                 };
+                container.Networks.Clear();
+                container.Networks.AddRange(networks);
                 var now = NowMs;
                 container.Created(now);
                 container.Start(now);

@@ -3,7 +3,7 @@ title: Containers, apps and stacks
 category: Deploy
 order: 30
 summary: Manage Docker on a server you deploy to, with live container lists, logs, consoles, images, volumes and networks, and deploy compose apps from your projects with rollbacks.
-keywords: docker, containers, compose, stack, apps, resource limits, cpu limit, cpu cores, memory limit, ram limit, disk limit, docker update, logs, compose logs, console, shell, exec, run command, docker exec, root, images, volumes, networks, prune, disk usage, cleanup, clean up, unused images, build cache, deploy app, revision, rollback, new app wizard, docker install
+keywords: docker, containers, compose, stack, apps, resource limits, join network, connect network, app network, cpu limit, cpu cores, memory limit, ram limit, disk limit, docker update, logs, compose logs, console, shell, exec, run command, docker exec, root, images, volumes, networks, prune, disk usage, cleanup, clean up, unused images, build cache, deploy app, revision, rollback, new app wizard, docker install
 route: /deploy
 ---
 
@@ -201,7 +201,7 @@ The lifecycle buttons need the Operator role and are disabled while a job works 
 Below the toolbar:
 
 - The **timeline** of the shown revision.
-- **Services**: each service with its image, ports and containers (with state and health), and its resource limits ("No limits", or a line such as "2 cores at 50% · 2 GB RAM"). Each container has a log button, and a running one a console button. The processor button at the end of the row opens **Edit resource limits**, see [Resource limits](#resource-limits).
+- **Services**: each service with its image, ports and containers (with state and health), and its resource limits ("No limits", or a line such as "2 cores at 50% · 2 GB RAM"). Each container has a log button, and a running one a console button. The processor button at the end of the row opens **Edit resource limits**, see [Resource limits](#resource-limits), and the network button next to it opens **Networks of (service)**, see [Networks of an app's services](#networks-of-an-app-s-services). A service that joins other networks lists them under its name after **Also on**.
 - **Revisions**: every upload is kept, with its number, state (Waiting for files, Ready, Invalid, Deploying, Live, Failed or Replaced), date and who made it. Click one to see its timeline. **Roll back** (or **Roll back to this revision** in the timeline) deploys an older revision's files again as a new revision, after a confirmation. Only revisions that ran once can be rolled back to.
 - **Route map**: where each published port leads, starting with the domains whose sites in Websites forward to it (or **No domain**). **Add domain** (Admins only) puts a port on the internet through nginx. Enter the domain, choose whether to get an HTTPS certificate from Let's Encrypt and whether to let WebSocket connections through, then **Add the domain**. It adds the site in Websites, applies nginx and asks for the certificate, showing each step as it runs. If a step fails, it says why, and **Try again** keeps what you typed. Point the domain's DNS at the server first. The button is off for UDP ports, for ports bound to another address than this server or every address, and until nginx is set up under [Websites](deploy-websites-certificates.md).
 - **Registry sign-in**: see [Registries](deploy-registries.md). It has a switch to send this computer's sign-ins with this app's deploys.
@@ -221,6 +221,23 @@ How the limits apply depends on what the container belongs to:
 - **Any other container**: **Edit limits** in the container panel's **Overview** sets CPU and memory right away, without a restart (Docker's `docker update`). Disk cannot be changed this way. Whatever recreates the container later (a `docker run` of your own, for example) drops these limits.
 
 Changing limits needs the Operator role. If the server's core is too old to apply limits, the buttons are disabled and ask you to update the core first.
+
+### Networks of an app's services
+
+Each app gets its own network, so its services reach each other by service name but not the containers of other apps. To let a service talk to another app (an API that uses an `ollama` app, for example), add it to that app's network:
+
+1. On the app's page, click the network button at the end of the service's row.
+2. Pick a network in **Network to join**. Each one says which app it belongs to and how many containers are on it. Docker's own networks (`bridge`, `host`, `none`) and this app's own network are not listed.
+3. Click **Add**.
+
+The core copies the live revision with the network into a new revision and deploys it. Only that service restarts, and it stays on its own app's network too. From then on it reaches the other app's containers by their service names (for example `http://ollama:11434`), and they reach it the same way. The network stays with the app through redeploys, updates and rollbacks, because it is written into the app's override file as an external network (rolling back to an older revision brings back that revision's networks). To take the service off a network, click **Remove** next to it in the same window and confirm.
+
+A few things to know:
+
+- The other app must be running, or at least have its network on the server. If the network is gone when the app deploys, the deploy stops and says which network is missing. Start the other app, or remove the network from the service.
+- A service that sets `network_mode` in the compose file (for example `host`) cannot join other networks.
+- Joining networks needs the Operator role. If the server's core is too old to keep networks with an app, the button is disabled and asks you to update the core first.
+- The **Networks** tab of a [container's panel](#networks) can also join a container to a network right away, but for an app's container that lasts only until the next deploy. Use the app's page for anything that should stay.
 
 ### Logs and consoles of an app
 

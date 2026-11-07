@@ -34,6 +34,7 @@ internal static partial class StackMapper
     [MapProperty(nameof(StackRevisionRecord.FinishedAt), nameof(StackRevisionInfo.FinishedAtUnixMs))]
     [MapPropertyFromSource(nameof(StackRevisionInfo.Source), Use = nameof(RevisionSourceOf))]
     [MapProperty(nameof(StackRevisionRecord.Limits), nameof(StackRevisionInfo.Limits), Use = nameof(ReadLimits))]
+    [MapProperty(nameof(StackRevisionRecord.Networks), nameof(StackRevisionInfo.Networks), Use = nameof(ReadNetworks))]
     public static partial StackRevisionInfo ToInfo(StackRevisionRecord row);
 
     private static StackSource? StackSourceOf(StackRecord stack) =>
@@ -58,6 +59,8 @@ internal static partial class StackMapper
     private static StackPortBinding[] ReadBindings(string json) => StackOperations.Read<StackPortBinding[]>(json);
 
     private static StackServiceLimits[] ReadLimits(string json) => StackOperations.Read<StackServiceLimits[]>(json);
+
+    private static StackServiceNetworks[] ReadNetworks(string json) => StackOperations.Read<StackServiceNetworks[]>(json);
 
     private static string[] Unacknowledged(StackRevisionRecord row) =>
         StackOperations.Unacknowledged(ReadFindings(row.Findings), ReadNames(row.AcknowledgedRisks));

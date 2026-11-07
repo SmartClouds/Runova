@@ -22,6 +22,7 @@ import type {
   DeployMakePrivateInput,
   DeployRevisionResult,
   DeployStackLimitsInput,
+  DeployStackNetworksInput,
 } from '../../../shared/deployAppStoreTypes';
 import type {
   DeployComposeDiscovery,
@@ -297,6 +298,35 @@ export class DeployStacks {
       proxiedServices: base.proxiedServices,
       purpose: 'limits',
       limits: checked.limits,
+    });
+  }
+
+  /**
+   * Other networks for the app's services to join: the live revision copied on the server with
+   * them and deployed, so Compose recreates only the services whose networks changed. A core
+   * that answers revisions without a networks list would drop them, so it is asked to update.
+   */
+  async setNetworks(input: DeployStackNetworksInput): Promise<DeployRevisionResult> {
+    const details = await this.get(input.serverId, input.stackId);
+    const { stack } = details;
+    const base =
+      details.revisions.find((revision) => revision.number === stack.liveRevision) ??
+      details.revisions[0];
+    if (!base) throw new Error(`${stack.name} has no revision to start from yet.`);
+    if (base.networks === undefined || base.networks === null) {
+      throw new Error("Update this server's core to join other networks.");
+    }
+    for (const entry of input.networks) {
+      if (!base.services.includes(entry.service)) {
+        throw new Error(`There is no service called ${entry.service} in this app.`);
+      }
+    }
+    return this.reviseAndDeploy(input.serverId, {
+      stackId: stack.id,
+      revision: base.number,
+      proxiedServices: base.proxiedServices,
+      purpose: 'networks',
+      networks: input.networks.filter((entry) => entry.networks.length > 0),
     });
   }
 

@@ -7,6 +7,7 @@ import type {
   StackRevisionInfo,
   StackServiceInfo,
   StackServiceLimits,
+  StackServiceNetworks,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -23,6 +24,7 @@ import {
   FileText,
   Globe,
   History,
+  NetworkIcon,
   Pause,
   Pencil,
   Play,
@@ -54,6 +56,7 @@ import {
   STATUS_TEXT,
   STATUS_TONE,
 } from '@/lib/deploy/apps/format';
+import { networksOf, withServiceNetworks } from '@/lib/deploy/apps/networks';
 import { domainsForPort, proxyBlockReason, publishedPort } from '@/lib/deploy/apps/routes';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
@@ -78,6 +81,7 @@ import { EditSourceDialog } from './EditSourceDialog';
 import type { AppsAccess } from './hooks';
 import { stackIsBusy, useStack } from './hooks';
 import { type ProxyRoute, ProxyRouteDialog } from './ProxyRouteDialog';
+import { ServiceNetworksDialog } from './ServiceNetworksDialog';
 import { StatusPill } from './StatusPill';
 import type { WizardSource } from './wizard/types';
 
@@ -165,16 +169,28 @@ interface LimitsControl {
   onEdit: (service: string) => void;
 }
 
+const NETWORKS_OUTDATED = "Update this server's core to join other networks.";
+
+/** What the Networks buttons may do, and why not when they may not. */
+interface NetworksControl {
+  networks: readonly StackServiceNetworks[];
+  allowed: boolean;
+  reason: string;
+  onEdit: (service: string) => void;
+}
+
 function ServicesCard({
   services,
   canAdmin,
   onTools,
   limits,
+  networks,
 }: {
   services: StackServiceInfo[];
   canAdmin: boolean;
   onTools: (request: StackToolsRequest) => void;
   limits: LimitsControl;
+  networks: NetworksControl;
 }): React.JSX.Element {
   return (
     <section className={cn(GLASS_CARD, 'space-y-3 p-4')}>
@@ -215,7 +231,22 @@ function ServicesCard({
                     <Cpu />
                   </Button>
                 </Gate>
+                <Gate allowed={networks.allowed} reason={networks.reason}>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Networks of ${service.name}`}
+                    disabled={!networks.allowed}
+                    onClick={() => networks.onEdit(service.name)}
+                  >
+                    <NetworkIcon />
+                  </Button>
+                </Gate>
               </div>
+              <JoinedNetworks
+                service={service.name}
+                networks={networksOf(networks.networks, service.name)}
+              />
               {service.ports.length > 0 && (
                 <p className="mt-1 flex flex-wrap gap-x-3 font-mono text-[11px] text-muted-foreground">
                   {service.ports.map((port) => (
@@ -285,6 +316,32 @@ function ServicesCard({
         </ul>
       )}
     </section>
+  );
+}
+
+/** The other networks a service joins, as chips under its name; nothing when it joins none. */
+function JoinedNetworks({
+  service,
+  networks,
+}: {
+  service: string;
+  networks: readonly string[];
+}): React.JSX.Element | null {
+  if (networks.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-muted-foreground">Also on</span>
+      <ul aria-label={`Networks ${service} joins`} className="flex flex-wrap gap-1">
+        {networks.map((network) => (
+          <li key={network}>
+            <Chip tone="neutral" className="h-5 gap-1 px-1.5">
+              <NetworkIcon className="h-2.5 w-2.5" aria-hidden />
+              <span className="font-mono text-[10px]">{network}</span>
+            </Chip>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -662,6 +719,9 @@ export function AppDetail({
   const [limitsSaving, setLimitsSaving] = useState(false);
   const [limitsError, setLimitsError] = useState<string | null>(null);
   const limitsHost = useLimitsHost(serverId, access.signedIn);
+  const [networksFocus, setNetworksFocus] = useState<string | null>(null);
+  const [networksSaving, setNetworksSaving] = useState(false);
+  const [networksError, setNetworksError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.deployApps(serverId) });
@@ -754,6 +814,44 @@ export function AppDetail({
       setLimitsError(coreErrorMessage(error));
     } finally {
       setLimitsSaving(false);
+    }
+  }
+
+  async function saveNetworks(
+    service: string,
+    networks: string[],
+    change: { added?: string; removed?: string },
+    base: readonly StackServiceNetworks[],
+  ): Promise<void> {
+    setNetworksSaving(true);
+    setNetworksError(null);
+    try {
+      const result = await window.runova.deployStacks.setNetworks({
+        serverId,
+        stackId,
+        networks: withServiceNetworks(base, service, networks),
+      });
+      setNetworksFocus(null);
+      refresh();
+      if (result.job) {
+        setBusyJob(result.job.id);
+        setFollowJob(result.job.id);
+        setShownRevision(null);
+        toast.success(
+          change.added
+            ? `${service} joins ${change.added} in revision ${result.revision.number}.`
+            : `${service} leaves ${change.removed ?? 'the network'} in revision ${result.revision.number}.`,
+        );
+      } else {
+        toast.error(
+          result.revision.error ??
+            `Revision ${result.revision.number} has the new networks but needs a look before it deploys.`,
+        );
+      }
+    } catch (error) {
+      setNetworksError(coreErrorMessage(error));
+    } finally {
+      setNetworksSaving(false);
     }
   }
 
@@ -855,6 +953,18 @@ export function AppDetail({
         : !liveRevision
           ? NO_CONTAINERS
           : '';
+  const liveNetworks = liveRevision?.networks;
+  const networksAllowed =
+    access.canOperate && !stackBusy && working === null && !!liveRevision && !!liveNetworks;
+  const networksReason = !access.canOperate
+    ? OPERATOR_ONLY
+    : liveRevision && !liveNetworks
+      ? NETWORKS_OUTDATED
+      : stackBusy
+        ? 'A job is working on this app. Wait for it to finish.'
+        : !liveRevision
+          ? NO_CONTAINERS
+          : '';
   const rollbackTarget =
     shown && shown.number !== latest && (shown.state === 'superseded' || shown.state === 'live')
       ? shown
@@ -920,6 +1030,23 @@ export function AppDetail({
             busy={limitsSaving}
             error={limitsError}
             onSave={(limits) => void saveLimits(limits)}
+          />
+        )}
+        {liveRevision && liveNetworks && (
+          <ServiceNetworksDialog
+            open={networksFocus !== null}
+            onOpenChange={(open) => {
+              if (!open && !networksSaving) setNetworksFocus(null);
+            }}
+            serverId={serverId}
+            app={stack.name}
+            service={networksFocus ?? ''}
+            joined={networksOf(liveNetworks, networksFocus ?? '')}
+            busy={networksSaving}
+            error={networksError}
+            onSave={(networks, change) => {
+              if (networksFocus) void saveNetworks(networksFocus, networks, change, liveNetworks);
+            }}
           />
         )}
         {editing && onEditSource && (
@@ -1044,6 +1171,15 @@ export function AppDetail({
             onEdit: (service) => {
               setLimitsError(null);
               setLimitsFocus(service);
+            },
+          }}
+          networks={{
+            networks: liveNetworks ?? [],
+            allowed: networksAllowed,
+            reason: networksReason,
+            onEdit: (service) => {
+              setNetworksError(null);
+              setNetworksFocus(service);
             },
           }}
         />

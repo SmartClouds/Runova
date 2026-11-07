@@ -33,6 +33,7 @@ function harness(trusted = true) {
       'delete',
       'makePrivate',
       'setLimits',
+      'setNetworks',
     ].map((name) => [name, vi.fn(async () => ({ ok: name }))]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   registerDeployStacksHandlers({
@@ -202,6 +203,30 @@ describe('registerDeployStacksHandlers', () => {
       }),
     ).rejects.toThrow('core count');
     expect(stacks.setLimits).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets the networks the services of an app join', async () => {
+    const { call, stacks } = harness();
+    const networks = [{ service: 'web', networks: ['ollama_default', 'shared.net'] }];
+    await call(IPC.deployStacks.setNetworks, { serverId: SERVER, stackId: STACK, networks });
+    expect(stacks.setNetworks).toHaveBeenCalledWith({ serverId: SERVER, stackId: STACK, networks });
+    for (const bad of [
+      [{ service: 'web', networks: ['bad/name'] }],
+      [{ service: 'web', networks: ['host'] }],
+      [{ service: 'Bad Name', networks: ['shared'] }],
+      [
+        { service: 'web', networks: ['a'] },
+        { service: 'web', networks: ['b'] },
+      ],
+      [{ service: 'web', networks: Array.from({ length: 17 }, (_, i) => `net${i}`) }],
+      [{ service: 'web' }],
+      'web',
+    ]) {
+      await expect(
+        call(IPC.deployStacks.setNetworks, { serverId: SERVER, stackId: STACK, networks: bad }),
+      ).rejects.toThrow();
+    }
+    expect(stacks.setNetworks).toHaveBeenCalledTimes(1);
   });
 
   it('refuses arguments the core would refuse anyway', async () => {

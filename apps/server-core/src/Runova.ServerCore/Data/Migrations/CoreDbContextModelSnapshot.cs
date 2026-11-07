@@ -1363,6 +1363,10 @@ namespace Runova.ServerCore.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Networks")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ProjectId")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");

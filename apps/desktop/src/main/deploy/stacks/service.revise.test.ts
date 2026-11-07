@@ -161,6 +161,61 @@ describe('DeployStacks.setLimits', () => {
   });
 });
 
+describe('DeployStacks.setNetworks', () => {
+  const current = (networks: StackRevisionInfo['networks']) => ({
+    getStack: vi.fn(async () => ({
+      stack: INFO,
+      revisions: [revision({ networks })],
+      services: [],
+    })),
+  });
+
+  it('copies the live revision with the networks and deploys it', async () => {
+    const { stacks, hub } = harness(current([]));
+    const networks = [{ service: 'web', networks: ['ollama_default'] }];
+    const result = await stacks.setNetworks({ serverId: SERVER, stackId: STACK, networks });
+    expect(hub.reviseStack).toHaveBeenCalledWith({
+      stackId: STACK,
+      revision: 1,
+      proxiedServices: ['db'],
+      purpose: 'networks',
+      networks,
+    });
+    expect(hub.deployStack).toHaveBeenCalledWith({ stackId: STACK, revision: 2 });
+    expect(result.job).toBe(JOB);
+  });
+
+  it('takes every service off its joined networks with an empty list', async () => {
+    const { stacks, hub } = harness(current([{ service: 'web', networks: ['ollama_default'] }]));
+    await stacks.setNetworks({ serverId: SERVER, stackId: STACK, networks: [] });
+    expect(hub.reviseStack).toHaveBeenCalledWith(expect.objectContaining({ networks: [] }));
+  });
+
+  it('refuses a service the app does not have', async () => {
+    const { stacks, hub } = harness(current([]));
+    await expect(
+      stacks.setNetworks({
+        serverId: SERVER,
+        stackId: STACK,
+        networks: [{ service: 'cache', networks: ['ollama_default'] }],
+      }),
+    ).rejects.toThrow('There is no service called cache in this app.');
+    expect(hub.reviseStack).not.toHaveBeenCalled();
+  });
+
+  it('asks for a core update when the server does not keep networks with revisions', async () => {
+    const { stacks, hub } = harness();
+    await expect(
+      stacks.setNetworks({
+        serverId: SERVER,
+        stackId: STACK,
+        networks: [{ service: 'web', networks: ['ollama_default'] }],
+      }),
+    ).rejects.toThrow("Update this server's core to join other networks.");
+    expect(hub.reviseStack).not.toHaveBeenCalled();
+  });
+});
+
 describe('DeployStacks.makePrivate', () => {
   it('copies the live revision with the services on loopback and deploys it', async () => {
     const { stacks, hub } = harness();

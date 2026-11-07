@@ -216,6 +216,9 @@ internal sealed partial class InMemoryDockerEngine
 
         public List<string> Networks { get; } = [project is null ? "bridge" : $"{project}_default"];
 
+        /// <summary>The networks its compose service names, which decide a recreate; a live connect does not.</summary>
+        public IReadOnlyList<string>? ComposeNetworks { get; init; }
+
         public bool Tty { get; init; }
 
         public ContainerHealth Health { get; init; }

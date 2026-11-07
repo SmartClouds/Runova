@@ -65,6 +65,9 @@ internal sealed class StackRevisionRecord
     /// <summary>Resource caps by service (StackServiceLimits), written into the override file.</summary>
     public string Limits { get; set; } = "[]";
 
+    /// <summary>Networks by service (StackServiceNetworks) joined besides the app's own, written into the override file.</summary>
+    public string Networks { get; set; } = "[]";
+
     public string Findings { get; set; } = "[]";
 
     public string AcknowledgedRisks { get; set; } = "[]";

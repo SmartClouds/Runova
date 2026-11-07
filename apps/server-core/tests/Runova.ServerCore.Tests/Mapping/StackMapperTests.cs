@@ -67,6 +67,7 @@ public sealed class StackMapperTests
             Services = StackOperations.Write<string[]>(["web", "db"]),
             ProxiedServices = StackOperations.Write<string[]>(["web"]),
             Limits = StackOperations.Write(limits),
+            Networks = StackOperations.Write<StackServiceNetworks[]>([new("web", ["shop_default", "shared"])]),
             Findings = StackOperations.Write(findings),
             AcknowledgedRisks = StackOperations.Write<string[]>(["privileged:web:web"]),
             Bindings = StackOperations.Write(bindings),
@@ -105,5 +106,8 @@ public sealed class StackMapperTests
         Assert.Equal("half done", info.Error);
         Assert.Equal(new StackSource(EnvironmentId: "e1", EnvironmentName: "Production"), info.Source);
         Assert.Equal(limits, info.Limits);
+        var joined = Assert.Single(info.Networks!);
+        Assert.Equal("web", joined.Service);
+        Assert.Equal(["shop_default", "shared"], joined.Networks);
     }
 }
