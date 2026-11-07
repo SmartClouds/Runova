@@ -85,8 +85,7 @@ export const announceHealthTransition = createHealthAlerts({
     showOsNotification(input);
   },
   inbox: appNotificationInbox({
-    list: () => store.getAppNotifications(),
-    save: (items) => store.setAppNotifications(items),
+    update: (change) => store.updateAppNotifications(change),
     changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
   }),
 });

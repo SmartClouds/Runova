@@ -48,8 +48,7 @@ function createService(): NewsService {
   });
   const notifier = createNewsNotifier({
     inbox: appNotificationInbox({
-      list: () => store.getAppNotifications(),
-      save: (items) => store.setAppNotifications(items),
+      update: (change) => store.updateAppNotifications(change),
       changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
     }),
     toast: (input) => {

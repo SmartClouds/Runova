@@ -49,8 +49,7 @@ const SCREEN_CHARS = 4096;
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 
 const inbox = appNotificationInbox({
-  list: () => store.getAppNotifications(),
-  save: (items) => store.setAppNotifications(items),
+  update: (change) => store.updateAppNotifications(change),
   changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
 });
 

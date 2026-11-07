@@ -22,8 +22,7 @@ import { pickWaitedRun } from './runs';
 import { type AutoFixService, createAutoFixService } from './service';
 
 const inbox = appNotificationInbox({
-  list: () => store.getAppNotifications(),
-  save: (items) => store.setAppNotifications(items),
+  update: (change) => store.updateAppNotifications(change),
   changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
 });
 

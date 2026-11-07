@@ -176,29 +176,35 @@ export class DeployAlertWatcher {
 
 /** The app's notification inbox as the watcher uses it, over the store that keeps it. */
 export function appNotificationInbox(port: {
-  list: () => Promise<AppNotification[]>;
-  save: (items: AppNotification[]) => Promise<void>;
+  /**
+   * Reads, changes and writes the inbox in one turn, so a message another watcher adds at the
+   * same moment stays. A change that returns null writes nothing.
+   */
+  update: (change: (items: AppNotification[]) => AppNotification[] | null) => Promise<unknown>;
   /** Tells the windows the inbox changed. */
   changed: () => void;
 }): NotificationInbox {
   return {
     add: async (notification) => {
-      const items = await port.list();
-      if (items.some((item) => item.id === notification.id)) return;
-      await port.save([notification, ...items].slice(0, MAX_NOTIFICATIONS));
-      port.changed();
+      let added = false;
+      await port.update((items) => {
+        if (items.some((item) => item.id === notification.id)) return null;
+        added = true;
+        return [notification, ...items].slice(0, MAX_NOTIFICATIONS);
+      });
+      if (added) port.changed();
     },
     markRead: async (prefix) => {
-      const items = await port.list();
       let changed = false;
-      const next = items.map((item) => {
-        if (item.read || !item.id.startsWith(prefix)) return item;
-        changed = true;
-        return { ...item, read: true };
+      await port.update((items) => {
+        const next = items.map((item) => {
+          if (item.read || !item.id.startsWith(prefix)) return item;
+          changed = true;
+          return { ...item, read: true };
+        });
+        return changed ? next : null;
       });
-      if (!changed) return;
-      await port.save(next);
-      port.changed();
+      if (changed) port.changed();
     },
   };
 }

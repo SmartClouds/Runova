@@ -132,6 +132,19 @@ function inSettingsQueue<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * The inbox (app-notifications.json) is written by every watcher that has news: deploy alerts,
+ * tool updates, pipelines, dependency alerts, health. Each reads, adds and writes, so two at once
+ * could drop a message; every write waits its turn here, the same way settings do.
+ */
+let notificationsQueue: Promise<unknown> = Promise.resolve();
+
+function inNotificationsQueue<T>(work: () => Promise<T>): Promise<T> {
+  const run = notificationsQueue.then(work, work);
+  notificationsQueue = run.catch(() => undefined);
+  return run;
+}
+
+/**
  * A brand new install opens with DEFAULT_DASHBOARD. It only applies while settings.json doesn't
  * exist, so a profile from an older build that is missing some of these keys keeps the plain
  * DEFAULT_SETTINGS (and its legacy card order still migrates) instead of being rearranged.
@@ -456,7 +469,24 @@ export const store = {
 
   getAppNotifications: (): Promise<AppNotification[]> => readJsonFile('app-notifications.json', []),
   setAppNotifications: (notifications: AppNotification[]): Promise<void> =>
-    writeJsonFile('app-notifications.json', notifications),
+    inNotificationsQueue(() => writeJsonFile('app-notifications.json', notifications)),
+  /**
+   * Reads the inbox, changes it and writes it back in one turn of its queue, so a message added at
+   * the same moment elsewhere stays. A change that returns null writes nothing. Resolves to the
+   * inbox as it now is.
+   */
+  updateAppNotifications: (
+    change: (
+      current: AppNotification[],
+    ) => AppNotification[] | null | Promise<AppNotification[] | null>,
+  ): Promise<AppNotification[]> =>
+    inNotificationsQueue(async () => {
+      const current = await readJsonFile<AppNotification[]>('app-notifications.json', []);
+      const next = await change(current);
+      if (next === null) return current;
+      await writeJsonFile('app-notifications.json', next);
+      return next;
+    }),
 
   getPipelineWatch: (): Promise<PipelineWatchState> =>
     readJsonFile('pipeline-watch.json', { lastCompletedRunId: {} }),

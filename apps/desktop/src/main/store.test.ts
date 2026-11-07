@@ -1017,6 +1017,46 @@ describe('the atomic write', () => {
     expect(results.some((result) => result.status === 'fulfilled')).toBe(true);
     expect(payloads).toContainEqual(await store.getTemplates());
   });
+
+  it('keeps every inbox message that arrives at the same moment', async () => {
+    const { store } = await loadStore();
+    const message = (id: string) => ({
+      id,
+      kind: 'dependency-updates' as const,
+      title: id,
+      body: '',
+      projectId: null,
+      projectName: 'Shop',
+      htmlUrl: null,
+      createdAt: '2026-11-07T09:00:00.000Z',
+      read: false,
+    });
+
+    // A dependency alert and a tool update landed together at sign-in on CI, and the later write
+    // put back the list it had read before the other one, so one message was gone.
+    await Promise.all(
+      ['dependency:1', 'tool-update:codex', 'deploy:a', 'news:b'].map((id) =>
+        store.updateAppNotifications((items) => [message(id), ...items]),
+      ),
+    );
+
+    expect((await store.getAppNotifications()).map((item) => item.id).sort()).toEqual([
+      'dependency:1',
+      'deploy:a',
+      'news:b',
+      'tool-update:codex',
+    ]);
+  });
+
+  it('leaves the inbox as it is when a change has nothing to do', async () => {
+    const { store } = await loadStore();
+    await store.setAppNotifications([]);
+
+    const result = await store.updateAppNotifications(() => null);
+
+    expect(result).toEqual([]);
+    expect(await store.getAppNotifications()).toEqual([]);
+  });
 });
 
 describe('migrateInlineProjectIcons', () => {

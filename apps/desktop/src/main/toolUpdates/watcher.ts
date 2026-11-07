@@ -31,11 +31,9 @@ async function appendUpdateNotification(
   currentVersion: string,
   latestVersion: string,
 ): Promise<boolean> {
-  const items = await store.getAppNotifications();
   // Keyed on the version being announced, so the same release only ever notifies once,
   // and a later release for the same tool notifies again.
   const id = `tool-update:${entry.id}:${latestVersion}`;
-  if (items.some((item) => item.id === id)) return false;
   const notification: AppNotification = {
     id,
     kind: 'tool-update-available',
@@ -47,9 +45,13 @@ async function appendUpdateNotification(
     createdAt: new Date().toISOString(),
     read: false,
   };
-  items.unshift(notification);
-  await store.setAppNotifications(items.slice(0, MAX_NOTIFICATIONS));
-  return true;
+  let added = false;
+  await store.updateAppNotifications((items) => {
+    if (items.some((item) => item.id === id)) return null;
+    added = true;
+    return [notification, ...items].slice(0, MAX_NOTIFICATIONS);
+  });
+  return added;
 }
 
 async function checkEntryForUpdate(

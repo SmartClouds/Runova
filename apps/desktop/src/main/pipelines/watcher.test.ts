@@ -42,6 +42,12 @@ vi.mock('../store', () => ({
     setAppNotifications: async (next: AppNotification[]) => {
       state.notifications = next;
     },
+    updateAppNotifications: async (
+      change: (items: AppNotification[]) => AppNotification[] | null,
+    ) => {
+      state.notifications = change(state.notifications) ?? state.notifications;
+      return state.notifications;
+    },
     getSettings: async () => state.settings,
   },
 }));

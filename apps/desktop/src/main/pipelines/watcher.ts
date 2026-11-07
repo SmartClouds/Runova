@@ -52,8 +52,6 @@ async function appendRunNotification(input: {
   /** Auto-fix already took the failure on and tells the user itself, so this one is a record. */
   autoFixing?: boolean;
 }): Promise<void> {
-  const items = await store.getAppNotifications();
-  if (items.some((item) => item.htmlUrl === input.run.htmlUrl)) return;
   const notification: AppNotification = {
     id: randomUUID(),
     kind: input.passed ? 'pipeline-success' : 'pipeline-failure',
@@ -67,9 +65,13 @@ async function appendRunNotification(input: {
     // stays out of the unread badge.
     read: input.passed || input.autoFixing === true,
   };
-  items.unshift(notification);
-  await store.setAppNotifications(items.slice(0, MAX_NOTIFICATIONS));
-  broadcastNotificationsChanged();
+  let added = false;
+  await store.updateAppNotifications((items) => {
+    if (items.some((item) => item.htmlUrl === input.run.htmlUrl)) return null;
+    added = true;
+    return [notification, ...items].slice(0, MAX_NOTIFICATIONS);
+  });
+  if (added) broadcastNotificationsChanged();
 }
 
 /**

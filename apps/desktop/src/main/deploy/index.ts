@@ -348,8 +348,7 @@ export function registerDeployIpc(): void {
         .filter((server) => server.enrolled && server.core)
         .map((server) => ({ id: server.id, name: server.nickname })),
     inbox: appNotificationInbox({
-      list: () => store.getAppNotifications(),
-      save: (items) => store.setAppNotifications(items),
+      update: (change) => store.updateAppNotifications(change),
       changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
     }),
     toast: (toast) => {

@@ -54,9 +54,9 @@ function setup(options: { state?: DeployState; core?: FakeCore; focused?: boolea
     state,
     servers: async () => servers,
     inbox: appNotificationInbox({
-      list: async () => inbox.map((item) => ({ ...item })),
-      save: async (items) => {
-        inbox.splice(0, inbox.length, ...items);
+      update: async (change) => {
+        const next = change(inbox.map((item) => ({ ...item })));
+        if (next) inbox.splice(0, inbox.length, ...next);
       },
       changed: () => undefined,
     }),
@@ -263,9 +263,8 @@ describe('appNotificationInbox', () => {
     let items = initial;
     const changed = vi.fn();
     const port = appNotificationInbox({
-      list: async () => items,
-      save: async (next) => {
-        items = next;
+      update: async (change) => {
+        items = change(items) ?? items;
       },
       changed,
     });

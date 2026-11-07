@@ -43,8 +43,7 @@ async function monitorOf(notification: ServerNotification): Promise<InboxMonitor
 
 export function liveDependencyAlerts(runtime: AccountRuntime): DependencyAlerts {
   const inbox = appNotificationInbox({
-    list: () => store.getAppNotifications(),
-    save: (items) => store.setAppNotifications(items),
+    update: (change) => store.updateAppNotifications(change),
     changed: () => broadcastToWindows(IPC.appNotifications.onChanged),
   });
 

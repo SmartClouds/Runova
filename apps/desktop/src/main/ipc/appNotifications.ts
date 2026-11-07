@@ -21,29 +21,24 @@ export function registerAppNotificationHandlers(): void {
   ipcMain.handle(
     IPC.appNotifications.markRead,
     async (_event, notificationId: string): Promise<AppNotification[]> => {
-      const items = await store.getAppNotifications();
-      const next = items.map((item) =>
-        item.id === notificationId ? { ...item, read: true } : item,
+      return store.updateAppNotifications((items) =>
+        items.map((item) => (item.id === notificationId ? { ...item, read: true } : item)),
       );
-      await store.setAppNotifications(next);
-      return next;
     },
   );
 
   ipcMain.handle(IPC.appNotifications.markAllRead, async (): Promise<AppNotification[]> => {
-    const items = await store.getAppNotifications();
-    const next = items.map((item) => (item.read ? item : { ...item, read: true }));
-    await store.setAppNotifications(next);
-    return next;
+    return store.updateAppNotifications((items) =>
+      items.map((item) => (item.read ? item : { ...item, read: true })),
+    );
   });
 
   ipcMain.handle(
     IPC.appNotifications.remove,
     async (_event, notificationId: string): Promise<AppNotification[]> => {
-      const items = await store.getAppNotifications();
-      const next = items.filter((item) => item.id !== notificationId);
-      await store.setAppNotifications(next);
-      return next;
+      return store.updateAppNotifications((items) =>
+        items.filter((item) => item.id !== notificationId),
+      );
     },
   );
 }
