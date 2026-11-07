@@ -6,7 +6,7 @@ import type {
   SecurityScannerId,
   SecurityScanOptions,
 } from '@runova/core';
-import { parseSarif, parseSonarIssues, parseStrixRun } from '@runova/core';
+import { BEARER_DOCKER_IMAGE, parseSarif, parseSonarIssues, parseStrixRun } from '@runova/core';
 import { resolveCodeqlCommand } from './codeqlLocal';
 import { type ScanCancelToken, spawnScan } from './exec';
 import { fetchSonarFindings, waitForSonarTask } from './sonarApi';
@@ -270,7 +270,7 @@ const bearer: ScannerAdapter = {
           containerName,
           '-v',
           bindMount(ctx.projectPath, CONTAINER_SCAN_ROOT),
-          'bearer/bearer:latest-amd64',
+          BEARER_DOCKER_IMAGE,
           'scan',
           CONTAINER_SCAN_ROOT,
           '--format',

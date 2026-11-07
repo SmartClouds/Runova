@@ -61,6 +61,26 @@ describe('StackChips', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('keeps Docker on while Security is picked, and says why when asked', async () => {
+    const { user, onToggle } = renderChips(['essentials', 'security']);
+
+    expect(screen.getByRole('button', { name: 'Security' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Docker' })).toBeNull();
+    await user.hover(screen.getByText('Docker'));
+
+    expect((await screen.findAllByText('On because Security needs it.')).length).toBeGreaterThan(0);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('gives Docker its toggle back once Security is off', () => {
+    renderChips(['essentials']);
+
+    expect(screen.getByRole('button', { name: 'Docker' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('says what a stack brings when its chip is hovered', async () => {
     const { user } = renderChips();
 

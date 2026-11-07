@@ -9,6 +9,8 @@ import {
   isDevItemId,
   itemsForStacks,
   normalizeDevSetupStacks,
+  stacksNeeding,
+  withNeededStacks,
 } from './catalog.js';
 import type { DevItem, DevOs, DevRecipe } from './types.js';
 
@@ -37,6 +39,13 @@ const ALLOWED_HOSTS = new Set([
   // Studio's local voices: Piper's home and OmniVoice's model card.
   'github.com',
   'huggingface.co',
+  // The Security stack's scanners and what they install through.
+  'www.python.org',
+  'pipx.pypa.io',
+  'semgrep.dev',
+  'trivy.dev',
+  'docs.bearer.com',
+  'docs.sonarsource.com',
 ]);
 
 function allRecipes(item: DevItem): DevRecipe[] {
@@ -97,11 +106,34 @@ describe('the catalog data', () => {
     for (const item of DEV_ITEMS) visit(item.id, []);
   });
 
-  it('keeps dependencies inside the same stack or Essentials, so a stack never needs another stack the user has not picked', () => {
+  it('keeps dependencies inside the same stack, Essentials or a stack it needs, so a stack never waits on one that is not on the list', () => {
     for (const item of DEV_ITEMS) {
+      const needs = DEV_STACKS.find((stack) => stack.id === item.stack)?.needs ?? [];
       for (const dep of item.dependsOn ?? []) {
         const target = getDevItem(dep);
-        expect(['essentials', item.stack], `${item.id} -> ${dep}`).toContain(target?.stack);
+        expect(['essentials', item.stack, ...needs], `${item.id} -> ${dep}`).toContain(
+          target?.stack,
+        );
+      }
+    }
+  });
+
+  it('only needs stacks that exist, never Essentials (always on) and never itself', () => {
+    const stackIds = DEV_STACKS.map((stack) => stack.id);
+    for (const stack of DEV_STACKS) {
+      for (const need of stack.needs ?? []) {
+        expect(stackIds, `${stack.id} needs ${need}`).toContain(need);
+        expect(need).not.toBe('essentials');
+        expect(need).not.toBe(stack.id);
+      }
+    }
+  });
+
+  it('keeps pipx on the same checklist as everything installed through it', () => {
+    const pipx = getDevItem('pipx');
+    for (const item of DEV_ITEMS) {
+      if (allRecipes(item).some((recipe) => recipe.kind === 'pipx')) {
+        expect(pipx?.stack, item.id).toBe(item.stack);
       }
     }
   });
@@ -146,7 +178,11 @@ describe('the catalog data', () => {
         if (recipe.kind === 'winget') expect(recipe.id).toMatch(wingetId);
         if (recipe.kind === 'brew') expect(recipe.formula).toMatch(brewName);
         if (recipe.kind === 'brew-cask') expect(recipe.cask).toMatch(brewName);
-        if (recipe.kind === 'npm-global' || recipe.kind === 'dotnet-tool') {
+        if (
+          recipe.kind === 'npm-global' ||
+          recipe.kind === 'dotnet-tool' ||
+          recipe.kind === 'pipx'
+        ) {
           expect(recipe.pkg).toMatch(npmName);
         }
         if (recipe.kind === 'pkg') {
@@ -219,6 +255,30 @@ describe('the catalog data', () => {
     );
   });
 
+  it('covers every scanner the Security tab runs', () => {
+    const security = DEV_ITEMS.filter((item) => item.stack === 'security').map((item) => item.id);
+    expect(security).toEqual(
+      expect.arrayContaining([
+        'python',
+        'pipx',
+        'semgrep',
+        'trivy',
+        'bearer',
+        'bearer-image',
+        'codeql',
+        'sonarqube-server',
+        'strix',
+      ]),
+    );
+  });
+
+  it('counts only the quick scanners and what they install through against ready', () => {
+    const required = DEV_ITEMS.filter((item) => item.stack === 'security' && !item.optional).map(
+      (item) => item.id,
+    );
+    expect(required).toEqual(['python', 'pipx', 'semgrep', 'trivy']);
+  });
+
   it('keeps Android Studio optional, since the headless SDK is what the checklist installs', () => {
     expect(getDevItem('android-studio')?.optional).toBe(true);
   });
@@ -288,6 +348,41 @@ describe('itemsForStacks', () => {
     const ids = itemsForStacks(['dotnet'], 'linux').map((item) => item.id);
     expect(ids).toContain('git');
     expect(ids).toContain('dotnet-sdk');
+  });
+
+  it('brings in the Docker rows with Security, since its container scanners wait on them', () => {
+    const ids = itemsForStacks(['security'], 'win32').map((item) => item.id);
+    expect(ids).toContain('docker-running');
+    expect(ids).toContain('sonarqube-server');
+    expect(ids.indexOf('docker-running')).toBeLessThan(ids.indexOf('sonarqube-server'));
+  });
+
+  it('runs Bearer natively off Windows and through its Docker image on Windows', () => {
+    const win = itemsForStacks(['security'], 'win32').map((item) => item.id);
+    const mac = itemsForStacks(['security'], 'darwin').map((item) => item.id);
+    expect(win).toContain('bearer-image');
+    expect(win).not.toContain('bearer');
+    expect(mac).toContain('bearer');
+    expect(mac).not.toContain('bearer-image');
+    expect(mac).not.toContain('python');
+  });
+});
+
+describe('withNeededStacks and stacksNeeding', () => {
+  it('adds what a picked stack needs, in catalog order, without changing the rest', () => {
+    expect(withNeededStacks(['security'])).toEqual(['essentials', 'docker', 'security']);
+    expect(withNeededStacks(['dotnet'])).toEqual(['essentials', 'dotnet']);
+    expect(withNeededStacks(['security', 'docker'])).toEqual(['essentials', 'docker', 'security']);
+  });
+
+  it('names the picked stacks that keep a stack on', () => {
+    expect(stacksNeeding('docker', ['security']).map((stack) => stack.id)).toEqual(['security']);
+    expect(stacksNeeding('docker', ['dotnet'])).toEqual([]);
+    expect(stacksNeeding('security', ['security'])).toEqual([]);
+  });
+
+  it('leaves the saved choice alone, so turning Security off takes Docker away again', () => {
+    expect(normalizeDevSetupStacks(['security'])).toEqual(['essentials', 'security']);
   });
 });
 

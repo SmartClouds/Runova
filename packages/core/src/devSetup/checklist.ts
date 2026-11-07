@@ -3,7 +3,7 @@ import {
   displayName,
   getDevItem,
   itemsForStacks,
-  normalizeDevSetupStacks,
+  withNeededStacks,
 } from './catalog.js';
 import { hasUpdate, type PlanEntry, type SetupSummary, summarizeSetup } from './plan.js';
 import { type DevSetupEnvironment, type InstallMode, selectRecipe } from './recipes.js';
@@ -111,7 +111,7 @@ export function buildChecklist(input: ChecklistInput): Checklist {
     rows.map((row) => [row.item.id, { item: row.item, mode: row.mode, state: row.state }]),
   );
 
-  const chosen = new Set<string>(normalizeDevSetupStacks(input.stacks));
+  const chosen = new Set<string>(withNeededStacks(input.stacks));
   const groups: ChecklistGroup[] = DEV_STACKS.filter((stack) => chosen.has(stack.id)).map(
     (stack) => {
       const own = rows.filter((row) => row.item.stack === stack.id);

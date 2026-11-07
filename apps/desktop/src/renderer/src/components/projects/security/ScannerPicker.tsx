@@ -2,6 +2,7 @@ import type { ScannerPreflight, ScannerRequirement, SecurityScannerId } from '@r
 import { SECURITY_SCANNER_KIND_LABEL, SECURITY_SCANNERS } from '@runova/core';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Download, SettingsIcon, TriangleAlert } from '@/components/icons';
+import { SECURITY_SETUP_ROUTE } from '@/components/tools/routes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -92,7 +93,7 @@ export function ScannerPicker({
             ) : (
               <BlockedLine
                 blocker={blocker}
-                onInstall={() => navigate('/tools?tab=security')}
+                onInstall={() => navigate(SECURITY_SETUP_ROUTE)}
                 onConfigure={() => onConfigure(scanner.id)}
               />
             )}

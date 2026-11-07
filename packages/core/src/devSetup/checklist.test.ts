@@ -124,6 +124,48 @@ describe('buildChecklist', () => {
     expect(checklist.groups.map((group) => group.stack.id)).toEqual(['essentials', 'dotnet']);
   });
 
+  it('shows Docker with Security, and lets the SonarQube server wait on Docker running', () => {
+    const checklist = buildChecklist({
+      stacks: ['security'],
+      environment: win,
+      detections: {
+        wsl2: found('2.5.9'),
+        'docker-desktop': found('28.1.0'),
+        'docker-running': absent,
+        'sonarqube-server': absent,
+      },
+    });
+
+    expect(checklist.groups.map((group) => group.stack.id)).toEqual([
+      'essentials',
+      'docker',
+      'security',
+    ]);
+    const sonar = checklist.rows.find((row) => row.item.id === 'sonarqube-server');
+    expect(sonar?.state).toEqual({
+      kind: 'blocked',
+      waitingFor: ['docker-running'],
+      via: 'dependency',
+    });
+  });
+
+  it('blocks a pipx app on pipx, and pipx on Python on Windows', () => {
+    const checklist = buildChecklist({
+      stacks: ['security'],
+      environment: win,
+      detections: { python: absent, pipx: absent, semgrep: absent },
+    });
+
+    expect(checklist.rows.find((row) => row.item.id === 'pipx')?.state).toMatchObject({
+      kind: 'blocked',
+      waitingFor: ['python'],
+    });
+    expect(checklist.rows.find((row) => row.item.id === 'semgrep')?.state).toMatchObject({
+      kind: 'blocked',
+      waitingFor: ['pipx'],
+    });
+  });
+
   it('shows only what exists on this OS', () => {
     const onWindows = buildChecklist({
       stacks: ['essentials', 'docker'],

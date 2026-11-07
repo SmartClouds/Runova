@@ -72,7 +72,17 @@ export function SystemFactsCard({
       ) : (
         <div className={cn('space-y-2 transition-opacity', stale && 'opacity-50')}>
           {(info.rebootRequired || info.rebootRequiredBy.length > 0) && (
-            <Notice tone="warning" icon={TriangleAlert}>
+            <Notice
+              tone="warning"
+              icon={TriangleAlert}
+              action={
+                onReboot && (
+                  <Button size="sm" variant="soft" disabled={rebooting} onClick={onReboot}>
+                    <Power /> Reboot now
+                  </Button>
+                )
+              }
+            >
               A reboot is waiting
               {info.rebootRequiredBy.length > 0 ? ` for ${info.rebootRequiredBy.join(', ')}` : ''}.
             </Notice>

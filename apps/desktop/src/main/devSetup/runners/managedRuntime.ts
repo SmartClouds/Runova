@@ -9,6 +9,7 @@ import { app, net } from 'electron';
 import { runSdkManagerStreaming } from '../../android/exec';
 import { getAndroidSdk, refreshAndroidSdk } from '../../android/sdk';
 import { killProcessTree, spawnStreaming } from '../../process/spawnStreaming';
+import { cancelCodeqlInstall, installCodeqlLocally } from '../../security/codeqlLocal';
 import { studioPackageRoot } from '../../studio/host';
 import { isE2E } from '../../testMode';
 import { ResumableDownload } from '../../updater/resumableDownload';
@@ -21,6 +22,8 @@ import { createFlutterInstaller } from './flutterInstaller';
 import { createDockerLauncher } from './launchDocker';
 import type { ManagedRunners } from './managedDispatch';
 import { createManagedKit, STUDIO_TOOL_HOSTS } from './managedSystem';
+import type { RunHooks, RunResult } from './packageManagerRunner';
+import { createSecurityTools } from './securityTools';
 import { createStudioToolsInstaller, type StudioToolsInstaller } from './studioTools';
 
 /**
@@ -86,7 +89,10 @@ function currentArch(): DevArch {
   return process.arch === 'x64' || process.arch === 'arm64' ? process.arch : 'other';
 }
 
-export function createManagedRunners(): ManagedRunners {
+export function createManagedRunners(deps: {
+  /** Runs one command the way a package manager install runs, for the Docker steps. */
+  runArgv: (argv: readonly string[], hooks: RunHooks) => Promise<RunResult>;
+}): ManagedRunners {
   const os = currentOs();
   const arch = currentArch();
   const home = homedir();
@@ -126,6 +132,15 @@ export function createManagedRunners(): ManagedRunners {
     }),
     androidPackages: androidPackagesFor(arch),
     studioTools: createStudioTools(),
+    security: createSecurityTools({
+      runArgv: deps.runArgv,
+      containerExists: async (name) =>
+        (await runProbe('docker', ['container', 'inspect', '--format', '{{.Id}}', name])).ok,
+      installCodeql: async (onProgress) => {
+        await installCodeqlLocally(onProgress);
+      },
+      cancelCodeql: cancelCodeqlInstall,
+    }),
   };
 }
 

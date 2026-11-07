@@ -244,6 +244,13 @@ describe('updateQueryFor', () => {
       package: 'dotnet-ef',
     });
     expect(updateQueryFor(item('flutter'), win)).toEqual({ source: 'flutter' });
+    expect(updateQueryFor(item('semgrep'), win)).toEqual({ source: 'pypi', package: 'semgrep' });
+  });
+
+  it('has nothing to ask about the steps Runova runs itself for the Security tab', () => {
+    expect(updateQueryFor(item('codeql'), win)).toBeNull();
+    expect(updateQueryFor(item('sonarqube-server'), win)).toBeNull();
+    expect(updateQueryFor(item('bearer-image'), win)).toBeNull();
   });
 
   it('asks winget about Bun on Windows and the npm registry elsewhere', () => {

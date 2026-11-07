@@ -200,6 +200,25 @@ describe('useDevSetup: stacks', () => {
     expect(() => bridge.$fn('settings.update')).toThrow();
   });
 
+  it('lists the Docker rows with Security, and keeps Docker on while Security needs it', async () => {
+    const { result, bridge } = renderHookWithProviders(() => useDevSetup(), {
+      bridge: bridgeFor({ stacks: ['essentials', 'security'] }),
+    });
+    await waitFor(() =>
+      expect(result.current.checklist?.groups.map((group) => group.stack.id)).toEqual([
+        'essentials',
+        'docker',
+        'security',
+      ]),
+    );
+    const ids = result.current.checklist?.rows.map((row) => row.item.id) ?? [];
+    expect(ids).toEqual(expect.arrayContaining(['docker-running', 'semgrep', 'trivy']));
+
+    act(() => result.current.toggleStack('docker'));
+
+    expect(() => bridge.$fn('settings.update')).toThrow();
+  });
+
   it('ignores a stack id that is not in the catalog', async () => {
     const { result, bridge } = renderHookWithProviders(() => useDevSetup(), {
       bridge: bridgeFor(),

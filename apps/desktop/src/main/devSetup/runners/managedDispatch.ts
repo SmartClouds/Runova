@@ -27,6 +27,14 @@ export interface ManagedRunners {
       hooks: RunHooks,
     ) => Promise<RunResult>;
   };
+  /** What the Security tab's scanners need that Runova sets up itself. */
+  security: {
+    /** CodeQL's release, into Runova's tools folder. */
+    downloadCodeql: (hooks: RunHooks) => Promise<RunResult>;
+    /** Starts the container a Dev Tools card declares, creating it the first time. */
+    startContainer: (toolId: string, hooks: RunHooks) => Promise<RunResult>;
+    pullImage: (image: string, hooks: RunHooks) => Promise<RunResult>;
+  };
   /** The sdkmanager package for each Android item, for this CPU. */
   androidPackages: Readonly<Record<DevItemId, string>>;
 }
@@ -48,13 +56,8 @@ function cannotUpdate(): Promise<RunResult> {
   });
 }
 
-function noTarget(): Promise<RunResult> {
-  return Promise.resolve({
-    ok: false,
-    code: null,
-    cancelled: false,
-    message: 'There is no Studio tool set for that item.',
-  });
+function noTarget(message = 'There is no Studio tool set for that item.'): Promise<RunResult> {
+  return Promise.resolve({ ok: false, code: null, cancelled: false, message });
 }
 
 export function runManagedRecipe(
@@ -99,5 +102,18 @@ export function runManagedRecipe(
         return runners.studioTools.runModels(recipe.target, hooks);
       }
       return noTarget();
+    // Updates are not offered for these three: nothing reports a newer version to compare with.
+    case 'codeql-download':
+      return updating ? cannotUpdate() : runners.security.downloadCodeql(hooks);
+    case 'docker-container':
+      if (updating) return cannotUpdate();
+      return recipe.toolId
+        ? runners.security.startContainer(recipe.toolId, hooks)
+        : noTarget('There is no container set for that item.');
+    case 'docker-image':
+      if (updating) return cannotUpdate();
+      return recipe.image
+        ? runners.security.pullImage(recipe.image, hooks)
+        : noTarget('There is no image set for that item.');
   }
 }

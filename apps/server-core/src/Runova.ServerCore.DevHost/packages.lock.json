@@ -346,7 +346,7 @@
           "SSH.NET": "[2026.0.0, )",
           "Tapper.Attributes": "[1.14.0, )",
           "TypedSignalR.Client.TypeScript.Attributes": "[1.17.0, )",
-          "WTelegramClient": "[4.4.9, )"
+          "WTelegramClient": "[4.4.10, )"
         }
       },
       "Cronos": {
@@ -476,9 +476,9 @@
       },
       "WTelegramClient": {
         "type": "CentralTransitive",
-        "requested": "[4.4.9, )",
-        "resolved": "4.4.9",
-        "contentHash": "K4xOqTx8J9/g/Qzwk4YHxcMnO3CrL5ascHW3Ka/TZcGK5hryAKUOW/e2SzoU/ilqXBV//Hn9RXW2wmn+OcRoXA=="
+        "requested": "[4.4.10, )",
+        "resolved": "4.4.10",
+        "contentHash": "1L/3ntiWiKnD743XMjthJIdL01WpHTE/WlRKqpF3dAorGgsabU+EZpq2j9q7H/Yb0PfXUoMaWxkrYYSg0brm0Q=="
       }
     }
   }

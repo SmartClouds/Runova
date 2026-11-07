@@ -44,11 +44,13 @@ function platform(): SupportedOS {
 }
 
 /** The zip unpacks to a `codeql/` folder, so the binary sits one level in. */
-function managedBinaryPath(): string {
+export function managedBinaryPath(): string {
   return join(codeqlInstallDir(), 'codeql', codeqlBinaryName(platform()));
 }
 
 let currentProgress: CodeqlInstallProgress | null = null;
+/** Dev Setup's row, when Dev Setup started the install. The card hears it through the broadcast. */
+let progressListener: ((progress: CodeqlInstallProgress) => void) | null = null;
 let activeDownload: ResumableDownload | null = null;
 let activeWorker: Worker | null = null;
 let cancelled = false;
@@ -58,6 +60,7 @@ function emit(progress: CodeqlInstallProgress): void {
   // Broadcast rather than reply to one sender: the Tools page and a project's Security tab can
   // both be showing this, and an install outlives whichever one started it.
   broadcastToWindows(IPC.security.onCodeqlProgress, progress);
+  progressListener?.(progress);
 }
 
 async function readVersion(binary: string): Promise<string | null> {
@@ -212,12 +215,24 @@ export function cancelCodeqlInstall(): void {
 
 /**
  * Downloads and unpacks CodeQL. Resumable, so a dropped connection partway through a 400 MB
- * download picks up where it left off rather than starting again.
+ * download picks up where it left off rather than starting again. `onProgress` hears the same
+ * progress the broadcast carries, for a caller that is not a window (Dev Setup's installer).
  */
-export async function installCodeqlLocally(): Promise<CodeqlLocalStatus> {
+export async function installCodeqlLocally(
+  onProgress?: (progress: CodeqlInstallProgress) => void,
+): Promise<CodeqlLocalStatus> {
   if (currentProgress && currentProgress.phase !== 'done' && currentProgress.phase !== 'failed') {
     throw new Error('A CodeQL install is already running.');
   }
+  progressListener = onProgress ?? null;
+  try {
+    return await runCodeqlInstall();
+  } finally {
+    progressListener = null;
+  }
+}
+
+async function runCodeqlInstall(): Promise<CodeqlLocalStatus> {
   cancelled = false;
 
   const installDir = codeqlInstallDir();

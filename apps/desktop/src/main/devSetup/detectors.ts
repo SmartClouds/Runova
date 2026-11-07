@@ -55,6 +55,8 @@ export interface DetectorDeps {
   androidSdk: () => Promise<DetectorAndroidSdk>;
   /** Where Studio installs its local voices (`<userData>/studio-tools`). */
   studioToolsDir: string;
+  /** Where the CodeQL that Runova downloads lives, whether or not it is there yet. */
+  codeqlManagedBinary: string;
   now: () => number;
   /** How many items are checked at once. Fifteen Node tools starting together slow each other. */
   concurrency?: number;
@@ -71,6 +73,8 @@ const CACHE_TTL_MS = 10_000;
 const DEFAULT_CONCURRENCY = 4;
 const FLUTTER_VERSION_TIMEOUT_MS = 45_000;
 const WSL_TIMEOUT_MS = 15_000;
+/** `codeql version` starts the JVM-backed CLI, which is slow on a cold disk. */
+const CODEQL_TIMEOUT_MS = 20_000;
 
 const ABSENT: DevDetection = { state: 'absent' };
 
@@ -281,6 +285,34 @@ export function createDevSetupDetector(deps: DetectorDeps): DevSetupDetector {
     return found(null, dir, true);
   }
 
+  /**
+   * A codeql on PATH first, the same order the Security tab runs it in, then the copy Runova
+   * downloaded. That copy is used from where it is on purpose, so it counts as usable rather than
+   * as "not on your PATH".
+   */
+  async function detectCodeql(): Promise<DevDetection> {
+    const args = ['version', '--format=terse'];
+    const onPath = await deps.probe('codeql', args, { timeoutMs: CODEQL_TIMEOUT_MS });
+    if (onPath.ok) {
+      return found(parseVersion(onPath.output), await deps.findExecutable('codeql'), true);
+    }
+    const managed = deps.codeqlManagedBinary;
+    if (!(await deps.exists(managed))) return ABSENT;
+    const result = await deps.probe(managed, args, { timeoutMs: CODEQL_TIMEOUT_MS });
+    return found(result.ok ? parseVersion(result.output) : null, managed, true);
+  }
+
+  /**
+   * A container counts while it runs. One that exists but is stopped is not ready, since the scan
+   * needs the server up, and starting it is what the row's button does. With Docker down the
+   * answer is "not there", and the row waits on "Docker is running" anyway.
+   */
+  async function detectContainer(name: string | undefined): Promise<DevDetection> {
+    if (!name) return ABSENT;
+    const result = await deps.probe('docker', ['inspect', '--format', '{{.State.Running}}', name]);
+    return result.ok && result.stdout.trim() === 'true' ? found(null, null, true) : ABSENT;
+  }
+
   async function runDetection(item: DevItem): Promise<DevDetection> {
     const spec = item.detect;
     switch (spec.kind) {
@@ -292,6 +324,8 @@ export function createDevSetupDetector(deps: DetectorDeps): DevSetupDetector {
         if (spec.id === 'flutter') return detectFlutter();
         if (spec.id === 'wsl') return detectWsl();
         if (spec.id === 'studio-tool') return detectStudioTool(spec.tool ?? 'piper');
+        if (spec.id === 'codeql') return detectCodeql();
+        if (spec.id === 'docker-container') return detectContainer(spec.container);
         return detectAndroidPiece(spec.piece ?? 'cmdline-tools');
     }
   }

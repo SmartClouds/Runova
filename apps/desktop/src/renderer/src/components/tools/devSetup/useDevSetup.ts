@@ -19,6 +19,7 @@ import {
   itemsForStacks,
   missingItemIds,
   normalizeDevSetupStacks,
+  stacksNeeding,
   type UpdatePlan,
   updatableItemIds,
   updateSourceFor,
@@ -393,8 +394,9 @@ export function useDevSetup(): UseDevSetup {
     stacks,
     toggleStack: (id) => {
       const stack = DEV_STACKS.find((one) => one.id === id);
-      // Essentials is always on, and an id from nowhere is not a stack.
-      if (!stack || stack.alwaysOn) return;
+      // Essentials is always on, a stack another picked one needs stays on with it, and an id from
+      // nowhere is not a stack.
+      if (!stack || stack.alwaysOn || stacksNeeding(stack.id, stacks).length > 0) return;
       const next = stacks.includes(stack.id)
         ? stacks.filter((one) => one !== stack.id)
         : [...stacks, stack.id];

@@ -38,6 +38,8 @@ export interface UpdateCheckerDeps {
   ) => Promise<ProbeResult>;
   /** The newest version an npm package has, or null when the registry cannot be reached. */
   latestNpm: (pkg: string) => Promise<string | null>;
+  /** The same for a PyPI package, which is what pipx installs from. */
+  latestPypi: (pkg: string) => Promise<string | null>;
   /** Throws when the request fails. */
   fetchJson: (url: string) => Promise<unknown>;
   /** What `sdkmanager --list` printed, or null when there is no sdkmanager to run. */
@@ -219,6 +221,10 @@ export function createUpdateChecker(deps: UpdateCheckerDeps): DevUpdateChecker {
         case 'npm':
           return await askFeed(entries, (entry) =>
             deps.latestNpm((entry.query as Extract<DevUpdateQuery, { source: 'npm' }>).package),
+          );
+        case 'pypi':
+          return await askFeed(entries, (entry) =>
+            deps.latestPypi((entry.query as Extract<DevUpdateQuery, { source: 'pypi' }>).package),
           );
         case 'nuget':
           return await askFeed(entries, async (entry) => {

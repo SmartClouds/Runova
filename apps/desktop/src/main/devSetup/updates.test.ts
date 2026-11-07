@@ -48,6 +48,7 @@ function world(
     detections?: Record<string, DevDetection>;
     probe?: (command: string, args: readonly string[]) => ProbeResult | Promise<ProbeResult>;
     latestNpm?: (pkg: string) => Promise<string | null>;
+    latestPypi?: (pkg: string) => Promise<string | null>;
     fetchJson?: (url: string) => Promise<unknown>;
     sdkmanagerList?: () => Promise<string | null>;
   } = {},
@@ -62,6 +63,7 @@ function world(
       return (await options.probe?.(command, args)) ?? ran('');
     }),
     latestNpm: options.latestNpm ?? (async () => null),
+    latestPypi: options.latestPypi ?? (async () => null),
     fetchJson: options.fetchJson ?? (async () => ({})),
     sdkmanagerList: options.sdkmanagerList ?? (async () => null),
     now: () => time,
@@ -282,6 +284,18 @@ describe('registries and feeds', () => {
 
     const offline = world({ detections: { pnpm: found('12.14.0') }, latestNpm: async () => null });
     expect(await offline.checker.check(['pnpm'])).toEqual({ pnpm: { state: 'unknown' } });
+  });
+
+  it('asks PyPI about what pipx installed', async () => {
+    const latestPypi = vi.fn(async (pkg: string) => (pkg === 'semgrep' ? '1.140.0' : null));
+    const w = world({ detections: { semgrep: found('1.139.0') }, latestPypi });
+
+    expect((await w.checker.check(['semgrep'])).semgrep).toEqual({
+      state: 'update',
+      latest: '1.140.0',
+      installed: null,
+    });
+    expect(latestPypi).toHaveBeenCalledWith('semgrep');
   });
 
   it('does not ask a registry about a tool that is not installed', async () => {

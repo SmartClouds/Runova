@@ -272,7 +272,7 @@ The review wizard can also be opened as a dialog from a project card (**Review w
 
 ### Security
 
-The Security section scans the project with security tools and gives one merged report. Scanners are installed from Dev Tools (when none is installed, a **Browse security tools** button goes there), and the section is never hidden so you can see what exists.
+The Security section scans the project with security tools and gives one merged report. Scanners are installed once for every project from the **Security** stack in Dev Tools, **Dev Setup**. When none is installed, **Set up security tools** opens that checklist and **Browse security tools** opens the scanner cards. A scanner's **Install** button opens the checklist too. The section is never hidden so you can see what exists.
 
 | Scanner | What it covers | Time |
 | --- | --- | --- |

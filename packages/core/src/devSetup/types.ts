@@ -9,7 +9,7 @@ import type { InstallIntent } from './recipes.js';
 export type DevOs = 'win32' | 'darwin' | 'linux';
 export type DevArch = 'x64' | 'arm64' | 'other';
 
-export type DevStackId = 'essentials' | 'dotnet' | 'flutter' | 'docker' | 'studio';
+export type DevStackId = 'essentials' | 'dotnet' | 'flutter' | 'docker' | 'studio' | 'security';
 export type DevItemId = string;
 
 export interface DevStack {
@@ -19,6 +19,11 @@ export interface DevStack {
   description: string;
   /** Essentials is always on, the others are chosen by the user. */
   alwaysOn?: boolean;
+  /**
+   * Stacks this one cannot work without. Picking it turns them on as well, for as long as it stays
+   * picked, so its items may depend on theirs.
+   */
+  needs?: readonly DevStackId[];
 }
 
 /**
@@ -26,7 +31,15 @@ export interface DevStack {
  * detector in the app. They exist because the answer lives in a file layout or in output that
  * needs special reading, not in a version line.
  */
-export type DevResolverId = 'flutter' | 'wsl' | 'android-sdk-piece' | 'studio-tool';
+export type DevResolverId =
+  | 'flutter'
+  | 'wsl'
+  | 'android-sdk-piece'
+  | 'studio-tool'
+  /** CodeQL on PATH, or the copy Runova downloads into its own tools folder. */
+  | 'codeql'
+  /** A Docker container, by name, that is running right now. */
+  | 'docker-container';
 
 /**
  * What Studio installs into its own folder (`<userData>/studio-tools`): Python environments for its
@@ -69,7 +82,14 @@ export type DetectSpec =
     }
   /** Installed when any of these exists (an app bundle, an IDE launcher). Templates as above. */
   | { kind: 'paths'; anyOf: readonly string[] }
-  | { kind: 'resolver'; id: DevResolverId; piece?: AndroidSdkPiece; tool?: StudioToolId };
+  | {
+      kind: 'resolver';
+      id: DevResolverId;
+      piece?: AndroidSdkPiece;
+      tool?: StudioToolId;
+      /** For `docker-container`: the container's name. */
+      container?: string;
+    };
 
 export type DevManagedInstaller =
   | 'flutter-archive'
@@ -80,7 +100,13 @@ export type DevManagedInstaller =
   /** A pinned Python and wheels, downloaded resumably and installed offline with checked hashes. */
   | 'studio-python-env'
   /** Model files pinned by hash, downloaded resumably. */
-  | 'studio-model-files';
+  | 'studio-model-files'
+  /** The CodeQL release, checked against GitHub's SHA-256 and unpacked into Runova's tools folder. */
+  | 'codeql-download'
+  /** Starts the container a Dev Tools card declares, creating it the first time. */
+  | 'docker-container'
+  /** Pulls a Docker image ahead of the first run that needs it. */
+  | 'docker-image';
 
 /** One way to install an item on one OS. Static data, never built from user input. */
 export type DevRecipe =
@@ -97,7 +123,18 @@ export type DevRecipe =
   | { kind: 'npm-global'; pkg: string }
   | { kind: 'dotnet-tool'; pkg: string }
   /** Runova runs its own installer (download, verify, unpack, or drive sdkmanager). */
-  | { kind: 'managed'; installer: DevManagedInstaller; sdkPackage?: string; target?: StudioToolId }
+  /** A Python command-line app, each in its own environment. Runs once pipx itself is there. */
+  | { kind: 'pipx'; pkg: string }
+  | {
+      kind: 'managed';
+      installer: DevManagedInstaller;
+      sdkPackage?: string;
+      target?: StudioToolId;
+      /** For `docker-container`: the Dev Tools card whose `docker` block says how to run it. */
+      toolId?: string;
+      /** For `docker-image`: the image to pull. */
+      image?: string;
+    }
   /** Arrives with another item, so there is nothing to run. */
   | { kind: 'bundled'; with: DevItemId }
   /** Needs a password, an interactive prompt or a system dialog, so it goes to the terminal. */
@@ -162,6 +199,7 @@ export type DevUpdateSource =
   | 'pacman'
   | 'npm'
   | 'nuget'
+  | 'pypi'
   | 'flutter'
   | 'sdkmanager';
 

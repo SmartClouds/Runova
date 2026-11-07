@@ -263,4 +263,53 @@ describe('the environment it runs in', () => {
 
     expect(spawn.mock.calls[0]?.[0].env).toBeUndefined();
   });
+
+  it('runs pipx in UTF-8 mode, on top of the environment it was given', async () => {
+    const spawn = fakeSpawn();
+    const env = { Path: 'C:\\sandbox\\bin' };
+
+    await createPackageManagerRunner({ spawn, cwd: '.', env }).run(
+      { kind: 'pipx', pkg: 'semgrep' },
+      'install',
+      hooks(),
+    );
+
+    const options = spawn.mock.calls[0]?.[0];
+    expect(options).toMatchObject({ command: 'pipx', args: ['install', 'semgrep'] });
+    expect(options?.env).toEqual({ ...env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' });
+  });
+});
+
+describe('a command of its own', () => {
+  it('runs the argv it is handed, with the patience the command gets', async () => {
+    const spawn = fakeSpawn(['Pulling fs layer']);
+    const h = hooks();
+
+    const result = await createPackageManagerRunner({ spawn, cwd: 'C:\\home' }).runArgv(
+      ['docker', 'pull', 'bearer/bearer:latest-amd64'],
+      h,
+    );
+
+    expect(result).toEqual({ ok: true, code: 0, cancelled: false });
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+      command: 'docker',
+      args: ['pull', 'bearer/bearer:latest-amd64'],
+      cwd: 'C:\\home',
+      timeoutMs: 15 * 60_000,
+      token: h.token,
+    });
+    expect(h.onLine).toHaveBeenCalledWith('Pulling fs layer');
+  });
+
+  it('refuses an empty argv without starting anything', async () => {
+    const spawn = fakeSpawn();
+
+    expect(await createPackageManagerRunner({ spawn, cwd: '.' }).runArgv([], hooks())).toEqual({
+      ok: false,
+      code: null,
+      cancelled: false,
+      message: 'There is no command to run.',
+    });
+    expect(spawn).not.toHaveBeenCalled();
+  });
 });

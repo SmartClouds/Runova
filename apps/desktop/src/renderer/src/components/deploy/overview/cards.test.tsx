@@ -45,6 +45,57 @@ describe('SystemFactsCard', () => {
     expect(screen.getByText('None found')).toBeInTheDocument();
     expect(screen.getByText(/2 sockets/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reboot' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reboot now' })).toBeNull();
+  });
+
+  it('offers a reboot right in the warning to someone who may reboot', async () => {
+    const onReboot = vi.fn();
+    const info = sampleSystemInfo({
+      rebootRequired: true,
+      rebootRequiredBy: ['linux-image-6.8.0-47-generic'],
+    });
+    const { user, unmount } = renderWithProviders(
+      <SystemFactsCard
+        info={info}
+        loading={false}
+        error={null}
+        stale={false}
+        now={Date.now()}
+        onReboot={onReboot}
+        rebooting={false}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Reboot now' }));
+    expect(onReboot).toHaveBeenCalledTimes(1);
+    unmount();
+    renderWithProviders(
+      <SystemFactsCard
+        info={info}
+        loading={false}
+        error={null}
+        stale={false}
+        now={Date.now()}
+        onReboot={onReboot}
+        rebooting
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Reboot now' })).toBeDisabled();
+  });
+
+  it('keeps only the header reboot when no reboot is waiting', () => {
+    renderWithProviders(
+      <SystemFactsCard
+        info={sampleSystemInfo({ rebootRequired: false, rebootRequiredBy: [] })}
+        loading={false}
+        error={null}
+        stale={false}
+        now={Date.now()}
+        onReboot={vi.fn()}
+        rebooting={false}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Reboot' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reboot now' })).toBeNull();
   });
 
   it('shimmers, says when the facts failed, and an unknown clock', () => {

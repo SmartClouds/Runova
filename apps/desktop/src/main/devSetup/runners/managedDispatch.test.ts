@@ -46,6 +46,17 @@ function runners(): ManagedRunners & { calls: string[] } {
         return OK;
       }),
     },
+    security: {
+      downloadCodeql: done('codeql'),
+      startContainer: vi.fn(async (toolId: string) => {
+        calls.push(`container:${toolId}`);
+        return OK;
+      }),
+      pullImage: vi.fn(async (image: string) => {
+        calls.push(`image:${image}`);
+        return OK;
+      }),
+    },
     androidPackages: {
       'android-emulator': 'emulator',
       'android-system-image': 'system-images;android-36;google_apis;x86_64',
@@ -169,12 +180,51 @@ describe('runManagedRecipe for an update', () => {
       ['android-cmdline-tools', 'android-cmdline-tools'],
       ['android-licenses', 'android-licenses'],
       ['docker-running', 'docker-launch'],
+      ['codeql', 'codeql-download'],
+      ['sonarqube-server', 'docker-container'],
+      ['bearer-image', 'docker-image'],
     ] as const) {
       expect(await runManagedRecipe(id, managed(installer), hooks, r, update())).toMatchObject({
         ok: false,
         message: 'This step cannot be updated.',
       });
     }
+    expect(r.calls).toEqual([]);
+  });
+
+  it("runs the Security stack's own installers with what the catalog names", async () => {
+    const r = runners();
+    const recipe = (fields: Partial<Extract<DevRecipe, { kind: 'managed' }>>) =>
+      ({ kind: 'managed', ...fields }) as Extract<DevRecipe, { kind: 'managed' }>;
+
+    await runManagedRecipe('codeql', recipe({ installer: 'codeql-download' }), hooks, r);
+    await runManagedRecipe(
+      'sonarqube-server',
+      recipe({ installer: 'docker-container', toolId: 'sonarqube' }),
+      hooks,
+      r,
+    );
+    await runManagedRecipe(
+      'bearer-image',
+      recipe({ installer: 'docker-image', image: 'bearer/bearer:latest-amd64' }),
+      hooks,
+      r,
+    );
+
+    expect(r.calls).toEqual(['codeql', 'container:sonarqube', 'image:bearer/bearer:latest-amd64']);
+  });
+
+  it('refuses a container or image step that names nothing to run', async () => {
+    const r = runners();
+
+    expect(await runManagedRecipe('x', managed('docker-container'), hooks, r)).toMatchObject({
+      ok: false,
+      message: 'There is no container set for that item.',
+    });
+    expect(await runManagedRecipe('x', managed('docker-image'), hooks, r)).toMatchObject({
+      ok: false,
+      message: 'There is no image set for that item.',
+    });
     expect(r.calls).toEqual([]);
   });
 

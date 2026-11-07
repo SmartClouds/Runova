@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ChevronDown, History, Play, RefreshCw, Shield } from '@/components/icons';
 import { ProjectEmptyState } from '@/components/projects/ProjectDetailChrome';
+import { SECURITY_SETUP_ROUTE } from '@/components/tools/routes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -82,11 +83,16 @@ export function SecurityTab({ project }: { project: Project }): React.JSX.Elemen
         <ProjectEmptyState
           icon={Shield}
           title="No security scanners installed yet"
-          description="Install Semgrep, Trivy, CodeQL, Bearer, SonarQube, or Strix from the Dev Tools page, then come back here to scan this project and get one merged report you can hand to an agent."
+          description="Dev Setup has a Security checklist that installs Semgrep, Trivy, CodeQL, Bearer, SonarQube and Strix once for every project. Come back here afterwards to scan this project and get one merged report you can hand to an agent."
           action={
-            <Button onClick={() => navigate('/tools?tab=security')}>
-              <Shield className="h-4 w-4" /> Browse security tools
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => navigate(SECURITY_SETUP_ROUTE)}>
+                <Shield className="h-4 w-4" /> Set up security tools
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/tools?tab=security')}>
+                Browse security tools
+              </Button>
+            </div>
           }
         />
         <ScannerPicker

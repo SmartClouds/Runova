@@ -89,7 +89,7 @@ function text(html: string): string {
     .trim();
 }
 
-/** The lucide icon names in a piece of markup, such as `triangle-alert`. Old alias names are skipped. */
+/** The lucide icon names in a piece of markup, such as `triangle-exclamation-point`. Old alias names are skipped. */
 function icons(html: string): string[] {
   return [...html.matchAll(/class="lucide lucide-([a-z0-9-]+)/g)].map((match) => match[1]);
 }
@@ -133,9 +133,9 @@ const LABELS: Record<FixtureSeverity, string> = {
 const ICONS: Record<FixtureSeverity, string> = {
   info: 'info',
   low: 'shield-check',
-  medium: 'shield-alert',
-  high: 'triangle-alert',
-  critical: 'octagon-alert',
+  medium: 'shield-exclamation-point',
+  high: 'triangle-exclamation-point',
+  critical: 'octagon-exclamation-point',
 };
 
 describe('/news', () => {

@@ -76,6 +76,15 @@ export const SECURITY_SCANNERS: SecurityScannerDescriptor[] = [
   },
 ];
 
+/**
+ * The Bearer image. Bearer has no Windows build, so on Windows every scan runs in this image, and
+ * Dev Setup pulls it ahead of the first one.
+ */
+export const BEARER_DOCKER_IMAGE = 'bearer/bearer:latest-amd64';
+
+/** The SonarQube server container the Dev Tools card creates and the Security tab scans into. */
+export const SONARQUBE_CONTAINER_NAME = 'runova-sonarqube';
+
 export function getSecurityScanner(id: SecurityScannerId): SecurityScannerDescriptor | undefined {
   return SECURITY_SCANNERS.find((scanner) => scanner.id === id);
 }

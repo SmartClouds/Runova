@@ -1,4 +1,4 @@
-import type { DevStack } from '@runova/core';
+import { type DevStack, stacksNeeding } from '@runova/core';
 import { Lock } from '@/components/icons';
 import { FilterChip, GLASS_CARD } from '@/components/pageKit';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -8,7 +8,8 @@ import { STACK_ICONS } from './stackIcons';
 /**
  * "What do you build?" The checklist below only lists what the chosen stacks need, so this one
  * choice decides how long the page is. Essentials is always on and drawn as a plain label, not a
- * toggle, so nothing invites a click that could not do anything.
+ * toggle, so nothing invites a click that could not do anything. A stack another picked stack needs
+ * (Docker, while Security is on) is drawn the same way for as long as that lasts.
  */
 export function StackChips({
   stacks,
@@ -30,9 +31,13 @@ export function StackChips({
       <div role="group" aria-label="Stacks" className="mt-3 flex flex-wrap gap-2">
         {stacks.map((stack) => {
           const Icon = STACK_ICONS[stack.id];
-          if (stack.alwaysOn) {
+          const neededBy = stacksNeeding(stack.id, selected).map((one) => one.name);
+          if (stack.alwaysOn || neededBy.length > 0) {
+            const label = stack.alwaysOn
+              ? 'Always on. Everything else builds on it.'
+              : `On because ${neededBy.join(' and ')} needs it.`;
             return (
-              <SimpleTooltip key={stack.id} label="Always on. Everything else builds on it.">
+              <SimpleTooltip key={stack.id} label={label}>
                 <span className="flex h-7 shrink-0 cursor-default items-center gap-1.5 whitespace-nowrap rounded-full bg-primary/12 px-3 text-xs font-medium text-primary ring-1 ring-inset ring-primary/30 [&_svg]:size-3.5 [&_svg]:shrink-0">
                   <Icon />
                   {stack.name}

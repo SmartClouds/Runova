@@ -19,6 +19,7 @@ import { getAndroidSdk, refreshAndroidSdk } from '../android/sdk';
 import { broadcastToWindows } from '../ipc/send';
 import { cancelSpawn, killProcessTree, spawnStreaming } from '../process/spawnStreaming';
 import { fetchLatestVersion } from '../registryVersions';
+import { managedBinaryPath as codeqlManagedBinary } from '../security/codeqlLocal';
 import { store } from '../store';
 import { isE2E } from '../testMode';
 import { refreshExtraToolPathDirs } from '../toolPaths';
@@ -161,6 +162,7 @@ function createService(): DevSetupService {
       findExecutable(command, { env: env(), os, exists: isExecutableFile }),
     androidSdk: () => getAndroidSdk(),
     studioToolsDir: join(app.getPath('userData'), 'studio-tools'),
+    codeqlManagedBinary: codeqlManagedBinary(),
     now: Date.now,
   });
 
@@ -191,6 +193,8 @@ function createService(): DevSetupService {
     probe: (command, args, options) => runProbe(command, args, { ...options, env: sandbox?.env }),
     // A test run must not depend on the network, or on the SDK this machine happens to have.
     latestNpm: async (pkg) => (sandbox ? null : fetchLatestVersion({ type: 'npm', package: pkg })),
+    latestPypi: async (pkg) =>
+      sandbox ? null : fetchLatestVersion({ type: 'pypi', package: pkg }),
     fetchJson: async (url) => {
       if (sandbox) throw new Error('Not available in a test run.');
       const response = await fetch(url, { signal: AbortSignal.timeout(FEED_TIMEOUT_MS) });
@@ -233,7 +237,9 @@ function createService(): DevSetupService {
       if (recipe.kind === 'managed') {
         // Built the first time one is needed: opening the page touches neither the data folder
         // nor the network.
-        managed ??= createManagedRunners();
+        managed ??= createManagedRunners({
+          runArgv: (argv, runHooks) => packageManagerRunner.runArgv(argv, runHooks),
+        });
         return runManagedRecipe(step.item.id, recipe, hooks, managed, {
           intent,
           path: step.path,

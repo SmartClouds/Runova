@@ -11,7 +11,7 @@ Dev Tools has five jobs. **AI CLIs** finds the AI coding CLIs on this computer (
 
 ## Where to find it
 
-Click **Dev Tools** in the sidebar under **Agents**, or open the command palette and type "Dev Tools". The page opens on **AI CLIs**; click **All** under **Categories** for the tool cards. A project's **Security** tab also links here with a **Browse security tools** button, which opens this page on the **Security** tab.
+Click **Dev Tools** in the sidebar under **Agents**, or open the command palette and type "Dev Tools". The page opens on **AI CLIs**; click **All** under **Categories** for the tool cards. A project's **Security** tab also links here: **Set up security tools** (and each scanner's **Install** button) opens **Dev Setup** with the **Security** stack turned on, and **Browse security tools** opens this page on the **Security** tab.
 
 ## AI CLIs
 
@@ -31,6 +31,16 @@ Click **Dev Tools** in the sidebar under **Agents**, or open the command palette
 | **.NET** | The .NET SDK (10 or newer) and, as an optional extra, the Entity Framework tool. |
 | **Flutter + Android** | Java 17, the Flutter SDK (which includes Dart), the Android command-line tools, the Android SDK licenses, platform tools, the emulator, an Android 16 platform and an emulator image. Android Studio is an optional extra, and on a Mac so are Xcode and CocoaPods. |
 | **Docker** | Docker Desktop (Docker Engine on Linux), a check that Docker is running and, on Windows, the Windows Subsystem for Linux that Docker Desktop runs on. |
+| **Security** | Everything a project's **Security** tab needs, set up once for every project. pipx, Semgrep and Trivy count toward ready (on Windows, Python 3.12 or newer too, for pipx). Bearer, CodeQL, the SonarQube server and Strix are optional extras. Picking **Security** also turns on **Docker**, because SonarQube, Strix and Bearer on Windows run in it. |
+
+Some stacks need another. While **Security** is on, the **Docker** chip is locked on, and hovering it says why. Turn **Security** off and **Docker** goes back to how you left it.
+
+The **Security** stack only covers what is set up once per computer. The SonarQube token, the Strix model and API key, and the CodeQL language are saved per project, so you set them in each project's **Security** tab. In the checklist:
+
+- **Semgrep** and, on Windows, **Strix** install with pipx inside the app. On Windows, pipx itself installs in a terminal, and you open a new terminal afterwards so its folder is on your PATH.
+- **CodeQL** downloads into Runova's own tools folder (about 400 MB), the same copy the CodeQL card's **Download CodeQL** button fetches.
+- **SonarQube server** is ready while its container runs. **Install** creates the container the first time and starts it after that, keeping its data and admin password. Then sign in at `http://localhost:9000` to create the token a project asks for.
+- **Bearer image** (Windows only) pulls the Docker image Bearer scans in, so the first scan does not wait for it.
 
 ### Read the checklist
 
@@ -173,7 +183,7 @@ Runova currently lists 14 tools.
 
 ## Security scanners
 
-The **Security** tab on this page holds six scanners: Semgrep, Trivy, Bearer, SonarQube, CodeQL and Strix. Installing a scanner here is only the first step. You run scans from a project's **Security** tab, which merges every scanner's findings into one report with a score out of 100, a **History** menu of previous scans and a **Copy report** menu (an AI fix prompt, a Markdown report or raw JSON). See [Projects](projects.md) for the project side.
+The **Security** tab on this page holds six scanners: Semgrep, Trivy, Bearer, SonarQube, CodeQL and Strix. The **Security** stack in [Dev Setup](#dev-setup) installs the same scanners as a checklist, with what they need in the right order. Installing a scanner is only the first step. You run scans from a project's **Security** tab, which merges every scanner's findings into one report with a score out of 100, a **History** menu of previous scans and a **Copy report** menu (an AI fix prompt, a Markdown report or raw JSON). See [Projects](projects.md) for the project side.
 
 Setup notes for each scanner:
 

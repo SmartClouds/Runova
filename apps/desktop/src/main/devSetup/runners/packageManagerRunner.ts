@@ -56,7 +56,16 @@ const IDLE_TIMEOUT_MS: Record<string, number> = {
   brew: 10 * 60_000,
   npm: 5 * 60_000,
   dotnet: 5 * 60_000,
+  pipx: 10 * 60_000,
+  // A pull prints a line per layer as it goes, so a long quiet stretch really is a stuck one.
+  docker: 15 * 60_000,
 };
+
+/**
+ * Semgrep's Windows install asks for UTF-8 mode, and pip reads package files in the system code
+ * page without it. The Security tab sets the same variable when it runs the scanners.
+ */
+const PIPX_ENV = { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' };
 
 function describeEnd(command: string, end: SpawnStreamingResult): Omit<RunResult, 'cancelled'> {
   const { code } = end;
@@ -92,12 +101,64 @@ export function createPackageManagerRunner(deps: {
   env?: NodeJS.ProcessEnv;
 }): {
   run: (recipe: DevRecipe, intent: InstallIntent, hooks: RunHooks) => Promise<RunResult>;
+  /**
+   * One command Runova's own installers run (`docker pull`, `docker start`), with the same
+   * patience, progress and log as a package manager. The argv comes from the catalog, never from
+   * the renderer.
+   */
+  runArgv: (argv: readonly string[], hooks: RunHooks) => Promise<RunResult>;
 } {
+  async function runArgv(
+    argv: readonly string[],
+    hooks: RunHooks,
+    extraEnv?: Record<string, string>,
+  ): Promise<RunResult> {
+    const command = argv[0];
+    if (!command) {
+      return { ok: false, code: null, cancelled: false, message: 'There is no command to run.' };
+    }
+
+    let lastPhase: DevInstallPhase | null = null;
+    const onLine = (line: string): void => {
+      // The progress bar line is dropped from the log but is exactly what the percentage is read
+      // from, so progress is taken from the raw line and the log from the cleaned one.
+      const phase = phaseFromInstallerLine(line.trim());
+      if (phase && phase !== lastPhase) {
+        lastPhase = phase;
+        hooks.onProgress({ phase, fraction: null });
+      }
+      const progress = parseInstallerProgress(line);
+      if (progress) hooks.onProgress(progress);
+      const cleaned = cleanInstallerLine(line);
+      if (cleaned) hooks.onLine(cleaned);
+    };
+
+    try {
+      const end = await deps.spawn({
+        command,
+        args: argv.slice(1),
+        cwd: deps.cwd,
+        env: extraEnv ? { ...(deps.env ?? process.env), ...extraEnv } : deps.env,
+        timeoutMs: IDLE_TIMEOUT_MS[command] ?? 5 * 60_000,
+        idle: true,
+        token: hooks.token,
+        onLine,
+      });
+      return { ...describeEnd(command, end), cancelled: end.cancelled };
+    } catch (error) {
+      return {
+        ok: false,
+        code: null,
+        cancelled: false,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   return {
     async run(recipe, intent, hooks) {
       const argv = recipeArgv(recipe, intent);
-      const command = argv?.[0];
-      if (!argv || !command) {
+      if (!argv) {
         return {
           ok: false,
           code: null,
@@ -105,42 +166,8 @@ export function createPackageManagerRunner(deps: {
           message: 'This step is not a package manager command.',
         };
       }
-
-      let lastPhase: DevInstallPhase | null = null;
-      const onLine = (line: string): void => {
-        // The progress bar line is dropped from the log but is exactly what the percentage is read
-        // from, so progress is taken from the raw line and the log from the cleaned one.
-        const phase = phaseFromInstallerLine(line.trim());
-        if (phase && phase !== lastPhase) {
-          lastPhase = phase;
-          hooks.onProgress({ phase, fraction: null });
-        }
-        const progress = parseInstallerProgress(line);
-        if (progress) hooks.onProgress(progress);
-        const cleaned = cleanInstallerLine(line);
-        if (cleaned) hooks.onLine(cleaned);
-      };
-
-      try {
-        const end = await deps.spawn({
-          command,
-          args: argv.slice(1),
-          cwd: deps.cwd,
-          env: deps.env,
-          timeoutMs: IDLE_TIMEOUT_MS[command] ?? 5 * 60_000,
-          idle: true,
-          token: hooks.token,
-          onLine,
-        });
-        return { ...describeEnd(command, end), cancelled: end.cancelled };
-      } catch (error) {
-        return {
-          ok: false,
-          code: null,
-          cancelled: false,
-          message: error instanceof Error ? error.message : String(error),
-        };
-      }
+      return runArgv(argv, hooks, recipe.kind === 'pipx' ? PIPX_ENV : undefined);
     },
+    runArgv: (argv, hooks) => runArgv(argv, hooks),
   };
 }

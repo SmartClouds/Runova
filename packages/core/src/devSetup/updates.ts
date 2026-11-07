@@ -19,6 +19,7 @@ export type DevUpdateQuery =
   | { source: 'apt-get' | 'dnf' | 'pacman'; packages: readonly string[] }
   | { source: 'npm'; package: string }
   | { source: 'nuget'; package: string }
+  | { source: 'pypi'; package: string }
   | { source: 'flutter' }
   | { source: 'sdkmanager'; package: string };
 
@@ -56,6 +57,8 @@ export function updateQueryFor(
       return { source: 'npm', package: recipe.pkg };
     case 'dotnet-tool':
       return { source: 'nuget', package: recipe.pkg };
+    case 'pipx':
+      return { source: 'pypi', package: recipe.pkg };
     case 'managed': {
       if (recipe.installer === 'flutter-archive') return { source: 'flutter' };
       // The command-line tools cannot replace themselves while they run (on Windows the file is

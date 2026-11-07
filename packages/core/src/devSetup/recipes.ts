@@ -74,6 +74,8 @@ export function recipeArgv(recipe: DevRecipe, intent: InstallIntent = 'install')
       return ['npm', 'install', '--global', recipe.pkg];
     case 'dotnet-tool':
       return ['dotnet', 'tool', intent === 'update' ? 'update' : 'install', '--global', recipe.pkg];
+    case 'pipx':
+      return ['pipx', intent === 'update' ? 'upgrade' : 'install', recipe.pkg];
     default:
       return null;
   }
@@ -177,6 +179,8 @@ export function selectRecipe(item: DevItem, context: RecipeContext): InstallMode
       case 'dotnet-tool':
       case 'managed':
         return { mode: 'in-app', recipe, intent, implies: [] };
+      case 'pipx':
+        return { mode: 'in-app', recipe, intent, implies: ['pipx'] };
       case 'bundled':
         return { mode: 'bundled', with: recipe.with };
       case 'terminal-only':

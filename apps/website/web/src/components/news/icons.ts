@@ -3,13 +3,13 @@ import {
   CalendarX,
   Info,
   Newspaper,
-  OctagonAlert,
+  OctagonExclamationPoint,
   Shield,
-  ShieldAlert,
   ShieldCheck,
+  ShieldExclamationPoint,
   Sparkles,
   Tag,
-  TriangleAlert,
+  TriangleExclamationPoint,
   Wrench,
 } from 'lucide-react';
 import type { Category, Severity } from '../../lib/news/api';
@@ -19,9 +19,9 @@ import type { Category, Severity } from '../../lib/news/api';
 export const SEVERITY_ICONS: Record<Severity, typeof Info> = {
   info: Info,
   low: ShieldCheck,
-  medium: ShieldAlert,
-  high: TriangleAlert,
-  critical: OctagonAlert,
+  medium: ShieldExclamationPoint,
+  high: TriangleExclamationPoint,
+  critical: OctagonExclamationPoint,
 };
 
 export const CATEGORY_ICONS: Record<Category, typeof Info> = {

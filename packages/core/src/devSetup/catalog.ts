@@ -1,3 +1,4 @@
+import { BEARER_DOCKER_IMAGE, SONARQUBE_CONTAINER_NAME } from '../security/scanners.js';
 import type { DevItem, DevItemId, DevOs, DevRecipe, DevStack, DevStackId } from './types.js';
 
 /**
@@ -30,6 +31,13 @@ export const DEV_STACKS: readonly DevStack[] = [
     id: 'docker',
     name: 'Docker',
     description: 'Docker Desktop and what it needs, for running containers.',
+  },
+  {
+    id: 'security',
+    name: 'Security',
+    description:
+      'The scanners a project’s Security tab runs, set up once for every project. Turns on Docker, which SonarQube, Strix and Bearer on Windows run in.',
+    needs: ['docker'],
   },
   {
     id: 'studio',
@@ -520,6 +528,196 @@ export const DEV_ITEMS: readonly DevItem[] = [
     },
   },
 
+  // ------------------------------------------------------------------ Security
+  // The scanners a project's Security tab runs, and what they install through. Only what is set up
+  // once per computer lives here: tokens, API keys and the CodeQL language are saved per project,
+  // so they stay in that project's Security tab. Semgrep and Trivy are the two quick scans that
+  // work on almost any project, so they are the ones counted against "ready".
+  {
+    id: 'python',
+    name: 'Python',
+    description: 'Runs pipx and the scanners it installs. Strix needs Python 3.12 or newer.',
+    stack: 'security',
+    // On a Mac and on Linux, pipx's own package brings a Python with it.
+    os: ['win32'],
+    minVersion: '3.12.0',
+    detect: {
+      kind: 'command',
+      command: 'py',
+      args: ['--version'],
+      fallbackPaths: [
+        '%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py{exe}',
+        '%SystemRoot%\\py{exe}',
+      ],
+    },
+    recipes: { win32: [{ kind: 'winget', id: 'Python.Python.3.12' }] },
+    manualUrl: 'https://www.python.org/downloads/',
+  },
+  {
+    id: 'pipx',
+    name: 'pipx',
+    description:
+      'Installs Python command-line apps, each in its own environment. Semgrep installs with it.',
+    stack: 'security',
+    dependsOn: ['python'],
+    detect: {
+      kind: 'command',
+      command: 'pipx',
+      args: ['--version'],
+      fallbackPaths: [
+        '~/.local/bin/pipx{exe}',
+        '%APPDATA%\\Python\\Python312\\Scripts\\pipx{exe}',
+        '%APPDATA%\\Python\\Python313\\Scripts\\pipx{exe}',
+      ],
+    },
+    recipes: {
+      win32: [
+        {
+          kind: 'terminal-only',
+          command: 'py -m pip install --user pipx; py -m pipx ensurepath',
+          note: 'Open a new terminal afterwards, so the folder pipx puts its apps in is on your PATH.',
+        },
+      ],
+      darwin: [{ kind: 'brew', formula: 'pipx' }],
+      linux: [{ kind: 'pkg', apt: ['pipx'], dnf: ['pipx'], pacman: ['python-pipx'] }],
+    },
+    manualUrl: 'https://pipx.pypa.io/stable/installation/',
+  },
+  {
+    id: 'semgrep',
+    name: 'Semgrep',
+    description: 'Pattern-based static analysis for 30+ languages. The quickest first scan to run.',
+    stack: 'security',
+    detect: {
+      kind: 'command',
+      command: 'semgrep',
+      args: ['--version'],
+      fallbackPaths: ['~/.local/bin/semgrep{exe}'],
+    },
+    recipes: everyOs({ kind: 'pipx', pkg: 'semgrep' }),
+    manualUrl: 'https://semgrep.dev/docs/getting-started/quickstart',
+  },
+  {
+    id: 'trivy',
+    name: 'Trivy',
+    description:
+      'Finds known CVEs in your dependencies, secrets left in code and infrastructure mistakes.',
+    stack: 'security',
+    detect: {
+      kind: 'command',
+      command: 'trivy',
+      args: ['--version'],
+      fallbackPaths: [
+        '%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\trivy{exe}',
+        '~/.local/bin/trivy{exe}',
+      ],
+    },
+    recipes: {
+      win32: [{ kind: 'winget', id: 'AquaSecurity.Trivy' }],
+      darwin: [{ kind: 'brew', formula: 'trivy' }],
+      // Aqua's script, into a folder that needs no sudo.
+      linux: [
+        {
+          kind: 'terminal-only',
+          command:
+            'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$HOME/.local/bin"',
+        },
+      ],
+    },
+    manualUrl: 'https://trivy.dev/latest/getting-started/installation/',
+  },
+  {
+    id: 'bearer',
+    name: 'Bearer',
+    description: 'Follows personal data and tokens through your code and flags where they leak.',
+    stack: 'security',
+    optional: true,
+    // There is no Windows build. On Windows the scan runs in Docker instead, see bearer-image.
+    os: ['darwin', 'linux'],
+    detect: {
+      kind: 'command',
+      command: 'bearer',
+      args: ['version'],
+      fallbackPaths: ['~/.local/bin/bearer'],
+    },
+    recipes: {
+      // The formula lives in Bearer's own tap, which the brew recipe cannot name.
+      darwin: [{ kind: 'terminal-only', command: 'brew install bearer/tap/bearer' }],
+      linux: [
+        {
+          kind: 'terminal-only',
+          command:
+            'curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh -s -- -b "$HOME/.local/bin"',
+        },
+      ],
+    },
+    manualUrl: 'https://docs.bearer.com/quickstart/',
+  },
+  {
+    id: 'bearer-image',
+    name: 'Bearer image',
+    description:
+      'Bearer has no Windows build, so the Security tab runs it in Docker. Pulling the image now saves the wait on the first scan.',
+    stack: 'security',
+    optional: true,
+    os: ['win32'],
+    dependsOn: ['docker-running'],
+    detect: {
+      kind: 'command',
+      command: 'docker',
+      args: ['image', 'inspect', '--format', '{{.Id}}', BEARER_DOCKER_IMAGE],
+      noVersion: true,
+    },
+    recipes: {
+      win32: [{ kind: 'managed', installer: 'docker-image', image: BEARER_DOCKER_IMAGE }],
+    },
+    manualUrl: 'https://docs.bearer.com/quickstart/',
+  },
+  {
+    id: 'codeql',
+    name: 'CodeQL',
+    description:
+      'Traces untrusted input all the way to dangerous code. Slow and thorough. Runova downloads it into its own folder (about 400 MB) and checks it against the checksum GitHub publishes.',
+    stack: 'security',
+    optional: true,
+    detect: { kind: 'resolver', id: 'codeql' },
+    recipes: everyOs({ kind: 'managed', installer: 'codeql-download' }),
+    manualUrl: 'https://github.com/github/codeql-cli-binaries/releases/latest',
+  },
+  {
+    id: 'sonarqube-server',
+    name: 'SonarQube server',
+    description:
+      'A local SonarQube in Docker, with its dashboard at localhost:9000. Sign in there to create the token each project’s Security tab asks for.',
+    stack: 'security',
+    optional: true,
+    dependsOn: ['docker-running'],
+    detect: { kind: 'resolver', id: 'docker-container', container: SONARQUBE_CONTAINER_NAME },
+    recipes: everyOs({ kind: 'managed', installer: 'docker-container', toolId: 'sonarqube' }),
+    manualUrl: 'https://docs.sonarsource.com/sonarqube-community-build/',
+  },
+  {
+    id: 'strix',
+    name: 'Strix',
+    description:
+      'An AI agent that runs your code in a sandbox and proves what it finds. Needs Docker and your own LLM API key, and every run costs tokens.',
+    stack: 'security',
+    optional: true,
+    detect: {
+      kind: 'command',
+      command: 'strix',
+      args: ['--version'],
+      fallbackPaths: ['~/.strix/bin/strix', '~/.local/bin/strix{exe}'],
+    },
+    recipes: {
+      // Strix's installer only runs in a POSIX shell, so Windows uses pipx, the other documented way.
+      win32: [{ kind: 'pipx', pkg: 'strix-agent' }],
+      darwin: [{ kind: 'terminal-only', command: 'curl -sSL https://strix.ai/install | bash' }],
+      linux: [{ kind: 'terminal-only', command: 'curl -sSL https://strix.ai/install | bash' }],
+    },
+    manualUrl: 'https://github.com/usestrix/strix',
+  },
+
   // ---------------------------------------------------------------- Studio
   {
     id: 'ffmpeg',
@@ -677,9 +875,41 @@ export function normalizeDevSetupStacks(value: unknown): DevStackId[] {
   return DEV_STACKS.filter((stack) => picked.has(stack.id)).map((stack) => stack.id);
 }
 
+/**
+ * The stacks on the checklist: the ones picked and every stack a picked one needs, in catalog
+ * order. Security needs Docker, so picking Security brings Docker's rows along. The saved choice
+ * stays as the person made it, so turning Security off takes Docker away again unless they picked
+ * it themselves.
+ */
+export function withNeededStacks(stacks: readonly string[]): DevStackId[] {
+  const chosen = new Set<string>(normalizeDevSetupStacks(stacks));
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const stack of DEV_STACKS) {
+      if (!chosen.has(stack.id)) continue;
+      for (const need of stack.needs ?? []) {
+        if (!chosen.has(need)) {
+          chosen.add(need);
+          grew = true;
+        }
+      }
+    }
+  }
+  return DEV_STACKS.filter((stack) => chosen.has(stack.id)).map((stack) => stack.id);
+}
+
+/** The picked stacks that need this one. While any of them is picked, this one stays on. */
+export function stacksNeeding(id: string, stacks: readonly string[]): DevStack[] {
+  const chosen = new Set<string>(normalizeDevSetupStacks(stacks));
+  return DEV_STACKS.filter(
+    (stack) => chosen.has(stack.id) && (stack.needs ?? []).some((need) => need === id),
+  );
+}
+
 /** The checklist for these stacks on this OS, in catalog order. */
 export function itemsForStacks(stacks: readonly string[], os: DevOs): DevItem[] {
-  const chosen = new Set<string>(normalizeDevSetupStacks(stacks));
+  const chosen = new Set<string>(withNeededStacks(stacks));
   return DEV_ITEMS.filter((item) => chosen.has(item.stack) && appliesToOs(item, os));
 }
 

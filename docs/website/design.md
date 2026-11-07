@@ -85,9 +85,9 @@ color, with a 1px border at 30%.
 |---|---|---|---|---|
 | `info` | `Info` | Info | `210 90% 66%` | 5.93 |
 | `low` | `ShieldCheck` | Low | `185 70% 48%` | 6.84 |
-| `medium` | `ShieldAlert` | Medium | `38 92% 50%` | 6.93 |
-| `high` | `TriangleAlert` | High | `24 95% 58%` | 5.76 |
-| `critical` | `OctagonAlert` | Critical | `4 90% 67%` | 5.04 |
+| `medium` | `ShieldExclamationPoint` | Medium | `38 92% 50%` | 6.93 |
+| `high` | `TriangleExclamationPoint` | High | `24 95% 58%` | 5.76 |
+| `critical` | `OctagonExclamationPoint` | Critical | `4 90% 67%` | 5.04 |
 
 Tokens: `--severity-info`, `--severity-low`, `--severity-medium`, `--severity-high`,
 `--severity-critical`. The site's token parity test skips these (the app gains the same values in

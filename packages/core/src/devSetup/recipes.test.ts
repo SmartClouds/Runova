@@ -74,6 +74,12 @@ describe('recipeArgv', () => {
       '--global',
       'dotnet-ef',
     ]);
+    expect(recipeArgv({ kind: 'pipx', pkg: 'semgrep' })).toEqual(['pipx', 'install', 'semgrep']);
+    expect(recipeArgv({ kind: 'pipx', pkg: 'semgrep' }, 'update')).toEqual([
+      'pipx',
+      'upgrade',
+      'semgrep',
+    ]);
   });
 
   it('has no argv for recipes Runova runs itself or hands to the user', () => {
@@ -205,6 +211,28 @@ describe('selectRecipe in general', () => {
         recipe: { kind: 'dotnet-tool' },
       });
     }
+  });
+
+  it('runs pipx apps inside the app, once pipx itself is there', () => {
+    for (const ctx of [win, mac, ubuntu]) {
+      expect(selectRecipe(item('semgrep'), ctx)).toMatchObject({
+        mode: 'in-app',
+        recipe: { kind: 'pipx', pkg: 'semgrep' },
+        implies: ['pipx'],
+      });
+    }
+  });
+
+  it('installs Strix with pipx on Windows and with its own script elsewhere', () => {
+    expect(selectRecipe(item('strix'), win)).toMatchObject({
+      mode: 'in-app',
+      recipe: { kind: 'pipx', pkg: 'strix-agent' },
+    });
+    expect(selectRecipe(item('strix'), mac)).toMatchObject({
+      mode: 'terminal',
+      reason: 'interactive',
+      implies: [],
+    });
   });
 
   it('launches Docker Desktop on Windows and a Mac, and uses systemctl on Linux', () => {

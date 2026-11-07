@@ -87,6 +87,10 @@ function rig(
       os === 'win32'
         ? 'C:\\Users\\me\\AppData\\Roaming\\Runova\\studio-tools'
         : '/home/me/.config/Runova/studio-tools',
+    codeqlManagedBinary:
+      os === 'win32'
+        ? 'C:\\Users\\me\\AppData\\Roaming\\Runova\\tools\\codeql\\codeql\\codeql.exe'
+        : '/home/me/.config/Runova/tools/codeql/codeql/codeql',
     now: () => clock.now,
   };
   return { deps, probe, files, dirs, clock, sdk, onPath };
@@ -653,6 +657,66 @@ describe('the detector as a whole', () => {
     expect(detector.peek(['node']).node).toBeUndefined();
     await detector.detect('node');
     expect(r.probe).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the Security stack', () => {
+  const MANAGED = 'C:\\Users\\me\\AppData\\Roaming\\Runova\\tools\\codeql\\codeql\\codeql.exe';
+
+  it('finds a codeql on PATH first, the one the Security tab runs', async () => {
+    const r = rig({ script: { 'codeql version --format=terse': OK('2.23.1\n') } });
+    r.onPath.set('codeql', 'C:\\tools\\codeql\\codeql.exe');
+    r.files.set(MANAGED, '');
+
+    expect(await detect(r, 'codeql')).toEqual({
+      state: 'found',
+      version: '2.23.1',
+      path: 'C:\\tools\\codeql\\codeql.exe',
+      onPath: true,
+    });
+  });
+
+  it('falls back to the copy Runova downloaded, which counts as usable where it is', async () => {
+    const r = rig({ script: { [`${MANAGED} version --format=terse`]: OK('2.23.1') } });
+    r.files.set(MANAGED, '');
+
+    expect(await detect(r, 'codeql')).toEqual({
+      state: 'found',
+      version: '2.23.1',
+      path: MANAGED,
+      onPath: true,
+    });
+  });
+
+  it('says CodeQL is not there when neither copy is', async () => {
+    expect(await detect(rig(), 'codeql')).toEqual({ state: 'absent' });
+  });
+
+  it('counts the SonarQube server only while its container runs', async () => {
+    const inspect = 'docker inspect --format {{.State.Running}} runova-sonarqube';
+    expect(await detect(rig({ script: { [inspect]: OK('true\n') } }), 'sonarqube-server')).toEqual({
+      state: 'found',
+      version: null,
+      path: null,
+      onPath: true,
+    });
+    expect(await detect(rig({ script: { [inspect]: OK('false\n') } }), 'sonarqube-server')).toEqual(
+      { state: 'absent' },
+    );
+    // No such container, or Docker is not running: either way it is not up.
+    expect(await detect(rig({ script: { [inspect]: FAILED } }), 'sonarqube-server')).toEqual({
+      state: 'absent',
+    });
+  });
+
+  it('finds the Bearer image by asking Docker about it', async () => {
+    const r = rig({
+      script: {
+        'docker image inspect --format {{.Id}} bearer/bearer:latest-amd64': OK('sha256:abc'),
+      },
+    });
+
+    expect(await detect(r, 'bearer-image')).toMatchObject({ state: 'found', version: null });
   });
 });
 

@@ -6,6 +6,7 @@ import {
   LANGUAGETOOL_WEBSITE_URL,
 } from '../grammar/languagetool.js';
 import { STRIX_DEFAULT_MODEL } from '../models/catalog.js';
+import { BEARER_DOCKER_IMAGE, SONARQUBE_CONTAINER_NAME } from '../security/scanners.js';
 import {
   buildDiffrayProjectConfig,
   DIFFRAY_EXECUTORS,
@@ -703,7 +704,7 @@ export const AGENT_TOOL_REGISTRY: AgentToolDefinition[] = [
         label: 'Pull Docker image',
         action: {
           kind: 'command',
-          command: 'docker pull bearer/bearer:latest-amd64',
+          command: `docker pull ${BEARER_DOCKER_IMAGE}`,
           cwd: 'none',
         },
       },
@@ -727,7 +728,7 @@ export const AGENT_TOOL_REGISTRY: AgentToolDefinition[] = [
     updateCheck: { type: 'github-release', package: 'SonarSource/sonarqube' },
     docker: {
       image: 'sonarqube:community',
-      containerName: 'runova-sonarqube',
+      containerName: SONARQUBE_CONTAINER_NAME,
       runArgs: [
         '-p',
         '9000:9000',
