@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Runova.Website.Api.Accounts;
+using Runova.Website.Api.CloudMonitoring;
 using Runova.Website.Api.Identity;
 
 namespace Runova.Website.Api.Notifications;
@@ -14,6 +15,12 @@ public interface INotificationsClient
 
     /// <summary>The dependency findings this account sees changed; read <c>/dependency-findings</c> again.</summary>
     Task DependencySummaryChanged(DependencySummaryDto summary);
+
+    /// <summary>An online monitor this account sees has a new result (E55).</summary>
+    Task CloudMonitorUpdated(CloudMonitorLiveDto monitor);
+
+    /// <summary>A scope's online monitors were added, changed or removed; read them again.</summary>
+    Task CloudMonitorsChanged(CloudMonitorsChangedDto change);
 }
 
 public sealed record DependencySummaryDto(int Total, int Projects);

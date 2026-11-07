@@ -242,6 +242,7 @@ internal static class TeamEndpoints
         UserManager<AppUser> users,
         AccountSessions sessions,
         ActivityLog activity,
+        Billing.IPlanEnforcement enforcement,
         TimeProvider time)
     {
         var me = Me(http);
@@ -283,6 +284,12 @@ internal static class TeamEndpoints
         target.Role = role;
         activity.Add(me, ActivityActions.MemberRoleChanged, new { userId, from = before, to = role }, id);
         await db.SaveChangesAsync();
+        if (before == TeamRoles.Owner || role == TeamRoles.Owner)
+        {
+            // The team's online monitors use its owners' account type.
+            await enforcement.TeamChangedAsync(id);
+        }
+
         var user = await db.Users.SingleAsync(u => u.Id == userId);
         return TypedResults.Ok(new TeamMemberDto(user.Id, user.Email ?? "", user.DisplayName, target.Role, target.JoinedAt));
     }
@@ -297,6 +304,7 @@ internal static class TeamEndpoints
         UserManager<AppUser> users,
         AccountSessions sessions,
         ActivityLog activity,
+        Billing.IPlanEnforcement enforcement,
         TimeProvider time)
     {
         var me = Me(http);
@@ -330,6 +338,11 @@ internal static class TeamEndpoints
         db.TeamMembers.Remove(target);
         activity.Add(me, leaving ? ActivityActions.TeamLeft : ActivityActions.MemberRemoved, new { userId }, id);
         await db.SaveChangesAsync();
+        if (target.Role == TeamRoles.Owner)
+        {
+            await enforcement.TeamChangedAsync(id);
+        }
+
         return TypedResults.NoContent();
     }
 

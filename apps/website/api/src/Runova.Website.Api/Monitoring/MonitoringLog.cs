@@ -6,9 +6,6 @@ internal static partial class MonitoringLog
     [LoggerMessage(Level = LogLevel.Debug, Message = "No RabbitMQ is configured; a {Kind} for node {NodeId} goes nowhere.")]
     public static partial void NoBus(this ILogger logger, string kind, long nodeId);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Node {NodeId} sent {Count} results; nothing stores them yet.")]
-    public static partial void ResultsDropped(this ILogger logger, long nodeId, int count);
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Node {NodeId} connected with certificate {Serial}, which is not good; closing it.")]
     public static partial void BadCertificate(this ILogger logger, long nodeId, string serial);
 

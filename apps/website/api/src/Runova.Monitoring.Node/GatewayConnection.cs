@@ -46,6 +46,11 @@ public sealed partial class GatewayConnection(
                 StreamFailed(logger, e.GetType().Name, e.Message);
                 failures++;
             }
+            catch (Exception) when (stoppingToken.IsCancellationRequested)
+            {
+                // Stopping: a stream cancelled under it (an RpcException, not an OperationCanceledException) is the expected end.
+                break;
+            }
             finally
             {
                 Connected = false;

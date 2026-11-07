@@ -19,6 +19,7 @@ public sealed class NodeEvents(
     INodeBus bus,
     IAssignmentSource assignments,
     IResultIngestor results,
+    INodeRebalancer rebalancer,
     NodeCertificateAuthority authority,
     TimeProvider time,
     ILogger<NodeEvents> logger)
@@ -58,6 +59,8 @@ public sealed class NodeEvents(
         }
 
         await SendSnapshotAsync(node, ct);
+        // A node that came (back) may take monitors from the others: what changes comes as deltas after the snapshot.
+        await rebalancer.NodesChangedAsync(ct);
         return new NodeAccepted(true, null);
     }
 

@@ -599,8 +599,9 @@ Messages for one account, newest first: for now one per project and check, listi
 (`kind: "dependency-updates"`). A connected app hears each one at once on the SignalR hub at
 `/hubs/notifications` (outside `/api/v1`, Account auth: the session cookie, or the device token
 as a bearer header or, on the hub path only, as the `access_token` query value the SignalR clients
-send). The hub sends `NotificationCreated(UserNotificationDto)` and
-`DependencySummaryChanged({ "total": int, "projects": int })`; clients call nothing on it.
+send). The hub sends `NotificationCreated(UserNotificationDto)`,
+`DependencySummaryChanged({ "total": int, "projects": int })` and the online monitor messages (see
+Online monitors); clients call nothing on it.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
@@ -756,6 +757,81 @@ through Wolverine on the internal RabbitMQ, which has no published port; the gat
 result batch only after the API answered that it has it. All changes write `monitoring-node.create`,
 `monitoring-node.update`, `monitoring-node.enrollment-token`, `monitoring-node.drain`,
 `monitoring-node.revoke` and `monitoring-node.delete` audit entries, which never hold a token.
+
+### Online monitors
+
+An online monitor (E55) is a desktop monitor that Runova's nodes check day and night instead of
+the computer. It lives in a sync scope (personal, or a team's) and names the desktop monitor by
+its item id. Synced records are sealed, so the desktop also sends the project, environment and
+monitor names in plain text, and the access key, which is sealed with Data Protection, given only
+to the node that checks it, and never sent back. Everyone who can see the scope reads its
+monitors; Owners, Admins and Members change them; a Viewer only reads, and can mute a monitor for
+themselves. A scope or monitor the account can not see answers 404.
+
+The scope's account type sets the limits (a team's is its owner's; with several owners, the most
+generous): creating an active monitor, resuming one, or setting an interval checks them, and
+breaking one answers 409 (`limit` and `accountType` extensions) or 400 on `intervalSec`. A paused
+monitor does not count. No type checks more often than every 30 seconds.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/cloud-monitors` | Account | query `scopeId` (optional; all the account sees without it) | 200 `{ "items": CloudMonitorDto[] }`, by project, environment and name; 401; 404 no such scope |
+| POST | `/api/v1/cloud-monitors` | Account | `CloudMonitorWrite` with `scopeId`, `itemId`, `name`, `projectName`, `url` and `intervalSec` | 201 `CloudMonitorDto` with an ETag; 400; 401; 403 a Viewer; 404 no such scope; 409 over the type's limit, or this item is online already |
+| GET | `/api/v1/cloud-monitors/usage` | Account | none | 200 `MonitoringUsageDto`; 401 |
+| GET | `/api/v1/cloud-monitors/{id}` | Account | none | 200 `CloudMonitorDto` with an ETag; 401; 404 |
+| PATCH | `/api/v1/cloud-monitors/{id}` | Account | merge patch of `CloudMonitorWrite` (not `scopeId` or `itemId`); `If-Match` | 200 `CloudMonitorDto`; 400; 401; 403 a Viewer; 404; 409 resuming goes over the limit; 412; 428 |
+| DELETE | `/api/v1/cloud-monitors/{id}` | Account | `If-Match` | 204, with its history; 401; 403 a Viewer; 404; 412; 428 |
+| PUT | `/api/v1/cloud-monitors/{id}/secrets/current` | Account | `{ "secret": string }` | 204; 400 the monitor sends no key, or the key is not one; 401; 403 a Viewer; 404 |
+| GET | `/api/v1/cloud-monitors/{id}/samples` | Account | query `from`, `to` (ISO 8601; the last 24 hours by default, 31 days at most) | 200 `{ "items": CloudMonitorSampleDto[] }`, oldest first, the newest 2000; 400; 401; 404 |
+| GET | `/api/v1/cloud-monitors/{id}/hours` | Account | query `from`, `to` (the last 30 days by default, 400 at most) | 200 `{ "items": CloudMonitorHourDto[] }`, oldest first; 400; 401; 404 |
+| GET | `/api/v1/cloud-monitors/{id}/incidents` | Account | query `page`, `pageSize` | 200 `Page<CloudMonitorIncidentDto>`, newest first; 400; 401; 404 |
+| PUT | `/api/v1/cloud-monitors/{id}/mutes/me` | Account | none | 204 (no alerts about it for this account; the same again changes nothing); 401; 404 |
+| DELETE | `/api/v1/cloud-monitors/{id}/mutes/me` | Account | none | 204; 401; 404 |
+
+`CloudMonitorWrite`: `{ "scopeId": number, "itemId": string (1 to 64 letters, digits and . : - _),
+"name": string, "projectName": string, "environmentName": string | null (each up to 200),
+"url": string (http or https, up to 2048; a public address: not this computer, a private network
+or a name that only works on one; http only with allowInsecure), "intervalSec": int (the type's
+floor to 86400), "timeoutSec": int (2 to 60, shorter than the interval; 10 by default),
+"authMode": "none" | "bearer" | "basic" (none by default), "secret": string (the bearer key, or
+user:password for basic; required unless none, up to 1024), "allowInsecure": bool, "paused":
+bool, "notifyInApp": bool (true by default), "notifyTelegram": bool (false by default) }`.
+Changing `authMode` drops the stored key. Resuming clears `suspendedReason`.
+`CloudMonitorDto`: the fields above but `secret`, and `"id": number, "hasSecret": bool,
+"secretChangedAt": time | null, "suspendedReason": "over-limit" | null (Runova paused it when the
+type went down), "muted": bool (for this account), "canWrite": bool, "status":
+CloudMonitorStatusDto, "createdAt": time, "updatedAt": time, "version": string`.
+`CloudMonitorStatusDto`: `{ "verdict": "up" | "down" | "degraded" | "paused" | "unknown",
+"state": "pass" | "warn" | "fail" | "unreachable" | "unauthorized" | "invalid" | null,
+"lastCheckedAt": time | null, "latencyMs": int | null, "httpStatus": int | null, "problem": string
+| null (redacted by the node), "region": string | null, "confirming": bool (a change waits for its
+second sample or a second opinion), "openIncident": CloudMonitorIncidentDto | null, "uptime24h":
+number | null (0 to 1) }`.
+`CloudMonitorSampleDto`: `{ "at": time, "state": string, "latencyMs": int | null, "httpStatus":
+int | null, "region": string | null, "problem": string | null }`.
+`CloudMonitorHourDto`: `{ "hour": time (UTC), "checks": int, "failures": int, "warnings": int,
+"avgLatencyMs": int | null, "maxLatencyMs": int | null }`.
+`CloudMonitorIncidentDto`: `{ "id": number, "monitorId": number, "openedAt": time, "resolvedAt":
+time | null, "state": string, "problem": string | null, "region": string | null (the node that
+saw it), "confirmedFrom": string | null (the region of the second opinion; none with one node) }`.
+`MonitoringUsageDto`: `{ "scopes": [{ "scopeId": number, "kind": "personal" | "team", "name":
+string, "canWrite": bool, "accountTypeKey": string, "accountTypeName": string, "maxMonitors": int
+| null (no limit), "minIntervalSec": int, "historyDays": int, "active": int, "paused": int }] }`.
+
+A monitor goes down when two checks in a row on its node find a problem (warn is degraded, not
+down) and a second node, in another region when there is one, finds it too; with no other node, or
+no answer within two minutes, the first node's word stands. It comes back up after two good checks.
+Each change saves a `monitor-down` or `monitor-recovered` notification (`itemId` is the desktop
+monitor) for every member who did not mute it, when `notifyInApp` is on, and queues the RunovaHQ
+Telegram message for those who linked a chat, when `notifyTelegram` is on. When a scope's type
+goes down (it ended, an Admin changed it or the type, a team changed owners), the newest monitors
+over the limit are paused with `suspendedReason` `over-limit`, intervals under the floor are
+lengthened, and every member gets a `monitor-plan` notification. Raw samples are kept for the
+type's `historyDays`; hours and incidents are kept for good. The notifications hub also sends
+`CloudMonitorUpdated(CloudMonitorLiveDto)` after each result, with `{ "id": number, "scopeId":
+number, "itemId": string, "paused": bool, "status": CloudMonitorStatusDto }`, and
+`CloudMonitorsChanged({ "scopeId": number })` when a scope's monitors were added, changed or
+removed.
 
 ### Account sessions and activity
 

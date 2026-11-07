@@ -3,6 +3,7 @@ using Hangfire;
 using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Billing;
+using Runova.Website.Api.CloudMonitoring;
 using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Email;
 using Runova.Website.Api.Monitoring;
@@ -31,6 +32,7 @@ internal static class RecurringJobRegistry
     public const string SubscriptionExpiry = "subscription-expiry";
     public const string RenewalReminders = "renewal-reminders";
     public const string NodeLiveness = "node-liveness";
+    public const string SampleRetention = "monitor-sample-retention";
 
     public static readonly IReadOnlyDictionary<string, string> Schedules = new Dictionary<string, string>
     {
@@ -47,6 +49,7 @@ internal static class RecurringJobRegistry
         [SubscriptionExpiry] = Cron.Hourly(),
         [RenewalReminders] = Cron.Daily(9),
         [NodeLiveness] = Cron.Minutely(),
+        [SampleRetention] = Cron.Daily(4),
     };
 
     /// <summary>Adds each job, or updates it when its schedule or method changed.</summary>
@@ -65,6 +68,7 @@ internal static class RecurringJobRegistry
         Add<SubscriptionExpiryJob>(jobs, SubscriptionExpiry, job => job.RunAsync(CancellationToken.None));
         Add<RenewalReminderJob>(jobs, RenewalReminders, job => job.RunAsync(CancellationToken.None));
         Add<NodeLivenessJob>(jobs, NodeLiveness, job => job.RunAsync(CancellationToken.None));
+        Add<SampleRetentionJob>(jobs, SampleRetention, job => job.RunAsync(CancellationToken.None));
     }
 
     // Hangfire passes its own shutdown token in place of CancellationToken.None.

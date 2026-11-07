@@ -10,4 +10,8 @@
     <!-- Generator and attributes only; nothing of Mapperly ships at run time. -->
     <PackageReference Include="Riok.Mapperly" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The health rules and the public address guard the nodes use, so the API checks the same way (E55). -->
+    <ProjectReference Include="..\Runova.Monitoring.Core\Runova.Monitoring.Core.csproj" />
+  </ItemGroup>
 </Project>

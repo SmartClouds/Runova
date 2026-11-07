@@ -166,7 +166,7 @@ internal static partial class MonitoringNodeEndpoints
     }
 
     private static async Task<Results<Ok<MonitoringNodeDto>, ValidationProblem, ProblemHttpResult>> PatchAsync(
-        long id, HttpContext http, AppDbContext db, AuditLog audit, NodeEvents events, INodeBus bus, TimeProvider time,
+        long id, HttpContext http, AppDbContext db, AuditLog audit, NodeEvents events, INodeBus bus, INodeRebalancer rebalancer, TimeProvider time,
         IOptions<MonitoringOptions> options, IOptions<JsonOptions> json)
     {
         if (await db.MonitoringNodes.SingleOrDefaultAsync(n => n.Id == id) is not { } node)
@@ -226,6 +226,11 @@ internal static partial class MonitoringNodeEndpoints
             }
         }
 
+        if (node.Draining != wasDraining)
+        {
+            await rebalancer.NodesChangedAsync();
+        }
+
         Versions.SetETag(http.Response, node.Version);
         return TypedResults.Ok(await DtoAsync(db, node, time, options.Value));
     }
@@ -280,7 +285,7 @@ internal static partial class MonitoringNodeEndpoints
 
     /// <summary>Revokes the node for good: its certificates are refused and its stream closes at once.</summary>
     private static async Task<Results<Ok<MonitoringNodeDto>, ProblemHttpResult>> RevokeAsync(
-        long id, HttpContext http, AppDbContext db, AuditLog audit, INodeBus bus, TimeProvider time, IOptions<MonitoringOptions> options)
+        long id, HttpContext http, AppDbContext db, AuditLog audit, INodeBus bus, INodeRebalancer rebalancer, TimeProvider time, IOptions<MonitoringOptions> options)
     {
         if (await db.MonitoringNodes.SingleOrDefaultAsync(n => n.Id == id) is not { } node)
         {
@@ -307,6 +312,7 @@ internal static partial class MonitoringNodeEndpoints
         }
 
         await bus.RevokedAsync(node.Id, certificates.Select(c => c.Serial).ToList());
+        await rebalancer.NodesChangedAsync();
         Versions.SetETag(http.Response, node.Version);
         return TypedResults.Ok(await DtoAsync(db, node, time, options.Value));
     }

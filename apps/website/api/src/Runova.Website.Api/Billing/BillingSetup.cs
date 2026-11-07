@@ -23,7 +23,6 @@ internal static class BillingSetup
         services.AddScoped<BillingNotices>();
         services.AddScoped<SubscriptionExpiryJob>();
         services.AddScoped<RenewalReminderJob>();
-        services.AddScoped<IPlanEnforcement, NoPlanEnforcement>();
         return services;
     }
 

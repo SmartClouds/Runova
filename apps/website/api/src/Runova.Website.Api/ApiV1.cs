@@ -2,6 +2,7 @@ using Runova.Website.Api.Accounts;
 using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Billing;
+using Runova.Website.Api.CloudMonitoring;
 using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Media;
 using Runova.Website.Api.Monitoring;
@@ -45,6 +46,7 @@ internal static class ApiV1
         api.MapDependencies();
         api.MapBilling();
         api.MapMonitoring();
+        api.MapCloudMonitors();
         return api;
     }
 }

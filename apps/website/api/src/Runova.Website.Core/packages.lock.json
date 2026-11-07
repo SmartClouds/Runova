@@ -62,6 +62,9 @@
         "type": "Transitive",
         "resolved": "4.154.0",
         "contentHash": "GXgoY77GCXdPcveNAmy8o3gVit8sp6YtnI88h5camLPfihjulwJUajZXKhgVuZ8RhuwSTgfyt/00Dx8HRUSeAA=="
+      },
+      "runova.monitoring.core": {
+        "type": "Project"
       }
     }
   }

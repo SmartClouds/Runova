@@ -1,3 +1,5 @@
+extern alias api;
+
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -25,7 +27,7 @@ public sealed class WebsiteApiFactory(
     bool migrateOnStart = false,
     IReadOnlyDictionary<string, string>? settings = null,
     Action<IServiceCollection>? services = null)
-    : WebApplicationFactory<Program>
+    : WebApplicationFactory<api::Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

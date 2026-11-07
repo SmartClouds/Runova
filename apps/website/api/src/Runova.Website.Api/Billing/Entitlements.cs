@@ -63,15 +63,15 @@ internal sealed class Entitlements(AppDbContext db, TimeProvider time)
 }
 
 /// <summary>
-/// Brings an account's online monitors, and its teams', within its type after the type changed
-/// (it ended, an Admin changed it, a payment moved it). Online monitors (E55) fill this in.
+/// Brings online monitors within their scope's type after it went down: an account's type
+/// changed (it ended, an Admin changed it, a payment moved it), a team changed owners, or an Admin
+/// changed a type itself. <c>CloudMonitoring.PlanEnforcement</c> does it (E55).
 /// </summary>
 internal interface IPlanEnforcement
 {
     Task AccountChangedAsync(long userId, CancellationToken cancellationToken = default);
-}
 
-internal sealed class NoPlanEnforcement : IPlanEnforcement
-{
-    public Task AccountChangedAsync(long userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task TeamChangedAsync(long teamId, CancellationToken cancellationToken = default);
+
+    Task AllAsync(CancellationToken cancellationToken = default);
 }

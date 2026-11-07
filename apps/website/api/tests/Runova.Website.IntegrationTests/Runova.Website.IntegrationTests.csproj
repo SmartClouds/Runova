@@ -17,7 +17,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Runova.Website.Api\Runova.Website.Api.csproj" />
+    <!-- "api" names its Program apart from the gateway's: .NET 10 makes a web app's Program public. -->
+    <ProjectReference Include="..\..\src\Runova.Website.Api\Runova.Website.Api.csproj" Aliases="global,api" />
+    <!-- The end-to-end test of online monitoring (E55) runs the real gateway and a real node. -->
+    <ProjectReference Include="..\..\src\Runova.Monitoring.Gateway\Runova.Monitoring.Gateway.csproj" />
+    <ProjectReference Include="..\..\src\Runova.Monitoring.Node\Runova.Monitoring.Node.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The link tests' certificates, gateway harness and tiny HTTP server, shared rather than copied. -->
+    <Compile Include="..\Runova.Monitoring.Tests\Link\TestPki.cs" Link="Monitoring\Link\TestPki.cs" />
+    <Compile Include="..\Runova.Monitoring.Tests\Link\GatewayHarness.cs" Link="Monitoring\Link\GatewayHarness.cs" />
+    <Compile Include="..\Runova.Monitoring.Tests\Net\TestHttpServer.cs" Link="Monitoring\Link\TestHttpServer.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -112,6 +112,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<NodeAuthority> NodeAuthorities => Set<NodeAuthority>();
 
+    public DbSet<CloudMonitor> CloudMonitors => Set<CloudMonitor>();
+
+    public DbSet<CloudMonitorStatus> CloudMonitorStatuses => Set<CloudMonitorStatus>();
+
+    public DbSet<CloudMonitorSample> CloudMonitorSamples => Set<CloudMonitorSample>();
+
+    public DbSet<CloudMonitorHour> CloudMonitorHours => Set<CloudMonitorHour>();
+
+    public DbSet<CloudMonitorIncident> CloudMonitorIncidents => Set<CloudMonitorIncident>();
+
+    public DbSet<CloudMonitorMute> CloudMonitorMutes => Set<CloudMonitorMute>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -156,6 +168,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureDependencies();
         builder.ConfigureBilling();
         builder.ConfigureMonitoring();
+        builder.ConfigureCloudMonitors();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

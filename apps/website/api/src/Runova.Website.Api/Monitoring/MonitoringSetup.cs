@@ -24,9 +24,6 @@ internal static class MonitoringSetup
         services.AddScoped<NodeCertificateAuthority>();
         services.AddScoped<NodeEvents>();
         services.AddScoped<NodeLivenessJob>();
-        services.TryAddScoped<IAssignmentSource, NoAssignments>();
-        services.TryAddScoped<IResultIngestor, DropResults>();
-        services.TryAddScoped<INodeRebalancer, NoRebalance>();
 
         var rabbit = builder.Configuration[RabbitMqUriKey];
         if (string.IsNullOrWhiteSpace(rabbit))

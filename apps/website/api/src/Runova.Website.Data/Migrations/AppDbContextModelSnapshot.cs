@@ -2705,6 +2705,308 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("SetupLinks");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitor", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("AllowInsecure")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AuthMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DefinitionVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("EnvironmentName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("IntervalSec")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ItemId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("NotifyInApp")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyTelegram")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ProjectName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("ScopeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SealedSecret")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("SecretChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SuspendedReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("TimeoutSec")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeId", "ItemId")
+                        .IsUnique();
+
+                    b.ToTable("CloudMonitors", t =>
+                        {
+                            t.HasCheckConstraint("CK_CloudMonitors_AuthMode", "\"AuthMode\" IN ('none', 'bearer', 'basic')");
+
+                            t.HasCheckConstraint("CK_CloudMonitors_Interval", "\"IntervalSec\" > 0 AND \"TimeoutSec\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorHour", b =>
+                {
+                    b.Property<long>("MonitorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("Hour")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Checks")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LatencyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LatencyMaxMs")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("LatencySumMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Warnings")
+                        .HasColumnType("integer");
+
+                    b.HasKey("MonitorId", "Hour");
+
+                    b.ToTable("CloudMonitorHours", (string)null);
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorIncident", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("ConfirmedByNodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("MonitorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("NodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MonitorId", "OpenedAt");
+
+                    b.ToTable("CloudMonitorIncidents");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorMute", b =>
+                {
+                    b.Property<long>("MonitorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("MonitorId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CloudMonitorMutes");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorSample", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Confirm")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("LatencyMs")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("MonitorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("NodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckedAt");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("CheckedAt"), "brin");
+
+                    b.HasIndex("MonitorId", "CheckedAt");
+
+                    b.ToTable("CloudMonitorSamples");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorStatus", b =>
+                {
+                    b.Property<long>("MonitorId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("ConfirmId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ConfirmNodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("ConfirmRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Confirmed")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("LastNodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LastRegion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("LatencyMs")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("NodeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("OpenIncidentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Pending")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Streak")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SuspectProblem")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("SuspectSince")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SuspectState")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("MonitorId");
+
+                    b.HasIndex("NodeId");
+
+                    b.ToTable("CloudMonitorStatuses");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Monitoring.MonitoringNode", b =>
                 {
                     b.Property<long>("Id")
@@ -3242,6 +3544,71 @@ namespace Runova.Website.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitor", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Accounts.SyncScope", null)
+                        .WithMany()
+                        .HasForeignKey("ScopeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorHour", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.CloudMonitor", null)
+                        .WithMany()
+                        .HasForeignKey("MonitorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorIncident", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.CloudMonitor", null)
+                        .WithMany()
+                        .HasForeignKey("MonitorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorMute", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.CloudMonitor", null)
+                        .WithMany()
+                        .HasForeignKey("MonitorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorSample", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.CloudMonitor", null)
+                        .WithMany()
+                        .HasForeignKey("MonitorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Monitoring.CloudMonitorStatus", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Monitoring.CloudMonitor", null)
+                        .WithOne()
+                        .HasForeignKey("Runova.Website.Data.Monitoring.CloudMonitorStatus", "MonitorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Runova.Website.Data.Monitoring.MonitoringNode", null)
+                        .WithMany()
+                        .HasForeignKey("NodeId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Runova.Website.Data.Monitoring.NodeCertificate", b =>

@@ -12,6 +12,7 @@ ARG SOURCE_REVISION=
 # Restore first, from the project and lock files only, so a code change keeps the restore layer.
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/Runova.Monitoring.Contracts/Runova.Monitoring.Contracts.csproj src/Runova.Monitoring.Contracts/packages.lock.json src/Runova.Monitoring.Contracts/
+COPY src/Runova.Monitoring.Core/Runova.Monitoring.Core.csproj src/Runova.Monitoring.Core/packages.lock.json src/Runova.Monitoring.Core/
 COPY src/Runova.Website.Core/Runova.Website.Core.csproj src/Runova.Website.Core/packages.lock.json src/Runova.Website.Core/
 COPY src/Runova.Website.Data/Runova.Website.Data.csproj src/Runova.Website.Data/packages.lock.json src/Runova.Website.Data/
 COPY src/Runova.Website.Api/Runova.Website.Api.csproj src/Runova.Website.Api/packages.lock.json src/Runova.Website.Api/

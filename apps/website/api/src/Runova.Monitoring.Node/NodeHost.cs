@@ -56,11 +56,12 @@ public static class NodeHost
         services.AddSingleton<IMonitorProbe, SafeMonitorProbe>();
         services.AddSingleton<ResultOutbox>();
         services.AddSingleton<NodeIdentityStore>();
+        // First, so the SQLite file and its tables exist before anything else starts using them.
+        services.AddHostedService<NodeDbSetup>();
         services.AddSingleton<CheckScheduler>();
         services.AddHostedService(provider => provider.GetRequiredService<CheckScheduler>());
         services.AddSingleton<GatewayConnection>();
         services.AddHostedService(provider => provider.GetRequiredService<GatewayConnection>());
-        services.AddHostedService<NodeDbSetup>();
 
         // Every SQL statement of the outbox is not news; problems still show.
         builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);

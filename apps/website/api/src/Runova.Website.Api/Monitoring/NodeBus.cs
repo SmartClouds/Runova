@@ -53,32 +53,14 @@ internal sealed class WolverineNodeBus(IMessageBus bus) : INodeBus
         bus.PublishAsync(new CloseNodeConnection(nodeId, reason));
 }
 
-/// <summary>
-/// The monitors a node should check. Online monitors come with E55; until then every node gets an
-/// empty snapshot.
-/// </summary>
+/// <summary>The monitors a node should check (the online monitors' assigner, E55).</summary>
 public interface IAssignmentSource
 {
     Task<IReadOnlyList<MonitorDefinition>> ForNodeAsync(long nodeId, CancellationToken ct = default);
 }
 
-internal sealed class NoAssignments : IAssignmentSource
-{
-    public Task<IReadOnlyList<MonitorDefinition>> ForNodeAsync(long nodeId, CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<MonitorDefinition>>([]);
-}
-
-/// <summary>Takes a node's results. E55 stores them; until then they are counted and dropped.</summary>
+/// <summary>Takes a node's results (the online monitors' ingestor, E55).</summary>
 public interface IResultIngestor
 {
     Task IngestAsync(CheckResultBatch batch, CancellationToken ct = default);
-}
-
-internal sealed class DropResults(ILogger<DropResults> logger) : IResultIngestor
-{
-    public Task IngestAsync(CheckResultBatch batch, CancellationToken ct = default)
-    {
-        logger.ResultsDropped(batch.NodeId, batch.Results.Count);
-        return Task.CompletedTask;
-    }
 }

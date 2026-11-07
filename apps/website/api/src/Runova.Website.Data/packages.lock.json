@@ -470,11 +470,15 @@
           "System.Security.Cryptography.Pkcs": "10.0.14"
         }
       },
+      "runova.monitoring.core": {
+        "type": "Project"
+      },
       "runova.website.core": {
         "type": "Project",
         "dependencies": {
           "HtmlSanitizer": "[9.2.1039, )",
           "Markdig": "[1.5.1, )",
+          "Runova.Monitoring.Core": "[3.3.0, )",
           "SkiaSharp": "[4.154.0, )",
           "SkiaSharp.NativeAssets.Linux.NoDependencies": "[4.154.0, )"
         }

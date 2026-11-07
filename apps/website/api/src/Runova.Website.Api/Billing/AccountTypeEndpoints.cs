@@ -119,7 +119,8 @@ internal static partial class AccountTypeEndpoints
     }
 
     private static async Task<Results<Ok<AccountTypeDto>, ValidationProblem, ProblemHttpResult>> PatchAsync(
-        long id, HttpContext http, AppDbContext db, AuditLog audit, TimeProvider time, IConfiguration configuration, IOptions<JsonOptions> json)
+        long id, HttpContext http, AppDbContext db, AuditLog audit, IPlanEnforcement enforcement, TimeProvider time, IConfiguration configuration,
+        IOptions<JsonOptions> json)
     {
         if (await db.AccountTypes.SingleOrDefaultAsync(t => t.Id == id) is not { } type)
         {
@@ -161,6 +162,9 @@ internal static partial class AccountTypeEndpoints
             {
                 return Versions.Stale((await db.AccountTypes.AsNoTracking().SingleAsync(t => t.Id == id)).Version);
             }
+
+            // A lower limit or a longer floor reaches the monitors that have it now.
+            await enforcement.AllAsync(http.RequestAborted);
         }
 
         Versions.SetETag(http.Response, type.Version);

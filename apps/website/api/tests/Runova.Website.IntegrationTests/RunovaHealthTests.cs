@@ -1,3 +1,5 @@
+extern alias api;
+
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -149,7 +151,7 @@ public sealed class RunovaHealthTests(PostgresFixture postgres) : IAsyncLifetime
         // The tests run no Hangfire server, so that check fails and with it the report.
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("fail", root.GetProperty("status").GetString());
-        Assert.Equal(typeof(Program).Assembly.GetName().Version!.ToString(3), root.GetProperty("version").GetString());
+        Assert.Equal(typeof(api::Program).Assembly.GetName().Version!.ToString(3), root.GetProperty("version").GetString());
         if (root.TryGetProperty("releaseId", out var releaseId))
         {
             Assert.Matches("^[0-9a-f]{7,40}$", releaseId.GetString());

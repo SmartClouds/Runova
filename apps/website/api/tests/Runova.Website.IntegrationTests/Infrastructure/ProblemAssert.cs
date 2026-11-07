@@ -26,6 +26,20 @@ internal static class ProblemAssert
         return problem;
     }
 
+    /// <summary>A problem of this status, with the type the contract gives that status.</summary>
+    public static Task<JsonElement> IsAsync(HttpResponseMessage response, HttpStatusCode status) =>
+        IsAsync(response, status, (int)status switch
+        {
+            400 => "validation-failed",
+            401 => "unauthorized",
+            403 => "forbidden",
+            404 => "not-found",
+            409 => "conflict",
+            412 => "precondition-failed",
+            428 => "precondition-required",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "No default problem type for this status."),
+        });
+
     /// <summary>A problem of this status and type, at whatever path it answered.</summary>
     public static async Task<JsonElement> IsAsync(HttpResponseMessage response, HttpStatusCode status, string slug)
     {
