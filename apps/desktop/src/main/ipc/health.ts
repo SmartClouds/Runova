@@ -21,8 +21,7 @@ import type {
   HealthTargetSummary,
 } from '../../shared/healthTypes';
 import { IPC } from '../../shared/ipcChannels';
-import type { CloudDefinitionPatch } from '../health/cloud';
-import { getCloudMonitors } from '../health/cloudLive';
+import type { CloudDefinitionPatch, CloudMonitors } from '../health/cloud';
 import { healthDiagnoser } from '../health/diagnose';
 import { getHealthScheduler } from '../health/scheduler';
 import {
@@ -113,18 +112,35 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
   };
 }
 
-function context(target: StoredHealthTarget) {
-  const cloud = getCloudMonitors();
-  const info = cloud.info(target);
+let cloudLive: Promise<typeof import('../health/cloudLive')> | null = null;
+
+/**
+ * The online monitors (E56). They bring the whole account runtime with them, so they load only
+ * once a cloud channel is used or a target runs online; a computer with local checks alone never
+ * pays for them.
+ */
+async function cloudMonitors(): Promise<CloudMonitors> {
+  cloudLive ??= import('../health/cloudLive');
+  return (await cloudLive).getCloudMonitors();
+}
+
+/** The online monitors for a target that runs on Runova Cloud; a local one has nothing there. */
+async function onlineFor(target: StoredHealthTarget): Promise<CloudMonitors | null> {
+  return target.runMode === 'cloud' ? cloudMonitors() : null;
+}
+
+async function context(target: StoredHealthTarget) {
+  const cloud = await onlineFor(target);
+  const info = cloud?.info(target) ?? null;
   return {
     now: Date.now(),
     locked: isLockedEnvelope(target.secretEnvelope ?? undefined),
-    cloud: info ? { info, paused: cloud.paused(target) } : null,
+    cloud: cloud && info ? { info, paused: cloud.paused(target) } : null,
   };
 }
 
-function summary(target: StoredHealthTarget, result: HealthResultRecord | undefined) {
-  return toHealthSummary(target, result, context(target));
+async function summary(target: StoredHealthTarget, result: HealthResultRecord | undefined) {
+  return toHealthSummary(target, result, await context(target));
 }
 
 /** For a monitor on Runova Cloud the server's results stand in for this computer's (E56). */
@@ -132,8 +148,8 @@ async function resultOf(
   target: StoredHealthTarget,
   local: HealthResultRecord | undefined,
 ): Promise<HealthResultRecord | undefined> {
-  if (target.runMode !== 'cloud') return local;
-  return getCloudMonitors().result(target, true);
+  const cloud = await onlineFor(target);
+  return cloud ? cloud.result(target, true) : local;
 }
 
 /** What the server keeps of a change made in the dialog. */
@@ -170,7 +186,7 @@ async function detail(targetId: string): Promise<HealthTargetDetail | null> {
   const target = targets.find((one) => one.id === targetId);
   if (!target) return null;
   const result = await resultOf(target, results[target.id]);
-  return toHealthDetail(target, result, context(target));
+  return toHealthDetail(target, result, await context(target));
 }
 
 function newSecret(authMode: HealthAuthMode): string {
@@ -247,7 +263,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
       state.targets.push(target);
     });
     broadcastHealthChanged([target.id]);
-    return { target: summary(target, undefined), secret: reveal(target, secret) };
+    return { target: await summary(target, undefined), secret: reveal(target, secret) };
   });
 
   handle(IPC.health.update, async (value, patchValue): Promise<HealthTargetSummary> => {
@@ -258,7 +274,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
       const cleaned = await cleanHealthTargetInput({ ...inputOf(target), ...patch });
       // The server's copy first: when it refuses the change (an interval the type does not allow),
       // nothing changes here either.
-      await getCloudMonitors().push(target, await cloudPatchOf(target, cleaned));
+      await (await onlineFor(target))?.push(target, await cloudPatchOf(target, cleaned));
       Object.assign(target, cleaned);
       target.updatedAt = Date.now();
       // New settings are worth seeing at once rather than at the end of the old interval.
@@ -274,7 +290,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const idValue = targetId(value);
     const existing = (await readHealthState()).targets.find((one) => one.id === idValue);
     // Runova Cloud stops checking it too, or it would go on alerting for a monitor nobody sees.
-    if (existing) await getCloudMonitors().remove(existing);
+    if (existing) await (await onlineFor(existing))?.remove(existing);
     healthDiagnoser.cancel(idValue);
     await mutateHealth((state) => {
       state.targets = state.targets.filter((target) => target.id !== idValue);
@@ -289,7 +305,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const updated = await mutateHealth(async (state) => {
       const target = findTarget(state.targets, idValue);
       // Resuming an online monitor has to fit the account type; the server says when it does not.
-      await getCloudMonitors().push(target, { paused });
+      await (await onlineFor(target))?.push(target, { paused });
       target.paused = paused;
       target.updatedAt = Date.now();
       const result = state.results[target.id];
@@ -304,7 +320,8 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const idValue = targetId(value);
     const current = findTarget((await readHealthState()).targets, idValue);
     // Runova Cloud checks it on its own schedule: "check now" reads what it found.
-    if (current.runMode === 'cloud') await getCloudMonitors().reload(current);
+    const cloud = await onlineFor(current);
+    if (cloud) await cloud.reload(current);
     else await getHealthScheduler().checkNow(idValue);
     const found = await detail(idValue);
     if (!found) throw new Error('That healthcheck no longer exists.');
@@ -317,7 +334,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const secret = newSecret(current.authMode);
     const envelope = await encryptSecret(secret);
     // The nodes get the new key at once; without it they would be refused once the endpoint has it.
-    await getCloudMonitors().rotate(current, secret);
+    await (await onlineFor(current))?.rotate(current, secret);
     const rotated = await mutateHealth((state) => {
       const target = findTarget(state.targets, idValue);
       if (target.authMode !== current.authMode) {
@@ -360,13 +377,13 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const which = parse(cloudPlanSchema, value, 'monitor');
     const target =
       typeof which === 'string' ? findTarget((await readHealthState()).targets, which) : which;
-    return getCloudMonitors().plan(target);
+    return (await cloudMonitors()).plan(target);
   });
 
   handle(IPC.health.cloudEnable, async (value, inputValue): Promise<HealthTargetSummary> => {
     const idValue = targetId(value);
     const input: HealthCloudEnableInput = parse(cloudEnableSchema, inputValue, 'online setup');
-    await getCloudMonitors().enable(idValue, input);
+    await (await cloudMonitors()).enable(idValue, input);
     const found = await detail(idValue);
     if (!found) throw new Error('That healthcheck no longer exists.');
     return found.target;
@@ -374,7 +391,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
 
   handle(IPC.health.cloudDisable, async (value): Promise<HealthTargetSummary> => {
     const idValue = targetId(value);
-    await getCloudMonitors().disable(idValue);
+    await (await cloudMonitors()).disable(idValue);
     const found = await detail(idValue);
     if (!found) throw new Error('That healthcheck no longer exists.');
     return found.target;
@@ -387,7 +404,7 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
       patchValue,
       'online settings',
     );
-    await getCloudMonitors().settings(idValue, patch);
+    await (await cloudMonitors()).settings(idValue, patch);
     const found = await detail(idValue);
     if (!found) throw new Error('That healthcheck no longer exists.');
     return found.target;
