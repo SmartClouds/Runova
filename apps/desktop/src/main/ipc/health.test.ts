@@ -442,7 +442,10 @@ describe('Runova Cloud (E56), with no account signed in', () => {
   it('says to sign in, and turns nothing online', async () => {
     const { target } = await create();
 
-    const plan = await invoke<{ signedIn: boolean; action: string | null }>(IPC.health.cloudPlan, target.id);
+    const plan = await invoke<{ signedIn: boolean; action: string | null }>(
+      IPC.health.cloudPlan,
+      target.id,
+    );
     expect(plan).toMatchObject({ signedIn: false, action: 'sign-in' });
     await expect(
       invoke(IPC.health.cloudEnable, target.id, {

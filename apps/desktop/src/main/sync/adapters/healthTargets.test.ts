@@ -74,7 +74,9 @@ describe('healthTargetsAdapter', () => {
     });
 
     expect(health.mutations).toEqual(['mutate']);
-    expect(health.state().targets).toEqual([{ ...target(), runMode: 'local', cloudMonitorId: null }]);
+    expect(health.state().targets).toEqual([
+      { ...target(), runMode: 'local', cloudMonitorId: null },
+    ]);
     expect(health.changed).toEqual([['t1']]);
   });
 
