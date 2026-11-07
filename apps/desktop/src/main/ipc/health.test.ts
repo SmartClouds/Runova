@@ -437,3 +437,61 @@ describe('pruning with projects and environments', () => {
     expect(left).toMatchObject({ id: target.id, environmentId: null });
   });
 });
+
+describe('Runova Cloud (E56), with no account signed in', () => {
+  it('says to sign in, and turns nothing online', async () => {
+    const { target } = await create();
+
+    const plan = await invoke<{ signedIn: boolean; action: string | null }>(IPC.health.cloudPlan, target.id);
+    expect(plan).toMatchObject({ signedIn: false, action: 'sign-in' });
+    await expect(
+      invoke(IPC.health.cloudEnable, target.id, {
+        consent: false,
+        intervalSec: 300,
+        notifyInApp: true,
+        notifyTelegram: false,
+      }),
+    ).rejects.toThrow(/Agree to send them/);
+    await expect(
+      invoke(IPC.health.cloudEnable, target.id, {
+        consent: true,
+        intervalSec: 300,
+        notifyInApp: true,
+        notifyTelegram: false,
+      }),
+    ).rejects.toThrow(/Sign in/);
+    await expect(invoke(IPC.health.cloudSettings, target.id, { muted: true })).rejects.toThrow(
+      /not on Runova Cloud/,
+    );
+    const [listed] = await invoke<HealthTargetSummary[]>(IPC.health.list);
+    expect(listed).toMatchObject({ runMode: 'local', cloud: null });
+  });
+
+  it('never checks an online monitor here, and turning it back makes it local again', async () => {
+    const { target } = await create();
+    const stored = JSON.parse(readFileSync(userData.dataFile('health-targets.json'), 'utf-8'));
+    stored[0].runMode = 'cloud';
+    stored[0].cloudMonitorId = 41;
+    userData.writeData('health-targets.json', stored);
+
+    const checked = await invoke<HealthTargetDetail>(IPC.health.checkNow, target.id);
+
+    expect(sent).toEqual([]);
+    expect(checked.target).toMatchObject({
+      runMode: 'cloud',
+      state: 'pending',
+      cloud: { signedIn: false },
+      headline: expect.stringMatching(/^Sign in/),
+    });
+
+    const local = await invoke<HealthTargetSummary>(IPC.health.cloudDisable, target.id);
+    expect(local).toMatchObject({ runMode: 'local', cloud: null });
+  });
+
+  it('refuses a malformed online setup', async () => {
+    const { target } = await create();
+    await expect(
+      invoke(IPC.health.cloudEnable, target.id, { consent: true, intervalSec: 5 }),
+    ).rejects.toThrow(/not valid/);
+  });
+});

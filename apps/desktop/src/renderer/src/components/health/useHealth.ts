@@ -1,4 +1,7 @@
 import type {
+  HealthCloudEnableInput,
+  HealthCloudPlan,
+  HealthCloudSettingsPatch,
   HealthCreateResult,
   HealthSecretReveal,
   HealthTargetDetail,
@@ -74,6 +77,26 @@ export function useHealthTarget(targetId: string | null) {
     queryFn: async (): Promise<HealthTargetDetail | null> =>
       (await window.runova.health.get(targetId ?? '')) ?? null,
     enabled: targetId !== null,
+    meta: QUIET,
+  });
+}
+
+/**
+ * Where a monitor may run (E56): the account type of its project's scope and what stands in the
+ * way of Runova Cloud. A draft is asked about by its project and address.
+ */
+export function useHealthCloudPlan(
+  which:
+    | string
+    | { projectId: string; url?: string; allowInsecure?: boolean; runMode?: 'local' | 'cloud' }
+    | null,
+) {
+  const key = which === null ? '' : typeof which === 'string' ? which : JSON.stringify(which);
+  return useQuery({
+    queryKey: queryKeys.healthCloudPlan(key),
+    queryFn: async (): Promise<HealthCloudPlan> => window.runova.health.cloudPlan(which ?? ''),
+    enabled: which !== null && key !== '',
+    retry: false,
     meta: QUIET,
   });
 }
@@ -183,8 +206,40 @@ export function useHealthActions() {
     onError: failed('Could not stop the diagnosis'),
   });
 
+  /** Plain calls: the dialog shows their errors where the person is looking. */
+  const cloudEnable = useCallback(
+    async (targetId: string, input: HealthCloudEnableInput): Promise<HealthTargetSummary> => {
+      const result = await window.runova.health.cloudEnable(targetId, input);
+      void refreshAll();
+      return result;
+    },
+    [refreshAll],
+  );
+
+  const cloudDisable = useCallback(
+    async (targetId: string): Promise<HealthTargetSummary> => {
+      const result = await window.runova.health.cloudDisable(targetId);
+      void refreshAll();
+      return result;
+    },
+    [refreshAll],
+  );
+
+  const cloudSettings = useMutation({
+    mutationFn: ({ targetId, patch }: { targetId: string; patch: HealthCloudSettingsPatch }) =>
+      window.runova.health.cloudSettings(targetId, patch),
+    meta: QUIET,
+    onSuccess: () => {
+      void refreshAll();
+    },
+    onError: failed('Could not change the online settings'),
+  });
+
   return {
     create,
+    cloudEnable,
+    cloudDisable,
+    cloudSettings,
     rotateSecret,
     update,
     remove,

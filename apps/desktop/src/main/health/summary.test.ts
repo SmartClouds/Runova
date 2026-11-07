@@ -132,6 +132,52 @@ describe('toHealthSummary', () => {
     expect(summarize(record, true, { ...target, paused: true }).state).toBe('paused');
   });
 
+  it('takes an online monitor from the server: its pause, and no vault lock (E56)', () => {
+    const info = {
+      monitorId: 41,
+      signedIn: true,
+      region: 'eu-central',
+      suspendedReason: null,
+      notifyInApp: true,
+      notifyTelegram: false,
+      muted: false,
+      canWrite: true,
+      confirming: false,
+    };
+    const online = { ...target, runMode: 'cloud' as const, cloudMonitorId: 41 };
+    const record = result({ report: report({ state: 'fail' }) });
+
+    const shown = toHealthSummary(online, record, {
+      now: NOW,
+      locked: true,
+      cloud: { info, paused: false },
+    });
+    expect(shown).toMatchObject({ runMode: 'cloud', cloud: info, state: 'fail', paused: false });
+    expect(shown).not.toHaveProperty('cloudMonitorId');
+
+    const paused = toHealthSummary(online, record, {
+      now: NOW,
+      locked: false,
+      cloud: { info: { ...info, suspendedReason: 'over-limit' }, paused: true },
+    });
+    expect(paused.state).toBe('paused');
+    expect(paused.headline).toMatch(/Paused by Runova/);
+
+    const signedOut = toHealthSummary(online, undefined, {
+      now: NOW,
+      locked: false,
+      cloud: { info: { ...info, signedIn: false }, paused: false },
+    });
+    expect(signedOut).toMatchObject({
+      state: 'pending',
+      headline: expect.stringMatching(/^Sign in/),
+    });
+    expect(toHealthSummary(target, record, { now: NOW, locked: false })).toMatchObject({
+      runMode: 'local',
+      cloud: null,
+    });
+  });
+
   it('counts uptime over the last 24 hours, warn as up', () => {
     const samples: HealthSample[] = [
       { at: NOW - 30 * HOUR, state: 'fail', latencyMs: null },

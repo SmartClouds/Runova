@@ -10,6 +10,9 @@ import {
 import { type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { z } from 'zod';
 import type {
+  HealthCloudEnableInput,
+  HealthCloudPlan,
+  HealthCloudSettingsPatch,
   HealthCreateResult,
   HealthSecretReveal,
   HealthSetupPrompt,
@@ -18,6 +21,8 @@ import type {
   HealthTargetSummary,
 } from '../../shared/healthTypes';
 import { IPC } from '../../shared/ipcChannels';
+import type { CloudDefinitionPatch } from '../health/cloud';
+import { getCloudMonitors } from '../health/cloudLive';
 import { healthDiagnoser } from '../health/diagnose';
 import { getHealthScheduler } from '../health/scheduler';
 import {
@@ -60,6 +65,24 @@ const inputSchema = z.object({
 });
 
 const patchSchema = inputSchema.partial();
+const cloudEnableSchema = z.object({
+  consent: z.boolean(),
+  intervalSec: z.number().int().min(30).max(86_400),
+  notifyInApp: z.boolean(),
+  notifyTelegram: z.boolean(),
+});
+const cloudSettingsSchema = z
+  .object({ notifyInApp: z.boolean(), notifyTelegram: z.boolean(), muted: z.boolean() })
+  .partial();
+const cloudPlanSchema = z.union([
+  id,
+  z.object({
+    projectId: id,
+    url: z.string().max(4096).optional(),
+    allowInsecure: z.boolean().optional(),
+    runMode: z.enum(['local', 'cloud']).optional(),
+  }),
+]);
 const filterSchema = z.object({ projectId: id.optional() }).optional();
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -91,11 +114,49 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
 }
 
 function context(target: StoredHealthTarget) {
-  return { now: Date.now(), locked: isLockedEnvelope(target.secretEnvelope ?? undefined) };
+  const cloud = getCloudMonitors();
+  const info = cloud.info(target);
+  return {
+    now: Date.now(),
+    locked: isLockedEnvelope(target.secretEnvelope ?? undefined),
+    cloud: info ? { info, paused: cloud.paused(target) } : null,
+  };
 }
 
 function summary(target: StoredHealthTarget, result: HealthResultRecord | undefined) {
   return toHealthSummary(target, result, context(target));
+}
+
+/** For a monitor on Runova Cloud the server's results stand in for this computer's (E56). */
+async function resultOf(
+  target: StoredHealthTarget,
+  local: HealthResultRecord | undefined,
+): Promise<HealthResultRecord | undefined> {
+  if (target.runMode !== 'cloud') return local;
+  return getCloudMonitors().result(target, true);
+}
+
+/** What the server keeps of a change made in the dialog. */
+async function cloudPatchOf(
+  before: StoredHealthTarget,
+  after: HealthTargetInput,
+): Promise<CloudDefinitionPatch> {
+  const patch: CloudDefinitionPatch = {};
+  if (after.name !== before.name) patch.name = after.name;
+  if (after.url !== before.url) patch.url = after.url;
+  if (after.intervalSec !== before.intervalSec) patch.intervalSec = after.intervalSec;
+  if (after.timeoutSec !== before.timeoutSec) patch.timeoutSec = after.timeoutSec;
+  if (after.allowInsecure !== before.allowInsecure) patch.allowInsecure = after.allowInsecure;
+  if (after.environmentId !== before.environmentId) {
+    patch.environmentName = await environmentName({
+      ...before,
+      environmentId: after.environmentId,
+    });
+  }
+  if (after.projectId !== before.projectId) {
+    patch.projectName = await projectName({ ...before, projectId: after.projectId });
+  }
+  return patch;
 }
 
 function findTarget(targets: StoredHealthTarget[], targetId: string): StoredHealthTarget {
@@ -107,7 +168,9 @@ function findTarget(targets: StoredHealthTarget[], targetId: string): StoredHeal
 async function detail(targetId: string): Promise<HealthTargetDetail | null> {
   const { targets, results } = await readHealthState();
   const target = targets.find((one) => one.id === targetId);
-  return target ? toHealthDetail(target, results[target.id], context(target)) : null;
+  if (!target) return null;
+  const result = await resultOf(target, results[target.id]);
+  return toHealthDetail(target, result, context(target));
 }
 
 function newSecret(authMode: HealthAuthMode): string {
@@ -157,9 +220,12 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
   handle(IPC.health.list, async (filter): Promise<HealthTargetSummary[]> => {
     const projectId = parse(filterSchema, filter, 'filter')?.projectId;
     const { targets, results } = await readHealthState();
-    return targets
-      .filter((target) => projectId === undefined || target.projectId === projectId)
-      .map((target) => summary(target, results[target.id]));
+    const shown = targets.filter(
+      (target) => projectId === undefined || target.projectId === projectId,
+    );
+    return Promise.all(
+      shown.map(async (target) => summary(target, await resultOf(target, results[target.id]))),
+    );
   });
 
   handle(IPC.health.get, (value) => detail(targetId(value)));
@@ -189,7 +255,11 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const patch = parse(patchSchema, patchValue, 'change');
     const updated = await mutateHealth(async (state) => {
       const target = findTarget(state.targets, idValue);
-      Object.assign(target, await cleanHealthTargetInput({ ...inputOf(target), ...patch }));
+      const cleaned = await cleanHealthTargetInput({ ...inputOf(target), ...patch });
+      // The server's copy first: when it refuses the change (an interval the type does not allow),
+      // nothing changes here either.
+      await getCloudMonitors().push(target, await cloudPatchOf(target, cleaned));
+      Object.assign(target, cleaned);
       target.updatedAt = Date.now();
       // New settings are worth seeing at once rather than at the end of the old interval.
       const result = state.results[target.id];
@@ -202,6 +272,9 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
 
   handle(IPC.health.remove, async (value): Promise<void> => {
     const idValue = targetId(value);
+    const existing = (await readHealthState()).targets.find((one) => one.id === idValue);
+    // Runova Cloud stops checking it too, or it would go on alerting for a monitor nobody sees.
+    if (existing) await getCloudMonitors().remove(existing);
     healthDiagnoser.cancel(idValue);
     await mutateHealth((state) => {
       state.targets = state.targets.filter((target) => target.id !== idValue);
@@ -213,21 +286,26 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
   handle(IPC.health.setPaused, async (value, pausedValue): Promise<HealthTargetSummary> => {
     const idValue = targetId(value);
     const paused = parse(z.boolean(), pausedValue, 'pause switch');
-    const updated = await mutateHealth((state) => {
+    const updated = await mutateHealth(async (state) => {
       const target = findTarget(state.targets, idValue);
+      // Resuming an online monitor has to fit the account type; the server says when it does not.
+      await getCloudMonitors().push(target, { paused });
       target.paused = paused;
       target.updatedAt = Date.now();
       const result = state.results[target.id];
       if (!paused && result) result.nextCheckAt = null;
-      return summary(target, result);
+      return target;
     });
     broadcastHealthChanged([idValue]);
-    return updated;
+    return summary(updated, await resultOf(updated, (await readHealthState()).results[idValue]));
   });
 
   handle(IPC.health.checkNow, async (value): Promise<HealthTargetDetail> => {
     const idValue = targetId(value);
-    await getHealthScheduler().checkNow(idValue);
+    const current = findTarget((await readHealthState()).targets, idValue);
+    // Runova Cloud checks it on its own schedule: "check now" reads what it found.
+    if (current.runMode === 'cloud') await getCloudMonitors().reload(current);
+    else await getHealthScheduler().checkNow(idValue);
     const found = await detail(idValue);
     if (!found) throw new Error('That healthcheck no longer exists.');
     return found;
@@ -238,6 +316,8 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     const current = findTarget((await readHealthState()).targets, idValue);
     const secret = newSecret(current.authMode);
     const envelope = await encryptSecret(secret);
+    // The nodes get the new key at once; without it they would be refused once the endpoint has it.
+    await getCloudMonitors().rotate(current, secret);
     const rotated = await mutateHealth((state) => {
       const target = findTarget(state.targets, idValue);
       if (target.authMode !== current.authMode) {
@@ -274,6 +354,44 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
   });
 
   handle(IPC.health.spec, () => buildHealthSpecMarkdown());
+
+  // Runova Cloud (E56): where a monitor runs.
+  handle(IPC.health.cloudPlan, async (value): Promise<HealthCloudPlan> => {
+    const which = parse(cloudPlanSchema, value, 'monitor');
+    const target =
+      typeof which === 'string' ? findTarget((await readHealthState()).targets, which) : which;
+    return getCloudMonitors().plan(target);
+  });
+
+  handle(IPC.health.cloudEnable, async (value, inputValue): Promise<HealthTargetSummary> => {
+    const idValue = targetId(value);
+    const input: HealthCloudEnableInput = parse(cloudEnableSchema, inputValue, 'online setup');
+    await getCloudMonitors().enable(idValue, input);
+    const found = await detail(idValue);
+    if (!found) throw new Error('That healthcheck no longer exists.');
+    return found.target;
+  });
+
+  handle(IPC.health.cloudDisable, async (value): Promise<HealthTargetSummary> => {
+    const idValue = targetId(value);
+    await getCloudMonitors().disable(idValue);
+    const found = await detail(idValue);
+    if (!found) throw new Error('That healthcheck no longer exists.');
+    return found.target;
+  });
+
+  handle(IPC.health.cloudSettings, async (value, patchValue): Promise<HealthTargetSummary> => {
+    const idValue = targetId(value);
+    const patch: HealthCloudSettingsPatch = parse(
+      cloudSettingsSchema,
+      patchValue,
+      'online settings',
+    );
+    await getCloudMonitors().settings(idValue, patch);
+    const found = await detail(idValue);
+    if (!found) throw new Error('That healthcheck no longer exists.');
+    return found.target;
+  });
 
   handle(IPC.health.fixPrompt, async (value): Promise<string | null> => {
     const { targets, results } = await readHealthState();

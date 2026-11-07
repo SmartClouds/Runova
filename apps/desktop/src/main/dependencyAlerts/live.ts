@@ -1,16 +1,18 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { AppNotification } from '@runova/core';
 import { app } from 'electron';
 import type { ServerNotification } from '../../shared/dependencyAlerts';
 import { IPC } from '../../shared/ipcChannels';
 import type { AccountRuntime } from '../account/runtime';
 import { appNotificationInbox } from '../deploy/watcher';
+import { getCloudMonitors } from '../health/cloudLive';
+import { readHealthTargets } from '../health/store';
 import { broadcastToWindows } from '../ipc/send';
 import { showOsNotification } from '../notifications/osNotification';
 import { readProjectInventory } from '../packageManagers';
 import { store } from '../store';
 import { websiteAlertHub } from './hub';
+import { type InboxMonitor, inboxEntry, isMonitorMessage } from './inbox';
 import { createDependencyAlerts, type DependencyAlerts } from './service';
 
 /**
@@ -23,27 +25,21 @@ function hashesFile(): string {
   return join(app.getPath('userData'), 'data', 'dependency-alerts.json');
 }
 
-/** The inbox entry for a server message: the project's Packages tab is where it leads. */
-export function inboxEntry(
-  notification: ServerNotification,
-  project: { id: string; name: string } | null,
-): AppNotification {
-  return {
-    id: `dependency:${notification.id}`,
-    kind: 'dependency-updates',
-    title: notification.title,
-    body: notification.body,
-    projectId: project?.id ?? null,
-    projectName: project?.name ?? 'Packages',
-    htmlUrl: null,
-    route: project ? `/projects/${encodeURIComponent(project.id)}?tab=packages` : '/projects',
-    createdAt: notification.createdAt,
-    read: notification.readAt !== null,
-  };
-}
-
 // biome-ignore lint/suspicious/noConsole: the only record of an upload or a connection that failed
 const log = (message: string): void => console.warn(message);
+
+/** The desktop monitor and its project an online monitor's message names, when this computer has it. */
+async function monitorOf(notification: ServerNotification): Promise<InboxMonitor | null> {
+  if (!isMonitorMessage(notification) || !notification.itemId) return null;
+  const target = (await readHealthTargets()).find((one) => one.id === notification.itemId);
+  if (!target) return null;
+  const project = (await store.getProjects()).find((one) => one.id === target.projectId);
+  return {
+    targetId: target.id,
+    projectId: target.projectId,
+    projectName: project?.name ?? 'Monitoring',
+  };
+}
 
 export function liveDependencyAlerts(runtime: AccountRuntime): DependencyAlerts {
   const inbox = appNotificationInbox({
@@ -86,8 +82,17 @@ export function liveDependencyAlerts(runtime: AccountRuntime): DependencyAlerts 
         accessToken: () => runtime.accessToken(),
         log,
       }),
+    // The online monitors listen on the same connection (E56).
+    attach: (hub) => {
+      const cloud = getCloudMonitors();
+      const failed = (error: unknown) => log(`[cloud-monitors] ${String(error)}`);
+      hub.onCloudMonitorUpdated?.((monitor) => void cloud.live(monitor).catch(failed));
+      hub.onCloudMonitorsChanged?.(() => void cloud.refresh().catch(failed));
+      hub.onReconnected(() => void cloud.refresh().catch(failed));
+      void cloud.refresh().catch(failed);
+    },
     inbox: async (notification, project) => {
-      const entry = inboxEntry(notification, project);
+      const entry = inboxEntry(notification, project, await monitorOf(notification));
       // A message the app already has (caught up again after a restart) is not said twice.
       if ((await store.getAppNotifications()).some((item) => item.id === entry.id)) return;
       await inbox.add(entry);

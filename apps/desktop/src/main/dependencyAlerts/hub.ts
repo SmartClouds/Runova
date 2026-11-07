@@ -1,5 +1,6 @@
 import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import type { ServerNotification } from '../../shared/dependencyAlerts';
+import type { CloudMonitorLive } from '../health/cloud';
 import type { AlertHub } from './service';
 
 /** After a drop: at once, then a little longer each time, and every minute from then on. */
@@ -63,6 +64,9 @@ export function websiteAlertHub(input: {
         handler(notification),
       ),
     onSummaryChanged: (handler) => connection.on('DependencySummaryChanged', () => handler()),
+    onCloudMonitorUpdated: (handler) =>
+      connection.on('CloudMonitorUpdated', (monitor: CloudMonitorLive) => handler(monitor)),
+    onCloudMonitorsChanged: (handler) => connection.on('CloudMonitorsChanged', () => handler()),
     onReconnected: (handler) => {
       reconnected.push(handler);
     },

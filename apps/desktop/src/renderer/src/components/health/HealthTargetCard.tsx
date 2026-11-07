@@ -1,7 +1,7 @@
 import type { HealthServiceResult } from '@runova/core';
 import type { HealthTargetSummary } from '@shared/healthTypes';
 import { useId, useState } from 'react';
-import { ChevronDown, Server, TriangleAlert } from '@/components/icons';
+import { ChevronDown, Cloud, Server, TriangleAlert } from '@/components/icons';
 import { Chip, GLASS_CARD, SECTION_HEADING } from '@/components/pageKit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -139,6 +139,15 @@ export function HealthTargetCard({
             </button>
           </h4>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {target.runMode === 'cloud' && (
+              <span
+                title="Runova Cloud checks this monitor day and night"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-1.5 py-px text-[10px] font-semibold text-primary"
+              >
+                <Cloud className="h-2.5 w-2.5" />
+                Cloud
+              </span>
+            )}
             {target.serverLabel && (
               <>
                 <Server className="h-3 w-3 shrink-0" />
@@ -175,11 +184,15 @@ export function HealthTargetCard({
         <Fact label="Checked">
           {target.lastCheckedAt === null ? 'Never' : formatAgo(target.lastCheckedAt, now)}
         </Fact>
-        <Fact label="Next">
-          {scheduled && target.nextCheckAt !== null
-            ? formatIn(target.nextCheckAt, now)
-            : 'Not scheduled'}
-        </Fact>
+        {target.runMode === 'cloud' ? (
+          <Fact label="From">{target.cloud?.region ?? 'Not yet'}</Fact>
+        ) : (
+          <Fact label="Next">
+            {scheduled && target.nextCheckAt !== null
+              ? formatIn(target.nextCheckAt, now)
+              : 'Not scheduled'}
+          </Fact>
+        )}
       </dl>
 
       <div className="space-y-1.5">

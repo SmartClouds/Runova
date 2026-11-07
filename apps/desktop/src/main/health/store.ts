@@ -15,7 +15,7 @@ import {
 import { app } from 'electron';
 import { z } from 'zod';
 import type { SecretEnvelope } from '../../shared/apiTypes';
-import type { HealthTargetInput } from '../../shared/healthTypes';
+import type { HealthRunMode, HealthTargetInput } from '../../shared/healthTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { broadcastToWindows } from '../ipc/send';
 import type { SealedSecretStore } from '../ssh/vault';
@@ -41,6 +41,10 @@ export interface StoredHealthTarget extends HealthTargetInput {
   secretRotatedAt: number | null;
   /** The team it is shared with through sync (E48). Missing means the person's own. */
   syncTeamId?: number;
+  /** Where it is checked from (E56). Missing means this computer. Syncs, so teammates skip it too. */
+  runMode?: HealthRunMode;
+  /** The server's id for it while it runs on Runova Cloud. */
+  cloudMonitorId?: number | null;
 }
 
 export interface HealthResultRecord {
@@ -127,6 +131,9 @@ const targetSchema = z.object({
   secretEnvelope: envelopeSchema.nullable(),
   secretRotatedAt: time.nullable(),
   syncTeamId: z.number().int().optional(),
+  // Older files and older computers have no run mode: this computer.
+  runMode: z.enum(['local', 'cloud']).default('local'),
+  cloudMonitorId: z.number().int().positive().nullable().default(null),
 });
 
 const probeState = z.enum(['pass', 'warn', 'fail', 'unreachable', 'unauthorized', 'invalid']);

@@ -74,7 +74,7 @@ describe('healthTargetsAdapter', () => {
     });
 
     expect(health.mutations).toEqual(['mutate']);
-    expect(health.state().targets).toEqual([target()]);
+    expect(health.state().targets).toEqual([{ ...target(), runMode: 'local', cloudMonitorId: null }]);
     expect(health.changed).toEqual([['t1']]);
   });
 
@@ -99,7 +99,22 @@ describe('healthTargetsAdapter', () => {
       secretRotatedAt: null,
       appLink: null,
       showVersion: true,
+      runMode: 'local',
+      cloudMonitorId: null,
     });
+  });
+
+  it('keeps a monitor a teammate turned online as online, so this computer does not check it (E56)', async () => {
+    const health = memoryHealth();
+    const { secretEnvelope: _key, ...shared } = target();
+
+    await healthTargetsAdapter(health.port, memorySecrets()).apply({
+      id: 't1',
+      teamId: null,
+      value: { ...shared, runMode: 'cloud', cloudMonitorId: 41 },
+    });
+
+    expect(health.state().targets[0]).toMatchObject({ runMode: 'cloud', cloudMonitorId: 41 });
   });
 
   it('forgets a removed monitor’s results along with it', async () => {

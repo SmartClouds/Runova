@@ -76,6 +76,25 @@ export async function startFakeAccountServer() {
   let findings: { items: unknown[] } = { items: [] };
   let notifications: unknown[] = [];
   const muted = new Set<number>();
+  // Online monitors (E56): what the app turned online, with the status a test gives them.
+  type CloudMonitor = Record<string, unknown> & { id: number; itemId: string; secret?: string };
+  const cloudMonitors = new Map<number, CloudMonitor>();
+  const cloudCalls: { method: string; path: string; body: Record<string, unknown> | null }[] = [];
+  let nextCloudId = 41;
+  const emptyStatus = {
+    verdict: 'unknown',
+    state: null,
+    lastCheckedAt: null,
+    latencyMs: null,
+    httpStatus: null,
+    problem: null,
+    region: null,
+    confirming: false,
+    openIncident: null,
+    uptime24h: null,
+  };
+  /** The monitor as the API answers it: never with its key. */
+  const cloudDto = ({ secret: _secret, ...monitor }: CloudMonitor) => monitor;
 
   const sessionFor = (request: IncomingMessage) => {
     const token = request.headers.authorization?.replace(/^Bearer /, '');
@@ -254,6 +273,91 @@ export async function startFakeAccountServer() {
           else muted.delete(Number(muteMatch[1]));
           return json(response, 204);
         }
+        if (path.startsWith('/api/v1/cloud-monitors')) {
+          const sentBody =
+            method === 'POST' || method === 'PATCH' || method === 'PUT'
+              ? await body(request)
+              : null;
+          cloudCalls.push({ method, path, body: sentBody });
+          if (method === 'GET' && path === '/api/v1/cloud-monitors') {
+            return json(response, 200, { items: [...cloudMonitors.values()].map(cloudDto) });
+          }
+          if (method === 'GET' && path === '/api/v1/cloud-monitors/usage') {
+            const all = [...cloudMonitors.values()];
+            return json(response, 200, {
+              scopes: [
+                {
+                  scopeId: 1,
+                  kind: 'personal',
+                  name: 'Personal',
+                  canWrite: true,
+                  accountTypeKey: 'go',
+                  accountTypeName: 'Go',
+                  maxMonitors: 10,
+                  minIntervalSec: 300,
+                  historyDays: 30,
+                  active: all.filter((m) => !m.paused).length,
+                  paused: all.filter((m) => m.paused).length,
+                },
+              ],
+            });
+          }
+          if (method === 'POST' && path === '/api/v1/cloud-monitors') {
+            const input = sentBody ?? {};
+            const made: CloudMonitor = {
+              ...input,
+              id: nextCloudId++,
+              itemId: String(input.itemId),
+              secret: String(input.secret ?? ''),
+              hasSecret: Boolean(input.secret),
+              suspendedReason: null,
+              muted: false,
+              canWrite: true,
+              status: emptyStatus,
+              version: '1',
+            };
+            cloudMonitors.set(made.id, made);
+            return json(response, 201, cloudDto(made));
+          }
+          const one = /^\/api\/v1\/cloud-monitors\/(\d+)(\/.*)?$/.exec(path);
+          const monitor = one ? cloudMonitors.get(Number(one[1])) : undefined;
+          if (!one || !monitor) {
+            return json(response, 404, {
+              type: 'https://runovahq.com/problems/not-found',
+              status: 404,
+              detail: 'There is no such online monitor for this account.',
+            });
+          }
+          const rest = one[2] ?? '';
+          if (method === 'PATCH' && rest === '') {
+            Object.assign(monitor, sentBody ?? {});
+            monitor.version = String(Number(monitor.version) + 1);
+            return json(response, 200, cloudDto(monitor));
+          }
+          if (method === 'DELETE' && rest === '') {
+            cloudMonitors.delete(monitor.id);
+            return json(response, 204);
+          }
+          if (rest === '/samples') return json(response, 200, { items: monitor.samples ?? [] });
+          if (rest === '/hours') return json(response, 200, { items: [] });
+          if (rest.startsWith('/incidents')) {
+            return json(response, 200, {
+              items: [],
+              page: 1,
+              pageSize: 50,
+              totalItems: 0,
+              totalPages: 0,
+            });
+          }
+          if (rest === '/mutes/me') {
+            monitor.muted = method === 'PUT';
+            return json(response, 204);
+          }
+          if (method === 'PUT' && rest === '/secrets/current') {
+            monitor.secret = String(sentBody?.secret ?? '');
+            return json(response, 204);
+          }
+        }
         if (method === 'GET' && path === '/api/v1/accounts/me/telegram-links/current') {
           return json(response, 200, {
             available: true,
@@ -362,6 +466,53 @@ export async function startFakeAccountServer() {
     },
     setNotifications: (items: unknown[]) => {
       notifications = items;
+    },
+    /** The online monitors as the server holds them, with the key each was given. */
+    cloudMonitors: () => [...cloudMonitors.values()],
+    /** Every call to the online monitor routes, in order. */
+    cloudCalls: () => cloudCalls,
+    /** What the nodes found: the status the next read answers, and the sample it adds. */
+    setCloudResult: (
+      id: number,
+      result: { state: string; latencyMs: number | null; region: string; problem?: string | null },
+    ) => {
+      const monitor = cloudMonitors.get(id);
+      if (!monitor) throw new Error(`No online monitor ${id}`);
+      const at = new Date().toISOString();
+      const down = result.state !== 'pass' && result.state !== 'warn';
+      monitor.status = {
+        ...emptyStatus,
+        verdict: down ? 'down' : 'up',
+        state: result.state,
+        lastCheckedAt: at,
+        latencyMs: result.latencyMs,
+        httpStatus: down ? 503 : 200,
+        problem: result.problem ?? null,
+        region: result.region,
+        openIncident: down
+          ? {
+              id: 9,
+              monitorId: id,
+              openedAt: at,
+              resolvedAt: null,
+              state: result.state,
+              problem: result.problem ?? null,
+              region: result.region,
+              confirmedFrom: null,
+            }
+          : null,
+      };
+      monitor.samples = [
+        ...((monitor.samples as unknown[]) ?? []),
+        {
+          at,
+          state: result.state,
+          latencyMs: result.latencyMs,
+          httpStatus: down ? 503 : 200,
+          region: result.region,
+          problem: result.problem ?? null,
+        },
+      ];
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

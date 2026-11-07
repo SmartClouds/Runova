@@ -236,6 +236,15 @@ describe('when targets are probed', () => {
     expect(h.probe.mock.calls.map(([one]) => one.id)).toEqual(['live']);
   });
 
+  it('never checks a monitor that runs on Runova Cloud, on any computer (E56)', async () => {
+    await seed(target('cloud', { runMode: 'cloud', cloudMonitorId: 7 }), target('local'));
+    const h = harness();
+    const s = await scheduler(h.deps);
+    await tickAt(s, T0);
+    await tickAt(s, T0 + 120_000);
+    expect(h.probe.mock.calls.map(([one]) => one.id)).toEqual(['local', 'local']);
+  });
+
   it('keeps the newest 200 samples', async () => {
     await seed(target('a'));
     await health.mutateHealth((state) => {
@@ -484,6 +493,14 @@ describe('checkNow', () => {
     await checked;
     expect(h.deps.probe).toHaveBeenCalledOnce();
     expect((await results('a')).samples).toHaveLength(1);
+  });
+
+  it('refuses a monitor that Runova Cloud checks (E56)', async () => {
+    await seed(target('a', { runMode: 'cloud', cloudMonitorId: 7 }));
+    const h = harness();
+    const s = await scheduler(h.deps);
+    await expect(s.checkNow('a')).rejects.toThrow(/Runova Cloud checks/);
+    expect(h.probe).not.toHaveBeenCalled();
   });
 
   it('refuses a target that does not exist', async () => {

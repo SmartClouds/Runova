@@ -53,9 +53,35 @@ export interface HealthTargetInput {
   showVersion?: boolean;
 }
 
+/** Where a monitor is checked from (E56): this computer, or Runova Cloud's nodes. */
+export type HealthRunMode = 'local' | 'cloud';
+
+/** What the page knows of a monitor that runs on Runova Cloud. */
+export interface HealthCloudInfo {
+  /** The server's id for it; null until it was turned online on some computer. */
+  monitorId: number | null;
+  /** Signed out, the app has nothing to show and does not check it here either. */
+  signedIn: boolean;
+  /** The region of the node that checked it last. */
+  region: string | null;
+  /** "over-limit" when Runova paused it because the account type went down. */
+  suspendedReason: string | null;
+  notifyInApp: boolean;
+  notifyTelegram: boolean;
+  /** This account does not hear about it. */
+  muted: boolean;
+  /** False for a team Viewer: the settings are read only. */
+  canWrite: boolean;
+  /** A change waits for its second sample or a second opinion from another region. */
+  confirming: boolean;
+}
+
 /** One target as the page lists it. */
 export interface HealthTargetSummary extends HealthTargetInput {
   id: string;
+  runMode: HealthRunMode;
+  /** Set when it runs on Runova Cloud. */
+  cloud: HealthCloudInfo | null;
   createdAt: number;
   updatedAt: number;
   paused: boolean;
@@ -116,6 +142,44 @@ export interface HealthSetupPrompt {
   prompt: string;
   /** The protocol document on its own. */
   spec: string;
+}
+
+/**
+ * What "Where it runs" shows for a monitor: the account type of the project's scope, its use, and
+ * why the monitor can not go online now, if it can not.
+ */
+export interface HealthCloudPlan {
+  signedIn: boolean;
+  /** The scope the project lives in: "Personal" or the team's name. */
+  scopeName: string | null;
+  canWrite: boolean;
+  accountTypeName: string | null;
+  /** Null for no limit. */
+  maxMonitors: number | null;
+  active: number;
+  /** The shortest interval the type allows. */
+  minIntervalSec: number;
+  /** Why it can not go online now, in words for the dialog; null when it can. */
+  blocked: string | null;
+  /** What to do about it: sign in, or choose a type with more. */
+  action: 'sign-in' | 'upgrade' | null;
+  /** The account linked a Telegram chat to the RunovaHQ bot. */
+  telegramLinked: boolean;
+}
+
+/** Turning a monitor online. The key goes only with `consent`. */
+export interface HealthCloudEnableInput {
+  consent: boolean;
+  intervalSec: number;
+  notifyInApp: boolean;
+  notifyTelegram: boolean;
+}
+
+/** The online settings a member can change. */
+export interface HealthCloudSettingsPatch {
+  notifyInApp?: boolean;
+  notifyTelegram?: boolean;
+  muted?: boolean;
 }
 
 /** Main to renderer: these targets changed (a probe finished, a target was edited). */

@@ -8,6 +8,7 @@ import {
 import type { HealthSecretReveal, HealthTargetSummary } from '@shared/healthTypes';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
+import { toast } from 'sonner';
 import { HeartPulse, Package, Pencil, Server, Sparkles, Spinner } from '@/components/icons';
 import {
   FOOTER_HAIRLINE,
@@ -34,6 +35,7 @@ import { WordPressMark } from '@/components/wordpress/WordPressMark';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { described, Field, FormSection } from './formParts';
+import { type CloudChoice, cloudBlock, HealthCloudSection } from './HealthCloudSection';
 import { HealthSecretStep } from './HealthSecretStep';
 import {
   emptyHealthDraft,
@@ -45,7 +47,7 @@ import {
   isInsecureRemote,
   validateHealthDraft,
 } from './healthView';
-import { useHealthActions } from './useHealth';
+import { useHealthActions, useHealthCloudPlan } from './useHealth';
 
 /**
  * Adds a health check, or edits one. Adding ends on the one-time key step: the key comes back
@@ -137,6 +139,15 @@ export function HealthTargetDialog({
           ...initialDraft,
         };
   const [draft, setDraft] = useState<HealthDraft>(initial);
+  const initialCloud = (): CloudChoice => ({
+    runMode: target?.runMode ?? 'local',
+    consent: false,
+    notifyInApp: target?.cloud?.notifyInApp ?? true,
+    notifyTelegram: target?.cloud?.notifyTelegram ?? false,
+    muted: target?.cloud?.muted ?? false,
+  });
+  const [cloudChoice, setCloudChoice] = useState<CloudChoice>(initialCloud);
+  const alreadyOnline = target?.runMode === 'cloud';
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -147,6 +158,7 @@ export function HealthTargetDialog({
   useEffect(() => {
     if (!open) return;
     setDraft(initial());
+    setCloudChoice(initialCloud());
     setSubmitted(false);
     setProblem(null);
     setStep({ kind: 'form' });
@@ -178,6 +190,25 @@ export function HealthTargetDialog({
     meta: QUIET,
   });
 
+  // Where it may run: asked only once Runova Cloud is chosen, by the project (the address is checked here).
+  const cloudPlan = useHealthCloudPlan(
+    open && cloudChoice.runMode === 'cloud' && draft.projectId
+      ? { projectId: draft.projectId, runMode: target?.runMode ?? 'local' }
+      : null,
+  );
+  const floor = cloudChoice.runMode === 'cloud' ? (cloudPlan.data?.minIntervalSec ?? 0) : 0;
+  const presets = HEALTH_INTERVAL_PRESETS.filter((seconds) => seconds >= floor);
+
+  // Runova Cloud checks no more often than the account type allows: an interval under it moves up.
+  useEffect(() => {
+    if (floor === 0 || draft.intervalChoice === 'custom' || Number(draft.intervalChoice) >= floor)
+      return;
+    const first = HEALTH_INTERVAL_PRESETS.find((seconds) => seconds >= floor);
+    if (first !== undefined) {
+      setDraft((current) => ({ ...current, intervalChoice: `${first}` as IntervalChoice }));
+    }
+  }, [floor, draft.intervalChoice]);
+
   const errors: HealthDraftErrors = submitted ? validateHealthDraft(draft) : {};
   const insecure = isInsecureRemote(draft.url);
 
@@ -203,20 +234,70 @@ export function HealthTargetDialog({
       return;
     }
     const input = healthDraftToInput(draft);
+    // Nothing is saved while the monitor can not go where it was asked to.
+    const blocked = cloudBlock(
+      cloudChoice,
+      cloudPlan.data,
+      { ...input, intervalSec: input.intervalSec },
+      alreadyOnline,
+    );
+    if (blocked) {
+      setProblem(blocked);
+      return;
+    }
+    const goOnline = cloudChoice.runMode === 'cloud';
+    const online = {
+      consent: cloudChoice.consent,
+      intervalSec: input.intervalSec,
+      notifyInApp: cloudChoice.notifyInApp,
+      notifyTelegram: cloudChoice.notifyTelegram,
+    };
     setBusy(true);
     setProblem(null);
     try {
       if (target) {
         // The sign-in type is fixed once a key exists, so an edit never sends it.
         const { authMode: _mode, basicUser: _user, ...patch } = input;
+        if (alreadyOnline && !goOnline) await actions.cloudDisable(target.id);
         await actions.update.mutateAsync({ targetId: target.id, patch });
+        if (!alreadyOnline && goOnline) await actions.cloudEnable(target.id, online);
+        if (alreadyOnline && goOnline) {
+          const was = target.cloud;
+          const changed = {
+            ...(was?.notifyInApp !== cloudChoice.notifyInApp
+              ? { notifyInApp: cloudChoice.notifyInApp }
+              : {}),
+            ...(was?.notifyTelegram !== cloudChoice.notifyTelegram
+              ? { notifyTelegram: cloudChoice.notifyTelegram }
+              : {}),
+            ...(was?.muted !== cloudChoice.muted ? { muted: cloudChoice.muted } : {}),
+          };
+          if (Object.keys(changed).length > 0) {
+            await actions.cloudSettings.mutateAsync({ targetId: target.id, patch: changed });
+          }
+        }
         close();
       } else {
         const result = await actions.create(input);
+        if (goOnline) {
+          try {
+            await actions.cloudEnable(result.target.id, online);
+          } catch (error) {
+            // The monitor is saved and its key still has to be shown once; it runs here meanwhile.
+            toast.error('Could not turn it online', {
+              description: ipcErrorMessage(error, 'It is checked from this computer for now.'),
+            });
+          }
+        }
         setStep({ kind: 'secret', reveal: result.secret, targetId: result.target.id });
       }
     } catch (error) {
-      if (!target) setProblem(ipcErrorMessage(error, 'The target could not be added.'));
+      setProblem(
+        ipcErrorMessage(
+          error,
+          target ? 'The change could not be saved.' : 'The target could not be added.',
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -413,7 +494,7 @@ export function HealthTargetDialog({
                     aria-label="Check every"
                     className={cn(SEGMENT_TRACK, 'flex-wrap gap-0.5 rounded-2xl')}
                   >
-                    {HEALTH_INTERVAL_PRESETS.map((seconds) => (
+                    {presets.map((seconds) => (
                       <button
                         key={seconds}
                         type="button"
@@ -467,6 +548,25 @@ export function HealthTargetDialog({
                     />
                   </Field>
                 </div>
+              </FormSection>
+
+              <FormSection title="Where it runs">
+                <HealthCloudSection
+                  id={id}
+                  choice={cloudChoice}
+                  onChange={(next) => {
+                    setCloudChoice(next);
+                    setProblem(null);
+                  }}
+                  plan={cloudPlan.data}
+                  planLoading={cloudPlan.isLoading}
+                  draft={{
+                    url: draft.url,
+                    allowInsecure: draft.allowInsecure,
+                    intervalSec: healthDraftToInput(draft).intervalSec || null,
+                  }}
+                  alreadyOnline={alreadyOnline}
+                />
               </FormSection>
 
               <FormSection title="Sign-in">

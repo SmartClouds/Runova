@@ -1,6 +1,7 @@
 import { IPC } from '../../shared/ipcChannels';
 import { liveDependencyAlerts } from '../dependencyAlerts/live';
 import type { DependencyAlerts } from '../dependencyAlerts/service';
+import { getCloudMonitors } from '../health/cloudLive';
 import { broadcastToWindows } from '../ipc/send';
 import { onVaultUnlocked } from '../ssh/vault';
 import { liveSyncAdapters, refreshSecretsState } from '../sync/adapters/live';
@@ -36,6 +37,8 @@ export function getAccountRuntime(): AccountRuntime {
     },
     onSignedOut: () => {
       void alerts?.stop();
+      // Signed out, an online monitor shows nothing (and is still not checked here).
+      void getCloudMonitors().reset();
     },
   });
   return runtime;

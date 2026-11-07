@@ -581,7 +581,8 @@ export function HealthTargetDetail({
                     ) : (
                       <RefreshCw />
                     )}
-                    Check now
+                    {/* Runova Cloud checks an online monitor on its own; this reads what it found. */}
+                    {target.runMode === 'cloud' ? 'Refresh' : 'Check now'}
                   </Button>
                   <SimpleTooltip
                     label={project ? undefined : 'The project for this target is missing.'}
@@ -684,11 +685,19 @@ export function HealthTargetDetail({
                   <Fact label="Last check">
                     {target.lastCheckedAt === null ? 'Never' : formatAgo(target.lastCheckedAt, now)}
                   </Fact>
-                  <Fact label="Next check">
-                    {target.paused || target.nextCheckAt === null
-                      ? 'Not scheduled'
-                      : formatIn(target.nextCheckAt, now)}
-                  </Fact>
+                  {target.runMode === 'cloud' ? (
+                    <Fact label="Checked from">
+                      {target.cloud?.region
+                        ? `Runova Cloud, ${target.cloud.region}`
+                        : 'Runova Cloud'}
+                    </Fact>
+                  ) : (
+                    <Fact label="Next check">
+                      {target.paused || target.nextCheckAt === null
+                        ? 'Not scheduled'
+                        : formatIn(target.nextCheckAt, now)}
+                    </Fact>
+                  )}
                   <Fact label="Every">{formatHealthInterval(target.intervalSec)}</Fact>
                   <Fact label="Timeout">{target.timeoutSec} sec</Fact>
                   <Fact label="HTTP status">{report?.httpStatus ?? 'No answer'}</Fact>

@@ -48,6 +48,8 @@ export function healthTargetsAdapter(
         showVersion: target.showVersion !== false,
         secretEnvelope: target.secretEnvelope ?? null,
         secretRotatedAt: target.secretRotatedAt ?? null,
+        runMode: target.runMode === 'cloud' ? 'cloud' : 'local',
+        cloudMonitorId: typeof target.cloudMonitorId === 'number' ? target.cloudMonitorId : null,
       };
     },
     afterWrite: (ids) => health.changed(ids),

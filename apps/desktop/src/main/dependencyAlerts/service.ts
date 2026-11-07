@@ -8,6 +8,7 @@ import {
   type ServerNotification,
   type TelegramLinkView,
 } from '../../shared/dependencyAlerts';
+import type { CloudMonitorLive } from '../health/cloud';
 
 /**
  * Dependency alerts on this computer (E51). The server does the daily checks, so the app has two
@@ -23,6 +24,10 @@ export interface AlertHub {
   onNotification(handler: (notification: ServerNotification) => void): void;
   onSummaryChanged(handler: () => void): void;
   onReconnected(handler: () => void): void;
+  /** An online monitor this account sees has a new result (E56). */
+  onCloudMonitorUpdated?(handler: (monitor: CloudMonitorLive) => void): void;
+  /** A scope's online monitors were added, changed or removed. */
+  onCloudMonitorsChanged?(handler: () => void): void;
 }
 
 export interface AlertProject {
@@ -49,6 +54,8 @@ export interface DependencyAlertsDeps {
     write: (hashes: Record<string, string>) => Promise<void>;
   };
   hub: () => AlertHub;
+  /** Lets others listen on the same connection (the online monitors, E56) once it is made. */
+  attach?: (hub: AlertHub) => void;
   /** Puts a message in the app's inbox (and says it, the first time). */
   inbox: (
     notification: ServerNotification,
@@ -214,6 +221,7 @@ export function createDependencyAlerts(deps: DependencyAlertsDeps) {
       connection.onReconnected(() =>
         background(() => Promise.all([catchUp(), refresh()]), 'catching up'),
       );
+      deps.attach?.(connection);
       try {
         await connection.start();
       } catch (error) {

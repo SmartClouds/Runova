@@ -26,6 +26,28 @@ describe('HealthTargetCard', () => {
     expect(screen.queryByLabelText(/^Version/)).not.toBeInTheDocument();
   });
 
+  it('marks an online monitor and says where it was checked from instead of the next check (E56)', () => {
+    const online = target({
+      runMode: 'cloud',
+      cloud: {
+        monitorId: 41,
+        signedIn: true,
+        region: 'eu-central',
+        suspendedReason: null,
+        notifyInApp: true,
+        notifyTelegram: false,
+        muted: false,
+        canWrite: true,
+        confirming: false,
+      },
+    });
+    renderWithProviders(<HealthTargetCard target={online} now={NOW} onOpen={vi.fn()} />);
+    const card = screen.getByRole('article', { name: 'API' });
+    expect(within(card).getByText('Cloud')).toBeInTheDocument();
+    expect(card).toHaveTextContent('Fromeu-central');
+    expect(card).not.toHaveTextContent('in 30 sec');
+  });
+
   it('shows the latency, the last and the next check, and the uptime', () => {
     renderWithProviders(<HealthTargetCard target={target()} now={NOW} onOpen={vi.fn()} />);
     const card = screen.getByRole('article', { name: 'API' });

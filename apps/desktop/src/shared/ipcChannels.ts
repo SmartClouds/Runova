@@ -728,6 +728,14 @@ export const IPC = {
     // (targetId) -> void: runs the read-only AI analysis for the open incident now
     diagnoseNow: 'health:diagnoseNow',
     cancelDiagnose: 'health:cancelDiagnose',
+    // (targetId | { projectId, url, allowInsecure }) -> HealthCloudPlan: where it may run (E56)
+    cloudPlan: 'health:cloudPlan',
+    // (targetId, HealthCloudEnableInput) -> HealthTargetSummary, running on Runova Cloud
+    cloudEnable: 'health:cloudEnable',
+    // (targetId) -> HealthTargetSummary, back on this computer
+    cloudDisable: 'health:cloudDisable',
+    // (targetId, HealthCloudSettingsPatch) -> HealthTargetSummary
+    cloudSettings: 'health:cloudSettings',
     // main -> renderer: HealthChangedEvent
     onChanged: 'health:changed',
   },

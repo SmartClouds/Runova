@@ -208,7 +208,8 @@ export function createHealthScheduler(deps: HealthSchedulerDeps) {
     const at = now();
     for (const target of targets) {
       if (inFlight.size >= maxInFlight) return;
-      if (target.paused || inFlight.has(target.id)) continue;
+      // Runova Cloud checks it (E56), on this computer and every teammate's.
+      if (target.paused || target.runMode === 'cloud' || inFlight.has(target.id)) continue;
       if ((held.get(target.id) ?? 0) > at) continue;
       const project = live.get(target.projectId);
       if (!project || project.archived) continue;
@@ -271,6 +272,9 @@ export function createHealthScheduler(deps: HealthSchedulerDeps) {
       if (running) return running;
       const target = (await readHealthState()).targets.find((one) => one.id === targetId);
       if (!target) throw new Error('That healthcheck no longer exists.');
+      if (target.runMode === 'cloud') {
+        throw new Error('Runova Cloud checks this monitor, so this computer does not.');
+      }
       if (target.secretEnvelope && deps.isLocked(target.secretEnvelope)) {
         throw new VaultLockedError();
       }

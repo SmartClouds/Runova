@@ -44,6 +44,8 @@ export function samples(states: HealthSample['state'][], start = NOW - states.le
 export function target(overrides: Partial<HealthTargetSummary> = {}): HealthTargetSummary {
   return {
     id: 't1',
+    runMode: 'local',
+    cloud: null,
     projectId: 'p1',
     environmentId: 'env-prod',
     name: 'API',
