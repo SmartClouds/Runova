@@ -1,6 +1,7 @@
 import type { Project, SecurityScanRecord } from '@runova/core';
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { ProjectUiScope } from '@/hooks/useProjectUiState';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 
 const toast = vi.hoisted(() =>
@@ -120,5 +121,33 @@ describe('SecurityTab', () => {
     await user.click(deleteButtons[1]);
 
     await waitFor(() => expect(bridge.$fn('security.deleteScan')).toHaveBeenCalledWith('scan-old'));
+  });
+
+  it('switches between the scanners and the AI audit, and remembers the choice per project', async () => {
+    const { user, unmount } = renderWithProviders(
+      <ProjectUiScope.Provider value="p1">
+        <SecurityTab project={project} />
+      </ProjectUiScope.Provider>,
+      { bridge: { 'security.preflight': [readySemgrep], 'security.latest': record() } },
+    );
+
+    expect(await screen.findByRole('tab', { name: /Scanners/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(screen.getByRole('tab', { name: /AI audit/ }));
+    expect(await screen.findByText(/Find what scanners miss/)).toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(
+      <ProjectUiScope.Provider value="p1">
+        <SecurityTab project={project} />
+      </ProjectUiScope.Provider>,
+      { bridge: { 'security.preflight': [readySemgrep] } },
+    );
+    expect(await screen.findByRole('tab', { name: /AI audit/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });

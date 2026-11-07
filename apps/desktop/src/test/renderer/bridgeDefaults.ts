@@ -177,6 +177,13 @@ export function bridgeDefaults(): Record<string, unknown> {
     'security.activeScan': async () => null,
     'security.history': [],
     'security.preflight': [],
+    'securityAudit.status': {
+      installed: false,
+      locations: [],
+      node: { found: true, version: 'v22.20.0', meetsMinimum: true },
+      runsRoot: '/home/test/security-audit-skill/project',
+    },
+    'securityAudit.listRuns': [],
     'pipelines.runAnnotations': {
       ok: true,
       annotations: [],

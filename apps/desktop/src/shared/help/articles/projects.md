@@ -3,7 +3,7 @@ title: Projects
 category: Getting started
 order: 50
 summary: Add and organise your projects, then use each project's page for its prompts and Blueprint, git, token usage and cost, security scans, packages, Docker, bootstrap files, skills, MCP servers, hooks and environments.
-keywords: projects, project, new project, folder, pin, archive, tags, icon, run command, create with ai, placeholder, run input, bootstrap, blueprint, standing prompt, git, tag version, security scan, packages, environments, hooks, diffray, drafts, usage, cost, tokens, spend, pause, resume, freeze, hot reload, clone, clone from github, private repo, task board, relay
+keywords: projects, project, ai audit, security audit, cloudflare, new project, folder, pin, archive, tags, icon, run command, create with ai, placeholder, run input, bootstrap, blueprint, standing prompt, git, tag version, security scan, packages, environments, hooks, diffray, drafts, usage, cost, tokens, spend, pause, resume, freeze, hot reload, clone, clone from github, private repo, task board, relay
 route: /projects
 ---
 
@@ -272,7 +272,11 @@ The review wizard can also be opened as a dialog from a project card (**Review w
 
 ### Security
 
-The Security section scans the project with security tools and gives one merged report. Scanners are installed once for every project from the **Security** stack in Dev Tools, **Dev Setup**. When none is installed, **Set up security tools** opens that checklist and **Browse security tools** opens the scanner cards. A scanner's **Install** button opens the checklist too. The section is never hidden so you can see what exists.
+The Security section has two halves, switched at the top: **Scanners** and **AI audit**. The one you used last is remembered for each project.
+
+#### Scanners
+
+The scanners check the project with security tools and give one merged report. Scanners are installed once for every project from the **Security** stack in Dev Tools, **Dev Setup**. When none is installed, **Set up security tools** opens that checklist and **Browse security tools** opens the scanner cards. A scanner's **Install** button opens the checklist too. The section is never hidden so you can see what exists.
 
 | Scanner | What it covers | Time |
 | --- | --- | --- |
@@ -283,17 +287,34 @@ The Security section scans the project with security tools and gives one merged 
 | **CodeQL** | Deep analysis tracing untrusted input to dangerous code. Slow, finds real paths. | 10 to 45 minutes |
 | **Strix** | An autonomous agent that runs your code and proves vulnerabilities. Costs tokens on your own API key. | 15 to 60 minutes |
 
-1. Tick the scanners you want. Each card says **Ready** (with its version) or why it cannot run, with an **Install** or **Set up** button. **Refresh scanner status** re-checks.
-2. Click **Run scan**. Progress shows per scanner, with its output behind a toggle and a **Cancel** button. You can leave the tab while it runs.
+1. Tick the scanners you want. Each card says **Ready** (with its version) or why it cannot run, with an **Install** or **Set up** button. When Docker is the problem, start it and click **Check again**. **Refresh scanner status** re-checks every scanner straight away.
+2. Click **Run scan**. Only scanners that are ready are run. Progress shows per scanner, with its output behind a toggle and a **Cancel** button, and each row ends on **Done**, **Failed**, **Timed out**, **Skipped** or **Cancelled**. You can leave the tab while it runs. A project runs one scan at a time.
 3. Read the report.
 
-Setup is per project: Semgrep needs a **Ruleset**, CodeQL needs a **Language** (with **Detect**) and, for compiled languages, a **Build command**, SonarQube needs a **Server URL**, **Project key** and **Token**, and Strix needs a **Model** and **LLM API key**. These are stored in this computer's settings file and removed from reports and logs.
+The gear button on a scanner card opens its settings at any time, also once the scanner works. Setup is per project: Semgrep has a **Ruleset**, Trivy chooses what to look for (**Vulnerable dependencies**, **Secrets**, **Misconfigurations**), CodeQL needs a **Language** (with **Detect**) and, for compiled languages, a **Build command**, SonarQube needs a **Server URL**, **Project key** and **Token**, and Strix needs a **Model** and **LLM API key**. These are stored in this computer's settings file and removed from reports and logs.
 
 Strix asks for confirmation (**Run it**) before every run because it executes your code in a sandbox and spends tokens.
 
+A scan where no scanner finished says **The scan did not complete** (or **The scan was cancelled**) instead of a verdict, with the reasons underneath.
+
 The report shows a verdict (**Nothing serious found**, **Worth a look**, **Needs attention** or **Fix before shipping**), a score out of 100, a bar of severities, the findings grouped from **Critical** down to **Info**, and per-scanner status. Filter by severity or scanner, or search by file or rule. Click a finding to see its code excerpt, a suggested fix, and CWE, OWASP or CVE tags. Secrets that were matched are masked.
 
-**Copy report** has three formats: **AI fix prompt** (worst findings first, ready to paste at an agent), **Markdown report** and **Raw JSON**. Each finding also has its own copy button. **History** reopens earlier scans. The scanner output for each run is available at the bottom of the report.
+**Copy report** has three formats: **AI fix prompt** (worst findings first, ready to paste at an agent), **Markdown report** and **Raw JSON**. Each finding also has its own copy button. **History** opens an earlier scan (**Back to latest** returns), and the bin icon next to a scan deletes it. The scanner output for each run is available at the bottom of the report.
+
+#### AI audit
+
+The AI audit runs Cloudflare's open source **security-audit** skill with your own agent. The agent maps the project, works through each entry point and trust boundary, and tries to prove every candidate it finds. Each finding is then handed to a fresh agent that tries to disprove it, so a confirmed finding has been reproduced and checked twice. A run takes from about 20 minutes to a few hours and spends tokens on your agent plan.
+
+**Set up AI audit** (or **New audit** later) opens a wizard:
+
+1. **Check**: whether the skill is installed in this project, Node.js 22.20 or later (with **Get Node.js** when it is missing), and which agents that can run it are installed (Claude Code, Codex, OpenCode, Gemini CLI or Cursor).
+2. **Install**, only when the project does not have the skill yet: pick the agents to install it for, check the command, and click **Install into** the project. It runs `npx skills add` in a Setup tab in the project workspace, which closes itself when it succeeds. The wizard moves on by itself once the skill is in place, and the install is listed on the project's Skills section.
+3. **Configure**: the agent that runs the audit, how deep it goes (**Quick**, **Standard** or **Deep**) and whether it covers **The whole project** or **Only some folders**.
+4. **Start**: the prompt the agent gets, with a copy button. **Start audit** opens the agent in a workspace tab and starts it.
+
+Results go to `~/security-audit-skill/<project folder>/run-<N>`, outside the project, so nothing is added to your repository. While a run is going, the AI audit half follows it: the six phases (Reconnaissance, Hunting, Validation, Structured output, Verification, Reporting), how many coverage units are done, how long it has run and when it last wrote something. After half an hour without a change it warns that the agent may have stopped or be waiting for you. **Open agent tab** goes to the agent, and **Stop tracking** stops following a run you gave up on.
+
+When the run ends, the report shows how it went (or why it stopped early), a bar of confirmed severities and three tabs: **Confirmed**, **Needs validation** and **Rejected**. Filter by severity or search by title or file. Click a finding to read the trace from entry point to sink, the evidence, the conditions, how it was proven and the fix; a file and line opens in the workspace editor. **Copy fix prompt** copies the confirmed findings worst first, and **Fix with agent** opens the project's agent with that prompt for you to read and send. The run menu reopens earlier runs, **REPORT.md** opens the skill's own report and the folder button opens the run folder. Running the audit again tends to find more.
 
 ### Packages
 

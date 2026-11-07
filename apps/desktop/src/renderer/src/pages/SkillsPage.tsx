@@ -4,6 +4,7 @@ import {
   bundledSkillsShDirectory,
   getCliDefinition,
   SKILL_RISK_CATEGORIES,
+  SKILLS_CLI_AGENTS,
   SKILLS_SH_SNAPSHOT_DATE,
   UI_UX_PRO_MAX_AI_TARGETS,
   UI_UX_PRO_MAX_PSEUDO_REPOSITORY_ID,
@@ -136,16 +137,12 @@ const installsFormatter = new Intl.NumberFormat('en', {
 });
 
 /** Agent ids the `skills` CLI recognizes. Labels come from CLI_REGISTRY. */
-const SKILLS_CLI_AGENT_OPTIONS: { value: string; label: string }[] = [
-  { value: 'claude-code', cliId: 'claude-code' },
-  { value: 'codex', cliId: 'codex-cli' },
-  { value: 'cursor', cliId: 'cursor-cli' },
-  { value: 'opencode', cliId: 'opencode' },
-  { value: 'gemini-cli', cliId: 'gemini-cli' },
-].map((agent) => ({
-  value: agent.value,
-  label: getCliDefinition(agent.cliId)?.label ?? agent.value,
-}));
+const SKILLS_CLI_AGENT_OPTIONS: { value: string; label: string }[] = SKILLS_CLI_AGENTS.map(
+  (agent) => ({
+    value: agent.value,
+    label: getCliDefinition(agent.cliId)?.label ?? agent.value,
+  }),
+);
 const ALL_SKILLS_CLI_AGENTS = SKILLS_CLI_AGENT_OPTIONS.map((a) => a.value);
 
 /**

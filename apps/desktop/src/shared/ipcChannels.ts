@@ -652,6 +652,14 @@ export const IPC = {
     onCodeqlProgress: 'security:onCodeqlProgress',
     onScanProgress: 'security:onScanProgress',
   },
+  /** The AI security audit: Cloudflare's security-audit skill, run by the user's own agent. */
+  securityAudit: {
+    status: 'securityAudit:status',
+    listRuns: 'securityAudit:listRuns',
+    getRun: 'securityAudit:getRun',
+    prepareRun: 'securityAudit:prepareRun',
+    openPath: 'securityAudit:openPath',
+  },
   tools: {
     detectAll: 'tools:detectAll',
     getInstallCommand: 'tools:getInstallCommand',

@@ -1,6 +1,9 @@
 import type {
   ActivityEvent,
   AgentHistorySession,
+  AiAuditRunDetail,
+  AiAuditRunSummary,
+  AiAuditStatus,
   AndroidActionResult,
   AndroidCapture,
   AndroidEvent,
@@ -1039,6 +1042,20 @@ const mcp = {
     ipcRenderer.invoke(IPC.mcp.remove, params),
   listInstalled: (projectId: string): Promise<InstalledMcpServerRecord[]> =>
     ipcRenderer.invoke(IPC.mcp.listInstalled, projectId),
+};
+
+/** The AI security audit (Cloudflare's security-audit skill). Paths are resolved in main. */
+const securityAudit = {
+  status: (projectId: string): Promise<AiAuditStatus> =>
+    ipcRenderer.invoke(IPC.securityAudit.status, projectId),
+  listRuns: (projectId: string): Promise<AiAuditRunSummary[]> =>
+    ipcRenderer.invoke(IPC.securityAudit.listRuns, projectId),
+  getRun: (projectId: string, runName: string): Promise<AiAuditRunDetail> =>
+    ipcRenderer.invoke(IPC.securityAudit.getRun, projectId, runName),
+  prepareRun: (projectId: string): Promise<{ runName: string; outputDir: string }> =>
+    ipcRenderer.invoke(IPC.securityAudit.prepareRun, projectId),
+  openPath: (projectId: string, runName: string, target: 'folder' | 'report'): Promise<void> =>
+    ipcRenderer.invoke(IPC.securityAudit.openPath, projectId, runName, target),
 };
 
 const security = {
@@ -3038,6 +3055,7 @@ const runovaApi = {
   skills,
   mcp,
   security,
+  securityAudit,
   tools,
   devSetup,
   android,

@@ -72,6 +72,7 @@ import { registerResourceActivityHandlers } from './ipc/resourceActivity';
 import { registerRunProposalHandlers } from './ipc/runProposals';
 import { registerScheduledTaskHandlers } from './ipc/scheduledTasks';
 import { registerSecurityHandlers } from './ipc/security';
+import { registerSecurityAuditHandlers } from './ipc/securityAudit';
 import { registerSettingsHandlers } from './ipc/settings';
 import { sftpSenderAllowed } from './ipc/sftp';
 import { registerShellHandlers } from './ipc/shell';
@@ -372,6 +373,7 @@ function registerAllIpcHandlers(): void {
   registerSkillHandlers();
   registerMcpHandlers();
   registerSecurityHandlers();
+  registerSecurityAuditHandlers();
   // A crash or a force-quit can leave a scan's containers running; clear them before any
   // new scan tries to reuse the same names. Docker is machine-wide, so an e2e run leaves the
   // containers of whatever else is on this machine alone.

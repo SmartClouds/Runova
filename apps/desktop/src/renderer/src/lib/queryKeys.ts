@@ -71,6 +71,10 @@ export const queryKeys = {
   securityLatest: (projectId: string) => ['security', projectId, 'latest'] as const,
   securityHistory: (projectId: string) => ['security', projectId, 'history'] as const,
   securityConfig: (projectId: string) => ['security', projectId, 'config'] as const,
+  aiAuditStatus: (projectId: string) => ['security', projectId, 'ai-audit', 'status'] as const,
+  aiAuditRuns: (projectId: string) => ['security', projectId, 'ai-audit', 'runs'] as const,
+  aiAuditRun: (projectId: string, runName: string) =>
+    ['security', projectId, 'ai-audit', 'run', runName] as const,
   toolsStatus: ['tools-status'] as const,
   /** Dev Tools > Dev Setup: the machine (OS, package managers), then one probe per item. */
   devSetupEnvironment: ['dev-setup', 'environment'] as const,

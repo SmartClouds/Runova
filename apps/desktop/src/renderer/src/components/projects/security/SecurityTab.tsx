@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   Shield,
+  Sparkles,
   Trash2,
   TriangleAlert,
 } from '@/components/icons';
@@ -26,8 +27,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { confirmDialog } from '@/stores/confirmStore';
+import { AiAuditPanel } from './aiAudit/AiAuditPanel';
 import { ScannerPicker } from './ScannerPicker';
 import { ScannerSetupDialog } from './ScannerSetupDialog';
 import { ScanProgressPanel } from './ScanProgressPanel';
@@ -35,14 +39,42 @@ import { SecurityCopyMenu } from './SecurityCopyMenu';
 import { SecurityReport } from './SecurityReport';
 import { useSecurityScan } from './useSecurityScan';
 
+type SecurityMode = 'scanners' | 'ai-audit';
+
 /**
- * The project's Security section: pick scanners, run them, read one merged report, hand it to an
- * agent to fix.
+ * The project's Security section, in two halves: the local scanners (fast, rule based, one merged
+ * report) and the AI audit (Cloudflare's security-audit skill, run by the user's own agent). The
+ * half last used is remembered per project.
+ */
+export function SecurityTab({ project }: { project: Project }): React.JSX.Element {
+  const [mode, setMode] = useProjectUiState<SecurityMode>('security.mode', 'scanners');
+  return (
+    <Tabs value={mode} onValueChange={(value) => setMode(value as SecurityMode)}>
+      <TabsList aria-label="Security tools">
+        <TabsTrigger value="scanners" className="gap-1.5">
+          <Shield className="h-3.5 w-3.5" /> Scanners
+        </TabsTrigger>
+        <TabsTrigger value="ai-audit" className="gap-1.5">
+          <Sparkles className="h-3.5 w-3.5" /> AI audit
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="scanners" className="mt-4">
+        <ScannersView project={project} />
+      </TabsContent>
+      <TabsContent value="ai-audit" className="mt-4">
+        <AiAuditPanel project={project} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+/**
+ * Pick scanners, run them, read one merged report, hand it to an agent to fix.
  *
  * Never hidden when nothing is installed. Someone who has not installed a scanner is exactly the
  * person who needs to be told these exist.
  */
-export function SecurityTab({ project }: { project: Project }): React.JSX.Element {
+function ScannersView({ project }: { project: Project }): React.JSX.Element {
   const navigate = useNavigate();
   const [setupScanner, setSetupScanner] = useState<SecurityScannerId | null>(null);
   const {
