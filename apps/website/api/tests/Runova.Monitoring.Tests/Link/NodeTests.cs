@@ -152,28 +152,48 @@ public sealed class NodeTests : IDisposable
 
             Assert.Equal(2, probe.Running);
 
+            // The clock moves at most 10 seconds here, far from the next round, and the wait is on
+            // real time, so a slow machine only takes longer.
             probe.Open();
-            for (var i = 0; i < 20 && probe.Calls.Count < 5; i++)
+            var opened = TimeSpan.Zero;
+            await Eventually.TrueAsync(() =>
             {
-                clock.Advance(TimeSpan.FromMilliseconds(250));
-                await Task.Delay(30, TestContext.Current.CancellationToken);
-            }
+                if (opened < TimeSpan.FromSeconds(10))
+                {
+                    clock.Advance(TimeSpan.FromMilliseconds(250));
+                    opened += TimeSpan.FromMilliseconds(250);
+                }
+
+                return probe.Calls.Count >= 5;
+            });
 
             Assert.Equal(5, probe.Calls.Distinct().Count());
             Assert.Equal(2, probe.MostAtOnce);
             Assert.Equal(4, scheduler.AssignmentVersion);
+
+            // A check gets its next time once its result is stored, so the clock waits for that.
+            await Eventually.TrueAsync(async () => scheduler.InFlight == 0 && await outbox.CountAsync(TestContext.Current.CancellationToken) == 5);
 
             // Nothing again until the interval (plus at most 5 percent) has passed.
             var before = probe.Calls.Count;
             clock.Advance(TimeSpan.FromSeconds(30));
             await Task.Delay(100, TestContext.Current.CancellationToken);
             Assert.Equal(before, probe.Calls.Count);
-            for (var i = 0; i < 20 && probe.Calls.Count < before + 5; i++)
+            // The first checks ran within 11 seconds of each other and of now, so each is due again
+            // by 63 seconds from now (the interval plus 5 percent) and none a third time before 109.
+            var later = TimeSpan.FromSeconds(30);
+            await Eventually.TrueAsync(() =>
             {
-                clock.Advance(TimeSpan.FromSeconds(3));
-                await Task.Delay(30, TestContext.Current.CancellationToken);
-            }
+                if (later < TimeSpan.FromSeconds(75))
+                {
+                    clock.Advance(TimeSpan.FromSeconds(3));
+                    later += TimeSpan.FromSeconds(3);
+                }
 
+                return probe.Calls.Count >= before + 5;
+            });
+
+            await Eventually.TrueAsync(async () => scheduler.InFlight == 0 && await outbox.CountAsync(TestContext.Current.CancellationToken) >= 10);
             Assert.Equal(before + 5, probe.Calls.Count);
             Assert.Equal(10, await outbox.CountAsync(TestContext.Current.CancellationToken));
         }

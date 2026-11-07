@@ -62,6 +62,9 @@ public sealed partial class CheckScheduler(
 
     public int LagMs => _lagMs;
 
+    /// <summary>Scheduled checks running now; one counts until its next time is set.</summary>
+    public int InFlight => _monitors.Values.Count(e => Volatile.Read(ref e.Running) == 1);
+
     /// <summary>Checks finished in the last minute.</summary>
     public int ChecksLastMinute
     {

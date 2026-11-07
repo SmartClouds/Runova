@@ -153,10 +153,13 @@ public sealed class GatewayHarness : IAsyncDisposable
 /// <summary>Waits for something that happens on another thread.</summary>
 public static class Eventually
 {
-    public static async Task TrueAsync(Func<bool> condition, TimeSpan? within = null)
+    public static Task TrueAsync(Func<bool> condition, TimeSpan? within = null) =>
+        TrueAsync(() => Task.FromResult(condition()), within);
+
+    public static async Task TrueAsync(Func<Task<bool>> condition, TimeSpan? within = null)
     {
         var deadline = DateTime.UtcNow + (within ?? TimeSpan.FromSeconds(10));
-        while (!condition())
+        while (!await condition())
         {
             if (DateTime.UtcNow > deadline)
             {

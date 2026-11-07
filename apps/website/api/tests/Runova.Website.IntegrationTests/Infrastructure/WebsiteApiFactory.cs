@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Hangfire;
+using Hangfire.Logging;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -52,6 +53,7 @@ public sealed class WebsiteApiFactory(
                 testServices.Remove(server);
             }
 
+            KeepHangfireLoggingOffHosts(testServices);
             testServices.AddSingleton<IStartupFilter, RemoteIpFromHeader>();
             if (time is not null)
             {
@@ -69,6 +71,35 @@ public sealed class WebsiteApiFactory(
         base.Dispose(disposing);
         using var connection = new NpgsqlConnection(connectionString);
         NpgsqlConnection.ClearPool(connection);
+    }
+
+    /// <summary>
+    /// Hangfire keeps one log provider for the whole process, and each host sets it to its own
+    /// logger factory. With many hosts starting and stopping at once, a host could pick up one
+    /// whose host was already disposed and fail to start. Tests read no Hangfire logs, so each
+    /// host puts back a provider that belongs to no host.
+    /// </summary>
+    private static void KeepHangfireLoggingOffHosts(IServiceCollection services)
+    {
+        var configuration = services.Single(s => s.ServiceType == typeof(IGlobalConfiguration));
+        var create = configuration.ImplementationFactory
+            ?? throw new InvalidOperationException("Hangfire's configuration is expected to be made by a factory.");
+        services.Remove(configuration);
+        services.AddSingleton(provider =>
+        {
+            var made = (IGlobalConfiguration)create(provider);
+            made.UseLogProvider(SilentLogProvider.Instance);
+            return made;
+        });
+    }
+
+    private sealed class SilentLogProvider : ILogProvider, ILog
+    {
+        public static readonly SilentLogProvider Instance = new();
+
+        public ILog GetLogger(string name) => this;
+
+        public bool Log(Hangfire.Logging.LogLevel logLevel, Func<string>? messageFunc, Exception? exception = null) => false;
     }
 
     private static bool IsJobServer(ServiceDescriptor service) =>
