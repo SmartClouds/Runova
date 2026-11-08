@@ -280,3 +280,22 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E63](epics/63-anywhere-cross-platform-input.md) | Runova Anywhere on macOS and Linux: mouse and keyboard control, permissions, Wayland told plainly | Standalone (Remote) | E61 |
 | [E64](epics/64-anywhere-agent-windows.md) | Runova Anywhere background agent on Windows: reachable on the lock and sign-in screens, under the same ID | Standalone (Remote, Website) | E60, E61, E62 |
 | [E65](epics/65-anywhere-agent-macos-linux.md) | Runova Anywhere background agent on macOS and Linux | Standalone (Remote) | E64 |
+| [E66](epics/66-remove-expo-mobile.md) | Remove the Expo mobile app | Standalone (Mobile) | none |
+| [E67](epics/67-relay-hub-fixes.md) | Relay reachability and hub limits | Standalone (Website) | E62 |
+| [E68](epics/68-server-mobile-clients.md) | Server support for phones: sign-in, controller identity, `manage` intent | Standalone (Mobile, Website) | E60, E61, E67 |
+| [E69](epics/69-mobile-rust-core.md) | Rust core foundation and CI | Standalone (Mobile) | E66, E68 |
+| [E70](epics/70-mobile-transport-gate.md) | Transport gate: peer to peer and relay from Rust against real hosts | Standalone (Mobile) | E69 |
+| [E71](epics/71-manage-bridge.md) | Desktop management bridge: scoped RPC, approve once, audit | Standalone (Mobile, Remote) | E68, E70 |
+| [E72](epics/72-mobile-shells-design.md) | App shells and design system on Android and iOS | Standalone (Mobile) | E69 |
+| [E73](epics/73-mobile-slice.md) | Slice: sign in, systems, connect, projects | Standalone (Mobile) | E71, E72 |
+| [E74](epics/74-mobile-terminals.md) | Terminals and processes | Standalone (Mobile) | E73 |
+| [E75](epics/75-mobile-git.md) | Git | Standalone (Mobile) | E73 |
+| [E76](epics/76-mobile-status.md) | Status: AI usage, CPU and RAM | Standalone (Mobile) | E73 |
+| [E77](epics/77-mobile-vault.md) | Vault | Standalone (Mobile) | E73 |
+| [E78](epics/78-mobile-deploy.md) | Deploy | Standalone (Mobile) | E73 |
+| [E79](epics/79-mobile-monitoring.md) | Monitoring | Standalone (Mobile) | E73 |
+| [E80](epics/80-mobile-pipelines.md) | Pipelines | Standalone (Mobile) | E73 |
+| [E81](epics/81-mobile-account.md) | Account, sessions and teams | Standalone (Mobile) | E73 |
+| [E82](epics/82-mobile-notifications.md) | Notifications and push | Standalone (Mobile, Website) | E73, E81 |
+| [E83](epics/83-mobile-remote.md) | Remote desktop on the phone | Standalone (Mobile) | E73 |
+| [E84](epics/84-mobile-release.md) | Hardening and release | Standalone (Mobile) | E74 to E83 |

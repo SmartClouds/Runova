@@ -97,6 +97,25 @@ Plan: docs/ROADMAP.md
 | E63 | Runova Anywhere: macOS and Linux control | Complete | see git log | Input helpers per OS fed one command per line: PowerShell (Windows), osascript JXA with CGEvents (macOS), python3 with XTest through ctypes (X11). Wayland is view only and says so; on macOS the tab asks for Accessibility and Screen Recording. Command translation tested for each OS |
 | E64 | Runova Anywhere: background agent on Windows | Complete | see git log | `apps/remote-agent` (.NET 10): a LocalSystem service starts the agent as SYSTEM in the console session, which captures the input desktop (lock, sign-in and UAC screens included) with GDI as JPEG tiles and types with SendInput, over the relay with the app's handshake and cipher in C# (libsodium). It lets in only the password, the owner's own computers when allowed and always-allowed teammates. Website: agent keys and one-time secrets per computer, `ra1.` tokens for the remote hub only, routing to the app first. App: the agent's own key and secret, a private config file and an elevated install sealed with DPAPI, password re-entry checked against the app's, pins per kind, the Access settings switch. CI job, publish script, CD step and packaging. Built test-first: 24 agent tests (vectors from packages/protocol replayed byte for byte, link, session, policy, Win32 input, config, a real capture), 8 API integration tests, presence unit tests for the app and agent endpoints, 15 desktop tests (installer, service, pins, the setting) |
 | E65 | Runova Anywhere: background agent on macOS and Linux | Code complete, macOS not yet run | see git log | Linux: a systemd service that finds the X server on the active terminal, XShm capture, XTest input. macOS: a LaunchAgent at the login window, capture and input through Core Graphics. The app installs through polkit or an administrator prompt. JPEG tiles use SkiaSharp on every OS |
+| E66 | Remove the Expo mobile app | Not started | | |
+| E67 | Relay reachability and hub limits | Not started | | |
+| E68 | Server support for phones | Not started | | |
+| E69 | Rust core foundation and CI | Not started | | |
+| E70 | Transport gate | Not started | | Go or no-go, reported to the owner before E71 |
+| E71 | Desktop management bridge | Not started | | |
+| E72 | App shells and design system | Not started | | |
+| E73 | Slice: sign in, systems, connect, projects | Not started | | |
+| E74 | Terminals and processes | Not started | | |
+| E75 | Git | Not started | | |
+| E76 | Status: AI usage, CPU and RAM | Not started | | |
+| E77 | Vault | Not started | | |
+| E78 | Deploy | Not started | | |
+| E79 | Monitoring | Not started | | |
+| E80 | Pipelines | Not started | | |
+| E81 | Account, sessions and teams | Not started | | |
+| E82 | Notifications and push | Not started | | Needs a Firebase project and an APNs key |
+| E83 | Remote desktop on the phone | Not started | | |
+| E84 | Hardening and release | Not started | | |
 
 Status values: Not started, In progress, Blocked, Complete.
 
