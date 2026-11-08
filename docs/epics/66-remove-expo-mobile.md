@@ -18,14 +18,14 @@ Kept on purpose: the desktop Android SDK and emulator feature, `@runova/protocol
 
 ## Tasks
 
-- [ ] T1 Delete `apps/mobile` and `run-mobile-android.{bat,sh}`
-- [ ] T2 CI and CD: the `build-android` job, its `needs` entry and APK step in `cd.yml`; the `mobile`
+- [x] T1 Delete `apps/mobile` and `run-mobile-android.{bat,sh}`
+- [x] T2 CI and CD: the `build-android` job, its `needs` entry and APK step in `cd.yml`; the `mobile`
   job in `test.yml`; the comments in `test.yml` and `ci.yml`
-- [ ] T3 Workspace: `mobile` and `test:mobile` scripts, the Expo exclusions in `pnpm-workspace.yaml`,
+- [x] T3 Workspace: `mobile` and `test:mobile` scripts, the Expo exclusions in `pnpm-workspace.yaml`,
   `pnpm-lock.yaml`, `scripts/coverage-summary.mjs`
-- [ ] T4 Help and website together, since `helpFilter.test.ts` couples them: `remote.md` and the
+- [x] T4 Help and website together, since `helpFilter.test.ts` couples them: `remote.md` and the
   rules in `web/src/lib/help/filter.ts`
-- [ ] T5 README and the comments and version pin test in `packages/protocol`
+- [x] T5 README and the comments and version pin test in `packages/protocol`
 
 ## Acceptance criteria
 

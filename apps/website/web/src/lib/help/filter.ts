@@ -16,30 +16,8 @@ export type HelpFilterRule =
   /** Drop a `##` section with its `###` children, up to the next `##` heading. */
   | { file: string; dropSection: string };
 
-export const HELP_FILTER: HelpFilterRule[] = [
-  {
-    file: 'remote.md',
-    field: 'summary',
-    set: 'Control another Runova over your network, connect to servers over SSH, and open Windows Remote Desktop sessions.',
-  },
-  { file: 'remote.md', field: 'keywords', drop: ['mobile', 'phone', 'companion app'] },
-  {
-    file: 'remote.md',
-    replace: '**Host** (let another Runova or the mobile app control this computer)',
-    with: '**Host** (let another Runova control this computer)',
-  },
-  {
-    file: 'remote.md',
-    replace: 'on the same network, and from the Runova mobile app.',
-    with: 'on the same network.',
-  },
-  {
-    file: 'remote.md',
-    replace: 'scan the QR with the Runova mobile app, or copy the text',
-    with: 'copy the text',
-  },
-  { file: 'remote.md', dropSection: 'The Runova mobile app' },
-];
+/** Empty while no app article mentions a mobile version. */
+export const HELP_FILTER: HelpFilterRule[] = [];
 
 const FRONTMATTER = /^---\n[\s\S]*?\n---\n/;
 

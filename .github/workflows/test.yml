@@ -1,9 +1,9 @@
 name: Tests
 
-# Unit, integration, mobile and end-to-end tests. Called by CI on every push and pull request.
+# Unit, integration and end-to-end tests. Called by CI on every push and pull request.
 # CD does not run them again: it waits for CI to pass on the commit it releases.
 #
-# CI runs the suites that do not care about the OS (core, protocol, desktop unit and mobile) on
+# CI runs the suites that do not care about the OS (core, protocol and desktop unit) on
 # our self-hosted Mac mini, which runs them several times faster than the Linux runner. The Linux
 # runner keeps everything that needs Linux or Docker: the WordPress jobs, the server core (a Linux
 # product, its tests assume Linux wherever they are not on Windows), the system tests on test
@@ -610,60 +610,6 @@ jobs:
         env:
           RUNOVA_SYSTEM_TESTS: "1"
         run: pnpm --filter @runova/desktop exec vitest run src/main/deploy/layoutMigration.int.test.ts
-
-  mobile:
-    name: Mobile
-    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64"]') }}
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest (see
-          # keepsDependencies in .github/actions/runner-cleanup/shared.mjs).
-          clean: ${{ runner.os != 'macOS' }}
-
-      - name: Runner cleanup
-        uses: ./.github/actions/runner-cleanup
-
-      # Node first: pnpm's installer runs npm from PATH, and without one it falls back to the
-      # runner's own npm, which a runner self-update leaves broken (actions/runner#2094).
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "26"
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        # pnpm installs itself into its store's links folder and reuses an entry there without
-        # checking it is whole, so its own install gets a store inside dest, which setup wipes
-        # every time. The workspace's packages go in the store Runner cleanup sets.
-        env:
-          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
-        with:
-          # One pnpm per runner: two runners share this machine, and a shared ~/setup-pnpm let
-          # one job's setup delete files the other was using.
-          dest: ${{ runner.tool_cache }}/setup-pnpm
-          cache: ${{ inputs.github-hosted }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Jest
-        run: pnpm --filter @runova/mobile test:ci
-
-      - name: Coverage summary
-        if: ${{ !cancelled() }}
-        run: node scripts/coverage-summary.mjs apps/mobile >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload coverage
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-mobile
-          retention-days: 14
-          if-no-files-found: ignore
-          path: apps/mobile/coverage
 
   # On our own runners this is Linux and macOS (the self-hosted Mac mini, Apple Silicon). With one
   # Mac the three macOS shards take turns on it, along with the unit suites above. Windows runs

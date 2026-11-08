@@ -1,9 +1,8 @@
 name: CD
 
-# Builds the Runova desktop app for Windows, macOS, and Linux plus the
-# Android mobile app (a universal APK and one per CPU architecture), and the
-# server core the desktop installs on users' servers (linux-x64 and
-# linux-arm64), and publishes all of it to a GitHub Release. It also pushes the
+# Builds the Runova desktop app for Windows, macOS, and Linux and the server
+# core the desktop installs on users' servers (linux-x64 and linux-arm64), and
+# publishes all of it to a GitHub Release. It also pushes the
 # website's API and site images to GitHub Container Registry. Once the release
 # is out, the Windows installer goes to winget as a PR on microsoft/winget-pkgs
 # (turned off until the installer is code signed, see the winget job).
@@ -330,128 +329,6 @@ jobs:
             apps/desktop/release/latest-mac-*.yml
             apps/desktop/release/latest-linux.yml
 
-  build-android:
-    name: Build Android APK
-    needs: ci-passed
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "26"
-          cache: pnpm
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Set app version from release tag
-        shell: bash
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="${{ inputs.tag }}"
-          fi
-          APP_VERSION="${TAG#v}"
-          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
-          node -e "
-            const fs = require('fs');
-            const path = 'apps/mobile/app.json';
-            const config = JSON.parse(fs.readFileSync(path, 'utf8'));
-            config.expo.version = '$APP_VERSION';
-            fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
-          "
-
-      - name: Build protocol package
-        run: pnpm --filter @runova/protocol build
-
-      # apps/mobile/android is generated (gitignored) rather than committed,
-      # so it's regenerated from app.json on every build via Expo's
-      # Continuous Native Generation instead of being checked into git.
-      - name: Generate native Android project
-        run: pnpm --filter @runova/mobile exec expo prebuild -p android --no-install
-
-      # Splits the release APK by CPU architecture (in addition to the
-      # existing universal APK) so most users can grab a smaller,
-      # device-specific download. android/app/build.gradle is regenerated
-      # by expo prebuild on every run, so this config can't be committed
-      # there directly, so it's injected right after prebuild instead.
-      - name: Enable per-ABI APK splits
-        shell: bash
-        run: |
-          sed -i 's/^android {/android {\n    splits {\n        abi {\n            reset()\n            enable true\n            universalApk true\n            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"\n        }\n    }/' apps/mobile/android/app/build.gradle
-
-      # The wrapper properties that expo prebuild writes ship with a 10s
-      # network timeout, which is not enough to start the ~150 MB
-      # distribution download when services.gradle.org is slow to answer:
-      # the wrapper gives up mid-connect and the release build dies. Same
-      # story as the splits above, the file is regenerated on every run, so
-      # the timeout is widened here instead of being committed.
-      - name: Widen the Gradle wrapper network timeout
-        shell: bash
-        run: |
-          props=apps/mobile/android/gradle/wrapper/gradle-wrapper.properties
-          { grep -v '^networkTimeout=' "$props"; echo 'networkTimeout=120000'; } > "$props.tmp"
-          mv "$props.tmp" "$props"
-          cat "$props"
-
-      # The runner starts with an empty Gradle home, so the distribution is
-      # fetched on every run, and the wrapper has no retry of its own: one
-      # bad connection and the whole release fails. Fetching it in a step of
-      # its own means a transient failure costs a retry instead of a rerun.
-      - name: Download the Gradle distribution
-        working-directory: apps/mobile/android
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            if ./gradlew --version; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "Gradle distribution download failed (attempt $attempt of 3), retrying in 15s"
-              sleep 15
-            fi
-          done
-          echo "Could not download the Gradle distribution after 3 attempts"
-          exit 1
-
-      - name: Build release APK
-        working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease
-
-      - name: Rename APKs with version
-        shell: bash
-        run: |
-          cd apps/mobile/android/app/build/outputs/apk/release
-          for f in app-*-release.apk; do
-            abi="${f#app-}"
-            abi="${abi%-release.apk}"
-            if [ "$abi" = "universal" ]; then
-              mv "$f" "Runova-${APP_VERSION}.apk"
-            else
-              mv "$f" "Runova-${APP_VERSION}-${abi}.apk"
-            fi
-          done
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: android-apk
-          if-no-files-found: error
-          path: apps/mobile/android/app/build/outputs/apk/release/Runova-*.apk
-
   # The website's API and site images, pushed to GitHub Container Registry as
   # ghcr.io/<owner>/runova-website-api and ghcr.io/<owner>/runova-website-web, each tagged with the
   # release version and "latest". apps/website/docker-compose.production.yaml runs "latest", so
@@ -567,7 +444,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [build, build-android, build-server-core]
+    needs: [build, build-server-core]
     runs-on: ubuntu-latest
     steps:
       # Only for scripts/merge-mac-manifest.mjs. It runs first because checkout
@@ -592,12 +469,6 @@ jobs:
           pattern: desktop-installer-*
           path: dist-release
           merge-multiple: true
-
-      - name: Download Android APK artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: android-apk
-          path: dist-release
 
       # The tarballs, their .sha256 files and server-core-manifest.json. The app downloads the
       # tarball for its own version from this release and checks it against its embedded manifest.

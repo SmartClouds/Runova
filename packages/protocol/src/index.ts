@@ -1,9 +1,9 @@
 /**
  * Wire protocol shared between two Runova peers over a single WebSocket.
  *
- * This package is platform-agnostic on purpose: it is consumed by the desktop
- * app (Node/Electron, re-exported from `@shared/remoteProtocol`) and by the
- * mobile controller app (Hermes/React Native), so it must not rely on
+ * This package is platform-agnostic on purpose: the desktop app uses it in both
+ * its main process (Node) and its renderer (a browser), re-exported from
+ * `@shared/remoteProtocol`, so it must not rely on
  * `Buffer`, `btoa`/`atob`, or any other environment-specific global, only
  * `ArrayBuffer`/`DataView`/`Uint8Array`, which are standard everywhere.
  *
@@ -367,7 +367,7 @@ export function transferKeyFromId(id: string): number {
   return hash >>> 0;
 }
 
-// --- Portable base64 (no Buffer/btoa; safe on Node, browsers, and Hermes) ----
+// --- Portable base64 (no Buffer/btoa; safe on Node and in browsers) ----------
 
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const B64_LOOKUP = new Map<string, number>(Array.from(B64_CHARS).map((c, i) => [c, i]));
@@ -456,11 +456,6 @@ function utf8Decode(bytes: Uint8Array): string {
     }
   }
   return out;
-}
-
-/** A `data:` URI a mobile `<Image>` can render directly from a decoded screen tile's JPEG bytes. */
-export function jpegToDataUri(jpeg: Uint8Array): string {
-  return `data:image/jpeg;base64,${bytesToBase64(jpeg)}`;
 }
 
 // --- Pairing code --------------------------------------------------------------

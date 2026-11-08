@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-/** The wire protocol shared with the mobile app: encoders, decoders and the version constant. */
+/** The wire protocol Runova peers share: encoders, decoders and the version constant. */
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],

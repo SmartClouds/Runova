@@ -79,7 +79,6 @@ Runova used to be called AgentMate. If you used it under that name, updating mov
 
 - **Servers.** The first time you update a server's core from Runova, the core moves to its new name (`runova-core`) as well. Your sites and containers keep running while it does; only the core restarts, and if anything goes wrong the server is put back as it was.
 - **WordPress sites.** Install Runova Connector on each site in place of the old AgentMate Connector, then pair the site again from Runova. The new connector keeps its own tables and keys, so earlier connections do not carry over.
-- **Phones.** The mobile app is a new app now. Install Runova on the phone and pair it again; the old AgentMate app can then go.
 - **Your own scripts.** `.agentmateignore`, `AGENTMATE_USER_DATA_DIR` and health endpoints built for the AgentMate Health Protocol keep working in Runova, so there is nothing to rename unless you want to. WordPress projects are the exception: they read only `.runovaignore`, so rename the file there.
 
 ## Why "ADE"
@@ -160,7 +159,7 @@ Everything else is support around that, so you don't leave the app to go and get
 
 ### Connect
 
-- **Remote**: control another Runova over your local network, over WebSockets, including from the companion mobile app, with a remote file manager and resumable transfers.
+- **Remote**: control another Runova over your local network, over WebSockets, with a remote file manager and resumable transfers.
 - **SSH**: saved servers in the vault, terminal sessions in the drawer, a two-pane SFTP file manager (upload and download files and whole folders, change permissions, edit text files on the server, and keep an eye on transfers from the status bar), and an AI task runner that prompts an agent in a RUN / FINISHED / NEEDS_INPUT loop, executes the commands in the live session, and stops for your approval on anything risky.
 - **RDP**: saved Remote Desktop servers and full sessions in their own window, built on Devolutions Iron Remote Desktop, with a shared clipboard, file copy, full screen, and an AI that can do tasks on the remote desktop for you.
 - **Vault**: passwords, API keys, and private notes, encrypted on this computer behind a master password. Ranked search, type tabs, tags and favorites, a password generator, custom fields, CSV import with column matching and duplicate handling, export behind the master password, auto-lock, clipboard clearing on a countdown, and locking with the computer. The same vault backs the SSH, RDP, and environment credentials, and every decrypted value leaves the app's cache the moment it locks.
@@ -316,7 +315,6 @@ The news the API serves is the same news the Dashboard's News card shows. The sp
 |---|---|
 | Desktop app | Electron, React 19, TypeScript 7, Vite (`electron-vite`), Tailwind CSS, Radix UI, TanStack Query, Zustand |
 | Editor and terminal | Monaco, xterm.js, node-pty |
-| Mobile companion | Expo / React Native, WebRTC |
 | Shared packages | `@runova/core` (business logic), `@runova/protocol` (shared types/wire protocol) |
 | Local storage | better-sqlite3, plus an encrypted vault file for secrets |
 | Remote | `ws` for the local-network protocol, `ssh2` for SSH, Devolutions Iron Remote Desktop for RDP |
@@ -335,7 +333,6 @@ The news the API serves is the same news the Dashboard's News card shows. The sp
 Runova/
 ├── apps/
 │   ├── desktop/     Electron app (main, preload, renderer), the primary product
-│   ├── mobile/      Expo/React Native companion app for the Remote feature
 │   ├── server-core/ .NET 10 service the Deploy section installs on your servers
 │   ├── website/     runovahq.com: the Astro site (web/), its .NET 10 API (api/) and the compose stack
 │   └── wordpress-connector/  PHP plugin that lets a WordPress site talk to Deploy and WordPress projects
@@ -392,7 +389,6 @@ On Windows you can also just run `run.bat`, which installs dependencies, verifie
 | `pnpm dev` | Build `core`/`protocol`, then launch the desktop app in dev mode with hot reload |
 | `pnpm build` | Build `core`, `protocol`, and the desktop app's production bundle |
 | `pnpm package` | Package the desktop app into installers via `electron-builder` |
-| `pnpm mobile` | Build `protocol`, then launch the Expo dev server for the mobile companion app |
 | `pnpm typecheck` | Type-check every workspace package |
 | `pnpm lint` | Lint every workspace package |
 | `pnpm check` | Run Biome over the whole repo (format, lint, import order) |
@@ -402,7 +398,6 @@ On Windows you can also just run `run.bat`, which installs dependencies, verifie
 | `pnpm test` | Run every package's test suite |
 | `pnpm test:unit` | Unit, integration and component tests (core, protocol, desktop) |
 | `pnpm test:coverage` | The same with coverage, then print a summary table |
-| `pnpm test:mobile` | The mobile app's Jest suite |
 | `pnpm test:e2e` | Build the desktop app and drive it end to end through Playwright |
 | `pnpm server-core:build` | Build the .NET server core solution |
 | `pnpm server-core:test` | The server core's unit and integration tests (xUnit v3) |
@@ -424,7 +419,6 @@ Tests live next to the code they cover (`foo.ts` has `foo.test.ts` beside it). E
 | Integration | `apps/desktop/src/main/**`, IPC handlers, stores and hooks | Vitest (node and jsdom) |
 | Component | `apps/desktop/src/renderer/**` | Vitest (jsdom) plus Testing Library |
 | End to end | `apps/desktop/e2e` | Playwright, driving the built Electron app |
-| Mobile | `apps/mobile` | Jest (`jest-expo`) plus React Native Testing Library |
 | Server core | `apps/server-core/tests/Runova.ServerCore.Tests` | xUnit v3 on Microsoft.Testing.Platform, with the real web host in memory |
 | Server core system | `apps/server-core/tests/Runova.ServerCore.SystemTests` | xUnit v3, Linux with Docker only (the nightly workflow) |
 | Deploy system | `apps/desktop/src/main/deploy/*.int.test.ts` | Vitest against systemd test servers in Docker, with the published core (`RUNOVA_SYSTEM_TESTS=1`) |
@@ -452,7 +446,7 @@ The Deploy system tests boot whole Linux machines, so they only run when asked. 
 
 ### CI
 
-Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the mobile Jest suite, the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), and the end-to-end tests. Two more jobs in `ci.yml` cover the website: `website-api` (format, build and tests) and `website-web` (lint, types, unit tests, the build, both Playwright suites and Lighthouse). CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build, the unit suites and mobile) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core and the Linux end-to-end tests. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
+Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), and the end-to-end tests. Two more jobs in `ci.yml` cover the website: `website-api` (format, build and tests) and `website-web` (lint, types, unit tests, the build, both Playwright suites and Lighthouse). CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build and the unit suites) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core and the Linux end-to-end tests. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
 
 A deprecated dependency you cannot drop yet goes in [`.github/deprecated-deps-allowlist.json`](.github/deprecated-deps-allowlist.json) with a reason for keeping it.
 

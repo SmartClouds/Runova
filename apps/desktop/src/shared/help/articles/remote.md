@@ -2,14 +2,14 @@
 title: Remote
 category: Connect
 order: 10
-summary: Control another Runova over your network, connect to servers over SSH, open Windows Remote Desktop sessions, and pair the Runova mobile app.
-keywords: remote, ssh, remote control, host, pairing code, qr code, mobile, phone, companion app, servers, saved servers, host key, passkey, lan, rdp, connect, sudo, su, saved password, enter saved password
+summary: Control another Runova over your network, connect to servers over SSH, and open Windows Remote Desktop sessions.
+keywords: remote, ssh, remote control, host, pairing code, qr code, servers, saved servers, host key, passkey, lan, rdp, connect, sudo, su, saved password, enter saved password
 route: /remote
 ---
 
-The Remote page is where you reach other computers. It has five tabs: **Anywhere** (connect to any computer by its Runova ID, see [Runova Anywhere](remote-anywhere.md)), **Host** (let another Runova or the mobile app control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
+The Remote page is where you reach other computers. It has five tabs: **Anywhere** (connect to any computer by its Runova ID, see [Runova Anywhere](remote-anywhere.md)), **Host** (let another Runova control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
 
-Two sets of tools live here. The first is a remote control that works between Runova installs on the same network, and from the Runova mobile app. The second is a saved server list for SSH and Remote Desktop.
+Two sets of tools live here. The first is a remote control that works between Runova installs on the same network. The second is a saved server list for SSH and Remote Desktop.
 
 **Anywhere**, **Host** and **Connect** need you to be signed in to your Runova account. Signed out, those tabs show a sign-in button instead, and signing out stops hosting and ends any session you started. **SSH** and **Remote Desktop** work without an account.
 
@@ -38,7 +38,7 @@ Use the **Host** tab on the computer you want to be controlled. The card **Allow
 Once hosting, a **Pairing code** card appears.
 
 1. Click **Generate pairing code**. A QR code and a text code (starting with `RUNOVA1:`) appear.
-2. Give the code to the other device: scan the QR with the Runova mobile app, or copy the text with **Copy code** and paste it on the other computer.
+2. Give the code to the other device: copy the text with **Copy code** and paste it on the other computer.
 3. Click **New code** whenever you need a fresh one.
 
 Each code works once and expires after 5 minutes. Generating a new code cancels the old one. A device that paired successfully is remembered by the host, so it can reconnect later without a new code. Stopping and starting hosting does not forget paired devices.
@@ -198,26 +198,6 @@ Tasks run on a saved server are kept after Runova closes, up to 50 per server. T
 ## Remote Desktop: saved Windows servers
 
 The **Remote Desktop** tab keeps saved Windows servers and PCs. **Connect** opens the session in its own window. Adding a server, the session window, file copying and Ask AI are covered in [Remote Desktop](remote-desktop.md).
-
-## The Runova mobile app
-
-Runova has a companion app for iPhone and Android that works as a remote control for a computer running Runova. It is controller only: you control your computer from the phone. You cannot host from the phone, and sending files is not available on mobile yet.
-
-### Pair your phone
-
-1. Your phone and the computer must be on the same Wi-Fi network.
-2. On the computer, open **Remote**, **Host**, start hosting and click **Generate pairing code**.
-3. On the phone, open the app. Tap **Scan QR** and point the camera at the code, or paste the `RUNOVA1:...` code into the box under **Pair a new computer** and tap **Connect**.
-4. You only pair once. The computer is saved under **My computers** on the phone. Tap it to reconnect later. Tap the pencil next to it to rename it (**Save**) or remove it (**Forget**).
-
-### Using the phone as a remote
-
-Once connected, the computer's screen fills the phone.
-
-- Tap to click. Long-press for a right click. Drag with one finger to drag.
-- Pinch to zoom, and drag with two fingers to pan while zoomed. With two fingers moving up or down while not zoomed, you scroll.
-- The floating **...** button opens a bar with the computer name and screen size, **Stats** (connection details), **Clipboard** (sends your phone's clipboard to the computer) and **Disconnect**.
-- A keyboard bar gives you the system keyboard plus Esc, Tab, Enter, Backspace and the arrow keys. Clipboard text the computer sends with **Send clipboard** on the Host tab is copied to the phone.
 
 ## Tips
 

@@ -237,13 +237,7 @@ Play Store
 React Native
 
 # Help filter (T016), applied to the article source before rendering
-remote.md: front matter summary -> "Control another Runova over your network, connect to servers over SSH, and open Windows Remote Desktop sessions."
-remote.md: front matter keywords -> drop "mobile", "phone", "companion app"
-remote.md: line "**Host** (let another Runova or the mobile app control this computer)" -> "**Host** (let another Runova control this computer)"
-remote.md: sentence "...on the same network, and from the Runova mobile app." -> "...on the same network."
-remote.md: step "scan the QR with the Runova mobile app, or copy the text" -> "copy the text"
-remote.md: drop the whole "## The Runova mobile app" section with its "###" children, up to the next "## " heading
-README (if quoted anywhere): drop the "Phones." bullet under Why "Runova", and "including from the companion mobile app" in Connect > Remote
+No rules at the moment: E66 took the mobile section out of the remote article itself.
 ```
 
 The filter is written as data the loader applies (match a heading or an exact phrase, then drop or

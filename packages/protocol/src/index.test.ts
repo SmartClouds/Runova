@@ -20,7 +20,6 @@ import {
   encodeScreenTile,
   FILE_CHUNK_BYTES,
   formatBytes,
-  jpegToDataUri,
   PART_BYTES,
   type PairingPayload,
   REMOTE_PROTOCOL_VERSION,
@@ -29,14 +28,13 @@ import {
 } from './index.js';
 
 /**
- * The wire protocol is the one thing the desktop host and the Expo controller
- * both compile against, so a silent change here breaks a shipped mobile build
- * rather than failing a build. These tests pin the byte layouts, the lenient
+ * The wire protocol is what every Runova peer speaks, so a silent change here
+ * breaks installed apps rather than failing a build. These tests pin the byte layouts, the lenient
  * paths (truncated frames, tampered pairing codes) and the version constant.
  */
 
 /**
- * This package deliberately has no dependencies (it compiles for Hermes), so
+ * This package deliberately has no dependencies (it stays platform-agnostic), so
  * `@types/node` is not available here. Node's Buffer, the reference base64
  * implementation for these tests, is reached through a narrow local shape
  * instead of the global Node types.
@@ -68,10 +66,9 @@ function seededBytes(length: number, seed: number): Uint8Array {
 }
 
 describe('REMOTE_PROTOCOL_VERSION', () => {
-  it('is pinned, because the mobile client has to move in step', () => {
-    // apps/mobile sends this number in its `hello` frame and the host refuses a
-    // mismatch, so bumping it here without shipping a new controller build
-    // locks every phone out. Update this expectation and apps/mobile together.
+  it('is pinned, because every peer has to move in step', () => {
+    // A controller sends this number in its `hello` frame and the host refuses
+    // a mismatch, so bumping it locks out every install still on the old one.
     expect(REMOTE_PROTOCOL_VERSION).toBe(4);
   });
 });
@@ -368,8 +365,8 @@ describe('transferKeyFromId', () => {
 
 describe('portable base64', () => {
   it('matches Node Buffer for every length from 0 to 1025', () => {
-    // The encoder is hand-rolled so it can run on Hermes, where Buffer and
-    // btoa do not exist. Node's Buffer is the reference implementation here.
+    // The encoder is hand-rolled so the package needs neither Buffer nor
+    // btoa. Node's Buffer is the reference implementation here.
     for (let length = 0; length <= 1025; length++) {
       const input = seededBytes(length, length + 1);
       const expected = NodeBuffer.from(input).toString('base64');
@@ -426,29 +423,6 @@ describe('portable base64', () => {
     expect(Array.from(base64ToBytes(dirty))).toEqual([1, 2, 3, 4, 5, 6]);
     expect(base64ToBytes('!!!').byteLength).toBe(0);
     expect(base64ToBytes('').byteLength).toBe(0);
-  });
-});
-
-describe('jpegToDataUri', () => {
-  it('builds a URI a mobile Image can render', () => {
-    const jpeg = bytes(48, 13);
-    expect(jpegToDataUri(jpeg)).toBe(
-      `data:image/jpeg;base64,${NodeBuffer.from(jpeg).toString('base64')}`,
-    );
-  });
-
-  it('still produces a well-formed URI for empty bytes', () => {
-    expect(jpegToDataUri(new Uint8Array(0))).toBe('data:image/jpeg;base64,');
-  });
-
-  it('works straight off a decoded tile', () => {
-    const jpeg = bytes(200, 17);
-    const decoded = decodeScreenTile(
-      encodeScreenTile({ frameId: 1, x: 0, y: 0, w: 4, h: 4, jpeg }),
-    );
-    // The decoded payload is a subarray of the frame, so the data URI must not
-    // pick up the 13 header bytes.
-    expect(jpegToDataUri(decoded.jpeg)).toBe(jpegToDataUri(jpeg));
   });
 });
 

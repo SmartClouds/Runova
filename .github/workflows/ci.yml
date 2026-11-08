@@ -2,12 +2,12 @@ name: CI
 
 # Checks every push and pull request: formatting/lint (Biome), no deprecated
 # dependencies or deprecated imports, types, a real build of the desktop app,
-# and every test suite: unit, integration, mobile, the system tests on Docker
+# and every test suite: unit, integration, the system tests on Docker
 # test servers and the end-to-end run on Linux and macOS.
 #
 # It runs on our two self-hosted runners (CD never uses them). Everything that
-# does not care about the OS (lint, types, the build, the unit suites and
-# mobile) runs on the Mac mini, which is much faster. The Linux runner keeps
+# does not care about the OS (lint, types, the build and the unit suites)
+# runs on the Mac mini, which is much faster. The Linux runner keeps
 # what needs Linux: Docker, the server core, the website (its API, its site and
 # the compose stack they run in) and the Linux end-to-end shards. The macOS
 # end-to-end shards run on the Mac too. GitHub's hosted runners are
@@ -118,7 +118,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm check:deprecated-deps
 
-      # Desktop and mobile type-check against @runova/core and
+      # The desktop type-checks against @runova/core and
       # @runova/protocol declaration output, so those have to be built first.
       - name: Build workspace packages
         if: ${{ !cancelled() }}

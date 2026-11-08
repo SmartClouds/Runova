@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyHelpFilter, HELP_FILTER, unusedFilterRules } from '../src/lib/help/filter';
+import {
+  applyHelpFilter,
+  HELP_FILTER,
+  type HelpFilterRule,
+  unusedFilterRules,
+} from '../src/lib/help/filter';
 import { forbiddenPhrases } from './helpers/textScan';
 
 function fixture(name: string): string {
@@ -19,8 +24,39 @@ function forbiddenIn(text: string): string[] {
   return forbiddenPhrases().filter((phrase) => lower.includes(phrase));
 }
 
+/** An article with a mobile section, kept out of the folder the loader tests read. */
+function mobileArticle(): string {
+  return readFileSync(new URL('./fixtures/help-filter/remote.md', import.meta.url), 'utf8');
+}
+
+/** Rules of each kind, so the filter stays tested while the app's articles need none. */
+const MOBILE_RULES: HelpFilterRule[] = [
+  {
+    file: 'remote.md',
+    field: 'summary',
+    set: 'Control another Runova over your network, connect to servers over SSH, and open Windows Remote Desktop sessions.',
+  },
+  { file: 'remote.md', field: 'keywords', drop: ['mobile', 'phone', 'companion app'] },
+  {
+    file: 'remote.md',
+    replace: '**Host** (let another Runova or the mobile app control this computer)',
+    with: '**Host** (let another Runova control this computer)',
+  },
+  {
+    file: 'remote.md',
+    replace: 'on the same network, and from the Runova mobile app.',
+    with: 'on the same network.',
+  },
+  {
+    file: 'remote.md',
+    replace: 'scan the QR with the Runova mobile app, or copy the text',
+    with: 'copy the text',
+  },
+  { file: 'remote.md', dropSection: 'The Runova mobile app' },
+];
+
 describe('the help filter on a fixture with a phone pairing section', () => {
-  const filtered = applyHelpFilter('remote.md', fixture('remote.md'));
+  const filtered = applyHelpFilter('remote.md', mobileArticle(), MOBILE_RULES);
 
   it('replaces the summary', () => {
     expect(filtered).toMatch(
@@ -51,7 +87,7 @@ describe('the help filter on a fixture with a phone pairing section', () => {
   });
 
   it('leaves no forbidden phrase', () => {
-    expect(forbiddenIn(fixture('remote.md')).length).toBeGreaterThan(0);
+    expect(forbiddenIn(mobileArticle()).length).toBeGreaterThan(0);
     expect(forbiddenIn(filtered)).toEqual([]);
   });
 
@@ -88,7 +124,7 @@ describe('the help filter rules', () => {
   });
 
   it('works on Windows line endings', () => {
-    const crlf = fixture('remote.md').replace(/\r?\n/g, '\r\n');
-    expect(forbiddenIn(applyHelpFilter('remote.md', crlf))).toEqual([]);
+    const crlf = mobileArticle().replace(/\r?\n/g, '\r\n');
+    expect(forbiddenIn(applyHelpFilter('remote.md', crlf, MOBILE_RULES))).toEqual([]);
   });
 });
