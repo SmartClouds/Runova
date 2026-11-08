@@ -148,7 +148,7 @@ internal static class RemoteAgentEndpoints
         }
 
         var me = CurrentAccount.Id(http);
-        if (await db.RemoteDevices.SingleOrDefaultAsync(d => d.Id == id && d.UserId == me && d.RevokedAt == null) is not { } device)
+        if (await db.RemoteDevices.SingleOrDefaultAsync(d => d.Id == id && d.UserId == me && d.Kind != RemoteDeviceKinds.Phone && d.RevokedAt == null) is not { } device)
         {
             return ApiProblems.Of(ProblemTypes.NotFound, "There is no such computer on this account.");
         }

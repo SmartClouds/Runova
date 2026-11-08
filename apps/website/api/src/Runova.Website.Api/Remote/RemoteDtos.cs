@@ -104,5 +104,8 @@ public static class RemoteIntents
     public const string Control = "control";
     public const string Files = "files";
 
-    public static readonly IReadOnlyList<string> All = [Control, Files];
+    /// <summary>A phone working with its owner's computer: projects, terminals, git and the rest.</summary>
+    public const string Manage = "manage";
+
+    public static readonly IReadOnlyList<string> All = [Control, Files, Manage];
 }

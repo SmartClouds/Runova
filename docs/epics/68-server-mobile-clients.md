@@ -19,11 +19,11 @@ without appearing as a computer anyone can connect to.
 
 ## Tasks
 
-- [ ] T1 Client id, redirect validation and session kind, with tests for refused redirects
-- [ ] T2 Platforms and controller device kind; directory and target exclusion
-- [ ] T3 `manage` intent through `RequestConnect`
-- [ ] T4 Generic labels on the authorize page and session list
-- [ ] T5 Mapperly mappers with a unit test each, no secrets in DTOs, contract and OpenAPI snapshot
+- [x] T1 Client id, redirect validation and session kind, with tests for refused redirects
+- [x] T2 Platforms and controller device kind; directory and target exclusion
+- [x] T3 `manage` intent through `RequestConnect`
+- [x] T4 Generic labels on the authorize page and session list
+- [x] T5 Mapperly mappers with a unit test each, no secrets in DTOs, contract and OpenAPI snapshot
 
 ## Acceptance criteria
 

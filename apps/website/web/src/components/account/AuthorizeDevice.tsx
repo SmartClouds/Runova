@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { Notice } from './ui';
 
 const LOOPBACK = /^http:\/\/(127\.0\.0\.1|\[::1\]):(\d{1,5})\/callback$/;
+const APP_CLIENT = 'runova-mobile';
+const APP_REDIRECT = 'com.runovahq.app:/auth/callback';
 const PLATFORM_NAMES: Record<string, string> = {
   windows: 'Windows',
   macos: 'macOS',
@@ -24,7 +26,12 @@ export interface AuthorizeRequest {
   deviceId: string | null;
 }
 
-/** What the desktop app put in the link, or null when it is not a desktop sign-in link at all. */
+function isOurRedirect(clientId: string, redirectUri: string): boolean {
+  if (clientId === APP_CLIENT) return redirectUri === APP_REDIRECT;
+  return clientId === 'runova-desktop' && LOOPBACK.test(redirectUri);
+}
+
+/** What the app put in the link, or null when it is not one of our sign-in links at all. */
 export function readAuthorizeRequest(search: string): AuthorizeRequest | null {
   const p = new URLSearchParams(search);
   const request = {
@@ -39,8 +46,7 @@ export function readAuthorizeRequest(search: string): AuthorizeRequest | null {
     deviceId: p.get('device_id'),
   };
   if (
-    request.clientId !== 'runova-desktop' ||
-    !LOOPBACK.test(request.redirectUri) ||
+    !isOurRedirect(request.clientId, request.redirectUri) ||
     !request.codeChallenge ||
     !request.state
   ) {
@@ -78,7 +84,8 @@ export default function AuthorizeDevice({
     );
   }
 
-  const platform = PLATFORM_NAMES[request.platform] ?? 'a computer';
+  const isApp = request.clientId === APP_CLIENT;
+  const platform = isApp ? 'Runova app' : (PLATFORM_NAMES[request.platform] ?? 'a computer');
 
   const approve = async () => {
     setState('working');
@@ -134,32 +141,47 @@ export default function AuthorizeDevice({
       {state === 'approved' ? (
         <div className="text-center">
           <h1 className="font-display font-bold text-2xl tracking-tight">
-            {request.deviceName || 'Your computer'} is signed in
+            {isApp ? 'The Runova app' : request.deviceName || 'Your computer'} is signed in
           </h1>
           <p className="mt-2 text-muted-foreground text-sm">
-            You can close this tab and go back to Runova. It starts syncing right away.
+            {isApp
+              ? 'You can close this tab and go back to the app.'
+              : 'You can close this tab and go back to Runova. It starts syncing right away.'}
           </p>
         </div>
       ) : state === 'declined' ? (
         <div className="text-center">
           <h1 className="font-display font-bold text-2xl tracking-tight">Not signed in</h1>
           <p className="mt-2 text-muted-foreground text-sm">
-            Runova on that computer stays signed out. You can close this tab.
+            {isApp ? 'The Runova app' : 'Runova on that computer'} stays signed out. You can close
+            this tab.
           </p>
         </div>
       ) : (
         <>
           <div className="text-center">
             <h1 className="font-display font-bold text-2xl tracking-tight">
-              Sign in Runova on {request.deviceName || 'this computer'}?
+              {isApp
+                ? 'Sign in the Runova app?'
+                : `Sign in Runova on ${request.deviceName || 'this computer'}?`}
             </h1>
-            <p className="mt-2 text-muted-foreground text-sm leading-relaxed">
-              Runova{' '}
-              {request.appVersion ? <span className="font-mono">{request.appVersion}</span> : null}{' '}
-              on {platform} asks to use the account{' '}
-              <span className="font-medium text-foreground">{email}</span>. It will sync your
-              projects, servers and settings with your other computers.
-            </p>
+            {isApp ? (
+              <p className="mt-2 text-muted-foreground text-sm leading-relaxed">
+                The Runova app asks to use the account{' '}
+                <span className="font-medium text-foreground">{email}</span>. It will reach the
+                computers on your account after you approve it on each one.
+              </p>
+            ) : (
+              <p className="mt-2 text-muted-foreground text-sm leading-relaxed">
+                Runova{' '}
+                {request.appVersion ? (
+                  <span className="font-mono">{request.appVersion}</span>
+                ) : null}{' '}
+                on {platform} asks to use the account{' '}
+                <span className="font-medium text-foreground">{email}</span>. It will sync your
+                projects, servers and settings with your other computers.
+              </p>
+            )}
           </div>
           {problem && <Notice tone="danger">{problem.detail || problem.title}</Notice>}
           <div className="grid gap-2 sm:grid-cols-2">
@@ -168,7 +190,11 @@ export default function AuthorizeDevice({
             </Button>
             <Button onClick={approve} disabled={state === 'working'}>
               <ShieldCheck />
-              {state === 'working' ? 'Signing in…' : 'Sign in this computer'}
+              {state === 'working'
+                ? 'Signing in…'
+                : isApp
+                  ? 'Sign in the app'
+                  : 'Sign in this computer'}
             </Button>
           </div>
           <p className="flex items-center justify-center gap-1.5 text-muted-foreground text-xs">

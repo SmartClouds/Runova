@@ -109,6 +109,23 @@ public sealed partial class ComposeTests
     }
 
     [Fact]
+    public void Both_proxies_send_the_api_the_hubs_and_the_relay_to_the_api()
+    {
+        foreach (var file in new[] { "Caddyfile", "docker-compose.production.yaml" })
+        {
+            var matcher = File.ReadAllLines(Path.Combine(_folder, file))
+                .Select(line => line.Trim())
+                .Single(line => line.StartsWith("@api path ", StringComparison.Ordinal));
+            var paths = matcher.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2..];
+
+            foreach (var path in new[] { "/api/*", "/hubs/*", "/relay/*" })
+            {
+                Assert.True(paths.Contains(path), $"{file}: {path} does not reach the API.");
+            }
+        }
+    }
+
+    [Fact]
     public void Rabbitmq_has_no_management_plugin_and_no_guest()
     {
         foreach (var file in new[] { "compose.yaml", "docker-compose.production.yaml" })

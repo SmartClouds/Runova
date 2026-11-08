@@ -512,11 +512,13 @@ the code at `POST /device-tokens`.
 | POST | `/api/v1/device-authorizations` | Account (cookie, with antiforgery) | `DeviceAuthorizationRequest` | 201 `{ "redirectUrl": string, "expiresAt": time }`; 400; 401 |
 | POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 429 |
 
-`DeviceAuthorizationRequest`: `{ "clientId": "runova-desktop", "redirectUri": string (only
-http://127.0.0.1:<port>/callback or http://[::1]:<port>/callback, port 1024 to 65535),
-"codeChallenge": string (base64url SHA-256), "codeChallengeMethod": "S256", "state": string,
-"deviceName": string (1 to 100), "platform": "windows" | "macos" | "linux", "appVersion": string |
-null, "deviceId": uuid | null }`. The code is 32 random bytes, kept only as its SHA-256, good for two
+`DeviceAuthorizationRequest`: `{ "clientId": "runova-desktop" | "runova-mobile", "redirectUri":
+string (for the desktop only http://127.0.0.1:<port>/callback or http://[::1]:<port>/callback, port
+1024 to 65535; for the phone only com.runovahq.app:/auth/callback), "codeChallenge": string
+(base64url SHA-256), "codeChallengeMethod": "S256", "state": string, "deviceName": string (1 to
+100), "platform": "windows" | "macos" | "linux", or "android" | "ios" for the phone, "appVersion":
+string | null, "deviceId": uuid | null }`. A phone's session has kind `mobile`, is named
+`Runova app` and has the platform `Phone`, whatever the app sent. The code is 32 random bytes, kept only as its SHA-256, good for two
 minutes and one use.
 
 `DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token", "code": string | null,
@@ -907,7 +909,7 @@ turn away what the computer would refuse anyway; the computer always decides.
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/remote-devices` | Account | none | 200 `{ "items": RemoteDeviceDto[] }`; 401 |
-| POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos" or "linux", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401 |
+| POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos", "linux", "android" or "ios", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401. `android` and `ios` register a phone (kind `phone`): it can ask to connect but never goes online, is never a target, and is left out of `/remote-devices` and `/reachable-devices` |
 | PATCH | `/api/v1/remote-devices/{id}` | Account (owner) | merge patch of `name`, `allowOwnDevices`, `unattendedEnabled`, `teamIds` | 200 `RemoteDeviceDto`; 400 (a team the owner is not in); 401; 404 |
 | DELETE | `/api/v1/remote-devices/{id}` | Account (owner) | none | 204 (the ID is retired, and the computer goes offline); 401; 404 |
 | POST | `/api/v1/remote-devices/{id}/agents` | Account (owner) | `{ "identityKey": string }` (the agent's own Ed25519 public key) | 201 `{ "identityKey": string, "agentSecret": string }` (the secret is shown this once; turning the agent on again gives a new one and retires the old one and its tokens); 400; 401; 404 |
@@ -994,7 +996,7 @@ the owner a "new sign-in" email (not for the very first session).
 | DELETE | `/api/v1/sessions/{id}` | Account | none | 204; 401; 404 not this account's, or ended already |
 | GET | `/api/v1/activities` | Account | query `page`, `pageSize`, `action` | 200 `Page<ActivityDto>`, newest first; 400; 401 |
 
-`SessionDto`: `{ "id": number, "kind": "web" | "desktop", "deviceName": string, "platform": string,
+`SessionDto`: `{ "id": number, "kind": "web" | "desktop" | "mobile", "deviceName": string, "platform": string,
 "appVersion": string | null, "ip": string | null, "createdAt": time, "lastSeenAt": time,
 "current": bool }`. `ip` is the address last seen; `lastSeenAt` is kept to within 5 minutes.
 

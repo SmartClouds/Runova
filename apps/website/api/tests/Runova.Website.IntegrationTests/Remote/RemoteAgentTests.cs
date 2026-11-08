@@ -46,6 +46,33 @@ public sealed class RemoteAgentTests(PostgresFixture postgres) : IAsyncLifetime
         (await ApiClient.ReadJsonAsync(await TokenAsync(remoteId, secret), HttpStatusCode.OK)).GetProperty("accessToken").GetString()!;
 
     [Fact]
+    public async Task A_phone_can_not_manage_a_computer_only_its_agent_is_keeping_online()
+    {
+        var (sam, device, _, secret) = await AgentOnAsync();
+        var remoteId = device.GetProperty("remoteId").GetString()!;
+        await using var agent = await ConnectAsync(_factory, await AgentTokenAsync(remoteId, secret));
+        await agent.GoOnlineAsync(device.GetProperty("id").GetInt64());
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "android");
+        await using var phoneApp = await ConnectAsync(_factory, await DeviceTokenAsync(_factory, sam));
+
+        var result = await phoneApp.RequestAsync(remoteId, "ask", phone.GetProperty("id").GetInt64(), RemoteIntents.Manage);
+
+        Assert.Equal(RemoteConnectStatuses.Offline, result.Status);
+        await RemoteApp.NothingAsync(agent.Incoming);
+    }
+
+    [Fact]
+    public async Task A_phone_can_not_have_a_background_agent()
+    {
+        var (_, sam) = await AccountAsync(_factory);
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "ios");
+
+        var response = await sam.SendAsync(HttpMethod.Post, $"/api/v1/remote-devices/{phone.GetProperty("id").GetInt64()}/agents", new { identityKey = NewIdentityKey() });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task The_owner_turns_the_agent_on_and_gets_its_secret_once()
     {
         var (sam, device, agentKey, secret) = await AgentOnAsync();

@@ -60,6 +60,11 @@ internal sealed partial class RemoteHub(
         var agentOf = AgentOf;
         var device = await db.RemoteDevices.SingleOrDefaultAsync(d => d.Id == deviceId && d.UserId == me && d.RevokedAt == null)
             ?? throw new HubException("There is no such computer on this account.");
+        if (device.Kind == RemoteDeviceKinds.Phone)
+        {
+            throw new HubException("A phone connects to computers and can not be connected to.");
+        }
+
         if (agentOf is not null && (agentOf != device.Id || device.AgentSecretHash is null))
         {
             throw new HubException("An agent can only host its own computer.");
@@ -91,7 +96,7 @@ internal sealed partial class RemoteHub(
         if (RemoteIds.Parse(request.RemoteId) is not { } remoteId
             || !RemoteAccessModes.All.Contains(request.Mode)
             || !RemoteIntents.All.Contains(request.Intent)
-            || await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.RemoteId == remoteId && d.RevokedAt == null) is not { } target)
+            || await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.RemoteId == remoteId && d.Kind != RemoteDeviceKinds.Phone && d.RevokedAt == null) is not { } target)
         {
             return Result(RemoteConnectStatuses.Unavailable);
         }
@@ -106,7 +111,9 @@ internal sealed partial class RemoteHub(
 
         var teams = target.UserId == me ? [] : await audience.SharedTeamsAsync(target, me);
         var relation = RemoteAccess.RelationOf(me, target.UserId, teams.Count > 0);
-        if (!RemoteAccess.MayRequest(relation, request.Mode, target.UnattendedEnabled))
+        var manages = request.Intent == RemoteIntents.Manage;
+        if (!RemoteAccess.MayRequest(relation, request.Mode, target.UnattendedEnabled)
+            || (manages && (relation != RemoteRelation.Own || from?.Kind != RemoteDeviceKinds.Phone)))
         {
             return Result(RemoteConnectStatuses.Unavailable);
         }
@@ -117,7 +124,8 @@ internal sealed partial class RemoteHub(
             return Result(RemoteConnectStatuses.RateLimited);
         }
 
-        if (presence.EndpointOf(target.Id) is not { } endpoint)
+        // Managing needs the desktop app itself; the background agent only shows the screen.
+        if (presence.EndpointOf(target.Id) is not { } endpoint || (manages && endpoint.Kind == RemoteDeviceKinds.Agent))
         {
             return Result(RemoteConnectStatuses.Offline);
         }

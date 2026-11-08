@@ -89,6 +89,13 @@ internal static class RemoteLimits
     /// <summary>The largest signaling message, in characters. An SDP offer is a few kilobytes.</summary>
     public const int MaxSignalLength = 64 * 1024;
 
+    /// <summary>
+    /// What the hub accepts on the wire: the largest signal with every character JSON-escaped to
+    /// two bytes, and room for the invocation around it. Below this the connection would be cut
+    /// before <see cref="RemoteHub.Signal"/> could turn a long message down.
+    /// </summary>
+    public const int MaxHubMessageBytes = (2 * MaxSignalLength) + 1024;
+
     /// <summary>Sessions one connection may have open, ringing or live.</summary>
     public const int SessionsPerConnection = 8;
 

@@ -14,6 +14,7 @@ namespace Runova.Website.IntegrationTests.Accounts;
 public sealed class DeviceTokensTests : IAsyncLifetime
 {
     private const string Redirect = "http://127.0.0.1:53111/callback";
+    private const string PhoneRedirect = "com.runovahq.app:/auth/callback";
     private const string Tokens = "/api/v1/device-tokens";
 
     private readonly PostgresFixture _postgres;
@@ -53,6 +54,19 @@ public sealed class DeviceTokensTests : IAsyncLifetime
         platform = "macos",
         appVersion = "3.4.0",
         deviceId = deviceId ?? Guid.NewGuid(),
+    };
+
+    private static object PhoneApproval(string challenge, string redirectUri = PhoneRedirect, string clientId = "runova-mobile", string platform = "ios") => new
+    {
+        clientId,
+        redirectUri,
+        codeChallenge = challenge,
+        codeChallengeMethod = "S256",
+        state = "state-1234567890",
+        deviceName = "Sam's phone",
+        platform,
+        appVersion = "1.0.0",
+        deviceId = Guid.NewGuid(),
     };
 
     /// <summary>The browser's side: approve, and read the code out of the redirect it gets back.</summary>
@@ -142,6 +156,44 @@ public sealed class DeviceTokensTests : IAsyncLifetime
         var browser = await TestAccounts.SignedInClientAsync(_factory, user);
 
         var response = await browser.SendAsync(HttpMethod.Post, "/api/v1/device-authorizations", Approval(Pkce().Challenge, redirectUri, clientId));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_phone_signs_in_through_its_own_redirect_and_shows_as_the_runova_app()
+    {
+        var user = await TestAccounts.CreateAsync(_factory.Services);
+        var browser = await TestAccounts.SignedInClientAsync(_factory, user);
+        var (verifier, challenge) = Pkce();
+
+        var approved = await ApiClient.ReadJsonAsync(
+            await browser.SendAsync(HttpMethod.Post, "/api/v1/device-authorizations", PhoneApproval(challenge)),
+            HttpStatusCode.Created);
+        var redirect = approved.GetProperty("redirectUrl").GetString()!;
+        var code = System.Web.HttpUtility.ParseQueryString(new Uri(redirect).Query)["code"]!;
+        await ApiClient.ReadJsonAsync(await TradeAsync(code, verifier, PhoneRedirect), HttpStatusCode.OK);
+
+        Assert.StartsWith($"{PhoneRedirect}?code=", redirect, StringComparison.Ordinal);
+        var sessions = await ApiClient.ReadJsonAsync(await browser.GetAsync("/api/v1/sessions"), HttpStatusCode.OK);
+        var phone = Assert.Single(sessions.GetProperty("items").EnumerateArray(), s => s.GetProperty("kind").GetString() == "mobile");
+        Assert.Equal("Runova app", phone.GetProperty("deviceName").GetString());
+        Assert.Equal("Phone", phone.GetProperty("platform").GetString());
+    }
+
+    [Theory]
+    [InlineData("com.runovahq.app:/elsewhere", "runova-mobile", "ios")]
+    [InlineData("com.other.app:/auth/callback", "runova-mobile", "ios")]
+    [InlineData("https://evil.example/callback", "runova-mobile", "ios")]
+    [InlineData(Redirect, "runova-mobile", "android")]
+    [InlineData(PhoneRedirect, "runova-mobile", "windows")]
+    [InlineData(PhoneRedirect, "runova-desktop", "ios")]
+    public async Task A_phone_sign_in_needs_the_phone_redirect_and_a_phone_platform(string redirectUri, string clientId, string platform)
+    {
+        var user = await TestAccounts.CreateAsync(_factory.Services);
+        var browser = await TestAccounts.SignedInClientAsync(_factory, user);
+
+        var response = await browser.SendAsync(HttpMethod.Post, "/api/v1/device-authorizations", PhoneApproval(Pkce().Challenge, redirectUri, clientId, platform));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

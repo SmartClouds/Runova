@@ -51,6 +51,13 @@ public sealed record DeviceTokenDto(string AccessToken, string RefreshToken, int
 internal static partial class DeviceTokenEndpoints
 {
     public const string ClientId = "runova-desktop";
+    public const string PhoneClientId = "runova-mobile";
+
+    /// <summary>The phone app's private-use redirect (RFC 8252 section 7.1); PKCE protects the code.</summary>
+    public const string PhoneRedirect = "com.runovahq.app:/auth/callback";
+
+    /// <summary>A phone's name in the session list, and the only one the website shows for it.</summary>
+    public const string PhoneDeviceName = "Runova app";
     public static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(2);
     public static readonly TimeSpan RefreshLifetime = TimeSpan.FromDays(60);
 
@@ -64,6 +71,12 @@ internal static partial class DeviceTokenEndpoints
         ["linux"] = "Linux",
     };
 
+    private static readonly Dictionary<string, string> _phonePlatforms = new(StringComparer.Ordinal)
+    {
+        ["android"] = "Phone",
+        ["ios"] = "Phone",
+    };
+
     public static RouteGroupBuilder MapDeviceTokens(this RouteGroupBuilder api)
     {
         api.MapPost("/device-authorizations", ApproveAsync).RequireAuthorization(Policies.Account);
@@ -73,6 +86,12 @@ internal static partial class DeviceTokenEndpoints
 
     [GeneratedRegex(@"^http://(127\.0\.0\.1|\[::1\]):(\d{1,5})/callback$", RegexOptions.CultureInvariant)]
     private static partial Regex LoopbackRedirect();
+
+    private static bool IsLoopbackRedirect(string? redirectUri) =>
+        redirectUri is not null
+        && LoopbackRedirect().Match(redirectUri) is { Success: true } loopback
+        && int.TryParse(loopback.Groups[2].Value, CultureInfo.InvariantCulture, out var port)
+        && port is >= 1024 and <= 65535;
 
     [GeneratedRegex("^[A-Za-z0-9_-]{43,128}$", RegexOptions.CultureInvariant)]
     private static partial Regex Base64UrlToken();
@@ -89,15 +108,15 @@ internal static partial class DeviceTokenEndpoints
         }
 
         var errors = new Dictionary<string, string[]>();
-        if (request.ClientId != ClientId)
+        var isPhone = request.ClientId == PhoneClientId;
+        if (!isPhone && request.ClientId != ClientId)
         {
-            errors["clientId"] = [$"Only the Runova desktop app ({ClientId}) can be signed in here."];
+            errors["clientId"] = ["Only the Runova apps can be signed in here."];
         }
 
-        if (request.RedirectUri is null || LoopbackRedirect().Match(request.RedirectUri) is not { Success: true } loopback
-            || !int.TryParse(loopback.Groups[2].Value, CultureInfo.InvariantCulture, out var port) || port is < 1024 or > 65535)
+        if (isPhone ? request.RedirectUri != PhoneRedirect : !IsLoopbackRedirect(request.RedirectUri))
         {
-            errors["redirectUri"] = ["The app listens on http://127.0.0.1:<port>/callback."];
+            errors["redirectUri"] = [isPhone ? $"The app listens on {PhoneRedirect}." : "The app listens on http://127.0.0.1:<port>/callback."];
         }
 
         if (request.CodeChallengeMethod != "S256" || request.CodeChallenge is null || !Base64UrlToken().IsMatch(request.CodeChallenge))
@@ -116,9 +135,10 @@ internal static partial class DeviceTokenEndpoints
             errors["deviceName"] = ["Name the computer, up to 100 characters."];
         }
 
-        if (request.Platform is null || !_platforms.ContainsKey(request.Platform))
+        var platforms = isPhone ? _phonePlatforms : _platforms;
+        if (request.Platform is null || !platforms.ContainsKey(request.Platform))
         {
-            errors["platform"] = ["platform is windows, macos or linux."];
+            errors["platform"] = [isPhone ? "platform is android or ios." : "platform is windows, macos or linux."];
         }
 
         if (request.AppVersion is { Length: > 32 })
@@ -139,8 +159,8 @@ internal static partial class DeviceTokenEndpoints
             CodeHash = Hash(code),
             CodeChallenge = request.CodeChallenge!,
             RedirectUri = request.RedirectUri!,
-            DeviceName = deviceName,
-            Platform = _platforms[request.Platform!],
+            DeviceName = isPhone ? PhoneDeviceName : deviceName,
+            Platform = platforms[request.Platform!],
             AppVersion = request.AppVersion,
             DeviceId = request.DeviceId,
             CreatedAt = now,
@@ -214,12 +234,13 @@ internal static partial class DeviceTokenEndpoints
                     }
 
                     var refresh = DeviceTokens.NewRefreshToken();
-                    var anyBefore = await db.AccountSessions.AnyAsync(s => s.UserId == user.Id && s.Kind == AccountSessionKinds.Desktop);
+                    var kind = approval.RedirectUri == PhoneRedirect ? AccountSessionKinds.Mobile : AccountSessionKinds.Desktop;
+                    var anyBefore = await db.AccountSessions.AnyAsync(s => s.UserId == user.Id && s.Kind == kind);
                     var ip = http.Connection.RemoteIpAddress?.ToString();
                     var session = new AccountSession
                     {
                         UserId = user.Id,
-                        Kind = AccountSessionKinds.Desktop,
+                        Kind = kind,
                         DeviceName = approval.DeviceName,
                         Platform = approval.Platform,
                         AppVersion = approval.AppVersion,

@@ -20,10 +20,10 @@ on mobile networks depend on the relay far more than desktops do.
 
 ## Tasks
 
-- [ ] T1 A test that reads both proxy configs and fails when a route the API serves is not matched
-- [ ] T2 `/relay/*` in both matchers
-- [ ] T3 An explicit receive limit on the hub, with a test that a 64 KiB signal is accepted
-- [ ] T4 A per-session byte quota on the relay, with a test
+- [x] T1 A test that reads both proxy configs and fails when a route the API serves is not matched
+- [x] T2 `/relay/*` in both matchers
+- [x] T3 An explicit receive limit on the hub, with a test that a 64 KiB signal is accepted
+- [x] T4 A per-session byte quota on the relay, with a test
 
 ## Acceptance criteria
 

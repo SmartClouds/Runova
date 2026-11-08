@@ -81,6 +81,23 @@ describe('relay links', () => {
     await expect(closed).resolves.toBeTypeOf('string');
   });
 
+  it('says why when the relay turns a session away', async () => {
+    relay = fakeRelay();
+    const opener = createRelayOpener({
+      siteUrl: relay.siteUrl,
+      ticket: async (sessionId) => ({ path: `/relay/remote/${sessionId}`, ticket: 't' }),
+    });
+    const [, host] = await Promise.all([
+      opener({ sessionId: 's4', role: 'controller' }),
+      opener({ sessionId: 's4', role: 'host' }),
+    ]);
+    const closed = new Promise<string>((resolve) => host.transport.onClose(resolve));
+
+    for (const socket of relay.server.clients) socket.close(1008, 'Out of data.');
+
+    await expect(closed).resolves.toBe('Out of data.');
+  });
+
   it('gives up when the other side never arrives', async () => {
     relay = fakeRelay({ neverReady: true });
     const opener = createRelayOpener({

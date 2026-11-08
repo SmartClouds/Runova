@@ -15,6 +15,9 @@ const providers = (items: string[] = []) => json({ items });
 const AUTHORIZE =
   '?client_id=runova-desktop&redirect_uri=http%3A%2F%2F127.0.0.1%3A53111%2Fcallback&response_type=code&code_challenge=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG&code_challenge_method=S256&state=state-12345&device_name=Sam%27s%20MacBook&platform=macos&app_version=3.4.0&device_id=4b2c0c0e-1111-4222-8333-944444444444';
 
+const PHONE_AUTHORIZE =
+  '?client_id=runova-mobile&redirect_uri=com.runovahq.app%3A%2Fauth%2Fcallback&response_type=code&code_challenge=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG&code_challenge_method=S256&state=state-12345&device_name=Sam%27s%20phone&platform=ios&app_version=1.0.0&device_id=4b2c0c0e-1111-4222-8333-944444444444';
+
 beforeEach(() => {
   document.cookie = 'XSRF-TOKEN=xsrf; path=/';
 });
@@ -151,6 +154,42 @@ describe('AuthorizeDevice', () => {
     expect(readAuthorizeRequest(AUTHORIZE)?.deviceName).toBe("Sam's MacBook");
     expect(readAuthorizeRequest(AUTHORIZE.replace('runova-desktop', 'evil'))).toBeNull();
     expect(readAuthorizeRequest(AUTHORIZE.replace('127.0.0.1', 'evil.example'))).toBeNull();
+  });
+
+  it('reads a phone sign-in link only with the phone redirect', () => {
+    expect(readAuthorizeRequest(PHONE_AUTHORIZE)?.clientId).toBe('runova-mobile');
+    expect(
+      readAuthorizeRequest(PHONE_AUTHORIZE.replace('com.runovahq.app', 'com.other.app')),
+    ).toBeNull();
+    expect(
+      readAuthorizeRequest(
+        PHONE_AUTHORIZE.replace(
+          'com.runovahq.app%3A%2Fauth%2Fcallback',
+          'http%3A%2F%2F127.0.0.1%3A53111%2Fcallback',
+        ),
+      ),
+    ).toBeNull();
+    expect(readAuthorizeRequest(AUTHORIZE.replace('runova-desktop', 'runova-mobile'))).toBeNull();
+  });
+
+  it('asks about the Runova app in generic words and sends the browser back to it', async () => {
+    window.history.replaceState(null, '', `/account/authorize${PHONE_AUTHORIZE}`);
+    const redirectUrl = 'com.runovahq.app:/auth/callback?code=c&state=state-12345';
+    fakeFetch({
+      'POST /api/v1/device-authorizations': json(
+        { redirectUrl, expiresAt: '2026-11-05T10:00:00.000Z' },
+        { status: 201 },
+      ),
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    const { container } = render(<AuthorizeDevice email="sam@example.com" navigate={navigate} />);
+
+    expect(screen.getByRole('heading', { name: 'Sign in the Runova app?' })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/iphone|ipad|android|ios app|mobile|phone/i);
+    await user.click(screen.getByRole('button', { name: /Sign in the app/ }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(redirectUrl));
   });
 
   it('names the computer and the account, and approving sends the browser back to the app', async () => {

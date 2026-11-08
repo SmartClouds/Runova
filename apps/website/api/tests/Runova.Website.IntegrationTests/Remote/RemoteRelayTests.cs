@@ -145,6 +145,33 @@ public sealed class RemoteRelayTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_session_over_its_byte_limit_ends_for_both_sides_and_says_why()
+    {
+        _factory.Dispose();
+        _factory = new WebsiteApiFactory(
+            await postgres.CreateDatabaseAsync(),
+            settings: new Dictionary<string, string> { ["Remote:Relay:MaxSessionBytes"] = "10" });
+        await using var accepted = await AcceptedAsync();
+        var (host, controller, sessionId) = accepted;
+        using var hostSocket = await OpenAsync(await host.RelayTicketAsync(sessionId));
+        using var controllerSocket = await OpenAsync(await controller.RelayTicketAsync(sessionId));
+        await ReceiveAsync(hostSocket);
+        await ReceiveAsync(controllerSocket);
+
+        await controllerSocket.SendAsync(new byte[8], WebSocketMessageType.Binary, true, Ct);
+        var first = await ReceiveAsync(hostSocket);
+        await hostSocket.SendAsync(new byte[8], WebSocketMessageType.Binary, true, Ct);
+        var atController = await ReceiveAsync(controllerSocket);
+        var atHost = await ReceiveAsync(hostSocket);
+
+        Assert.Equal(8, first.Data.Length);
+        Assert.Equal(WebSocketMessageType.Close, atController.Type);
+        Assert.Equal(WebSocketMessageType.Close, atHost.Type);
+        Assert.Equal(RemoteRelay.OverLimitReason, controllerSocket.CloseStatusDescription);
+        Assert.Equal(RemoteRelay.OverLimitReason, hostSocket.CloseStatusDescription);
+    }
+
+    [Fact]
     public async Task A_ticket_works_once_and_only_on_its_own_session()
     {
         await using var accepted = await AcceptedAsync();

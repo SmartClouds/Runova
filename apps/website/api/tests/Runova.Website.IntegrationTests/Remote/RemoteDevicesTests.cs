@@ -71,6 +71,32 @@ public sealed class RemoteDevicesTests(PostgresFixture postgres) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task A_phone_registers_but_is_never_listed_as_a_computer()
+    {
+        var (_, sam) = await AccountAsync(_factory);
+
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "ios");
+        var devices = await ApiClient.ReadJsonAsync(await sam.GetAsync("/api/v1/remote-devices"), HttpStatusCode.OK);
+        var directory = await ApiClient.ReadJsonAsync(await sam.GetAsync("/api/v1/reachable-devices"), HttpStatusCode.OK);
+
+        Assert.Equal("phone", phone.GetProperty("kind").GetString());
+        Assert.Empty(devices.GetProperty("items").EnumerateArray());
+        Assert.Empty(directory.GetProperty("mine").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_phone_can_not_be_shown_to_a_team()
+    {
+        var (_, sam) = await AccountAsync(_factory);
+        var team = await CreateTeamAsync(sam, "Ops");
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "android");
+
+        var response = await sam.SendAsync(HttpMethod.Patch, $"/api/v1/remote-devices/{phone.GetProperty("id").GetInt64()}", new { teamIds = new[] { team } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Each_account_lists_only_its_own_computers()
     {
         var (_, sam) = await AccountAsync(_factory);

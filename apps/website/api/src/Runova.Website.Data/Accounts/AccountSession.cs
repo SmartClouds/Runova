@@ -50,4 +50,5 @@ public static class AccountSessionKinds
 {
     public const string Web = "web";
     public const string Desktop = "desktop";
+    public const string Mobile = "mobile";
 }

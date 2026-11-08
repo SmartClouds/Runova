@@ -55,6 +55,56 @@ public sealed class RemoteHubTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_phone_can_not_go_online_or_be_connected_to()
+    {
+        var (_, sam) = await AccountAsync(_factory);
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "android");
+        var desk = await RegisterAsync(sam, name: "Sam's desk");
+        await using var app = await ConnectAsync(_factory, await DeviceTokenAsync(_factory, sam));
+
+        await Assert.ThrowsAsync<HubException>(() => app.GoOnlineAsync(phone.GetProperty("id").GetInt64()));
+        var result = await app.RequestAsync(phone.GetProperty("remoteId").GetString()!, "ask", desk.GetProperty("id").GetInt64());
+
+        Assert.Equal(RemoteConnectStatuses.Unavailable, result.Status);
+    }
+
+    [Fact]
+    public async Task A_phone_asks_to_manage_its_owners_computer_and_the_computer_gets_its_key()
+    {
+        var (_, sam) = await AccountAsync(_factory);
+        var desk = await RegisterAsync(sam, name: "Sam's desk");
+        var key = NewIdentityKey();
+        var phone = await RegisterAsync(sam, name: "Runova app", platform: "ios", identityKey: key);
+        await using var deskApp = await ConnectAsync(_factory, await DeviceTokenAsync(_factory, sam));
+        await using var phoneApp = await ConnectAsync(_factory, await DeviceTokenAsync(_factory, sam));
+        await deskApp.GoOnlineAsync(desk.GetProperty("id").GetInt64());
+
+        var result = await phoneApp.RequestAsync(desk.GetProperty("remoteId").GetString()!, "ask", phone.GetProperty("id").GetInt64(), RemoteIntents.Manage);
+        var incoming = await RemoteApp.NextAsync(deskApp.Incoming);
+
+        Assert.Equal(RemoteConnectStatuses.Ringing, result.Status);
+        Assert.Equal(RemoteIntents.Manage, incoming.Intent);
+        Assert.Equal(key, incoming.Controller.IdentityKey);
+        Assert.Equal("ios", incoming.Controller.Platform);
+    }
+
+    [Fact]
+    public async Task Only_the_owners_phone_can_ask_to_manage_a_computer()
+    {
+        await using var pair = await TeammatesAsync();
+        var kimsPhone = await RegisterAsync(pair.Kim, name: "Runova app", platform: "android");
+
+        var fromLaptop = await pair.ControllerApp.RequestAsync(pair.HostRemoteId, "ask", pair.ControllerDeviceId, RemoteIntents.Manage);
+        var fromTeammatesPhone = await pair.ControllerApp.RequestAsync(pair.HostRemoteId, "ask", kimsPhone.GetProperty("id").GetInt64(), RemoteIntents.Manage);
+        var fromNoDevice = await pair.ControllerApp.RequestAsync(pair.HostRemoteId, "ask", null, RemoteIntents.Manage);
+
+        Assert.Equal(RemoteConnectStatuses.Unavailable, fromLaptop.Status);
+        Assert.Equal(RemoteConnectStatuses.Unavailable, fromTeammatesPhone.Status);
+        Assert.Equal(RemoteConnectStatuses.Unavailable, fromNoDevice.Status);
+        await RemoteApp.NothingAsync(pair.HostApp.Incoming);
+    }
+
+    [Fact]
     public async Task An_app_can_only_go_online_for_its_own_account_computer()
     {
         var (_, sam) = await AccountAsync(_factory);
@@ -220,7 +270,23 @@ public sealed class RemoteHubTests(PostgresFixture postgres) : IAsyncLifetime
         var sessionId = (await RemoteApp.NextAsync(pair.HostApp.Incoming)).SessionId;
         await pair.HostApp.RespondAsync(sessionId, accept: true);
 
-        await Assert.ThrowsAsync<HubException>(() => pair.ControllerApp.SignalAsync(sessionId, new string('x', RemoteLimits.MaxSignalLength + 1)));
+        var refused = await Assert.ThrowsAsync<HubException>(() => pair.ControllerApp.SignalAsync(sessionId, new string('x', RemoteLimits.MaxSignalLength + 1)));
+
+        Assert.Contains("too large", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_largest_signal_arrives_even_when_every_character_needs_escaping()
+    {
+        await using var pair = await TeammatesAsync();
+        await pair.ControllerApp.RequestAsync(pair.HostRemoteId, "ask", pair.ControllerDeviceId);
+        var sessionId = (await RemoteApp.NextAsync(pair.HostApp.Incoming)).SessionId;
+        await pair.HostApp.RespondAsync(sessionId, accept: true);
+        var payload = new string('"', RemoteLimits.MaxSignalLength);
+
+        await pair.ControllerApp.SignalAsync(sessionId, payload);
+
+        Assert.Equal((sessionId, payload), await RemoteApp.NextAsync(pair.HostApp.Signals));
     }
 
     [Fact]

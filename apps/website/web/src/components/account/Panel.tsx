@@ -142,7 +142,7 @@ function ActivityKindIcon({ action }: { action: string }) {
 }
 
 function SessionIcon({ session }: { session: Pick<Session, 'kind'> }) {
-  return session.kind === 'desktop' ? <Laptop /> : <Globe />;
+  return session.kind === 'web' ? <Globe /> : <Laptop />;
 }
 
 export function Overview() {
@@ -152,7 +152,7 @@ export function Overview() {
   const scopes = useLoad<{ items: SyncScope[] }>('/sync-scopes');
   const teams = useLoad<{ items: Team[] }>('/teams');
   const me = account.value;
-  const computers = sessions.value?.items.filter((s) => s.kind === 'desktop') ?? [];
+  const computers = sessions.value?.items.filter((s) => s.kind !== 'web') ?? [];
   const browsers = sessions.value?.items.filter((s) => s.kind === 'web') ?? [];
   const protections = me
     ? [me.twoFactorEnabled, me.hasPassword || me.logins.length > 0, me.emailConfirmed]

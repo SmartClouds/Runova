@@ -96,6 +96,9 @@ public static class RemoteDeviceKinds
 
     /// <summary>The background service that keeps the computer reachable when no one is signed in.</summary>
     public const string Agent = "agent";
+
+    /// <summary>A phone that connects to computers. It holds an identity key but is never one itself.</summary>
+    public const string Phone = "phone";
 }
 
 public static class RemoteAccessModes

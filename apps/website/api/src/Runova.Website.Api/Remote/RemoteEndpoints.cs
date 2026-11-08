@@ -27,6 +27,9 @@ internal static class RemoteEndpoints
 
     public static readonly IReadOnlySet<string> Platforms = new HashSet<string>(StringComparer.Ordinal) { "windows", "macos", "linux" };
 
+    /// <summary>A device on one of these connects to computers and is never listed as one.</summary>
+    public static readonly IReadOnlySet<string> PhonePlatforms = new HashSet<string>(StringComparer.Ordinal) { "android", "ios" };
+
     /// <summary>How long a session record is kept.</summary>
     public static readonly TimeSpan KeepRecordsFor = TimeSpan.FromDays(30);
 
@@ -47,7 +50,7 @@ internal static class RemoteEndpoints
     {
         var me = CurrentAccount.Id(http);
         var devices = await db.RemoteDevices.AsNoTracking()
-            .Where(d => d.UserId == me && d.RevokedAt == null)
+            .Where(d => d.UserId == me && d.Kind != RemoteDeviceKinds.Phone && d.RevokedAt == null)
             .OrderBy(d => d.Name).ThenBy(d => d.Id)
             .ToListAsync();
         var teams = await TeamIdsAsync(db, devices.Select(d => d.Id));
@@ -65,9 +68,9 @@ internal static class RemoteEndpoints
             errors["name"] = [$"Name the computer, up to {NameMax} characters."];
         }
 
-        if (request.Platform is null || !Platforms.Contains(request.Platform))
+        if (request.Platform is null || !(Platforms.Contains(request.Platform) || PhonePlatforms.Contains(request.Platform)))
         {
-            errors["platform"] = ["platform is windows, macos or linux."];
+            errors["platform"] = ["platform is windows, macos, linux, android or ios."];
         }
 
         if (!IsIdentityKey(request.IdentityKey))
@@ -87,7 +90,8 @@ internal static class RemoteEndpoints
 
         var me = CurrentAccount.Id(http);
         var now = time.GetUtcNow();
-        if (await db.RemoteDevices.SingleOrDefaultAsync(d => d.UserId == me && d.DeviceId == request.DeviceId && d.Kind == RemoteDeviceKinds.App && d.RevokedAt == null) is { } existing)
+        var kind = PhonePlatforms.Contains(request.Platform!) ? RemoteDeviceKinds.Phone : RemoteDeviceKinds.App;
+        if (await db.RemoteDevices.SingleOrDefaultAsync(d => d.UserId == me && d.DeviceId == request.DeviceId && d.Kind == kind && d.RevokedAt == null) is { } existing)
         {
             existing.Name = name;
             existing.Platform = request.Platform!;
@@ -102,7 +106,7 @@ internal static class RemoteEndpoints
         {
             UserId = me,
             DeviceId = request.DeviceId,
-            Kind = RemoteDeviceKinds.App,
+            Kind = kind,
             Name = name,
             Platform = request.Platform!,
             IdentityKey = request.IdentityKey,
@@ -150,7 +154,11 @@ internal static class RemoteEndpoints
         }
 
         var teamIds = request.TeamIds?.Distinct().ToList();
-        if (teamIds is { Count: > 0 })
+        if (teamIds is { Count: > 0 } && device.Kind == RemoteDeviceKinds.Phone)
+        {
+            errors["teamIds"] = ["A phone can not be shown to a team."];
+        }
+        else if (teamIds is { Count: > 0 })
         {
             var mine = await db.TeamMembers.Where(m => m.UserId == me && teamIds.Contains(m.TeamId)).CountAsync();
             if (mine != teamIds.Count)
@@ -204,7 +212,7 @@ internal static class RemoteEndpoints
         var me = CurrentAccount.Id(http);
         var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == me);
         var mine = await db.RemoteDevices.AsNoTracking()
-            .Where(d => d.UserId == me && d.RevokedAt == null)
+            .Where(d => d.UserId == me && d.Kind != RemoteDeviceKinds.Phone && d.RevokedAt == null)
             .OrderBy(d => d.Name).ThenBy(d => d.Id)
             .ToListAsync();
 

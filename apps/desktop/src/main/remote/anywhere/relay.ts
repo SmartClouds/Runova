@@ -80,7 +80,10 @@ function socketTransport(socket: WebSocket): LinkTransport {
     const frame = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     for (const listener of frameListeners) listener(frame);
   });
-  socket.on('close', () => shut('the relay closed'));
+  socket.on('close', (code, reason) => {
+    // 1008 is the relay turning the session away, and its reason is written for the person.
+    shut(code === 1008 && reason.length > 0 ? reason.toString() : 'the relay closed');
+  });
   socket.on('error', (error) => shut(error.message));
   return {
     send: (frame) => {

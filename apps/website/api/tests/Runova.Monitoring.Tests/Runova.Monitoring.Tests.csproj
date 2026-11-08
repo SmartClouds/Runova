@@ -26,7 +26,7 @@
     <!-- The fixtures @runova/core's Vitest reads too, so the two parsers can not drift apart. -->
     <None Include="..\..\..\..\..\packages\core\src\health\fixtures\*.json" Link="Fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The compose files, so a test can check no broker or database port is published (E54). -->
-    <None Include="..\..\..\compose.yaml;..\..\..\compose.test.yaml;..\..\..\docker-compose.production.yaml" LinkBase="Compose" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\compose.yaml;..\..\..\compose.test.yaml;..\..\..\docker-compose.production.yaml;..\..\..\Caddyfile" LinkBase="Compose" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\monitoring-node\compose.yaml" Link="Compose\monitoring-node.compose.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

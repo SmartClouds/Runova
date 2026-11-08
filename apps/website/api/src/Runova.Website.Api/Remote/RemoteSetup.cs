@@ -14,6 +14,8 @@ internal static class RemoteSetup
 {
     public static IServiceCollection AddWebsiteRemote(this IServiceCollection services)
     {
+        services.AddSignalR().AddHubOptions<RemoteHub>(options => options.MaximumReceiveMessageSize = RemoteLimits.MaxHubMessageBytes);
+        services.AddOptions<RemoteRelayOptions>().BindConfiguration(RemoteRelayOptions.SectionName);
         services.AddSingleton<RemotePresence>();
         services.AddSingleton<RemoteHubConnections>();
         services.AddSingleton<RemoteSessionRegistry>();

@@ -211,7 +211,7 @@ configs:
       	}
 
       	# /_runova/health is the API's report for Runova's Health page.
-      	@api path /api /api/* /hangfire /hangfire/* /hubs/* /_runova/health
+      	@api path /api /api/* /hangfire /hangfire/* /hubs/* /relay/* /_runova/health
       	handle @api {
       		reverse_proxy api:8080 {
       			import from_nginx

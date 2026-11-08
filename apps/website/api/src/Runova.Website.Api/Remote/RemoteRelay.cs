@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
 
 namespace Runova.Website.Api.Remote;
 
@@ -13,6 +14,15 @@ public enum RelaySide
 }
 
 public sealed record RelayTicket(string SessionId, RelaySide Side);
+
+/// <summary>What one relay session may cost, from the <c>Remote:Relay</c> settings.</summary>
+public sealed class RemoteRelayOptions
+{
+    public const string SectionName = "Remote:Relay";
+
+    /// <summary>Bytes both directions may carry together, about a day of screen tiles.</summary>
+    public long MaxSessionBytes { get; set; } = 50L * 1024 * 1024 * 1024;
+}
 
 /// <summary>A ticket for one side of a session to meet the other on the relay.</summary>
 public sealed record RelayTicketDto(string Path, string Ticket);
@@ -88,9 +98,11 @@ internal sealed class RemoteRelayTickets(TimeProvider time)
 /// reads them; the two computers seal every frame with keys the relay never sees. One message is
 /// forwarded at a time in each direction, so a slow side slows the other instead of filling memory.
 /// </summary>
-internal sealed partial class RemoteRelay(RemoteRelayTickets tickets, TimeProvider time, ILogger<RemoteRelay> logger)
+internal sealed partial class RemoteRelay(RemoteRelayTickets tickets, IOptions<RemoteRelayOptions> options, TimeProvider time, ILogger<RemoteRelay> logger)
 {
     public const string PathPrefix = "/relay/remote";
+
+    public const string OverLimitReason = "This relay session used up its data limit.";
 
     /// <summary>A link frame is 60 KiB, plus 24 bytes of the cipher; anything much larger is not ours.</summary>
     public const int MaxMessageBytes = 128 * 1024;
@@ -142,11 +154,17 @@ internal sealed partial class RemoteRelay(RemoteRelayTickets tickets, TimeProvid
         await socket.SendAsync(ready, WebSocketMessageType.Text, true, lifetime.Token);
         await partner.SendAsync(ready, WebSocketMessageType.Text, true, lifetime.Token);
         var started = time.GetUtcNow();
-        var first = await Task.WhenAny(PumpAsync(socket, partner, lifetime.Token), PumpAsync(partner, socket, lifetime.Token));
+        var allowance = new Allowance(options.Value.MaxSessionBytes);
+        var first = await Task.WhenAny(PumpAsync(socket, partner, allowance, lifetime.Token), PumpAsync(partner, socket, allowance, lifetime.Token));
+        var (status, reason) = allowance.Exceeded
+            ? (WebSocketCloseStatus.PolicyViolation, OverLimitReason)
+            : (WebSocketCloseStatus.NormalClosure, "ended");
+
+        // Both sides hear why before the pumps stop: cancelling a receive aborts its socket.
+        await CloseQuietlyAsync(socket, status, reason);
+        await CloseQuietlyAsync(partner, status, reason);
         await lifetime.CancelAsync();
         var bytes = await first;
-        await CloseQuietlyAsync(socket, WebSocketCloseStatus.NormalClosure, "ended");
-        await CloseQuietlyAsync(partner, WebSocketCloseStatus.NormalClosure, "ended");
         var seconds = (time.GetUtcNow() - started).TotalSeconds;
         LogEnded(logger, sessionId, seconds, bytes);
     }
@@ -196,7 +214,17 @@ internal sealed partial class RemoteRelay(RemoteRelayTickets tickets, TimeProvid
         }
     }
 
-    private static async Task<long> PumpAsync(WebSocket from, WebSocket to, CancellationToken ct)
+    /// <summary>The bytes a session has left, shared by its two directions.</summary>
+    private sealed class Allowance(long limit)
+    {
+        private long _used;
+
+        public bool Exceeded => Volatile.Read(ref _used) > limit;
+
+        public bool Spend(int bytes) => Interlocked.Add(ref _used, bytes) <= limit;
+    }
+
+    private static async Task<long> PumpAsync(WebSocket from, WebSocket to, Allowance allowance, CancellationToken ct)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(MaxMessageBytes);
         long total = 0;
@@ -225,6 +253,11 @@ internal sealed partial class RemoteRelay(RemoteRelayTickets tickets, TimeProvid
 
                 // Only binary frames are the computers' own; anything else ends the session.
                 if (result.MessageType != WebSocketMessageType.Binary)
+                {
+                    return total;
+                }
+
+                if (!allowance.Spend(length))
                 {
                     return total;
                 }
