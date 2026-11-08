@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+aes-gcm = "0.10"
+base64 = "0.22"
+curve25519-dalek = { version = "4", features = ["rand_core", "digest"] }
+ed25519-dalek = "2"
+getrandom = "0.2"
+hex = "0.4"
+hkdf = "0.12"
+hmac = "0.12"
+scrypt = { version = "0.11", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+thiserror = "2"
+unicode-normalization = "0.1"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+zeroize = { version = "1", features = ["derive"] }
+
+runova-protocol = { path = "crates/protocol" }
+runova-crypto = { path = "crates/crypto" }
+runova-signalr = { path = "crates/signalr" }
+
+# The password key derivation is far too slow unoptimized, even in tests.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

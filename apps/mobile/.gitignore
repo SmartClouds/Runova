@@ -1,0 +1,12 @@
+core/target/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/jniLibs/
+android/app/src/main/java/uniffi/
+ios/Runova.xcodeproj/
+ios/build/
+ios/Generated/
+ios/Frameworks/
+.DS_Store

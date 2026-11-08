@@ -1,0 +1,26 @@
+[package]
+name = "runova-crypto"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+aes-gcm.workspace = true
+base64.workspace = true
+curve25519-dalek.workspace = true
+ed25519-dalek.workspace = true
+getrandom.workspace = true
+hkdf.workspace = true
+hmac.workspace = true
+runova-protocol.workspace = true
+scrypt.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true
+x25519-dalek.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+serde_json.workspace = true
