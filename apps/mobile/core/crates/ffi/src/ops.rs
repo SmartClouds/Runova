@@ -248,6 +248,10 @@ impl Runner {
         }
     }
 
+    pub(crate) fn reload_cloud(&mut self) {
+        self.load_cloud();
+    }
+
     fn load_cloud(&mut self) {
         self.view.monitoring.loading = self.view.monitoring.cloud.is_empty();
         self.rest(

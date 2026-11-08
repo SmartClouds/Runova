@@ -21,8 +21,8 @@ category can be turned on or off.
 - [x] T1 Categories and preferences on the server
 - [x] T2 Device tokens, FCM and APNs senders behind an interface with fakes
 - [x] T3 Desktop forwarding
-- [ ] T4 Inbox and settings screens
-- [ ] T5 OS integration on both, with opening a notification going to the right screen
+- [x] T4 Inbox and settings screens
+- [x] T5 OS integration on both, with opening a notification going to the right screen
 
 ## Acceptance criteria
 
@@ -34,3 +34,10 @@ category can be turned on or off.
 ## Not in this epic
 
 Encrypted push payloads.
+
+## Status
+
+All tested through fakes: the server, the desktop's forwarding, the core and the Android screens. No
+push has reached Google or Apple, because the Firebase project and APNs key do not exist yet. Tapping a
+notification opens the Monitors, Account or Inbox screen; other categories open the Inbox rather than
+the exact item. The iOS code has never been compiled. Owed: AC1 on real phones with the app closed.

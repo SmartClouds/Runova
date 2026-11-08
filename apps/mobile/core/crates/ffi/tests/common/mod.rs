@@ -10,6 +10,7 @@ use runova_api::http::{HttpError, HttpReply, HttpTransport};
 use runova_crypto::handshake::{Identity, Mode, base64url, os_random};
 use runova_ffi::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use runova_ffi::engine::{Dependencies, Engine, HubConnector};
+use runova_ffi::notifications::{FeedConnector, FeedEvent};
 use runova_ffi::secure::{SecureStore, SecureTokens};
 use runova_ffi::view::{AppView, AuthState, ConnectionPhase, ViewListener};
 use runova_link::opener::{Direct, Relay};
@@ -158,6 +159,36 @@ impl HubPort for FakeHub {
     }
 
     async fn end(&self, _: &str) {}
+}
+
+/// The notifications hub, pushing whatever a test asks.
+#[derive(Default)]
+pub struct FakeFeed {
+    sender: Mutex<Option<mpsc::Sender<FeedEvent>>>,
+}
+
+impl FakeFeed {
+    fn send(&self, event: FeedEvent) {
+        let sender = self.sender.lock().unwrap().clone().expect("connected");
+        sender.try_send(event).ok();
+    }
+
+    pub fn notification(&self, value: Value) {
+        self.send(FeedEvent::Notification(value));
+    }
+
+    pub fn monitor_changed(&self) {
+        self.send(FeedEvent::MonitorChanged);
+    }
+}
+
+#[async_trait]
+impl FeedConnector for FakeFeed {
+    async fn connect(&self, _token: String) -> Result<mpsc::Receiver<FeedEvent>, String> {
+        let (sender, queue) = mpsc::channel(32);
+        *self.sender.lock().unwrap() = Some(sender);
+        Ok(queue)
+    }
 }
 
 struct FakeConnector;
@@ -389,6 +420,7 @@ pub struct World {
     pub views: Arc<Views>,
     pub computer: Arc<Computer>,
     pub backend: Arc<FakeBackend>,
+    pub feed: Arc<FakeFeed>,
     pub engine: Engine,
 }
 
@@ -433,6 +465,7 @@ pub async fn signed_in() -> World {
     let views = Arc::new(Views::default());
     let computer = Arc::new(Computer::default());
     let backend = Arc::new(FakeBackend::default());
+    let feed = Arc::new(FakeFeed::default());
     let session = Arc::new(Session::new(
         "https://runovahq.test",
         Arc::new(OneToken),
@@ -448,6 +481,7 @@ pub async fn signed_in() -> World {
         listener: views.clone(),
         session,
         backend: backend.clone(),
+        feed: feed.clone(),
         hub: Arc::new(FakeConnector),
         transports: Arc::new(MemoryTransports(computer.clone())),
         refresh_every: Duration::from_millis(20),
@@ -457,6 +491,7 @@ pub async fn signed_in() -> World {
         views,
         computer,
         backend,
+        feed,
         engine,
     };
     world

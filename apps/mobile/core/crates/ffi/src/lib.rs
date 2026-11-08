@@ -11,6 +11,7 @@ pub mod deploy;
 pub mod engine;
 pub mod git;
 pub(crate) mod labels;
+pub mod notifications;
 pub mod ops;
 pub mod palette;
 pub mod secure;

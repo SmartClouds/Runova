@@ -18,6 +18,16 @@ android {
         targetSdk = 36
         versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
         versionName = (findProperty("appVersionName") as String?) ?: "0.1.0"
+
+        // Empty until a Firebase project exists. The app then simply asks for no push token.
+        for ((field, variable) in listOf(
+            "FIREBASE_API_KEY" to "RUNOVA_FIREBASE_API_KEY",
+            "FIREBASE_APP_ID" to "RUNOVA_FIREBASE_APP_ID",
+            "FIREBASE_PROJECT_ID" to "RUNOVA_FIREBASE_PROJECT_ID",
+            "FIREBASE_SENDER_ID" to "RUNOVA_FIREBASE_SENDER_ID",
+        )) {
+            buildConfigField("String", field, "\"${System.getenv(variable).orEmpty()}\"")
+        }
     }
 
     // Only a release build in CD has these, see docs/mobile/release.md.
@@ -76,6 +86,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.biometric:biometric:1.1.0")
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
     implementation("net.java.dev.jna:jna:5.17.0@aar")
 
     testImplementation(composeBom)

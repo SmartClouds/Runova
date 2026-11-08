@@ -17,6 +17,10 @@ targets:
       - path: ../design/fonts
         type: folder
         buildPhase: resources
+    entitlements:
+      path: Runova/Runova.entitlements
+      properties:
+        aps-environment: production
     dependencies:
       - framework: Frameworks/RunovaCore.xcframework
         embed: false

@@ -2,6 +2,7 @@
 
 use crate::backend::LiveBackend;
 use crate::engine::{AppLifecycle, Dependencies, Engine, HubConnector};
+use crate::notifications::{FeedConnector, FeedEvent};
 use crate::secure::{SecureStore, SecureTokens};
 use crate::view::{Section, ViewListener};
 use crate::{CoreError, SignInLink};
@@ -56,6 +57,44 @@ impl HubConnector for LiveHub {
     }
 }
 
+struct LiveFeed {
+    site: String,
+}
+
+#[async_trait]
+impl FeedConnector for LiveFeed {
+    async fn connect(&self, token: String) -> Result<mpsc::Receiver<FeedEvent>, String> {
+        let url = hub_url(&self.site, "/hubs/notifications");
+        let (client, mut raw) = HubClient::connect(&url, &token, HubOptions::default())
+            .await
+            .map_err(|e| e.to_string())?;
+        let (events, queue) = mpsc::channel(HUB_EVENTS);
+        tokio::spawn(async move {
+            // Owning the client here keeps the connection up for as long as anyone is listening.
+            let _client = client;
+            while let Some(event) = raw.recv().await {
+                let mapped = match event.target.as_str() {
+                    "NotificationCreated" => event
+                        .arguments
+                        .into_iter()
+                        .next()
+                        .map(FeedEvent::Notification),
+                    "CloudMonitorUpdated" | "CloudMonitorsChanged" => {
+                        Some(FeedEvent::MonitorChanged)
+                    }
+                    _ => None,
+                };
+                if let Some(mapped) = mapped
+                    && events.send(mapped).await.is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Ok(queue)
+    }
+}
+
 #[derive(uniffi::Object)]
 pub struct RunovaCore {
     runtime: Runtime,
@@ -98,6 +137,9 @@ impl RunovaCore {
                 listener,
                 session,
                 backend: Arc::new(backend),
+                feed: Arc::new(LiveFeed {
+                    site: config.site.clone(),
+                }),
                 hub: Arc::new(LiveHub {
                     site: config.site.clone(),
                 }),

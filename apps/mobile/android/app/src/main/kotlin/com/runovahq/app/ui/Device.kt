@@ -82,6 +82,7 @@ private val MoreSections = listOf(
     TabItem("deploy", "Deploy", RunovaIcons.Deploy),
     TabItem("monitoring", "Monitoring", RunovaIcons.Monitoring),
     TabItem("pipelines", "Pipelines", RunovaIcons.Pipelines),
+    TabItem("notifications", "Notifications", RunovaIcons.Notifications),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -126,6 +127,7 @@ fun DeviceShell(
         section == "deploy" -> Section.DEPLOY
         section == "monitoring" -> Section.MONITORING
         section == "pipelines" -> Section.PIPELINES
+        section == "notifications" -> Section.NOTIFICATIONS
         else -> null
     }
     DisposableEffect(onShow) {
@@ -166,6 +168,7 @@ fun DeviceShell(
                     Box(Modifier.weight(1f)) { PipelinesTab(view, intents.pipelines) }
                     view.error?.let { ErrorLine(it) }
                 }
+                "notifications" -> InboxTab(view, intents.notifications, onTab, showTitle = false)
                 "more" -> MoreScreen(onTab, intents.forgetThisPhone)
                 else -> ProjectsScreen(view, intents, onTab)
             }

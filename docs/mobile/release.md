@@ -44,5 +44,13 @@ The build goes to TestFlight.
 
 ### Push notifications
 
-Needs a Firebase project and an APNs key, wired into the website API's configuration as described in
-`docs/epics/82-*.md`.
+Needs a Firebase project and an APNs key. The website API reads them from `Push__Fcm__*` and
+`Push__Apns__*`, see `docs/website/api-contract.md`, and stays silent without them. The Android build
+also needs the project's public values:
+
+| Repository secret | Value |
+|---|---|
+| `RUNOVA_FIREBASE_API_KEY` | from the Firebase Android app |
+| `RUNOVA_FIREBASE_APP_ID` | from the Firebase Android app |
+| `RUNOVA_FIREBASE_PROJECT_ID` | the project id |
+| `RUNOVA_FIREBASE_SENDER_ID` | the project number |

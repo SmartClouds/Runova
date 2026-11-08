@@ -275,6 +275,24 @@ fun RunovaProgress(percent: Double, modifier: Modifier = Modifier) {
     }
 }
 
+/** On or off. Drawn here so it is the same switch on both apps. */
+@Composable
+fun RunovaToggle(on: Boolean, onChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) {
+    val colors = RunovaTheme.colors
+    Box(
+        modifier
+            .size(width = 46.dp, height = 28.dp)
+            .clip(CircleShape)
+            .background(if (on) colors.primary else colors.secondary)
+            .clickable(role = Role.Switch) { onChange(!on) }
+            .semantics { contentDescription = label }
+            .padding(3.dp),
+        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+    ) {
+        Box(Modifier.size(22.dp).clip(CircleShape).background(if (on) colors.primaryForeground else colors.mutedForeground))
+    }
+}
+
 /** A small control: a terminal key, a filter, a shortcut. */
 @Composable
 fun RunovaChip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {

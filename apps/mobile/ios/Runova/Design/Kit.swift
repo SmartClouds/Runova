@@ -264,6 +264,33 @@ struct RunovaProgress: View {
     }
 }
 
+/// On or off. Drawn here so it is the same switch on both apps.
+struct RunovaToggle: View {
+    let isOn: Bool
+    let label: String
+    let onChange: (Bool) -> Void
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button {
+            onChange(!isOn)
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule().fill(isOn ? palette.primary : palette.secondary)
+                Circle()
+                    .fill(isOn ? palette.primaryForeground : palette.mutedForeground)
+                    .frame(width: 22, height: 22)
+                    .padding(3)
+            }
+            .frame(width: 46, height: 28)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(isOn ? "On" : "Off")
+    }
+}
+
 /// A small control: a terminal key, a filter, a shortcut.
 struct RunovaChip: View {
     let text: String

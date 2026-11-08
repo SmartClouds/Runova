@@ -25,11 +25,13 @@ struct AppIntents {
     var pipelines = PipelineIntents()
     var account = AccountIntents()
     var forgetThisPhone: () -> Void = {}
+    var notifications = NotificationIntents()
 }
 
 let appTabs = [
     TabItem(id: "systems", title: "Systems", icon: RunovaIcons.systems),
     TabItem(id: "monitors", title: "Monitors", icon: RunovaIcons.monitoring),
+    TabItem(id: "inbox", title: "Inbox", icon: RunovaIcons.notifications),
     TabItem(id: "account", title: "Account", icon: RunovaIcons.account),
 ]
 
@@ -47,6 +49,13 @@ struct AppRoot: View {
             case .starting: StartingScreen()
             case .signedOut: SignInScreen(error: view.error, onSignIn: intents.signIn)
             case .signedIn: signedIn
+            }
+            if let banner = view.notifications.banner {
+                VStack {
+                    NotificationBanner(
+                        item: banner, connected: view.connection != nil, intents: intents.notifications, tab: $tab)
+                    Spacer(minLength: 0)
+                }
             }
             if let stepUp = view.account.stepUp {
                 StepUpOverlay(stepUp: stepUp, intents: intents.account)
@@ -79,6 +88,10 @@ struct AppRoot: View {
                     case "account":
                         AccountTab(view: view, intents: intents)
                             .onAppear { intents.openSection(.account) }
+                            .onDisappear { intents.openSection(nil) }
+                    case "inbox":
+                        InboxTab(view: view, intents: intents.notifications, tab: $tab)
+                            .onAppear { intents.openSection(.notifications) }
                             .onDisappear { intents.openSection(nil) }
                     case "monitors":
                         VStack(alignment: .leading, spacing: 0) {

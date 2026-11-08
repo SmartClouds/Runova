@@ -133,6 +133,42 @@ pub enum Section {
     Monitoring,
     Pipelines,
     Account,
+    Notifications,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum NotificationDestination {
+    Inbox,
+    Monitors,
+    Account,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct NotificationItemView {
+    pub id: i64,
+    pub title: String,
+    pub body: String,
+    pub category: String,
+    pub destination: NotificationDestination,
+    pub read: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct NotificationPreferenceView {
+    pub category: String,
+    pub label: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct NotificationsScreen {
+    pub items: Vec<NotificationItemView>,
+    pub unread: u32,
+    pub loading: bool,
+    pub preferences: Vec<NotificationPreferenceView>,
+    pub settings_open: bool,
+    /// One that just arrived while the app is open.
+    pub banner: Option<NotificationItemView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -651,6 +687,7 @@ pub struct AppView {
     pub monitoring: MonitoringScreen,
     pub pipelines: PipelinesScreen,
     pub account: AccountScreen,
+    pub notifications: NotificationsScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -681,6 +718,7 @@ impl AppView {
             monitoring: MonitoringScreen::default(),
             pipelines: PipelinesScreen::default(),
             account: AccountScreen::default(),
+            notifications: NotificationsScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

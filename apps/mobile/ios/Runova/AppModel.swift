@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Security
 import LocalAuthentication
+import UserNotifications
 import SwiftUI
 
 private let service = "com.runovahq.app.secure"
@@ -126,10 +127,34 @@ final class AppModel: NSObject, ObservableObject {
                 removeMember: { [weak self] in self?.engine?.accountRemoveMember(userId: $0) },
                 acceptInvitation: { [weak self] in self?.engine?.accountAcceptInvitation(id: $0) },
                 declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) }),
-            forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() })
+            forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() },
+            notifications: NotificationIntents(
+                open: { [weak self] in self?.engine?.notificationOpen(id: $0) },
+                dismissBanner: { [weak self] in self?.engine?.notificationDismissBanner() },
+                markAllRead: { [weak self] in self?.engine?.notificationsMarkAllRead() },
+                openSettings: { [weak self] in self?.engine?.notificationsOpenSettings() },
+                closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
+                setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }))
     }
 
     private var engine: Engine? { core?.engine() }
+
+    func askForNotifications() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { allowed, _ in
+            guard allowed else { return }
+            Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
+        }
+    }
+
+    func registerPushToken(_ token: String) {
+        engine?.registerPushToken(token: token)
+    }
+
+    /// A tapped push, with what the server put next to its alert.
+    func openPush(category: String, notificationId: Int64?) {
+        if let notificationId { engine?.notificationOpen(id: notificationId) }
+        tab = tabFor(notificationDestination(category: category), connected: view?.connection != nil)
+    }
     private var lastBiometric: UInt64 = 0
 
     /// Runs the phone's own check. The core only asks for the value if this says yes.

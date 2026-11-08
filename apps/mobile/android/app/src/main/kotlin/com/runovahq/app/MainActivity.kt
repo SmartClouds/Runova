@@ -29,6 +29,13 @@ import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
+import com.runovahq.app.ui.NotificationIntents
+import com.runovahq.app.ui.tabFor
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.messaging.FirebaseMessaging
+import android.Manifest
+import uniffi.runova_ffi.notificationDestination
 import com.runovahq.app.ui.MonitoringIntents
 import com.runovahq.app.ui.PipelineIntents
 import com.runovahq.app.ui.StatusIntents
@@ -149,6 +156,14 @@ class MainActivity : FragmentActivity(), ViewListener {
                 declineInvitation = { engine.accountDeclineInvitation(it) },
             ),
             forgetThisPhone = { engine.forgetThisPhone() },
+            notifications = NotificationIntents(
+                open = { engine.notificationOpen(it) },
+                dismissBanner = { engine.notificationDismissBanner() },
+                markAllRead = { engine.notificationsMarkAllRead() },
+                openSettings = { engine.notificationsOpenSettings() },
+                closeSettings = { engine.notificationsCloseSettings() },
+                setEnabled = { category, on -> engine.notificationSetEnabled(category, on) },
+            ),
         )
         setContent {
             RunovaTheme {
@@ -163,11 +178,41 @@ class MainActivity : FragmentActivity(), ViewListener {
             }
         }
         handleCallback(intent)
+        handlePushTap(intent)
+        startPush()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleCallback(intent)
+        handlePushTap(intent)
+    }
+
+    /** Asks the OS for a push token. Does nothing until the app is built with a Firebase project. */
+    private fun startPush() {
+        if (BuildConfig.FIREBASE_API_KEY.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            FirebaseApp.initializeApp(
+                this,
+                FirebaseOptions.Builder()
+                    .setApiKey(BuildConfig.FIREBASE_API_KEY)
+                    .setApplicationId(BuildConfig.FIREBASE_APP_ID)
+                    .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
+                    .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
+                    .build(),
+            )
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { engine.registerPushToken(it) }
+    }
+
+    /** A tapped push arrives as this activity's extras, with what the server put in `data`. */
+    private fun handlePushTap(intent: Intent) {
+        val category = intent.getStringExtra("category") ?: return
+        intent.getStringExtra("notificationId")?.toLongOrNull()?.let { engine.notificationOpen(it) }
+        tab = tabFor(notificationDestination(category), view?.connection != null)
     }
 
     override fun onStart() {

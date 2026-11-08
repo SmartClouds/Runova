@@ -3,6 +3,7 @@
 
 use crate::account::PendingStepUp;
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
+use crate::notifications::{FeedConnector, FeedEvent};
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
 use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
@@ -63,6 +64,7 @@ pub struct Dependencies {
     pub backend: Arc<dyn Backend>,
     pub hub: Arc<dyn HubConnector>,
     pub transports: Arc<dyn Transports>,
+    pub feed: Arc<dyn FeedConnector>,
     /// How often a screen on show refreshes itself.
     pub refresh_every: Duration,
 }
@@ -111,6 +113,7 @@ pub(crate) enum Done {
 pub(crate) struct Booted {
     hub: Arc<dyn HubPort>,
     events: mpsc::Receiver<HubEvent>,
+    feed: Option<mpsc::Receiver<FeedEvent>>,
     device_id: i64,
     systems: Vec<SystemEntry>,
 }
@@ -272,6 +275,8 @@ pub(crate) struct Runner {
     pub(crate) biometric_serial: u64,
     pub(crate) vault_listing: bool,
     pub(crate) pending_step_up: Option<PendingStepUp>,
+    pub(crate) feed_events: Option<mpsc::Receiver<FeedEvent>>,
+    pub(crate) push_token: Option<String>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -337,6 +342,18 @@ impl Runner {
             biometric_serial: 0,
             vault_listing: false,
             pending_step_up: None,
+            feed_events: None,
+            push_token: None,
+        }
+    }
+
+    pub(crate) fn platform_name(&self) -> String {
+        self.deps.platform.clone()
+    }
+
+    pub(crate) fn refresh_cloud_if_on_show(&mut self) {
+        if self.section == Some(Section::Monitoring) {
+            self.reload_cloud();
         }
     }
 
@@ -425,7 +442,7 @@ impl Runner {
         // Cloud monitors come from Runova itself, so they need no computer.
         let needs_computer = !matches!(
             self.section,
-            Some(Section::Monitoring) | Some(Section::Account)
+            Some(Section::Monitoring) | Some(Section::Account) | Some(Section::Notifications)
         );
         if self.section.is_none() || (needs_computer && self.session.is_none()) {
             return;
@@ -455,6 +472,7 @@ impl Runner {
             Some(Section::Monitoring) => self.refresh_monitoring(),
             Some(Section::Pipelines) => self.refresh_pipelines(),
             Some(Section::Account) => self.refresh_account(),
+            Some(Section::Notifications) => self.refresh_notifications(),
             None => {}
         }
     }
@@ -550,9 +568,10 @@ impl Runner {
         let backend = self.deps.backend.clone();
         let secure = self.deps.secure.clone();
         let platform = self.deps.platform.clone();
+        let feed = self.deps.feed.clone();
         tokio::spawn(async move {
             let _ = done.send(Done::Boot(
-                run_boot(session, connector, backend, secure, platform).await,
+                run_boot(session, connector, feed, backend, secure, platform).await,
             ));
         });
     }
@@ -580,6 +599,7 @@ impl Runner {
     }
 
     fn let_go_of_hub(&mut self) {
+        self.feed_events = None;
         self.hub = None;
         self.hub_events = None;
         self.view.hub_connected = false;
@@ -627,6 +647,7 @@ impl Runner {
     fn signed_out(&mut self) {
         self.view.monitoring = MonitoringScreen::default();
         self.view.account = Default::default();
+        self.view.notifications = Default::default();
         self.pending_step_up = None;
         self.end_connection();
         self.let_go_of_hub();
@@ -765,6 +786,8 @@ impl Runner {
             Done::Boot(Ok(booted)) => {
                 self.hub = Some(booted.hub);
                 self.hub_events = Some(booted.events);
+                self.feed_events = booted.feed;
+                self.send_push_token();
                 self.device_id = Some(booted.device_id);
                 self.view.hub_connected = true;
                 self.set_systems(booted.systems);
@@ -899,6 +922,7 @@ impl Runner {
                 },
                 Some(finished) = done.recv() => self.on_done(finished),
                 event = next_event(&mut self.hub_events) => self.on_hub_event(event),
+                event = next_feed_event(&mut self.feed_events) => self.on_feed_event(event),
                 () = wait_until(let_go_at) => {
                     self.let_go_at = None;
                     self.end_connection();
@@ -918,6 +942,13 @@ fn first_line(message: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+async fn next_feed_event(events: &mut Option<mpsc::Receiver<FeedEvent>>) -> Option<FeedEvent> {
+    match events {
+        Some(queue) => queue.recv().await,
+        None => std::future::pending().await,
+    }
+}
+
 async fn next_event(events: &mut Option<mpsc::Receiver<HubEvent>>) -> Option<HubEvent> {
     match events {
         Some(queue) => queue.recv().await,
@@ -935,6 +966,7 @@ async fn wait_until(at: Option<Instant>) {
 async fn run_boot(
     session: Arc<Session>,
     connector: Arc<dyn HubConnector>,
+    feed: Arc<dyn FeedConnector>,
     backend: Arc<dyn Backend>,
     secure: Arc<dyn SecureStore>,
     platform: String,
@@ -947,7 +979,12 @@ async fn run_boot(
         AuthError::SignedOut => BootError::SignedOut,
         other => BootError::Failed(other.to_string()),
     })?;
-    let (hub, events) = connector.connect(token).await.map_err(BootError::Failed)?;
+    let (hub, events) = connector
+        .connect(token.clone())
+        .await
+        .map_err(BootError::Failed)?;
+    // The app works without live delivery, so this failing is not a failed start.
+    let feed = feed.connect(token).await.ok();
     let seed = identity_seed(secure.as_ref());
     let device_id = backend
         .register_phone(PhoneRegistration {
@@ -962,6 +999,7 @@ async fn run_boot(
     Ok(Booted {
         hub,
         events,
+        feed,
         device_id,
         systems,
     })

@@ -69,11 +69,13 @@ data class AppIntents(
     val pipelines: PipelineIntents = PipelineIntents(),
     val account: AccountIntents = AccountIntents(),
     val forgetThisPhone: () -> Unit = {},
+    val notifications: NotificationIntents = NotificationIntents(),
 )
 
 val AppTabs = listOf(
     TabItem("systems", "Systems", RunovaIcons.Systems),
     TabItem("monitors", "Monitors", RunovaIcons.Monitoring),
+    TabItem("inbox", "Inbox", RunovaIcons.Notifications),
     TabItem("account", "Account", RunovaIcons.Account),
 )
 
@@ -91,6 +93,11 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
                     else -> ConnectionScreen(connection, intents)
                 }
+            }
+        }
+        view.notifications.banner?.let {
+            Box(Modifier.align(Alignment.TopCenter)) {
+                NotificationBanner(it, view.connection != null, intents.notifications, onTab)
             }
         }
         view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
@@ -132,6 +139,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
     val onShow = when (section) {
         "monitors" -> Section.MONITORING
         "account" -> Section.ACCOUNT
+        "inbox" -> Section.NOTIFICATIONS
         else -> null
     }
     DisposableEffect(onShow) {
@@ -143,6 +151,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
         Box(Modifier.weight(1f)) {
             when (section) {
                 "account" -> AccountTab(view, intents)
+                "inbox" -> InboxTab(view, intents.notifications, onTab)
                 "monitors" -> Column(Modifier.fillMaxSize()) {
                     RunovaTopBar("Monitors")
                     MonitoringTab(view, intents.monitoring)

@@ -198,6 +198,17 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(fixtureView(account: account), "account", tab: "account")
     }
 
+    func testInbox() throws {
+        let screen = NotificationsScreen(
+            items: [
+                NotificationItemView(
+                    id: 1, title: "Deploy failed on prod", body: "", category: "deploys", destination: .inbox,
+                    read: false)
+            ],
+            unread: 1, loading: false, preferences: [], settingsOpen: false, banner: nil)
+        try renderSnapshot(fixtureView(notifications: screen), "inbox", tab: "inbox")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
@@ -220,6 +231,8 @@ func fixtureView(
     pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil),
     account: AccountScreen = AccountScreen(
         profile: nil, loading: false, sessions: [], activity: [], teams: [], invitations: [], team: nil, stepUp: nil),
+    notifications: NotificationsScreen = NotificationsScreen(
+        items: [], unread: 0, loading: false, preferences: [], settingsOpen: false, banner: nil),
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
@@ -227,6 +240,7 @@ func fixtureView(
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
         monitoring: monitoring, pipelines: pipelines, account: account,
+        notifications: notifications,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 
