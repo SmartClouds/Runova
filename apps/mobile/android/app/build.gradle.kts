@@ -16,8 +16,24 @@ android {
         applicationId = "com.runovahq.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("appVersionName") as String?) ?: "0.1.0"
+    }
+
+    // Only a release build in CD has these, see docs/mobile/release.md.
+    System.getenv("RUNOVA_ANDROID_KEYSTORE")?.let { keystore ->
+        signingConfigs.create("release") {
+            storeFile = file(keystore)
+            storePassword = System.getenv("RUNOVA_ANDROID_STORE_PASSWORD")
+            keyAlias = System.getenv("RUNOVA_ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("RUNOVA_ANDROID_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     compileOptions {

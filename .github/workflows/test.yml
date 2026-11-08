@@ -652,7 +652,7 @@ jobs:
         working-directory: .
         run: |
           pnpm install --frozen-lockfile --filter @runova/desktop
-          node --test scripts/mobile-design.test.mjs
+          node --test scripts/mobile-design.test.mjs scripts/mobile-version.test.mjs
           node scripts/mobile-design.mjs --check
 
       - name: Format

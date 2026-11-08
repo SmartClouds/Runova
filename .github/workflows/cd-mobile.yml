@@ -1,0 +1,230 @@
+name: CD Mobile
+
+# Builds the signed Android app and sends the iOS app to TestFlight for a release tag. It is its
+# own workflow so a problem with a phone build can never hold up a desktop release.
+#
+# Both builds need secrets the repository owner sets once, listed in docs/mobile/release.md. A
+# build whose secrets are missing says so and is skipped, so the workflow is safe before then.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.0). Required for manual runs."
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cd-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for CI on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          waited=0
+          while true; do
+            runs="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=20")"
+            passed="$(jq -r '[.workflow_runs[] | select(.conclusion == "success")][0].html_url // empty' <<< "$runs")"
+            if [ -n "$passed" ]; then
+              echo "CI passed on $SHA: $passed"
+              exit 0
+            fi
+            running="$(jq -r '[.workflow_runs[] | select(.status != "completed")][0].html_url // empty' <<< "$runs")"
+            latest="$(jq -r '(.workflow_runs[0] // empty) | "\(.conclusion) \(.html_url)"' <<< "$runs")"
+            if [ -n "$running" ]; then
+              echo "CI is still running on $SHA: $running"
+            elif [ -n "$latest" ]; then
+              echo "::error::CI did not pass on $SHA (${latest%% *}): ${latest#* }. Fix it, or run CI on the tag, then re-run this workflow."
+              exit 1
+            elif [ "$waited" -ge 300 ]; then
+              echo "::error::CI never ran on $SHA. Push the commit to master, or run CI on the tag, then re-run this workflow."
+              exit 1
+            fi
+            sleep 30
+            waited=$((waited + 30))
+          done
+
+  android:
+    name: Android
+    needs: ci-passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      KEYSTORE_BASE64: ${{ secrets.RUNOVA_ANDROID_KEYSTORE_BASE64 }}
+      RUNOVA_ANDROID_STORE_PASSWORD: ${{ secrets.RUNOVA_ANDROID_STORE_PASSWORD }}
+      RUNOVA_ANDROID_KEY_ALIAS: ${{ secrets.RUNOVA_ANDROID_KEY_ALIAS }}
+      RUNOVA_ANDROID_KEY_PASSWORD: ${{ secrets.RUNOVA_ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Are the signing secrets set?
+        id: secrets
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::RUNOVA_ANDROID_KEYSTORE_BASE64 is not set, so no Android build was made. See docs/mobile/release.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        if: steps.secrets.outputs.ready == 'true'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-37.0 build-tools;36.0.0 ndk;28.2.13676358
+
+      - name: Setup Rust
+        if: steps.secrets.outputs.ready == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+
+      - name: Install cargo-ndk
+        if: steps.secrets.outputs.ready == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Setup Node.js
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      - name: Build and sign
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+        run: |
+          eval "$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          keystore="$RUNNER_TEMP/release.keystore"
+          base64 --decode <<< "$KEYSTORE_BASE64" > "$keystore"
+          RUNOVA_ANDROID_KEYSTORE="$keystore" ./gradlew :app:assembleRelease :app:bundleRelease \
+            -PappVersionName="$VERSION_NAME" -PappVersionCode="$VERSION_CODE" \
+            --console=plain --no-daemon
+          rm -f "$keystore"
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/runova-$VERSION_NAME.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/runova-$VERSION_NAME.aab"
+
+      - name: Keep the build
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: runova-android
+          path: apps/mobile/android/dist/*
+
+      # The desktop workflow creates the release, and it may still be building.
+      - name: Attach to the release
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 120); do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              gh release upload "$TAG" apps/mobile/android/dist/* --clobber
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::warning::No release named $TAG appeared, so the build is only in this run's artifacts."
+
+  ios:
+    name: iOS
+    needs: ci-passed
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+    steps:
+      - name: Is everything needed here?
+        id: secrets
+        run: |
+          if [ -z "$KEY_BASE64" ] || [ -z "$TEAM_ID" ]; then
+            echo "::warning::The App Store Connect secrets are not set, so nothing went to TestFlight. See docs/mobile/release.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif ! xcodebuild -version > /dev/null 2>&1; then
+            echo "::warning::Xcode is not installed on this runner, so nothing went to TestFlight."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        if: steps.secrets.outputs.ready == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - name: Setup Node.js
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      - name: Build the core and the project
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          command -v xcodegen > /dev/null || brew install xcodegen
+          sh apps/mobile/ios/scripts/build-core.sh
+          cd apps/mobile/ios && xcodegen generate
+
+      - name: Archive and upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: apps/mobile/ios
+        run: |
+          eval "$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          key="$RUNNER_TEMP/AuthKey.p8"
+          base64 --decode <<< "$KEY_BASE64" > "$key"
+          trap 'rm -f "$key"' EXIT
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key"
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          xcodebuild archive -project Runova.xcodeproj -scheme Runova \
+            -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}"
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>destination</key><string>upload</string>
+          <key>teamID</key><string>$TEAM_ID</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
