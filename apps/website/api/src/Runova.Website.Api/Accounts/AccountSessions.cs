@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Runova.Website.Api.Email;
 using Runova.Website.Api.Http;
+using Runova.Website.Api.Remote;
 using Runova.Website.Core.Accounts;
 using Runova.Website.Core.Email;
 using Runova.Website.Data;
@@ -29,7 +30,8 @@ internal sealed class AccountSessions(
     IMemoryCache cache,
     IHttpContextAccessor accessor,
     IServiceScopeFactory scopes,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    RemoteHubConnections remoteConnections)
 {
     public const string SessionClaim = "runova:sid";
 
@@ -138,6 +140,7 @@ internal sealed class AccountSessions(
             .Where(s => s.Id == sessionId && s.UserId == userId && s.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
         cache.Remove(CacheKey(sessionId));
+        remoteConnections.Close(sessionId);
         return ended == 1;
     }
 
@@ -158,6 +161,7 @@ internal sealed class AccountSessions(
         foreach (var id in ids)
         {
             cache.Remove(CacheKey(id));
+            remoteConnections.Close(id);
         }
 
         return ids.Count;

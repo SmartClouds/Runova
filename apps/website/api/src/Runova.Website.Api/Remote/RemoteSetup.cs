@@ -15,6 +15,7 @@ internal static class RemoteSetup
     public static IServiceCollection AddWebsiteRemote(this IServiceCollection services)
     {
         services.AddSingleton<RemotePresence>();
+        services.AddSingleton<RemoteHubConnections>();
         services.AddSingleton<RemoteSessionRegistry>();
         services.AddSingleton<RemoteRateLimiter>();
         services.AddSingleton<RemoteRelayTickets>();

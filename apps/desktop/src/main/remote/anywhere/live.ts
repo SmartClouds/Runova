@@ -136,6 +136,9 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
       showOsNotification({ title, body, route: '/remote?tab=anywhere' });
     },
     log,
+    checkAccount: () => {
+      void runtime.profile().catch(() => undefined);
+    },
     siteUrl: runtime.siteUrl,
     agent: createAgentInstaller({
       platform: process.platform,

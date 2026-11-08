@@ -13,6 +13,20 @@ const manager = vi.hoisted(() => ({
   stopHost: vi.fn(),
   connect: vi.fn(),
   connectSaved: vi.fn(async () => ({ ok: true })),
+  generatePairingCode: vi.fn(),
+  listSavedServers: vi.fn(() => [{ id: 'srv-1' }]),
+  renameSavedServer: vi.fn(),
+  removeSavedServer: vi.fn(),
+  openSessionWindow: vi.fn(),
+  sendClipboard: vi.fn(),
+  sendFile: vi.fn(),
+  fmRoots: vi.fn(),
+  fmList: vi.fn(),
+  fmMkdir: vi.fn(),
+  fmDelete: vi.fn(),
+  fmRename: vi.fn(),
+  uploadFileTo: vi.fn(),
+  downloadFile: vi.fn(),
 }));
 const account = vi.hoisted(() => ({ status: vi.fn() }));
 
@@ -46,6 +60,22 @@ beforeEach(async () => {
   );
 });
 
+const SIGNED_IN_ONLY: [keyof typeof manager, string, unknown[]][] = [
+  ['generatePairingCode', IPC.remote.generatePairingCode, []],
+  ['renameSavedServer', IPC.remote.renameSavedServer, ['srv-1', 'Desk']],
+  ['removeSavedServer', IPC.remote.removeSavedServer, ['srv-1']],
+  ['openSessionWindow', IPC.remote.openSessionWindow, []],
+  ['sendClipboard', IPC.remote.sendClipboard, []],
+  ['sendFile', IPC.remote.sendFile, []],
+  ['fmRoots', IPC.remote.fmRoots, []],
+  ['fmList', IPC.remote.fmList, ['/']],
+  ['fmMkdir', IPC.remote.fmMkdir, ['/', 'new']],
+  ['fmDelete', IPC.remote.fmDelete, ['/a']],
+  ['fmRename', IPC.remote.fmRename, ['/a', '/b']],
+  ['uploadFileTo', IPC.remote.fmUploadTo, ['/']],
+  ['downloadFile', IPC.remote.fmDownload, ['/a']],
+];
+
 describe('remote handlers signed out', () => {
   beforeEach(() => account.status.mockResolvedValue(SIGNED_OUT));
 
@@ -70,6 +100,16 @@ describe('remote handlers signed out', () => {
     expect(manager.connectSaved).not.toHaveBeenCalled();
   });
 
+  it.each(SIGNED_IN_ONLY)('will not run %s', async (method, channel, args) => {
+    await expect(invoke(channel, ...args)).rejects.toThrow(REMOTE_SIGN_IN_ERROR);
+    expect(manager[method]).not.toHaveBeenCalled();
+  });
+
+  it('lists no saved computers', async () => {
+    await expect(invoke(IPC.remote.listSavedServers)).resolves.toEqual([]);
+    expect(manager.listSavedServers).not.toHaveBeenCalled();
+  });
+
   it('still lets hosting be stopped and the state be read', async () => {
     await invoke(IPC.remote.stopHost);
     await invoke(IPC.remote.getState);
@@ -86,6 +126,16 @@ describe('remote handlers signed in', () => {
     await invoke(IPC.remote.startHost, { ip: '192.168.1.20', port: 7900 });
 
     expect(manager.startHost).toHaveBeenCalledWith('192.168.1.20', 7900);
+  });
+
+  it.each(SIGNED_IN_ONLY)('runs %s', async (method, channel, args) => {
+    await invoke(channel, ...args);
+
+    expect(manager[method]).toHaveBeenCalledWith(...args);
+  });
+
+  it('lists saved computers', async () => {
+    await expect(invoke(IPC.remote.listSavedServers)).resolves.toEqual([{ id: 'srv-1' }]);
   });
 
   it('connects by code and from a saved server', async () => {

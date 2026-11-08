@@ -90,6 +90,8 @@ export interface AnywhereServiceDeps {
   siteUrl?: string;
   /** Installs the background agent (E64), where this build and OS have one. */
   agent?: AgentInstaller;
+  /** Asks the website whether this sign-in still stands, for when the hub drops this computer. */
+  checkAccount?: () => void;
 }
 
 const RETRY_REGISTER_MS = 60_000;
@@ -152,6 +154,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   let retry: NodeJS.Timeout | null = null;
   let running = false;
   let agentInstalled = false;
+  /** Goes up with every start and stop, so work a sign-out overtook can tell. */
+  let generation = 0;
 
   function state(): AnywhereState {
     return {
@@ -221,21 +225,48 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     disconnected: () => {
       if (status === 'online') status = 'offline';
       announce();
+      // The server also closes this when the sign-in was ended from another device.
+      deps.checkAccount?.();
     },
   };
 
+  function forgetAccount(): void {
+    account = null;
+    device = null;
+    identity = null;
+    settings = null;
+    passwordSet = false;
+    agentInstalled = false;
+    directory = { mine: [], teammates: [] };
+    teams = [];
+    recent = [];
+    error = null;
+    earlyResolved.clear();
+  }
+
+  /** True when a sign-out or a newer start overtook this work. A sign-out leaves nothing behind. */
+  function overtaken(run: number): boolean {
+    if (run === generation) return false;
+    if (!running) forgetAccount();
+    return true;
+  }
+
   async function start(): Promise<void> {
+    const run = ++generation;
     running = true;
     account = await deps.account();
-    settings = await deps.store.settings();
-    passwordSet = await deps.store.hasPasswordSecret();
-    agentInstalled = deps.agent ? await deps.agent.installed().catch(() => false) : false;
-    await loadRecent();
+    if (overtaken(run)) return;
     if (!account) {
+      forgetAccount();
       status = 'signed-out';
       announce();
       return;
     }
+    settings = await deps.store.settings();
+    passwordSet = await deps.store.hasPasswordSecret();
+    agentInstalled = deps.agent ? await deps.agent.installed().catch(() => false) : false;
+    await loadRecent();
+    if (overtaken(run)) return;
     status = 'starting';
     announce();
     try {
@@ -246,13 +277,22 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         platform: deps.device.platform,
         identityKey: b64u(identity.publicKey),
       });
+      if (overtaken(run)) return;
       await pushSettings();
+      if (overtaken(run)) return;
       await deps.hub.start(handlers);
+      if (overtaken(run)) {
+        if (!running) await deps.hub.stop().catch(() => undefined);
+        return;
+      }
+      if (!device) return;
       await deps.hub.goOnline(device.id);
+      if (overtaken(run)) return;
       status = 'online';
       error = null;
       await refresh();
     } catch (e) {
+      if (overtaken(run)) return;
       status = 'offline';
       error = 'Runova Anywhere could not reach the website. It keeps trying.';
       log(`starting failed: ${String(e)}`);
@@ -262,27 +302,32 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   }
 
   async function stop(): Promise<void> {
+    generation += 1;
     running = false;
     if (retry) clearTimeout(retry);
     disconnect();
     for (const sessionId of [...hosted.keys()]) endHosted(sessionId);
     for (const p of pending.values()) clearTimeout(p.timer);
     pending.clear();
-    await deps.hub.stop().catch(() => undefined);
     status = 'signed-out';
-    device = null;
-    directory = { mine: [], teammates: [] };
+    forgetAccount();
     announce();
+    await deps.hub.stop().catch(() => undefined);
   }
 
   async function refresh(): Promise<void> {
     if (!device) return;
+    const run = generation;
     try {
-      [directory, teams] = await Promise.all([deps.api.reachable(), deps.api.teams()]);
+      const [reachable, myTeams] = await Promise.all([deps.api.reachable(), deps.api.teams()]);
+      if (overtaken(run)) return;
+      directory = reachable;
+      teams = myTeams;
     } catch (e) {
       log(`reading the directory failed: ${String(e)}`);
     }
     await loadRecent();
+    if (overtaken(run)) return;
     announce();
   }
 
@@ -671,6 +716,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       receivedAt: now(),
       expiresAt: now() + ringMs,
     };
+    if (!running) return;
     const timer = setTimeout(() => {
       if (!pending.delete(request.sessionId)) return;
       void deps.hub.respond(request.sessionId, false).catch(() => undefined);

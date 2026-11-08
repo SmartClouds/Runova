@@ -10,6 +10,7 @@ import { IPC } from '../../shared/ipcChannels';
 import { getAccountRuntime } from '../account/live';
 import { getMainWindow } from '../mainWindow';
 import { anywhereLinks, anywhereState, getAnywhere } from '../remote/anywhere/live';
+import { signedInOnly } from './remoteSignIn';
 
 const anywhere = () => getAnywhere(getAccountRuntime());
 
@@ -19,37 +20,53 @@ export function registerAnywhereHandlers(): void {
     IPC.anywhere.getState,
     (): AnywhereState => anywhereState() ?? EMPTY_ANYWHERE_STATE,
   );
-  ipcMain.handle(IPC.anywhere.connect, (_e, request: AnywhereConnectRequest) =>
-    anywhere().connect(request),
+  ipcMain.handle(
+    IPC.anywhere.connect,
+    signedInOnly((request: AnywhereConnectRequest) => anywhere().connect(request)),
   );
-  ipcMain.handle(IPC.anywhere.submitPassword, (_e, password: string, save: boolean) =>
-    anywhere().submitPassword(password, save),
+  ipcMain.handle(
+    IPC.anywhere.submitPassword,
+    signedInOnly((password: string, save: boolean) => anywhere().submitPassword(password, save)),
   );
-  ipcMain.handle(IPC.anywhere.trustNewKey, () => anywhere().trustNewKey());
+  ipcMain.handle(
+    IPC.anywhere.trustNewKey,
+    signedInOnly(() => anywhere().trustNewKey()),
+  );
   ipcMain.handle(IPC.anywhere.disconnect, () => anywhere().disconnect());
   ipcMain.handle(
     IPC.anywhere.respondIncoming,
-    (_e, sessionId: string, answer: AnywhereIncomingAnswer) =>
+    signedInOnly((sessionId: string, answer: AnywhereIncomingAnswer) =>
       anywhere().respondIncoming(sessionId, answer),
+    ),
   );
   ipcMain.handle(IPC.anywhere.endHosted, (_e, sessionId: string) =>
     anywhere().endHosted(sessionId),
   );
   ipcMain.handle(IPC.anywhere.pauseInput, (_e, paused: boolean) => anywhere().pauseInput(paused));
-  ipcMain.handle(IPC.anywhere.updateSettings, (_e, patch: AnywhereSettingsPatch) =>
-    anywhere().updateSettings(patch),
+  ipcMain.handle(
+    IPC.anywhere.updateSettings,
+    signedInOnly((patch: AnywhereSettingsPatch) => anywhere().updateSettings(patch)),
   );
-  ipcMain.handle(IPC.anywhere.setPassword, (_e, password: string | null) =>
-    anywhere().setPassword(password),
+  ipcMain.handle(
+    IPC.anywhere.setPassword,
+    signedInOnly((password: string | null) => anywhere().setPassword(password)),
   );
   ipcMain.handle(IPC.anywhere.refresh, () => anywhere().refresh());
-  ipcMain.handle(IPC.anywhere.history, () => anywhere().history());
-  ipcMain.handle(IPC.anywhere.deleteHistory, (_e, id: number) => anywhere().deleteHistory(id));
-  ipcMain.handle(IPC.anywhere.forgetRecent, (_e, remoteId: string) =>
-    anywhere().forgetRecent(remoteId),
+  ipcMain.handle(
+    IPC.anywhere.history,
+    signedInOnly(() => anywhere().history()),
   );
-  ipcMain.handle(IPC.anywhere.forgetSavedPassword, (_e, remoteId: string) =>
-    anywhere().forgetSavedPassword(remoteId),
+  ipcMain.handle(
+    IPC.anywhere.deleteHistory,
+    signedInOnly((id: number) => anywhere().deleteHistory(id)),
+  );
+  ipcMain.handle(
+    IPC.anywhere.forgetRecent,
+    signedInOnly((remoteId: string) => anywhere().forgetRecent(remoteId)),
+  );
+  ipcMain.handle(
+    IPC.anywhere.forgetSavedPassword,
+    signedInOnly((remoteId: string) => anywhere().forgetSavedPassword(remoteId)),
   );
   ipcMain.handle(IPC.anywhere.openApp, () => {
     const window = getMainWindow();
@@ -60,10 +77,14 @@ export function registerAnywhereHandlers(): void {
     window.webContents.send(IPC.app.onNavigate, '/remote?tab=anywhere');
   });
 
-  ipcMain.handle(IPC.anywhere.enableAgent, (_e, password?: string) =>
-    anywhere().enableAgent(password),
+  ipcMain.handle(
+    IPC.anywhere.enableAgent,
+    signedInOnly((password?: string) => anywhere().enableAgent(password)),
   );
-  ipcMain.handle(IPC.anywhere.disableAgent, () => anywhere().disableAgent());
+  ipcMain.handle(
+    IPC.anywhere.disableAgent,
+    signedInOnly(() => anywhere().disableAgent()),
+  );
   ipcMain.handle(IPC.anywhere.grantPermission, async (_e, kind: 'accessibility' | 'screen') => {
     if (process.platform !== 'darwin') return;
     // Asking once shows macOS's own prompt; after that only System Settings can change it.

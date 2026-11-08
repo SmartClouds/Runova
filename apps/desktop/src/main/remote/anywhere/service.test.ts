@@ -395,7 +395,12 @@ function computer(
   links: FakeLinks,
   userId: number,
   name: string,
-  options: { ringMs?: number; installer?: ReturnType<typeof fakeInstaller> } = {},
+  options: {
+    ringMs?: number;
+    installer?: ReturnType<typeof fakeInstaller>;
+    registerGate?: Promise<void>;
+    checkAccount?: () => void;
+  } = {},
 ) {
   const manager = fakeManager();
   const installer = options.installer ?? fakeInstaller();
@@ -404,8 +409,17 @@ function computer(
   const notices: string[] = [];
   let state: AnywhereState | null = null;
   const hub = server.hub(userId);
+  const api = server.api(userId);
   const service = createAnywhereService({
-    api: server.api(userId),
+    api: options.registerGate
+      ? {
+          ...api,
+          register: async (input) => {
+            await options.registerGate;
+            return api.register(input);
+          },
+        }
+      : api,
     hub,
     store: createAnywhereStore(memoryIo()),
     links: links.opener(),
@@ -426,6 +440,7 @@ function computer(
     ringMs: options.ringMs ?? 60_000,
     siteUrl: 'https://runovahq.test',
     agent: installer,
+    ...(options.checkAccount ? { checkAccount: options.checkAccount } : {}),
   });
   return {
     service,
@@ -889,5 +904,105 @@ describe('Runova Anywhere service: pinned keys', () => {
     await kim.service.connect({ remoteId: samId, intent: 'control' });
 
     expect(kim.state().outgoing?.phase).not.toBe('key-changed');
+  });
+});
+
+describe('Runova Anywhere service: signing out', () => {
+  async function ringing() {
+    const w = await world();
+    await w.sam.service.updateSettings({ teamIds: [10] });
+    await w.kim.service.refresh();
+    await w.kim.service.connect({ remoteId: w.samId, intent: 'control' });
+    await until(() => w.sam.incoming.length === 1, 'the request window');
+    return w;
+  }
+
+  async function connected() {
+    const w = await ringing();
+    await w.sam.service.respondIncoming(w.sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: false,
+    });
+    await until(() => w.sam.state().hosted.length === 1, 'hosted');
+    await until(() => w.kim.state().outgoing?.phase === 'connected', 'connected');
+    return w;
+  }
+
+  it('drops the session when the computer being controlled signs out', async () => {
+    const { sam, kim } = await connected();
+
+    await sam.service.stop();
+
+    expect(sam.state().hosted).toEqual([]);
+    expect(sam.manager.ended).toEqual(['peer-1']);
+    await until(() => kim.state().outgoing === null, 'the controller sees it end');
+  });
+
+  it('drops the session when the computer in control signs out', async () => {
+    const { sam, kim } = await connected();
+
+    await kim.service.stop();
+
+    expect(kim.state().outgoing).toBeNull();
+    await until(() => sam.state().hosted.length === 0, 'the host sees it end');
+  });
+
+  it('closes a request still waiting for an answer', async () => {
+    const { sam } = await ringing();
+
+    await sam.service.stop();
+
+    expect(sam.state().incoming).toEqual([]);
+  });
+
+  it('keeps nothing of the account in what the screens can read', async () => {
+    const { kim } = await connected();
+    expect(kim.state().directory.teammates).not.toEqual([]);
+
+    await kim.service.stop();
+
+    expect(kim.state()).toMatchObject({
+      status: 'signed-out',
+      account: null,
+      device: null,
+      recent: [],
+      directory: { mine: [], teammates: [] },
+    });
+  });
+
+  it('stays signed out when the sign-out arrives while it is still starting', async () => {
+    const server = new FakeServer();
+    server.user(1, 'Sam');
+    let open = () => undefined as void;
+    const registerGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const sam = computer(server, new FakeLinks(), 1, "Sam's desk", { registerGate });
+    const starting = sam.service.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await sam.service.stop();
+    open();
+    await starting;
+
+    expect(sam.state()).toMatchObject({ status: 'signed-out', account: null, device: null });
+    expect(server.online.size).toBe(0);
+  });
+
+  it('asks whether it is still signed in when the hub drops', async () => {
+    const server = new FakeServer();
+    server.user(1, 'Sam');
+    let checks = 0;
+    const sam = computer(server, new FakeLinks(), 1, "Sam's desk", {
+      checkAccount: () => {
+        checks += 1;
+      },
+    });
+    await sam.service.start();
+
+    sam.hub.handlers?.disconnected();
+
+    expect(checks).toBe(1);
   });
 });

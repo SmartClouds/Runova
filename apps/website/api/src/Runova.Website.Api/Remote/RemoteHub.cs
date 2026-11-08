@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.Identity;
 using Runova.Website.Data;
 using Runova.Website.Data.Remote;
@@ -41,6 +42,7 @@ internal sealed partial class RemoteHub(
     RemoteRateLimiter limits,
     RemoteAudience audience,
     RemoteRelayTickets relayTickets,
+    RemoteHubConnections connections,
     TimeProvider time,
     ILogger<RemoteHub> logger) : Hub<IRemoteClient>
 {
@@ -252,8 +254,20 @@ internal sealed partial class RemoteHub(
         await CloseRecordAsync(session);
     }
 
+    public override async Task OnConnectedAsync()
+    {
+        // A background agent has no account session, so ending a sign-in leaves it alone.
+        if (AccountSessions.SessionId(Context.User) is { } accountSessionId)
+        {
+            connections.Add(accountSessionId, Context);
+        }
+
+        await base.OnConnectedAsync();
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        connections.Remove(Context.ConnectionId);
         if (presence.Offline(Context.ConnectionId) is { Change: PresenceChange.WentOffline, Entry: { } entry }
             && await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.Id == entry.DeviceId) is { } device)
         {

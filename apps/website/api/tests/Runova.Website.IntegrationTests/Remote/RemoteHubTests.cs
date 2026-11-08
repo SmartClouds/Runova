@@ -113,6 +113,25 @@ public sealed class RemoteHubTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    /// <summary>Ending a computer's sign-in, from anywhere, takes it off the hub and ends its sessions.</summary>
+    [Fact]
+    public async Task Ending_the_sign_in_drops_the_computer_and_tells_the_other_side()
+    {
+        await using var pair = await TeammatesAsync();
+        await pair.ControllerApp.RequestAsync(pair.HostRemoteId, "ask", pair.ControllerDeviceId);
+        var sessionId = (await RemoteApp.NextAsync(pair.HostApp.Incoming)).SessionId;
+        await pair.HostApp.RespondAsync(sessionId, accept: true);
+        await RemoteApp.NextAsync(pair.ControllerApp.Resolved);
+        var signIns = await ApiClient.ReadJsonAsync(await pair.Sam.GetAsync("/api/v1/sessions"), HttpStatusCode.OK);
+        var desktop = signIns.GetProperty("items").EnumerateArray().Single(s => s.GetProperty("kind").GetString() == "desktop");
+
+        await pair.Sam.SendAsync(HttpMethod.Delete, $"/api/v1/sessions/{desktop.GetProperty("id").GetInt64()}");
+
+        await pair.HostApp.ClosedAsync();
+        Assert.Equal(sessionId, (await RemoteApp.NextAsync(pair.ControllerApp.Ended)).SessionId);
+        Assert.Equal(Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected, pair.ControllerApp.Hub.State);
+    }
+
     [Fact]
     public async Task Accepting_lets_the_two_signal_and_the_host_records_the_session()
     {

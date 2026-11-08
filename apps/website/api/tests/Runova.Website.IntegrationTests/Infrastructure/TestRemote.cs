@@ -53,6 +53,11 @@ internal sealed class RemoteApp : IAsyncDisposable
     public RemoteApp(HubConnection hub)
     {
         Hub = hub;
+        hub.Closed += _ =>
+        {
+            _closed.TrySetResult();
+            return Task.CompletedTask;
+        };
         hub.On<IncomingRequestDto>(nameof(IRemoteClient.IncomingRequest), r => Incoming.Writer.TryWrite(r));
         hub.On<RequestResolvedDto>(nameof(IRemoteClient.RequestResolved), r => Resolved.Writer.TryWrite(r));
         hub.On<string, string>(nameof(IRemoteClient.Signal), (session, payload) => Signals.Writer.TryWrite((session, payload)));
@@ -60,7 +65,12 @@ internal sealed class RemoteApp : IAsyncDisposable
         hub.On<PresenceChangedDto>(nameof(IRemoteClient.PresenceChanged), p => Presence.Writer.TryWrite(p));
     }
 
+    private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public HubConnection Hub { get; }
+
+    /// <summary>Waits for the server to close this connection.</summary>
+    public Task ClosedAsync() => _closed.Task.WaitAsync(_wait, TestContext.Current.CancellationToken);
 
     public Channel<IncomingRequestDto> Incoming { get; } = Channel.CreateUnbounded<IncomingRequestDto>();
 

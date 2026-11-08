@@ -56,7 +56,7 @@ Nothing can connect to a new computer until you allow it. Click **Access setting
 
 ### When no one is signed in to the computer
 
-**Keep this computer reachable while no one is signed in** in **Access settings** sets up a small background service that starts with the computer. It answers instead of the app, under the same ID, and shows the sign-in screen. Your computer asks for administrator permission to set it up, and again to remove it. It stays on if you sign out of Runova, until you turn it off.
+**Keep this computer reachable while no one is signed in** in **Access settings** sets up a small background service that starts with the computer. It answers instead of the app, under the same ID, and shows the sign-in screen. Your computer asks for administrator permission to set it up, and again to remove it. It stays on if you sign out of Runova, until you turn it off. Everything else needs you signed in: when you sign out, or your sign-in is ended from another device, every connection on this computer ends at once.
 
 - **Windows**: it answers while no one is signed in and while the computer is locked.
 - **macOS**: it answers at the login window, when no one is signed in. It can not answer on the lock screen of a signed-in account.

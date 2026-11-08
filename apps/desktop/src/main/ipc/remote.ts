@@ -1,20 +1,15 @@
 import { ipcMain } from 'electron';
 import type { RemoteConnectIntent, RemoteState } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
-import { canUseRemote, REMOTE_SIGN_IN_ERROR } from '../../shared/remoteAccess';
+import { REMOTE_SIGN_IN_ERROR } from '../../shared/remoteAccess';
 import {
   decodePairingCode,
   type RemoteInputEvent,
   type RemoteRtcMessage,
 } from '../../shared/remoteProtocol';
-import { getAccountRuntime } from '../account/live';
 import { remoteManager } from '../remote/manager';
 import { listNetworkInterfaces } from '../remote/networkInterfaces';
-
-/** Starting remote control needs a Runova sign-in; the screens ask first, and this holds anyway. */
-async function signedIn(): Promise<boolean> {
-  return canUseRemote(await getAccountRuntime().status());
-}
+import { remoteSignedIn, signedInOnly } from './remoteSignIn';
 
 const SIGN_IN_FIRST = { ok: false, error: REMOTE_SIGN_IN_ERROR };
 
@@ -24,7 +19,7 @@ export function registerRemoteHandlers(): void {
   ipcMain.handle(IPC.remote.listInterfaces, () => listNetworkInterfaces());
 
   ipcMain.handle(IPC.remote.startHost, async (_e, input: { ip: string; port: number }) => {
-    if (!(await signedIn())) throw new Error(REMOTE_SIGN_IN_ERROR);
+    if (!(await remoteSignedIn())) throw new Error(REMOTE_SIGN_IN_ERROR);
     return remoteManager.startHost(input.ip, input.port);
   });
 
@@ -32,14 +27,17 @@ export function registerRemoteHandlers(): void {
     remoteManager.stopHost();
   });
 
-  ipcMain.handle(IPC.remote.generatePairingCode, () => remoteManager.generatePairingCode());
+  ipcMain.handle(
+    IPC.remote.generatePairingCode,
+    signedInOnly(() => remoteManager.generatePairingCode()),
+  );
 
   // The control and files variants differ only in the intent they dial with, so
   // the code validation and its error copy live in one place.
   const pairingConnect =
     (intent?: RemoteConnectIntent) =>
     async (_e: unknown, code: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!(await signedIn())) return SIGN_IN_FIRST;
+      if (!(await remoteSignedIn())) return SIGN_IN_FIRST;
       const payload = decodePairingCode(code);
       if (!payload) return { ok: false, error: 'That pairing code is not valid.' };
       remoteManager.connect(payload, intent);
@@ -54,10 +52,12 @@ export function registerRemoteHandlers(): void {
     remoteManager.closeSessionAndDisconnect();
   });
 
-  ipcMain.handle(IPC.remote.listSavedServers, () => remoteManager.listSavedServers());
+  ipcMain.handle(IPC.remote.listSavedServers, async () =>
+    (await remoteSignedIn()) ? remoteManager.listSavedServers() : [],
+  );
 
   const savedConnect = (intent?: RemoteConnectIntent) => async (_e: unknown, id: string) => {
-    if (!(await signedIn())) return SIGN_IN_FIRST;
+    if (!(await remoteSignedIn())) return SIGN_IN_FIRST;
     return remoteManager.connectSaved(id, intent);
   };
 
@@ -65,45 +65,71 @@ export function registerRemoteHandlers(): void {
 
   ipcMain.handle(IPC.remote.connectSavedFiles, savedConnect('files'));
 
-  ipcMain.handle(IPC.remote.renameSavedServer, (_e, id: string, nickname: string) =>
-    remoteManager.renameSavedServer(id, nickname),
+  ipcMain.handle(
+    IPC.remote.renameSavedServer,
+    signedInOnly((id: string, nickname: string) => remoteManager.renameSavedServer(id, nickname)),
   );
 
-  ipcMain.handle(IPC.remote.removeSavedServer, (_e, id: string) =>
-    remoteManager.removeSavedServer(id),
+  ipcMain.handle(
+    IPC.remote.removeSavedServer,
+    signedInOnly((id: string) => remoteManager.removeSavedServer(id)),
   );
 
-  ipcMain.handle(IPC.remote.openSessionWindow, () => {
-    remoteManager.openSessionWindow();
-  });
+  ipcMain.handle(
+    IPC.remote.openSessionWindow,
+    signedInOnly(() => {
+      remoteManager.openSessionWindow();
+    }),
+  );
 
-  ipcMain.handle(IPC.remote.sendClipboard, () => {
-    remoteManager.sendClipboard();
-  });
+  ipcMain.handle(
+    IPC.remote.sendClipboard,
+    signedInOnly(() => {
+      remoteManager.sendClipboard();
+    }),
+  );
 
-  ipcMain.handle(IPC.remote.sendFile, () => remoteManager.sendFile());
+  ipcMain.handle(
+    IPC.remote.sendFile,
+    signedInOnly(() => remoteManager.sendFile()),
+  );
 
   ipcMain.handle(IPC.remote.getFileProgress, () => remoteManager.getFileProgress());
 
-  ipcMain.handle(IPC.remote.fmRoots, () => remoteManager.fmRoots());
-
-  ipcMain.handle(IPC.remote.fmList, (_e, path: string | null) => remoteManager.fmList(path));
-
-  ipcMain.handle(IPC.remote.fmMkdir, (_e, parentPath: string, name: string) =>
-    remoteManager.fmMkdir(parentPath, name),
+  ipcMain.handle(
+    IPC.remote.fmRoots,
+    signedInOnly(() => remoteManager.fmRoots()),
   );
 
-  ipcMain.handle(IPC.remote.fmDelete, (_e, path: string) => remoteManager.fmDelete(path));
-
-  ipcMain.handle(IPC.remote.fmRename, (_e, path: string, newName: string) =>
-    remoteManager.fmRename(path, newName),
+  ipcMain.handle(
+    IPC.remote.fmList,
+    signedInOnly((path: string | null) => remoteManager.fmList(path)),
   );
 
-  ipcMain.handle(IPC.remote.fmUploadTo, (_e, destDir: string) =>
-    remoteManager.uploadFileTo(destDir),
+  ipcMain.handle(
+    IPC.remote.fmMkdir,
+    signedInOnly((parentPath: string, name: string) => remoteManager.fmMkdir(parentPath, name)),
   );
 
-  ipcMain.handle(IPC.remote.fmDownload, (_e, path: string) => remoteManager.downloadFile(path));
+  ipcMain.handle(
+    IPC.remote.fmDelete,
+    signedInOnly((path: string) => remoteManager.fmDelete(path)),
+  );
+
+  ipcMain.handle(
+    IPC.remote.fmRename,
+    signedInOnly((path: string, newName: string) => remoteManager.fmRename(path, newName)),
+  );
+
+  ipcMain.handle(
+    IPC.remote.fmUploadTo,
+    signedInOnly((destDir: string) => remoteManager.uploadFileTo(destDir)),
+  );
+
+  ipcMain.handle(
+    IPC.remote.fmDownload,
+    signedInOnly((path: string) => remoteManager.downloadFile(path)),
+  );
 
   // High-frequency, fire-and-forget channels use send/on rather than invoke so
   // they don't pay for a round-trip acknowledgement per event/tile.
