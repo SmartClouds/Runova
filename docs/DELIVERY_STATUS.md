@@ -103,7 +103,7 @@ Plan: docs/ROADMAP.md
 | E69 | Rust core foundation and CI | In progress | see git log | `protocol` and `crypto` pass the vectors the desktop and agent pass; hand-written SignalR; PKCE sign-in with single-flight rotation; Kotlin and Swift bindings through UniFFI; three CI jobs with an 85% line floor. Owed: a run against the real hub (AC2), iOS on the Mac runner, green CI (AC5) |
 | E70 | Transport gate | In progress | see git log | Go: Rust `str0m` opened `runova-link` with real Chromium and finished the handshake with the desktop's own host code. Relay client and the 8 second fallback done. Owed: real desktop app, C# agent, real phones, memory figure |
 | E71 | Desktop management bridge | In progress | see git log | The contract and its vectors in `packages/protocol`, the session that enforces the allowlist, scopes, limits and audit, approve once with pinned phone keys, the Trusted phones list, and `projects.list`. Reviewing this found a real race, fixed with a test: an answer arriving while a pinned key was read was painted over with "waiting". Terminal attach and the workspace snapshot moved to E74 |
-| E72 | App shells and design system | Not started | | |
+| E72 | App shells and design system | In progress | see git log | Tokens generated from the desktop's `index.css` with a drift check in CI; Inter, JetBrains Mono and a FontAwesome subset bundled; the component kit and gallery on Android, with 9 tests and light and dark screenshots. Owed: the iOS kit has never been compiled, the Android and iOS comparison, the memory baseline |
 | E73 | Slice: sign in, systems, connect, projects | Not started | | |
 | E74 | Terminals and processes | Not started | | |
 | E75 | Git | Not started | | |

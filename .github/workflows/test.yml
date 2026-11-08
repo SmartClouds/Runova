@@ -635,6 +635,19 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      - name: Design tokens match the desktop's theme
+        working-directory: .
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --filter @runova/desktop
+          node --test scripts/mobile-design.test.mjs
+          node scripts/mobile-design.mjs --check
+
       - name: Format
         run: cargo fmt --all --check
 
@@ -664,7 +677,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358
+          packages: platforms;android-37.0 build-tools;36.0.0 ndk;28.2.13676358
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -731,7 +744,17 @@ jobs:
         working-directory: apps/mobile/ios
         run: |
           device=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
-          xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" CODE_SIGNING_ALLOWED=NO
+          SNAPSHOT_OUTPUT="$RUNNER_TEMP/ios-snapshots" \
+            xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload the iOS screenshots
+        if: ${{ !cancelled() && steps.xcode.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-snapshots
+          retention-days: 14
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/ios-snapshots
 
   # On our own runners this is Linux and macOS (the self-hosted Mac mini, Apple Silicon). With one
   # Mac the three macOS shards take turns on it, along with the unit suites above. Windows runs

@@ -14,6 +14,9 @@ targets:
     sources:
       - Runova
       - Generated
+      - path: ../design/fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - framework: Frameworks/RunovaCore.xcframework
         embed: false
@@ -25,6 +28,14 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Runova
         SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
         OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+    info:
+      path: Runova/Info.plist
+      properties:
+        UIAppFonts:
+          - fonts/Inter.ttf
+          - fonts/JetBrainsMono.ttf
+          - fonts/FontAwesomeSolid.ttf
+        UILaunchScreen: {}
   RunovaTests:
     type: bundle.unit-test
     platform: iOS

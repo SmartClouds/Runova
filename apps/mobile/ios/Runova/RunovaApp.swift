@@ -2,9 +2,11 @@ import SwiftUI
 
 @main
 struct RunovaApp: App {
+    @Environment(\.colorScheme) private var scheme
+
     var body: some Scene {
         WindowGroup {
-            Text("Runova \(coreVersion())")
+            RunovaTheme(dark: scheme == .dark) { KitGallery() }
         }
     }
 }
