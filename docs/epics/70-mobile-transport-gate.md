@@ -20,9 +20,9 @@ against real hosts on real devices.
 
 ## Tasks
 
-- [ ] T1 `PeerTransport` trait and the `link` state machine against a fake transport
-- [ ] T2 `str0m` behind the trait: `runova-link`, signed fingerprints, handshake
-- [ ] T3 Relay path with the frame cipher
+- [x] T1 `PeerTransport` trait and the `link` state machine against a fake transport
+- [x] T2 `str0m` behind the trait: `runova-link`, signed fingerprints, handshake
+- [x] T3 Relay path with the frame cipher
 - [ ] T4 Interop test against the real desktop host (Chromium) and the C# agent
 - [ ] T5 Run on a real Android phone and a real iPhone, on Wi-Fi and on mobile data
 - [ ] T6 Write down the numbers and the decision in `docs/DELIVERY_STATUS.md`
@@ -37,3 +37,14 @@ against real hosts on real devices.
 ## Not in this epic
 
 Video, which is E83.
+
+## Result so far
+
+Run on Windows with `node apps/mobile/core/interop/chromium.mjs`: `str0m` 0.25 with its pure-Rust
+crypto opened `runova-link` with real Chromium, and the Rust controller finished the handshake with
+the desktop's own host code from `packages/protocol`. Both sides reached the same safety code, and
+300 KB crossed both ways, fragmented. Decision: `str0m` stays for the data link, and native
+libwebrtc is not needed for it.
+
+Still owed: the run against the installed desktop app and the C# agent, the same on a real Android
+phone and iPhone over Wi-Fi and mobile data (T4 and T5), and the memory figure (AC4).
