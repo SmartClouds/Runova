@@ -69,6 +69,13 @@ services:
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
       Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
       Telegram__WebhookSecret: ${TELEGRAM_WEBHOOK_SECRET:-}
+      # Push notifications (E82). Without these each push service stays off and logs it once.
+      Push__Fcm__ProjectId: ${PUSH_FCM_PROJECT_ID:-}
+      Push__Fcm__ClientEmail: ${PUSH_FCM_CLIENT_EMAIL:-}
+      Push__Fcm__PrivateKey: ${PUSH_FCM_PRIVATE_KEY:-}
+      Push__Apns__KeyId: ${PUSH_APNS_KEY_ID:-}
+      Push__Apns__TeamId: ${PUSH_APNS_TEAM_ID:-}
+      Push__Apns__PrivateKey: ${PUSH_APNS_PRIVATE_KEY:-}
       # The healthcheck asks the site container too.
       Website__InternalSiteUrl: http://web:4321/
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}

@@ -16,6 +16,7 @@ import { streamHeadlessCliPrompt } from '../cli/headlessStream';
 import { getDevSetupService } from '../devSetup/runtime';
 import { broadcastToWindows } from '../ipc/send';
 import { transcribeSamples } from '../ipc/speech';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { killProcessTree } from '../process/spawnStreaming';
 import {
@@ -95,6 +96,14 @@ export function createDesktopStudioHost(service: () => StudioService): StudioHos
     },
     notify: (event: StudioEvent) => {
       broadcastToWindows(IPC.studio.onEvent, event);
+      if (event.type === 'render-finished') {
+        forwardNotification({
+          category: 'tasks',
+          status: event.ok ? 'finished' : 'failed',
+          subject: event.fileName,
+          project: 'Studio',
+        });
+      }
       const notice = noticeFor(event);
       if (notice && 'videoId' in event) {
         showOsNotification({ ...notice, route: `/studio/${event.videoId}` });

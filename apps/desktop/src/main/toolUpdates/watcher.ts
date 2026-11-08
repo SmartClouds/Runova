@@ -4,6 +4,7 @@ import { IPC } from '../../shared/ipcChannels';
 import { detectAllClis } from '../ipc/cliDetection';
 import { broadcastToWindows } from '../ipc/send';
 import { detectAllTools } from '../ipc/tools';
+import { forwardNotification } from '../notifications/forward';
 import { compareVersions, fetchLatestVersion, releaseUrl } from '../registryVersions';
 import { store } from '../store';
 import { isCheckDue } from './schedule';
@@ -51,6 +52,7 @@ async function appendUpdateNotification(
     added = true;
     return [notification, ...items].slice(0, MAX_NOTIFICATIONS);
   });
+  if (added) forwardNotification({ category: 'tool-updates', subject: entry.name });
   return added;
 }
 

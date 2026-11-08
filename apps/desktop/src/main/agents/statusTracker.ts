@@ -20,6 +20,7 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import { broadcastToWindows } from '../ipc/send';
 import { getMainWindow } from '../mainWindow';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { speakOnPet } from '../notifications/petNotifier';
 import { keepAwake } from '../power/keepAwake';
@@ -263,6 +264,15 @@ async function flushNotices(): Promise<void> {
   const project = (entry.projectId && (await scopeDisplayName(entry.projectId))) || 'Workspace';
   const others = notices.length - 1;
   const isQuestion = lead.status === 'needs-input';
+
+  // A phone hears the same event by its category and the names alone: the tab title and what the
+  // hook said can hold terminal output, so neither goes along.
+  forwardNotification({
+    category: isQuestion ? 'agent-needs-input' : 'agent-finished',
+    agent,
+    project,
+    itemId: entry.projectId || undefined,
+  });
 
   if (!(settings && settings.workspaceNotifications === false)) {
     const title = isQuestion ? `${agent} needs your input` : `${agent} finished`;

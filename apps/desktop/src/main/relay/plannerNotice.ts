@@ -2,6 +2,7 @@ import { IPC } from '../../shared/ipcChannels';
 import type { RelayPlannerResult } from '../../shared/relayTypes';
 import { broadcastToWindows } from '../ipc/send';
 import { focusMainWindow, getMainWindow } from '../mainWindow';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { findProjectScope } from '../worktrees/resolve';
 
@@ -40,6 +41,12 @@ export async function announcePlannerResult(
           : plural(result.entries.length, 'change')
       } to look over.`
     : `${where}: ${result.error}`;
+  forwardNotification({
+    category: 'relay',
+    status: result.ok ? 'planner-ready' : 'planner-failed',
+    project: where,
+    itemId: input.projectId,
+  });
   showOsNotification({
     title,
     body,

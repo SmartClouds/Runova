@@ -38,6 +38,7 @@ internal static class DependenciesSetup
 
         services.AddSignalR();
         services.AddSingleton<IUserIdProvider, AccountUserIdProvider>();
+        services.AddWebsiteNotifications();
         return services;
     }
 
@@ -53,6 +54,7 @@ internal static class DependenciesSetup
         api.MapPackageInventories();
         api.MapDependencyAlerts();
         api.MapNotifications();
+        api.MapNotificationSettings();
         api.MapTelegram();
         return api;
     }

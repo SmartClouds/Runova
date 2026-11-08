@@ -1028,6 +1028,45 @@
         }
       }
     },
+    "/api/v1/notification-events": {
+      "post": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationEventDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/telegram-updates": {
       "post": {
         "tags": [
@@ -4380,6 +4419,142 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/notification-preferences": {
+      "get": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/notification-preferences/{category}": {
+      "put": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferenceWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferenceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/push-devices/current": {
+      "put": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushDeviceWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushDeviceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/notification-listeners": {
+      "get": {
+        "tags": [
+          "NotificationSettingsEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListenersDto"
                 }
               }
             }
@@ -9170,6 +9345,91 @@
         },
         "additionalProperties": false
       },
+      "NotificationEventDto": {
+        "required": [
+          "notificationId"
+        ],
+        "type": "object",
+        "properties": {
+          "notificationId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationEventRequest": {
+        "required": [
+          "category",
+          "status",
+          "agent",
+          "project",
+          "subject",
+          "itemId"
+        ],
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "agent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "project": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subject": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "itemId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationListenersDto": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "NotificationPageDto": {
         "required": [
           "items",
@@ -9226,6 +9486,56 @@
               "string"
             ],
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationPreferenceDto": {
+        "required": [
+          "category",
+          "label",
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationPreferenceWrite": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationPreferencesDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationPreferenceDto"
+            }
           }
         },
         "additionalProperties": false
@@ -10643,6 +10953,54 @@
             "items": {
               "$ref": "#/components/schemas/FindingDto"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PushDeviceDto": {
+        "required": [
+          "id",
+          "platform",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PushDeviceWrite": {
+        "required": [
+          "platform",
+          "pushToken"
+        ],
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pushToken": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -12896,7 +13254,8 @@
           "itemId",
           "inventoryId",
           "createdAt",
-          "readAt"
+          "readAt",
+          "category"
         ],
         "type": "object",
         "properties": {
@@ -12957,6 +13316,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "category": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -13060,6 +13422,9 @@
     },
     {
       "name": "NotificationEndpoints"
+    },
+    {
+      "name": "NotificationSettingsEndpoints"
     },
     {
       "name": "TelegramEndpoints"

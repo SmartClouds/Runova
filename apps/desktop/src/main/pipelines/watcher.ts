@@ -4,6 +4,7 @@ import type { GithubWorkflowRunInfo } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import type { PetPipelineMessage, PetPipelineRunRef } from '../../shared/pet';
 import { broadcastToWindows } from '../ipc/send';
+import { forwardNotification } from '../notifications/forward';
 import { petDisplayName } from '../pet/names';
 import { petManager } from '../pet/petWindow';
 import { type PipelineWatchState, store } from '../store';
@@ -71,7 +72,18 @@ async function appendRunNotification(input: {
     added = true;
     return [notification, ...items].slice(0, MAX_NOTIFICATIONS);
   });
-  if (added) broadcastNotificationsChanged();
+  if (added) {
+    broadcastNotificationsChanged();
+    if (!input.autoFixing) {
+      forwardNotification({
+        category: 'pipelines',
+        status: input.passed ? 'passed' : 'failed',
+        project: input.project.name,
+        subject: input.workflowName,
+        itemId: input.project.id,
+      });
+    }
+  }
 }
 
 /**

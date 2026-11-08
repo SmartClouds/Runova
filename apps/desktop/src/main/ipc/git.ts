@@ -149,6 +149,7 @@ import {
   unstagePaths,
   writeWorkingFile,
 } from '../git/workspaceGit';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { schedulePipelineCheck } from '../pipelines/watcher';
 import { store } from '../store';
@@ -842,6 +843,13 @@ function registerTagHandlers(): void {
     // since closed or the user moved to another project or page entirely. Clicking it
     // reopens the review, same as the in-app toast the still-open dialog would show.
     if (!applyResult.cancelled) {
+      forwardNotification({
+        category: 'tasks',
+        status: applyResult.ok ? 'finished' : 'failed',
+        subject: 'Version update',
+        project: project.name,
+        itemId: input.projectId,
+      });
       const settings = await store.getSettings();
       if (settings.workspaceNotifications !== false) {
         showOsNotification({

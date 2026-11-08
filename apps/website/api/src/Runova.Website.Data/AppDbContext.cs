@@ -17,6 +17,7 @@ using Runova.Website.Data.Email;
 using Runova.Website.Data.Identity;
 using Runova.Website.Data.Monitoring;
 using Runova.Website.Data.News;
+using Runova.Website.Data.Notifications;
 using Runova.Website.Data.Posts;
 using Runova.Website.Data.Releases;
 using Runova.Website.Data.Remote;
@@ -87,6 +88,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<DependencyAlertDelivery> DependencyAlertDeliveries => Set<DependencyAlertDelivery>();
 
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
     public DbSet<TelegramLink> TelegramLinks => Set<TelegramLink>();
 
@@ -176,6 +181,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureReleases();
         builder.ConfigureAccounts();
         builder.ConfigureDependencies();
+        builder.ConfigureNotifications();
         builder.ConfigureBilling();
         builder.ConfigureMonitoring();
         builder.ConfigureCloudMonitors();

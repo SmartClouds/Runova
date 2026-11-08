@@ -3236,6 +3236,63 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("NodeCertificates");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Notifications.NotificationPreference", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("UserId", "Category");
+
+                    b.ToTable("NotificationPreferences");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Notifications.PushDevice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("PushToken")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long>("SessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PushToken")
+                        .IsUnique();
+
+                    b.HasIndex("SessionId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PushDevices");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Remote.RemoteDevice", b =>
                 {
                     b.Property<long>("Id")
@@ -3823,6 +3880,30 @@ namespace Runova.Website.Data.Migrations
                     b.HasOne("Runova.Website.Data.Monitoring.MonitoringNode", null)
                         .WithMany()
                         .HasForeignKey("NodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Notifications.NotificationPreference", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Notifications.PushDevice", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Accounts.AccountSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

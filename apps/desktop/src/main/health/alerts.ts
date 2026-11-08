@@ -2,6 +2,7 @@ import type { AppNotification, HealthIncident, Project } from '@runova/core';
 import { IPC } from '../../shared/ipcChannels';
 import { appNotificationInbox } from '../deploy/watcher';
 import { broadcastToWindows } from '../ipc/send';
+import { forwardNotification } from '../notifications/forward';
 import { type OsNotificationInput, showOsNotification } from '../notifications/osNotification';
 import { store } from '../store';
 import type { StoredHealthTarget } from './store';
@@ -74,6 +75,12 @@ export function createHealthAlerts(deps: HealthAlertDeps) {
       createdAt: new Date(now()).toISOString(),
       // Coming back is good news to look back on, not something to clear.
       read: !down,
+    });
+    forwardNotification({
+      category: 'monitors',
+      status: down ? 'failed' : 'recovered',
+      subject: target.name,
+      itemId: target.id,
     });
     deps.toast({ title, body, route });
   };

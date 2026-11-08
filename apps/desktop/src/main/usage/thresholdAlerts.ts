@@ -1,6 +1,7 @@
 import { FABLE_WEEK_LABEL, getUsageProvider, type SubscriptionWindowKey } from '@runova/core';
 import { IPC } from '../../shared/ipcChannels';
 import { broadcastToWindows } from '../ipc/send';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { store } from '../store';
 import { getProviderUsage } from './index';
@@ -36,6 +37,11 @@ function broadcast(channel: string, payload: unknown): void {
  * brings the app forward on the Token Usage page, scrolled to the provider that fired.
  */
 function notify(title: string, body: string, providerId: string): void {
+  forwardNotification({
+    category: 'ai-limits',
+    status: 'threshold',
+    subject: getUsageProvider(providerId)?.name ?? providerId,
+  });
   const route = `/usage?provider=${encodeURIComponent(providerId)}`;
   if (showOsNotification({ title, body, route })) return;
   broadcast(IPC.usage.onThresholdAlert, { title, body, providerId });

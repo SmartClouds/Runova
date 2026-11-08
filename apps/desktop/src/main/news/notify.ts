@@ -1,6 +1,7 @@
 import type { AppNotification, NewsLocalState } from '@runova/core';
 import { DEFAULT_NEWS_NOTIFY_LEVEL, type NewsNotifyLevel } from '../../shared/newsSettings';
 import { type InstalledTool, NEWS_SEVERITIES, type NewsListItem } from '../../shared/newsTypes';
+import { forwardNotification } from '../notifications/forward';
 import type { OsNotificationInput } from '../notifications/osNotification';
 import { matchNews } from './match';
 import { markNews } from './state';
@@ -102,6 +103,7 @@ export function createNewsNotifier(deps: NewsNotifierDeps): NewsNotifier {
         .catch((error: unknown) =>
           log(`[news] could not add ${item.slug} to the inbox: ${String(error)}`),
         );
+      forwardNotification({ category: 'security-news', subject: match.label });
       deps.toast({ title, body, route });
     }
   }

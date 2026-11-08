@@ -22,7 +22,7 @@ namespace Runova.Website.Api.Accounts;
 /// The sessions of an account: one per browser and one per computer. A cookie or token names its
 /// session in <see cref="SessionClaim"/>, and every request checks the session is still live (from a
 /// cache for a few seconds), so ending a session works at once. Ending one here also drops it from
-/// this instance's cache straight away.
+/// this instance's cache straight away, closes its hub connections and forgets its phone's push token.
 /// </summary>
 internal sealed class AccountSessions(
     AppDbContext db,
@@ -141,6 +141,7 @@ internal sealed class AccountSessions(
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
         cache.Remove(CacheKey(sessionId));
         remoteConnections.Close(sessionId);
+        await db.PushDevices.Where(d => d.SessionId == sessionId).ExecuteDeleteAsync();
         return ended == 1;
     }
 
@@ -158,6 +159,7 @@ internal sealed class AccountSessions(
         }
 
         await db.AccountSessions.Where(s => ids.Contains(s.Id)).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+        await db.PushDevices.Where(d => ids.Contains(d.SessionId)).ExecuteDeleteAsync();
         foreach (var id in ids)
         {
             cache.Remove(CacheKey(id));

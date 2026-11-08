@@ -7,6 +7,7 @@ import type {
   UpdateScheduledTaskInput,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { forwardNotification } from '../notifications/forward';
 import { editTelegramMessage, sendTelegramMessage } from '../notifications/telegramApi';
 import { store } from '../store';
 
@@ -46,11 +47,12 @@ async function projectName(projectId: string): Promise<string> {
  * missing token or a failed send is silently skipped rather than raised.
  */
 async function announceOnTelegram(tasks: ScheduledTask[], projectId: string): Promise<void> {
+  const name = await projectName(projectId);
+  forwardNotification({ category: 'tasks', status: 'added', project: name, itemId: projectId });
   const settings = await store.getSettings();
   const { telegramBotToken, telegramScheduledTasksChatId } = settings;
   if (!telegramBotToken || !telegramScheduledTasksChatId) return;
 
-  const name = await projectName(projectId);
   for (const task of tasks) {
     const result = await sendTelegramMessage(
       telegramBotToken,

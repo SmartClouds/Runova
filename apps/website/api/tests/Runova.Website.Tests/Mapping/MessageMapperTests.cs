@@ -31,7 +31,7 @@ public class MessageMapperTests
         };
 
         Assert.Equal(
-            new UserNotificationDto(3, "dependency", "New findings", "Two packages need a look.", "high", 5, "proj-1", 2, _at, null),
+            new UserNotificationDto(3, "dependency", "New findings", "Two packages need a look.", "high", 5, "proj-1", 2, _at, null, NotificationCategories.Account),
             NotificationMapper.ToDto(notification));
         Assert.Empty(SecretProperties.In(typeof(UserNotificationDto)));
     }

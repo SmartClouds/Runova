@@ -3,6 +3,7 @@ import type {
   AlertInfo,
   AlertSeverity,
 } from '../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import { forwardNotification } from '../notifications/forward';
 import type { CoreLinks } from './live/coreLinks';
 import { AlertsFeed } from './live/feeds';
 import type { DeployState } from './state';
@@ -167,6 +168,12 @@ export class DeployAlertWatcher {
       route,
       createdAt: new Date(this.now()).toISOString(),
       read: false,
+    });
+    forwardNotification({
+      category: 'deploys',
+      status: alert.severity,
+      subject: name,
+      itemId: serverId,
     });
     if (alert.severity !== 'info' && !this.deps.focused()) {
       this.deps.toast({ title, body: alert.message, route });

@@ -655,13 +655,14 @@ time }`.
 
 ### Notifications
 
-Messages for one account, newest first: for now one per project and check, listing what is new
-(`kind: "dependency-updates"`). A connected app hears each one at once on the SignalR hub at
+Messages for one account, newest first: one per project and check listing what is new
+(`kind: "dependency-updates"`), online monitor changes, plan notices (`kind: "plan"`), and the
+events a signed-in computer forwards. A connected app hears each one at once on the SignalR hub at
 `/hubs/notifications` (outside `/api/v1`, Account auth: the session cookie, or the device token
 as a bearer header or, on the hub path only, as the `access_token` query value the SignalR clients
 send). The hub sends `NotificationCreated(UserNotificationDto)`,
 `DependencySummaryChanged({ "total": int, "projects": int })` and the online monitor messages (see
-Online monitors); clients call nothing on it.
+Online monitors); clients call nothing on it. Ending a session closes its hub connections.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
@@ -671,7 +672,58 @@ Online monitors); clients call nothing on it.
 
 `UserNotificationDto`: `{ "id": number, "kind": string, "title": string, "body": string (one line
 per package), "severity": string | null (the worst advisory in it), "scopeId": number | null,
-"itemId": string | null, "inventoryId": number | null, "createdAt": time, "readAt": time | null }`.
+"itemId": string | null, "inventoryId": number | null, "createdAt": time, "readAt": time | null,
+"category": string }`.
+
+### Push notifications
+
+Each account switches notification **categories** on or off; they all start on, and a category
+applies to the push services and to a phone's live hub connection. Category ids: `agent-needs-input`,
+`agent-finished`, `tasks`, `pipelines`, `deploys`, `monitors`, `dependencies`, `relay`, `ai-limits`,
+`security-news`, `tool-updates`, `remote`, `account`. Messages made on the server carry their own
+`kind` and map onto a category (`dependency-updates` to `dependencies`, the `monitor-*` kinds to
+`monitors`, `plan` to `account`); a forwarded message's `kind` is its category.
+
+A computer forwards an event as a category and short named fields, never a message: the server
+composes the one line a phone shows from a fixed template. Field values must be plain names (no
+control characters, line breaks or shell punctuation, `agent` up to 40 characters and `project`
+and `subject` up to 80); unknown properties are refused, so nothing else can be added to the
+line. Terminal output and secrets have no field to go in. Forwarded messages are visible only to
+phones and the account's sessions of kind `mobile`. When no phone is signed in, or the category is
+off, nothing is stored and `notificationId` is null.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/accounts/me/notification-preferences` | Account | none | 200 `{ "items": NotificationPreferenceDto[] }`, one per category in display order; 401 |
+| PUT | `/api/v1/accounts/me/notification-preferences/{category}` | Account | `{ "enabled": bool }` | 200 `NotificationPreferenceDto`; 400; 401; 404 unknown category |
+| PUT | `/api/v1/accounts/me/push-devices/current` | Account, `mobile` session | `{ "platform": "android" \| "ios", "pushToken": string }` | 200 `PushDeviceDto`; 400; 401; 403 |
+| DELETE | `/api/v1/accounts/me/push-devices/current` | Account | none | 204; 401 |
+| GET | `/api/v1/accounts/me/notification-listeners` | Account | none | 200 `{ "count": int }` (signed-in phones; a computer forwards nothing at 0); 401 |
+| POST | `/api/v1/notification-events` | Account, `desktop` session | `NotificationEventRequest` | 201 `{ "notificationId": number \| null }`; 400; 401; 403; 429 |
+
+`NotificationPreferenceDto`: `{ "category": string, "label": string, "enabled": bool }`.
+`PushDeviceDto`: `{ "id": number, "platform": string, "updatedAt": time }`; the token itself is
+write-only. `pushToken` is the FCM registration token on Android and the APNs device token on
+iOS. A session has at most one push device, registering again replaces it, and a token registered
+under another session moves to this one. Ending the session removes the device, so a signed-out
+phone gets no more pushes.
+
+`NotificationEventRequest`: `{ "category": string, "status": string | null, "agent": string | null,
+"project": string | null, "subject": string | null, "itemId": string | null }`. `status` is one of
+the statuses the category has (see the table in the source: pipelines has `failed`, `passed`,
+`fixed`, `attention`, `gave-up`; tasks has `finished`, `failed`, `needs-input`, `added`; deploys has
+`critical`, `warning`, `info`, `review`; monitors has `failed`, `recovered`; relay has `attention`,
+`finished`, `planner-ready`, `planner-failed`; ai-limits has `threshold`, `reset`; remote has
+`connected`, `locked`; the others have none). `itemId` is the desktop's id of the project
+or target, up to 64 letters, digits, dots, dashes or underscores.
+
+A push is sent through FCM (Android) or APNs (iOS) with the line as its text and `category`,
+`notificationId` and (when present) `itemId` as data; the same message arrives as
+`NotificationCreated` for a phone that is connected, so the app can collapse the two by
+`notificationId`. The push services read `Push__Fcm__ProjectId`, `Push__Fcm__ClientEmail`,
+`Push__Fcm__PrivateKey`, `Push__Apns__KeyId`, `Push__Apns__TeamId`, `Push__Apns__PrivateKey` and
+`Push__Apns__BundleId` (default `com.runovahq.app`); without them that service is off and logs it
+once.
 
 ### Telegram
 

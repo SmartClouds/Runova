@@ -10,6 +10,7 @@ import { IPC } from '../../../shared/ipcChannels';
 import { agentStatus } from '../../agents/statusTracker';
 import { appNotificationInbox } from '../../deploy/watcher';
 import { broadcastToWindows } from '../../ipc/send';
+import { forwardNotification } from '../../notifications/forward';
 import { showOsNotification } from '../../notifications/osNotification';
 import { store } from '../../store';
 import { findProjectScope } from '../../worktrees/resolve';
@@ -77,6 +78,13 @@ function notify(session: AutoFixSession, kind: 'fixed' | 'attention' | 'gave-up'
   };
   void inbox.add(notification).catch(() => undefined);
   showOsNotification({ title: text.title, body: text.body, route: text.route });
+  forwardNotification({
+    category: 'pipelines',
+    status: kind,
+    project: session.projectName,
+    subject: session.workflowName,
+    itemId: session.projectId,
+  });
 }
 
 let service: AutoFixService | null = null;

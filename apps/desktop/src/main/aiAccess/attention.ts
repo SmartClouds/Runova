@@ -1,4 +1,5 @@
 import type { AiAccessApproval } from '../../shared/aiAccessTypes';
+import { forwardNotification } from '../notifications/forward';
 
 /**
  * An agent waiting on an approval while Runova is in the background would wait for nothing, so a
@@ -17,6 +18,11 @@ export function createApprovalAttention(deps: {
     if (fresh.length === 0 || deps.isFocused()) return;
     for (const approval of fresh) {
       deps.flash();
+      forwardNotification({
+        category: 'agent-needs-input',
+        agent: approval.agent,
+        project: approval.projectName ?? 'Runova',
+      });
       deps.notify({
         title: `${approval.agent} is waiting for you`,
         body: approval.projectName

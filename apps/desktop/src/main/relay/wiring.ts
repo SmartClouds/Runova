@@ -22,6 +22,7 @@ import {
   subscribeTerminalOutput,
   writeToShell,
 } from '../ipc/terminal';
+import { forwardNotification } from '../notifications/forward';
 import { setRelayHttpHandlers } from '../notifications/hookServer';
 import { showOsNotification } from '../notifications/osNotification';
 import { store } from '../store';
@@ -185,6 +186,12 @@ export async function startRelayService(): Promise<void> {
           read: false,
         };
         await inbox.add(notification).catch(() => undefined);
+        forwardNotification({
+          category: 'relay',
+          status: finished && notice.level === 'info' ? 'finished' : 'attention',
+          project: project?.name ?? 'Relay',
+          itemId: relay.projectId,
+        });
         showOsNotification({
           title: notice.title,
           body: project ? `${project.name}: ${notice.body}` : notice.body,

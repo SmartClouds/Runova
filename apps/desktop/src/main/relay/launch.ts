@@ -24,6 +24,7 @@ import {
   subscribeTerminalOutput,
   writeToShell,
 } from '../ipc/terminal';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { store } from '../store';
 import { findProjectScope } from '../worktrees/resolve';
@@ -190,6 +191,12 @@ export async function launchRelayLeg(request: LegLaunchRequest): Promise<LegLaun
     }).then((delivered) => {
       if (delivered) return;
       clipboard.writeText(prompt);
+      forwardNotification({
+        category: 'relay',
+        status: 'attention',
+        project: project.name,
+        itemId: project.id,
+      });
       showOsNotification({
         title: `${cli.name} did not come up for ${taskId}`,
         body: 'The prompt is on your clipboard. Paste it in the tab once the CLI is running.',

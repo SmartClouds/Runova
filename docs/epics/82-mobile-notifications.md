@@ -18,9 +18,9 @@ category can be turned on or off.
 
 ## Tasks
 
-- [ ] T1 Categories and preferences on the server
-- [ ] T2 Device tokens, FCM and APNs senders behind an interface with fakes
-- [ ] T3 Desktop forwarding
+- [x] T1 Categories and preferences on the server
+- [x] T2 Device tokens, FCM and APNs senders behind an interface with fakes
+- [x] T3 Desktop forwarding
 - [ ] T4 Inbox and settings screens
 - [ ] T5 OS integration on both, with opening a notification going to the right screen
 

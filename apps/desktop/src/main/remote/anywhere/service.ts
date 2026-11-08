@@ -28,6 +28,7 @@ import {
   parseRemoteId,
 } from '../../../shared/anywhere';
 import { passwordProblem } from '../../../shared/anywherePassword';
+import { forwardNotification } from '../../notifications/forward';
 import type { ManagePhone } from '../manage/session';
 import type { AttachableSocket, PeerPermissions } from '../manager';
 import { decideIncoming, decideManage, PasswordLockout } from './accessPolicy';
@@ -856,6 +857,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         deps.hostedChanged(state().hosted);
         announce();
       });
+      forwardNotification({ category: 'remote', status: 'connected', subject: name });
       deps.notify(
         request.intent === 'files'
           ? `${name} opened your files`
@@ -871,6 +873,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       if (e instanceof HandshakeError && e.reason === 'wrong-password') {
         lockout.failed();
         if (lockout.lockedUntil()) {
+          forwardNotification({ category: 'remote', status: 'locked' });
           deps.notify(
             'Password access is locked for 15 minutes',
             'Someone tried the wrong unattended-access password too many times.',

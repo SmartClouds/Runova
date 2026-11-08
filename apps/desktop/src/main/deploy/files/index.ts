@@ -2,6 +2,7 @@ import { app, type IpcMainInvokeEvent } from 'electron';
 import { IPC } from '../../../shared/ipcChannels';
 import { registerDeployFilesHandlers } from '../../ipc/deployFiles';
 import { broadcastToWindows } from '../../ipc/send';
+import { forwardNotification } from '../../notifications/forward';
 import { showOsNotification } from '../../notifications/osNotification';
 import { createFilesService, type FilesService, type FilesServiceDeps } from './service';
 import { registerFileSitesSealedStore } from './store';
@@ -31,6 +32,12 @@ export function registerDeployFilesIpc(deps: {
       sitesChanged: (sites) => broadcastToWindows(C.onSitesChanged, { sites }),
     },
     notify: (site, review) => {
+      forwardNotification({
+        category: 'deploys',
+        status: 'review',
+        subject: site.label,
+        itemId: site.id,
+      });
       showOsNotification({
         title: `${site.label} needs a look`,
         body: review.message,

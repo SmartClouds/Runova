@@ -3,6 +3,7 @@ import { liveDependencyAlerts } from '../dependencyAlerts/live';
 import type { DependencyAlerts } from '../dependencyAlerts/service';
 import { getCloudMonitors } from '../health/cloudLive';
 import { broadcastToWindows } from '../ipc/send';
+import { startNotificationForwarding } from '../notifications/forward';
 import { getAnywhere } from '../remote/anywhere/live';
 import { remoteManager } from '../remote/manager';
 import { endRemoteOnSignOut } from '../remote/signOut';
@@ -28,7 +29,8 @@ export function getDependencyAlerts(): DependencyAlerts {
 }
 
 export function getAccountRuntime(): AccountRuntime {
-  runtime ??= createAccountRuntime({
+  if (runtime) return runtime;
+  runtime = createAccountRuntime({
     adapters: () => {
       adapters ??= liveSyncAdapters();
       return adapters;
@@ -47,6 +49,13 @@ export function getAccountRuntime(): AccountRuntime {
       // Signed out, an online monitor shows nothing (and is still not checked here).
       void getCloudMonitors().reset();
     },
+  });
+  const account = runtime;
+  startNotificationForwarding({
+    api: (method, path, body) => account.api(method, path, body),
+    signedIn: async () => (await account.status()).state === 'signed-in',
+    // biome-ignore lint/suspicious/noConsole: the only record of a forward that failed
+    log: (message) => console.warn(message),
   });
   return runtime;
 }

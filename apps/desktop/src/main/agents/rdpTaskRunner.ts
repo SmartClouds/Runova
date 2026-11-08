@@ -17,6 +17,7 @@ import type {
 import { MAX_SSH_AGENT_MESSAGE_CHARS } from '../../shared/sshAgentMessage';
 import { cancelHeadlessPrompt, runHeadlessCliPrompt } from '../cli/headlessPrompt';
 import { runAiPrompt } from '../ipc/ai';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { speakOnPet } from '../notifications/petNotifier';
 import { dropRdpAgentRequests, requestRdpFrame, requestRdpInput } from '../rdp/agentBridge';
@@ -637,6 +638,12 @@ export async function notifyRdpTaskWaiting(sessionId: string, title: string): Pr
     default:
       return;
   }
+  forwardNotification({
+    category: 'tasks',
+    status: 'needs-input',
+    subject: 'An AI task',
+    project: 'a remote desktop',
+  });
   const body = detail ? `${where}\n${detail}` : where;
   // The session lives in its own window, so a click brings that forward instead of a route.
   const shown = showOsNotification({

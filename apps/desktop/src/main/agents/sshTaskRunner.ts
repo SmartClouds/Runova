@@ -34,6 +34,7 @@ import {
   writeToTerminalDisplay,
 } from '../ipc/terminal';
 import { getMainWindow } from '../mainWindow';
+import { forwardNotification } from '../notifications/forward';
 import { showOsNotification } from '../notifications/osNotification';
 import { speakOnPet } from '../notifications/petNotifier';
 import { stripAnsi } from '../process/spawnStreaming';
@@ -1177,6 +1178,13 @@ export async function notifySshTaskWaiting(sessionId: string, tabTitle: string):
     default:
       return;
   }
+  // The tab title can be set by the terminal, so the phone gets neither it nor the detail.
+  forwardNotification({
+    category: 'tasks',
+    status: 'needs-input',
+    subject: 'An AI task',
+    project: 'an SSH terminal',
+  });
   const route = `/terminal-session/${encodeURIComponent(sessionId)}`;
   const body = detail ? `${where}\n${detail}` : where;
   if (showOsNotification({ title, body, route })) getMainWindow()?.flashFrame(true);

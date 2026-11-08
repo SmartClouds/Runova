@@ -25,6 +25,7 @@ internal sealed partial class CloudMonitorNotifier(
     AlertNotifier members,
     IHubContext<NotificationsHub, INotificationsClient> hub,
     TelegramOutbox telegram,
+    NotificationDelivery delivery,
     CloudMonitorViews views,
     TimeProvider time,
     ILogger<CloudMonitorNotifier> logger)
@@ -102,10 +103,7 @@ internal sealed partial class CloudMonitorNotifier(
     public async Task PushAsync(IReadOnlyList<UserNotification> created, IReadOnlyCollection<long> monitorIds, CancellationToken ct = default)
     {
         telegram.SendSoon();
-        foreach (var notification in created)
-        {
-            await SendAsync(notification.UserId, client => client.NotificationCreated(NotificationMapper.ToDto(notification)));
-        }
+        await delivery.DeliverAsync(created, ct);
 
         if (monitorIds.Count == 0)
         {

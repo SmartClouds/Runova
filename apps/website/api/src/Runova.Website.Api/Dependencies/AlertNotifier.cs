@@ -20,6 +20,7 @@ internal sealed partial class AlertNotifier(
     AppDbContext db,
     IHubContext<NotificationsHub, INotificationsClient> hub,
     TelegramOutbox telegram,
+    NotificationDelivery delivery,
     FindingsReader findings,
     TimeProvider time,
     ILogger<AlertNotifier> logger)
@@ -108,10 +109,7 @@ internal sealed partial class AlertNotifier(
         await db.SaveChangesAsync(cancellationToken);
         telegram.SendSoon();
 
-        foreach (var notification in created)
-        {
-            await PushAsync(notification.UserId, client => client.NotificationCreated(NotificationMapper.ToDto(notification)));
-        }
+        await delivery.DeliverAsync(created, cancellationToken);
 
         await SummaryChangedAsync(members, cancellationToken);
     }

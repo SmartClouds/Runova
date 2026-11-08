@@ -5,6 +5,7 @@ import {
   type SubscriptionWindowKey,
   type UsageResetAlertSettings,
 } from '@runova/core';
+import { forwardNotification } from '../notifications/forward';
 import { sendTelegramMessage } from '../notifications/telegramApi';
 import { store } from '../store';
 import { getProviderUsage } from './index';
@@ -127,9 +128,10 @@ async function announce(
   alerts: UsageResetAlertSettings,
   due: [SubscriptionWindowKey, TrackedWindow][],
 ): Promise<void> {
+  const providerName = getUsageProvider(alerts.providerId)?.name ?? alerts.providerId;
+  forwardNotification({ category: 'ai-limits', status: 'reset', subject: providerName });
   const target = await resolveTarget(alerts);
   if (!target) return;
-  const providerName = getUsageProvider(alerts.providerId)?.name ?? alerts.providerId;
 
   for (const [key, window] of due) {
     // The window that just closed is followed by a new one only once the user

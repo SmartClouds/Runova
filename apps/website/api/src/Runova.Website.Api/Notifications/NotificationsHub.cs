@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -5,6 +6,7 @@ using Runova.Website.Api.Accounts;
 using Runova.Website.Api.CloudMonitoring;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Remote;
+using Runova.Website.Data.Accounts;
 
 namespace Runova.Website.Api.Notifications;
 
@@ -28,13 +30,40 @@ public sealed record DependencySummaryDto(int Total, int Projects);
 
 /// <summary>
 /// Live messages for a signed-in account (E51): the desktop app with its device token, or the
-/// website with its session cookie. The hub only sends; a client calls nothing on it. Every
-/// connection of an account gets its messages, since SignalR groups them by the account id.
+/// website with its session cookie, and a phone (E82). The hub only sends; a client calls nothing
+/// on it. SignalR groups connections by account id for the refresh messages, and each connection
+/// also joins the group for what it is, so <see cref="NotificationDelivery"/> can spare a phone a
+/// category that is turned off. Ending a sign-in closes its connections.
 /// </summary>
 [Authorize(Policies.Account)]
-internal sealed class NotificationsHub : Hub<INotificationsClient>
+internal sealed class NotificationsHub(AccountSessions sessions, RemoteHubConnections connections) : Hub<INotificationsClient>
 {
     public const string Path = "/hubs/notifications";
+
+    public static string DeskGroup(long userId) => string.Create(CultureInfo.InvariantCulture, $"desk:{userId}");
+
+    public static string PhoneGroup(long userId) => string.Create(CultureInfo.InvariantCulture, $"phone:{userId}");
+
+    public override async Task OnConnectedAsync()
+    {
+        var userId = long.Parse(Context.UserIdentifier!, CultureInfo.InvariantCulture);
+        var sessionId = AccountSessions.SessionId(Context.User);
+        var session = sessionId is { } id ? await sessions.FindLiveAsync(id, userId) : null;
+        if (sessionId is { } live)
+        {
+            connections.Add(live, Context);
+        }
+
+        var group = session?.Kind == AccountSessionKinds.Mobile ? PhoneGroup(userId) : DeskGroup(userId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, group);
+        await base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        connections.Remove(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
+    }
 }
 
 /// <summary>The account id in the principal is what <c>Clients.User</c> matches.</summary>

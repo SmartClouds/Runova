@@ -1,5 +1,3 @@
-using System.Globalization;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Api.Email;
 using Runova.Website.Api.Notifications;
@@ -15,12 +13,11 @@ namespace Runova.Website.Api.Billing;
 /// email when asked, and Telegram when the account linked a chat. Saved with the caller's other
 /// changes; <see cref="FlushAsync"/> pushes and sends after the commit.
 /// </summary>
-internal sealed partial class BillingNotices(
+internal sealed class BillingNotices(
     AppDbContext db,
-    IHubContext<NotificationsHub, INotificationsClient> hub,
+    NotificationDelivery delivery,
     TelegramOutbox telegram,
     EmailOutbox email,
-    ILogger<BillingNotices> logger,
     TimeProvider time)
 {
     public const string Kind = "plan";
@@ -50,21 +47,7 @@ internal sealed partial class BillingNotices(
     {
         telegram.SendSoon();
         email.SendSoon();
-        foreach (var notification in _created)
-        {
-            try
-            {
-                await hub.Clients.User(notification.UserId.ToString(CultureInfo.InvariantCulture)).NotificationCreated(NotificationMapper.ToDto(notification));
-            }
-            catch (Exception e) when (e is not OperationCanceledException)
-            {
-                LogPushFailed(logger, notification.UserId, e);
-            }
-        }
-
+        await delivery.DeliverAsync(_created);
         _created.Clear();
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "A plan notification for account {UserId} could not be pushed")]
-    private static partial void LogPushFailed(ILogger logger, long userId, Exception exception);
 }
