@@ -109,7 +109,7 @@ Plan: docs/ROADMAP.md
 | E75 | Git | In progress | see git log | Changes, host-computed diffs capped at 3000 lines, stage, unstage, commit, fetch, pull, push, branches, stashes and conflicts. Anything hard to undo asks first, with the question owned by the Rust core. iOS screens are written but never compiled. Owed: a real repository from a real phone |
 | E76 | Status: AI usage, CPU and RAM | In progress | see git log | Limits with the desktop's own ok, estimate, stale and unavailable logic (moved to `@runova/core` so both use it), every provider with costs and a chart, CPU, memory and network, only while on screen. The bar's Relay, Run, SFTP, Docker, Android and Keep awake items are not on the phone. iOS screens are written but never compiled. Owed: comparing numbers on a real computer |
 | E77 | Vault | In progress | see git log | Status, unlock, list, biometric-gated reveal, edit and delete, off unless the phone has the `vault` scope. Each reveal is audited on the computer, and values are wiped from Rust's memory when the screen closes, the app backgrounds or the computer locks. iOS can only hide the app switcher preview, not block screenshots. iOS screens are written but never compiled. Owed: a real phone |
-| E78 | Deploy | Not started | | |
+| E78 | Deploy | In progress | see git log | Servers, overview, containers with restart, stop and logs, apps with restart and redeploy, the problems feed (now shared with the desktop) and the last backup. A server that doesn't answer says so within 12 seconds. iOS screens are written but never compiled. Owed: a real server |
 | E79 | Monitoring | Not started | | |
 | E80 | Pipelines | Not started | | |
 | E81 | Account, sessions and teams | Not started | | |

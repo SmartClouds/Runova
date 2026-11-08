@@ -129,6 +129,91 @@ pub enum Section {
     Git,
     Status,
     Vault,
+    Deploy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DeployServerView {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub state_label: String,
+    pub online: bool,
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ContainerView {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+    pub status: String,
+    pub running: bool,
+    pub healthy: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StackView {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    pub detail: String,
+    pub can_redeploy: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ProblemSeverity {
+    Critical,
+    Warning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ProblemView {
+    pub id: String,
+    pub severity: ProblemSeverity,
+    pub title: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct BackupView {
+    pub label: String,
+    pub detail: String,
+    pub failed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ServerDetailView {
+    pub id: String,
+    pub name: String,
+    pub loading: bool,
+    pub unreachable: Option<String>,
+    pub containers: Vec<ContainerView>,
+    pub stacks: Vec<StackView>,
+    pub problems: Vec<ProblemView>,
+    pub backup: Option<BackupView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct LogLineView {
+    pub text: String,
+    pub error: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ContainerLogsView {
+    pub container_id: String,
+    pub name: String,
+    pub loading: bool,
+    pub lines: Vec<LogLineView>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct DeployScreen {
+    pub servers: Vec<DeployServerView>,
+    pub loading: bool,
+    pub server: Option<ServerDetailView>,
+    pub logs: Option<ContainerLogsView>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
@@ -370,6 +455,7 @@ pub struct AppView {
     pub git: GitScreen,
     pub status: StatusScreen,
     pub vault: VaultScreen,
+    pub deploy: DeployScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -396,6 +482,7 @@ impl AppView {
             git: GitScreen::default(),
             status: StatusScreen::default(),
             vault: VaultScreen::default(),
+            deploy: DeployScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

@@ -26,6 +26,7 @@ import uniffi.runova_ffi.Engine
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
+import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.StatusIntents
 import com.runovahq.app.ui.VaultIntents
@@ -106,6 +107,15 @@ class MainActivity : FragmentActivity(), ViewListener {
                 hide = { engine.vaultHide() },
                 save = { id, title, username, password -> engine.vaultSave(id, title, username, password) },
                 remove = { engine.vaultRemove(it) },
+            ),
+            deploy = DeployIntents(
+                openServer = { engine.deployOpenServer(it) },
+                closeServer = { engine.deployCloseServer() },
+                openLogs = { engine.deployOpenLogs(it) },
+                closeLogs = { engine.deployCloseLogs() },
+                containerAction = { id, action -> engine.deployContainerAction(id, action) },
+                stackAction = { stack, action -> engine.deployStackAction(stack, action) },
+                redeploy = { engine.deployStackRedeploy(it) },
             ),
         )
         setContent {

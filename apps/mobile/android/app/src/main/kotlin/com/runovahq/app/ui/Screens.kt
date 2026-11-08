@@ -63,6 +63,7 @@ data class AppIntents(
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
     val vault: VaultIntents = VaultIntents(),
+    val deploy: DeployIntents = DeployIntents(),
 )
 
 val AppTabs = listOf(

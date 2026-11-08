@@ -4,6 +4,7 @@ import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
+import uniffi.runova_ffi.DeployScreen
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.StatusScreen
@@ -16,6 +17,7 @@ import uniffi.runova_ffi.VaultScreen
 
 val emptyGit = GitScreen(null, false, null, false, emptyList(), emptyList())
 val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null)
+val emptyDeploy = DeployScreen(emptyList(), false, null, null)
 val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, null, emptyList(), null, null, null)
 
 /** One place to build what the core publishes, so a new screen changes only this function. */
@@ -32,6 +34,7 @@ fun appView(
     git: GitScreen = emptyGit,
     status: StatusScreen = emptyStatus,
     vault: VaultScreen = emptyVault,
+    deploy: DeployScreen = emptyDeploy,
     notice: String? = null,
     confirm: ConfirmView? = null,
     error: String? = null,
@@ -51,6 +54,7 @@ fun appView(
     git,
     status,
     vault,
+    deploy,
     false,
     notice,
     confirm,

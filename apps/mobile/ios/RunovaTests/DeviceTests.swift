@@ -154,6 +154,17 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(fixtureView(connection: connected), "more", tab: "more")
     }
 
+    func testDeploy() throws {
+        let deploy = DeployScreen(
+            servers: [
+                DeployServerView(
+                    id: "srv1", name: "Prod", host: "10.0.0.1", stateLabel: "Online", online: true, problem: nil),
+                DeployServerView(
+                    id: "srv2", name: "Lab", host: "10.0.0.2", stateLabel: "Needs sign-in", online: false, problem: nil),
+            ], loading: false, server: nil, logs: nil)
+        try renderSnapshot(fixtureView(connection: connected, deploy: deploy), "deploy", tab: "deploy")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
@@ -171,12 +182,13 @@ func fixtureView(
     vault: VaultScreen = VaultScreen(
         state: .unknown, loading: false, onShow: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
+    deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
-        terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault,
+        terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 

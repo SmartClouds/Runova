@@ -14,10 +14,10 @@ backup status. Destructive actions ask first. Logs stream only while visible.
 
 ## Tasks
 
-- [ ] T1 Bridge methods over the Deploy service
-- [ ] T2 `store` and screens for servers and overview
-- [ ] T3 Containers and logs
-- [ ] T4 Stacks, problems and backups
+- [x] T1 Bridge methods over the Deploy service
+- [x] T2 `store` and screens for servers and overview
+- [x] T3 Containers and logs
+- [x] T4 Stacks, problems and backups
 
 ## Acceptance criteria
 
@@ -28,3 +28,9 @@ backup status. Destructive actions ask first. Logs stream only while visible.
 ## Not in this epic
 
 The rest of CoreHub, including firewall rules and nginx editing.
+
+## Status
+
+The bridge, the core and the Android screens are tested, using the same service instances and problem
+logic as the desktop's Deploy pages. Logs re-read every few seconds while open rather than streaming.
+Owed: AC1 and AC2 against a real server, and the iOS screens have never been compiled.

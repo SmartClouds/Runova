@@ -1,12 +1,12 @@
+import { describe, expect, it } from 'vitest';
+import { buildProblems, PROBLEM_LABELS } from './problems';
 import type {
   AlertInfo,
   CertificateInfo,
   ContainerPortInfo,
   ContainerSummary,
   StackInfo,
-} from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import { describe, expect, it } from 'vitest';
-import { buildProblems, PROBLEM_LABELS } from './problems';
+} from './protocol/generated/Runova.ServerCore.Contracts';
 
 const NOW = 1_700_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;

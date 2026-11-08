@@ -1,3 +1,4 @@
+import { PROBLEM_LABELS, type Problem } from '@shared/deploy/problems';
 import type { ContainerSummary } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployServer } from '@shared/deployTypes';
 import { useState } from 'react';
@@ -5,7 +6,6 @@ import { CircleCheck, CircleX, FolderKanban, Robot, TriangleAlert } from '@/comp
 import { Chip, EmptyState, GLASS_CARD } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PROBLEM_LABELS, type Problem } from '@/lib/deploy/problems/problems';
 import { cn } from '@/lib/utils';
 import { useDeployAssistantStore } from '@/stores/deployAssistantStore';
 import { SendLogsDialog } from '../containers/SendLogsDialog';

@@ -1,6 +1,6 @@
+import { buildProblems, type Problem } from '@shared/deploy/problems';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { buildProblems, type Problem } from '@/lib/deploy/problems/problems';
 import { queryKeys } from '@/lib/queryKeys';
 import { useLiveAlerts } from '../overview/hooks';
 

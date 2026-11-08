@@ -6,8 +6,8 @@ use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_s
 use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
 use crate::view::{
-    AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, GitScreen, ProjectView,
-    Section, StatusScreen, SystemView, ViewListener,
+    AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, DeployScreen, GitScreen,
+    ProjectView, Section, StatusScreen, SystemView, ViewListener,
 };
 use async_trait::async_trait;
 use runova_api::auth::{
@@ -429,6 +429,7 @@ impl Runner {
             Some(Section::Git) => self.load_git(),
             Some(Section::Status) => self.refresh_status(),
             Some(Section::Vault) => self.refresh_vault(),
+            Some(Section::Deploy) => self.refresh_deploy(),
             None => {}
         }
     }
@@ -487,6 +488,7 @@ impl Runner {
         self.view.git = GitScreen::default();
         self.view.status = StatusScreen::default();
         self.clear_vault();
+        self.view.deploy = DeployScreen::default();
         self.view.confirm = None;
         self.pending_confirm = None;
         self.view.busy = false;

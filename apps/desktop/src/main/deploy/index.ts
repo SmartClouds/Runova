@@ -216,23 +216,25 @@ export function registerDeployIpc(): void {
 
   const subscriptions = new DeploySubscriptions({ links: service.links });
   const ownerOf = subscriptionOwners((ownerId) => subscriptions.dropOwner(ownerId));
+  const system = new DeploySystem({ links: service.links, roles: (id) => service.roles(id) });
   registerDeploySystemHandlers({
     ipc: ipcMain,
-    system: new DeploySystem({ links: service.links, roles: (id) => service.roles(id) }),
+    system,
     subscriptions,
     guard,
     owner: (event) => ownerOf(event.sender),
   });
 
   // The firewall's safe apply confirms over a new SSH connection of its own (pool.openSeparate).
+  const firewall = new DeployFirewall({
+    links: service.links,
+    service,
+    roles: (id) => service.roles(id),
+    progress: (event) => sendToWindow(getMainWindow(), IPC.deployFirewall.onProgress, event),
+  });
   registerDeployFirewallHandlers({
     ipc: ipcMain,
-    firewall: new DeployFirewall({
-      links: service.links,
-      service,
-      roles: (id) => service.roles(id),
-      progress: (event) => sendToWindow(getMainWindow(), IPC.deployFirewall.onProgress, event),
-    }),
+    firewall,
     guard,
   });
 
@@ -331,7 +333,7 @@ export function registerDeployIpc(): void {
   const siteLogOwnerOf = subscriptionOwners((ownerId) => siteLogs.dropOwner(ownerId));
   const sites = new DeploySites({ links: service.links, roles: (id) => service.roles(id) });
   // AI access (E46) calls these same instances, so an agent goes through the page's own path.
-  setLiveDeployServices({ deploy: service, stacks, sites });
+  setLiveDeployServices({ deploy: service, stacks, sites, system, firewall });
   registerDeploySitesHandlers({
     ipc: ipcMain,
     sites,
@@ -548,6 +550,7 @@ function registerDeployServerBackupsIpc(
     runProgress: (event) =>
       sendToWindow(getMainWindow(), IPC.deployServerBackups.onRunProgress, event),
   });
+  setLiveDeployServices({ backups });
   const restores = new ServerRestores({
     backups,
     restoreCore: (request, onProgress) => service.restore(request, onProgress),

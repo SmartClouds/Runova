@@ -6,6 +6,7 @@ use thiserror::Error;
 
 pub mod backend;
 pub mod core;
+pub mod deploy;
 pub mod engine;
 pub mod git;
 pub(crate) mod labels;

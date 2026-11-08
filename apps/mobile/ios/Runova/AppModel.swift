@@ -92,7 +92,15 @@ final class AppModel: NSObject, ObservableObject {
                 requestReveal: { [weak self] in self?.engine?.vaultRequestReveal(field: $0, custom: $1) },
                 hide: { [weak self] in self?.engine?.vaultHide() },
                 save: { [weak self] in self?.engine?.vaultSave(id: $0, title: $1, username: $2, password: $3) },
-                remove: { [weak self] in self?.engine?.vaultRemove(id: $0) }))
+                remove: { [weak self] in self?.engine?.vaultRemove(id: $0) }),
+            deploy: DeployIntents(
+                openServer: { [weak self] in self?.engine?.deployOpenServer(id: $0) },
+                closeServer: { [weak self] in self?.engine?.deployCloseServer() },
+                openLogs: { [weak self] in self?.engine?.deployOpenLogs(containerId: $0) },
+                closeLogs: { [weak self] in self?.engine?.deployCloseLogs() },
+                containerAction: { [weak self] in self?.engine?.deployContainerAction(containerId: $0, action: $1) },
+                stackAction: { [weak self] in self?.engine?.deployStackAction(stack: $0, action: $1) },
+                redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) }))
     }
 
     private var engine: Engine? { core?.engine() }

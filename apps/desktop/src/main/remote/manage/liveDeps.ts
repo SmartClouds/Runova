@@ -12,6 +12,7 @@ import {
 import { store } from '../../store';
 import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
+import { liveDeploy } from './liveDeploy';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
 
@@ -71,4 +72,5 @@ export const liveManageDeps: ManageMethodDeps = {
     save: (input) => getVaultService().save(input),
     remove: (id) => getVaultService().remove([id]),
   },
+  deploy: liveDeploy,
 };

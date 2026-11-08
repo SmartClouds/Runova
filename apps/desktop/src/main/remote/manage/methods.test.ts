@@ -1,5 +1,6 @@
 import type { Project } from '@runova/core';
 import { describe, expect, it, vi } from 'vitest';
+import type { ManageDeployDeps } from './deployMethods';
 import type { ManageGitDeps } from './gitMethods';
 import { createManageMethods, type ManageMethodDeps } from './methods';
 import type { ManageStreamSink } from './session';
@@ -21,6 +22,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     git: {} as ManageGitDeps,
     status: {} as ManageStatusDeps,
     vault: {} as ManageVaultDeps,
+    deploy: {} as ManageDeployDeps,
     ...change,
   };
 }

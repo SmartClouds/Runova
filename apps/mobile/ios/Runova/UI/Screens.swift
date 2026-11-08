@@ -20,6 +20,7 @@ struct AppIntents {
     var git = GitIntents()
     var status = StatusIntents()
     var vault = VaultIntents()
+    var deploy = DeployIntents()
 }
 
 let appTabs = [

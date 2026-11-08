@@ -11,6 +11,7 @@ let deviceTabs = [
 /// Reached from More, so the bar stays at five.
 private let moreSections = [
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
+    TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -48,6 +49,7 @@ struct DeviceShell: View {
         case "git": return .git
         case "status": return .status
         case "vault": return .vault
+        case "deploy": return .deploy
         default: return nil
         }
     }
@@ -65,6 +67,10 @@ struct DeviceShell: View {
                 ProviderScreen(provider: provider, intents: intents.status)
             } else if let entry = view.vault.entries.first(where: { $0.id == view.vault.openEntry }) {
                 VaultEntryScreen(entry: entry, revealed: view.vault.revealed, intents: intents.vault)
+            } else if let logs = view.deploy.logs {
+                LogsScreen(logs: logs, intents: intents.deploy)
+            } else if let server = view.deploy.server {
+                ServerScreen(server: server, error: view.error, intents: intents.deploy)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
@@ -84,6 +90,7 @@ struct DeviceShell: View {
                                     .frame(maxHeight: .infinity, alignment: .top)
                                 if let error = view.error { ErrorLine(message: error) }
                             }
+                        case "deploy": DeployTab(view: view, intents: intents.deploy)
                         case "more": MoreScreen(tab: $tab)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }

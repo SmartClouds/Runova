@@ -79,6 +79,7 @@ val DeviceTabs = listOf(
 /** Reached from More, so the bar stays at five. */
 private val MoreSections = listOf(
     TabItem("vault", "Vault", RunovaIcons.Vault),
+    TabItem("deploy", "Deploy", RunovaIcons.Deploy),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -120,6 +121,7 @@ fun DeviceShell(
         section == "git" -> Section.GIT
         section == "status" -> Section.STATUS
         section == "vault" -> Section.VAULT
+        section == "deploy" -> Section.DEPLOY
         else -> null
     }
     DisposableEffect(onShow) {
@@ -130,7 +132,14 @@ fun DeviceShell(
         TerminalScreen(terminal, view.terminalProcesses, view.error, intents)
         return
     }
-    if (GitOverlay(view, intents) || StatusOverlay(view, intents.status) || VaultOverlay(view, intents.vault)) return
+    if (
+        GitOverlay(view, intents) ||
+        StatusOverlay(view, intents.status) ||
+        VaultOverlay(view, intents.vault) ||
+        DeployOverlay(view, intents.deploy)
+    ) {
+        return
+    }
     Column(Modifier.fillMaxSize()) {
         DeviceTopBar(connection, intents)
         Box(Modifier.weight(1f)) {
@@ -145,6 +154,7 @@ fun DeviceShell(
                     Box(Modifier.weight(1f)) { VaultTab(view, intents.vault) }
                     view.error?.let { ErrorLine(it) }
                 }
+                "deploy" -> DeployTab(view, intents.deploy)
                 "more" -> MoreScreen(onTab)
                 else -> ProjectsScreen(view, intents, onTab)
             }

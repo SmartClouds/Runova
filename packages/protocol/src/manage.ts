@@ -71,6 +71,12 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'vault.reveal': { scope: 'vault', risk: 'danger' },
   'vault.save': { scope: 'vault', risk: 'write' },
   'vault.remove': { scope: 'vault', risk: 'danger' },
+  'deploy.servers': { scope: 'deploy', risk: 'read' },
+  'deploy.overview': { scope: 'deploy', risk: 'read' },
+  'deploy.containerLogs': { scope: 'deploy', risk: 'read' },
+  'deploy.containerAction': { scope: 'deploy', risk: 'danger' },
+  'deploy.stackAction': { scope: 'deploy', risk: 'danger' },
+  'deploy.stackRedeploy': { scope: 'deploy', risk: 'danger' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -177,6 +183,42 @@ export interface ManageVaultEntry {
   hasSecret: boolean;
   hasNotes: boolean;
   fields: { id: string; label: string; concealed: boolean; hasValue: boolean }[];
+}
+
+export interface ManageDeployServer {
+  id: string;
+  name: string;
+  host: string;
+  state: string;
+  problem: string | null;
+}
+
+export interface ManageDeployOverview {
+  reachable: boolean;
+  version: string | null;
+  containers: {
+    id: string;
+    name: string;
+    image: string;
+    state: string;
+    status: string;
+    health: string | null;
+  }[];
+  stacks: {
+    id: string;
+    name: string;
+    status: string;
+    running: number;
+    total: number;
+    canRedeploy: boolean;
+  }[];
+  problems: { id: string; severity: 'critical' | 'warning'; title: string; detail: string }[];
+  lastBackup: { state: string; planName: string | null; error: string | null } | null;
+}
+
+export interface ManageDeployLogLine {
+  text: string;
+  error: boolean;
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

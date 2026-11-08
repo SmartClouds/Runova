@@ -1,8 +1,11 @@
 import type { CloudflareService } from './cloudflare/service';
 import type { DeployDocker } from './docker';
+import type { DeployFirewall } from './firewall';
+import type { ServerBackups } from './serverBackups/service';
 import type { DeployService } from './service';
 import type { DeploySites } from './sites/deploySites';
 import type { DeployStacks } from './stacks/service';
+import type { DeploySystem } from './system';
 import type { WordPressProjectService } from './wordpress/projectService';
 
 /**
@@ -18,6 +21,9 @@ export interface LiveDeployServices {
   docker: DeployDocker;
   cloudflare: CloudflareService;
   wordpress: WordPressProjectService;
+  system: DeploySystem;
+  firewall: DeployFirewall;
+  backups: ServerBackups;
 }
 
 const live: Partial<LiveDeployServices> = {};
