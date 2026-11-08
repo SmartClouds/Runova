@@ -1,6 +1,7 @@
 package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -69,6 +71,7 @@ import uniffi.runova_ffi.TerminalView
 val DeviceTabs = listOf(
     TabItem("projects", "Projects", RunovaIcons.Folder),
     TabItem("clis", "CLIs", RunovaIcons.Terminal),
+    TabItem("git", "Git", RunovaIcons.Git),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -104,7 +107,12 @@ fun DeviceShell(
 ) {
     val section = DeviceTabs.firstOrNull { it.id == tab }?.id ?: "projects"
     val terminal = view.terminal
-    val onShow = if (terminal == null && section == "clis") Section.CLIS else null
+    val onShow = when {
+        terminal != null -> null
+        section == "clis" -> Section.CLIS
+        section == "git" -> Section.GIT
+        else -> null
+    }
     DisposableEffect(onShow) {
         intents.openSection(onShow)
         onDispose { if (onShow != null) intents.openSection(null) }
@@ -113,17 +121,37 @@ fun DeviceShell(
         TerminalScreen(terminal, view.terminalProcesses, view.error, intents)
         return
     }
+    if (GitOverlay(view, intents)) return
     Column(Modifier.fillMaxSize()) {
         DeviceTopBar(connection, intents)
         Box(Modifier.weight(1f)) {
-            if (section == "clis") {
-                ClisScreen(view, intents)
-            } else {
-                ProjectsScreen(view, intents, onTab)
+            when (section) {
+                "clis" -> ClisScreen(view, intents)
+                "git" -> Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) { GitChangesScreen(view, intents.git) }
+                    view.error?.let { ErrorLine(it) }
+                }
+                else -> ProjectsScreen(view, intents, onTab)
             }
         }
+        view.notice?.let { NoticeBar(it, intents.dismissNotice) }
         RunovaBottomBar(DeviceTabs, section, onTab)
     }
+}
+
+@Composable
+private fun NoticeBar(message: String, onDismiss: () -> Unit) {
+    val colors = RunovaTheme.colors
+    RunovaText(
+        message,
+        Modifier
+            .fillMaxWidth()
+            .background(colors.secondary)
+            .clickable(role = Role.Button, onClick = onDismiss)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        style = RunovaType.small,
+        color = colors.foreground,
+    )
 }
 
 @Composable

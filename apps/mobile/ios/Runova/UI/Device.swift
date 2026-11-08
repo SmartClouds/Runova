@@ -3,6 +3,7 @@ import SwiftUI
 let deviceTabs = [
     TabItem(id: "projects", title: "Projects", icon: RunovaIcons.folder),
     TabItem(id: "clis", title: "CLIs", icon: RunovaIcons.terminal),
+    TabItem(id: "git", title: "Git", icon: RunovaIcons.git),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -33,24 +34,43 @@ struct DeviceShell: View {
     let intents: AppIntents
 
     private var section: String { deviceTabs.first { $0.id == tab }?.id ?? "projects" }
-    private var onShow: Section? { view.terminal == nil && section == "clis" ? .clis : nil }
+    private var onShow: Section? {
+        guard view.terminal == nil else { return nil }
+        switch section {
+        case "clis": return .clis
+        case "git": return .git
+        default: return nil
+        }
+    }
 
     var body: some View {
         Group {
             if let terminal = view.terminal {
                 TerminalScreen(
                     terminal: terminal, processes: view.terminalProcesses, error: view.error, intents: intents)
+            } else if let diff = view.git.diff {
+                DiffScreen(diff: diff, intents: intents.git)
+            } else if view.git.branchesOpen {
+                BranchesScreen(git: view.git, intents: intents.git)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
                     Group {
-                        if section == "clis" {
-                            ClisScreen(view: view, intents: intents)
-                        } else {
-                            ProjectsScreen(view: view, intents: intents, tab: $tab)
+                        switch section {
+                        case "clis": ClisScreen(view: view, intents: intents)
+                        case "git":
+                            VStack(alignment: .leading, spacing: 0) {
+                                GitChangesScreen(view: view, intents: intents.git)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                if let error = view.error { ErrorLine(message: error) }
+                            }
+                        default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
+                    if let notice = view.notice {
+                        NoticeBar(message: notice, onDismiss: intents.dismissNotice)
+                    }
                     RunovaBottomBar(tabs: deviceTabs, selected: section) { tab = $0 }
                 }
             }
@@ -58,6 +78,24 @@ struct DeviceShell: View {
         .onAppear { intents.openSection(onShow) }
         .onChange(of: onShow) { intents.openSection($0) }
         .onDisappear { intents.openSection(nil) }
+    }
+}
+
+private struct NoticeBar: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: onDismiss) {
+            RunovaText(message, style: RunovaType.small, color: palette.foreground)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(palette.secondary)
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -142,6 +142,11 @@ impl RunovaCore {
         self.engine.sign_out();
     }
 
+    /// The rest of what screens can ask for, grouped by feature.
+    pub fn engine(&self) -> Arc<Engine> {
+        Arc::new(self.engine.clone())
+    }
+
     pub fn open_section(&self, section: Option<Section>) {
         self.engine.open_section(section);
     }

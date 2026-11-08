@@ -1,5 +1,6 @@
 import type { Project } from '@runova/core';
 import { describe, expect, it, vi } from 'vitest';
+import type { ManageGitDeps } from './gitMethods';
 import { createManageMethods, type ManageMethodDeps } from './methods';
 import type { ManageStreamSink } from './session';
 
@@ -15,6 +16,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     onTerminalExit: () => () => undefined,
     writeTerminal: () => undefined,
     terminalProcesses: async () => [],
+    git: {} as ManageGitDeps,
     ...change,
   };
 }

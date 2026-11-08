@@ -43,6 +43,25 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'terminals.follow': { scope: 'terminal', risk: 'read' },
   'terminals.write': { scope: 'terminal', risk: 'write' },
   'terminals.processes': { scope: 'terminal', risk: 'read' },
+  'git.state': { scope: 'git', risk: 'read' },
+  'git.diff': { scope: 'git', risk: 'read' },
+  'git.branches': { scope: 'git', risk: 'read' },
+  'git.stashes': { scope: 'git', risk: 'read' },
+  'git.stage': { scope: 'git', risk: 'write' },
+  'git.unstage': { scope: 'git', risk: 'write' },
+  'git.commit': { scope: 'git', risk: 'write' },
+  'git.fetch': { scope: 'git', risk: 'write' },
+  'git.pull': { scope: 'git', risk: 'write' },
+  'git.push': { scope: 'git', risk: 'write' },
+  'git.checkout': { scope: 'git', risk: 'write' },
+  'git.createBranch': { scope: 'git', risk: 'write' },
+  'git.stashPush': { scope: 'git', risk: 'write' },
+  'git.stashPop': { scope: 'git', risk: 'write' },
+  'git.resolve': { scope: 'git', risk: 'write' },
+  'git.discard': { scope: 'git', risk: 'danger' },
+  'git.deleteBranch': { scope: 'git', risk: 'danger' },
+  'git.stashDrop': { scope: 'git', risk: 'danger' },
+  'git.abort': { scope: 'git', risk: 'danger' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -72,6 +91,30 @@ export interface ManageTerminalProcess {
   name: string;
   cpuPercent: number;
   memBytes: number;
+}
+
+export interface ManageGitDiffLine {
+  kind: 'hunk' | 'ctx' | 'add' | 'del';
+  text: string;
+}
+
+/** Worked out on the computer, so a phone never has to hold two versions of a file. */
+export interface ManageGitDiff {
+  path: string;
+  binary: boolean;
+  tooLarge: boolean;
+  lines: ManageGitDiffLine[];
+}
+
+export interface ManageGitBranch {
+  name: string;
+  current: boolean;
+  local: boolean;
+}
+
+export interface ManageGitStash {
+  ref: string;
+  message: string;
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

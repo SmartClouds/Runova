@@ -207,7 +207,7 @@ async function getProject(projectId: string): Promise<Project> {
   return project;
 }
 
-async function getProjectPath(projectId: string): Promise<string> {
+export async function getProjectPath(projectId: string): Promise<string> {
   return (await getProject(projectId)).folderPath;
 }
 
@@ -235,6 +235,19 @@ async function suggestGitText(
     error: result.error,
     cancelled: result.cancelled,
   };
+}
+
+export async function pushProject(projectId: string): Promise<GitOpResult> {
+  const cwd = await getProjectPath(projectId);
+  const result = await runGitOp(async () => {
+    // The branch name is all this needs; a full readStatus would spend another
+    // ten subprocesses listing branches and diffing the tree for nothing.
+    const branch = await currentBranch(cwd);
+    if (!branch) throw new Error('No current branch to push.');
+    return pushCurrentBranch(cwd, branch);
+  });
+  if (result.ok) schedulePipelineCheck(projectId);
+  return result;
 }
 
 function registerRepoHandlers(): void {
@@ -268,18 +281,10 @@ function registerRepoHandlers(): void {
     return runGitOp(() => git(cwd, ['pull']));
   });
 
-  ipcMain.handle(IPC.git.push, async (_event, projectId: string): Promise<GitOpResult> => {
-    const cwd = await getProjectPath(projectId);
-    const result = await runGitOp(async () => {
-      // The branch name is all this needs; a full readStatus would spend another
-      // ten subprocesses listing branches and diffing the tree for nothing.
-      const branch = await currentBranch(cwd);
-      if (!branch) throw new Error('No current branch to push.');
-      return pushCurrentBranch(cwd, branch);
-    });
-    if (result.ok) schedulePipelineCheck(projectId);
-    return result;
-  });
+  ipcMain.handle(
+    IPC.git.push,
+    (_event, projectId: string): Promise<GitOpResult> => pushProject(projectId),
+  );
 
   ipcMain.handle(IPC.git.sync, async (_event, projectId: string): Promise<GitOpResult> => {
     const cwd = await getProjectPath(projectId);
@@ -1027,7 +1032,7 @@ function registerGithubHandlers(): void {
 }
 
 /** Resolves a project to its repository, refusing a folder that is not in one. */
-async function requireRepo(
+export async function requireRepo(
   projectId: string,
 ): Promise<{ root: string; gitDir: string; folder: string }> {
   const folder = await getProjectPath(projectId);
@@ -1040,7 +1045,7 @@ async function requireRepo(
  * Runs a change the workspace panel asked for, then pushes the fresh state straight back so
  * the panel moves the instant git is done rather than when the file events arrive.
  */
-async function workspaceGitOp(
+export async function workspaceGitOp(
   projectId: string,
   fn: (repo: { root: string; gitDir: string }) => Promise<string>,
 ): Promise<GitOpResult> {
@@ -1051,6 +1056,51 @@ async function workspaceGitOp(
     return fn(repo);
   });
   if (resolved.folder) void refreshWorkspaceState(projectId, resolved.folder);
+  return result;
+}
+
+export async function discardChanges(
+  projectId: string,
+  paths: string[],
+  side: 'unstaged' | 'untracked',
+): Promise<GitDiscardResult> {
+  let folder: string | null = null;
+  try {
+    const repo = await requireRepo(projectId);
+    folder = repo.folder;
+    if (side !== 'unstaged' && side !== 'untracked') throw new Error('Unknown change type.');
+    const picked = assertRepoPaths(repo.root, paths);
+    // Only throw away what the panel is actually showing as a change on that side, so a
+    // stale or crafted request can never delete an unrelated file.
+    const state = await readWorkspaceGitState(repo.root);
+    const listed = new Set(
+      (side === 'untracked' ? state.untracked : state.unstaged).map((e) => e.path),
+    );
+    const stray = picked.find((path) => !listed.has(path));
+    if (stray) throw new Error(`${stray} has no changes to discard.`);
+    return await discardPaths(repo.root, picked, side);
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  } finally {
+    if (folder) void refreshWorkspaceState(projectId, folder);
+  }
+}
+
+export async function commitStagedChanges(
+  projectId: string,
+  message: string,
+  push: boolean,
+): Promise<GitOpResult> {
+  if (!message?.trim()) return { ok: false, message: 'Write a commit message first.' };
+  const result = await workspaceGitOp(projectId, async ({ root }) => {
+    const out = await commitStaged(root, message.trim());
+    if (!push) return out;
+    const branch = await currentBranch(root);
+    if (!branch) throw new Error('Committed, but there is no branch to push.');
+    await pushCurrentBranch(root, branch);
+    return `${out}\nPushed ${branch}.`;
+  });
+  if (result.ok && push) schedulePipelineCheck(projectId);
   return result;
 }
 
@@ -1089,33 +1139,12 @@ function registerWorkspaceHandlers(): void {
 
   ipcMain.handle(
     IPC.git.discard,
-    async (
+    (
       _event,
       projectId: string,
       paths: string[],
       side: 'unstaged' | 'untracked',
-    ): Promise<GitDiscardResult> => {
-      let folder: string | null = null;
-      try {
-        const repo = await requireRepo(projectId);
-        folder = repo.folder;
-        if (side !== 'unstaged' && side !== 'untracked') throw new Error('Unknown change type.');
-        const picked = assertRepoPaths(repo.root, paths);
-        // Only throw away what the panel is actually showing as a change on that side, so a
-        // stale or crafted request can never delete an unrelated file.
-        const state = await readWorkspaceGitState(repo.root);
-        const listed = new Set(
-          (side === 'untracked' ? state.untracked : state.unstaged).map((e) => e.path),
-        );
-        const stray = picked.find((path) => !listed.has(path));
-        if (stray) throw new Error(`${stray} has no changes to discard.`);
-        return await discardPaths(repo.root, picked, side);
-      } catch (error) {
-        return { ok: false, message: (error as Error).message };
-      } finally {
-        if (folder) void refreshWorkspaceState(projectId, folder);
-      }
-    },
+    ): Promise<GitDiscardResult> => discardChanges(projectId, paths, side),
   );
 
   ipcMain.handle(
@@ -1265,19 +1294,8 @@ function registerWorkspaceHandlers(): void {
 
   ipcMain.handle(
     IPC.git.commitStaged,
-    async (_event, projectId: string, message: string, push: boolean): Promise<GitOpResult> => {
-      if (!message?.trim()) return { ok: false, message: 'Write a commit message first.' };
-      const result = await workspaceGitOp(projectId, async ({ root }) => {
-        const out = await commitStaged(root, message.trim());
-        if (!push) return out;
-        const branch = await currentBranch(root);
-        if (!branch) throw new Error('Committed, but there is no branch to push.');
-        await pushCurrentBranch(root, branch);
-        return `${out}\nPushed ${branch}.`;
-      });
-      if (result.ok && push) schedulePipelineCheck(projectId);
-      return result;
-    },
+    (_event, projectId: string, message: string, push: boolean): Promise<GitOpResult> =>
+      commitStagedChanges(projectId, message, push),
   );
 
   ipcMain.handle(

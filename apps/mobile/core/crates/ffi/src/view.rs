@@ -126,6 +126,97 @@ pub struct TerminalProcessView {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum Section {
     Clis,
+    Git,
+}
+
+/// Asked before anything hard to undo.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConfirmView {
+    pub title: String,
+    pub detail: String,
+    pub action: String,
+    pub danger: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum GitGroup {
+    Conflict,
+    Staged,
+    Unstaged,
+    Untracked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitFileView {
+    pub path: String,
+    pub orig_path: Option<String>,
+    pub group: GitGroup,
+    pub status: String,
+    pub conflict: Option<String>,
+    pub additions: Option<u32>,
+    pub deletions: Option<u32>,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitStateView {
+    pub is_repo: bool,
+    pub branch: Option<String>,
+    pub detached: bool,
+    pub upstream: Option<String>,
+    pub ahead: u32,
+    pub behind: u32,
+    pub has_remote: bool,
+    pub operation: Option<String>,
+    pub files: Vec<GitFileView>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum DiffLineKind {
+    Hunk,
+    Context,
+    Added,
+    Removed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DiffLineView {
+    pub kind: DiffLineKind,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitDiffView {
+    pub path: String,
+    pub group: GitGroup,
+    pub loading: bool,
+    pub binary: bool,
+    pub too_large: bool,
+    pub lines: Vec<DiffLineView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitBranchView {
+    pub name: String,
+    pub current: bool,
+    pub local: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitStashView {
+    pub reference: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct GitScreen {
+    pub state: Option<GitStateView>,
+    pub loading: bool,
+    pub diff: Option<GitDiffView>,
+    pub branches_open: bool,
+    pub branches: Vec<GitBranchView>,
+    pub stashes: Vec<GitStashView>,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -142,6 +233,12 @@ pub struct AppView {
     pub terminals_loading: bool,
     pub terminal: Option<TerminalView>,
     pub terminal_processes: Vec<TerminalProcessView>,
+    pub git: GitScreen,
+    /// Something asked for is still being done on the computer.
+    pub busy: bool,
+    /// That it worked, for a moment.
+    pub notice: Option<String>,
+    pub confirm: Option<ConfirmView>,
     pub error: Option<String>,
 }
 
@@ -160,6 +257,10 @@ impl AppView {
             terminals_loading: false,
             terminal: None,
             terminal_processes: Vec::new(),
+            git: GitScreen::default(),
+            busy: false,
+            notice: None,
+            confirm: None,
             error: None,
         }
     }

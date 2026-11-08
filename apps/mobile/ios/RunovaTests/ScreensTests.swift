@@ -23,7 +23,9 @@ final class ScreensTests: XCTestCase {
         AppView(
             auth: auth, hubConnected: true, systems: list ?? systems, systemsLoading: false,
             connection: connection, projects: projects, projectsLoading: false, selectedProject: nil,
-            terminals: [], terminalsLoading: false, terminal: nil, terminalProcesses: [], error: error)
+            terminals: [], terminalsLoading: false, terminal: nil, terminalProcesses: [],
+            git: GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
+            busy: false, notice: nil, confirm: nil, error: error)
     }
 
     private func connection(_ phase: ConnectionPhase, error: String? = nil) -> ConnectionView {
@@ -34,25 +36,7 @@ final class ScreensTests: XCTestCase {
     }
 
     private func render(_ view: AppView, _ name: String, dark: Bool = true) throws {
-        let root = RunovaTheme(dark: dark) {
-            AppRoot(view: view, tab: .constant("systems"), intents: AppIntents())
-        }
-        let controller = UIHostingController(rootView: root.ignoresSafeArea())
-        let bounds = CGRect(x: 0, y: 0, width: 390, height: 844)
-        let window = UIWindow(frame: bounds)
-        window.rootViewController = controller
-        window.isHidden = false
-        controller.view.frame = bounds
-        controller.view.layoutIfNeeded()
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 3
-        let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
-            controller.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
-        }
-        let folder = ProcessInfo.processInfo.environment["SNAPSHOT_OUTPUT"] ?? NSTemporaryDirectory()
-        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-        try XCTUnwrap(image.pngData())
-            .write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(name).png"))
+        try renderSnapshot(view, name, dark: dark)
     }
 
     func testSignIn() throws { try render(view(auth: .signedOut, systems: []), "sign-in") }

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
+import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.StartingScreen
 import uniffi.runova_ffi.AppLifecycle
 import uniffi.runova_ffi.AppView
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity(), ViewListener {
             AndroidSecureStore(applicationContext),
             this,
         )
+        val engine = core.engine()
         val intents = AppIntents(
             signIn = ::openSignIn,
             refresh = { core.refresh() },
@@ -56,6 +58,30 @@ class MainActivity : ComponentActivity(), ViewListener {
             terminalInput = { core.terminalInput(it) },
             terminalScroll = { core.terminalScroll(it) },
             loadProcesses = { core.loadTerminalProcesses(it) },
+            confirm = { engine.confirm() },
+            dismissConfirm = { engine.dismissConfirm() },
+            dismissNotice = { engine.dismissNotice() },
+            git = GitIntents(
+                openDiff = { path, group -> engine.openGitDiff(path, group) },
+                closeDiff = { engine.closeGitDiff() },
+                openBranches = { engine.openGitBranches() },
+                closeBranches = { engine.closeGitBranches() },
+                stage = { engine.gitStage(it) },
+                unstage = { engine.gitUnstage(it) },
+                discard = { path, group -> engine.gitDiscard(path, group) },
+                commit = { message, push -> engine.gitCommit(message, push) },
+                fetch = { engine.gitFetch() },
+                pull = { engine.gitPull() },
+                push = { engine.gitPush() },
+                checkout = { engine.gitCheckout(it) },
+                createBranch = { engine.gitCreateBranch(it) },
+                deleteBranch = { engine.gitDeleteBranch(it) },
+                stashPush = { engine.gitStashPush(it) },
+                stashPop = { engine.gitStashPop(it) },
+                stashDrop = { engine.gitStashDrop(it) },
+                resolve = { path, pick -> engine.gitResolve(path, pick) },
+                abort = { engine.gitAbort() },
+            ),
         )
         setContent {
             RunovaTheme {

@@ -9,6 +9,7 @@ import {
   writeToSession,
 } from '../../ipc/terminal';
 import { store } from '../../store';
+import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
 
 async function listTerminals(): Promise<ManageTerminal[]> {
@@ -51,4 +52,5 @@ export const liveManageDeps: ManageMethodDeps = {
       memBytes: process.memBytes,
     }));
   },
+  git: liveGit,
 };

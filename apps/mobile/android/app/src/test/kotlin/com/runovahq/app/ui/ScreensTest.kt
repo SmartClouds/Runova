@@ -20,6 +20,7 @@ import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
+import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.SystemView
 
@@ -44,7 +45,7 @@ private fun view(
     projects: List<ProjectView> = emptyList(),
     projectsLoading: Boolean = false,
     error: String? = null,
-) = AppView(auth, true, list, false, connection, projects, projectsLoading, null, emptyList(), false, null, emptyList(), error)
+) = AppView(auth, true, list, false, connection, projects, projectsLoading, null, emptyList(), false, null, emptyList(), GitScreen(null, false, null, false, emptyList(), emptyList()), false, null, null, error)
 
 private fun connection(
     phase: ConnectionPhase,

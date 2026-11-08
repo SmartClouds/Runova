@@ -14,6 +14,10 @@ struct AppIntents {
     var terminalInput: (String) -> Void = { _ in }
     var terminalScroll: (Int32) -> Void = { _ in }
     var loadProcesses: (String) -> Void = { _ in }
+    var confirm: () -> Void = {}
+    var dismissConfirm: () -> Void = {}
+    var dismissNotice: () -> Void = {}
+    var git = GitIntents()
 }
 
 let appTabs = [
@@ -35,6 +39,9 @@ struct AppRoot: View {
             case .starting: StartingScreen()
             case .signedOut: SignInScreen(error: view.error, onSignIn: intents.signIn)
             case .signedIn: signedIn
+            }
+            if let confirm = view.confirm {
+                ConfirmOverlay(confirm: confirm, onConfirm: intents.confirm, onDismiss: intents.dismissConfirm)
             }
         }
     }

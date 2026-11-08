@@ -75,7 +75,36 @@ final class AppModel: NSObject, ObservableObject {
             closeTerminal: { [weak self] in self?.core?.closeTerminal() },
             terminalInput: { [weak self] in self?.core?.terminalInput(data: $0) },
             terminalScroll: { [weak self] in self?.core?.terminalScroll(lines: $0) },
-            loadProcesses: { [weak self] in self?.core?.loadTerminalProcesses(sessionId: $0) })
+            loadProcesses: { [weak self] in self?.core?.loadTerminalProcesses(sessionId: $0) },
+            confirm: { [weak self] in self?.engine?.confirm() },
+            dismissConfirm: { [weak self] in self?.engine?.dismissConfirm() },
+            dismissNotice: { [weak self] in self?.engine?.dismissNotice() },
+            git: gitIntents)
+    }
+
+    private var engine: Engine? { core?.engine() }
+
+    private var gitIntents: GitIntents {
+        GitIntents(
+            openDiff: { [weak self] in self?.engine?.openGitDiff(path: $0, group: $1) },
+            closeDiff: { [weak self] in self?.engine?.closeGitDiff() },
+            openBranches: { [weak self] in self?.engine?.openGitBranches() },
+            closeBranches: { [weak self] in self?.engine?.closeGitBranches() },
+            stage: { [weak self] in self?.engine?.gitStage(paths: $0) },
+            unstage: { [weak self] in self?.engine?.gitUnstage(paths: $0) },
+            discard: { [weak self] in self?.engine?.gitDiscard(path: $0, group: $1) },
+            commit: { [weak self] in self?.engine?.gitCommit(message: $0, push: $1) },
+            fetch: { [weak self] in self?.engine?.gitFetch() },
+            pull: { [weak self] in self?.engine?.gitPull() },
+            push: { [weak self] in self?.engine?.gitPush() },
+            checkout: { [weak self] in self?.engine?.gitCheckout(name: $0) },
+            createBranch: { [weak self] in self?.engine?.gitCreateBranch(name: $0) },
+            deleteBranch: { [weak self] in self?.engine?.gitDeleteBranch(name: $0) },
+            stashPush: { [weak self] in self?.engine?.gitStashPush(message: $0) },
+            stashPop: { [weak self] in self?.engine?.gitStashPop(reference: $0) },
+            stashDrop: { [weak self] in self?.engine?.gitStashDrop(reference: $0) },
+            resolve: { [weak self] in self?.engine?.gitResolve(path: $0, pick: $1) },
+            abort: { [weak self] in self?.engine?.gitAbort() })
     }
 
     func scene(_ phase: ScenePhase) {

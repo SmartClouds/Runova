@@ -24,6 +24,7 @@ import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.CursorView
+import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.FrameView
 import uniffi.runova_ffi.LineView
 import uniffi.runova_ffi.ProjectView
@@ -79,6 +80,10 @@ private fun view(
     false,
     terminal,
     processes,
+    GitScreen(null, false, null, false, emptyList(), emptyList()),
+    false,
+    null,
+    null,
     null,
 )
 

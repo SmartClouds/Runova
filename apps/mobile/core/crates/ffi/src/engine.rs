@@ -5,8 +5,8 @@ use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
 use crate::terminals::OpenTerminal;
 use crate::view::{
-    AppView, AuthState, ConnectionPhase, ConnectionView, ProjectView, Section, SystemView,
-    ViewListener,
+    AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, GitScreen, ProjectView,
+    Section, SystemView, ViewListener,
 };
 use async_trait::async_trait;
 use runova_api::auth::{
@@ -99,6 +99,10 @@ pub(crate) enum Done {
     Tick {
         attempt: u64,
     },
+    Run {
+        attempt: u64,
+        task: Task,
+    },
 }
 
 pub(crate) struct Booted {
@@ -114,7 +118,7 @@ pub(crate) enum BootError {
 }
 
 /// Native code's handle on the running engine.
-#[derive(Clone)]
+#[derive(Clone, uniffi::Object)]
 pub struct Engine {
     commands: mpsc::UnboundedSender<Command>,
     pending: Arc<Mutex<Option<SignInRequest>>>,
@@ -185,7 +189,7 @@ impl Engine {
         let _ = self.commands.send(Command::SignOut);
     }
 
-    fn run(&self, task: impl FnOnce(&mut Runner) + Send + 'static) {
+    pub(crate) fn run(&self, task: impl FnOnce(&mut Runner) + Send + 'static) {
         let _ = self.commands.send(Command::Run(Box::new(task)));
     }
 
@@ -195,7 +199,7 @@ impl Engine {
     }
 
     pub fn select_project(&self, project_id: Option<String>) {
-        self.run(move |runner| runner.view.selected_project = project_id);
+        self.run(move |runner| runner.select_project(project_id));
     }
 
     pub fn load_terminals(&self) {
@@ -224,6 +228,22 @@ impl Engine {
     }
 }
 
+#[uniffi::export]
+impl Engine {
+    /// Yes to the question on screen.
+    pub fn confirm(&self) {
+        self.run(|runner| runner.answer(true));
+    }
+
+    pub fn dismiss_confirm(&self) {
+        self.run(|runner| runner.answer(false));
+    }
+
+    pub fn dismiss_notice(&self) {
+        self.run(|runner| runner.view.notice = None);
+    }
+}
+
 pub(crate) struct Runner {
     deps: Dependencies,
     pub(crate) done_tx: mpsc::UnboundedSender<Done>,
@@ -241,8 +261,9 @@ pub(crate) struct Runner {
     return_to: Option<i64>,
     let_go_at: Option<Instant>,
     pub(crate) open_terminal: Option<OpenTerminal>,
-    section: Option<Section>,
+    pub(crate) section: Option<Section>,
     ticker: Option<JoinHandle<()>>,
+    pending_confirm: Option<Task>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -255,6 +276,13 @@ fn view_of(entry: &SystemEntry) -> SystemView {
         own: entry.own,
         can_manage: entry.own && entry.kind == "app",
     }
+}
+
+#[derive(Deserialize)]
+struct OpResult {
+    ok: bool,
+    #[serde(default)]
+    message: String,
 }
 
 #[derive(Deserialize)]
@@ -295,11 +323,66 @@ impl Runner {
             open_terminal: None,
             section: None,
             ticker: None,
+            pending_confirm: None,
         }
+    }
+
+    /// Puts the question on screen and runs `task` only if the answer is yes.
+    pub(crate) fn ask(
+        &mut self,
+        confirm: ConfirmView,
+        task: impl FnOnce(&mut Runner) + Send + 'static,
+    ) {
+        self.view.confirm = Some(confirm);
+        self.pending_confirm = Some(Box::new(task));
+    }
+
+    fn answer(&mut self, yes: bool) {
+        self.view.confirm = None;
+        if let Some(task) = self.pending_confirm.take()
+            && yes
+        {
+            task(self);
+        }
+    }
+
+    /// Does something on the computer that answers with `{ok, message}`, then runs `after`.
+    pub(crate) fn op(
+        &mut self,
+        method: &'static str,
+        params: Option<Value>,
+        after: fn(&mut Runner),
+    ) {
+        let Some(client) = self.client() else {
+            return;
+        };
+        self.view.busy = true;
+        self.view.error = None;
+        self.view.notice = None;
+        let attempt = self.attempt;
+        let done = self.done_tx.clone();
+        tokio::spawn(async move {
+            let outcome = client.call(method, params).await;
+            let task: Task = Box::new(move |runner| {
+                runner.view.busy = false;
+                match outcome.map(serde_json::from_value::<OpResult>) {
+                    Ok(Ok(OpResult { ok: true, message })) => {
+                        runner.view.notice = first_line(&message);
+                    }
+                    Ok(Ok(OpResult { message, .. })) => runner.view.error = Some(message),
+                    Ok(Err(_)) => runner.view.error = Some(UNREADABLE.to_owned()),
+                    Err(RpcError::Closed) => {}
+                    Err(error) => runner.view.error = Some(error.to_string()),
+                }
+                after(runner);
+            });
+            let _ = done.send(Done::Run { attempt, task });
+        });
     }
 
     fn open_section(&mut self, section: Option<Section>) {
         self.view.error = None;
+        self.view.notice = None;
         self.section = section;
         self.start_ticking();
     }
@@ -325,9 +408,10 @@ impl Runner {
         }));
     }
 
-    fn refresh_section(&mut self) {
+    pub(crate) fn refresh_section(&mut self) {
         match self.section {
             Some(Section::Clis) => self.load_terminals(),
+            Some(Section::Git) => self.load_git(),
             None => {}
         }
     }
@@ -383,6 +467,11 @@ impl Runner {
         }
         self.open_terminal = None;
         self.view.selected_project = None;
+        self.view.git = GitScreen::default();
+        self.view.confirm = None;
+        self.pending_confirm = None;
+        self.view.busy = false;
+        self.view.notice = None;
         self.view.projects.clear();
         self.view.projects_loading = false;
         self.view.terminals.clear();
@@ -626,6 +715,7 @@ impl Runner {
             }
             Done::Apply { attempt, apply } if attempt == self.attempt => apply(&mut self.view),
             Done::Tick { attempt } if attempt == self.attempt => self.refresh_section(),
+            Done::Run { attempt, task } if attempt == self.attempt => task(self),
             _ => {}
         }
     }
@@ -727,6 +817,14 @@ impl Runner {
             self.publish();
         }
     }
+}
+
+fn first_line(message: &str) -> Option<String> {
+    message
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
 }
 
 async fn next_event(events: &mut Option<mpsc::Receiver<HubEvent>>) -> Option<HubEvent> {

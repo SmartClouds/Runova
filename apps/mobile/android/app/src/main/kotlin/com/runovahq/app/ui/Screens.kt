@@ -1,6 +1,7 @@
 package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.runovahq.app.design.BadgeTone
@@ -35,6 +37,7 @@ import com.runovahq.app.design.RunovaType
 import com.runovahq.app.design.TabItem
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
+import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.Section
@@ -54,6 +57,10 @@ data class AppIntents(
     val terminalInput: (String) -> Unit = {},
     val terminalScroll: (Int) -> Unit = {},
     val loadProcesses: (String) -> Unit = {},
+    val confirm: () -> Unit = {},
+    val dismissConfirm: () -> Unit = {},
+    val dismissNotice: () -> Unit = {},
+    val git: GitIntents = GitIntents(),
 )
 
 val AppTabs = listOf(
@@ -74,6 +81,35 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
                     else -> ConnectionScreen(connection, intents)
+                }
+            }
+        }
+        view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
+    }
+}
+
+@Composable
+private fun ConfirmOverlay(confirm: ConfirmView, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val colors = RunovaTheme.colors
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .clickable(interactionSource = null, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        RunovaCard(Modifier.padding(24.dp).fillMaxWidth().clickable(interactionSource = null, indication = null) {}) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                RunovaText(confirm.title, style = RunovaType.title)
+                RunovaText(confirm.detail, color = colors.mutedForeground)
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RunovaButton("Cancel", onClick = onDismiss, Modifier.weight(1f), kind = ButtonKind.Soft)
+                    RunovaButton(
+                        confirm.action,
+                        onClick = onConfirm,
+                        Modifier.weight(1f),
+                        kind = if (confirm.danger) ButtonKind.Danger else ButtonKind.Primary,
+                    )
                 }
             }
         }

@@ -14,9 +14,9 @@ their size. Discard, branch delete, and stash drop are high risk and ask first.
 
 ## Tasks
 
-- [ ] T1 Bridge methods and the working tree subscription
-- [ ] T2 Host-side hunks with a size cap
-- [ ] T3 `store` and screens: changes, diff, commit, branches, stashes, conflicts
+- [x] T1 Bridge methods, with the screen re-reading the state every 5 seconds while it is open
+- [x] T2 Host-side hunks with a size cap
+- [x] T3 `store` and screens: changes, diff, commit, branches, stashes, conflicts
 
 ## Acceptance criteria
 
@@ -28,3 +28,10 @@ their size. Discard, branch delete, and stash drop are high risk and ask first.
 ## Not in this epic
 
 Line-by-line staging and pull requests.
+
+## Status
+
+The bridge, the core and the Android screens are tested. A change on the computer shows up within
+5 seconds while the screen is open (AC1), rather than through a file watcher, which keeps idle cost
+at nothing once the screen closes. Owed: AC2 and AC4 against a real repository from a real phone, and
+the iOS screens have never been compiled.
