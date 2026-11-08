@@ -17,7 +17,8 @@
     <!-- Seals the agent's key and secret to the machine (DPAPI) on Windows. -->
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
     <!-- JPEG encoding of screen tiles on Windows. -->
-    <PackageVersion Include="System.Drawing.Common" Version="10.0.14" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
   </ItemGroup>
   <ItemGroup Label="Tests">
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />

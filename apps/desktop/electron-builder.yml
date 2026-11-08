@@ -37,8 +37,8 @@ extraResources:
   # fine (electron-builder only warns) and its Deploy section says it has no core to install.
   - from: build/server-core-manifest.json
     to: server-core-manifest.json
-  # The Runova Anywhere agent (E64), which CD publishes into build/remote-agent before packaging
-  # on Windows. A build without it packages fine and the app says the background service is not
+  # The Runova Anywhere agent (E64, E65), which CD publishes into build/remote-agent before
+  # packaging. A build without it packages fine and the app says the background service is not
   # part of this build.
   - from: build/remote-agent
     to: remote-agent

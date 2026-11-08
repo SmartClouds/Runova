@@ -480,9 +480,22 @@ jobs:
         working-directory: apps/remote-agent
         run: dotnet build Runova.RemoteAgent.slnx --no-restore --configuration Release
 
+      - name: X server for the Linux screen and input test
+        run: |
+          # The self-hosted runner keeps what it installed, so only reach for apt when needed.
+          command -v Xvfb > /dev/null && command -v xsetroot > /dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y xvfb x11-xserver-utils libx11-6 libxext6 libxtst6
+          }
+          Xvfb :97 -screen 0 1024x768x24 -ac -noreset &
+          sleep 2
+          DISPLAY=:97 xsetroot -solid red
+
       # Includes the protocol vectors from packages/protocol, so the agent and the app can not drift.
       - name: Tests
         working-directory: apps/remote-agent
+        env:
+          RUNOVA_TEST_X_DISPLAY: ":97"
         run: dotnet test --project tests/Runova.RemoteAgent.Tests --no-build --configuration Release --output Detailed
 
   server-core-system:

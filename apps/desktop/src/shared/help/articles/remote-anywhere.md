@@ -56,11 +56,15 @@ Nothing can connect to a new computer until you allow it. Click **Access setting
 
 ### When no one is signed in to the computer
 
-On Windows, **Keep this computer reachable while no one is signed in** in **Access settings** sets up a small background service that starts with Windows. While no one is signed in, or the computer is locked, it answers instead of the app, under the same ID, and shows the lock or sign-in screen. Windows asks for administrator permission to set it up, and again to remove it.
+**Keep this computer reachable while no one is signed in** in **Access settings** sets up a small background service that starts with the computer. It answers instead of the app, under the same ID, and shows the sign-in screen. Your computer asks for administrator permission to set it up, and again to remove it. It stays on if you sign out of Runova, until you turn it off.
+
+- **Windows**: it answers while no one is signed in and while the computer is locked.
+- **macOS**: it answers at the login window, when no one is signed in. It can not answer on the lock screen of a signed-in account.
+- **Linux**: it needs an X11 sign-in screen, such as LightDM or SDDM. GDM often uses Wayland, which does not let other programs see or control the screen; set `WaylandEnable=false` in GDM's config to use the service there.
 
 With no one there to accept, the service lets in only what you allowed without asking: your own computers (when **My other computers connect without asking** is on), teammates you always let in, and the unattended-access password. If a password is set, Runova asks for it once more when you turn the service on, and the service gets a key of its own made from it. Changing the password sets the service up again.
 
-The background service shows the screen as pictures rather than video, does not share the clipboard or files, and uses the Runova relay. It keeps the settings from when it was turned on: turn it off and on again after changing who can connect. It is not available on macOS and Linux yet.
+The background service shows the screen as pictures rather than video, does not share the clipboard or files, and uses the Runova relay. It keeps the settings from when it was turned on: turn it off and on again after changing who can connect.
 
 ### When someone asks
 

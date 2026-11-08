@@ -221,7 +221,7 @@ function AgentSetting({ state }: { state: AnywhereState }): React.JSX.Element {
     <div className="space-y-2.5">
       <ToggleRow
         label="Keep this computer reachable while no one is signed in"
-        description="A small service that starts with Windows answers on the lock and sign-in screens, for your own computers, teammates you always let in, and the password. Windows asks for permission to set it up."
+        description="A small service that starts with this computer answers on its sign-in screen, for your own computers, teammates you always let in, and the password. Your computer asks for permission to set it up."
         checked={installed || asking}
         disabled={!!unavailableReason || busy}
         onChange={toggle}

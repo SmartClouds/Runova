@@ -100,7 +100,9 @@ public sealed partial class AgentService(AgentConfig config, IAgentPlatform plat
         var hub = _hub!;
         var passwordSecret = config.PasswordSecret is { } s ? Bytes.FromB64u(s) : null;
         var facts = new IncomingFacts(request.Mode, request.Relation, request.Controller.UserId, request.Teams, passwordSecret is not null, _lockout.Locked());
-        var accept = request.Controller.IdentityKey is not null && AgentPolicy.Accepts(facts, config.Settings);
+
+        // With no screen to show (a Wayland greeter, say) a session would only be blank.
+        var accept = request.Controller.IdentityKey is not null && AgentPolicy.Accepts(facts, config.Settings) && platform.Screen.Capture() is not null;
         await hub.InvokeAsync("Respond", request.SessionId, accept, ct);
         if (!accept)
         {

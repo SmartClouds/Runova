@@ -241,17 +241,16 @@ jobs:
           name: server-core-manifest
           path: apps/desktop/build
 
-      # The Runova Anywhere agent (E64), a self-contained executable the Windows app ships so a
+      # The Runova Anywhere agent (E64, E65), a self-contained executable the app ships so a
       # computer stays reachable while no one is signed in. electron-builder.yml copies it in.
+      # Published on each OS's own runner: on a Mac, dotnet signs the file, which arm64 requires.
       - name: Setup .NET for the Anywhere agent
-        if: runner.os == 'Windows'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.4xx
 
       - name: Publish the Anywhere agent
-        if: runner.os == 'Windows'
-        run: node scripts/remote-agent.mjs publish win-x64
+        run: node scripts/remote-agent.mjs publish ${{ runner.os == 'Windows' && 'win-x64' || runner.os == 'Linux' && 'linux-x64' || matrix.mac_arch == 'arm64' && 'osx-arm64' || 'osx-x64' }}
 
       # The Runova Connector plugin zip (E19). electron-builder.yml copies it into the app's
       # resources, so Deploy can hand it to the user to upload in wp-admin. Plain Node, no Docker.

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { app, safeStorage, systemPreferences } from 'electron';
@@ -158,6 +158,13 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
         return file;
       },
       removeFile: (path) => unlink(path),
+      copyExecutable: async (path) => {
+        const file = dataFile(`agent-setup-${randomUUID()}`);
+        await mkdir(dirname(file), { recursive: true });
+        await copyFile(path, file);
+        await chmod(file, 0o700);
+        return file;
+      },
     }),
     readiness: () => {
       const needs: ('accessibility' | 'screen')[] = [];

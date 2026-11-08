@@ -54,9 +54,18 @@ public sealed record AgentConfig
 /// <summary>Where the agent keeps its configuration, readable by the system and administrators only.</summary>
 public static class AgentConfigStore
 {
-    public static string Folder => OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Runova", "Agent")
-        : "/etc/runova-agent";
+    public static string Folder
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Runova", "Agent");
+            }
+
+            return OperatingSystem.IsMacOS() ? "/Library/Application Support/Runova/Agent" : "/etc/runova-agent";
+        }
+    }
 
     public static string FilePath => Path.Combine(Folder, "agent.bin");
 
@@ -66,14 +75,38 @@ public static class AgentConfigStore
     {
         ArgumentNullException.ThrowIfNull(config);
         var file = path ?? FilePath;
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var plain = System.Text.Encoding.UTF8.GetBytes(config.ToJson());
-        var data = OperatingSystem.IsWindows() ? Seal(plain) : plain;
-        File.WriteAllBytes(file, data);
-        if (!OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, Seal(plain));
         }
+        else
+        {
+            WriteForOwnerOnly(file, plain);
+        }
+    }
+
+    /// <summary>The file never exists with wider permissions, whatever the umask, and it replaces an older one whole.</summary>
+    [UnsupportedOSPlatform("windows")]
+    private static void WriteForOwnerOnly(string file, byte[] content)
+    {
+        var folder = Path.GetDirectoryName(file)!;
+        Directory.CreateDirectory(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var temporary = $"{file}.{Environment.ProcessId}.tmp";
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+        };
+        using (var stream = new FileStream(temporary, options))
+        {
+            stream.Write(content);
+        }
+
+        File.Move(temporary, file, overwrite: true);
     }
 
     public static AgentConfig Load(string? path = null)

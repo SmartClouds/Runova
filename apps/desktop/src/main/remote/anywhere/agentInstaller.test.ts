@@ -15,18 +15,28 @@ const config: AgentConfigFile = {
 };
 
 function fake(
-  options: { platform?: string; exe?: boolean; queryCode?: number; elevatedCode?: number } = {},
+  options: {
+    platform?: string;
+    exe?: boolean;
+    plist?: boolean;
+    queryCode?: number;
+    elevatedCode?: number;
+  } = {},
 ) {
   const runs: { command: string; args: string[] }[] = [];
   const written: string[] = [];
   const removed: string[] = [];
+  const copied: string[] = [];
   const installer = createAgentInstaller({
     platform: options.platform ?? 'win32',
     resourcesPath: 'C:\\Program Files\\Runova\\resources',
-    exists: () => options.exe ?? true,
+    exists: (path) => (path.endsWith('.plist') ? (options.plist ?? false) : (options.exe ?? true)),
     run: async (command, args) => {
       runs.push({ command, args });
-      if (command === 'sc.exe') return { code: options.queryCode ?? 1060, stdout: '' };
+      if (command === 'sc.exe' || command === 'systemctl') {
+        return { code: options.queryCode ?? 1060, stdout: '' };
+      }
+      if (command === 'pkexec') return { code: options.elevatedCode ?? 0, stdout: '' };
       return { code: 0, stdout: String(options.elevatedCode ?? 0) };
     },
     writePrivateFile: async (content) => {
@@ -36,21 +46,71 @@ function fake(
     removeFile: async (path) => {
       removed.push(path);
     },
+    copyExecutable: async (path) => {
+      copied.push(path);
+      return '/home/sam/.config/Runova/agent-setup/RunovaAgent';
+    },
   });
-  return { installer, runs, written, removed };
+  return { installer, runs, written, removed, copied };
 }
 
 describe('the background agent installer', () => {
-  it('is for Windows, and only when this build carries the agent', () => {
+  it('is there on Windows, macOS and Linux when this build carries the agent', () => {
     expect(fake().installer.unavailable()).toBeNull();
-    expect(fake({ platform: 'darwin' }).installer.unavailable()).toMatch(/Windows/);
+    expect(fake({ platform: 'darwin' }).installer.unavailable()).toBeNull();
+    expect(fake({ platform: 'linux' }).installer.unavailable()).toBeNull();
+    expect(fake({ platform: 'freebsd' }).installer.unavailable()).toMatch(/not available/);
     expect(fake({ exe: false }).installer.unavailable()).toMatch(/does not include/);
   });
 
   it('asks Windows whether the service exists', async () => {
     expect(await fake({ queryCode: 0 }).installer.installed()).toBe(true);
     expect(await fake({ queryCode: 1060 }).installer.installed()).toBe(false);
-    expect(await fake({ platform: 'linux' }).installer.installed()).toBe(false);
+  });
+
+  it('asks each system in its own way whether the service is set up', async () => {
+    expect(await fake({ platform: 'linux', queryCode: 0 }).installer.installed()).toBe(true);
+    expect(await fake({ platform: 'linux', queryCode: 1 }).installer.installed()).toBe(false);
+    expect(await fake({ platform: 'darwin', plist: true }).installer.installed()).toBe(true);
+    expect(await fake({ platform: 'darwin', plist: false }).installer.installed()).toBe(false);
+    expect(await fake({ platform: 'freebsd' }).installer.installed()).toBe(false);
+  });
+
+  it('on Linux asks through polkit, running a copy root can reach, then removes the copy', async () => {
+    const { installer, runs, copied, removed } = fake({ platform: 'linux' });
+
+    await installer.install(config);
+
+    const elevated = runs.find((r) => r.command === 'pkexec');
+    expect(elevated?.args[0]).toBe('/home/sam/.config/Runova/agent-setup/RunovaAgent');
+    expect(elevated?.args.slice(1, 3)).toEqual(['install', '--config']);
+    expect(copied[0]).toMatch(/remote-agent.RunovaAgent$/);
+    expect(removed).toContain('/home/sam/.config/Runova/agent-setup/RunovaAgent');
+  });
+
+  it('on Linux says so when the person dismisses the polkit prompt', async () => {
+    const { installer, removed } = fake({ platform: 'linux', elevatedCode: 126 });
+
+    await expect(installer.install(config)).rejects.toThrow(/did not get permission/);
+    expect(removed).toContain('C:\\Users\\sam\\AppData\\Roaming\\Runova\\agent-config.json');
+  });
+
+  it('on macOS asks through an administrator prompt with the paths quoted', async () => {
+    const { installer, runs } = fake({ platform: 'darwin' });
+
+    await installer.install(config);
+
+    const elevated = runs.find((r) => r.command === 'osascript');
+    const script = elevated?.args.join(' ') ?? '';
+    expect(script).toContain('with administrator privileges');
+    expect(script).toContain('RunovaAgent');
+    expect(script).toContain("'install' '--config'");
+  });
+
+  it('on macOS says so when the person cancels the prompt', async () => {
+    const { installer } = fake({ platform: 'darwin', elevatedCode: -128 });
+
+    await expect(installer.install(config)).rejects.toThrow(/did not get permission/);
   });
 
   it('hands over the config in a private file and installs as administrator', async () => {

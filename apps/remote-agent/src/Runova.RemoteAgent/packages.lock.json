@@ -53,14 +53,21 @@
           "System.ServiceProcess.ServiceController": "10.0.14"
         }
       },
-      "System.Drawing.Common": {
+      "SkiaSharp": {
         "type": "Direct",
-        "requested": "[10.0.14, )",
-        "resolved": "10.0.14",
-        "contentHash": "kBe75KgVcm8soY0BPd5vTSLfC5vjd0O1YN6ApsL4qWnQiLUsOQ2k+PjWwraOI7JEp36mksavW/qz/r0NoSzYuQ==",
+        "requested": "[3.119.1, )",
+        "resolved": "3.119.1",
+        "contentHash": "+Ru1BTSZQne3Vp+vbSb50Ke3Nlc3ZnItxx4+751J9WZ8YzLKAV/n+9DAo4zFTyeCI//ueT63c+VybmTTpYBEiw==",
         "dependencies": {
-          "Microsoft.Win32.SystemEvents": "10.0.14"
+          "SkiaSharp.NativeAssets.Win32": "3.119.1",
+          "SkiaSharp.NativeAssets.macOS": "3.119.1"
         }
+      },
+      "SkiaSharp.NativeAssets.Linux.NoDependencies": {
+        "type": "Direct",
+        "requested": "[3.119.1, )",
+        "resolved": "3.119.1",
+        "contentHash": "5jj6gBCe4K6TLnIERBXZfmUNE0TUyeTaF28RCxdCgIDVDaCAbHwEbk99eNYRFem/ubW/hKdvayZBOt6PaDL05g=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Direct",
@@ -377,10 +384,15 @@
         "resolved": "10.0.14",
         "contentHash": "1bbZqqCJTPba3inTADExbp/9PsGVyvGOX3zr6tFr7ySCgVkX9Lpw7BV0TizktNItd3SsbUu1sQfSAYm1GZMoNw=="
       },
-      "Microsoft.Win32.SystemEvents": {
+      "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
-        "resolved": "10.0.14",
-        "contentHash": "axfieK5mj+uS/wLYl0dhlRFWdNP1iKHhx/M6DZNXPCSve7q4TCogw//W6BWGsYhnWuSw55aqheHE0a8l8s1oTw=="
+        "resolved": "3.119.1",
+        "contentHash": "6hR3BdLhApjDxR1bFrJ7/lMydPfI01s3K+3WjIXFUlfC0MFCFCwRzv+JtzIkW9bDXs7XUVQS+6EVf0uzCasnGQ=="
+      },
+      "SkiaSharp.NativeAssets.Win32": {
+        "type": "Transitive",
+        "resolved": "3.119.1",
+        "contentHash": "8C4GSXVJqSr0y3Tyyv5jz6MJSTVUyYkMjeKrzK+VyZPGLo89MNoUEclVuYahzOCDdtbfXrd2HtxXfDuvoSXrUw=="
       },
       "System.Diagnostics.EventLog": {
         "type": "Transitive",

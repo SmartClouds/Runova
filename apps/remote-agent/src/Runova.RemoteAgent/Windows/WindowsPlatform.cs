@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.Json.Nodes;
@@ -128,38 +126,6 @@ internal sealed class GdiScreenSource(DesktopThread desktop) : IScreenSource
             _ = NativeMethods.ReleaseDC(0, screenDc);
         }
     }
-}
-
-/// <summary>JPEG tiles through GDI+.</summary>
-[SupportedOSPlatform("windows")]
-internal sealed class JpegTileEncoder : ITileEncoder, IDisposable
-{
-    private readonly ImageCodecInfo _jpeg = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-    private readonly EncoderParameters _quality = new(1) { Param = { [0] = new EncoderParameter(Encoder.Quality, 70L) } };
-
-    public byte[] Encode(ScreenFrame frame, TileRect rect)
-    {
-        ArgumentNullException.ThrowIfNull(frame);
-        using var bitmap = new Bitmap(rect.W, rect.H, PixelFormat.Format32bppRgb);
-        var data = bitmap.LockBits(new Rectangle(0, 0, rect.W, rect.H), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
-        try
-        {
-            for (var row = 0; row < rect.H; row++)
-            {
-                Marshal.Copy(frame.Pixels, ((rect.Y + row) * frame.Stride) + (rect.X * 4), data.Scan0 + (row * data.Stride), rect.W * 4);
-            }
-        }
-        finally
-        {
-            bitmap.UnlockBits(data);
-        }
-
-        using var output = new MemoryStream();
-        bitmap.Save(output, _jpeg, _quality);
-        return output.ToArray();
-    }
-
-    public void Dispose() => _quality.Dispose();
 }
 
 /// <summary>Mouse and keyboard on the input desktop through SendInput.</summary>
