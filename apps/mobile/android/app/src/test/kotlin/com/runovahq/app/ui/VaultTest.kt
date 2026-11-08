@@ -50,7 +50,7 @@ private fun vault(
     open: String? = null,
     revealed: RevealedSecretView? = null,
     unlockError: String? = null,
-) = VaultScreen(state, false, true, unlockError, entries, open, null, revealed)
+) = VaultScreen(state, false, true, false, unlockError, entries, open, null, revealed)
 
 private fun view(screen: VaultScreen) = appView(connection = connected, vault = screen)
 

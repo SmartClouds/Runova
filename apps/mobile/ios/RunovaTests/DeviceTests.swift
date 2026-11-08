@@ -132,7 +132,7 @@ final class DeviceTests: XCTestCase {
 
     private func vaultScreen(_ state: VaultLockState, open: String? = nil) -> VaultScreen {
         VaultScreen(
-            state: state, loading: false, onShow: true, unlockError: nil,
+            state: state, loading: false, onShow: true, inBackground: false, unlockError: nil,
             entries: state == .unlocked ? [vaultEntry] : [], openEntry: open, biometric: nil, revealed: nil)
     }
 
@@ -224,7 +224,7 @@ func fixtureView(
     git: GitScreen = GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
     status: StatusScreen = StatusScreen(system: nil, loading: false, limits: [], providers: [], detail: nil),
     vault: VaultScreen = VaultScreen(
-        state: .unknown, loading: false, onShow: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
+        state: .unknown, loading: false, onShow: false, inBackground: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),

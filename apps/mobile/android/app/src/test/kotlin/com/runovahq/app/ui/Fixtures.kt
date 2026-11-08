@@ -27,7 +27,7 @@ val emptyMonitoring = MonitoringScreen(emptyList(), emptyList(), false, null, nu
 val emptyPipelines = PipelinesScreen(null, false, null, null)
 val emptyAccount = AccountScreen(null, false, emptyList(), emptyList(), emptyList(), emptyList(), null, null)
 val emptyNotifications = NotificationsScreen(emptyList(), 0u, false, emptyList(), false, null)
-val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, null, emptyList(), null, null, null)
+val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, false, null, emptyList(), null, null, null)
 
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
