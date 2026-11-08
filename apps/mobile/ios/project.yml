@@ -1,0 +1,47 @@
+name: Runova
+options:
+  bundleIdPrefix: com.runovahq
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+targets:
+  Runova:
+    type: application
+    platform: iOS
+    sources:
+      - Runova
+      - Generated
+    dependencies:
+      - framework: Frameworks/RunovaCore.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runovahq.app
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Runova
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
+        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+  RunovaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - RunovaTests
+    dependencies:
+      - target: Runova
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+schemes:
+  Runova:
+    build:
+      targets:
+        Runova: all
+        RunovaTests: [test]
+    test:
+      targets:
+        - RunovaTests

@@ -1,6 +1,6 @@
 name: Tests
 
-# Unit, integration and end-to-end tests. Called by CI on every push and pull request.
+# Unit, integration, mobile and end-to-end tests. Called by CI on every push and pull request.
 # CD does not run them again: it waits for CI to pass on the commit it releases.
 #
 # CI runs the suites that do not care about the OS (core, protocol and desktop unit) on
@@ -610,6 +610,128 @@ jobs:
         env:
           RUNOVA_SYSTEM_TESTS: "1"
         run: pnpm --filter @runova/desktop exec vitest run src/main/deploy/layoutMigration.int.test.ts
+
+  mobile-core:
+    name: Mobile core
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile/core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Tests with a coverage floor
+        run: cargo llvm-cov --workspace --locked --fail-under-lines 85
+
+  mobile-android:
+    name: Mobile Android
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+
+      - name: Install cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Tests and a debug build
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain --no-daemon
+
+  mobile-ios:
+    name: Mobile iOS
+    runs-on: ${{ inputs.github-hosted && 'macos-latest' || fromJSON('["self-hosted","macOS","ARM64"]') }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          clean: ${{ runner.os != 'macOS' }}
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      # The Mac is shared, so a missing Xcode is reported here instead of failing everyone's CI.
+      - name: Check for Xcode
+        id: xcode
+        run: |
+          if xcodebuild -version > /dev/null 2>&1; then
+            xcodebuild -version
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Xcode is not installed on this runner, so the iOS app was not built or tested."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Rust
+        if: steps.xcode.outputs.available == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+
+      - name: Install XcodeGen
+        if: steps.xcode.outputs.available == 'true'
+        run: command -v xcodegen > /dev/null || brew install xcodegen
+
+      - name: Build the core and its Swift bindings
+        if: steps.xcode.outputs.available == 'true'
+        run: sh apps/mobile/ios/scripts/build-core.sh
+
+      - name: Generate the Xcode project
+        if: steps.xcode.outputs.available == 'true'
+        working-directory: apps/mobile/ios
+        run: xcodegen generate
+
+      - name: Tests on the simulator
+        if: steps.xcode.outputs.available == 'true'
+        working-directory: apps/mobile/ios
+        run: |
+          device=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" CODE_SIGNING_ALLOWED=NO
 
   # On our own runners this is Linux and macOS (the self-hosted Mac mini, Apple Silicon). With one
   # Mac the three macOS shards take turns on it, along with the unit suites above. Windows runs
