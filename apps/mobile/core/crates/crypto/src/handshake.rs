@@ -304,6 +304,220 @@ impl SessionKeys {
     }
 }
 
+fn derive_okm(
+    eph: &StaticSecret,
+    peer_eph: [u8; 32],
+    isk: Option<&[u8; 64]>,
+    transcript: &[u8; 32],
+) -> Result<[u8; 96], HandshakeError> {
+    let shared = eph.diffie_hellman(&PublicKey::from(peer_eph));
+    if !shared.was_contributory() {
+        return Err(HandshakeError::Protocol);
+    }
+    let mut ikm = shared.as_bytes().to_vec();
+    if let Some(isk) = isk {
+        ikm.extend_from_slice(isk);
+    }
+    let mut okm = [0u8; 96];
+    let expanded = Hkdf::<Sha256>::new(Some(transcript), &ikm)
+        .expand(format!("{DOMAIN} keys").as_bytes(), &mut okm)
+        .map_err(|_| HandshakeError::Protocol);
+    ikm.zeroize();
+    expanded?;
+    Ok(okm)
+}
+
+struct HostPending {
+    transcript: [u8; 32],
+    controller_id: [u8; 32],
+    okm: [u8; 96],
+}
+
+impl Drop for HostPending {
+    fn drop(&mut self) {
+        self.okm.zeroize();
+    }
+}
+
+/// The computer's side: answers the hello, then checks the finish. The app is never a real host;
+/// this exists so its tests and the fake host run the true protocol.
+pub struct HostHandshake {
+    session_id: String,
+    mode: Mode,
+    identity: Identity,
+    expected_controller_key: [u8; 32],
+    password_secret: Option<[u8; 32]>,
+    local_fingerprint: String,
+    remote_fingerprint: String,
+    pending: Option<HostPending>,
+}
+
+impl HostHandshake {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        session_id: &str,
+        mode: Mode,
+        identity: Identity,
+        expected_controller_key: [u8; 32],
+        password_secret: Option<[u8; 32]>,
+        local_fingerprint: &str,
+        remote_fingerprint: &str,
+    ) -> Self {
+        Self {
+            session_id: session_id.to_owned(),
+            mode,
+            identity,
+            expected_controller_key,
+            password_secret,
+            local_fingerprint: local_fingerprint.to_owned(),
+            remote_fingerprint: remote_fingerprint.to_owned(),
+            pending: None,
+        }
+    }
+
+    pub fn respond(
+        &mut self,
+        hello: &HandshakeMessage,
+        random: &mut dyn FnMut(usize) -> Vec<u8>,
+    ) -> Result<HandshakeMessage, HandshakeError> {
+        if hello.t != "hs-hello" || hello.v != Some(1) {
+            return Err(HandshakeError::Protocol);
+        }
+        let controller_eph: [u8; 32] = field(hello.eph.as_deref())?;
+        let controller_id: [u8; 32] = field(hello.id.as_deref())?;
+        let controller_nonce: [u8; 16] = field(hello.nonce.as_deref())?;
+        if !bool::from(controller_id.ct_eq(&self.expected_controller_key)) {
+            return Err(HandshakeError::Identity);
+        }
+        let controller_fp = hello.fp.as_deref().unwrap_or("");
+        if controller_fp != self.remote_fingerprint {
+            return Err(HandshakeError::Fingerprint);
+        }
+        let is_password = self.mode == Mode::Password;
+        if is_password != hello.cpace.is_some() {
+            return Err(HandshakeError::Protocol);
+        }
+        let controller_share = if is_password {
+            Some(point(hello.cpace.as_deref())?)
+        } else {
+            None
+        };
+
+        let mut eph_bytes: [u8; 32] = random(32)
+            .try_into()
+            .map_err(|_| HandshakeError::Protocol)?;
+        let eph = StaticSecret::from(eph_bytes);
+        eph_bytes.zeroize();
+        let eph_public = PublicKey::from(&eph).to_bytes();
+        let nonce: [u8; 16] = random(16)
+            .try_into()
+            .map_err(|_| HandshakeError::Protocol)?;
+        let host_id = self.identity.public_key();
+        let cpace = match self.password_secret.as_ref().filter(|_| is_password) {
+            Some(secret) => Some(cpace_share(
+                secret,
+                &controller_id,
+                &host_id,
+                &self.session_id,
+                random,
+            )?),
+            None if is_password => return Err(HandshakeError::Protocol),
+            None => None,
+        };
+
+        let transcript = transcript(&TranscriptParts {
+            session_id: &self.session_id,
+            mode: self.mode,
+            controller_id: &controller_id,
+            host_id: &host_id,
+            controller_eph: &controller_eph,
+            host_eph: &eph_public,
+            controller_nonce: &controller_nonce,
+            host_nonce: &nonce,
+            controller_fp,
+            host_fp: &self.local_fingerprint,
+            controller_share: controller_share.as_ref(),
+            host_share: cpace.as_ref().map(|c| &c.share),
+        });
+        let isk = match (&cpace, &controller_share) {
+            (Some(cpace), Some(share)) => Some(cpace_isk(
+                &self.session_id,
+                &cpace.scalar,
+                share,
+                share,
+                &cpace.share,
+            )?),
+            _ => None,
+        };
+        let okm = derive_okm(&eph, controller_eph, isk.as_ref(), &transcript)?;
+        let mut confirm_key = [0u8; 32];
+        confirm_key.copy_from_slice(&okm[64..]);
+        let reply = HandshakeMessage {
+            t: "hs-reply".into(),
+            eph: Some(base64url(&eph_public)),
+            id: Some(base64url(&host_id)),
+            nonce: Some(base64url(&nonce)),
+            fp: Some(self.local_fingerprint.clone()),
+            cpace: cpace.as_ref().map(|c| base64url(&c.share)),
+            sig: Some(base64url(&self.identity.sign("host", &transcript))),
+            confirm: Some(base64url(&confirm_tag(&confirm_key, "host", &transcript))),
+            ..HandshakeMessage::default()
+        };
+        confirm_key.zeroize();
+        self.pending = Some(HostPending {
+            transcript,
+            controller_id,
+            okm,
+        });
+        Ok(reply)
+    }
+
+    pub fn complete(&mut self, finish: &HandshakeMessage) -> Result<SessionKeys, HandshakeError> {
+        if finish.t != "hs-finish" {
+            return Err(if finish.t == "hs-abort" {
+                HandshakeError::from_wire(finish.reason.as_deref())
+            } else {
+                HandshakeError::Protocol
+            });
+        }
+        let pending = self.pending.take().ok_or(HandshakeError::Protocol)?;
+        let signature: [u8; 64] =
+            field(finish.sig.as_deref()).map_err(|_| HandshakeError::Signature)?;
+        VerifyingKey::from_bytes(&pending.controller_id)
+            .and_then(|key| {
+                key.verify_strict(
+                    &role_message("controller", &pending.transcript),
+                    &Signature::from_bytes(&signature),
+                )
+            })
+            .map_err(|_| HandshakeError::Signature)?;
+
+        let wrong_confirm = match self.mode {
+            Mode::Password => HandshakeError::WrongPassword,
+            Mode::Ask => HandshakeError::Protocol,
+        };
+        let mut confirm_key = [0u8; 32];
+        confirm_key.copy_from_slice(&pending.okm[64..]);
+        let claimed: [u8; 32] = field(finish.confirm.as_deref()).map_err(|_| wrong_confirm)?;
+        let expected = confirm_tag(&confirm_key, "controller", &pending.transcript);
+        confirm_key.zeroize();
+        if !bool::from(claimed.ct_eq(&expected)) {
+            return Err(wrong_confirm);
+        }
+
+        let mut send = [0u8; 32];
+        let mut receive = [0u8; 32];
+        receive.copy_from_slice(&pending.okm[..32]);
+        send.copy_from_slice(&pending.okm[32..64]);
+        Ok(SessionKeys {
+            send,
+            receive,
+            safety_code: safety_code(&pending.transcript),
+            transcript: pending.transcript,
+        })
+    }
+}
+
 /// Sends the hello, then checks the computer's reply and finishes.
 pub struct ControllerHandshake {
     session_id: String,

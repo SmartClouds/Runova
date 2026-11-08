@@ -2,7 +2,8 @@
 
 use runova_crypto::cipher::FrameCipher;
 use runova_crypto::handshake::{
-    ControllerHandshake, HandshakeError, Identity, Mode, base64url, derive_password_secret,
+    ControllerHandshake, HandshakeError, HostHandshake, Identity, Mode, base64url,
+    derive_password_secret,
 };
 use runova_protocol::handshake::HandshakeMessage;
 use serde_json::Value;
@@ -217,6 +218,88 @@ fn a_cpace_share_outside_password_mode_is_refused() {
     let result = controller_for(ask).complete(&reply_with(ask, "cpace", share));
 
     assert_eq!(result.err(), Some(HandshakeError::Protocol));
+}
+
+fn recorded_host(case: &Value) -> impl FnMut(usize) -> Vec<u8> {
+    let values: Vec<Vec<u8>> = case["hostRandom"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| hex::decode(v.as_str().unwrap()).unwrap())
+        .collect();
+    let mut next = values.into_iter();
+    move |length| {
+        let value = next.next().expect("a recorded value");
+        assert_eq!(value.len(), length);
+        value
+    }
+}
+
+fn host_for(case: &Value) -> HostHandshake {
+    let controller = Identity::from_seed(bytes32(case["controllerSeed"].as_str().unwrap()));
+    HostHandshake::new(
+        case["sessionId"].as_str().unwrap(),
+        mode_of(case),
+        Identity::from_seed(bytes32(case["hostSeed"].as_str().unwrap())),
+        controller.public_key(),
+        case["passwordSecret"].as_str().map(bytes32),
+        case["hostFingerprint"].as_str().unwrap(),
+        case["controllerFingerprint"].as_str().unwrap(),
+    )
+}
+
+#[test]
+fn the_host_produces_the_recorded_reply_and_the_same_keys() {
+    for case in vectors()["handshake"].as_array().unwrap() {
+        let mut host = host_for(case);
+
+        let reply = host
+            .respond(&message(&case["hello"]), &mut recorded_host(case))
+            .unwrap();
+        let keys = host.complete(&message(&case["finish"])).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&reply).unwrap(),
+            case["reply"],
+            "reply in {}",
+            case["mode"]
+        );
+        assert_eq!(
+            hex::encode(keys.send()),
+            case["hostToController"].as_str().unwrap()
+        );
+        assert_eq!(
+            hex::encode(keys.receive()),
+            case["controllerToHost"].as_str().unwrap()
+        );
+        assert_eq!(keys.safety_code(), case["safetyCode"].as_str().unwrap());
+    }
+}
+
+#[test]
+fn the_host_refuses_a_controller_it_does_not_expect() {
+    let case = &vectors()["handshake"][0];
+    let mut hello = case["hello"].clone();
+    hello["id"] = base64url(&Identity::from_seed([9; 32]).public_key()).into();
+
+    let result = host_for(case).respond(&message(&hello), &mut recorded_host(case));
+
+    assert_eq!(result.err(), Some(HandshakeError::Identity));
+}
+
+#[test]
+fn the_host_refuses_a_forged_finish() {
+    let case = &vectors()["handshake"][0];
+    let mut host = host_for(case);
+    host.respond(&message(&case["hello"]), &mut recorded_host(case))
+        .unwrap();
+    let mut finish = case["finish"].clone();
+    finish["sig"] = other_value_b64(&finish["sig"]);
+
+    assert_eq!(
+        host.complete(&message(&finish)).err(),
+        Some(HandshakeError::Signature)
+    );
 }
 
 fn cipher_case() -> (FrameCipher, Vec<Vec<u8>>, Vec<Vec<u8>>) {

@@ -1,0 +1,20 @@
+[package]
+name = "runova-rtc"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+if-addrs = "0.13"
+runova-link = { path = "../link" }
+serde.workspace = true
+serde_json.workspace = true
+str0m = { version = "0.25", default-features = false, features = ["rust-crypto"] }
+thiserror.workspace = true
+tokio = { version = "1", features = ["macros", "net", "rt", "sync", "time"] }
+
+[dev-dependencies]
+hex.workspace = true
+runova-crypto.workspace = true
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
