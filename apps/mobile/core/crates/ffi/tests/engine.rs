@@ -44,12 +44,6 @@ impl ViewListener for Views {
     }
 }
 
-impl Views {
-    fn latest(&self) -> AppView {
-        self.0.lock().unwrap().last().cloned().expect("a view")
-    }
-}
-
 #[derive(Default)]
 struct FakeHttp {
     replies: Mutex<VecDeque<HttpReply>>,
@@ -484,7 +478,7 @@ async fn going_to_the_background_lets_go_of_the_hub_and_coming_back_reconnects()
     world
         .engine
         .lifecycle(AppLifecycle::Backgrounded { grace_ms: 0 });
-    until(&world, |v| v.hub_connected == false, "let go").await;
+    until(&world, |v| !v.hub_connected, "let go").await;
     world.engine.lifecycle(AppLifecycle::Foregrounded);
 
     until(&world, |v| v.hub_connected, "reconnected").await;
