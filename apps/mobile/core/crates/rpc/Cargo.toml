@@ -1,0 +1,16 @@
+[package]
+name = "runova-rpc"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+runova-link = { path = "../link" }
+runova-protocol.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+runova-crypto.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }

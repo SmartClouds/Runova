@@ -1,0 +1,23 @@
+[package]
+name = "runova-session"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+base64.workspace = true
+runova-crypto.workspace = true
+runova-link = { path = "../link" }
+runova-relay = { path = "../relay" }
+runova-rpc = { path = "../rpc" }
+runova-rtc = { path = "../rtc" }
+runova-signalr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+runova-protocol.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }

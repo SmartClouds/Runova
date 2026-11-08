@@ -886,6 +886,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2016,6 +2022,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "runova-rpc"
+version = "0.1.0"
+dependencies = [
+ "runova-crypto",
+ "runova-link",
+ "runova-protocol",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "runova-rtc"
 version = "0.1.0"
 dependencies = [
@@ -2027,6 +2045,25 @@ dependencies = [
  "serde",
  "serde_json",
  "str0m",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "runova-session"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "runova-crypto",
+ "runova-link",
+ "runova-protocol",
+ "runova-relay",
+ "runova-rpc",
+ "runova-rtc",
+ "runova-signalr",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]
@@ -2243,6 +2280,8 @@ version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
+ "foldhash",
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
