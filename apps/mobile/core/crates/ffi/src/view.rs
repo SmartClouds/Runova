@@ -132,6 +132,88 @@ pub enum Section {
     Deploy,
     Monitoring,
     Pipelines,
+    Account,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ProfileView {
+    pub name: String,
+    pub email: String,
+    pub two_factor: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SessionView {
+    pub id: i64,
+    pub title: String,
+    pub detail: String,
+    pub current: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ActivityView {
+    pub id: i64,
+    pub action: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TeamView {
+    pub id: i64,
+    pub name: String,
+    pub role: String,
+    pub member_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct MyInvitationView {
+    pub id: i64,
+    pub team: String,
+    pub role: String,
+    pub invited_by: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TeamMemberView {
+    pub user_id: i64,
+    pub name: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TeamInvitationView {
+    pub id: i64,
+    pub email: String,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TeamDetailView {
+    pub id: i64,
+    pub name: String,
+    pub can_manage: bool,
+    pub members: Vec<TeamMemberView>,
+    pub invitations: Vec<TeamInvitationView>,
+}
+
+/// The website asks for a password or code again before the riskiest changes.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StepUpView {
+    pub title: String,
+    pub detail: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct AccountScreen {
+    pub profile: Option<ProfileView>,
+    pub loading: bool,
+    pub sessions: Vec<SessionView>,
+    pub activity: Vec<ActivityView>,
+    pub teams: Vec<TeamView>,
+    pub invitations: Vec<MyInvitationView>,
+    pub team: Option<TeamDetailView>,
+    pub step_up: Option<StepUpView>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -568,6 +650,7 @@ pub struct AppView {
     pub deploy: DeployScreen,
     pub monitoring: MonitoringScreen,
     pub pipelines: PipelinesScreen,
+    pub account: AccountScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -597,6 +680,7 @@ impl AppView {
             deploy: DeployScreen::default(),
             monitoring: MonitoringScreen::default(),
             pipelines: PipelinesScreen::default(),
+            account: AccountScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

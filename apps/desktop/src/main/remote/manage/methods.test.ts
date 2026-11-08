@@ -24,11 +24,22 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     status: {} as ManageStatusDeps,
     vault: {} as ManageVaultDeps,
     deploy: {} as ManageDeployDeps,
+    forgetPhone: async () => undefined,
     monitoring: {} as ManageMonitoringDeps,
     pipelines: {} as ManagePipelineDeps,
     ...change,
   };
 }
+
+describe('phone.forget', () => {
+  it('forgets the phone that asked and no other', async () => {
+    const forgetPhone = vi.fn(async () => undefined);
+
+    await createManageMethods(deps({ forgetPhone })).calls['phone.forget'](undefined, context);
+
+    expect(forgetPhone).toHaveBeenCalledWith('k');
+  });
+});
 
 function sink() {
   const events: unknown[] = [];

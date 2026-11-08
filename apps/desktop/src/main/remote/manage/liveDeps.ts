@@ -43,7 +43,7 @@ async function listTerminals(): Promise<ManageTerminal[]> {
 }
 
 /** The app's real services, behind the shape the methods are tested against. */
-export const liveManageDeps: ManageMethodDeps = {
+export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
   listProjects: () => store.getProjects(),
   listTerminals,
   terminalShell: terminalSessionShell,

@@ -13,9 +13,9 @@ needs step-up, as on the website.
 
 ## Tasks
 
-- [ ] T1 `api` methods for profile, sessions, activities, teams and invitations
-- [ ] T2 `store` and screens
-- [ ] T3 Trusted computers list: forget this phone on a computer
+- [x] T1 `api` methods for profile, sessions, activities, teams and invitations
+- [x] T2 `store` and screens
+- [x] T3 Trusted computers list: forget this phone on a computer
 
 ## Acceptance criteria
 
@@ -27,3 +27,9 @@ needs step-up, as on the website.
 ## Not in this epic
 
 Billing.
+
+## Status
+
+The core and the Android screens are tested against a scripted server. The phone can leave a computer's
+trusted list from More while connected to it. Changing a member's role is not on the phone. Owed: a real
+account, and the iOS screens have never been compiled.

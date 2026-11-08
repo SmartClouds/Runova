@@ -24,6 +24,7 @@ import android.view.WindowManager
 import uniffi.runova_ffi.BiometricRequestView
 import uniffi.runova_ffi.Engine
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.ui.AccountIntents
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.DeployIntents
@@ -133,6 +134,21 @@ class MainActivity : FragmentActivity(), ViewListener {
                 dispatch = { engine.pipelinesDispatch(it) },
                 cancel = { engine.pipelinesCancel(it) },
             ),
+            account = AccountIntents(
+                setName = { engine.accountSetName(it) },
+                endSession = { engine.accountEndSession(it) },
+                endOtherSessions = { engine.accountEndOtherSessions() },
+                submitStepUp = { password, code -> engine.accountSubmitStepUp(password, code) },
+                cancelStepUp = { engine.accountCancelStepUp() },
+                openTeam = { engine.accountOpenTeam(it) },
+                closeTeam = { engine.accountCloseTeam() },
+                invite = { email, role -> engine.accountInvite(email, role) },
+                cancelInvitation = { engine.accountCancelInvitation(it) },
+                removeMember = { engine.accountRemoveMember(it) },
+                acceptInvitation = { engine.accountAcceptInvitation(it) },
+                declineInvitation = { engine.accountDeclineInvitation(it) },
+            ),
+            forgetThisPhone = { engine.forgetThisPhone() },
         )
         setContent {
             RunovaTheme {

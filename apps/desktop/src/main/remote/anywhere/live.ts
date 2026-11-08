@@ -72,7 +72,10 @@ function broadcast(channel: string, payload: unknown): void {
     sendToWindow(window, channel, payload);
 }
 
-const manageMethods = createManageMethods(liveManageDeps);
+const manageMethods = createManageMethods({
+  ...liveManageDeps,
+  forgetPhone: async (key) => service?.forgetPhone(key),
+});
 
 const AUDIT_RISK = { read: 'read', write: 'write', danger: 'sensitive' } as const;
 const AUDIT_OUTCOME = { ok: 'auto', failed: 'failed', forbidden: 'refused' } as const;

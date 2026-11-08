@@ -1,5 +1,6 @@
 package com.runovahq.app.ui
 
+import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConfirmView
@@ -22,6 +23,7 @@ val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null)
 val emptyDeploy = DeployScreen(emptyList(), false, null, null)
 val emptyMonitoring = MonitoringScreen(emptyList(), emptyList(), false, null, null)
 val emptyPipelines = PipelinesScreen(null, false, null, null)
+val emptyAccount = AccountScreen(null, false, emptyList(), emptyList(), emptyList(), emptyList(), null, null)
 val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, null, emptyList(), null, null, null)
 
 /** One place to build what the core publishes, so a new screen changes only this function. */
@@ -41,6 +43,7 @@ fun appView(
     deploy: DeployScreen = emptyDeploy,
     monitoring: MonitoringScreen = emptyMonitoring,
     pipelines: PipelinesScreen = emptyPipelines,
+    account: AccountScreen = emptyAccount,
     notice: String? = null,
     confirm: ConfirmView? = null,
     error: String? = null,
@@ -63,6 +66,7 @@ fun appView(
     deploy,
     monitoring,
     pipelines,
+    account,
     false,
     notice,
     confirm,

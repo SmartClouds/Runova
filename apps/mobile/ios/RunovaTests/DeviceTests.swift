@@ -184,6 +184,20 @@ final class DeviceTests: XCTestCase {
             fixtureView(connection: connected, selected: "p1", pipelines: pipelines), "pipelines", tab: "pipelines")
     }
 
+    func testAccount() throws {
+        let account = AccountScreen(
+            profile: ProfileView(name: "Sam", email: "sam@example.com", twoFactor: true), loading: false,
+            sessions: [
+                SessionView(id: 4, title: "Pixel", detail: "Runova app, android", current: true),
+                SessionView(id: 9, title: "Sam's desk", detail: "Runova desktop app, windows", current: false),
+            ],
+            activity: [ActivityView(id: 1, action: "signed in", detail: "Pixel")],
+            teams: [TeamView(id: 3, name: "Acme", role: "Owner", memberCount: 2)],
+            invitations: [MyInvitationView(id: 7, team: "Beta", role: "Member", invitedBy: "Lee")],
+            team: nil, stepUp: nil)
+        try renderSnapshot(fixtureView(account: account), "account", tab: "account")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
@@ -204,13 +218,15 @@ func fixtureView(
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
     pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil),
+    account: AccountScreen = AccountScreen(
+        profile: nil, loading: false, sessions: [], activity: [], teams: [], invitations: [], team: nil, stepUp: nil),
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
-        monitoring: monitoring, pipelines: pipelines,
+        monitoring: monitoring, pipelines: pipelines, account: account,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 

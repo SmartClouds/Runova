@@ -112,7 +112,7 @@ struct DeviceShell: View {
                                     .frame(maxHeight: .infinity, alignment: .top)
                                 if let error = view.error { ErrorLine(message: error) }
                             }
-                        case "more": MoreScreen(tab: $tab)
+                        case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }
                     }
@@ -134,6 +134,7 @@ struct DeviceShell: View {
 
 private struct MoreScreen: View {
     @Binding var tab: String
+    let onForget: () -> Void
 
     var body: some View {
         ScrollView {
@@ -146,6 +147,11 @@ private struct MoreScreen: View {
                     }
                     .buttonStyle(.plain)
                 }
+                Button(action: onForget) {
+                    RunovaListRow(title: "Forget this phone", detail: nil, icon: RunovaIcons.shield)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             .padding(16)
         }

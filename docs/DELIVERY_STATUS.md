@@ -112,7 +112,7 @@ Plan: docs/ROADMAP.md
 | E78 | Deploy | In progress | see git log | Servers, overview, containers with restart, stop and logs, apps with restart and redeploy, the problems feed (now shared with the desktop) and the last backup. A server that doesn't answer says so within 12 seconds. iOS screens are written but never compiled. Owed: a real server |
 | E79 | Monitoring | In progress | see git log | Local and cloud monitors in one labeled list, cloud ones with no computer connected, check now and pause. Cloud refreshes every 16 seconds until live delivery lands in E82, and the Errors tab is not on the phone. iOS screens are written but never compiled |
 | E80 | Pipelines | In progress | see git log | Workflows with their latest run, jobs, logs, dispatch and cancel, which both ask first. Logs keep their last 2000 lines and dispatch has no inputs form yet. iOS screens are written but never compiled. Owed: trying it against GitHub |
-| E81 | Account, sessions and teams | Not started | | |
+| E81 | Account, sessions and teams | In progress | see git log | Profile, sessions with this phone marked, ending one or all others with step-up, activity, teams, members and invitations by role, and forgetting this phone on a computer. Sign-out ends the server session and removes tokens, identity and device id. Changing a member's role is not on the phone. iOS screens are written but never compiled. Owed: a real account |
 | E82 | Notifications and push | Not started | | Needs a Firebase project and an APNs key |
 | E83 | Remote desktop on the phone | Not started | | |
 | E84 | Hardening and release | Not started | | |

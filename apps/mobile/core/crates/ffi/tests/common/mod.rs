@@ -75,6 +75,11 @@ impl FakeBackend {
         self.rest.lock().unwrap().insert(path.to_owned(), value);
     }
 
+    /// The next change to this path is turned down.
+    pub fn refuse(&self, path: &str) {
+        self.rest.lock().unwrap().remove(path);
+    }
+
     pub fn sent(&self) -> Vec<(String, String, Value)> {
         self.changes.lock().unwrap().clone()
     }
@@ -380,6 +385,7 @@ impl Computer {
 }
 
 pub struct World {
+    pub store: Arc<MemoryStore>,
     pub views: Arc<Views>,
     pub computer: Arc<Computer>,
     pub backend: Arc<FakeBackend>,
@@ -433,6 +439,7 @@ pub async fn signed_in() -> World {
         Arc::new(SecureTokens(store.clone())),
         Box::new(|| 1_000),
     ));
+    let kept = store.clone();
     let engine = Engine::start(Dependencies {
         site: "https://runovahq.test".into(),
         platform: "android".into(),
@@ -446,6 +453,7 @@ pub async fn signed_in() -> World {
         refresh_every: Duration::from_millis(20),
     });
     let world = World {
+        store: kept,
         views,
         computer,
         backend,

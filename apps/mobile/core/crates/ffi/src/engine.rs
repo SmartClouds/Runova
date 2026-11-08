@@ -1,6 +1,7 @@
 //! The app's one state machine. Commands come in from the screens, the hub and running work, and
 //! a new view goes out whenever anything a screen shows has changed.
 
+use crate::account::PendingStepUp;
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
 use crate::terminals::OpenTerminal;
@@ -270,6 +271,7 @@ pub(crate) struct Runner {
     pub(crate) pending_reveal: Option<PendingReveal>,
     pub(crate) biometric_serial: u64,
     pub(crate) vault_listing: bool,
+    pub(crate) pending_step_up: Option<PendingStepUp>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -334,6 +336,20 @@ impl Runner {
             pending_reveal: None,
             biometric_serial: 0,
             vault_listing: false,
+            pending_step_up: None,
+        }
+    }
+
+    pub(crate) fn leave_computer(&mut self) {
+        self.return_to = None;
+        self.end_connection();
+    }
+
+    /// Removes everything that identifies this phone, so the next person starts clean.
+    pub(crate) async fn clear_identity(&mut self) {
+        self.deps.session.sign_out().await;
+        for key in ["identity-seed", "device-id"] {
+            self.deps.secure.remove(key.to_owned());
         }
     }
 
@@ -407,7 +423,10 @@ impl Runner {
             ticker.abort();
         }
         // Cloud monitors come from Runova itself, so they need no computer.
-        let needs_computer = self.section != Some(Section::Monitoring);
+        let needs_computer = !matches!(
+            self.section,
+            Some(Section::Monitoring) | Some(Section::Account)
+        );
         if self.section.is_none() || (needs_computer && self.session.is_none()) {
             return;
         }
@@ -435,6 +454,7 @@ impl Runner {
             Some(Section::Deploy) => self.refresh_deploy(),
             Some(Section::Monitoring) => self.refresh_monitoring(),
             Some(Section::Pipelines) => self.refresh_pipelines(),
+            Some(Section::Account) => self.refresh_account(),
             None => {}
         }
     }
@@ -574,7 +594,7 @@ impl Runner {
     }
 
     /// Reads from the website, for screens that do not go through a computer.
-    pub(crate) fn rest<T, Ok, Failed>(&mut self, path: &'static str, ok: Ok, failed: Failed)
+    pub(crate) fn rest<T, Ok, Failed>(&mut self, path: impl Into<String>, ok: Ok, failed: Failed)
     where
         T: DeserializeOwned + Send + 'static,
         Ok: FnOnce(&mut AppView, T) + Send + 'static,
@@ -583,8 +603,9 @@ impl Runner {
         let backend = self.deps.backend.clone();
         let attempt = self.attempt;
         let done = self.done_tx.clone();
+        let path = path.into();
         tokio::spawn(async move {
-            let outcome = backend.get_json(path).await;
+            let outcome = backend.get_json(&path).await;
             let task: Task = Box::new(move |runner| match outcome {
                 Ok(value) => match serde_json::from_value::<T>(value) {
                     Ok(value) => ok(&mut runner.view, value),
@@ -605,6 +626,8 @@ impl Runner {
 
     fn signed_out(&mut self) {
         self.view.monitoring = MonitoringScreen::default();
+        self.view.account = Default::default();
+        self.pending_step_up = None;
         self.end_connection();
         self.let_go_of_hub();
         self.device_id = None;
@@ -850,7 +873,7 @@ impl Runner {
                 }
             }
             Command::SignOut => {
-                self.deps.session.sign_out().await;
+                self.sign_out_fully().await;
                 self.signed_out();
             }
             Command::Run(task) => task(self),

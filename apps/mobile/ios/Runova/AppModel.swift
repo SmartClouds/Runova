@@ -112,7 +112,21 @@ final class AppModel: NSObject, ObservableObject {
                 openJob: { [weak self] in self?.engine?.pipelinesOpenJob(jobId: $0) },
                 closeJob: { [weak self] in self?.engine?.pipelinesCloseJob() },
                 dispatch: { [weak self] in self?.engine?.pipelinesDispatch(workflowId: $0) },
-                cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) }))
+                cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) }),
+            account: AccountIntents(
+                setName: { [weak self] in self?.engine?.accountSetName(name: $0) },
+                endSession: { [weak self] in self?.engine?.accountEndSession(id: $0) },
+                endOtherSessions: { [weak self] in self?.engine?.accountEndOtherSessions() },
+                submitStepUp: { [weak self] in self?.engine?.accountSubmitStepUp(password: $0, code: $1) },
+                cancelStepUp: { [weak self] in self?.engine?.accountCancelStepUp() },
+                openTeam: { [weak self] in self?.engine?.accountOpenTeam(id: $0) },
+                closeTeam: { [weak self] in self?.engine?.accountCloseTeam() },
+                invite: { [weak self] in self?.engine?.accountInvite(email: $0, role: $1) },
+                cancelInvitation: { [weak self] in self?.engine?.accountCancelInvitation(id: $0) },
+                removeMember: { [weak self] in self?.engine?.accountRemoveMember(userId: $0) },
+                acceptInvitation: { [weak self] in self?.engine?.accountAcceptInvitation(id: $0) },
+                declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) }),
+            forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() })
     }
 
     private var engine: Engine? { core?.engine() }

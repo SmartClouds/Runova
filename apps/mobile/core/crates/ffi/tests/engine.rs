@@ -453,7 +453,7 @@ async fn a_session_the_server_ended_signs_the_phone_out() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn signing_out_forgets_the_tokens_but_keeps_the_phones_identity() {
+async fn signing_out_forgets_the_tokens_and_the_phones_identity() {
     let world = world();
     signed_in(&world).await;
 
@@ -462,7 +462,7 @@ async fn signing_out_forgets_the_tokens_but_keeps_the_phones_identity() {
 
     let stored = world.store.0.lock().unwrap();
     assert!(!stored.contains_key("tokens"));
-    assert!(stored.contains_key("identity-seed"));
+    assert!(!stored.contains_key("identity-seed"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

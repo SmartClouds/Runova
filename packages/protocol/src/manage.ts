@@ -39,6 +39,7 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
 
 export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'projects.list': { scope: 'core', risk: 'read' },
+  'phone.forget': { scope: 'core', risk: 'write' },
   'terminals.list': { scope: 'terminal', risk: 'read' },
   'terminals.follow': { scope: 'terminal', risk: 'read' },
   'terminals.write': { scope: 'terminal', risk: 'write' },

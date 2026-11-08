@@ -167,6 +167,14 @@ impl Backend for LiveBackend {
             // The server refuses a change with no version unless it is told any version will do.
             .header("if-match", "*")
             .json(&body)
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                if method == "PATCH" {
+                    "application/merge-patch+json"
+                } else {
+                    "application/json"
+                },
+            )
             .send()
             .await
             .map_err(failed)?;

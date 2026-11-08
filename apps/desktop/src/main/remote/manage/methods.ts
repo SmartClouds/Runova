@@ -29,6 +29,8 @@ export interface ManageMethodDeps {
   status: ManageStatusDeps;
   vault: ManageVaultDeps;
   deploy: ManageDeployDeps;
+  /** Takes a phone off this computer's trusted list. */
+  forgetPhone(key: string): Promise<void>;
   monitoring: ManageMonitoringDeps;
   pipelines: ManagePipelineDeps;
 }
@@ -62,6 +64,10 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
   return {
     calls: {
       'projects.list': async () => (await deps.listProjects()).map(toManageProject),
+      'phone.forget': async (_params, context) => {
+        await deps.forgetPhone(context.phone.key);
+        return { ok: true, message: 'This computer has forgotten this phone.' };
+      },
       'terminals.list': () => deps.listTerminals(),
       'terminals.processes': (params) => deps.terminalProcesses(sessionIdOf(params)),
       'terminals.write': (params) => {

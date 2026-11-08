@@ -67,6 +67,8 @@ data class AppIntents(
     val deploy: DeployIntents = DeployIntents(),
     val monitoring: MonitoringIntents = MonitoringIntents(),
     val pipelines: PipelineIntents = PipelineIntents(),
+    val account: AccountIntents = AccountIntents(),
+    val forgetThisPhone: () -> Unit = {},
 )
 
 val AppTabs = listOf(
@@ -91,6 +93,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
                 }
             }
         }
+        view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
         view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
     }
 }
@@ -126,7 +129,11 @@ private fun ConfirmOverlay(confirm: ConfirmView, onConfirm: () -> Unit, onDismis
 @Composable
 private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppIntents) {
     val section = AppTabs.firstOrNull { it.id == tab }?.id ?: "systems"
-    val onShow = if (section == "monitors") Section.MONITORING else null
+    val onShow = when (section) {
+        "monitors" -> Section.MONITORING
+        "account" -> Section.ACCOUNT
+        else -> null
+    }
     DisposableEffect(onShow) {
         if (onShow != null) intents.openSection(onShow)
         onDispose { if (onShow != null) intents.openSection(null) }
@@ -135,7 +142,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (section) {
-                "account" -> AccountScreen(intents)
+                "account" -> AccountTab(view, intents)
                 "monitors" -> Column(Modifier.fillMaxSize()) {
                     RunovaTopBar("Monitors")
                     MonitoringTab(view, intents.monitoring)
@@ -288,12 +295,3 @@ fun ConnectionScreen(connection: ConnectionView, intents: AppIntents) {
     }
 }
 
-@Composable
-fun AccountScreen(intents: AppIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Account")
-        Column(Modifier.padding(16.dp)) {
-            RunovaButton("Sign out", onClick = intents.signOut, kind = ButtonKind.Soft, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}

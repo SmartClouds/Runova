@@ -23,6 +23,8 @@ struct AppIntents {
     var deploy = DeployIntents()
     var monitoring = MonitoringIntents()
     var pipelines = PipelineIntents()
+    var account = AccountIntents()
+    var forgetThisPhone: () -> Void = {}
 }
 
 let appTabs = [
@@ -45,6 +47,9 @@ struct AppRoot: View {
             case .starting: StartingScreen()
             case .signedOut: SignInScreen(error: view.error, onSignIn: intents.signIn)
             case .signedIn: signedIn
+            }
+            if let stepUp = view.account.stepUp {
+                StepUpOverlay(stepUp: stepUp, intents: intents.account)
             }
             if let confirm = view.confirm {
                 ConfirmOverlay(confirm: confirm, onConfirm: intents.confirm, onDismiss: intents.dismissConfirm)
@@ -71,7 +76,10 @@ struct AppRoot: View {
             VStack(spacing: 0) {
                 Group {
                     switch appSection {
-                    case "account": AccountScreen(intents: intents)
+                    case "account":
+                        AccountTab(view: view, intents: intents)
+                            .onAppear { intents.openSection(.account) }
+                            .onDisappear { intents.openSection(nil) }
                     case "monitors":
                         VStack(alignment: .leading, spacing: 0) {
                             RunovaTopBar(title: "Monitors")
@@ -247,15 +255,3 @@ struct ConnectionScreen: View {
     }
 }
 
-struct AccountScreen: View {
-    let intents: AppIntents
-
-    var body: some View {
-        VStack(spacing: 0) {
-            RunovaTopBar(title: "Account")
-            RunovaButton(text: "Sign out", kind: .soft, action: intents.signOut)
-                .frame(maxWidth: .infinity)
-                .padding(16)
-        }
-    }
-}
