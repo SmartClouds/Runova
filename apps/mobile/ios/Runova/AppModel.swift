@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Security
+import LocalAuthentication
 import SwiftUI
 
 private let service = "com.runovahq.app.secure"
@@ -82,10 +83,36 @@ final class AppModel: NSObject, ObservableObject {
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },
-                closeProvider: { [weak self] in self?.engine?.closeUsageProvider() }))
+                closeProvider: { [weak self] in self?.engine?.closeUsageProvider() }),
+            vault: VaultIntents(
+                unlock: { [weak self] in self?.engine?.vaultUnlock(password: $0) },
+                lock: { [weak self] in self?.engine?.vaultLock() },
+                openEntry: { [weak self] in self?.engine?.vaultOpenEntry(id: $0) },
+                closeEntry: { [weak self] in self?.engine?.vaultCloseEntry() },
+                requestReveal: { [weak self] in self?.engine?.vaultRequestReveal(field: $0, custom: $1) },
+                hide: { [weak self] in self?.engine?.vaultHide() },
+                save: { [weak self] in self?.engine?.vaultSave(id: $0, title: $1, username: $2, password: $3) },
+                remove: { [weak self] in self?.engine?.vaultRemove(id: $0) }))
     }
 
     private var engine: Engine? { core?.engine() }
+    private var lastBiometric: UInt64 = 0
+
+    /// Runs the phone's own check. The core only asks for the value if this says yes.
+    func confirmIdentityIfAsked(_ view: AppView) {
+        guard let request = view.vault.biometric, request.id != lastBiometric else { return }
+        lastBiometric = request.id
+        let id = request.id
+        let context = LAContext()
+        var problem: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &problem) else {
+            engine?.biometricResult(id: id, confirmed: false)
+            return
+        }
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: request.reason) { [weak self] ok, _ in
+            Task { @MainActor in self?.engine?.biometricResult(id: id, confirmed: ok) }
+        }
+    }
 
     private var gitIntents: GitIntents {
         GitIntents(
@@ -147,6 +174,9 @@ private final class Listener: ViewListener {
     init(model: AppModel) { self.model = model }
 
     func onView(view: AppView) {
-        Task { @MainActor [weak model] in model?.view = view }
+        Task { @MainActor [weak model] in
+            model?.view = view
+            model?.confirmIdentityIfAsked(view)
+        }
     }
 }

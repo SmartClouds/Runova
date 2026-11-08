@@ -11,9 +11,12 @@ import uniffi.runova_ffi.SystemView
 import uniffi.runova_ffi.TerminalItem
 import uniffi.runova_ffi.TerminalProcessView
 import uniffi.runova_ffi.TerminalView
+import uniffi.runova_ffi.VaultLockState
+import uniffi.runova_ffi.VaultScreen
 
 val emptyGit = GitScreen(null, false, null, false, emptyList(), emptyList())
 val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null)
+val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, null, emptyList(), null, null, null)
 
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
@@ -28,6 +31,7 @@ fun appView(
     processes: List<TerminalProcessView> = emptyList(),
     git: GitScreen = emptyGit,
     status: StatusScreen = emptyStatus,
+    vault: VaultScreen = emptyVault,
     notice: String? = null,
     confirm: ConfirmView? = null,
     error: String? = null,
@@ -46,6 +50,7 @@ fun appView(
     processes,
     git,
     status,
+    vault,
     false,
     notice,
     confirm,

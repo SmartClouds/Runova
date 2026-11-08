@@ -64,6 +64,13 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'git.abort': { scope: 'git', risk: 'danger' },
   'status.system': { scope: 'core', risk: 'read' },
   'status.usage': { scope: 'core', risk: 'read' },
+  'vault.status': { scope: 'vault', risk: 'read' },
+  'vault.unlock': { scope: 'vault', risk: 'write' },
+  'vault.lock': { scope: 'vault', risk: 'write' },
+  'vault.list': { scope: 'vault', risk: 'read' },
+  'vault.reveal': { scope: 'vault', risk: 'danger' },
+  'vault.save': { scope: 'vault', risk: 'write' },
+  'vault.remove': { scope: 'vault', risk: 'danger' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -154,6 +161,22 @@ export interface ManageProviderUsage {
 export interface ManageUsage {
   limits: ManageUsageLimit[];
   providers: ManageProviderUsage[];
+}
+
+/** An entry as a phone lists it: which secrets exist, never what they are. */
+export interface ManageVaultEntry {
+  id: string;
+  type: string;
+  title: string;
+  username: string;
+  service: string;
+  host: string;
+  favorite: boolean;
+  hasPassword: boolean;
+  hasTotp: boolean;
+  hasSecret: boolean;
+  hasNotes: boolean;
+  fields: { id: string; label: string; concealed: boolean; hasValue: boolean }[];
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

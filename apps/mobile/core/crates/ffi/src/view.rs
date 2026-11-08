@@ -128,6 +128,70 @@ pub enum Section {
     Clis,
     Git,
     Status,
+    Vault,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
+pub enum VaultLockState {
+    #[default]
+    Unknown,
+    Uninitialized,
+    Locked,
+    Unlocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct VaultSecretField {
+    pub key: String,
+    pub label: String,
+    /// A custom field, asked for by its id.
+    pub custom: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct VaultEntryView {
+    pub id: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub favorite: bool,
+    pub editable: bool,
+    pub secrets: Vec<VaultSecretField>,
+}
+
+/// Native code runs the phone's own check and answers with `biometric_result`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct BiometricRequestView {
+    pub id: u64,
+    pub reason: String,
+}
+
+#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RevealedSecretView {
+    pub label: String,
+    pub value: String,
+}
+
+/// Written by hand so a view printed for debugging can never carry the value.
+impl std::fmt::Debug for RevealedSecretView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RevealedSecretView")
+            .field("label", &self.label)
+            .field("value", &"<hidden>")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct VaultScreen {
+    pub state: VaultLockState,
+    pub loading: bool,
+    /// While true, native code blocks screenshots and hides the app switcher preview.
+    pub on_show: bool,
+    pub unlock_error: Option<String>,
+    pub entries: Vec<VaultEntryView>,
+    pub open_entry: Option<String>,
+    pub biometric: Option<BiometricRequestView>,
+    pub revealed: Option<RevealedSecretView>,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
@@ -305,6 +369,7 @@ pub struct AppView {
     pub terminal_processes: Vec<TerminalProcessView>,
     pub git: GitScreen,
     pub status: StatusScreen,
+    pub vault: VaultScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -330,6 +395,7 @@ impl AppView {
             terminal_processes: Vec::new(),
             git: GitScreen::default(),
             status: StatusScreen::default(),
+            vault: VaultScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

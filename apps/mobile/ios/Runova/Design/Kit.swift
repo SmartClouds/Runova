@@ -176,6 +176,7 @@ struct RunovaListRow: View {
 struct RunovaTextField: View {
     @Binding var value: String
     let placeholder: String
+    var secure = false
 
     @Environment(\.palette) private var palette
 
@@ -184,7 +185,13 @@ struct RunovaTextField: View {
             if value.isEmpty {
                 RunovaText(placeholder, color: palette.mutedForeground, maxLines: 1)
             }
-            TextField("", text: $value)
+            Group {
+                if secure {
+                    SecureField("", text: $value)
+                } else {
+                    TextField("", text: $value)
+                }
+            }
                 .font(RunovaType.body.font)
                 .tint(palette.primary)
                 .foregroundColor(palette.foreground)

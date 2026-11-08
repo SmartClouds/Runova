@@ -3,6 +3,7 @@ import type { ManageProject, ManageTerminal, ManageTerminalProcess } from '@runo
 import { gitMethods, type ManageGitDeps } from './gitMethods';
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
+import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
 
 export interface TerminalSnapshot {
   data: string;
@@ -24,6 +25,7 @@ export interface ManageMethodDeps {
   terminalProcesses(sessionId: string): Promise<ManageTerminalProcess[]>;
   git: ManageGitDeps;
   status: ManageStatusDeps;
+  vault: ManageVaultDeps;
 }
 
 /** Far past anything typed or pasted on a phone. */
@@ -67,6 +69,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       },
       ...gitMethods(deps.git),
       ...statusMethods(deps.status),
+      ...vaultMethods(deps.vault),
     },
     streams: {
       'terminals.follow': async (params, sink) => {

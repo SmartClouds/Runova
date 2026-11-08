@@ -4,6 +4,7 @@ import type { ManageGitDeps } from './gitMethods';
 import { createManageMethods, type ManageMethodDeps } from './methods';
 import type { ManageStreamSink } from './session';
 import type { ManageStatusDeps } from './statusMethods';
+import type { ManageVaultDeps } from './vaultMethods';
 
 const context = { phone: { key: 'k', name: 'Runova app', scopes: ['core' as const] } };
 
@@ -19,6 +20,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     terminalProcesses: async () => [],
     git: {} as ManageGitDeps,
     status: {} as ManageStatusDeps,
+    vault: {} as ManageVaultDeps,
     ...change,
   };
 }

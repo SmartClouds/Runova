@@ -13,6 +13,7 @@ pub mod palette;
 pub mod secure;
 pub mod status;
 pub(crate) mod terminals;
+pub mod vault;
 pub mod view;
 
 uniffi::setup_scaffolding!();

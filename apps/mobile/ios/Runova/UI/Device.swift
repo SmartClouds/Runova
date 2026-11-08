@@ -5,6 +5,12 @@ let deviceTabs = [
     TabItem(id: "clis", title: "CLIs", icon: RunovaIcons.terminal),
     TabItem(id: "git", title: "Git", icon: RunovaIcons.git),
     TabItem(id: "status", title: "Status", icon: RunovaIcons.monitoring),
+    TabItem(id: "more", title: "More", icon: RunovaIcons.more),
+]
+
+/// Reached from More, so the bar stays at five.
+private let moreSections = [
+    TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -34,13 +40,14 @@ struct DeviceShell: View {
     @Binding var tab: String
     let intents: AppIntents
 
-    private var section: String { deviceTabs.first { $0.id == tab }?.id ?? "projects" }
+    private var section: String { (deviceTabs + moreSections).first { $0.id == tab }?.id ?? "projects" }
     private var onShow: Section? {
         guard view.terminal == nil else { return nil }
         switch section {
         case "clis": return .clis
         case "git": return .git
         case "status": return .status
+        case "vault": return .vault
         default: return nil
         }
     }
@@ -56,6 +63,8 @@ struct DeviceShell: View {
                 BranchesScreen(git: view.git, intents: intents.git)
             } else if let provider = view.status.providers.first(where: { $0.providerId == view.status.detail }) {
                 ProviderScreen(provider: provider, intents: intents.status)
+            } else if let entry = view.vault.entries.first(where: { $0.id == view.vault.openEntry }) {
+                VaultEntryScreen(entry: entry, revealed: view.vault.revealed, intents: intents.vault)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
@@ -69,6 +78,13 @@ struct DeviceShell: View {
                                 if let error = view.error { ErrorLine(message: error) }
                             }
                         case "status": StatusTab(view: view, intents: intents.status)
+                        case "vault":
+                            VStack(alignment: .leading, spacing: 0) {
+                                VaultTab(view: view, intents: intents.vault)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                if let error = view.error { ErrorLine(message: error) }
+                            }
+                        case "more": MoreScreen(tab: $tab)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }
                     }
@@ -76,13 +92,35 @@ struct DeviceShell: View {
                     if let notice = view.notice {
                         NoticeBar(message: notice, onDismiss: intents.dismissNotice)
                     }
-                    RunovaBottomBar(tabs: deviceTabs, selected: section) { tab = $0 }
+                    RunovaBottomBar(
+                        tabs: deviceTabs, selected: moreSections.contains { $0.id == section } ? "more" : section
+                    ) { tab = $0 }
                 }
             }
         }
         .onAppear { intents.openSection(onShow) }
         .onChange(of: onShow) { intents.openSection($0) }
         .onDisappear { intents.openSection(nil) }
+    }
+}
+
+private struct MoreScreen: View {
+    @Binding var tab: String
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(moreSections) { item in
+                    Button {
+                        tab = item.id
+                    } label: {
+                        RunovaListRow(title: item.title, detail: nil, icon: item.icon).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(16)
+        }
     }
 }
 

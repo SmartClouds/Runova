@@ -4,6 +4,7 @@
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
 use crate::terminals::OpenTerminal;
+use crate::vault::PendingReveal;
 use crate::view::{
     AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, GitScreen, ProjectView,
     Section, StatusScreen, SystemView, ViewListener,
@@ -249,7 +250,7 @@ pub(crate) struct Runner {
     pub(crate) done_tx: mpsc::UnboundedSender<Done>,
     done_rx: Option<mpsc::UnboundedReceiver<Done>>,
     pub(crate) view: AppView,
-    published: Option<AppView>,
+    pub(crate) published: Option<AppView>,
     hub: Option<Arc<dyn HubPort>>,
     hub_events: Option<mpsc::Receiver<HubEvent>>,
     device_id: Option<i64>,
@@ -265,6 +266,9 @@ pub(crate) struct Runner {
     ticker: Option<JoinHandle<()>>,
     pending_confirm: Option<Task>,
     pub(crate) ticks: u32,
+    pub(crate) pending_reveal: Option<PendingReveal>,
+    pub(crate) biometric_serial: u64,
+    pub(crate) vault_listing: bool,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -326,6 +330,9 @@ impl Runner {
             ticker: None,
             pending_confirm: None,
             ticks: 0,
+            pending_reveal: None,
+            biometric_serial: 0,
+            vault_listing: false,
         }
     }
 
@@ -385,6 +392,11 @@ impl Runner {
     fn open_section(&mut self, section: Option<Section>) {
         self.view.error = None;
         self.view.notice = None;
+        let on_vault = section == Some(Section::Vault);
+        if !on_vault {
+            self.forget_secret();
+        }
+        self.view.vault.on_show = on_vault;
         self.section = section;
         self.start_ticking();
     }
@@ -416,6 +428,7 @@ impl Runner {
             Some(Section::Clis) => self.load_terminals(),
             Some(Section::Git) => self.load_git(),
             Some(Section::Status) => self.refresh_status(),
+            Some(Section::Vault) => self.refresh_vault(),
             None => {}
         }
     }
@@ -473,6 +486,7 @@ impl Runner {
         self.view.selected_project = None;
         self.view.git = GitScreen::default();
         self.view.status = StatusScreen::default();
+        self.clear_vault();
         self.view.confirm = None;
         self.pending_confirm = None;
         self.view.busy = false;
@@ -778,6 +792,7 @@ impl Runner {
                 self.end_connection();
             }
             Command::Lifecycle(AppLifecycle::Backgrounded { grace_ms }) => {
+                self.forget_secret();
                 self.let_go_at = Some(Instant::now() + Duration::from_millis(grace_ms));
             }
             Command::Lifecycle(AppLifecycle::Foregrounded) => {

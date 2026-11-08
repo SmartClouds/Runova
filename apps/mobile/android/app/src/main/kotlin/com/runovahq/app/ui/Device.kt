@@ -73,6 +73,12 @@ val DeviceTabs = listOf(
     TabItem("clis", "CLIs", RunovaIcons.Terminal),
     TabItem("git", "Git", RunovaIcons.Git),
     TabItem("status", "Status", RunovaIcons.Monitoring),
+    TabItem("more", "More", RunovaIcons.More),
+)
+
+/** Reached from More, so the bar stays at five. */
+private val MoreSections = listOf(
+    TabItem("vault", "Vault", RunovaIcons.Vault),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -106,13 +112,14 @@ fun DeviceShell(
     onTab: (String) -> Unit,
     intents: AppIntents,
 ) {
-    val section = DeviceTabs.firstOrNull { it.id == tab }?.id ?: "projects"
+    val section = (DeviceTabs + MoreSections).firstOrNull { it.id == tab }?.id ?: "projects"
     val terminal = view.terminal
     val onShow = when {
         terminal != null -> null
         section == "clis" -> Section.CLIS
         section == "git" -> Section.GIT
         section == "status" -> Section.STATUS
+        section == "vault" -> Section.VAULT
         else -> null
     }
     DisposableEffect(onShow) {
@@ -123,7 +130,7 @@ fun DeviceShell(
         TerminalScreen(terminal, view.terminalProcesses, view.error, intents)
         return
     }
-    if (GitOverlay(view, intents) || StatusOverlay(view, intents.status)) return
+    if (GitOverlay(view, intents) || StatusOverlay(view, intents.status) || VaultOverlay(view, intents.vault)) return
     Column(Modifier.fillMaxSize()) {
         DeviceTopBar(connection, intents)
         Box(Modifier.weight(1f)) {
@@ -134,11 +141,25 @@ fun DeviceShell(
                     view.error?.let { ErrorLine(it) }
                 }
                 "status" -> StatusTab(view, intents.status)
+                "vault" -> Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) { VaultTab(view, intents.vault) }
+                    view.error?.let { ErrorLine(it) }
+                }
+                "more" -> MoreScreen(onTab)
                 else -> ProjectsScreen(view, intents, onTab)
             }
         }
         view.notice?.let { NoticeBar(it, intents.dismissNotice) }
-        RunovaBottomBar(DeviceTabs, section, onTab)
+        RunovaBottomBar(DeviceTabs, if (MoreSections.any { it.id == section }) "more" else section, onTab)
+    }
+}
+
+@Composable
+private fun MoreScreen(onTab: (String) -> Unit) {
+    LazyColumn(contentPadding = PaddingValues(16.dp)) {
+        items(MoreSections, key = { it.id }) { item ->
+            RunovaListRow(title = item.title, icon = item.icon, onClick = { onTab(item.id) })
+        }
     }
 }
 

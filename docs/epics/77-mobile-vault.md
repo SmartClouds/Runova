@@ -15,10 +15,10 @@ app switcher.
 
 ## Tasks
 
-- [ ] T1 Bridge methods with risk levels
-- [ ] T2 `store` with zeroized secrets
-- [ ] T3 Screens: status, unlock, list, reveal, edit
-- [ ] T4 Screenshot blocking on both OS
+- [x] T1 Bridge methods with risk levels
+- [x] T2 `store` with zeroized secrets
+- [x] T3 Screens: status, unlock, list, reveal, edit
+- [x] T4 Screenshot blocking on both OS
 
 ## Acceptance criteria
 
@@ -29,3 +29,11 @@ app switcher.
 ## Not in this epic
 
 Reading sealed sync entries with the computer off.
+
+## Status
+
+The bridge, the core and the Android screens are tested. A reveal cannot happen without the phone's
+check passing, and each one is audited on the computer. Values are wiped from Rust's memory, but the
+JVM and Swift hold their own copy of what is on screen until they free it, which Rust can't reach.
+iOS has no public way to block a screenshot, so it only hides the app switcher preview. Owed: a real
+phone, and the iOS screens have never been compiled.

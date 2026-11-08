@@ -10,6 +10,12 @@ struct RunovaApp: App {
             Root(model: model)
                 .onAppear { model.start() }
                 .onChange(of: phase) { model.scene($0) }
+                .overlay {
+                    // iOS has no way to refuse a screenshot, but the app switcher can show this instead.
+                    if phase != .active && model.view?.vault.onShow == true {
+                        RunovaTokens.dark.background.ignoresSafeArea()
+                    }
+                }
         }
     }
 }

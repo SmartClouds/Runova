@@ -11,6 +11,7 @@ import {
 } from '../../ipc/terminal';
 import { store } from '../../store';
 import { getAllUsage } from '../../usage';
+import { getVaultService } from '../../vault';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
 
@@ -60,5 +61,14 @@ export const liveManageDeps: ManageMethodDeps = {
     usage: async () => getAllUsage((await store.getSettings()).usageProviderConfigs ?? {}),
     shownLimits: async () => (await store.getSettings()).statusBarUsage,
     now: Date.now,
+  },
+  vault: {
+    status: () => getVaultService().status(),
+    unlock: (password) => getVaultService().unlock(password),
+    lock: () => getVaultService().lock('manual'),
+    list: () => getVaultService().list(),
+    reveal: (id, field) => getVaultService().reveal(id, field),
+    save: (input) => getVaultService().save(input),
+    remove: (id) => getVaultService().remove([id]),
   },
 };

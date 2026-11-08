@@ -121,6 +121,39 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(fixtureView(connection: connected, status: status), "status", tab: "status")
     }
 
+    private var vaultEntry: VaultEntryView {
+        VaultEntryView(
+            id: "e1", title: "GitHub", subtitle: "sam", favorite: true, editable: true,
+            secrets: [
+                VaultSecretField(key: "password", label: "Password", custom: false),
+                VaultSecretField(key: "f1", label: "PIN", custom: true),
+            ])
+    }
+
+    private func vaultScreen(_ state: VaultLockState, open: String? = nil) -> VaultScreen {
+        VaultScreen(
+            state: state, loading: false, onShow: true, unlockError: nil,
+            entries: state == .unlocked ? [vaultEntry] : [], openEntry: open, biometric: nil, revealed: nil)
+    }
+
+    func testVaultLocked() throws {
+        try renderSnapshot(
+            fixtureView(connection: connected, vault: vaultScreen(.locked)), "vault-locked", tab: "vault")
+    }
+
+    func testVault() throws {
+        try renderSnapshot(fixtureView(connection: connected, vault: vaultScreen(.unlocked)), "vault", tab: "vault")
+    }
+
+    func testVaultEntry() throws {
+        try renderSnapshot(
+            fixtureView(connection: connected, vault: vaultScreen(.unlocked, open: "e1")), "vault-entry", tab: "vault")
+    }
+
+    func testMore() throws {
+        try renderSnapshot(fixtureView(connection: connected), "more", tab: "more")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
@@ -135,12 +168,15 @@ func fixtureView(
     terminal: TerminalView? = nil, processes: [TerminalProcessView] = [],
     git: GitScreen = GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
     status: StatusScreen = StatusScreen(system: nil, loading: false, limits: [], providers: [], detail: nil),
+    vault: VaultScreen = VaultScreen(
+        state: .unknown, loading: false, onShow: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
+        revealed: nil),
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
-        terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status,
+        terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 
