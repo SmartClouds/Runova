@@ -1,22 +1,32 @@
 import { ipcMain } from 'electron';
 import type { RemoteConnectIntent, RemoteState } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { canUseRemote, REMOTE_SIGN_IN_ERROR } from '../../shared/remoteAccess';
 import {
   decodePairingCode,
   type RemoteInputEvent,
   type RemoteRtcMessage,
 } from '../../shared/remoteProtocol';
+import { getAccountRuntime } from '../account/live';
 import { remoteManager } from '../remote/manager';
 import { listNetworkInterfaces } from '../remote/networkInterfaces';
+
+/** Starting remote control needs a Runova sign-in; the screens ask first, and this holds anyway. */
+async function signedIn(): Promise<boolean> {
+  return canUseRemote(await getAccountRuntime().status());
+}
+
+const SIGN_IN_FIRST = { ok: false, error: REMOTE_SIGN_IN_ERROR };
 
 export function registerRemoteHandlers(): void {
   ipcMain.handle(IPC.remote.getState, (): RemoteState => remoteManager.getState());
 
   ipcMain.handle(IPC.remote.listInterfaces, () => listNetworkInterfaces());
 
-  ipcMain.handle(IPC.remote.startHost, (_e, input: { ip: string; port: number }) =>
-    remoteManager.startHost(input.ip, input.port),
-  );
+  ipcMain.handle(IPC.remote.startHost, async (_e, input: { ip: string; port: number }) => {
+    if (!(await signedIn())) throw new Error(REMOTE_SIGN_IN_ERROR);
+    return remoteManager.startHost(input.ip, input.port);
+  });
 
   ipcMain.handle(IPC.remote.stopHost, () => {
     remoteManager.stopHost();
@@ -28,7 +38,8 @@ export function registerRemoteHandlers(): void {
   // the code validation and its error copy live in one place.
   const pairingConnect =
     (intent?: RemoteConnectIntent) =>
-    (_e: unknown, code: string): { ok: boolean; error?: string } => {
+    async (_e: unknown, code: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!(await signedIn())) return SIGN_IN_FIRST;
       const payload = decodePairingCode(code);
       if (!payload) return { ok: false, error: 'That pairing code is not valid.' };
       remoteManager.connect(payload, intent);
@@ -45,8 +56,10 @@ export function registerRemoteHandlers(): void {
 
   ipcMain.handle(IPC.remote.listSavedServers, () => remoteManager.listSavedServers());
 
-  const savedConnect = (intent?: RemoteConnectIntent) => (_e: unknown, id: string) =>
-    remoteManager.connectSaved(id, intent);
+  const savedConnect = (intent?: RemoteConnectIntent) => async (_e: unknown, id: string) => {
+    if (!(await signedIn())) return SIGN_IN_FIRST;
+    return remoteManager.connectSaved(id, intent);
+  };
 
   ipcMain.handle(IPC.remote.connectSaved, savedConnect());
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { AccountStatus } from '@shared/accountTypes';
 import type { RemoteSavedServer, RemoteState } from '@shared/apiTypes';
 import { screen, waitFor, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
@@ -58,6 +59,17 @@ const studio: RemoteSavedServer = {
   lastConnectedAt: Date.now() - 3_600_000,
 };
 
+const SIGNED_IN = {
+  'account.status': {
+    state: 'signed-in',
+    deviceId: 'd',
+    sessionId: 1,
+    account: { id: 1, email: 'sam@example.com', displayName: 'Sam' },
+    rememberedOnDisk: true,
+    needsSignIn: false,
+  } satisfies AccountStatus,
+};
+
 const viewSwitcher = (): HTMLElement => screen.getByRole('navigation', { name: 'Remote views' });
 
 async function openView(user: UserEvent, label: string): Promise<void> {
@@ -111,7 +123,7 @@ describe('RemotePage with nothing set up', () => {
   });
 
   it('opens the Host view by name and says there is no activity yet', async () => {
-    renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=host', bridge: SIGNED_IN });
 
     expect(await screen.findByText('Allow this machine to be controlled')).toBeInTheDocument();
     expect(screen.getByText('Nothing yet.')).toBeInTheDocument();
@@ -121,9 +133,39 @@ describe('RemotePage with nothing set up', () => {
   });
 });
 
+describe('RemotePage signed out', () => {
+  const signedOut = { 'account.status': { state: 'signed-out', deviceId: 'd' } };
+
+  it.each([
+    ['host', 'Sign in to host this computer', 'Allow this machine to be controlled'],
+    ['connect', 'Sign in to connect to a computer', 'Pair a new device'],
+  ])('asks to sign in on the %s view instead of showing it', async (tab, heading, hidden) => {
+    renderWithProviders(<RemotePage />, { route: `/remote?tab=${tab}`, bridge: signedOut });
+
+    expect(await screen.findByText(heading)).toBeInTheDocument();
+    expect(screen.queryByText(hidden)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['ssh', 'SSH'],
+    ['rdp', 'Remote Desktop'],
+  ])('keeps the %s view open', async (tab, label) => {
+    renderWithProviders(<RemotePage />, { route: `/remote?tab=${tab}`, bridge: signedOut });
+
+    expect(within(viewSwitcher()).getByRole('button', { name: label })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Sign in to Runova' })).not.toBeInTheDocument();
+  });
+});
+
 describe('RemotePage views', () => {
   it('marks the open view and switches to another', async () => {
-    const { user } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     const host = within(viewSwitcher()).getByRole('button', { name: 'Host' });
     expect(host).toHaveAttribute('aria-current', 'true');
@@ -177,7 +219,7 @@ describe('RemotePage views', () => {
         },
       }),
     });
-    renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=host', bridge: SIGNED_IN });
 
     expect(await screen.findByText('Connected to Studio')).toBeInTheDocument();
   });
@@ -186,7 +228,10 @@ describe('RemotePage views', () => {
 describe('RemotePage hosting', () => {
   it('starts hosting on the first address main offered', async () => {
     useRemoteStore.setState({ state: remoteState({ interfaces: LAN }) });
-    const { user, bridge } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     // The address picker defaults to the LAN-preferred interface, so Start hosting is ready.
     expect(await screen.findByText(/192\.168\.1\.20/)).toBeInTheDocument();
@@ -200,7 +245,7 @@ describe('RemotePage hosting', () => {
 
   it('warns that this platform can be watched but not driven', async () => {
     useRemoteStore.setState({ state: remoteState({ interfaces: LAN, inputSupported: false }) });
-    renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=host', bridge: SIGNED_IN });
 
     expect(await screen.findByText(/Keyboard\/mouse control isn't available/)).toBeInTheDocument();
   });
@@ -214,7 +259,10 @@ describe('RemotePage hosting', () => {
         hostPort: 7900,
       }),
     });
-    const { user, bridge } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     expect(await screen.findByText(/Listening on 192\.168\.1\.20:7900/)).toBeInTheDocument();
     expect(screen.getByText(/No one is connected yet/)).toBeInTheDocument();
@@ -236,7 +284,10 @@ describe('RemotePage hosting', () => {
         },
       }),
     });
-    const { user } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     const qr = await screen.findByAltText('Pairing QR code');
     expect(qr).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
@@ -261,7 +312,10 @@ describe('RemotePage hosting', () => {
         ],
       }),
     });
-    const { user, bridge } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     expect(await screen.findByText('Connected controllers (1)')).toBeInTheDocument();
     expect(screen.getByText('Studio')).toBeInTheDocument();
@@ -278,6 +332,7 @@ describe('RemotePage hosting', () => {
     const { user } = renderWithProviders(<RemotePage />, {
       route: '/remote?tab=host',
       bridge: {
+        ...SIGNED_IN,
         'remote.generatePairingCode': () => Promise.reject(new Error('Host socket went away')),
       },
     });
@@ -295,7 +350,7 @@ describe('RemotePage saved servers', () => {
   it('forgets a paired device after confirming', async () => {
     const { user, bridge } = renderWithProviders(<RemotePage />, {
       route: '/remote',
-      bridge: { 'remote.listSavedServers': [studio] },
+      bridge: { ...SIGNED_IN, 'remote.listSavedServers': [studio] },
     });
 
     await openView(user, 'Connect');
@@ -318,7 +373,7 @@ describe('RemotePage saved servers', () => {
     confirm.confirmDialog.mockResolvedValueOnce(false);
     const { user, bridge } = renderWithProviders(<RemotePage />, {
       route: '/remote',
-      bridge: { 'remote.listSavedServers': [studio] },
+      bridge: { ...SIGNED_IN, 'remote.listSavedServers': [studio] },
     });
 
     await openView(user, 'Connect');
@@ -335,7 +390,7 @@ describe('RemotePage saved servers', () => {
   it('reports a refused pairing code instead of opening a session window', async () => {
     const { user, bridge } = renderWithProviders(<RemotePage />, {
       route: '/remote',
-      bridge: { 'remote.connect': { ok: false, error: 'That code has expired.' } },
+      bridge: { ...SIGNED_IN, 'remote.connect': { ok: false, error: 'That code has expired.' } },
     });
 
     await openView(user, 'Connect');
@@ -350,7 +405,10 @@ describe('RemotePage saved servers', () => {
   });
 
   it('refuses to connect with an empty pairing code', async () => {
-    const { user, bridge } = renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: SIGNED_IN,
+    });
 
     await openView(user, 'Connect');
     await user.click(action('Connect'));
@@ -369,7 +427,7 @@ describe('RemotePage activity', () => {
         { level: 'success', message: 'Studio connected', at: Date.now() - 1000 },
       ],
     });
-    renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=host', bridge: SIGNED_IN });
 
     expect(await screen.findByText('Controller dropped')).toBeInTheDocument();
     expect(screen.getByText('Studio connected')).toBeInTheDocument();
@@ -390,7 +448,7 @@ describe('RemotePage activity', () => {
         },
       ],
     });
-    renderWithProviders(<RemotePage />, { route: '/remote?tab=host' });
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=host', bridge: SIGNED_IN });
 
     expect(await screen.findByText('File transfers')).toBeInTheDocument();
     expect(screen.getByText(/build\.zip/)).toBeInTheDocument();

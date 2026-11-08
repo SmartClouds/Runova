@@ -37,7 +37,8 @@ test('the Anywhere tab opens first and asks a signed-out person to sign in', asy
   await expect(page.getByRole('group', { name: /^Runova ID not ready yet/ })).toBeVisible();
 
   await views.getByRole('button', { name: 'Host', exact: true }).click();
-  await expect(page.getByText('Allow this machine to be controlled')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to host this computer' })).toBeVisible();
+  await expect(page.getByText('Allow this machine to be controlled')).toBeHidden();
 
   // The main window answers the bridge for Anywhere even with no account behind it.
   const state = await page.evaluate(() =>

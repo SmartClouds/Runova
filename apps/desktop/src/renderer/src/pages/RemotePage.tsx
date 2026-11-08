@@ -6,6 +6,7 @@ import { AnywherePanel } from '@/components/remote/anywhere/AnywherePanel';
 import { ControllerPanel } from '@/components/remote/ControllerPanel';
 import { HostPanel } from '@/components/remote/HostPanel';
 import { RdpServersPanel } from '@/components/remote/RdpServersPanel';
+import { RequireRemoteSignIn } from '@/components/remote/RequireRemoteSignIn';
 import { REMOTE_CARD } from '@/components/remote/remoteCard';
 import { SshServersPanel } from '@/components/remote/SshServersPanel';
 import { TransfersCard } from '@/components/remote/TransfersCard';
@@ -107,8 +108,22 @@ export default function RemotePage(): React.JSX.Element {
       <div className="grid items-start gap-2 @4xl/remote:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
           {activeTab === 'anywhere' && <AnywherePanel />}
-          {activeTab === 'host' && <HostPanel />}
-          {activeTab === 'connect' && <ControllerPanel />}
+          {activeTab === 'host' && (
+            <RequireRemoteSignIn
+              title="Sign in to host this computer"
+              text="Letting another computer control this one over your network needs a Runova account."
+            >
+              <HostPanel />
+            </RequireRemoteSignIn>
+          )}
+          {activeTab === 'connect' && (
+            <RequireRemoteSignIn
+              title="Sign in to connect to a computer"
+              text="Controlling another computer over your network needs a Runova account."
+            >
+              <ControllerPanel />
+            </RequireRemoteSignIn>
+          )}
           {activeTab === 'ssh' && <SshServersPanel />}
           {activeTab === 'rdp' && <RdpServersPanel />}
         </div>

@@ -11,6 +11,8 @@ The Remote page is where you reach other computers. It has five tabs: **Anywhere
 
 Two sets of tools live here. The first is a remote control that works between Runova installs on the same network, and from the Runova mobile app. The second is a saved server list for SSH and Remote Desktop.
 
+**Anywhere**, **Host** and **Connect** need you to be signed in to your Runova account. Signed out, those tabs show a sign-in button instead, and signing out stops hosting and ends any session you started. **SSH** and **Remote Desktop** work without an account.
+
 ## Where to find it
 
 Click **Remote** in the sidebar under **Connect**, or open the command palette and type Remote. Pick a tab at the top: **Anywhere**, **Host**, **Connect**, **SSH** or **Remote Desktop**. The page remembers the tab you used last and opens on it next time. The first time, it opens on **Anywhere**.

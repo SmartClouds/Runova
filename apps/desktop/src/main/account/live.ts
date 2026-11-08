@@ -4,6 +4,8 @@ import type { DependencyAlerts } from '../dependencyAlerts/service';
 import { getCloudMonitors } from '../health/cloudLive';
 import { broadcastToWindows } from '../ipc/send';
 import { getAnywhere } from '../remote/anywhere/live';
+import { remoteManager } from '../remote/manager';
+import { endRemoteOnSignOut } from '../remote/signOut';
 import { onVaultUnlocked } from '../ssh/vault';
 import { liveSyncAdapters, refreshSecretsState } from '../sync/adapters/live';
 import type { SyncAdapter } from '../sync/types';
@@ -41,6 +43,7 @@ export function getAccountRuntime(): AccountRuntime {
     onSignedOut: () => {
       void alerts?.stop();
       if (runtime) void getAnywhere(runtime).stop();
+      endRemoteOnSignOut(remoteManager);
       // Signed out, an online monitor shows nothing (and is still not checked here).
       void getCloudMonitors().reset();
     },
