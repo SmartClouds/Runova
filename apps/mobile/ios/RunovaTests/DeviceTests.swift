@@ -233,6 +233,7 @@ func fixtureView(
         profile: nil, loading: false, sessions: [], activity: [], teams: [], invitations: [], team: nil, stepUp: nil),
     notifications: NotificationsScreen = NotificationsScreen(
         items: [], unread: 0, loading: false, preferences: [], settingsOpen: false, banner: nil),
+    remote: RemoteView? = nil,
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
@@ -241,6 +242,7 @@ func fixtureView(
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
         monitoring: monitoring, pipelines: pipelines, account: account,
         notifications: notifications,
+        remote: remote,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 

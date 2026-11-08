@@ -20,6 +20,9 @@ import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.WindowManager
 import uniffi.runova_ffi.BiometricRequestView
 import uniffi.runova_ffi.Engine
@@ -38,6 +41,8 @@ import android.Manifest
 import uniffi.runova_ffi.notificationDestination
 import com.runovahq.app.ui.MonitoringIntents
 import com.runovahq.app.ui.PipelineIntents
+import com.runovahq.app.ui.RemoteFrames
+import com.runovahq.app.ui.RemoteIntents
 import com.runovahq.app.ui.StatusIntents
 import com.runovahq.app.ui.VaultIntents
 import com.runovahq.app.ui.StartingScreen
@@ -164,6 +169,7 @@ class MainActivity : FragmentActivity(), ViewListener {
                 closeSettings = { engine.notificationsCloseSettings() },
                 setEnabled = { category, on -> engine.notificationSetEnabled(category, on) },
             ),
+            remote = remoteIntents(),
         )
         setContent {
             RunovaTheme {
@@ -181,6 +187,31 @@ class MainActivity : FragmentActivity(), ViewListener {
         handlePushTap(intent)
         startPush()
     }
+
+    private val frames = RemoteFrames()
+
+    private fun remoteIntents() = RemoteIntents(
+        frames = frames,
+        open = { engine.remoteOpen(it, frames) },
+        close = { engine.remoteClose() },
+        submitPassword = { engine.remoteSubmitPassword(it) },
+        usePassword = { engine.remoteUsePassword() },
+        pointer = { engine.remotePointer(it) },
+        text = { engine.remoteText(it) },
+        key = { engine.remoteKey(it) },
+        sendClipboard = {
+            val text = clipboard().primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)
+            engine.remoteSendClipboard(text?.toString().orEmpty())
+        },
+        copyClipboard = {
+            clipboard().setPrimaryClip(ClipData.newPlainText("Runova", it))
+            engine.remoteClipboardTaken()
+        },
+        clipboardTaken = { engine.remoteClipboardTaken() },
+        dismissNote = { engine.remoteDismissNote() },
+    )
+
+    private fun clipboard() = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

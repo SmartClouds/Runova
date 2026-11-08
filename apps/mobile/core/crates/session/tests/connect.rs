@@ -43,6 +43,7 @@ impl FakeHub {
                 host: Some(HostInfo {
                     name: "Sam's desk".into(),
                     identity_key: key,
+                    kind: runova_session::hub::HostKind::App,
                 }),
             }))),
             requests: Mutex::default(),
@@ -69,6 +70,8 @@ impl HubPort for FakeHub {
         &self,
         remote_id: &str,
         device_id: i64,
+        _intent: runova_session::hub::Intent,
+        _mode: runova_session::hub::AccessMode,
     ) -> Result<ConnectResult, String> {
         self.requests
             .lock()

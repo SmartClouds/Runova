@@ -5,10 +5,53 @@ use runova_signalr::client::{HubClient, HubEvent as RawEvent};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+/// What a connection is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Intent {
+    /// A phone working with its owner's computer.
+    Manage,
+    /// Watching and using a computer's screen.
+    Control,
+}
+
+impl Intent {
+    fn wire_name(self) -> &'static str {
+        match self {
+            Intent::Manage => "manage",
+            Intent::Control => "control",
+        }
+    }
+}
+
+/// How the computer lets someone in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccessMode {
+    Ask,
+    Password,
+}
+
+impl AccessMode {
+    fn wire_name(self) -> &'static str {
+        match self {
+            AccessMode::Ask => "ask",
+            AccessMode::Password => "password",
+        }
+    }
+}
+
+/// Whose key a computer answers with: the app, or the background agent, which has its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HostKind {
+    #[default]
+    App,
+    Agent,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostInfo {
     pub name: String,
     pub identity_key: String,
+    pub kind: HostKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +94,8 @@ pub trait HubPort: Send + Sync {
         &self,
         remote_id: &str,
         device_id: i64,
+        intent: Intent,
+        mode: AccessMode,
     ) -> Result<ConnectResult, String>;
     async fn signal(&self, session_id: &str, payload: &str);
     async fn relay_ticket(&self, session_id: &str) -> Result<RelayTicket, String>;
@@ -70,6 +115,8 @@ struct ConnectResultDto {
 struct HostDto {
     name: String,
     identity_key: String,
+    #[serde(default)]
+    kind: String,
 }
 
 #[derive(Deserialize)]
@@ -137,12 +184,14 @@ impl HubPort for RemoteHub {
         &self,
         remote_id: &str,
         device_id: i64,
+        intent: Intent,
+        mode: AccessMode,
     ) -> Result<ConnectResult, String> {
         let request = json!({
             "remoteId": remote_id,
-            "mode": "ask",
+            "mode": mode.wire_name(),
             "controllerDeviceId": device_id,
-            "intent": "manage",
+            "intent": intent.wire_name(),
         });
         let answer = self
             .0
@@ -156,6 +205,11 @@ impl HubPort for RemoteHub {
             host: dto.host.map(|host| HostInfo {
                 name: host.name,
                 identity_key: host.identity_key,
+                kind: if host.kind == "agent" {
+                    HostKind::Agent
+                } else {
+                    HostKind::App
+                },
             }),
         })
     }

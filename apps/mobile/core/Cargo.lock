@@ -2081,6 +2081,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite",
+ "zeroize",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@
 use crate::account::PendingStepUp;
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::notifications::{FeedConnector, FeedEvent};
+use crate::remote::RemoteSession;
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
 use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
@@ -251,20 +252,21 @@ impl Engine {
 }
 
 pub(crate) struct Runner {
-    deps: Dependencies,
+    pub(crate) deps: Dependencies,
     pub(crate) done_tx: mpsc::UnboundedSender<Done>,
     done_rx: Option<mpsc::UnboundedReceiver<Done>>,
     pub(crate) view: AppView,
     pub(crate) published: Option<AppView>,
-    hub: Option<Arc<dyn HubPort>>,
+    pub(crate) hub: Option<Arc<dyn HubPort>>,
     hub_events: Option<mpsc::Receiver<HubEvent>>,
-    device_id: Option<i64>,
-    systems: Vec<SystemEntry>,
+    pub(crate) device_id: Option<i64>,
+    pub(crate) systems: Vec<SystemEntry>,
     pub(crate) attempt: u64,
-    connecting: Option<(mpsc::Sender<HubEvent>, JoinHandle<()>)>,
-    session: Option<ManageSession>,
+    pub(crate) connecting: Option<(mpsc::Sender<HubEvent>, JoinHandle<()>)>,
+    pub(crate) session: Option<ManageSession>,
     /// The computer to return to when the app comes back.
-    return_to: Option<i64>,
+    pub(crate) return_to: Option<i64>,
+    pub(crate) remote: Option<RemoteSession>,
     let_go_at: Option<Instant>,
     pub(crate) open_terminal: Option<OpenTerminal>,
     pub(crate) section: Option<Section>,
@@ -332,6 +334,7 @@ impl Runner {
             connecting: None,
             session: None,
             return_to: None,
+            remote: None,
             let_go_at: None,
             open_terminal: None,
             section: None,
@@ -585,7 +588,7 @@ impl Runner {
         });
     }
 
-    fn end_connection(&mut self) {
+    pub(crate) fn end_connection(&mut self) {
         self.attempt += 1;
         if let Some((_, task)) = self.connecting.take() {
             task.abort();
@@ -594,6 +597,7 @@ impl Runner {
             let client = session.client.clone();
             tokio::spawn(async move { client.close().await });
         }
+        self.stop_remote();
         self.view.connection = None;
         self.clear_device();
     }
@@ -659,7 +663,7 @@ impl Runner {
         self.view.auth = AuthState::SignedOut;
     }
 
-    fn connect(&mut self, system_id: i64) {
+    pub(crate) fn connect(&mut self, system_id: i64) {
         self.end_connection();
         let Some(entry) = self.systems.iter().find(|s| s.id == system_id).cloned() else {
             return;

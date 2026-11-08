@@ -134,7 +134,34 @@ final class AppModel: NSObject, ObservableObject {
                 markAllRead: { [weak self] in self?.engine?.notificationsMarkAllRead() },
                 openSettings: { [weak self] in self?.engine?.notificationsOpenSettings() },
                 closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
-                setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }))
+                setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }),
+            remote: remoteIntents)
+    }
+
+    private let frames = RemoteFrames()
+
+    private var remoteIntents: RemoteIntents {
+        RemoteIntents(
+            frames: frames,
+            open: { [weak self] id in
+                guard let self else { return }
+                self.engine?.remoteOpen(systemId: id, sink: self.frames)
+            },
+            close: { [weak self] in self?.engine?.remoteClose() },
+            submitPassword: { [weak self] in self?.engine?.remoteSubmitPassword(password: $0) },
+            usePassword: { [weak self] in self?.engine?.remoteUsePassword() },
+            pointer: { [weak self] in self?.engine?.remotePointer(pointer: $0) },
+            text: { [weak self] in self?.engine?.remoteText(text: $0) },
+            key: { [weak self] in self?.engine?.remoteKey(key: $0) },
+            sendClipboard: { [weak self] in
+                self?.engine?.remoteSendClipboard(text: UIPasteboard.general.string ?? "")
+            },
+            copyClipboard: { [weak self] in
+                UIPasteboard.general.string = $0
+                self?.engine?.remoteClipboardTaken()
+            },
+            clipboardTaken: { [weak self] in self?.engine?.remoteClipboardTaken() },
+            dismissNote: { [weak self] in self?.engine?.remoteDismissNote() })
     }
 
     private var engine: Engine? { core?.engine() }

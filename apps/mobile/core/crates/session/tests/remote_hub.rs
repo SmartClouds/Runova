@@ -1,7 +1,7 @@
 //! The real hub client calling a small server that speaks the hub protocol.
 
 use futures_util::{SinkExt, StreamExt};
-use runova_session::hub::{HubPort, RelayTicket, RemoteHub};
+use runova_session::hub::{AccessMode, HostKind, HubPort, Intent, RelayTicket, RemoteHub};
 use runova_signalr::client::{HubClient, HubOptions};
 use runova_signalr::wire::RS;
 use serde_json::{Value, json};
@@ -61,7 +61,10 @@ async fn a_request_asks_to_manage_and_reads_the_answer() {
     }))
     .await;
 
-    let answer = hub.request_connect("111222333", 7).await.unwrap();
+    let answer = hub
+        .request_connect("111222333", 7, Intent::Manage, AccessMode::Ask)
+        .await
+        .unwrap();
 
     assert_eq!(answer.status, "ringing");
     assert_eq!(answer.session_id.as_deref(), Some("s1"));
@@ -75,10 +78,36 @@ async fn a_request_asks_to_manage_and_reads_the_answer() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_viewer_asks_for_control_with_its_mode_and_reads_the_agent_kind() {
+    let (hub, seen) = hub_answering(json!({
+        "status": "ringing",
+        "sessionId": "s1",
+        "host": {"name": "Sam's desk", "identityKey": "key", "kind": "agent"},
+    }))
+    .await;
+
+    let answer = hub
+        .request_connect("111222333", 7, Intent::Control, AccessMode::Password)
+        .await
+        .unwrap();
+
+    assert_eq!(answer.host.unwrap().kind, HostKind::Agent);
+    let seen = seen.lock().unwrap();
+    assert_eq!(
+        seen[0].1[0],
+        json!({"remoteId":"111222333","mode":"password","controllerDeviceId":7,"intent":"control"})
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_answer_it_cannot_read_is_an_error() {
     let (hub, _) = hub_answering(json!({"nope": true})).await;
 
-    assert!(hub.request_connect("111222333", 7).await.is_err());
+    assert!(
+        hub.request_connect("111222333", 7, Intent::Manage, AccessMode::Ask)
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

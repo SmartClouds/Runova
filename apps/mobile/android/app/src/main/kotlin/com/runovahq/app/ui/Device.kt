@@ -83,6 +83,7 @@ private val MoreSections = listOf(
     TabItem("monitoring", "Monitoring", RunovaIcons.Monitoring),
     TabItem("pipelines", "Pipelines", RunovaIcons.Pipelines),
     TabItem("notifications", "Notifications", RunovaIcons.Notifications),
+    TabItem("remote", "Remote", RunovaIcons.Remote),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -169,6 +170,7 @@ fun DeviceShell(
                     view.error?.let { ErrorLine(it) }
                 }
                 "notifications" -> InboxTab(view, intents.notifications, onTab, showTitle = false)
+                "remote" -> RemoteTab(connection, intents.remote)
                 "more" -> MoreScreen(onTab, intents.forgetThisPhone)
                 else -> ProjectsScreen(view, intents, onTab)
             }

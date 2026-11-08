@@ -33,6 +33,8 @@ pub struct SystemEntry {
     pub kind: String,
     pub online: bool,
     pub own: bool,
+    /// It takes its unattended-access password.
+    pub unattended: bool,
 }
 
 #[async_trait]
@@ -65,6 +67,8 @@ struct EntryDto {
     platform: String,
     kind: String,
     online: bool,
+    #[serde(default)]
+    unattended_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -200,6 +204,7 @@ impl Backend for LiveBackend {
                 kind: e.kind,
                 online: e.online,
                 own,
+                unattended: e.unattended_enabled,
             }
         };
         let mut systems: Vec<_> = dto.mine.into_iter().map(entry(true)).collect();

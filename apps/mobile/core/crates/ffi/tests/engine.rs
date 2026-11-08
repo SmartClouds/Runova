@@ -105,6 +105,7 @@ fn desk() -> SystemEntry {
         kind: "app".into(),
         online: true,
         own: true,
+        unattended: false,
     }
 }
 
@@ -116,7 +117,13 @@ struct FakeHub {
 
 #[async_trait]
 impl HubPort for FakeHub {
-    async fn request_connect(&self, _: &str, _: i64) -> Result<ConnectResult, String> {
+    async fn request_connect(
+        &self,
+        _: &str,
+        _: i64,
+        _: runova_session::hub::Intent,
+        _: runova_session::hub::AccessMode,
+    ) -> Result<ConnectResult, String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .outcome
@@ -422,6 +429,7 @@ async fn while_waiting_the_phone_shows_it_is_waiting_for_approval() {
         host: Some(HostInfo {
             name: "Sam's desk".into(),
             identity_key: "k".into(),
+            kind: runova_session::hub::HostKind::App,
         }),
     });
     signed_in(&world).await;

@@ -70,6 +70,7 @@ data class AppIntents(
     val account: AccountIntents = AccountIntents(),
     val forgetThisPhone: () -> Unit = {},
     val notifications: NotificationIntents = NotificationIntents(),
+    val remote: RemoteIntents = RemoteIntents(),
 )
 
 val AppTabs = listOf(
@@ -88,7 +89,9 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
             AuthState.SIGNED_OUT -> SignInScreen(view.error, intents.signIn)
             AuthState.SIGNED_IN -> {
                 val connection = view.connection
+                val remote = view.remote
                 when {
+                    remote != null -> RemoteViewerScreen(remote, intents.remote)
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
                     else -> ConnectionScreen(connection, intents)
@@ -235,12 +238,16 @@ fun SystemsScreen(view: AppView, intents: AppIntents) {
 
 @Composable
 private fun SystemRow(system: SystemView, intents: AppIntents) {
-    val enabled = system.online && system.canManage
     RunovaListRow(
         title = system.name,
         detail = platformName(system.platform),
         icon = RunovaIcons.Systems,
-        onClick = if (enabled) ({ intents.connect(system.id) }) else null,
+        onClick = when {
+            !system.online -> null
+            system.canManage -> ({ intents.connect(system.id) })
+            // Only its screen can be reached, by the background agent or as someone else's computer.
+            else -> ({ intents.remote.open(system.id) })
+        },
         trailing = {
             when {
                 !system.online -> RunovaBadge("Offline")

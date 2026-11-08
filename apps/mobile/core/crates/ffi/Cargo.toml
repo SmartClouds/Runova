@@ -17,6 +17,7 @@ async-trait = "0.1"
 base64.workspace = true
 runova-api = { path = "../api" }
 runova-link = { path = "../link" }
+runova-protocol.workspace = true
 runova-rpc = { path = "../rpc" }
 runova-session = { path = "../session" }
 runova-term = { path = "../term" }
@@ -31,5 +32,4 @@ uniffi = { version = "0.29", features = ["cli"] }
 zeroize.workspace = true
 
 [dev-dependencies]
-runova-protocol.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

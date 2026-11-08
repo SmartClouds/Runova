@@ -666,6 +666,51 @@ pub struct GitScreen {
     pub stashes: Vec<GitStashView>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum RemotePhase {
+    Requesting,
+    WaitingForApproval,
+    Connecting,
+    Securing,
+    NeedsPassword,
+    Live,
+    Failed,
+}
+
+/// The screen of a computer on show. The pixels themselves never come through here.
+#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RemoteView {
+    pub system_id: i64,
+    pub system_name: String,
+    pub phase: RemotePhase,
+    pub error: Option<String>,
+    /// The computer also takes its unattended-access password.
+    pub can_use_password: bool,
+    /// Only the background agent is answering, so this is the sign-in screen or an idle desktop.
+    pub agent: bool,
+    pub width: u32,
+    pub height: u32,
+    pub direct: Option<bool>,
+    pub safety_code: Option<String>,
+    /// Text the computer sent to this phone's clipboard, until it is dealt with.
+    pub clipboard: Option<String>,
+    pub note: Option<String>,
+}
+
+/// Written by hand so a view printed for debugging can not carry clipboard text.
+impl std::fmt::Debug for RemoteView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RemoteView")
+            .field("system_id", &self.system_id)
+            .field("phase", &self.phase)
+            .field("error", &self.error)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("direct", &self.direct)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -688,6 +733,7 @@ pub struct AppView {
     pub pipelines: PipelinesScreen,
     pub account: AccountScreen,
     pub notifications: NotificationsScreen,
+    pub remote: Option<RemoteView>,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -719,6 +765,7 @@ impl AppView {
             pipelines: PipelinesScreen::default(),
             account: AccountScreen::default(),
             notifications: NotificationsScreen::default(),
+            remote: None,
             busy: false,
             notice: None,
             confirm: None,

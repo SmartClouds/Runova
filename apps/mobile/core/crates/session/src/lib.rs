@@ -3,3 +3,4 @@
 pub mod connect;
 pub mod hub;
 pub mod live;
+pub mod viewer;

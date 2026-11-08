@@ -8,7 +8,9 @@ use thiserror::Error;
 use tokio::time::timeout;
 
 pub const DIRECT_TIMEOUT: Duration = Duration::from_secs(8);
-const RELAY_SIGNAL: &str = "{\"k\":\"relay\"}";
+/// Sent by whichever side settles on the relay. A background agent says it at once, since it can
+/// not do WebRTC at all.
+pub const RELAY_SIGNAL: &str = "{\"k\":\"relay\"}";
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum OpenError {

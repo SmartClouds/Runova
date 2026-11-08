@@ -15,6 +15,7 @@ private let moreSections = [
     TabItem(id: "monitoring", title: "Monitoring", icon: RunovaIcons.monitoring),
     TabItem(id: "pipelines", title: "Pipelines", icon: RunovaIcons.pipelines),
     TabItem(id: "notifications", title: "Notifications", icon: RunovaIcons.notifications),
+    TabItem(id: "remote", title: "Remote", icon: RunovaIcons.remote),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -116,6 +117,7 @@ struct DeviceShell: View {
                             }
                         case "notifications":
                             InboxTab(view: view, intents: intents.notifications, tab: $tab, showTitle: false)
+                        case "remote": RemoteTab(connection: connection, intents: intents.remote)
                         case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }

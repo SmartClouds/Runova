@@ -26,6 +26,7 @@ struct AppIntents {
     var account = AccountIntents()
     var forgetThisPhone: () -> Void = {}
     var notifications = NotificationIntents()
+    var remote = RemoteIntents()
 }
 
 let appTabs = [
@@ -73,7 +74,9 @@ struct AppRoot: View {
     }
 
     @ViewBuilder private var signedIn: some View {
-        if let connection = view.connection {
+        if let remote = view.remote {
+            RemoteViewerScreen(view: remote, intents: intents.remote)
+        } else if let connection = view.connection {
             if connection.phase == .connected {
                 DeviceShell(view: view, connection: connection, tab: $tab, intents: intents)
             } else {
@@ -212,8 +215,11 @@ private struct SystemRow: View {
             )
             badge.padding(.trailing, 16)
         }
-        if system.online && system.canManage {
-            Button { intents.connect(system.id) } label: { row.contentShape(Rectangle()) }
+        if system.online {
+            // Only its screen can be reached, by the background agent or as someone else's computer.
+            let open: () -> Void =
+                system.canManage ? { intents.connect(system.id) } : { intents.remote.open(system.id) }
+            Button(action: open) { row.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
         } else {
             row

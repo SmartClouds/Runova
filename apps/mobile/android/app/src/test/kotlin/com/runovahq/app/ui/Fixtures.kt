@@ -11,6 +11,7 @@ import uniffi.runova_ffi.MonitoringScreen
 import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.RemoteView
 import uniffi.runova_ffi.StatusScreen
 import uniffi.runova_ffi.SystemView
 import uniffi.runova_ffi.TerminalItem
@@ -47,6 +48,7 @@ fun appView(
     pipelines: PipelinesScreen = emptyPipelines,
     account: AccountScreen = emptyAccount,
     notifications: NotificationsScreen = emptyNotifications,
+    remote: RemoteView? = null,
     notice: String? = null,
     confirm: ConfirmView? = null,
     error: String? = null,
@@ -71,6 +73,7 @@ fun appView(
     pipelines,
     account,
     notifications,
+    remote,
     false,
     notice,
     confirm,
