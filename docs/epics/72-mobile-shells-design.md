@@ -17,9 +17,9 @@ Inter and JetBrains Mono, bundled. Icons come from one generated FontAwesome sol
 
 - [x] T1 Token generator for Kotlin and Swift, drift test
 - [x] T2 Fonts and generated icons
-- [ ] T3 Component kit on both OS: button, card, badge, input, list row, sheet, tabs, top bar,
+- [x] T3 Component kit on both OS: button, card, badge, input, list row, sheet, tabs, top bar,
   bottom bar, toast, empty state, skeleton
-- [ ] T4 Navigation shell and themes
+- [x] T4 Navigation shell and themes
 - [ ] T5 Fixture format, Roborazzi and swift-snapshot-testing, Android and iOS comparison in CI
 - [ ] T6 Memory measurement of the empty shell, and the final budgets
 

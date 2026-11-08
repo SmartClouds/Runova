@@ -36,6 +36,9 @@ targets:
           - fonts/JetBrainsMono.ttf
           - fonts/FontAwesomeSolid.ttf
         UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.runovahq.app
   RunovaTests:
     type: bundle.unit-test
     platform: iOS

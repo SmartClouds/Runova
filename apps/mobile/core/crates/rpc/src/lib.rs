@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::timeout;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -68,6 +68,7 @@ pub struct ManageClient {
     next_id: Arc<AtomicU64>,
     device_name: Arc<str>,
     scopes: Arc<HashSet<String>>,
+    closed: watch::Receiver<()>,
 }
 
 pub struct Subscription {
@@ -126,8 +127,10 @@ impl ManageClient {
             }
         };
         let (commands, queue) = mpsc::channel(COMMAND_QUEUE);
-        tokio::spawn(run(link, queue));
+        let (keep_open, closed) = watch::channel(());
+        tokio::spawn(run(link, queue, keep_open));
         Ok(Self {
+            closed,
             commands,
             next_id: Arc::new(AtomicU64::new(1)),
             device_name: device_name.into(),
@@ -191,6 +194,12 @@ impl ManageClient {
 
     pub async fn close(&self) {
         let _ = self.commands.send(Command::Close).await;
+    }
+
+    /// Finishes when the link to the computer has ended.
+    pub async fn closed(&self) {
+        let mut closed = self.closed.clone();
+        while closed.changed().await.is_ok() {}
     }
 }
 
@@ -314,7 +323,11 @@ impl Engine {
     }
 }
 
-async fn run(link: SecureLink, mut commands: mpsc::Receiver<Command>) {
+async fn run(
+    link: SecureLink,
+    mut commands: mpsc::Receiver<Command>,
+    keep_open: watch::Sender<()>,
+) {
     let mut engine = Engine {
         link,
         pending: HashMap::new(),
@@ -338,4 +351,5 @@ async fn run(link: SecureLink, mut commands: mpsc::Receiver<Command>) {
     engine.link.close().await;
     // Dropping the queue first turns away calls made from now on; the maps tell those waiting.
     drop(commands);
+    drop(keep_open);
 }

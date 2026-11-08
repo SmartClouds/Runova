@@ -4,6 +4,12 @@ use runova_api::auth::{AuthError, DeviceInfo, begin_sign_in, read_callback};
 use runova_crypto::handshake::os_random;
 use thiserror::Error;
 
+pub mod backend;
+pub mod core;
+pub mod engine;
+pub mod secure;
+pub mod view;
+
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, Error, Clone, PartialEq, Eq, uniffi::Error)]
@@ -12,6 +18,8 @@ pub enum CoreError {
     SignInDeclined,
     #[error("that sign-in link is not valid")]
     SignInInvalid,
+    #[error("the app core could not start")]
+    StartFailed,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
