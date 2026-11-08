@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { WebSocket } from 'ws';
 import type { RemoteControlMessage, RemoteFileEntry } from '../../shared/remoteProtocol';
 import { listLocalRoots } from '../fs/localRoots';
+import type { PeerSocket } from './peerSocket';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
 export interface FileManagerCallbacks {
-  sendControl(ws: WebSocket, msg: RemoteControlMessage): void;
+  sendControl(ws: PeerSocket, msg: RemoteControlMessage): void;
 }
 
 type Reply =
@@ -41,7 +41,7 @@ export class FileManagerOps {
 
   // --- Outbound: ask the peer about its filesystem ---------------------------
 
-  roots(ws: WebSocket): Promise<RemoteFileEntry[]> {
+  roots(ws: PeerSocket): Promise<RemoteFileEntry[]> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'fm-roots', reqId }, reqId, (reply) => {
       if (reply.t !== 'fm-roots-reply') throw new Error('Unexpected reply.');
@@ -49,7 +49,7 @@ export class FileManagerOps {
     });
   }
 
-  list(ws: WebSocket, path: string | null): Promise<{ path: string; entries: RemoteFileEntry[] }> {
+  list(ws: PeerSocket, path: string | null): Promise<{ path: string; entries: RemoteFileEntry[] }> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'fm-list', reqId, path }, reqId, (reply) => {
       if (reply.t !== 'fm-list-reply') throw new Error('Unexpected reply.');
@@ -58,23 +58,23 @@ export class FileManagerOps {
     });
   }
 
-  mkdir(ws: WebSocket, parentPath: string, name: string): Promise<void> {
+  mkdir(ws: PeerSocket, parentPath: string, name: string): Promise<void> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'fm-mkdir', reqId, parentPath, name }, reqId, ackOrThrow);
   }
 
-  delete(ws: WebSocket, path: string): Promise<void> {
+  delete(ws: PeerSocket, path: string): Promise<void> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'fm-delete', reqId, path }, reqId, ackOrThrow);
   }
 
-  rename(ws: WebSocket, path: string, newName: string): Promise<void> {
+  rename(ws: PeerSocket, path: string, newName: string): Promise<void> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'fm-rename', reqId, path, newName }, reqId, ackOrThrow);
   }
 
   /** Ask the peer to push a file it has at `path` (download half of the file manager). */
-  requestFile(ws: WebSocket, path: string): Promise<void> {
+  requestFile(ws: PeerSocket, path: string): Promise<void> {
     const reqId = randomUUID();
     return this.request(ws, { t: 'file-request', reqId, path }, reqId, (reply) => {
       if (reply.t !== 'file-request-ack') throw new Error('Unexpected reply.');
@@ -83,7 +83,7 @@ export class FileManagerOps {
   }
 
   private request<T>(
-    ws: WebSocket,
+    ws: PeerSocket,
     msg: RemoteControlMessage,
     reqId: string,
     extract: (reply: Reply) => T,
@@ -118,7 +118,7 @@ export class FileManagerOps {
 
   // --- Dispatch ----------------------------------------------------------------
 
-  handleControl(ws: WebSocket, msg: RemoteControlMessage): boolean {
+  handleControl(ws: PeerSocket, msg: RemoteControlMessage): boolean {
     switch (msg.t) {
       case 'fm-roots-reply':
       case 'fm-list-reply':
@@ -148,12 +148,12 @@ export class FileManagerOps {
 
   // --- Inbound: execute against our own filesystem ----------------------------
 
-  private async replyRoots(ws: WebSocket, reqId: string): Promise<void> {
+  private async replyRoots(ws: PeerSocket, reqId: string): Promise<void> {
     const roots = await listRoots();
     this.callbacks.sendControl(ws, { t: 'fm-roots-reply', reqId, roots });
   }
 
-  private async replyList(ws: WebSocket, reqId: string, path: string | null): Promise<void> {
+  private async replyList(ws: PeerSocket, reqId: string, path: string | null): Promise<void> {
     const target = path ?? homedir();
     try {
       const dirents = await readdir(target, { withFileTypes: true });
@@ -186,7 +186,7 @@ export class FileManagerOps {
   }
 
   private async replyMkdir(
-    ws: WebSocket,
+    ws: PeerSocket,
     reqId: string,
     parentPath: string,
     name: string,
@@ -204,7 +204,7 @@ export class FileManagerOps {
     }
   }
 
-  private async replyDelete(ws: WebSocket, reqId: string, path: string): Promise<void> {
+  private async replyDelete(ws: PeerSocket, reqId: string, path: string): Promise<void> {
     try {
       await rm(path, { recursive: true, force: false });
       this.callbacks.sendControl(ws, { t: 'fm-ack', reqId, ok: true });
@@ -219,7 +219,7 @@ export class FileManagerOps {
   }
 
   private async replyRename(
-    ws: WebSocket,
+    ws: PeerSocket,
     reqId: string,
     path: string,
     newName: string,

@@ -3,7 +3,6 @@ import { createReadStream, existsSync } from 'node:fs';
 import { type FileHandle, mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app } from 'electron';
-import { WebSocket } from 'ws';
 import type {
   RemoteFileDirection,
   RemoteFileProgress,
@@ -20,6 +19,7 @@ import {
   type RemoteControlMessage,
   transferKeyFromId,
 } from '../../shared/remoteProtocol';
+import { type PeerSocket, SOCKET_OPEN } from './peerSocket';
 
 /** A part is retried this many times (hash mismatch or ack timeout) before the whole transfer is failed. */
 const MAX_PART_RETRIES = 5;
@@ -39,7 +39,7 @@ interface UploadState {
   partSize: number;
   partCount: number;
   filePath: string;
-  ws: WebSocket | null;
+  ws: PeerSocket | null;
   status: TransferStatus;
   lastActivityAt: number;
   completedParts: Set<number>;
@@ -63,7 +63,7 @@ interface DownloadState {
   /** Final path the file was renamed to once verified (set on completion). */
   savedPath?: string;
   fh: FileHandle;
-  ws: WebSocket | null;
+  ws: PeerSocket | null;
   status: TransferStatus;
   lastActivityAt: number;
   completedParts: Set<number>;
@@ -76,14 +76,14 @@ interface DownloadState {
 type TransferState = UploadState | DownloadState;
 
 export interface FileTransferCallbacks {
-  sendControl(ws: WebSocket, msg: RemoteControlMessage): void;
-  sendBinary(ws: WebSocket, data: Uint8Array): Promise<void>;
+  sendControl(ws: PeerSocket, msg: RemoteControlMessage): void;
+  sendBinary(ws: PeerSocket, data: Uint8Array): Promise<void>;
   log(level: RemoteLogLevel, message: string): void;
   emitProgress(progress: RemoteFileProgress): void;
 }
 
 /**
- * Resumable, hash-verified file transfer over the remote-control WebSocket.
+ * Resumable, hash-verified file transfer over the remote-control connection (a LAN WebSocket or a Runova Anywhere link).
  *
  * Files are split into fixed-size parts (`PART_BYTES`, 10MB). Each part is
  * streamed as 64KB `BIN_FILE_CHUNK` frames, independently SHA-256 hashed and
@@ -124,7 +124,7 @@ export class FileTransferManager {
 
   // --- Sending -------------------------------------------------------------
 
-  async startUpload(ws: WebSocket, filePath: string, destDir?: string): Promise<void> {
+  async startUpload(ws: PeerSocket, filePath: string, destDir?: string): Promise<void> {
     const info = await stat(filePath);
     const name = basename(filePath);
     const transferId = this.freshTransferId();
@@ -165,7 +165,7 @@ export class FileTransferManager {
 
   /** Peer asked us to push a file from our own filesystem (the download half of the remote file manager). */
   async handleFileRequest(
-    ws: WebSocket,
+    ws: PeerSocket,
     msg: Extract<RemoteControlMessage, { t: 'file-request' }>,
   ): Promise<void> {
     try {
@@ -184,7 +184,7 @@ export class FileTransferManager {
   }
 
   private async sendPart(state: UploadState, partIndex: number): Promise<void> {
-    if (state.ws?.readyState !== WebSocket.OPEN) return; // will resume once reconnected
+    if (state.ws?.readyState !== SOCKET_OPEN) return; // will resume once reconnected
     const start = partIndex * state.partSize;
     const end = Math.min(state.size, start + state.partSize) - 1;
     const partHash = createHash('sha256');
@@ -308,7 +308,7 @@ export class FileTransferManager {
   // --- Receiving -------------------------------------------------------------
 
   private async handleFileOffer(
-    ws: WebSocket,
+    ws: PeerSocket,
     msg: Extract<RemoteControlMessage, { t: 'file-offer' }>,
   ): Promise<void> {
     let state = this.transfers.get(msg.transferId) as DownloadState | undefined;
@@ -362,7 +362,7 @@ export class FileTransferManager {
   /** We're the sender for this transfer; the peer told us which parts it still needs. */
   private handleFileResume(
     state: UploadState,
-    ws: WebSocket,
+    ws: PeerSocket,
     msg: Extract<RemoteControlMessage, { t: 'file-resume' }>,
   ): void {
     state.ws = ws;
@@ -459,7 +459,7 @@ export class FileTransferManager {
   // --- Dispatch ----------------------------------------------------------------
 
   /** Route a control-plane message into whichever transfer it belongs to. Returns false if this message isn't ours. */
-  handleControl(ws: WebSocket, msg: RemoteControlMessage): boolean {
+  handleControl(ws: PeerSocket, msg: RemoteControlMessage): boolean {
     switch (msg.t) {
       case 'file-offer':
         void this.handleFileOffer(ws, msg);
@@ -519,7 +519,7 @@ export class FileTransferManager {
   // --- Reconnect lifecycle -------------------------------------------------
 
   /** Connection to `ws` was lost; mark any transfer using it as awaiting-reconnect instead of tearing it down. */
-  onConnectionLost(ws: WebSocket): void {
+  onConnectionLost(ws: PeerSocket): void {
     for (const state of this.transfers.values()) {
       if (state.ws !== ws) continue;
       state.ws = null;
@@ -535,7 +535,7 @@ export class FileTransferManager {
   }
 
   /** The dialing side reconnected; re-drive whichever message resumes our role in each pending transfer. */
-  resumeAfterReconnect(ws: WebSocket): void {
+  resumeAfterReconnect(ws: PeerSocket): void {
     for (const state of this.transfers.values()) {
       if (state.status !== 'awaiting-reconnect') continue;
       state.ws = ws;

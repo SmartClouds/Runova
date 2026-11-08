@@ -10,6 +10,7 @@ using Runova.Website.Api.Monitoring;
 using Runova.Website.Api.News;
 using Runova.Website.Api.Posts;
 using Runova.Website.Api.Releases;
+using Runova.Website.Api.Remote;
 using Runova.Website.Api.Reports;
 using Runova.Website.Api.Sessions;
 using Runova.Website.Api.Users;
@@ -49,6 +50,7 @@ internal static class ApiV1
         api.MapBilling();
         api.MapMonitoring();
         api.MapCloudMonitors();
+        api.MapRemote();
         return api;
     }
 }

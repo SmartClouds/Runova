@@ -22,6 +22,8 @@ import { QuitConfirmation } from './components/QuitConfirmation';
 import { RelayBoardHost } from './components/relay/RelayBoard';
 import { RelayPlanHost } from './components/relay/RelayPlanHost';
 import { RelayProposalHost } from './components/relay/RelayProposalHost';
+import { HostBarRoute } from './components/remote/anywhere/HostBarRoute';
+import { IncomingRequestRoute } from './components/remote/anywhere/IncomingRequestRoute';
 import { HostKeyChangedDialogHost } from './components/remote/HostKeyChangedDialog';
 import RemoteSessionRoute from './components/remote/RemoteSessionRoute';
 import { ImageViewerHost } from './components/terminal/ImageViewerHost';
@@ -33,6 +35,7 @@ import { TooltipProvider } from './components/ui/tooltip';
 import WidgetRoute from './components/usage/WidgetRoute';
 import WorkspaceRoute from './components/workspace/WorkspaceRoute';
 import { useAiAccessDataSync } from './hooks/useAiAccessDataSync';
+import { initAnywhereLinks } from './lib/anywhere/linkPeer';
 import { useIsDarkMode } from './lib/chartColors';
 import { installToastHistoryCapture } from './lib/toastHistory';
 import AccountPage from './pages/AccountPage';
@@ -53,6 +56,7 @@ import ToolsPage from './pages/ToolsPage';
 import UsagePage from './pages/UsagePage';
 import VaultPage from './pages/VaultPage';
 import { queryClient } from './queryClient';
+import { initAnywhere } from './stores/anywhereStore';
 import { initDefaultCli } from './stores/cliStore';
 import { initDashboardLayout } from './stores/dashboardLayoutStore';
 import { initPingTargets } from './stores/pingTargetsStore';
@@ -110,6 +114,8 @@ function isStandalonePath(pathname: string): boolean {
     pathname.startsWith('/widget') ||
     pathname === '/desktop-pet' ||
     pathname === '/remote-session' ||
+    pathname === '/anywhere-request' ||
+    pathname === '/anywhere-bar' ||
     pathname === '/rdp-session' ||
     pathname === '/sftp-window'
   );
@@ -150,6 +156,10 @@ export default function App(): React.JSX.Element {
     void initPingTargets();
     void initDashboardLayout();
     initRemote();
+    // Runova Anywhere (E61): every window follows its state; only the main window is ever asked
+    // to carry a link, since main sends link events to that window alone.
+    const stopAnywhere = initAnywhere();
+    const stopAnywhereLinks = initAnywhereLinks();
     // Usage threshold alerts prefer an OS notification; main only falls back
     // to this event when the platform has none to show. The OS notification's own
     // click already opens Usage there, so this toast gets the same shortcut.
@@ -170,6 +180,8 @@ export default function App(): React.JSX.Element {
     return () => {
       unsubscribeThresholdAlert();
       unsubscribeUpdateStatus();
+      stopAnywhere();
+      stopAnywhereLinks();
     };
   }, []);
 
@@ -186,6 +198,8 @@ export default function App(): React.JSX.Element {
               <Route path="widget/prompt-build/:id" element={<PromptBuildWidgetRoute />} />
               <Route path="desktop-pet" element={<DesktopPetRoute />} />
               <Route path="remote-session" element={<RemoteSessionRoute />} />
+              <Route path="anywhere-request" element={<IncomingRequestRoute />} />
+              <Route path="anywhere-bar" element={<HostBarRoute />} />
               <Route
                 path="rdp-session"
                 element={

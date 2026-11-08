@@ -97,6 +97,13 @@ import type {
   AiExternalClientStatus,
 } from '../shared/aiAccessTypes';
 import type {
+  AnywhereConnectRequest,
+  AnywhereIncomingAnswer,
+  AnywhereSessionRecord,
+  AnywhereSettingsPatch,
+  AnywhereState,
+} from '../shared/anywhere';
+import type {
   ApiCollectionSummary,
   ApiExecutionResult,
   ExecuteApiRequestInput,
@@ -2567,6 +2574,62 @@ const dependencyAlerts = {
     subscribe(IPC.dependencyAlerts.onChanged, cb),
 };
 
+/** Runova Anywhere (E61). The link calls are the main window's WebRTC peer talking to main. */
+const anywhere = {
+  getState: (): Promise<AnywhereState> => ipcRenderer.invoke(IPC.anywhere.getState),
+  connect: (request: AnywhereConnectRequest): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.connect, request),
+  submitPassword: (password: string, savePassword: boolean): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.submitPassword, password, savePassword),
+  trustNewKey: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.trustNewKey),
+  disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.disconnect),
+  respondIncoming: (sessionId: string, answer: AnywhereIncomingAnswer): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.respondIncoming, sessionId, answer),
+  endHosted: (sessionId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.endHosted, sessionId),
+  pauseInput: (paused: boolean): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.pauseInput, paused),
+  updateSettings: (patch: AnywhereSettingsPatch): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.updateSettings, patch),
+  setPassword: (password: string | null): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.setPassword, password),
+  refresh: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.refresh),
+  history: (): Promise<AnywhereSessionRecord[]> => ipcRenderer.invoke(IPC.anywhere.history),
+  deleteHistory: (id: number): Promise<void> => ipcRenderer.invoke(IPC.anywhere.deleteHistory, id),
+  forgetRecent: (remoteId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.forgetRecent, remoteId),
+  forgetSavedPassword: (remoteId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.forgetSavedPassword, remoteId),
+  openApp: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.openApp),
+  grantPermission: (kind: 'accessibility' | 'screen'): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.grantPermission, kind),
+  linkSignal: (sessionId: string, payload: string): void =>
+    ipcRenderer.send(IPC.anywhere.linkSignal, sessionId, payload),
+  linkOpened: (sessionId: string, fingerprints: { local: string; remote: string }): void =>
+    ipcRenderer.send(IPC.anywhere.linkOpened, sessionId, fingerprints),
+  linkFrame: (sessionId: string, frame: Uint8Array): void =>
+    ipcRenderer.send(IPC.anywhere.linkFrame, sessionId, frame),
+  linkBuffered: (sessionId: string, amount: number): void =>
+    ipcRenderer.send(IPC.anywhere.linkBuffered, sessionId, amount),
+  linkClosed: (sessionId: string, reason: string): void =>
+    ipcRenderer.send(IPC.anywhere.linkClosed, sessionId, reason),
+  onState: (cb: (state: AnywhereState) => void): (() => void) =>
+    subscribe(IPC.anywhere.onState, cb),
+  onLinkStart: (
+    cb: (input: {
+      sessionId: string;
+      role: 'controller' | 'host';
+      iceServers: { urls: string }[];
+    }) => void,
+  ): (() => void) => subscribe(IPC.anywhere.onLinkStart, cb),
+  onLinkSignal: (cb: (message: { sessionId: string; payload: string }) => void): (() => void) =>
+    subscribe(IPC.anywhere.onLinkSignal, cb),
+  onLinkFrame: (cb: (message: { sessionId: string; frame: Uint8Array }) => void): (() => void) =>
+    subscribe(IPC.anywhere.onLinkFrame, cb),
+  onLinkStop: (cb: (message: { sessionId: string; reason: string }) => void): (() => void) =>
+    subscribe(IPC.anywhere.onLinkStop, cb),
+};
+
 const remote = {
   getState: (): Promise<RemoteState> => ipcRenderer.invoke(IPC.remote.getState),
   listInterfaces: (): Promise<RemoteNetworkInterface[]> =>
@@ -3143,6 +3206,7 @@ const runovaApi = {
   apiClient,
   packages,
   dependencyAlerts,
+  anywhere,
   remote,
   usage,
   pet,

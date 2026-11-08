@@ -30,6 +30,7 @@ import { registerAgentHandlers } from './ipc/agents';
 import { registerAiHandlers } from './ipc/ai';
 import { registerAiAccessHandlers } from './ipc/aiAccess';
 import { registerAndroidHandlers } from './ipc/android';
+import { registerAnywhereHandlers } from './ipc/anywhere';
 import { registerApiClientHandlers, shutdownApiClient } from './ipc/apiClient';
 import { registerAppHandlers } from './ipc/app';
 import { registerAppNotificationHandlers } from './ipc/appNotifications';
@@ -405,6 +406,7 @@ function registerAllIpcHandlers(): void {
   registerPackageManagerHandlers();
   registerDependencyAlertHandlers();
   registerRemoteHandlers();
+  registerAnywhereHandlers();
   registerUsageHandlers();
   registerBackupHandlers();
   registerBlueprintHandlers();

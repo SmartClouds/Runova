@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Runova.Website.Api.Accounts;
 using Runova.Website.Api.CloudMonitoring;
 using Runova.Website.Api.Identity;
+using Runova.Website.Api.Remote;
 
 namespace Runova.Website.Api.Notifications;
 
@@ -44,14 +45,16 @@ internal sealed class AccountUserIdProvider : IUserIdProvider
 
 /// <summary>
 /// A WebSocket from a browser can not carry an Authorization header, so on the hub path the
-/// device token may come as <c>access_token</c> in the query, as the SignalR clients send it.
+/// device token may come as <c>access_token</c> in the query, as the SignalR clients send it, on
+/// the notifications hub and the remote hub (E60).
 /// It is moved into the header before authentication runs, and never anywhere else.
 /// </summary>
 internal sealed class HubAccessTokenMiddleware(RequestDelegate next)
 {
     public Task InvokeAsync(HttpContext http)
     {
-        if (http.Request.Path.StartsWithSegments(NotificationsHub.Path, StringComparison.Ordinal)
+        if ((http.Request.Path.StartsWithSegments(NotificationsHub.Path, StringComparison.Ordinal)
+                || http.Request.Path.StartsWithSegments(RemoteHub.Path, StringComparison.Ordinal))
             && http.Request.Query.TryGetValue("access_token", out var token)
             && token.ToString().StartsWith(DeviceTokens.Prefix, StringComparison.Ordinal)
             && string.IsNullOrEmpty(http.Request.Headers.Authorization))

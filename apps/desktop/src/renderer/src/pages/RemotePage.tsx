@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { Broadcast, Link, Monitor, Server } from '@/components/icons';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Broadcast, Globe, Link, Monitor, Server } from '@/components/icons';
 import { Chip, PillTabs, SECTION_HEADING } from '@/components/pageKit';
+import { AnywherePanel } from '@/components/remote/anywhere/AnywherePanel';
 import { ControllerPanel } from '@/components/remote/ControllerPanel';
 import { HostPanel } from '@/components/remote/HostPanel';
 import { RdpServersPanel } from '@/components/remote/RdpServersPanel';
@@ -11,17 +13,17 @@ import { cn } from '@/lib/utils';
 import { usePageHeader } from '@/stores/pageHeaderStore';
 import { useRemoteStore } from '@/stores/remoteStore';
 
-type RemoteTab = 'host' | 'connect' | 'ssh' | 'rdp';
+type RemoteTab = 'anywhere' | 'host' | 'connect' | 'ssh' | 'rdp';
 
 const TAB_STORAGE_KEY = 'runova.remote.tab';
-const REMOTE_TABS: readonly RemoteTab[] = ['host', 'connect', 'ssh', 'rdp'];
+const REMOTE_TABS: readonly RemoteTab[] = ['anywhere', 'host', 'connect', 'ssh', 'rdp'];
 
 function readStoredTab(): RemoteTab {
   try {
     const stored = localStorage.getItem(TAB_STORAGE_KEY);
-    return REMOTE_TABS.find((tab) => tab === stored) ?? 'host';
+    return REMOTE_TABS.find((tab) => tab === stored) ?? 'anywhere';
   } catch {
-    return 'host';
+    return 'anywhere';
   }
 }
 
@@ -44,9 +46,16 @@ export default function RemotePage(): React.JSX.Element {
   const transfers = useRemoteStore((s) => s.transfers);
   const hosting = useRemoteStore((s) => s.state?.hosting ?? false);
   const connection = useRemoteStore((s) => s.state?.connection);
-  const [activeTab, setActiveTab] = useState<RemoteTab>(readStoredTab);
+  const [params] = useSearchParams();
+  const asked = REMOTE_TABS.find((tab) => tab === params.get('tab'));
+  const [activeTab, setActiveTab] = useState<RemoteTab>(() => asked ?? readStoredTab());
 
-  usePageHeader('Remote', 'Control another Runova over your local network, over WebSockets.');
+  // A notification or the host bar can open a tab by name.
+  useEffect(() => {
+    if (asked) setActiveTab(asked);
+  }, [asked]);
+
+  usePageHeader('Remote', 'Control another computer from anywhere, or over your local network.');
 
   const connected = connection?.status === 'connected';
   const connecting = connection?.status === 'connecting';
@@ -71,6 +80,7 @@ export default function RemotePage(): React.JSX.Element {
           value={activeTab}
           onChange={openTab}
           items={[
+            { value: 'anywhere', label: 'Anywhere', icon: <Globe /> },
             { value: 'host', label: 'Host', icon: <Broadcast /> },
             { value: 'connect', label: 'Connect', icon: <Link /> },
             { value: 'ssh', label: 'SSH', icon: <Server /> },
@@ -96,6 +106,7 @@ export default function RemotePage(): React.JSX.Element {
 
       <div className="grid items-start gap-2 @4xl/remote:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
+          {activeTab === 'anywhere' && <AnywherePanel />}
           {activeTab === 'host' && <HostPanel />}
           {activeTab === 'connect' && <ControllerPanel />}
           {activeTab === 'ssh' && <SshServersPanel />}

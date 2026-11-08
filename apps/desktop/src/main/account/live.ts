@@ -3,6 +3,7 @@ import { liveDependencyAlerts } from '../dependencyAlerts/live';
 import type { DependencyAlerts } from '../dependencyAlerts/service';
 import { getCloudMonitors } from '../health/cloudLive';
 import { broadcastToWindows } from '../ipc/send';
+import { getAnywhere } from '../remote/anywhere/live';
 import { onVaultUnlocked } from '../ssh/vault';
 import { liveSyncAdapters, refreshSecretsState } from '../sync/adapters/live';
 import type { SyncAdapter } from '../sync/types';
@@ -34,9 +35,12 @@ export function getAccountRuntime(): AccountRuntime {
     beforeSync: refreshSecretsState,
     onSignedIn: () => {
       void getDependencyAlerts().start();
+      // Runova Anywhere (E61) registers this computer and goes online with the account.
+      if (runtime) void getAnywhere(runtime).start();
     },
     onSignedOut: () => {
       void alerts?.stop();
+      if (runtime) void getAnywhere(runtime).stop();
       // Signed out, an online monitor shows nothing (and is still not checked here).
       void getCloudMonitors().reset();
     },
@@ -51,9 +55,11 @@ export async function startAccount(): Promise<void> {
   // Secrets that waited for the Servers passkey go out as soon as it opens.
   onVaultUnlocked(() => account.trigger(0));
   await account.start();
+  void getAnywhere(account).start();
 }
 
 export function stopAccount(): void {
   runtime?.stop();
   void alerts?.stop();
+  if (runtime) void getAnywhere(runtime).stop();
 }

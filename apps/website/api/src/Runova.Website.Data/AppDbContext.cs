@@ -19,6 +19,7 @@ using Runova.Website.Data.Monitoring;
 using Runova.Website.Data.News;
 using Runova.Website.Data.Posts;
 using Runova.Website.Data.Releases;
+using Runova.Website.Data.Remote;
 
 namespace Runova.Website.Data;
 
@@ -127,6 +128,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<CloudMonitorMute> CloudMonitorMutes => Set<CloudMonitorMute>();
 
+    public DbSet<RemoteDevice> RemoteDevices => Set<RemoteDevice>();
+
+    public DbSet<RemoteDeviceTeam> RemoteDeviceTeams => Set<RemoteDeviceTeam>();
+
+    public DbSet<RemoteSessionRecord> RemoteSessionRecords => Set<RemoteSessionRecord>();
+
     /// <summary>The Data Protection key ring, shared by every API instance.</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -173,6 +180,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.ConfigureMonitoring();
         builder.ConfigureCloudMonitors();
         builder.ConfigureAnalytics();
+        builder.ConfigureRemote();
 
         // Identity gives claims an int key, and Data Protection its keys; widen them so every key in the database is bigint.
         builder.Entity<IdentityUserClaim<long>>().Property(c => c.Id).HasConversion<long>();

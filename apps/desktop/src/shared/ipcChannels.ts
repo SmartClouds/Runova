@@ -570,6 +570,40 @@ export const IPC = {
     isMaximized: 'remoteSessionWindow:isMaximized',
     onMaximizedChange: 'remoteSessionWindow:onMaximizedChange',
   },
+  /** Runova Anywhere (E61, E62): connecting to any computer by its Runova ID. */
+  anywhere: {
+    getState: 'anywhere:getState',
+    connect: 'anywhere:connect',
+    submitPassword: 'anywhere:submitPassword',
+    trustNewKey: 'anywhere:trustNewKey',
+    disconnect: 'anywhere:disconnect',
+    respondIncoming: 'anywhere:respondIncoming',
+    endHosted: 'anywhere:endHosted',
+    pauseInput: 'anywhere:pauseInput',
+    updateSettings: 'anywhere:updateSettings',
+    setPassword: 'anywhere:setPassword',
+    refresh: 'anywhere:refresh',
+    history: 'anywhere:history',
+    deleteHistory: 'anywhere:deleteHistory',
+    forgetRecent: 'anywhere:forgetRecent',
+    forgetSavedPassword: 'anywhere:forgetSavedPassword',
+    /** Opens the main window on the Anywhere tab, from the request window or the host bar. */
+    openApp: 'anywhere:openApp',
+    /** macOS: asks for, or opens the settings of, a permission the host still needs (E63). */
+    grantPermission: 'anywhere:grantPermission',
+    // renderer -> main: the WebRTC peer that carries a direct link, in the main window
+    linkSignal: 'anywhere:linkSignal',
+    linkOpened: 'anywhere:linkOpened',
+    linkFrame: 'anywhere:linkFrame',
+    linkBuffered: 'anywhere:linkBuffered',
+    linkClosed: 'anywhere:linkClosed',
+    // main -> renderer
+    onState: 'anywhere:onState',
+    onLinkStart: 'anywhere:onLinkStart',
+    onLinkSignal: 'anywhere:onLinkSignal',
+    onLinkFrame: 'anywhere:onLinkFrame',
+    onLinkStop: 'anywhere:onLinkStop',
+  },
   remote: {
     getState: 'remote:getState',
     listInterfaces: 'remote:listInterfaces',

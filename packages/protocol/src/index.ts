@@ -531,3 +531,6 @@ export function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(1)} ${units[i]}`;
 }
+
+export * from './link.js';
+export * from './secure/handshake.js';

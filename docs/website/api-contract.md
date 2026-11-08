@@ -892,6 +892,81 @@ number, "itemId": string, "paused": bool, "status": CloudMonitorStatusDto }`, an
 removed. The website connects to the hub with its session cookie; the negotiation is a POST, so it
 carries the antiforgery header.
 
+### Runova Anywhere
+
+Connecting to a computer by its Runova ID, as a teammate or with an unattended-access password
+(E60). Each signed-in desktop app registers its computer once and gets a Runova ID: nine digits
+that never start with 0, drawn at random and never given out again. A new computer takes no
+requests until its owner allows something. The owner's own computers may connect without anyone
+accepting (`allowOwnDevices`); members of the teams it is shown to (`teamIds`, only teams the
+owner is in) may ask; and anyone signed in may try the password once the owner set one on the
+computer (`unattendedEnabled`). The password, and anything derived from it, never reaches the
+server: the two computers check it between themselves with a PAKE. These flags only let the server
+turn away what the computer would refuse anyway; the computer always decides.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| GET | `/api/v1/remote-devices` | Account | none | 200 `{ "items": RemoteDeviceDto[] }`; 401 |
+| POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos" or "linux", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401 |
+| PATCH | `/api/v1/remote-devices/{id}` | Account (owner) | merge patch of `name`, `allowOwnDevices`, `unattendedEnabled`, `teamIds` | 200 `RemoteDeviceDto`; 400 (a team the owner is not in); 401; 404 |
+| DELETE | `/api/v1/remote-devices/{id}` | Account (owner) | none | 204 (the ID is retired, and the computer goes offline); 401; 404 |
+| GET | `/api/v1/reachable-devices` | Account | none | 200 `{ "mine": RemoteDirectoryEntryDto[], "teammates": RemoteDirectoryEntryDto[] }`; 401 |
+| GET | `/api/v1/remote-sessions` | Account | query `page`, `pageSize` | 200 `Page<RemoteSessionDto>` (the last 30 days, either side); 400; 401 |
+| DELETE | `/api/v1/remote-sessions/{id}` | Account (either side) | none | 204; 401; 404 |
+
+`RemoteDeviceDto`: `{ "id": number, "remoteId": string, "name": string, "platform": string,
+"kind": "app" | "agent", "identityKey": string, "allowOwnDevices": bool, "unattendedEnabled":
+bool, "teamIds": number[], "online": bool, "createdAt": time, "lastSeenAt": time }`.
+`RemoteDirectoryEntryDto`: `{ "id", "remoteId", "name", "platform", "kind", "identityKey",
+"unattendedEnabled", "online", "lastSeenAt", "owner": { "userId": number, "displayName": string,
+"email": string }, "teams": [{ "id": number, "name": string }] }`; a teammate's computer is listed
+while it is shown to a team both accounts are in. `RemoteSessionDto`: `{ "id": number, "role":
+"host" | "controller", "mode": "ask" | "password", "transport": "direct" | "relay" | null,
+"hostRemoteId": string, "hostName": string, "hostOwnerName": string, "controllerName": string,
+"controllerEmail": string, "startedAt": time, "endedAt": time | null }`. A session record says only
+who connected to which computer, how and when: never what was on screen, typed or copied, and no
+address. Records are kept 30 days.
+
+Connecting goes through the SignalR hub at `/hubs/remote` (outside `/api/v1`, Account auth as for
+the notifications hub, including the `access_token` query value on the hub path). The app calls:
+
+- `GoOnline(deviceId)`: this connection now reaches one of the account's computers; it replaces any
+  earlier connection for it. A computer that is not the account's is an error.
+- `RequestConnect({ "remoteId", "mode": "ask" | "password", "controllerDeviceId"?, "intent":
+  "control" | "files" })` returns `{ "status", "sessionId"?, "relation"?, "host"? }`. `status` is
+  `ringing`, `offline`, `unavailable` (no such ID, or the computer does not take this request; the
+  two are the same answer on purpose), `rate-limited` or `self`. `relation` is `own`, `teammate`
+  or `other`; `host` is `{ "remoteId", "name" (empty for `other`), "platform", "kind",
+  "identityKey" }`. An account makes 20 requests a minute; a computer takes 30 password requests
+  in 10 minutes from everyone together; a connection has 8 sessions open at most.
+- `Respond(sessionId, accept)`: the computer accepts or declines a ringing request. Unanswered
+  requests stop ringing after 60 seconds.
+- `Signal(sessionId, payload)`: a WebRTC signaling message (up to 64 KiB, 600 a minute) to the
+  other side, once the computer accepted. It is passed on untouched and never logged or stored.
+- `Connected(sessionId, "direct" | "relay")`: the computer says the encrypted handshake succeeded
+  and how the two are connected. Only then is the session recorded.
+- `End(sessionId)`: either side ends a session, ringing or live.
+- `CreateRelayTicket(sessionId)` returns `{ "path": "/relay/remote/{sessionId}", "ticket": string }`
+  for one side of an accepted session (E62). The ticket works once, for one minute, for that
+  session only.
+
+The hub calls `IncomingRequest({ "sessionId", "mode", "relation", "intent", "controller": {
+"userId", "displayName", "email", "deviceName"?, "platform"?, "remoteId"?, "identityKey"? },
+"teams": string[] })` on the computer, `RequestResolved({ "sessionId", "accepted", "reason":
+"declined" | "timeout" | null })` on the controller, `Signal(sessionId, payload)` on either,
+`SessionEnded({ "sessionId", "reason": "ended" | "cancelled" | "left" | "timeout" })` on the other
+side, and `PresenceChanged({ "deviceId", "remoteId", "online" })` on the owner and everyone the
+computer is shown to.
+
+When the two computers can not reach each other directly, both open a WebSocket to the relay at
+`GET {path}?ticket={ticket}` (outside `/api/v1`, no other auth; 400 when it is not a WebSocket
+request, 401 for a missing, used, expired or foreign ticket). When the other side arrives within
+30 seconds the relay sends each side the text message `ready`, then copies binary messages of up to
+128 KiB between them, one at a time in each direction, for at most 12 hours. A text message, a
+larger message or either side closing ends it for both. The two computers seal every frame with
+keys from their own handshake, so the relay never reads or changes what it carries, and it logs
+only that a session paired and how long it lasted.
+
 ### Account sessions and activity
 
 Every browser and every computer signed in to an account is a session. The session cookie (and a

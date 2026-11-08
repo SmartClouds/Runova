@@ -274,3 +274,7 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E57](epics/57-website-monitoring-page.md) | Website Monitoring page: a team's and an account's online monitors, live | Standalone (Website) | E55 |
 | [E58](epics/58-studio-pictures.md) | Studio pictures: real screenshots of the project, GPT Image, or prompts in PICTURES.md, built into each scene | Standalone (Studio) | E32, E33, E35, E38 |
 | [E59](epics/59-tracking-tags.md) | Tracking tags and site verification: Google Analytics, Ads and Tag Manager, Microsoft Clarity and UET, Search Console and Bing Webmaster verification, and a cookie consent banner, set from the admin panel | Standalone (Website) | E41, E52 |
+| [E60](epics/60-remote-ids-signaling.md) | Runova Anywhere IDs and signaling: a nine-digit ID per computer, presence, connection requests and WebRTC signaling through the website's hub | Standalone (Website) | E41, E48, E51 |
+| [E61](epics/61-connect-by-id.md) | Runova Anywhere: connect to any computer by ID, as a teammate or with a password, peer to peer and encrypted end to end | Standalone (Remote) | E60 |
+| [E62](epics/62-anywhere-relay.md) | Runova Anywhere relay: through the website when two computers can not reach each other directly | Standalone (Remote, Website) | E60, E61 |
+| [E63](epics/63-anywhere-cross-platform-input.md) | Runova Anywhere on macOS and Linux: mouse and keyboard control, permissions, Wayland told plainly | Standalone (Remote) | E61 |

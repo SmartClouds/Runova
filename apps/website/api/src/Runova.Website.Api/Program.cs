@@ -17,6 +17,7 @@ using Runova.Website.Api.Monitoring;
 using Runova.Website.Api.News;
 using Runova.Website.Api.Problems;
 using Runova.Website.Api.Releases;
+using Runova.Website.Api.Remote;
 using Runova.Website.Api.Telemetry;
 using Runova.Website.Api.Users;
 using Runova.Website.Data;
@@ -41,6 +42,7 @@ builder.Services.AddWebsiteDependencies();
 builder.Services.AddWebsiteBilling();
 builder.AddWebsiteMonitoring();
 builder.Services.AddWebsiteCloudMonitoring();
+builder.Services.AddWebsiteRemote();
 builder.Services.AddWebsiteJobs();
 builder.Services.AddWebsiteJson();
 builder.Services.AddHostedService<MigrateOnStart>();
@@ -68,6 +70,8 @@ if (AdminCli.IsCommand(args))
 }
 
 app.UseForwardedHeaders();
+// The relay (E62) and the hubs' WebSocket transport.
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 app.UseWebsiteProblemDetails();
 MediaStorage.UseMediaFiles(app);
 app.UseHubAccessTokens();
@@ -83,6 +87,7 @@ app.MapHealth();
 app.MapRunovaHealth();
 app.MapApiV1();
 app.MapNotificationsHub();
+app.MapRemoteHub();
 app.MapJobsDashboard();
 
 await app.RunAsync();

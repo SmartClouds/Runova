@@ -7,13 +7,13 @@ keywords: remote, ssh, remote control, host, pairing code, qr code, mobile, phon
 route: /remote
 ---
 
-The Remote page is where you reach other computers. It has four tabs: **Host** (let another Runova or the mobile app control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
+The Remote page is where you reach other computers. It has five tabs: **Anywhere** (connect to any computer by its Runova ID, see [Runova Anywhere](remote-anywhere.md)), **Host** (let another Runova or the mobile app control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
 
 Two sets of tools live here. The first is a remote control that works between Runova installs on the same network, and from the Runova mobile app. The second is a saved server list for SSH and Remote Desktop.
 
 ## Where to find it
 
-Click **Remote** in the sidebar under **Connect**, or open the command palette and type Remote. Pick a tab at the top: **Host**, **Connect**, **SSH** or **Remote Desktop**. The page remembers the tab you used last and opens on it next time. The first time, it opens on **Host**.
+Click **Remote** in the sidebar under **Connect**, or open the command palette and type Remote. Pick a tab at the top: **Anywhere**, **Host**, **Connect**, **SSH** or **Remote Desktop**. The page remembers the tab you used last and opens on it next time. The first time, it opens on **Anywhere**.
 
 Below the tabs, two shared cards can appear on any tab: **File transfers** (progress of files being sent or received, shown once a transfer starts) and **Activity** (a running log of what happened, such as pairing attempts and connections, with timestamps).
 

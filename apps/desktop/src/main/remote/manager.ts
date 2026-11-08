@@ -28,6 +28,7 @@ import { FileManagerOps } from './fileManagerOps';
 import { FileTransferManager } from './fileTransfer';
 import { InputInjector } from './inputInjector';
 import { listNetworkInterfaces } from './networkInterfaces';
+import { type PeerSocket, SOCKET_OPEN } from './peerSocket';
 import { sessionWindow } from './sessionWindow';
 import { TokenStore } from './tokens';
 
@@ -47,9 +48,26 @@ const TILE_HEAL_LOW_WATER = 256 * 1024;
 /** Minimum spacing between drop-healing full refreshes. */
 const TILE_HEAL_MIN_INTERVAL_MS = 2000;
 
+/** What a connected controller may do here. A LAN peer that paired with a code may do everything. */
+export interface PeerPermissions {
+  control: boolean;
+  clipboard: boolean;
+  files: boolean;
+}
+
+const FULL_PERMISSIONS: PeerPermissions = { control: true, clipboard: true, files: true };
+
+/** A connection the caller set up and authenticated already, with its own message and close events. */
+export interface AttachableSocket extends PeerSocket {
+  onMessage(listener: (data: Buffer, isBinary: boolean) => void): void;
+  onClose(listener: (reason?: string) => void): void;
+}
+
 interface HostPeer {
   id: string;
-  ws: WebSocket;
+  ws: PeerSocket;
+  /** What this peer may do: everything for a paired LAN peer, what the person allowed for Runova Anywhere. */
+  permissions: PeerPermissions;
   deviceName: string;
   address: string;
   connectedAt: number;
@@ -77,7 +95,7 @@ interface HostPeer {
  * screen (host) / paints frames and reads input (controller) and exchanges
  * everything with this manager over IPC.
  */
-class RemoteManager {
+export class RemoteManager {
   private mainWindow: BrowserWindow | null = null;
   private readonly injector = new InputInjector();
   private readonly tokens = new TokenStore();
@@ -102,7 +120,9 @@ class RemoteManager {
   private lastTileHealAt = 0;
   private pairing: RemotePairingInfo | null = null;
 
-  private client: WebSocket | null = null;
+  private client: PeerSocket | null = null;
+  /** The person at the host paused remote input for every session. */
+  private inputPaused = false;
   private connection: RemoteConnectionInfo = {
     status: 'idle',
     remoteDeviceName: null,
@@ -179,6 +199,7 @@ class RemoteManager {
         authed: false,
         intent: 'control',
         wantsTiles: true,
+        permissions: FULL_PERMISSIONS,
       };
       this.peers.set(peer.id, peer);
       ws.on('message', (data, isBinary) => this.onHostMessage(peer, data as Buffer, isBinary));
@@ -323,7 +344,7 @@ class RemoteManager {
    */
   applyRtcInput(peerId: string, event: RemoteInputEvent): void {
     const peer = this.peers.get(peerId);
-    if (peer?.authed) this.injector.apply(event);
+    if (peer?.authed && this.mayControl(peer)) this.injector.apply(event);
   }
 
   /**
@@ -372,6 +393,7 @@ class RemoteManager {
     }
     const msg = this.parseControl(data);
     if (!msg) return;
+    if (peer.authed && !peer.permissions.files && this.refuseFiles(peer, msg)) return;
     if (
       peer.authed &&
       (this.files.handleControl(peer.ws, msg) || this.fmOps.handleControl(peer.ws, msg))
@@ -390,25 +412,9 @@ class RemoteManager {
         const paired = this.tokens.consume(msg.token);
         const known = paired ? null : this.tokens.validateDeviceToken(msg.token, peer.deviceName);
         if (paired || known) {
-          peer.authed = true;
           const deviceToken = paired ? this.tokens.issueDeviceToken(peer.deviceName) : undefined;
           if (paired) this.pairing = null; // code was single-use
-          if (peer.intent === 'control') {
-            if (this.capturing) {
-              // Capture is already streaming deltas; this newcomer needs every
-              // tile once or it stares at a mostly-black screen.
-              this.send(IPC.remote.onCaptureRefresh);
-            }
-            this.startCapture();
-          }
-          this.updateTileDemand();
-          this.syncPowerSaveBlocker();
-          this.sendControl(peer.ws, {
-            t: 'auth-ok',
-            deviceName: this.deviceName(),
-            screen: this.hostScreen ?? { width: 0, height: 0 },
-            ...(deviceToken ? { deviceToken } : {}),
-          });
+          this.admit(peer, deviceToken);
           this.log(
             'success',
             paired
@@ -429,10 +435,10 @@ class RemoteManager {
       case 'control-stop':
         break;
       case 'input':
-        if (peer.authed) this.injector.apply(msg.event);
+        if (peer.authed && this.mayControl(peer)) this.injector.apply(msg.event);
         break;
       case 'clipboard':
-        if (peer.authed) {
+        if (peer.authed && peer.permissions.clipboard) {
           clipboard.writeText(msg.text);
           this.log('info', 'Clipboard received from controller.');
         }
@@ -480,6 +486,153 @@ class RemoteManager {
     if (this.capturing) return;
     this.capturing = true;
     this.send(IPC.remote.onCaptureStart);
+  }
+
+  /** Lets an authenticated peer in: capture for a control session, and the auth-ok it waits for. */
+  private admit(peer: HostPeer, deviceToken?: string): void {
+    peer.authed = true;
+    if (peer.intent === 'control') {
+      if (this.capturing) {
+        // Capture is already streaming deltas; this newcomer needs every
+        // tile once or it stares at a mostly-black screen.
+        this.send(IPC.remote.onCaptureRefresh);
+      }
+      this.startCapture();
+    }
+    this.updateTileDemand();
+    this.syncPowerSaveBlocker();
+    this.sendControl(peer.ws, {
+      t: 'auth-ok',
+      deviceName: this.deviceName(),
+      screen: this.hostScreen ?? { width: 0, height: 0 },
+      ...(deviceToken ? { deviceToken } : {}),
+    });
+  }
+
+  private mayControl(peer: HostPeer): boolean {
+    return peer.permissions.control && !this.inputPaused;
+  }
+
+  /**
+   * Answers a file or file-manager request from a session that may not touch files, so the other
+   * side shows a clear refusal instead of waiting. Returns whether the message was one of those.
+   */
+  private refuseFiles(peer: HostPeer, msg: RemoteControlMessage): boolean {
+    const reason = 'Files are turned off for this session.';
+    switch (msg.t) {
+      case 'file-offer':
+      case 'file-resume':
+      case 'file-part-done':
+      case 'file-complete':
+        this.sendControl(peer.ws, { t: 'file-error', transferId: msg.transferId, message: reason });
+        return true;
+      case 'file-request':
+        this.sendControl(peer.ws, {
+          t: 'file-request-ack',
+          reqId: msg.reqId,
+          ok: false,
+          error: reason,
+        });
+        return true;
+      case 'fm-roots':
+        this.sendControl(peer.ws, { t: 'fm-roots-reply', reqId: msg.reqId, roots: [] });
+        return true;
+      case 'fm-list':
+        this.sendControl(peer.ws, {
+          t: 'fm-list-reply',
+          reqId: msg.reqId,
+          path: msg.path ?? '',
+          entries: [],
+          error: reason,
+        });
+        return true;
+      case 'fm-mkdir':
+      case 'fm-delete':
+      case 'fm-rename':
+        this.sendControl(peer.ws, { t: 'fm-ack', reqId: msg.reqId, ok: false, error: reason });
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // --- Runova Anywhere ---------------------------------------------------------
+
+  /**
+   * Host role: a Runova Anywhere controller whose secure handshake succeeded (E61). It is let in
+   * at once, with only what the person here allowed. Returns its peer id.
+   */
+  attachHostPeer(
+    socket: AttachableSocket,
+    info: {
+      deviceName: string;
+      address: string;
+      intent: RemoteConnectIntent;
+      permissions: PeerPermissions;
+    },
+  ): string {
+    const peer: HostPeer = {
+      id: randomUUID(),
+      ws: socket,
+      deviceName: info.deviceName,
+      address: info.address,
+      connectedAt: Date.now(),
+      authed: false,
+      intent: info.intent,
+      wantsTiles: info.intent === 'control',
+      permissions: { ...info.permissions },
+    };
+    this.peers.set(peer.id, peer);
+    socket.onMessage((data, isBinary) => this.onHostMessage(peer, data, isBinary));
+    socket.onClose(() => this.onPeerGone(peer));
+    this.injector.start();
+    this.admit(peer);
+    this.log('success', `${peer.deviceName} connected through Runova Anywhere.`);
+    this.emitState();
+    return peer.id;
+  }
+
+  /** Host role: the person here ends one session. */
+  endHostPeer(peerId: string): void {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+    this.safeClose(peer.ws, 'the host ended the session');
+    this.onPeerGone(peer);
+  }
+
+  /** Host role: pauses or resumes remote input for every session, without ending them. */
+  setInputPaused(paused: boolean): void {
+    this.inputPaused = paused;
+  }
+
+  /**
+   * Controller role: drives a host over a Runova Anywhere link whose handshake succeeded. There
+   * is no token to send, and a dropped link is not redialed: the person reconnects by ID.
+   */
+  attachClient(
+    socket: AttachableSocket,
+    info: { deviceName: string; intent: RemoteConnectIntent },
+  ): void {
+    this.disconnect();
+    this.connectIntent = info.intent;
+    this.reconnectAttempt = 0;
+    this.connection = {
+      status: 'connecting',
+      remoteDeviceName: info.deviceName,
+      remoteScreen: null,
+      intent: info.intent,
+    };
+    this.client = socket;
+    socket.onMessage((data, isBinary) => this.onClientMessage(data, isBinary));
+    socket.onClose(() => this.onClientGone(socket));
+    this.sendControl(socket, {
+      t: 'hello',
+      role: 'controller',
+      deviceName: this.deviceName(),
+      protocolVersion: REMOTE_PROTOCOL_VERSION,
+      intent: info.intent,
+    });
+    this.emitState();
   }
 
   /**
@@ -568,7 +721,7 @@ class RemoteManager {
    * this machine is the dialer, so it's the one that has to redial; treat
    * it as recoverable and start the reconnect backoff instead of giving up.
    */
-  private onClientGone(ws: WebSocket, err?: Error): void {
+  private onClientGone(ws: PeerSocket, err?: Error): void {
     if (this.client !== ws) return; // already superseded by a newer socket
     this.client = null;
     if (this.pendingConnect && this.files.hasActiveTransfers()) {
@@ -856,7 +1009,9 @@ class RemoteManager {
       this.sendControl(this.client, { t: 'clipboard', text });
     }
     for (const peer of this.peers.values()) {
-      if (peer.authed) this.sendControl(peer.ws, { t: 'clipboard', text });
+      if (peer.authed && peer.permissions.clipboard) {
+        this.sendControl(peer.ws, { t: 'clipboard', text });
+      }
     }
     this.log('info', 'Clipboard sent.');
   }
@@ -910,13 +1065,15 @@ class RemoteManager {
     return this.fmOps.rename(this.requireTarget(), path, newName);
   }
 
-  private pickTransferTarget(): WebSocket | null {
+  private pickTransferTarget(): PeerSocket | null {
     if (this.client && this.connection.status === 'connected') return this.client;
-    for (const peer of this.peers.values()) if (peer.authed) return peer.ws;
+    for (const peer of this.peers.values()) {
+      if (peer.authed && peer.permissions.files) return peer.ws;
+    }
     return null;
   }
 
-  private requireTarget(): WebSocket {
+  private requireTarget(): PeerSocket {
     const target = this.pickTransferTarget();
     if (!target) throw new Error('No active connection.');
     return target;
@@ -934,13 +1091,13 @@ class RemoteManager {
 
   // --- Plumbing ----------------------------------------------------------------
 
-  private sendControl(ws: WebSocket, msg: RemoteControlMessage): void {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  private sendControl(ws: PeerSocket, msg: RemoteControlMessage): void {
+    if (ws.readyState === SOCKET_OPEN) ws.send(JSON.stringify(msg));
   }
 
-  private sendBinary(ws: WebSocket, data: Uint8Array): Promise<void> {
+  private sendBinary(ws: PeerSocket, data: Uint8Array): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (ws.readyState !== SOCKET_OPEN) {
         reject(new Error('socket closed'));
         return;
       }
@@ -956,7 +1113,7 @@ class RemoteManager {
     }
   }
 
-  private safeClose(ws: WebSocket, reason: string): void {
+  private safeClose(ws: PeerSocket, reason: string): void {
     try {
       this.sendControl(ws, { t: 'bye', reason });
       ws.close();
