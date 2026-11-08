@@ -24,7 +24,6 @@ import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.CursorView
-import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.FrameView
 import uniffi.runova_ffi.LineView
 import uniffi.runova_ffi.ProjectView
@@ -67,24 +66,13 @@ private fun view(
     terminal: TerminalView? = null,
     processes: List<TerminalProcessView> = emptyList(),
     selected: String? = null,
-) = AppView(
-    AuthState.SIGNED_IN,
-    true,
-    emptyList(),
-    false,
-    connected,
-    listOf(project),
-    false,
-    selected,
-    terminals,
-    false,
-    terminal,
-    processes,
-    GitScreen(null, false, null, false, emptyList(), emptyList()),
-    false,
-    null,
-    null,
-    null,
+) = appView(
+    connection = connected,
+    projects = listOf(project),
+    selected = selected,
+    terminals = terminals,
+    terminal = terminal,
+    processes = processes,
 )
 
 @RunWith(AndroidJUnit4::class)

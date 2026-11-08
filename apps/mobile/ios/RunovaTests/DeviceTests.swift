@@ -15,11 +15,9 @@ final class DeviceTests: XCTestCase {
         terminals: [TerminalItem] = [], terminal: TerminalView? = nil, processes: [TerminalProcessView] = [],
         git: GitScreen? = nil, selected: String? = "p1", confirm: ConfirmView? = nil
     ) -> AppView {
-        AppView(
-            auth: .signedIn, hubConnected: true, systems: [], systemsLoading: false, connection: connected,
-            projects: [], projectsLoading: false, selectedProject: selected, terminals: terminals,
-            terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git ?? emptyGit,
-            busy: false, notice: nil, confirm: confirm, error: nil)
+        fixtureView(
+            connection: connected, selected: selected, terminals: terminals, terminal: terminal,
+            processes: processes, git: git ?? emptyGit, confirm: confirm)
     }
 
     private func run(_ text: String, fg: UInt32? = nil, cursor: Bool = false) -> RunView {
@@ -107,11 +105,43 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(view(git: git), "git-branches", tab: "git")
     }
 
+    func testStatus() throws {
+        let system = SystemStatsView(
+            cpuPercent: 12.5, cpuLabel: "12.5%", cpuDetail: "Ryzen 9, 16 cores", memPercent: 50,
+            memLabel: "8 GB of 16 GB", netDownLabel: "1.5 MB/s", netUpLabel: "2 KB/s")
+        let window = LimitWindowView(
+            label: "5 hours", percent: 25, percentLabel: "25%", resetsLabel: "Resets in 3h 12m")
+        let status = StatusScreen(
+            system: system, loading: false,
+            limits: [
+                LimitChipView(
+                    providerId: "claude-code", name: "Claude", plan: "Max", state: .ok, windows: [window], problem: nil)
+            ],
+            providers: [], detail: nil)
+        try renderSnapshot(fixtureView(connection: connected, status: status), "status", tab: "status")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
         try renderSnapshot(view(confirm: question), "confirm", tab: "git")
     }
+}
+
+/// One place to build what the core publishes, so a new screen changes only this function.
+func fixtureView(
+    auth: AuthState = .signedIn, systems: [SystemView] = [], connection: ConnectionView? = nil,
+    projects: [ProjectView] = [], selected: String? = nil, terminals: [TerminalItem] = [],
+    terminal: TerminalView? = nil, processes: [TerminalProcessView] = [],
+    git: GitScreen = GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
+    status: StatusScreen = StatusScreen(system: nil, loading: false, limits: [], providers: [], detail: nil),
+    notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
+) -> AppView {
+    AppView(
+        auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
+        projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
+        terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status,
+        busy: false, notice: notice, confirm: confirm, error: error)
 }
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.

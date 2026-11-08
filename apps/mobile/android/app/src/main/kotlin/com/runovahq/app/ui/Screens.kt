@@ -61,6 +61,7 @@ data class AppIntents(
     val dismissConfirm: () -> Unit = {},
     val dismissNotice: () -> Unit = {},
     val git: GitIntents = GitIntents(),
+    val status: StatusIntents = StatusIntents(),
 )
 
 val AppTabs = listOf(

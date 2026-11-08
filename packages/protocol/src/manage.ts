@@ -62,6 +62,8 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'git.deleteBranch': { scope: 'git', risk: 'danger' },
   'git.stashDrop': { scope: 'git', risk: 'danger' },
   'git.abort': { scope: 'git', risk: 'danger' },
+  'status.system': { scope: 'core', risk: 'read' },
+  'status.usage': { scope: 'core', risk: 'read' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -115,6 +117,43 @@ export interface ManageGitBranch {
 export interface ManageGitStash {
   ref: string;
   message: string;
+}
+
+export interface ManageSystemStats {
+  cpuModel: string;
+  cpuCoreCount: number;
+  cpuPercent: number;
+  memPercent: number;
+  memUsedBytes: number;
+  memTotalBytes: number;
+  netRxBytesPerSec: number;
+  netTxBytesPerSec: number;
+}
+
+export interface ManageUsageLimit {
+  providerId: string;
+  name: string;
+  plan: string | null;
+  state: 'ok' | 'estimate' | 'stale' | 'unavailable';
+  problem: string | null;
+  /** `resetInMs` is measured on the computer, since a phone's clock may disagree with it. */
+  windows: { label: string; percent: number; resetInMs: number | null }[];
+}
+
+export interface ManageProviderUsage {
+  providerId: string;
+  name: string;
+  status: 'ok' | 'connect' | 'error';
+  error: string | null;
+  todayUsd: number | null;
+  weekUsd: number | null;
+  monthUsd: number | null;
+  series: number[];
+}
+
+export interface ManageUsage {
+  limits: ManageUsageLimit[];
+  providers: ManageProviderUsage[];
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

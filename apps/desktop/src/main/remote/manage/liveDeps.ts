@@ -1,5 +1,6 @@
 import type { ManageTerminal } from '@runova/protocol';
 import { agentStatus } from '../../agents/statusTracker';
+import { sampleSystemStats } from '../../ipc/systemStats';
 import {
   createTerminalSession,
   subscribeTerminalExit,
@@ -9,6 +10,7 @@ import {
   writeToSession,
 } from '../../ipc/terminal';
 import { store } from '../../store';
+import { getAllUsage } from '../../usage';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
 
@@ -53,4 +55,10 @@ export const liveManageDeps: ManageMethodDeps = {
     }));
   },
   git: liveGit,
+  status: {
+    system: sampleSystemStats,
+    usage: async () => getAllUsage((await store.getSettings()).usageProviderConfigs ?? {}),
+    shownLimits: async () => (await store.getSettings()).statusBarUsage,
+    now: Date.now,
+  },
 };

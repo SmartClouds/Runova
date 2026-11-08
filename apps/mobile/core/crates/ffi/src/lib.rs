@@ -11,6 +11,7 @@ pub mod git;
 pub(crate) mod labels;
 pub mod palette;
 pub mod secure;
+pub mod status;
 pub(crate) mod terminals;
 pub mod view;
 

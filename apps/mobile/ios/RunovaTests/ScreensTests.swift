@@ -20,12 +20,8 @@ final class ScreensTests: XCTestCase {
         auth: AuthState = .signedIn, systems list: [SystemView]? = nil, connection: ConnectionView? = nil,
         projects: [ProjectView] = [], error: String? = nil
     ) -> AppView {
-        AppView(
-            auth: auth, hubConnected: true, systems: list ?? systems, systemsLoading: false,
-            connection: connection, projects: projects, projectsLoading: false, selectedProject: nil,
-            terminals: [], terminalsLoading: false, terminal: nil, terminalProcesses: [],
-            git: GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
-            busy: false, notice: nil, confirm: nil, error: error)
+        fixtureView(
+            auth: auth, systems: list ?? systems, connection: connection, projects: projects, error: error)
     }
 
     private func connection(_ phase: ConnectionPhase, error: String? = nil) -> ConnectionView {

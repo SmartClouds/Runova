@@ -2,7 +2,9 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import {
   type AgentStatus,
   bootStageLabel,
+  buildLimitChips,
   type KeepAwakeMode,
+  type LimitChip,
   type Project,
   type SubscriptionWindow,
 } from '@runova/core';
@@ -44,7 +46,6 @@ import { isPausable, type RunRow, useRunRows } from '@/hooks/useRunRows';
 import { useSystemStatsHistory } from '@/hooks/useSystemStatsHistory';
 import { formatBytes as formatMemory, formatPercent } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
-import { buildLimitChips, type LimitChip } from '@/lib/statusBarLimits';
 import { timeAgo } from '@/lib/time';
 import { formatCountdown } from '@/lib/usageFormat';
 import { cn } from '@/lib/utils';

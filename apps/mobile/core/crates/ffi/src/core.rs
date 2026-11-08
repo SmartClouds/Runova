@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 const HUB_EVENTS: usize = 256;
 /// Two workers: enough for a phone, and small on memory.
 const WORKERS: usize = 2;
-const REFRESH_EVERY: Duration = Duration::from_secs(5);
+const REFRESH_EVERY: Duration = Duration::from_secs(4);
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CoreConfig {

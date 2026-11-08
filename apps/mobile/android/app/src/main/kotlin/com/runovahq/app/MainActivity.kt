@@ -20,6 +20,7 @@ import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.GitIntents
+import com.runovahq.app.ui.StatusIntents
 import com.runovahq.app.ui.StartingScreen
 import uniffi.runova_ffi.AppLifecycle
 import uniffi.runova_ffi.AppView
@@ -81,6 +82,10 @@ class MainActivity : ComponentActivity(), ViewListener {
                 stashDrop = { engine.gitStashDrop(it) },
                 resolve = { path, pick -> engine.gitResolve(path, pick) },
                 abort = { engine.gitAbort() },
+            ),
+            status = StatusIntents(
+                openProvider = { engine.openUsageProvider(it) },
+                closeProvider = { engine.closeUsageProvider() },
             ),
         )
         setContent {

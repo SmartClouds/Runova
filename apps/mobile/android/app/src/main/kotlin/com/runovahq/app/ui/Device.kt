@@ -72,6 +72,7 @@ val DeviceTabs = listOf(
     TabItem("projects", "Projects", RunovaIcons.Folder),
     TabItem("clis", "CLIs", RunovaIcons.Terminal),
     TabItem("git", "Git", RunovaIcons.Git),
+    TabItem("status", "Status", RunovaIcons.Monitoring),
 )
 
 /** The width of a JetBrains Mono cell, in ems. */
@@ -111,6 +112,7 @@ fun DeviceShell(
         terminal != null -> null
         section == "clis" -> Section.CLIS
         section == "git" -> Section.GIT
+        section == "status" -> Section.STATUS
         else -> null
     }
     DisposableEffect(onShow) {
@@ -121,7 +123,7 @@ fun DeviceShell(
         TerminalScreen(terminal, view.terminalProcesses, view.error, intents)
         return
     }
-    if (GitOverlay(view, intents)) return
+    if (GitOverlay(view, intents) || StatusOverlay(view, intents.status)) return
     Column(Modifier.fillMaxSize()) {
         DeviceTopBar(connection, intents)
         Box(Modifier.weight(1f)) {
@@ -131,6 +133,7 @@ fun DeviceShell(
                     Box(Modifier.weight(1f)) { GitChangesScreen(view, intents.git) }
                     view.error?.let { ErrorLine(it) }
                 }
+                "status" -> StatusTab(view, intents.status)
                 else -> ProjectsScreen(view, intents, onTab)
             }
         }

@@ -234,6 +234,29 @@ extension RunovaTopBar where Trailing == EmptyView {
     }
 }
 
+/// How full something is. It warns near the limit, as the desktop's status bar does.
+struct RunovaProgress: View {
+    let percent: Double
+
+    @Environment(\.palette) private var palette
+
+    private var fill: Color {
+        if percent >= 90 { return palette.destructive }
+        if percent >= 75 { return palette.warning }
+        return palette.primary
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(palette.secondary)
+                Capsule().fill(fill).frame(width: geometry.size.width * min(max(percent / 100, 0), 1))
+            }
+        }
+        .frame(height: 6)
+    }
+}
+
 /// A small control: a terminal key, a filter, a shortcut.
 struct RunovaChip: View {
     let text: String

@@ -640,10 +640,17 @@ jobs:
         with:
           node-version: "26"
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        env:
+          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
+        with:
+          dest: ${{ runner.tool_cache }}/setup-pnpm
+          cache: ${{ inputs.github-hosted }}
+
       - name: Design tokens match the desktop's theme
         working-directory: .
         run: |
-          corepack enable
           pnpm install --frozen-lockfile --filter @runova/desktop
           node --test scripts/mobile-design.test.mjs
           node scripts/mobile-design.mjs --check

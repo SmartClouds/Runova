@@ -20,9 +20,48 @@ pub(crate) fn percent_label(percent: f64) -> String {
     format!("{percent:.1}%")
 }
 
+pub(crate) fn usd_label(amount: f64) -> String {
+    format!("${amount:.2}")
+}
+
+/// How long until a limit resets, from the milliseconds the computer measured.
+pub(crate) fn reset_label(in_ms: i64) -> String {
+    let minutes = in_ms / 60_000;
+    if minutes <= 0 {
+        return "Resets soon".to_owned();
+    }
+    let (days, hours, minutes) = (minutes / 1440, (minutes % 1440) / 60, minutes % 60);
+    match (days, hours) {
+        (0, 0) => format!("Resets in {minutes}m"),
+        (0, _) => format!("Resets in {hours}h {minutes}m"),
+        _ => format!("Resets in {days}d {hours}h"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_reset_uses_the_two_biggest_units() {
+        assert_eq!(reset_label(5 * 60_000), "Resets in 5m");
+        assert_eq!(reset_label(192 * 60_000), "Resets in 3h 12m");
+        assert_eq!(
+            reset_label(2 * 86_400_000 + 4 * 3_600_000),
+            "Resets in 2d 4h"
+        );
+    }
+
+    #[test]
+    fn a_reset_already_due_says_soon() {
+        assert_eq!(reset_label(0), "Resets soon");
+        assert_eq!(reset_label(-5000), "Resets soon");
+    }
+
+    #[test]
+    fn money_has_two_decimals() {
+        assert_eq!(usd_label(1.5), "$1.50");
+    }
 
     #[test]
     fn bytes_use_the_biggest_unit_that_fits() {

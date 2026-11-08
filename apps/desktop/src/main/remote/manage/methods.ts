@@ -2,6 +2,7 @@ import type { Project } from '@runova/core';
 import type { ManageProject, ManageTerminal, ManageTerminalProcess } from '@runova/protocol';
 import { gitMethods, type ManageGitDeps } from './gitMethods';
 import { ManageError, type ManageMethods } from './session';
+import { type ManageStatusDeps, statusMethods } from './statusMethods';
 
 export interface TerminalSnapshot {
   data: string;
@@ -22,6 +23,7 @@ export interface ManageMethodDeps {
   writeTerminal(sessionId: string, data: string): void;
   terminalProcesses(sessionId: string): Promise<ManageTerminalProcess[]>;
   git: ManageGitDeps;
+  status: ManageStatusDeps;
 }
 
 /** Far past anything typed or pasted on a phone. */
@@ -64,6 +66,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
         deps.writeTerminal(sessionId, data);
       },
       ...gitMethods(deps.git),
+      ...statusMethods(deps.status),
     },
     streams: {
       'terminals.follow': async (params, sink) => {

@@ -18,6 +18,7 @@ struct AppIntents {
     var dismissConfirm: () -> Void = {}
     var dismissNotice: () -> Void = {}
     var git = GitIntents()
+    var status = StatusIntents()
 }
 
 let appTabs = [

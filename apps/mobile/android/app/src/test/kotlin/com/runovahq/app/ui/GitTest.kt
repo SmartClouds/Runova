@@ -60,25 +60,7 @@ private fun view(
     confirm: ConfirmView? = null,
     notice: String? = null,
     error: String? = null,
-) = AppView(
-    AuthState.SIGNED_IN,
-    true,
-    emptyList(),
-    false,
-    connected,
-    emptyList(),
-    false,
-    selected,
-    emptyList(),
-    false,
-    null,
-    emptyList(),
-    git,
-    false,
-    notice,
-    confirm,
-    error,
-)
+) = appView(connection = connected, selected = selected, git = git, notice = notice, confirm = confirm, error = error)
 
 private fun screen(
     diff: GitDiffView? = null,

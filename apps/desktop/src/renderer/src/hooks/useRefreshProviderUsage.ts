@@ -1,8 +1,7 @@
-import { getUsageProvider, type ProviderUsage } from '@runova/core';
+import { getUsageProvider, mergeProviderUsage, type ProviderUsage } from '@runova/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@/lib/queryKeys';
-import { mergeProviderUsage } from '@/lib/statusBarLimits';
 
 /**
  * Re-reads one provider on demand and puts the result into the usage list the rest of the app

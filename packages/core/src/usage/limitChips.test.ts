@@ -1,6 +1,6 @@
-import { emptyUsageTokens, type ProviderUsage, type SubscriptionWindow } from '@runova/core';
 import { describe, expect, it } from 'vitest';
-import { buildLimitChips, liveWindows, mergeProviderUsage } from './statusBarLimits';
+import { buildLimitChips, liveWindows, mergeProviderUsage } from './limitChips.js';
+import { emptyUsageTokens, type ProviderUsage, type SubscriptionWindow } from './types.js';
 
 /**
  * What the status bar draws for each provider, worked out from the usage list alone. A read that

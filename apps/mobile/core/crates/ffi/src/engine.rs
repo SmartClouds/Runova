@@ -6,7 +6,7 @@ use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_s
 use crate::terminals::OpenTerminal;
 use crate::view::{
     AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, GitScreen, ProjectView,
-    Section, SystemView, ViewListener,
+    Section, StatusScreen, SystemView, ViewListener,
 };
 use async_trait::async_trait;
 use runova_api::auth::{
@@ -264,6 +264,7 @@ pub(crate) struct Runner {
     pub(crate) section: Option<Section>,
     ticker: Option<JoinHandle<()>>,
     pending_confirm: Option<Task>,
+    pub(crate) ticks: u32,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -324,6 +325,7 @@ impl Runner {
             section: None,
             ticker: None,
             pending_confirm: None,
+            ticks: 0,
         }
     }
 
@@ -394,6 +396,7 @@ impl Runner {
         if self.section.is_none() || self.session.is_none() {
             return;
         }
+        self.ticks = 0;
         self.refresh_section();
         let attempt = self.attempt;
         let every = self.deps.refresh_every;
@@ -412,6 +415,7 @@ impl Runner {
         match self.section {
             Some(Section::Clis) => self.load_terminals(),
             Some(Section::Git) => self.load_git(),
+            Some(Section::Status) => self.refresh_status(),
             None => {}
         }
     }
@@ -468,6 +472,7 @@ impl Runner {
         self.open_terminal = None;
         self.view.selected_project = None;
         self.view.git = GitScreen::default();
+        self.view.status = StatusScreen::default();
         self.view.confirm = None;
         self.pending_confirm = None;
         self.view.busy = false;

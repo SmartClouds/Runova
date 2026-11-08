@@ -4,6 +4,7 @@ let deviceTabs = [
     TabItem(id: "projects", title: "Projects", icon: RunovaIcons.folder),
     TabItem(id: "clis", title: "CLIs", icon: RunovaIcons.terminal),
     TabItem(id: "git", title: "Git", icon: RunovaIcons.git),
+    TabItem(id: "status", title: "Status", icon: RunovaIcons.monitoring),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -39,6 +40,7 @@ struct DeviceShell: View {
         switch section {
         case "clis": return .clis
         case "git": return .git
+        case "status": return .status
         default: return nil
         }
     }
@@ -52,6 +54,8 @@ struct DeviceShell: View {
                 DiffScreen(diff: diff, intents: intents.git)
             } else if view.git.branchesOpen {
                 BranchesScreen(git: view.git, intents: intents.git)
+            } else if let provider = view.status.providers.first(where: { $0.providerId == view.status.detail }) {
+                ProviderScreen(provider: provider, intents: intents.status)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
@@ -64,6 +68,7 @@ struct DeviceShell: View {
                                     .frame(maxHeight: .infinity, alignment: .top)
                                 if let error = view.error { ErrorLine(message: error) }
                             }
+                        case "status": StatusTab(view: view, intents: intents.status)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }
                     }

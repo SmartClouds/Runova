@@ -15,9 +15,9 @@ sample every 4 s, and only while visible.
 
 ## Tasks
 
-- [ ] T1 Bridge methods with visibility-driven subscriptions
-- [ ] T2 `store` and the strip
-- [ ] T3 Detail screen for all providers, with charts
+- [x] T1 Bridge methods with visibility-driven subscriptions
+- [x] T2 `store` and the strip
+- [x] T3 Detail screen for all providers, with charts
 
 ## Acceptance criteria
 
@@ -28,3 +28,10 @@ sample every 4 s, and only while visible.
 ## Not in this epic
 
 Usage alerts, which are E82.
+
+## Status
+
+The bridge, the core and the Android screens are tested, and the desktop and a phone share one
+system reading so the CPU figures stay steady. Only limits, CPU, memory and network are here so far:
+the bar's Relay, Run, SFTP, Docker, Android and Keep awake items are not on the phone. Owed: AC1 on a
+real computer, and the iOS screens have never been compiled.

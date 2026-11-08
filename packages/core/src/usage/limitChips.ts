@@ -1,9 +1,9 @@
+import { getUsageProvider } from './registry.js';
 import {
-  getUsageProvider,
   type ProviderUsage,
   STATUS_BAR_USAGE_PROVIDERS,
   type SubscriptionWindow,
-} from '@runova/core';
+} from './types.js';
 
 /**
  * ok: the account's own numbers. estimate: worked out from local logs because the account did not

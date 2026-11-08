@@ -248,6 +248,26 @@ fun RunovaTopBar(title: String, onBack: (() -> Unit)? = null, trailing: (@Compos
 
 data class TabItem(val id: String, val title: String, val icon: String)
 
+/** How full something is. It warns near the limit, as the desktop's status bar does. */
+@Composable
+fun RunovaProgress(percent: Double, modifier: Modifier = Modifier) {
+    val colors = RunovaTheme.colors
+    val fill = when {
+        percent >= 90 -> colors.destructive
+        percent >= 75 -> colors.warning
+        else -> colors.primary
+    }
+    Box(modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(colors.secondary)) {
+        Box(
+            Modifier
+                .fillMaxWidth((percent / 100).toFloat().coerceIn(0f, 1f))
+                .height(6.dp)
+                .clip(CircleShape)
+                .background(fill),
+        )
+    }
+}
+
 /** A small control: a terminal key, a filter, a shortcut. */
 @Composable
 fun RunovaChip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {

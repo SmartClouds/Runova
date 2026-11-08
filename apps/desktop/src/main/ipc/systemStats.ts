@@ -20,6 +20,7 @@ import { readCpuArch } from '../system/cpuArch';
 import { sampleGpus } from '../system/gpuStats';
 import { sampleMemory } from '../system/memoryStats';
 import { asArray, runPowerShellJson } from '../system/processTree';
+import { sharedSample } from '../system/sharedSample';
 import {
   type CpuTemperature,
   sampleCpuTemperature,
@@ -27,6 +28,9 @@ import {
   sampleMemoryTemperature,
   WHOLE_DISK_NAME,
 } from '../system/temperatureStats';
+
+/** Half the status bar's 4 seconds, so a phone reading in between shares its reading. */
+const SYSTEM_SAMPLE_SHARED_MS = 2000;
 
 const execFileAsync = promisify(execFile);
 
@@ -953,36 +957,41 @@ export function registerSystemStatsHandlers(): void {
 
   ipcMain.handle(IPC.system.killProcess, async (_event, pid: number) => killProcess(pid));
 
-  ipcMain.handle(IPC.system.sample, async (): Promise<SystemStatsSample> => {
-    const settings = await store.getSettings();
-    const temperature = sampleCpuTemperatureCached();
-    const memTempC = sampleMemoryTemperatureCached();
-    const diskTemps = sampleDiskTemperaturesCached();
-    const [net, pings, diskRates, gpus, cpu, memory] = await Promise.all([
-      sampleNetworkRates(),
-      probeAll(settings),
-      sampleDisksCached(),
-      sampleGpusCached(),
-      sampleCpu(),
-      sampleMemory(),
-    ]);
-    return {
-      timestamp: Date.now(),
-      cpuModel,
-      cpuCoreCount: cpu.cpuCorePercents.length,
-      cpuArch,
-      ...temperature,
-      cpuPercent: cpu.cpuPercent,
-      cpuCorePercents: cpu.cpuCorePercents,
-      ...memory,
-      memTempC,
-      disks: diskRates.map((disk) => ({
-        ...disk,
-        tempC: diskTemps[diskTemperatureKey(disk.id)] ?? null,
-      })),
-      gpus,
-      ...net,
-      pings,
-    };
-  });
+  ipcMain.handle(IPC.system.sample, (): Promise<SystemStatsSample> => sampleSystemStats());
 }
+
+async function readSystemStats(): Promise<SystemStatsSample> {
+  const settings = await store.getSettings();
+  const temperature = sampleCpuTemperatureCached();
+  const memTempC = sampleMemoryTemperatureCached();
+  const diskTemps = sampleDiskTemperaturesCached();
+  const [net, pings, diskRates, gpus, cpu, memory] = await Promise.all([
+    sampleNetworkRates(),
+    probeAll(settings),
+    sampleDisksCached(),
+    sampleGpusCached(),
+    sampleCpu(),
+    sampleMemory(),
+  ]);
+  return {
+    timestamp: Date.now(),
+    cpuModel,
+    cpuCoreCount: cpu.cpuCorePercents.length,
+    cpuArch,
+    ...temperature,
+    cpuPercent: cpu.cpuPercent,
+    cpuCorePercents: cpu.cpuCorePercents,
+    ...memory,
+    memTempC,
+    disks: diskRates.map((disk) => ({
+      ...disk,
+      tempC: diskTemps[diskTemperatureKey(disk.id)] ?? null,
+    })),
+    gpus,
+    ...net,
+    pings,
+  };
+}
+
+/** The desktop's status bar and a phone can both read this without disturbing each other. */
+export const sampleSystemStats = sharedSample(readSystemStats, SYSTEM_SAMPLE_SHARED_MS);

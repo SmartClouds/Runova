@@ -127,6 +127,76 @@ pub struct TerminalProcessView {
 pub enum Section {
     Clis,
     Git,
+    Status,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct SystemStatsView {
+    pub cpu_percent: f64,
+    pub cpu_label: String,
+    pub cpu_detail: String,
+    pub mem_percent: f64,
+    pub mem_label: String,
+    pub net_down_label: String,
+    pub net_up_label: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum LimitState {
+    /// The account's own numbers.
+    Ok,
+    /// Worked out from local logs because the account did not answer.
+    Estimate,
+    /// The last numbers the account gave.
+    Stale,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LimitWindowView {
+    pub label: String,
+    pub percent: f64,
+    pub percent_label: String,
+    pub resets_label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct LimitChipView {
+    pub provider_id: String,
+    pub name: String,
+    pub plan: Option<String>,
+    pub state: LimitState,
+    pub windows: Vec<LimitWindowView>,
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ProviderState {
+    Ok,
+    Connect,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ProviderUsageView {
+    pub provider_id: String,
+    pub name: String,
+    pub state: ProviderState,
+    pub error: Option<String>,
+    pub today_label: Option<String>,
+    pub week_label: Option<String>,
+    pub month_label: Option<String>,
+    pub series: Vec<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
+pub struct StatusScreen {
+    pub system: Option<SystemStatsView>,
+    pub loading: bool,
+    pub limits: Vec<LimitChipView>,
+    pub providers: Vec<ProviderUsageView>,
+    /// The provider whose detail is open.
+    pub detail: Option<String>,
 }
 
 /// Asked before anything hard to undo.
@@ -234,6 +304,7 @@ pub struct AppView {
     pub terminal: Option<TerminalView>,
     pub terminal_processes: Vec<TerminalProcessView>,
     pub git: GitScreen,
+    pub status: StatusScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -258,6 +329,7 @@ impl AppView {
             terminal: None,
             terminal_processes: Vec::new(),
             git: GitScreen::default(),
+            status: StatusScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

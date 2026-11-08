@@ -19,5 +19,7 @@ thiserror.workspace = true
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 runova-protocol.workspace = true
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "test-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "test-util", "net"] }
+tokio-tungstenite = "0.26"

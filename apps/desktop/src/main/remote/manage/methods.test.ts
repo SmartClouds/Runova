@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ManageGitDeps } from './gitMethods';
 import { createManageMethods, type ManageMethodDeps } from './methods';
 import type { ManageStreamSink } from './session';
+import type { ManageStatusDeps } from './statusMethods';
 
 const context = { phone: { key: 'k', name: 'Runova app', scopes: ['core' as const] } };
 
@@ -17,6 +18,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     writeTerminal: () => undefined,
     terminalProcesses: async () => [],
     git: {} as ManageGitDeps,
+    status: {} as ManageStatusDeps,
     ...change,
   };
 }
