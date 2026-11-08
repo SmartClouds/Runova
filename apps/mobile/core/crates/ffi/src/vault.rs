@@ -66,7 +66,7 @@ struct RevealDto {
     value: String,
 }
 
-/// Wiped however it ends up unused, so a reply that comes too late leaves nothing behind.
+/// Wiped when it ends up unused. What the link and JSON layers held on the way here is not.
 impl Drop for RevealDto {
     fn drop(&mut self) {
         self.value.zeroize();
@@ -211,7 +211,8 @@ impl Runner {
         self.pending_reveal = None;
     }
 
-    /// Wipes the value from every copy this process holds.
+    /// Wipes the value from the copies the engine holds. The JVM or Swift copy it published can't
+    /// be reached from here, and goes when that side frees it.
     pub(crate) fn forget_secret(&mut self) {
         if let Some(mut secret) = self.view.vault.revealed.take() {
             secret.value.zeroize();
@@ -337,7 +338,10 @@ impl Runner {
             Some(json!({ "id": entry, "field": field })),
             move |view: &mut AppView, mut dto: RevealDto| {
                 // Still looking at this entry and still on this screen, or it is dropped and wiped.
-                if view.vault.on_show && view.vault.open_entry.as_deref() == Some(&asked_for) {
+                let wanted = view.vault.on_show
+                    && !view.vault.in_background
+                    && view.vault.open_entry.as_deref() == Some(&asked_for);
+                if wanted {
                     view.vault.revealed = Some(RevealedSecretView {
                         label,
                         value: std::mem::take(&mut dto.value),

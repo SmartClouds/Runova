@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useAnywhere } from '@/stores/anywhereStore';
 import { ManageScopeToggles, PermissionToggles } from './AccessSettingsDialog';
 
-/** Off to start with are the ones that reach secrets or the screen. */
+/** Off to start with are the Vault, servers, the screen and files. */
 const DEFAULT_PHONE_SCOPES: ManageScope[] = ['terminal', 'git', 'ops'];
 
 function initials(name: string): string {
@@ -95,6 +95,14 @@ function Request({
                   : `${name} wants to control this computer`}
             </h1>
             <p className="truncate text-xs text-muted-foreground">{request.controller.email}</p>
+            {request.controller.fingerprint ? (
+              <p className="text-xs text-muted-foreground">
+                Check the phone shows{' '}
+                <span className="font-mono font-medium text-foreground">
+                  {request.controller.fingerprint}
+                </span>
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <Chip tone={request.relation === 'own' ? 'primary' : 'neutral'}>
                 {request.relation === 'own'
@@ -154,7 +162,8 @@ function Request({
             <X />
             Decline
           </Button>
-          <Button shape="pill" autoFocus onClick={() => answer(true)}>
+          {/* A phone is trusted for good, so a stray key press must not approve it. */}
+          <Button shape="pill" autoFocus={!isPhone} onClick={() => answer(true)}>
             <Check />
             {isPhone ? 'Approve phone' : 'Accept'}
           </Button>

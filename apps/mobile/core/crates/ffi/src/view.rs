@@ -500,6 +500,8 @@ pub struct VaultScreen {
     pub loading: bool,
     /// While true, native code blocks screenshots and hides the app switcher preview.
     pub on_show: bool,
+    /// The app has left the screen, so a value that arrives now is not kept.
+    pub in_background: bool,
     pub unlock_error: Option<String>,
     pub entries: Vec<VaultEntryView>,
     pub open_entry: Option<String>,
@@ -734,6 +736,8 @@ pub struct AppView {
     pub account: AccountScreen,
     pub notifications: NotificationsScreen,
     pub remote: Option<RemoteView>,
+    /// The code to compare with the one the computer shows while it asks about this phone.
+    pub phone_fingerprint: Option<String>,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -766,6 +770,7 @@ impl AppView {
             account: AccountScreen::default(),
             notifications: NotificationsScreen::default(),
             remote: None,
+            phone_fingerprint: None,
             busy: false,
             notice: None,
             confirm: None,

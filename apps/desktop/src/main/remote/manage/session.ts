@@ -75,6 +75,8 @@ const MAX_CALLS_IN_FLIGHT = 16;
 const MAX_SUBSCRIPTIONS = 32;
 /** Past this many unsent bytes, a stream of values keeps only its latest. */
 const SLOW_LINK_BYTES = 1024 * 1024;
+/** Past this many unsent bytes a phone has stopped reading. It can follow again from a snapshot. */
+const STALLED_LINK_BYTES = 32 * 1024 * 1024;
 const DRAIN_CHECK_MS = 100;
 
 interface Subscription {
@@ -117,7 +119,7 @@ export function createManageSession(options: {
   }
 
   function record(name: string, method: ManageMethod, outcome: 'ok' | 'failed'): void {
-    if (method.risk !== 'read')
+    if (method.risk !== 'read' || method.audited)
       audit({ phone: phone.name, method: name, risk: method.risk, outcome });
   }
 
@@ -193,6 +195,7 @@ export function createManageSession(options: {
       end(id, 'busy', 'This computer is busy. Try again in a moment.');
       return;
     }
+    if (method.audited) record(name, method, 'ok');
     const subscription: Subscription = { stop: null, ended: false, latest: null, timer: null };
     subscriptions.set(id, subscription);
     const sink: ManageStreamSink = {
@@ -206,9 +209,13 @@ export function createManageSession(options: {
         subscription.timer ??= setTimeout(() => flushLatest(id, subscription), DRAIN_CHECK_MS);
       },
       binary(payload) {
-        if (!subscription.ended && !closed) {
-          link.send(encodeManageStream(id, payload), { binary: true });
+        if (subscription.ended || closed) return;
+        if (link.bufferedAmount >= STALLED_LINK_BYTES) {
+          stopSubscription(id, subscription);
+          end(id, 'busy', 'The phone stopped keeping up with this.');
+          return;
         }
+        link.send(encodeManageStream(id, payload), { binary: true });
       },
       end(code, message) {
         if (subscription.ended) return;

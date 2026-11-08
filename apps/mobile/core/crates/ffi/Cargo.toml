@@ -29,6 +29,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"
 runova-crypto.workspace = true
 thiserror.workspace = true
 uniffi = { version = "0.29", features = ["cli"] }
+sha2.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]

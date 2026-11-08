@@ -8,7 +8,9 @@ import {
 } from '../../git/plumbing';
 import {
   abortOperation,
+  assertConflicted,
   assertRepoPaths,
+  assertUntracked,
   listStashes,
   readFileDiff,
   readWorkspaceGitState,
@@ -36,6 +38,7 @@ export const liveGit: ManageGitDeps = {
     const { root } = await requireRepo(projectId);
     const [safe] = assertRepoPaths(root, [path]);
     const [orig] = origPath ? assertRepoPaths(root, [origPath]) : [undefined];
+    if (side === 'untracked') await assertUntracked(root, safe);
     const file = await readFileDiff(root, safe, side, orig);
     if (file.binary || file.tooLarge) {
       return { binary: file.binary, tooLarge: file.tooLarge, raw: '', untracked: null };
@@ -111,6 +114,7 @@ export const liveGit: ManageGitDeps = {
   resolve: (projectId, path, pick) =>
     workspaceGitOp(projectId, async ({ root }) => {
       const [safe] = assertRepoPaths(root, [path]);
+      await assertConflicted(root, safe);
       await resolveConflict(root, safe, pick);
       return `Kept ${pick === 'ours' ? 'your' : 'their'} version of ${safe}.`;
     }),

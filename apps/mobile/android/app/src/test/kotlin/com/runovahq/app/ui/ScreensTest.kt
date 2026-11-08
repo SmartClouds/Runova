@@ -137,6 +137,16 @@ class ScreensTest {
     }
 
     @Test
+    fun waitingShowsTheCodeToCompareOnTheComputer() {
+        val waiting = connection(ConnectionPhase.WAITING_FOR_APPROVAL)
+        compose.setContent {
+            RunovaTheme(dark = true) { AppRoot(appView(connection = waiting, phoneFingerprint = "4BB0 6F8E"), "systems", {}, AppIntents()) }
+        }
+
+        compose.onNodeWithText("It should show 4BB0 6F8E").assertExists()
+    }
+
+    @Test
     fun aFailureSaysWhyAndOffersARetry() {
         var retried = -1L
         show(

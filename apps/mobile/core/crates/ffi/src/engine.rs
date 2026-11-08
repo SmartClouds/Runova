@@ -5,7 +5,9 @@ use crate::account::PendingStepUp;
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::notifications::{FeedConnector, FeedEvent};
 use crate::remote::RemoteSession;
-use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
+use crate::secure::{
+    SecurePins, SecureStore, device_id, identity_key, identity_seed, phone_fingerprint,
+};
 use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
 use crate::view::{
@@ -29,6 +31,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep_until};
+use zeroize::Zeroize;
 
 const SIGN_IN_FAILED: &str = "Couldn't sign in. Try again.";
 const HUB_EVENT_QUEUE: usize = 256;
@@ -551,6 +554,9 @@ impl Runner {
 
     fn publish(&mut self) {
         if self.published.as_ref() != Some(&self.view) {
+            if let Some(mut old) = self.published.take().and_then(|view| view.vault.revealed) {
+                old.value.zeroize();
+            }
             self.published = Some(self.view.clone());
             self.deps.listener.on_view(self.view.clone());
         }
@@ -683,6 +689,8 @@ impl Runner {
             return;
         };
         self.view.connection = Some(view);
+        self.view.phone_fingerprint =
+            Some(phone_fingerprint(identity_seed(self.deps.secure.as_ref())));
         self.return_to = Some(system_id);
         let attempt = self.attempt;
         let target = ConnectTarget {
@@ -891,9 +899,11 @@ impl Runner {
             }
             Command::Lifecycle(AppLifecycle::Backgrounded { grace_ms }) => {
                 self.forget_secret();
+                self.view.vault.in_background = true;
                 self.let_go_at = Some(Instant::now() + Duration::from_millis(grace_ms));
             }
             Command::Lifecycle(AppLifecycle::Foregrounded) => {
+                self.view.vault.in_background = false;
                 self.let_go_at = None;
                 if self.view.auth == AuthState::SignedIn && self.hub.is_none() {
                     self.boot();

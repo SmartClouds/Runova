@@ -2,7 +2,13 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hasGit, initGitRepo } from '../../test/main/fixtures';
-import { readCommitFileImageDiff, readFileImageDiff, readWorkspaceGitState } from './workspaceGit';
+import {
+  assertConflicted,
+  assertUntracked,
+  readCommitFileImageDiff,
+  readFileImageDiff,
+  readWorkspaceGitState,
+} from './workspaceGit';
 
 /**
  * The changes panel's totals only add up if every side carries line counts. Git hands them over
@@ -13,6 +19,34 @@ import { readCommitFileImageDiff, readFileImageDiff, readWorkspaceGitState } fro
 const git = hasGit();
 const lines = (count: number, text = 'line'): string =>
   Array.from({ length: count }, (_, i) => `${text} ${i}`).join('\n') + '\n';
+
+describe.runIf(git)('what a phone may read as a new file', () => {
+  it('allows a file git lists as untracked', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+    writeFileSync(join(repo.dir, 'fresh.ts'), 'x\n');
+
+    await expect(assertUntracked(repo.dir, 'fresh.ts')).resolves.toBeUndefined();
+  });
+
+  it('refuses a file that is ignored, so a .env stays on the computer', async () => {
+    const repo = initGitRepo({ '.gitignore': '.env\n' });
+    writeFileSync(join(repo.dir, '.env'), 'SECRET=1\n');
+
+    await expect(assertUntracked(repo.dir, '.env')).rejects.toThrow('.env');
+  });
+
+  it('refuses git internals', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+
+    await expect(assertUntracked(repo.dir, '.git/config')).rejects.toThrow('.git/config');
+  });
+
+  it('only resolves a file that is really in conflict', async () => {
+    const repo = initGitRepo({ 'README.md': '# test\n' });
+
+    await expect(assertConflicted(repo.dir, 'README.md')).rejects.toThrow('README.md');
+  });
+});
 
 describe.runIf(git)('readWorkspaceGitState line counts', () => {
   it('counts the lines in an untracked file', async () => {

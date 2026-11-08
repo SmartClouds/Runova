@@ -94,7 +94,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
                     remote != null -> RemoteViewerScreen(remote, intents.remote)
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
-                    else -> ConnectionScreen(connection, intents)
+                    else -> ConnectionScreen(connection, intents, view.phoneFingerprint)
                 }
             }
         }
@@ -282,7 +282,7 @@ private fun phaseText(connection: ConnectionView) = when (connection.phase) {
 }
 
 @Composable
-fun ConnectionScreen(connection: ConnectionView, intents: AppIntents) {
+fun ConnectionScreen(connection: ConnectionView, intents: AppIntents, fingerprint: String? = null) {
     val colors = RunovaTheme.colors
     val failed = connection.phase == ConnectionPhase.FAILED
     val text = phaseText(connection)
@@ -300,6 +300,9 @@ fun ConnectionScreen(connection: ConnectionView, intents: AppIntents) {
             )
             RunovaText(text.title, style = RunovaType.title, align = TextAlign.Center)
             RunovaText(text.detail, color = colors.mutedForeground, align = TextAlign.Center)
+            if (connection.phase == ConnectionPhase.WAITING_FOR_APPROVAL && fingerprint != null) {
+                RunovaText("It should show $fingerprint", style = RunovaType.title, align = TextAlign.Center)
+            }
             if (failed) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

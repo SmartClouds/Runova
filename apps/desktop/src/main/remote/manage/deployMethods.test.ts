@@ -160,6 +160,19 @@ describe('deploy methods', () => {
     expect(result).toEqual({ ok: true, message: 'Restarted.' });
   });
 
+  it('refuses a container or app name that could not be one', async () => {
+    await expect(
+      call(deps(), 'deploy.containerAction', {
+        serverId: 'srv1',
+        containerId: '../../etc',
+        action: 'stop',
+      }),
+    ).rejects.toBeInstanceOf(ManageError);
+    await expect(
+      call(deps(), 'deploy.stackAction', { serverId: 'srv1', stack: 'a b', action: 'stop' }),
+    ).rejects.toBeInstanceOf(ManageError);
+  });
+
   it('refuses an action the phone does not offer', async () => {
     await expect(
       call(deps(), 'deploy.containerAction', {

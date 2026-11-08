@@ -46,6 +46,7 @@ export interface ManageDeployDeps {
 }
 
 const SERVER_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$/;
 const LOG_TAIL = 200;
 const DONE: Record<PhoneContainerAction, string> = {
   start: 'Started.',
@@ -68,6 +69,12 @@ function serverId(params: unknown): string {
 function text(params: unknown, name: string, say: string): string {
   const value = field(params, name);
   if (typeof value !== 'string' || value.length === 0) throw new ManageError('bad-params', say);
+  return value;
+}
+
+function resource(params: unknown, name: string, say: string): string {
+  const value = text(params, name, say);
+  if (!RESOURCE_ID.test(value)) throw new ManageError('bad-params', say);
   return value;
 }
 
@@ -169,27 +176,27 @@ export function deployMethods(deps: ManageDeployDeps): ManageMethods['calls'] {
     'deploy.overview': async (params) => overview(deps, serverId(params)),
     'deploy.containerAction': async (params) => {
       const id = serverId(params);
-      const container = text(params, 'containerId', 'Say which container.');
+      const container = resource(params, 'containerId', 'Say which container.');
       const chosen = action(params, ['start', 'stop', 'restart'] as const);
       return report(() => deps.containerAction(id, container, chosen), DONE[chosen]);
     },
     'deploy.containerLogs': async (params): Promise<ManageDeployLogLine[]> => {
       const lines = await deps.logs(
         serverId(params),
-        text(params, 'containerId', 'Say which container.'),
+        resource(params, 'containerId', 'Say which container.'),
         LOG_TAIL,
       );
       return lines.map((line) => ({ text: line.text, error: line.stream === 'stderr' }));
     },
     'deploy.stackAction': async (params) => {
       const id = serverId(params);
-      const stack = text(params, 'stack', 'Say which app.');
+      const stack = resource(params, 'stack', 'Say which app.');
       const chosen = action(params, ['start', 'stop', 'restart'] as const);
       return report(() => deps.stackAction(id, stack, chosen), 'Started the job.');
     },
     'deploy.stackRedeploy': async (params) => {
       const id = serverId(params);
-      const name = text(params, 'stack', 'Say which app.');
+      const name = resource(params, 'stack', 'Say which app.');
       const found = (await deps.stacks(id)).find((stack) => stack.id === name);
       if (found?.liveRevision === undefined) {
         throw new ManageError('bad-params', 'That app has nothing deployed to redeploy.');

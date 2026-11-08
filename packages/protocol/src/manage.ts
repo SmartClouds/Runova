@@ -24,6 +24,8 @@ export type ManageRisk = 'read' | 'write' | 'danger';
 export interface ManageMethod {
   scope: ManageScope;
   risk: ManageRisk;
+  /** A read worth a line in the audit log anyway, because of what it shows. */
+  audited?: boolean;
 }
 
 /** Scopes a person can switch per phone. `core` comes with being trusted. */
@@ -41,7 +43,7 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'projects.list': { scope: 'core', risk: 'read' },
   'phone.forget': { scope: 'core', risk: 'write' },
   'terminals.list': { scope: 'terminal', risk: 'read' },
-  'terminals.follow': { scope: 'terminal', risk: 'read' },
+  'terminals.follow': { scope: 'terminal', risk: 'read', audited: true },
   'terminals.write': { scope: 'terminal', risk: 'write' },
   'terminals.processes': { scope: 'terminal', risk: 'read' },
   'git.state': { scope: 'git', risk: 'read' },
@@ -68,7 +70,7 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'vault.status': { scope: 'vault', risk: 'read' },
   'vault.unlock': { scope: 'vault', risk: 'write' },
   'vault.lock': { scope: 'vault', risk: 'write' },
-  'vault.list': { scope: 'vault', risk: 'read' },
+  'vault.list': { scope: 'vault', risk: 'read', audited: true },
   'vault.reveal': { scope: 'vault', risk: 'danger' },
   'vault.save': { scope: 'vault', risk: 'write' },
   'vault.remove': { scope: 'vault', risk: 'danger' },

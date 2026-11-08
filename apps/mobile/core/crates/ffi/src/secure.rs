@@ -7,6 +7,7 @@ use runova_api::auth::{StoredTokens, TokenStore};
 use runova_crypto::handshake::{Identity, base64url, os_random};
 use runova_session::connect::PinStore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 const TOKENS: &str = "tokens";
@@ -86,6 +87,19 @@ pub fn identity_seed(store: &dyn SecureStore) -> [u8; 32] {
 
 pub fn identity_key(seed: [u8; 32]) -> String {
     base64url(&Identity::from_seed(seed).public_key())
+}
+
+/// A short code for a key, compared with the one the computer shows before approving this phone.
+pub fn key_fingerprint(key: &[u8]) -> String {
+    let hash = Sha256::digest(key);
+    format!(
+        "{:02X}{:02X} {:02X}{:02X}",
+        hash[0], hash[1], hash[2], hash[3]
+    )
+}
+
+pub(crate) fn phone_fingerprint(seed: [u8; 32]) -> String {
+    key_fingerprint(&Identity::from_seed(seed).public_key())
 }
 
 /// This install's id, in the UUID form the server expects.

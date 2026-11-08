@@ -242,7 +242,7 @@ func fixtureView(
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
         monitoring: monitoring, pipelines: pipelines, account: account,
         notifications: notifications,
-        remote: remote,
+        remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 

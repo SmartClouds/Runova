@@ -461,6 +461,12 @@ async fn a_session_the_server_ended_signs_the_phone_out() {
     until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
 }
 
+#[test]
+fn a_phones_code_is_the_start_of_its_keys_hash() {
+    // The same key and the same answer as fingerprint.test.ts on the desktop.
+    assert_eq!(runova_ffi::secure::key_fingerprint(&[7; 32]), "4BB0 6F8E");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn signing_out_forgets_the_tokens_and_the_phones_identity() {
     let world = world();

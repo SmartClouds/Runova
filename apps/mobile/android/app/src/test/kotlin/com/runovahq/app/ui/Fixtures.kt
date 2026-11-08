@@ -52,6 +52,7 @@ fun appView(
     notice: String? = null,
     confirm: ConfirmView? = null,
     error: String? = null,
+    phoneFingerprint: String? = null,
 ) = AppView(
     auth,
     true,
@@ -74,6 +75,7 @@ fun appView(
     account,
     notifications,
     remote,
+    phoneFingerprint,
     false,
     notice,
     confirm,

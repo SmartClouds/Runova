@@ -143,6 +143,8 @@ enum AfterEnd {
 fn after_end(error: Option<RpcError>) -> AfterEnd {
     match error {
         Some(RpcError::FellBehind) => AfterEnd::FollowAgain,
+        // The computer cut the stream because the link backed up, not because the terminal ended.
+        Some(RpcError::Refused { ref code, .. }) if code == "busy" => AfterEnd::FollowAgain,
         Some(error) => AfterEnd::Over(Some(error.to_string())),
         None => AfterEnd::Over(None),
     }
@@ -378,6 +380,16 @@ mod tests {
     #[test]
     fn falling_behind_starts_over_instead_of_ending_the_terminal() {
         assert_eq!(after_end(Some(RpcError::FellBehind)), AfterEnd::FollowAgain);
+    }
+
+    #[test]
+    fn a_link_that_backed_up_follows_again_too() {
+        let busy = RpcError::Refused {
+            code: "busy".into(),
+            message: "x".into(),
+        };
+
+        assert_eq!(after_end(Some(busy)), AfterEnd::FollowAgain);
     }
 
     #[test]

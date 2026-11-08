@@ -103,6 +103,8 @@ export interface AnywhereIncoming {
     deviceName: string | null;
     platform: string | null;
     remoteId: string | null;
+    /** A short code for the phone's key, to compare with the one the phone shows. */
+    fingerprint: string | null;
   };
   teams: string[];
   receivedAt: number;

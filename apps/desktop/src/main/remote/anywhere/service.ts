@@ -34,6 +34,7 @@ import type { AttachableSocket, PeerPermissions } from '../manager';
 import { decideIncoming, decideManage, PasswordLockout } from './accessPolicy';
 import type { AgentInstaller } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
+import { keyFingerprint } from './fingerprint';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult, HubIncomingRequest } from './hub';
 import { SecureLink } from './link';
 import type { LinkOpener } from './links';
@@ -324,6 +325,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     if (retry) clearTimeout(retry);
     disconnect();
     for (const sessionId of [...hosted.keys()]) endHosted(sessionId);
+    endAllPhoneSessions();
     for (const p of pending.values()) clearTimeout(p.timer);
     pending.clear();
     status = 'signed-out';
@@ -368,6 +370,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         : {}),
     });
     await pushSettings();
+    if (settings && !settings.acceptConnections) endAllPhoneSessions();
     announce();
   }
 
@@ -739,6 +742,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         deviceName: request.controller.deviceName,
         platform: request.controller.platform,
         remoteId: request.controller.remoteId,
+        fingerprint:
+          request.intent === 'manage' && request.controller.identityKey
+            ? keyFingerprint(request.controller.identityKey)
+            : null,
       },
       teams: request.teams,
       receivedAt: now(),
@@ -907,6 +914,13 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       scopes: ['core', ...phone.scopes],
     });
     announce();
+  }
+
+  function endAllPhoneSessions(): void {
+    for (const [sessionId, session] of [...managed]) {
+      managed.delete(sessionId);
+      session.link.close();
+    }
   }
 
   function endPhoneSessions(key: string): void {

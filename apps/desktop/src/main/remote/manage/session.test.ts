@@ -316,6 +316,16 @@ describe('subscriptions', () => {
     ]);
   });
 
+  it('ends a byte stream the phone is not reading, rather than filling this computer', async () => {
+    const { link, emit } = watching();
+    await Promise.resolve();
+    link.bufferedAmount = 64 * 1024 * 1024;
+
+    emit().binary(new Uint8Array([1, 2, 3]));
+
+    expect(link.last()).toMatchObject({ t: 'rpc-end', id: 5, code: 'busy' });
+  });
+
   it('refuses a subscription id already in use', async () => {
     const { link } = watching();
     await Promise.resolve();

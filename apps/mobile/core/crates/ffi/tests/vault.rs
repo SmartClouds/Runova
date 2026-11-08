@@ -288,6 +288,28 @@ async fn going_to_the_background_forgets_the_value_at_once() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_value_that_arrives_after_going_to_the_background_is_not_kept() {
+    let world = unlocked_entry().await;
+    world
+        .computer
+        .answer("vault.reveal", json!({"value": "hunter2"}));
+    world.engine.vault_request_reveal("password".into(), false);
+    let view = world
+        .until(|v| v.vault.biometric.is_some(), "the prompt")
+        .await;
+
+    world
+        .engine
+        .biometric_result(view.vault.biometric.unwrap().id, true);
+    world.engine.lifecycle(AppLifecycle::Backgrounded {
+        grace_ms: 3_600_000,
+    });
+    tokio::time::sleep(Duration::from_millis(80)).await;
+
+    assert!(world.latest().unwrap().vault.revealed.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn locking_clears_the_list_and_the_value() {
     let world = revealed().await;
     world.computer.answer("vault.lock", json!(null));

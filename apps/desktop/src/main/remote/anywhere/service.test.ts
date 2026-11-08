@@ -1100,6 +1100,39 @@ describe('Runova Anywhere service: a phone asks to manage this computer', () => 
     await until(() => sam.incoming.length === 2, 'asked again');
   });
 
+  it('shows a code to compare with the phone before anyone approves it', async () => {
+    const { sam, phone, samId } = await withPhone();
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+
+    expect(sam.incoming[0].controller.fingerprint).toMatch(/^[0-9A-F]{4} [0-9A-F]{4}$/);
+  });
+
+  it('ends a phone session when the computer signs out', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve([]));
+    await until(() => sam.manage.sessions.length === 1);
+
+    await sam.service.stop();
+
+    await until(() => phone.state().outgoing === null, 'the phone sees the end');
+  });
+
+  it('ends a phone session when connections are switched off', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve([]));
+    await until(() => sam.manage.sessions.length === 1);
+
+    await sam.service.updateSettings({ acceptConnections: false });
+
+    await until(() => phone.state().outgoing === null, 'the phone sees the end');
+  });
+
   it('applies changed scopes by ending the session, so the phone reconnects with them', async () => {
     const { sam, phone, samId } = await withPhone();
     await phone.service.connect({ remoteId: samId, intent: 'manage' });

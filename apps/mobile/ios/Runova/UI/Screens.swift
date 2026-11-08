@@ -80,7 +80,7 @@ struct AppRoot: View {
             if connection.phase == .connected {
                 DeviceShell(view: view, connection: connection, tab: $tab, intents: intents)
             } else {
-                ConnectionScreen(connection: connection, intents: intents)
+                ConnectionScreen(connection: connection, intents: intents, fingerprint: view.phoneFingerprint)
             }
         } else if appSection == "monitors", let monitor = openMonitor {
             MonitorScreen(monitor: monitor, intents: intents.monitoring)
@@ -246,6 +246,7 @@ private func phaseText(_ connection: ConnectionView) -> (title: String, detail: 
 struct ConnectionScreen: View {
     let connection: ConnectionView
     let intents: AppIntents
+    var fingerprint: String?
 
     @Environment(\.palette) private var palette
 
@@ -260,6 +261,9 @@ struct ConnectionScreen: View {
                     color: failed ? palette.destructive : palette.primary)
                 RunovaText(text.title, style: RunovaType.title, alignment: .center)
                 RunovaText(text.detail, color: palette.mutedForeground, alignment: .center)
+                if connection.phase == .waitingForApproval, let fingerprint {
+                    RunovaText("It should show \(fingerprint)", style: RunovaType.title, alignment: .center)
+                }
                 if failed {
                     HStack(spacing: 8) {
                         RunovaButton(text: "Back", kind: .soft, action: intents.disconnect)

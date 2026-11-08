@@ -15,9 +15,9 @@ real keystore in CD secrets. iOS goes to TestFlight.
 
 - [ ] T1 Memory soak on both OS against the budgets
 - [ ] T2 Parity sweep over every screen
-- [ ] T3 Security review of the phone, the bridge and the push path
-- [ ] T4 CD for signed Android and TestFlight
-- [ ] T5 Version bumps in the release checklist
+- [x] T3 Security review of the phone, the bridge and the push path
+- [x] T4 CD for signed Android and TestFlight
+- [x] T5 Version bumps in the release checklist
 
 ## Acceptance criteria
 
@@ -29,3 +29,16 @@ real keystore in CD secrets. iOS goes to TestFlight.
 ## Not in this epic
 
 Store listings and website marketing.
+
+## Status
+
+T3: an independent review of the phone, the bridge and the push path found nothing of high severity. Its
+medium findings are fixed: a phone can only read files git lists as new, approval shows a code to compare
+and needs a deliberate press, and signing out or switching off access ends phone sessions. Still open by
+choice: a trusted phone connecting shows no desktop notification, and terminal access stays on by default
+at approval. The WebRTC transports and the server's PKCE exchange were not reviewed.
+
+T4 and T5: `cd-mobile.yml` builds from the tag, and the version comes from the tag too. It has never run,
+and needs the secrets in `docs/mobile/release.md`.
+
+T1 and T2 need real phones and a Mac, so they are open, as are AC1, AC2 and AC4.

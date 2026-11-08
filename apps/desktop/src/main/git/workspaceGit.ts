@@ -232,6 +232,26 @@ export function assertRepoPaths(root: string, paths: unknown): string[] {
 }
 
 /** Runs a git command that takes its paths on stdin, so any number of them fits. */
+/** Reads of a new file are limited to what git lists, so ignored files and `.git` stay put. */
+export async function assertUntracked(root: string, path: string): Promise<void> {
+  const state = await readWorkspaceGitState(root);
+  if (!state.untracked.some((entry) => entry.path === path)) {
+    throw new Error(`${path} is not a new file in this repository.`);
+  }
+  const [realRoot, realFile] = await Promise.all([realpath(root), realpath(resolve(root, path))]);
+  const inside = relative(realRoot, realFile);
+  if (!inside || inside.startsWith('..') || isAbsolute(inside)) {
+    throw new Error(`${path} is outside the repository.`);
+  }
+}
+
+export async function assertConflicted(root: string, path: string): Promise<void> {
+  const state = await readWorkspaceGitState(root);
+  if (!state.conflicts.some((entry) => entry.path === path)) {
+    throw new Error(`${path} is not in conflict.`);
+  }
+}
+
 async function withPathspecs(root: string, args: string[], paths: string[]): Promise<void> {
   await runGit(
     root,

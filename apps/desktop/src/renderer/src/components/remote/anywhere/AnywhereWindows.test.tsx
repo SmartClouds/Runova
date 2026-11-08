@@ -20,6 +20,7 @@ function request(change: Partial<AnywhereIncoming> = {}): AnywhereIncoming {
       deviceName: "Kim's laptop",
       platform: 'macos',
       remoteId: '111222333',
+      fingerprint: null,
     },
     teams: ['Ops'],
     receivedAt: Date.now(),
@@ -77,6 +78,7 @@ describe('the request window', () => {
         deviceName: 'Runova app',
         platform: 'android',
         remoteId: null,
+        fingerprint: null,
       },
     });
 
