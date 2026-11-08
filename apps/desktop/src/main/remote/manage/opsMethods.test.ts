@@ -248,6 +248,67 @@ describe('pipeline methods', () => {
     expect(result.lines.at(-1)?.text).toBe('line 2999');
   });
 
+  it('says what inputs a workflow takes', async () => {
+    const input = {
+      name: 'version',
+      description: 'Which version',
+      required: true,
+      type: 'string',
+      default: '',
+      options: [],
+    };
+    const status = async () =>
+      ({
+        projectId: 'p1',
+        cliAvailable: true,
+        authenticated: true,
+        github: { owner: 'sam', repo: 'site' },
+        workflows: [{ ...workflow, dispatchInputs: [input] }],
+        runsByWorkflowId: {},
+      }) as never;
+
+    const result = (await call(
+      'pipelines.status',
+      { projectId: 'p1' },
+      monitoring(),
+      pipelines({ status }),
+    )) as { workflows: { inputs: unknown[] }[] };
+
+    expect(result.workflows[0].inputs).toEqual([input]);
+  });
+
+  it('passes the inputs it was given along', async () => {
+    const dispatch = vi.fn(async () => ({ ok: true }) as never);
+
+    await call(
+      'pipelines.dispatch',
+      { projectId: 'p1', workflowId: 7, inputs: { version: '1.2.3' } },
+      monitoring(),
+      pipelines({ dispatch }),
+    );
+
+    expect(dispatch).toHaveBeenCalledWith({
+      repo: 'sam/site',
+      workflowId: 7,
+      ref: 'main',
+      inputs: { version: '1.2.3' },
+    });
+  });
+
+  it('refuses inputs that are not short named strings', async () => {
+    for (const inputs of [
+      { version: 1 },
+      { 'bad name': 'x' },
+      { version: 'x'.repeat(5000) },
+      Object.fromEntries(Array.from({ length: 40 }, (_, n) => [`k${n}`, 'x'])),
+      ['x'],
+    ]) {
+      await expect(
+        call('pipelines.dispatch', { projectId: 'p1', workflowId: 7, inputs }),
+      ).rejects.toBeInstanceOf(ManageError);
+    }
+  });
+
   it('dispatches on the default branch', async () => {
     const dispatch = vi.fn(async () => ({ ok: true }) as never);
     const afterAction = vi.fn();

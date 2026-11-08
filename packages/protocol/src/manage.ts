@@ -254,7 +254,20 @@ export interface ManagePipelineRun {
 
 export interface ManagePipelineStatus {
   problem: string | null;
-  workflows: { id: number; name: string; canDispatch: boolean; run: ManagePipelineRun | null }[];
+  workflows: {
+    id: number;
+    name: string;
+    canDispatch: boolean;
+    run: ManagePipelineRun | null;
+    inputs: {
+      name: string;
+      description: string;
+      required: boolean;
+      type: string;
+      default: string;
+      options: string[];
+    }[];
+  }[];
 }
 
 export interface ManageJobLog {

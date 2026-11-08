@@ -26,6 +26,7 @@ import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.ActivityView
 import uniffi.runova_ffi.MyInvitationView
 import uniffi.runova_ffi.ProfileView
+import uniffi.runova_ffi.RoleOptionView
 import uniffi.runova_ffi.Section
 import uniffi.runova_ffi.SessionView
 import uniffi.runova_ffi.StepUpView
@@ -43,13 +44,17 @@ private val sessions = listOf(
     SessionView(4, "Pixel", "Runova app, android", true),
     SessionView(9, "Sam's desk", "Runova desktop app, windows", false),
 )
-private val teams = listOf(TeamView(3, "Acme", "Owner", 2u))
+private val teams = listOf(TeamView(3, "Acme", "Owner", "owner", 2u))
 private val invitations = listOf(MyInvitationView(7, "Beta", "Member", "Lee"))
 private val team = TeamDetailView(
     3,
     "Acme",
+    "owner",
     true,
-    listOf(TeamMemberView(1, "Sam", "Owner"), TeamMemberView(2, "Lee", "Member")),
+    listOf(
+        TeamMemberView(1, "Sam", "Owner", false, emptyList()),
+        TeamMemberView(2, "Lee", "Member", true, listOf(RoleOptionView("admin", "Admin"), RoleOptionView("viewer", "Viewer"))),
+    ),
     listOf(TeamInvitationView(5, "new@example.com", "Member")),
 )
 
@@ -168,11 +173,24 @@ class AccountTest {
 
         compose.onNode(hasSetTextAction()).performTextInput("kim@example.com")
         compose.onNodeWithText("Invite").performClick()
+        compose.onNodeWithText("Lee").performClick()
         compose.onNode(hasContentDescription("Remove Lee")).performClick()
 
         assertEquals("kim@example.com", invited)
         assertEquals(2L, removed)
         snapshot("account-team")
+    }
+
+    @Test
+    fun aRoleCanBeChangedFromTheMember() {
+        var changed: Pair<Long, String>? = null
+        show(account(team), AccountIntents(setMemberRole = { id, role -> changed = id to role }))
+
+        compose.onNodeWithText("Lee").performClick()
+        compose.onNodeWithText("Make Admin").performClick()
+
+        assertEquals(2L to "admin", changed)
+        snapshot("account-team-member")
     }
 
     @Test

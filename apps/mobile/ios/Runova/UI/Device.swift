@@ -84,6 +84,8 @@ struct DeviceShell: View {
                 ServerScreen(server: server, error: view.error, intents: intents.deploy)
             } else if section == "monitoring", let monitor = openMonitor {
                 MonitorScreen(monitor: monitor, intents: intents.monitoring)
+            } else if let form = view.pipelines.dispatchForm {
+                DispatchForm(form: form, intents: intents.pipelines)
             } else if let log = view.pipelines.log {
                 JobLogScreen(log: log, intents: intents.pipelines)
             } else if let run = view.pipelines.run {

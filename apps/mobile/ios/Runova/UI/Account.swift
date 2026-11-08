@@ -11,6 +11,7 @@ struct AccountIntents {
     var invite: (String, String) -> Void = { _, _ in }
     var cancelInvitation: (Int64) -> Void = { _ in }
     var removeMember: (Int64) -> Void = { _ in }
+    var setMemberRole: (Int64, String) -> Void = { _, _ in }
     var acceptInvitation: (Int64) -> Void = { _ in }
     var declineInvitation: (Int64) -> Void = { _ in }
 }
@@ -166,6 +167,7 @@ private struct TeamScreen: View {
     let intents: AccountIntents
 
     @State private var email = ""
+    @State private var expanded: Int64?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -174,7 +176,7 @@ private struct TeamScreen: View {
                 HStack(spacing: 8) {
                     RunovaTextField(value: $email, placeholder: "Email address")
                     RunovaButton(text: "Invite", enabled: !email.isEmpty) {
-                        intents.invite(email, "Member")
+                        intents.invite(email, "member")
                         email = ""
                     }
                 }
@@ -184,12 +186,27 @@ private struct TeamScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Heading(text: "Members")
                     ForEach(team.members, id: \.userId) { member in
-                        HStack(spacing: 6) {
+                        Button {
+                            guard member.canChange else { return }
+                            expanded = expanded == member.userId ? nil : member.userId
+                        } label: {
                             RunovaListRow(title: member.name, detail: member.role, icon: RunovaIcons.account)
-                            if team.canManage && member.role != "Owner" {
-                                RunovaChip(text: "Remove") { intents.removeMember(member.userId) }
-                                    .accessibilityLabel("Remove \(member.name)")
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if expanded == member.userId {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(member.roleOptions, id: \.key) { option in
+                                        RunovaChip(text: "Make \(option.label)") {
+                                            intents.setMemberRole(member.userId, option.key)
+                                        }
+                                    }
+                                    RunovaChip(text: "Remove") { intents.removeMember(member.userId) }
+                                        .accessibilityLabel("Remove \(member.name)")
+                                }
                             }
+                            .padding(.bottom, 8)
                         }
                     }
                     if !team.invitations.isEmpty {

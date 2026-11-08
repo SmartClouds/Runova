@@ -26,13 +26,13 @@ fn answer_all(world: &World) {
     world.backend.answer(
         TEAMS,
         json!({"items": [
-            {"id": 3, "name": "Acme", "role": "Owner", "memberCount": 2},
-            {"id": 8, "name": "Guests", "role": "Member", "memberCount": 5},
+            {"id": 3, "name": "Acme", "role": "owner", "memberCount": 2},
+            {"id": 8, "name": "Guests", "role": "member", "memberCount": 5},
         ]}),
     );
     world.backend.answer(
         INVITATIONS,
-        json!({"items": [{"id": 7, "teamId": 12, "teamName": "Beta", "role": "Member", "invitedBy": "Lee", "expiresAt": "x"}]}),
+        json!({"items": [{"id": 7, "teamId": 12, "teamName": "Beta", "role": "member", "invitedBy": "Lee", "expiresAt": "x"}]}),
     );
     world.backend.answer(
         ACTIVITIES,
@@ -64,13 +64,13 @@ async fn on_team() -> World {
     world.backend.answer(
         "/api/v1/teams/3/members",
         json!({"items": [
-            {"userId": 1, "email": "sam@example.com", "displayName": "Sam", "role": "Owner"},
-            {"userId": 2, "email": "lee@example.com", "displayName": "Lee", "role": "Member"},
+            {"userId": 1, "email": "sam@example.com", "displayName": "Sam", "role": "owner"},
+            {"userId": 2, "email": "lee@example.com", "displayName": "Lee", "role": "member"},
         ]}),
     );
     world.backend.answer(
         "/api/v1/teams/3/invitations",
-        json!({"items": [{"id": 5, "email": "new@example.com", "role": "Member"}]}),
+        json!({"items": [{"id": 5, "email": "new@example.com", "role": "member"}]}),
     );
     world.engine.account_open_team(3);
     world
@@ -223,6 +223,15 @@ async fn a_team_shows_more_to_those_who_can_manage_it() {
 
     assert!(team.can_manage);
     assert_eq!(team.members.len(), 2);
+    assert_eq!(team.members[0].role, "Owner");
+    assert!(!team.members[0].can_change);
+    assert!(team.members[1].can_change);
+    let options: Vec<&str> = team.members[1]
+        .role_options
+        .iter()
+        .map(|o| o.label.as_str())
+        .collect();
+    assert_eq!(options, ["Admin", "Viewer"]);
     assert_eq!(team.invitations[0].email, "new@example.com");
 }
 
@@ -231,7 +240,7 @@ async fn an_ordinary_member_does_not_ask_for_invitations() {
     let world = on_account().await;
     world.backend.answer(
         "/api/v1/teams/8/members",
-        json!({"items": [{"userId": 1, "email": "e", "displayName": "Sam", "role": "Member"}]}),
+        json!({"items": [{"userId": 1, "email": "e", "displayName": "Sam", "role": "member"}]}),
     );
 
     world.engine.account_open_team(8);
@@ -257,7 +266,7 @@ async fn inviting_and_taking_back_an_invitation() {
 
     world
         .engine
-        .account_invite("kim@example.com".into(), "Member".into());
+        .account_invite("kim@example.com".into(), "member".into());
     world
         .until(|_| !world.backend.sent().is_empty(), "invited")
         .await;
@@ -266,7 +275,7 @@ async fn inviting_and_taking_back_an_invitation() {
         (
             "POST".to_owned(),
             "/api/v1/teams/3/invitations".to_owned(),
-            json!({"email": "kim@example.com", "role": "Member"})
+            json!({"email": "kim@example.com", "role": "member"})
         )
     );
 
@@ -280,6 +289,81 @@ async fn inviting_and_taking_back_an_invitation() {
             "DELETE".to_owned(),
             "/api/v1/teams/3/invitations/5".to_owned(),
             json!({})
+        )
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_admin_can_only_manage_members_and_viewers() {
+    let world = on_account().await;
+    world.backend.answer(
+        TEAMS,
+        json!({"items": [{"id": 6, "name": "Crew", "role": "admin", "memberCount": 3}]}),
+    );
+    world.backend.answer(
+        "/api/v1/teams/6/members",
+        json!({"items": [
+            {"userId": 1, "email": "a", "displayName": "Other admin", "role": "admin"},
+            {"userId": 2, "email": "b", "displayName": "Lee", "role": "viewer"},
+        ]}),
+    );
+    world
+        .backend
+        .answer("/api/v1/teams/6/invitations", json!({"items": []}));
+    world.engine.open_section(Some(Section::Account));
+    world
+        .until(
+            |v| v.account.teams.iter().any(|t| t.id == 6),
+            "the new list",
+        )
+        .await;
+
+    world.engine.account_open_team(6);
+    let view = world
+        .until(
+            |v| {
+                v.account
+                    .team
+                    .as_ref()
+                    .is_some_and(|t| !t.members.is_empty())
+            },
+            "the team",
+        )
+        .await;
+
+    let team = view.account.team.unwrap();
+    assert!(team.can_manage);
+    assert!(!team.members[0].can_change);
+    let options: Vec<&str> = team.members[1]
+        .role_options
+        .iter()
+        .map(|o| o.key.as_str())
+        .collect();
+    assert_eq!(options, ["member"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changing_a_role_needs_step_up_and_sends_the_new_role() {
+    let world = on_team().await;
+    world.backend.answer("/api/v1/teams/3/members/2", json!({}));
+
+    world.engine.account_set_member_role(2, "admin".into());
+    world
+        .until(|v| v.account.step_up.is_some(), "the form")
+        .await;
+    assert!(world.backend.sent().is_empty());
+
+    world.engine.account_submit_step_up(Some("pw".into()), None);
+    world
+        .until(|_| !world.backend.sent().is_empty(), "sent")
+        .await;
+
+    assert_eq!(
+        world.backend.sent()[0],
+        (
+            "PATCH".to_owned(),
+            "/api/v1/teams/3/members/2".to_owned(),
+            json!({"role": "admin", "password": "pw"})
         )
     );
 }

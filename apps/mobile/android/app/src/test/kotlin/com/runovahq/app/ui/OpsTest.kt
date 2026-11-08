@@ -1,6 +1,8 @@
 package com.runovahq.app.ui
 
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -20,7 +22,10 @@ import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
+import uniffi.runova_ffi.DispatchFormView
 import uniffi.runova_ffi.JobLogView
+import uniffi.runova_ffi.WorkflowInputKind
+import uniffi.runova_ffi.WorkflowInputView
 import uniffi.runova_ffi.LogLineView
 import uniffi.runova_ffi.MonitorSource
 import uniffi.runova_ffi.MonitorState
@@ -53,8 +58,8 @@ private fun monitoring(
 
 private val running = PipelineRunView(100, "Fix it", "master", 12u, PipelineRunState.RUNNING, "Running", true)
 private val workflows = listOf(
-    WorkflowView(7, "CI", true, running),
-    WorkflowView(9, "Never", false, null),
+    WorkflowView(7, "CI", true, running, emptyList()),
+    WorkflowView(9, "Never", false, null, emptyList()),
 )
 private val job = PipelineJobView(5, "build", PipelineRunState.FAILED, "Failed")
 
@@ -62,7 +67,14 @@ private fun pipelines(
     problem: String? = null,
     run: PipelineRunDetailView? = null,
     log: JobLogView? = null,
-) = PipelinesScreen(PipelinesStatusView(problem, if (problem == null) workflows else emptyList()), false, run, log)
+    form: DispatchFormView? = null,
+) = PipelinesScreen(PipelinesStatusView(problem, if (problem == null) workflows else emptyList()), false, run, log, form)
+
+private val inputs = listOf(
+    WorkflowInputView("version", "Which version", true, WorkflowInputKind.TEXT, "", emptyList()),
+    WorkflowInputView("channel", "Where to", false, WorkflowInputKind.CHOICE, "beta", listOf("beta", "stable")),
+    WorkflowInputView("dry", "", false, WorkflowInputKind.TOGGLE, "false", emptyList()),
+)
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -199,6 +211,33 @@ class OpsTest {
         compose.onNodeWithText("Run").performClick()
 
         assertEquals(7L, dispatched)
+    }
+
+    @Test
+    fun aFormCollectsAWorkflowsInputs() {
+        var sent: Map<String, String>? = null
+        val form = DispatchFormView(11, "Release", inputs, null)
+        show(
+            appView(connection = connected, selected = "p1", pipelines = pipelines(form = form)),
+            "pipelines",
+            AppIntents(pipelines = PipelineIntents(submitDispatch = { sent = it })),
+        )
+
+        compose.onNode(hasSetTextAction()).performTextInput("1.2.3")
+        compose.onNodeWithText("stable").performClick()
+        compose.onNode(hasContentDescription("dry")).performClick()
+        snapshot("pipeline-form")
+        compose.onNodeWithText("Run workflow").performClick()
+
+        assertEquals(mapOf("version" to "1.2.3", "channel" to "stable", "dry" to "true"), sent)
+    }
+
+    @Test
+    fun aFormSaysWhatIsMissing() {
+        val form = DispatchFormView(11, "Release", inputs, "Fill in version.")
+        show(appView(connection = connected, selected = "p1", pipelines = pipelines(form = form)), "pipelines")
+
+        compose.onNodeWithText("Fill in version.").assertExists()
     }
 
     @Test

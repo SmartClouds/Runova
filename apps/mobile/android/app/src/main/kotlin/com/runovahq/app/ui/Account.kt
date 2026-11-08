@@ -2,6 +2,8 @@ package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +58,7 @@ data class AccountIntents(
     val invite: (String, String) -> Unit = { _, _ -> },
     val cancelInvitation: (Long) -> Unit = {},
     val removeMember: (Long) -> Unit = {},
+    val setMemberRole: (Long, String) -> Unit = { _, _ -> },
     val acceptInvitation: (Long) -> Unit = {},
     val declineInvitation: (Long) -> Unit = {},
 )
@@ -218,26 +221,38 @@ private fun InvitationRow(invitation: MyInvitationView, intents: AccountIntents)
 
 @Composable
 private fun TeamScreen(team: TeamDetailView, intents: AccountIntents) {
+    var expanded by remember(team.id) { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxSize()) {
         RunovaTopBar(team.name, onBack = intents.closeTeam)
         if (team.canManage) InviteForm(intents)
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
             heading("Members")
             items(team.members, key = { "m/${it.userId}" }) { member ->
-                RunovaListRow(
-                    title = member.name,
-                    detail = member.role,
-                    icon = RunovaIcons.Account,
-                    trailing = {
-                        if (team.canManage && member.role != "Owner") {
+                Column {
+                    RunovaListRow(
+                        title = member.name,
+                        detail = member.role,
+                        icon = RunovaIcons.Account,
+                        onClick = if (member.canChange) ({
+                            expanded = if (expanded == member.userId) null else member.userId
+                        }) else null,
+                    )
+                    if (expanded == member.userId) {
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            member.roleOptions.forEach { option ->
+                                RunovaChip("Make ${option.label}", { intents.setMemberRole(member.userId, option.key) })
+                            }
                             RunovaChip(
                                 "Remove",
                                 { intents.removeMember(member.userId) },
                                 Modifier.semantics { contentDescription = "Remove ${member.name}" },
                             )
                         }
-                    },
-                )
+                    }
+                }
             }
             if (team.invitations.isNotEmpty()) {
                 heading("Invitations")
@@ -266,7 +281,7 @@ private fun InviteForm(intents: AccountIntents) {
         RunovaButton(
             "Invite",
             onClick = {
-                intents.invite(email, "Member")
+                intents.invite(email, "member")
                 email = ""
             },
             enabled = email.isNotBlank(),

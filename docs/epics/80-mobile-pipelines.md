@@ -30,5 +30,5 @@ Auto-fix controls.
 ## Status
 
 The bridge, the core and the Android screens are tested. A job log keeps its last 2000 lines rather
-than paging. Dispatch uses the default branch and has no form for workflow inputs yet. Owed: AC2
+than paging. Dispatch uses the default branch. Owed: AC2
 against GitHub, and the iOS screens have never been compiled.

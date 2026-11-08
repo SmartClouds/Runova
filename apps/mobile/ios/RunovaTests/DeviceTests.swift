@@ -178,8 +178,8 @@ final class DeviceTests: XCTestCase {
             id: 100, title: "Fix it", branch: "master", number: 12, state: .running, stateLabel: "Running",
             canCancel: true)
         let status = PipelinesStatusView(
-            problem: nil, workflows: [WorkflowView(id: 7, name: "CI", canDispatch: true, run: run)])
-        let pipelines = PipelinesScreen(status: status, loading: false, run: nil, log: nil)
+            problem: nil, workflows: [WorkflowView(id: 7, name: "CI", canDispatch: true, run: run, inputs: [])])
+        let pipelines = PipelinesScreen(status: status, loading: false, run: nil, log: nil, dispatchForm: nil)
         try renderSnapshot(
             fixtureView(connection: connected, selected: "p1", pipelines: pipelines), "pipelines", tab: "pipelines")
     }
@@ -192,7 +192,7 @@ final class DeviceTests: XCTestCase {
                 SessionView(id: 9, title: "Sam's desk", detail: "Runova desktop app, windows", current: false),
             ],
             activity: [ActivityView(id: 1, action: "signed in", detail: "Pixel")],
-            teams: [TeamView(id: 3, name: "Acme", role: "Owner", memberCount: 2)],
+            teams: [TeamView(id: 3, name: "Acme", role: "Owner", roleKey: "owner", memberCount: 2)],
             invitations: [MyInvitationView(id: 7, team: "Beta", role: "Member", invitedBy: "Lee")],
             team: nil, stepUp: nil)
         try renderSnapshot(fixtureView(account: account), "account", tab: "account")
@@ -228,7 +228,7 @@ func fixtureView(
         revealed: nil),
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
-    pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil),
+    pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil, dispatchForm: nil),
     account: AccountScreen = AccountScreen(
         profile: nil, loading: false, sessions: [], activity: [], teams: [], invitations: [], team: nil, stepUp: nil),
     notifications: NotificationsScreen = NotificationsScreen(

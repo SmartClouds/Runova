@@ -13,6 +13,8 @@ struct PipelineIntents {
     var openJob: (Int64) -> Void = { _ in }
     var closeJob: () -> Void = {}
     var dispatch: (Int64) -> Void = { _ in }
+    var submitDispatch: ([String: String]) -> Void = { _ in }
+    var closeDispatch: () -> Void = {}
     var cancel: (Int64) -> Void = { _ in }
 }
 
@@ -232,6 +234,67 @@ private struct WorkflowCard: View {
                 } else {
                     RunovaText("Never run", style: RunovaType.small, color: palette.mutedForeground)
                 }
+            }
+        }
+    }
+}
+
+struct DispatchForm: View {
+    let form: DispatchFormView
+    let intents: PipelineIntents
+
+    @State private var values: [String: String] = [:]
+    @Environment(\.palette) private var palette
+
+    private func binding(_ name: String) -> Binding<String> {
+        Binding(get: { values[name] ?? "" }, set: { values[name] = $0 })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RunovaTopBar(title: form.name, onBack: intents.closeDispatch)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(form.inputs, id: \.name) { input in
+                        VStack(alignment: .leading, spacing: 6) {
+                            RunovaText(input.required ? "\(input.name) (required)" : input.name, style: RunovaType.label)
+                            if !input.description.isEmpty {
+                                RunovaText(input.description, style: RunovaType.small, color: palette.mutedForeground)
+                            }
+                            switch input.kind {
+                            case .text: RunovaTextField(value: binding(input.name), placeholder: input.name)
+                            case .toggle:
+                                RunovaToggle(isOn: values[input.name] == "true", label: input.name) {
+                                    values[input.name] = $0 ? "true" : "false"
+                                }
+                            case .choice:
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(input.options, id: \.self) { option in
+                                            if values[input.name] == option {
+                                                RunovaBadge(text: option, tone: .primary)
+                                            } else {
+                                                RunovaChip(text: option) { values[input.name] = option }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            if let error = form.error {
+                RunovaText(error, style: RunovaType.small, color: palette.destructive).padding(.horizontal, 16)
+            }
+            RunovaButton(text: "Run workflow") { intents.submitDispatch(values) }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+        }
+        .onAppear {
+            for input in form.inputs where values[input.name] == nil {
+                values[input.name] = input.defaultValue
             }
         }
     }

@@ -113,6 +113,8 @@ final class AppModel: NSObject, ObservableObject {
                 openJob: { [weak self] in self?.engine?.pipelinesOpenJob(jobId: $0) },
                 closeJob: { [weak self] in self?.engine?.pipelinesCloseJob() },
                 dispatch: { [weak self] in self?.engine?.pipelinesDispatch(workflowId: $0) },
+                submitDispatch: { [weak self] in self?.engine?.pipelinesSubmitDispatch(values: $0) },
+                closeDispatch: { [weak self] in self?.engine?.pipelinesCloseDispatch() },
                 cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) }),
             account: AccountIntents(
                 setName: { [weak self] in self?.engine?.accountSetName(name: $0) },
@@ -125,6 +127,7 @@ final class AppModel: NSObject, ObservableObject {
                 invite: { [weak self] in self?.engine?.accountInvite(email: $0, role: $1) },
                 cancelInvitation: { [weak self] in self?.engine?.accountCancelInvitation(id: $0) },
                 removeMember: { [weak self] in self?.engine?.accountRemoveMember(userId: $0) },
+                setMemberRole: { [weak self] in self?.engine?.accountSetMemberRole(userId: $0, role: $1) },
                 acceptInvitation: { [weak self] in self?.engine?.accountAcceptInvitation(id: $0) },
                 declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) }),
             forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() },

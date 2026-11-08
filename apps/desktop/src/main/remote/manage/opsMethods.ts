@@ -37,6 +37,9 @@ export interface ManagePipelineDeps {
 }
 
 const MAX_LOG_LINES = 2000;
+const MAX_INPUTS = 25;
+const MAX_INPUT_CHARS = 4096;
+const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_-]{0,99}$/;
 const SAMPLES = 30;
 
 function field(params: unknown, name: string): unknown {
@@ -55,6 +58,24 @@ function number(params: unknown, name: string, say: string): number {
     throw new ManageError('bad-params', say);
   }
   return value;
+}
+
+/** What GitHub accepts, so a bad request is turned down here with a clear reason. */
+function workflowInputs(params: unknown): Record<string, string> {
+  const value = field(params, 'inputs');
+  if (value === undefined) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ManageError('bad-params', 'Those inputs could not be read.');
+  }
+  const entries = Object.entries(value);
+  const valid =
+    entries.length <= MAX_INPUTS &&
+    entries.every(
+      ([name, text]) =>
+        INPUT_NAME.test(name) && typeof text === 'string' && text.length <= MAX_INPUT_CHARS,
+    );
+  if (!valid) throw new ManageError('bad-params', 'Those inputs could not be read.');
+  return Object.fromEntries(entries) as Record<string, string>;
 }
 
 function runOf(run: GithubWorkflowRunInfo): ManagePipelineRun {
@@ -132,6 +153,7 @@ export function opsMethods(
             id: workflow.id,
             name: workflow.name,
             canDispatch: workflow.dispatchable,
+            inputs: workflow.dispatchInputs,
             run: run ? runOf(run) : null,
           };
         }),
@@ -169,13 +191,14 @@ export function opsMethods(
       const projectId = project(params);
       const repo = await repository(pipelines, projectId);
       const workflowId = number(params, 'workflowId', 'Say which workflow.');
+      const inputs = workflowInputs(params);
       const refs = await pipelines.refs(repo);
       if (!refs.ok) return { ok: false, message: refs.error };
       const result = await pipelines.dispatch({
         repo,
         workflowId,
         ref: refs.defaultBranch,
-        inputs: {},
+        inputs,
       });
       if (result.ok) pipelines.afterAction(projectId);
       return outcome(result, 'Started.');

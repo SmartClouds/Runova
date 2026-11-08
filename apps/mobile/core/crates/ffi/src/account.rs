@@ -3,8 +3,9 @@
 use crate::backend::BackendError;
 use crate::engine::{Done, Engine, Runner};
 use crate::view::{
-    AccountScreen, ActivityView, AppView, ConfirmView, MyInvitationView, ProfileView, SessionView,
-    StepUpView, TeamDetailView, TeamInvitationView, TeamMemberView, TeamView,
+    AccountScreen, ActivityView, AppView, ConfirmView, MyInvitationView, ProfileView,
+    RoleOptionView, SessionView, StepUpView, TeamDetailView, TeamInvitationView, TeamMemberView,
+    TeamView,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -21,7 +22,9 @@ const WRONG_STEP_UP: &str = "That password or code isn't right.";
 
 /// What is about to happen once the step-up is given.
 pub(crate) struct PendingStepUp {
+    method: &'static str,
     path: String,
+    body: Value,
     after: fn(&mut Runner),
 }
 
@@ -130,7 +133,36 @@ fn session_of(dto: SessionDto) -> SessionView {
 }
 
 fn can_manage(role: &str) -> bool {
-    matches!(role, "Owner" | "Admin")
+    matches!(role, "owner" | "admin")
+}
+
+fn role_label(role: &str) -> String {
+    match role {
+        "owner" => "Owner".to_owned(),
+        "admin" => "Admin".to_owned(),
+        "member" => "Member".to_owned(),
+        "viewer" => "Viewer".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// What the person using the app may turn this member into, by the server's own rules: an Owner
+/// manages anyone but other Owners here, and an Admin only Members and Viewers.
+fn role_options(mine: &str, theirs: &str) -> Vec<RoleOptionView> {
+    let allowed: &[&str] = match (mine, theirs) {
+        ("owner", "owner") => &[],
+        ("owner", _) => &["admin", "member", "viewer"],
+        ("admin", "member" | "viewer") => &["member", "viewer"],
+        _ => &[],
+    };
+    allowed
+        .iter()
+        .filter(|role| **role != theirs)
+        .map(|role| RoleOptionView {
+            key: (*role).to_owned(),
+            label: role_label(role),
+        })
+        .collect()
 }
 
 fn asking(title: &str, detail: &str, action: &str) -> ConfirmView {
@@ -181,7 +213,8 @@ impl Runner {
                     .map(|t| TeamView {
                         id: t.id,
                         name: t.name,
-                        role: t.role,
+                        role: role_label(&t.role),
+                        role_key: t.role,
                         member_count: t.member_count,
                     })
                     .collect();
@@ -197,7 +230,7 @@ impl Runner {
                     .map(|i| MyInvitationView {
                         id: i.id,
                         team: i.team_name,
-                        role: i.role,
+                        role: role_label(&i.role),
                         invited_by: i.invited_by,
                     })
                     .collect();
@@ -225,10 +258,11 @@ impl Runner {
         let Some(team) = self.view.account.teams.iter().find(|t| t.id == id).cloned() else {
             return;
         };
-        let manage = can_manage(&team.role);
+        let manage = can_manage(&team.role_key);
         self.view.account.team = Some(TeamDetailView {
             id,
             name: team.name,
+            my_role: team.role_key,
             can_manage: manage,
             members: Vec::new(),
             invitations: Vec::new(),
@@ -250,13 +284,19 @@ impl Runner {
             format!("{TEAMS}/{id}/members"),
             move |view: &mut AppView, dto: Items<MemberDto>| {
                 if let Some(team) = view.account.team.as_mut().filter(|t| t.id == id) {
+                    let mine = team.my_role.clone();
                     team.members = dto
                         .items
                         .into_iter()
-                        .map(|m| TeamMemberView {
-                            user_id: m.user_id,
-                            name: m.display_name.filter(|n| !n.is_empty()).unwrap_or(m.email),
-                            role: m.role,
+                        .map(|m| {
+                            let role_options = role_options(&mine, &m.role);
+                            TeamMemberView {
+                                user_id: m.user_id,
+                                name: m.display_name.filter(|n| !n.is_empty()).unwrap_or(m.email),
+                                role: role_label(&m.role),
+                                can_change: !role_options.is_empty(),
+                                role_options,
+                            }
                         })
                         .collect();
                 }
@@ -274,7 +314,7 @@ impl Runner {
                             .map(|i| TeamInvitationView {
                                 id: i.id,
                                 email: i.email,
-                                role: i.role,
+                                role: role_label(&i.role),
                             })
                             .collect();
                     }
@@ -318,20 +358,31 @@ impl Runner {
         });
     }
 
-    fn ask_step_up(&mut self, title: &str, detail: &str, path: String, after: fn(&mut Runner)) {
+    fn ask_step_up(
+        &mut self,
+        title: &str,
+        detail: &str,
+        (method, path, body): (&'static str, String, Value),
+        after: fn(&mut Runner),
+    ) {
         self.view.account.step_up = Some(StepUpView {
             title: title.to_owned(),
             detail: detail.to_owned(),
             error: None,
         });
-        self.pending_step_up = Some(PendingStepUp { path, after });
+        self.pending_step_up = Some(PendingStepUp {
+            method,
+            path,
+            body,
+            after,
+        });
     }
 
     fn submit_step_up(&mut self, password: Option<String>, code: Option<String>) {
         let Some(pending) = self.pending_step_up.take() else {
             return;
         };
-        let mut body = json!({});
+        let mut body = pending.body.clone();
         if let Some(password) = password.filter(|p| !p.is_empty()) {
             body["password"] = Value::String(password);
         }
@@ -343,7 +394,7 @@ impl Runner {
         let attempt = self.attempt;
         self.view.busy = true;
         tokio::spawn(async move {
-            let outcome = backend.send_json("DELETE", &pending.path, body).await;
+            let outcome = backend.send_json(pending.method, &pending.path, body).await;
             let task = move |runner: &mut Runner| {
                 runner.view.busy = false;
                 match outcome {
@@ -431,7 +482,7 @@ impl Engine {
             r.ask_step_up(
                 "End all other sessions?",
                 "Enter your password or a two-factor code to confirm.",
-                SESSIONS.to_owned(),
+                ("DELETE", SESSIONS.to_owned(), json!({})),
                 Runner::load_account,
             );
         });
@@ -494,7 +545,29 @@ impl Engine {
             r.ask_step_up(
                 "Remove this member?",
                 "Enter your password or a two-factor code to confirm.",
-                format!("{TEAMS}/{team}/members/{user_id}"),
+                (
+                    "DELETE",
+                    format!("{TEAMS}/{team}/members/{user_id}"),
+                    json!({}),
+                ),
+                Runner::reload_team_and_account,
+            );
+        });
+    }
+
+    pub fn account_set_member_role(&self, user_id: i64, role: String) {
+        self.run(move |r| {
+            let Some(team) = r.team_id() else {
+                return;
+            };
+            r.ask_step_up(
+                &format!("Make this member {}?", role_label(&role)),
+                "Enter your password or a two-factor code to confirm.",
+                (
+                    "PATCH",
+                    format!("{TEAMS}/{team}/members/{user_id}"),
+                    json!({ "role": role }),
+                ),
                 Runner::reload_team_and_account,
             );
         });

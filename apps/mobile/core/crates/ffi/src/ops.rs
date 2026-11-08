@@ -4,12 +4,13 @@ use crate::backend::BackendError;
 use crate::engine::{Done, Engine, Runner};
 use crate::labels::percent_label;
 use crate::view::{
-    AppView, ConfirmView, JobLogView, LogLineView, MonitorSource, MonitorState, MonitorView,
-    PipelineJobView, PipelineRunDetailView, PipelineRunState, PipelineRunView, PipelinesStatusView,
-    WorkflowView,
+    AppView, ConfirmView, DispatchFormView, JobLogView, LogLineView, MonitorSource, MonitorState,
+    MonitorView, PipelineJobView, PipelineRunDetailView, PipelineRunState, PipelineRunView,
+    PipelinesStatusView, WorkflowInputKind, WorkflowInputView, WorkflowView,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 const CLOUD_MONITORS: &str = "/api/v1/cloud-monitors";
 /// Runova's own numbers change slowly, and this is a request to its servers.
@@ -76,6 +77,23 @@ struct WorkflowDto {
     #[serde(default)]
     can_dispatch: bool,
     run: Option<RunDto>,
+    #[serde(default)]
+    inputs: Vec<InputDto>,
+}
+
+#[derive(Deserialize)]
+struct InputDto {
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    required: bool,
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    default: String,
+    #[serde(default)]
+    options: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -200,6 +218,21 @@ fn run_of(dto: RunDto) -> PipelineRunView {
     }
 }
 
+fn input_of(dto: InputDto) -> WorkflowInputView {
+    WorkflowInputView {
+        kind: match dto.kind.as_str() {
+            "boolean" => WorkflowInputKind::Toggle,
+            "choice" => WorkflowInputKind::Choice,
+            _ => WorkflowInputKind::Text,
+        },
+        name: dto.name,
+        description: dto.description,
+        required: dto.required,
+        default_value: dto.default,
+        options: dto.options,
+    }
+}
+
 fn status_of(dto: StatusDto) -> PipelinesStatusView {
     PipelinesStatusView {
         problem: dto.problem,
@@ -211,6 +244,7 @@ fn status_of(dto: StatusDto) -> PipelinesStatusView {
                 name: w.name,
                 can_dispatch: w.can_dispatch,
                 run: w.run.map(run_of),
+                inputs: w.inputs.into_iter().map(input_of).collect(),
             })
             .collect(),
     }
@@ -395,6 +429,35 @@ impl Runner {
         );
     }
 
+    fn ask_to_dispatch(&mut self, name: &str, params: Value) {
+        self.ask(
+            asking(
+                "Run this workflow?",
+                format!("{name} starts on the default branch."),
+                "Run",
+            ),
+            move |runner| runner.pipeline_op("pipelines.dispatch", params),
+        );
+    }
+
+    fn submit_dispatch(&mut self, values: HashMap<String, String>) {
+        let Some(form) = self.view.pipelines.dispatch_form.as_mut() else {
+            return;
+        };
+        let missing = form.inputs.iter().find(|input| {
+            input.required && values.get(&input.name).is_none_or(|v| v.trim().is_empty())
+        });
+        if let Some(missing) = missing {
+            form.error = Some(format!("Fill in {}.", missing.name));
+            return;
+        }
+        let workflow_id = form.workflow_id;
+        let name = form.name.clone();
+        self.view.pipelines.dispatch_form = None;
+        let params = json!({ "workflowId": workflow_id, "inputs": values });
+        self.ask_to_dispatch(&name, params);
+    }
+
     fn pipeline_op(&mut self, method: &'static str, mut params: Value) {
         let Some(project) = self.view.selected_project.clone() else {
             return;
@@ -463,24 +526,36 @@ impl Engine {
 
     pub fn pipelines_dispatch(&self, workflow_id: i64) {
         self.run(move |r| {
-            let name = r
+            let workflow = r
                 .view
                 .pipelines
                 .status
                 .as_ref()
                 .and_then(|s| s.workflows.iter().find(|w| w.id == workflow_id))
-                .map_or_else(String::new, |w| w.name.clone());
-            r.ask(
-                asking(
-                    "Run this workflow?",
-                    format!("{name} starts on the default branch."),
-                    "Run",
-                ),
-                move |runner| {
-                    runner.pipeline_op("pipelines.dispatch", json!({ "workflowId": workflow_id }));
-                },
-            );
+                .cloned();
+            let Some(workflow) = workflow else {
+                return;
+            };
+            if workflow.inputs.is_empty() {
+                let params = json!({ "workflowId": workflow_id });
+                r.ask_to_dispatch(&workflow.name, params);
+            } else {
+                r.view.pipelines.dispatch_form = Some(DispatchFormView {
+                    workflow_id,
+                    name: workflow.name,
+                    inputs: workflow.inputs,
+                    error: None,
+                });
+            }
         });
+    }
+
+    pub fn pipelines_submit_dispatch(&self, values: HashMap<String, String>) {
+        self.run(move |r| r.submit_dispatch(values));
+    }
+
+    pub fn pipelines_close_dispatch(&self) {
+        self.run(|r| r.view.pipelines.dispatch_form = None);
     }
 
     pub fn pipelines_cancel(&self, run_id: i64) {

@@ -1,6 +1,8 @@
 package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,12 +35,16 @@ import com.runovahq.app.design.RunovaEmptyState
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
+import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaToggle
 import com.runovahq.app.design.RunovaTokens
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.DispatchFormView
 import uniffi.runova_ffi.JobLogView
+import uniffi.runova_ffi.WorkflowInputKind
 import uniffi.runova_ffi.MonitorSource
 import uniffi.runova_ffi.MonitorState
 import uniffi.runova_ffi.MonitorView
@@ -58,6 +66,8 @@ data class PipelineIntents(
     val openJob: (Long) -> Unit = {},
     val closeJob: () -> Unit = {},
     val dispatch: (Long) -> Unit = {},
+    val submitDispatch: (Map<String, String>) -> Unit = {},
+    val closeDispatch: () -> Unit = {},
     val cancel: (Long) -> Unit = {},
 )
 
@@ -195,6 +205,10 @@ private fun LatencyBars(samples: List<Double>) {
 /** A run or its log takes over the screen. */
 @Composable
 fun PipelineOverlay(view: AppView, intents: PipelineIntents): Boolean {
+    view.pipelines.dispatchForm?.let {
+        DispatchForm(it, intents)
+        return true
+    }
     val log = view.pipelines.log
     if (log != null) {
         JobLogScreen(log, intents)
@@ -259,6 +273,60 @@ private fun WorkflowCard(workflow: WorkflowView, intents: PipelineIntents) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DispatchForm(form: DispatchFormView, intents: PipelineIntents) {
+    val colors = RunovaTheme.colors
+    val values = remember(form.workflowId) {
+        mutableStateMapOf<String, String>().apply {
+            form.inputs.forEach { put(it.name, it.defaultValue) }
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        RunovaTopBar(form.name, onBack = intents.closeDispatch)
+        LazyColumn(
+            Modifier.weight(1f),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(form.inputs, key = { it.name }) { input ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RunovaText(if (input.required) "${input.name} (required)" else input.name, style = RunovaType.label)
+                    if (input.description.isNotEmpty()) {
+                        RunovaText(input.description, style = RunovaType.small, color = colors.mutedForeground)
+                    }
+                    val value = values[input.name].orEmpty()
+                    when (input.kind) {
+                        WorkflowInputKind.TEXT -> RunovaTextField(value, { values[input.name] = it }, input.name)
+                        WorkflowInputKind.TOGGLE -> RunovaToggle(
+                            value == "true",
+                            { values[input.name] = it.toString() },
+                            input.name,
+                        )
+                        WorkflowInputKind.CHOICE -> Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            input.options.forEach { option ->
+                                if (option == value) {
+                                    RunovaBadge(option, BadgeTone.Primary)
+                                } else {
+                                    RunovaChip(option, { values[input.name] = option })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        form.error?.let { RunovaText(it, Modifier.padding(horizontal = 16.dp), RunovaType.small, colors.destructive) }
+        RunovaButton(
+            "Run workflow",
+            onClick = { intents.submitDispatch(values.toMap()) },
+            Modifier.fillMaxWidth().padding(16.dp),
+        )
     }
 }
 

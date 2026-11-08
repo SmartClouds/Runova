@@ -31,5 +31,5 @@ Billing.
 ## Status
 
 The core and the Android screens are tested against a scripted server. The phone can leave a computer's
-trusted list from More while connected to it. Changing a member's role is not on the phone. Owed: a real
+trusted list from More while connected to it.  Owed: a real
 account, and the iOS screens have never been compiled.

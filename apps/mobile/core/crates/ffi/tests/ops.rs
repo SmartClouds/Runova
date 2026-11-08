@@ -1,8 +1,9 @@
 mod common;
 
 use common::{World, connected, signed_in};
-use runova_ffi::view::{MonitorSource, MonitorState, PipelineRunState, Section};
+use runova_ffi::view::{MonitorSource, MonitorState, PipelineRunState, Section, WorkflowInputKind};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 
 fn local() -> Value {
     json!([{"id": "h1", "name": "API", "state": "pass", "paused": false, "latencyMs": 42,
@@ -143,7 +144,13 @@ fn status() -> Value {
         "id": 8, "name": "Nightly", "canDispatch": false,
         "run": {"id": 101, "title": "Build", "branch": "master", "number": 3,
                 "status": "completed", "conclusion": "failure"},
-    }, {"id": 9, "name": "Never", "canDispatch": true, "run": null}]})
+    }, {"id": 9, "name": "Never", "canDispatch": true, "run": null}, {
+        "id": 11, "name": "Release", "canDispatch": true, "run": null, "inputs": [
+            {"name": "version", "description": "Which version", "required": true, "type": "string", "default": "", "options": []},
+            {"name": "channel", "description": "Where to", "required": false, "type": "choice", "default": "beta", "options": ["beta", "stable"]},
+            {"name": "dry", "description": "", "required": false, "type": "boolean", "default": "false", "options": []},
+        ],
+    }]})
 }
 
 async fn on_pipelines() -> World {
@@ -251,6 +258,109 @@ async fn a_run_opens_its_jobs_and_a_job_its_log() {
     world.until(|v| v.pipelines.log.is_none(), "closed").await;
     world.engine.pipelines_close_run();
     world.until(|v| v.pipelines.run.is_none(), "closed").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_workflow_with_inputs_opens_a_form_first() {
+    let world = on_pipelines().await;
+
+    world.engine.pipelines_dispatch(11);
+    let view = world
+        .until(|v| v.pipelines.dispatch_form.is_some(), "the form")
+        .await;
+
+    let form = view.pipelines.dispatch_form.unwrap();
+    assert_eq!(form.name, "Release");
+    assert_eq!(form.inputs[0].kind, WorkflowInputKind::Text);
+    assert_eq!(form.inputs[1].kind, WorkflowInputKind::Choice);
+    assert_eq!(form.inputs[1].default_value, "beta");
+    assert_eq!(form.inputs[2].kind, WorkflowInputKind::Toggle);
+    assert!(view.confirm.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_required_input_has_to_be_filled_in() {
+    let world = on_pipelines().await;
+    world.engine.pipelines_dispatch(11);
+    world
+        .until(|v| v.pipelines.dispatch_form.is_some(), "the form")
+        .await;
+
+    world
+        .engine
+        .pipelines_submit_dispatch(HashMap::from([("version".to_owned(), "  ".to_owned())]));
+    let view = world
+        .until(
+            |v| {
+                v.pipelines
+                    .dispatch_form
+                    .as_ref()
+                    .is_some_and(|f| f.error.is_some())
+            },
+            "the message",
+        )
+        .await;
+
+    assert_eq!(
+        view.pipelines.dispatch_form.unwrap().error.as_deref(),
+        Some("Fill in version.")
+    );
+    assert!(view.confirm.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn filled_in_inputs_are_sent_after_asking() {
+    let world = on_pipelines().await;
+    world.computer.answer(
+        "pipelines.dispatch",
+        json!({"ok": true, "message": "Started."}),
+    );
+    world.engine.pipelines_dispatch(11);
+    world
+        .until(|v| v.pipelines.dispatch_form.is_some(), "the form")
+        .await;
+
+    world.engine.pipelines_submit_dispatch(HashMap::from([
+        ("version".to_owned(), "1.2.3".to_owned()),
+        ("channel".to_owned(), "stable".to_owned()),
+    ]));
+    world
+        .until(
+            |v| v.confirm.is_some() && v.pipelines.dispatch_form.is_none(),
+            "the question",
+        )
+        .await;
+    assert!(world.computer.params_of("pipelines.dispatch").is_empty());
+    world.engine.confirm();
+    world
+        .until(
+            |_| !world.computer.params_of("pipelines.dispatch").is_empty(),
+            "sent",
+        )
+        .await;
+
+    assert_eq!(
+        world.computer.params_of("pipelines.dispatch"),
+        vec![Some(json!({
+            "projectId": "p1", "workflowId": 11,
+            "inputs": {"version": "1.2.3", "channel": "stable"},
+        }))]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_form_can_be_left() {
+    let world = on_pipelines().await;
+    world.engine.pipelines_dispatch(11);
+    world
+        .until(|v| v.pipelines.dispatch_form.is_some(), "the form")
+        .await;
+
+    world.engine.pipelines_close_dispatch();
+
+    world
+        .until(|v| v.pipelines.dispatch_form.is_none(), "closed")
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

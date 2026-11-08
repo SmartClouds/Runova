@@ -144,6 +144,8 @@ class MainActivity : FragmentActivity(), ViewListener {
                 openJob = { engine.pipelinesOpenJob(it) },
                 closeJob = { engine.pipelinesCloseJob() },
                 dispatch = { engine.pipelinesDispatch(it) },
+                submitDispatch = { engine.pipelinesSubmitDispatch(it) },
+                closeDispatch = { engine.pipelinesCloseDispatch() },
                 cancel = { engine.pipelinesCancel(it) },
             ),
             account = AccountIntents(
@@ -157,6 +159,7 @@ class MainActivity : FragmentActivity(), ViewListener {
                 invite = { email, role -> engine.accountInvite(email, role) },
                 cancelInvitation = { engine.accountCancelInvitation(it) },
                 removeMember = { engine.accountRemoveMember(it) },
+                setMemberRole = { id, role -> engine.accountSetMemberRole(id, role) },
                 acceptInvitation = { engine.accountAcceptInvitation(it) },
                 declineInvitation = { engine.accountDeclineInvitation(it) },
             ),

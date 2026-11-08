@@ -198,6 +198,8 @@ pub struct TeamView {
     pub id: i64,
     pub name: String,
     pub role: String,
+    /// The role as the server spells it, which is what rules are decided on.
+    pub role_key: String,
     pub member_count: u32,
 }
 
@@ -210,10 +212,19 @@ pub struct MyInvitationView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RoleOptionView {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct TeamMemberView {
     pub user_id: i64,
     pub name: String,
     pub role: String,
+    /// Whether the person using the app may change or remove this member.
+    pub can_change: bool,
+    pub role_options: Vec<RoleOptionView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -227,6 +238,7 @@ pub struct TeamInvitationView {
 pub struct TeamDetailView {
     pub id: i64,
     pub name: String,
+    pub my_role: String,
     pub can_manage: bool,
     pub members: Vec<TeamMemberView>,
     pub invitations: Vec<TeamInvitationView>,
@@ -320,6 +332,32 @@ pub struct WorkflowView {
     pub name: String,
     pub can_dispatch: bool,
     pub run: Option<PipelineRunView>,
+    pub inputs: Vec<WorkflowInputView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum WorkflowInputKind {
+    Text,
+    Choice,
+    Toggle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct WorkflowInputView {
+    pub name: String,
+    pub description: String,
+    pub required: bool,
+    pub kind: WorkflowInputKind,
+    pub default_value: String,
+    pub options: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DispatchFormView {
+    pub workflow_id: i64,
+    pub name: String,
+    pub inputs: Vec<WorkflowInputView>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -358,6 +396,7 @@ pub struct PipelinesScreen {
     pub loading: bool,
     pub run: Option<PipelineRunDetailView>,
     pub log: Option<JobLogView>,
+    pub dispatch_form: Option<DispatchFormView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
