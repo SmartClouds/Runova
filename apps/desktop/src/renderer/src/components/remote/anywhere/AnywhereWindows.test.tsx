@@ -65,6 +65,48 @@ describe('the request window', () => {
     });
   });
 
+  const phoneRequest = () =>
+    request({
+      intent: 'manage',
+      relation: 'own',
+      teams: [],
+      controller: {
+        userId: 1,
+        displayName: 'Sam',
+        email: 'sam@example.com',
+        deviceName: 'Runova app',
+        platform: 'android',
+        remoteId: null,
+      },
+    });
+
+  it('asks about a phone in its own words, with the Vault off to start with', () => {
+    show(<IncomingRequestRoute />, { incoming: [phoneRequest()] });
+
+    expect(
+      screen.getByRole('heading', { name: 'Runova app wants to manage this computer' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/connect without asking/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Terminals and CLIs' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'The Vault' })).not.toBeChecked();
+    expect(screen.queryByRole('switch', { name: 'Share the clipboard' })).not.toBeInTheDocument();
+  });
+
+  it('approves a phone with the scopes the person picked', async () => {
+    const { bridge } = show(<IncomingRequestRoute />, { incoming: [phoneRequest()] });
+
+    await userEvent.click(screen.getByRole('switch', { name: 'The Vault' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve phone' }));
+
+    expect(bridge.$fn('anywhere.respondIncoming')).toHaveBeenCalledWith(
+      's1',
+      expect.objectContaining({
+        accept: true,
+        scopes: ['terminal', 'git', 'vault', 'ops'],
+      }),
+    );
+  });
+
   it('declines', async () => {
     const { bridge } = show(<IncomingRequestRoute />, { incoming: [request()] });
 

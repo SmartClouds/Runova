@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "capability": "manage/1",
+  "messages": [
+    {
+      "text": "{\"t\":\"manage-ready\",\"v\":1,\"deviceName\":\"Sam's desk\",\"scopes\":[\"core\",\"git\"]}",
+      "value": { "t": "manage-ready", "v": 1, "deviceName": "Sam's desk", "scopes": ["core", "git"] }
+    },
+    {
+      "text": "{\"t\":\"rpc-call\",\"id\":7,\"m\":\"projects.list\"}",
+      "value": { "t": "rpc-call", "id": 7, "m": "projects.list" }
+    },
+    {
+      "text": "{\"t\":\"rpc-call\",\"id\":8,\"m\":\"git.stage\",\"p\":{\"projectId\":\"a\",\"paths\":[\"x\"]}}",
+      "value": { "t": "rpc-call", "id": 8, "m": "git.stage", "p": { "projectId": "a", "paths": ["x"] } }
+    },
+    {
+      "text": "{\"t\":\"rpc-result\",\"id\":7,\"ok\":true,\"v\":[{\"id\":\"a\"}]}",
+      "value": { "t": "rpc-result", "id": 7, "ok": true, "v": [{ "id": "a" }] }
+    },
+    {
+      "text": "{\"t\":\"rpc-result\",\"id\":8,\"ok\":false,\"code\":\"forbidden\",\"message\":\"Not allowed.\"}",
+      "value": { "t": "rpc-result", "id": 8, "ok": false, "code": "forbidden", "message": "Not allowed." }
+    },
+    {
+      "text": "{\"t\":\"rpc-sub\",\"id\":9,\"m\":\"system.stats\"}",
+      "value": { "t": "rpc-sub", "id": 9, "m": "system.stats" }
+    },
+    {
+      "text": "{\"t\":\"rpc-unsub\",\"id\":9}",
+      "value": { "t": "rpc-unsub", "id": 9 }
+    },
+    {
+      "text": "{\"t\":\"rpc-event\",\"id\":9,\"v\":{\"cpu\":12}}",
+      "value": { "t": "rpc-event", "id": 9, "v": { "cpu": 12 } }
+    },
+    {
+      "text": "{\"t\":\"rpc-end\",\"id\":9,\"code\":\"failed\",\"message\":\"It stopped.\"}",
+      "value": { "t": "rpc-end", "id": 9, "code": "failed", "message": "It stopped." }
+    }
+  ],
+  "rejected": [
+    "not json",
+    "{\"t\":\"rpc-call\",\"m\":\"x\"}",
+    "{\"t\":\"rpc-call\",\"id\":\"7\",\"m\":\"x\"}",
+    "{\"t\":\"rpc-call\",\"id\":1.5,\"m\":\"x\"}",
+    "{\"t\":\"rpc-call\",\"id\":1}",
+    "{\"t\":\"rpc-result\",\"id\":1}",
+    "{\"t\":\"rpc-sub\",\"id\":-1,\"m\":\"x\"}",
+    "{\"t\":\"something-else\",\"id\":1}"
+  ],
+  "binary": {
+    "subscription": 9,
+    "payload": "68656c6c6f",
+    "frame": "010000000968656c6c6f"
+  }
+}

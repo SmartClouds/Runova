@@ -1,3 +1,4 @@
+import type { ManageScope } from '@runova/protocol';
 import type { AnywhereIncoming, AnywherePermissions } from '@shared/anywhere';
 import { useEffect, useId, useState } from 'react';
 import { Check, Folder, Monitor, ShieldSolid, X } from '@/components/icons';
@@ -6,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useAnywhere } from '@/stores/anywhereStore';
-import { PermissionToggles } from './AccessSettingsDialog';
+import { ManageScopeToggles, PermissionToggles } from './AccessSettingsDialog';
+
+/** Off to start with are the ones that reach secrets or the screen. */
+const DEFAULT_PHONE_SCOPES: ManageScope[] = ['terminal', 'git', 'ops'];
 
 function initials(name: string): string {
   return (
@@ -49,6 +53,8 @@ function Request({
 }): React.JSX.Element {
   const [permissions, setPermissions] = useState(defaults);
   const [always, setAlways] = useState(false);
+  const [scopes, setScopes] = useState(DEFAULT_PHONE_SCOPES);
+  const isPhone = request.intent === 'manage';
   const [now, setNow] = useState(Date.now());
   const alwaysId = useId();
   useEffect(() => {
@@ -62,6 +68,7 @@ function Request({
       accept,
       permissions,
       alwaysAllow: accept && always,
+      ...(isPhone ? { scopes } : {}),
     });
 
   return (
@@ -81,9 +88,11 @@ function Request({
           </span>
           <div className="min-w-0 space-y-1">
             <h1 className="text-[15px] font-semibold leading-snug">
-              {request.intent === 'files'
-                ? `${name} wants to open your files`
-                : `${name} wants to control this computer`}
+              {isPhone
+                ? `${request.controller.deviceName ?? 'A phone'} wants to manage this computer`
+                : request.intent === 'files'
+                  ? `${name} wants to open your files`
+                  : `${name} wants to control this computer`}
             </h1>
             <p className="truncate text-xs text-muted-foreground">{request.controller.email}</p>
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -106,10 +115,21 @@ function Request({
 
         <div className="space-y-2.5 rounded-xl bg-foreground/[0.04] p-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            They may
+            {isPhone ? 'It may' : 'They may'}
           </div>
-          <PermissionToggles value={permissions} onChange={setPermissions} />
+          {isPhone ? (
+            <ManageScopeToggles value={scopes} onChange={setScopes} />
+          ) : (
+            <PermissionToggles value={permissions} onChange={setPermissions} />
+          )}
         </div>
+
+        {isPhone ? (
+          <p className="text-xs text-muted-foreground">
+            Once approved, this phone can connect without asking. You can change what it may do, or
+            forget it, under Who can connect.
+          </p>
+        ) : null}
 
         {request.relation === 'teammate' ? (
           <div className="flex items-center gap-2">
@@ -136,7 +156,7 @@ function Request({
           </Button>
           <Button shape="pill" autoFocus onClick={() => answer(true)}>
             <Check />
-            Accept
+            {isPhone ? 'Approve phone' : 'Accept'}
           </Button>
         </div>
       </footer>

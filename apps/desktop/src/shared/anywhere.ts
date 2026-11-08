@@ -1,3 +1,5 @@
+import type { ManageScope } from '@runova/protocol';
+
 /**
  * Runova Anywhere (E60 to E62): connecting to any computer by its Runova ID, as a teammate, or
  * with an unattended-access password. These types cross from main to the renderer.
@@ -5,7 +7,7 @@
 
 export type AnywherePlatform = 'windows' | 'macos' | 'linux';
 export type AnywhereMode = 'ask' | 'password';
-export type AnywhereIntent = 'control' | 'files';
+export type AnywhereIntent = 'control' | 'files' | 'manage';
 export type AnywhereTransport = 'direct' | 'relay';
 export type AnywhereRelation = 'own' | 'teammate' | 'other';
 
@@ -119,6 +121,18 @@ export interface AnywhereHosted {
   safetyCode: string;
 }
 
+/** A phone the person at this computer approved, identified by its own key (E71). */
+export interface AnywhereTrustedPhone {
+  key: string;
+  name: string;
+  platform: string | null;
+  /** What it may do besides the basics. */
+  scopes: ManageScope[];
+  approvedAt: number;
+  lastSeenAt: number;
+  connected: boolean;
+}
+
 export type AnywhereStatus = 'signed-out' | 'starting' | 'online' | 'offline' | 'error';
 
 /** What this computer still needs before others can see and control it (E63). */
@@ -141,6 +155,7 @@ export interface AnywhereState {
   outgoing: AnywhereOutgoing | null;
   incoming: AnywhereIncoming[];
   hosted: AnywhereHosted[];
+  trustedPhones: AnywhereTrustedPhone[];
   inputPaused: boolean;
   /** Password access is locked until then, after too many wrong passwords. */
   passwordLockedUntil: number | null;
@@ -161,6 +176,8 @@ export interface AnywhereIncomingAnswer {
   permissions: AnywherePermissions;
   /** Let this teammate in without asking from now on. */
   alwaysAllow: boolean;
+  /** For a phone asking to manage this computer: what it may do once approved. */
+  scopes?: ManageScope[];
 }
 
 export interface AnywhereSettingsPatch {
@@ -229,6 +246,7 @@ export const EMPTY_ANYWHERE_STATE: AnywhereState = {
   outgoing: null,
   incoming: [],
   hosted: [],
+  trustedPhones: [],
   inputPaused: false,
   passwordLockedUntil: null,
   readiness: { controlUnavailable: null, needs: [] },

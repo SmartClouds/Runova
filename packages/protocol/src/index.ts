@@ -528,4 +528,5 @@ export function formatBytes(bytes: number): string {
 }
 
 export * from './link.js';
+export * from './manage.js';
 export * from './secure/handshake.js';

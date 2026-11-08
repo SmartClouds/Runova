@@ -86,6 +86,7 @@ import type {
   WidgetStyle,
   WorktreeInfo,
 } from '@runova/core';
+import type { ManageScope } from '@runova/protocol';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type {
   AiAccessActivityEntry,
@@ -2596,6 +2597,9 @@ const anywhere = {
   refresh: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.refresh),
   history: (): Promise<AnywhereSessionRecord[]> => ipcRenderer.invoke(IPC.anywhere.history),
   deleteHistory: (id: number): Promise<void> => ipcRenderer.invoke(IPC.anywhere.deleteHistory, id),
+  forgetPhone: (key: string): Promise<void> => ipcRenderer.invoke(IPC.anywhere.forgetPhone, key),
+  setPhoneScopes: (key: string, scopes: ManageScope[]): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.setPhoneScopes, key, scopes),
   forgetRecent: (remoteId: string): Promise<void> =>
     ipcRenderer.invoke(IPC.anywhere.forgetRecent, remoteId),
   forgetSavedPassword: (remoteId: string): Promise<void> =>

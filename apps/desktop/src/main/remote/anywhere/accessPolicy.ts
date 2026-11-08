@@ -36,6 +36,21 @@ export function decideIncoming(facts: IncomingFacts, settings: AnywhereSettings)
   return 'decline';
 }
 
+/**
+ * A phone asking to manage this computer (E71). Only the owner's own phone can, only without a
+ * password, and only a key approved at this computer gets in without someone saying yes here.
+ * `allowOwnDevices` does not count: a phone can run commands and open the Vault.
+ */
+export function decideManage(facts: {
+  accepting: boolean;
+  relation: IncomingFacts['relation'];
+  mode: IncomingFacts['mode'];
+  trusted: boolean;
+}): IncomingDecision {
+  if (!facts.accepting || facts.relation !== 'own' || facts.mode !== 'ask') return 'decline';
+  return facts.trusted ? 'accept' : 'ask';
+}
+
 const FIRST_WAIT_MS = 1_000;
 const MAX_WAIT_MS = 60_000;
 const LOCK_AFTER = 10;

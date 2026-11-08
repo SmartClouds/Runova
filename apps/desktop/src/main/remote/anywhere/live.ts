@@ -8,11 +8,15 @@ import { app, safeStorage, systemPreferences } from 'electron';
 import type { AnywherePlatform, AnywhereState } from '../../../shared/anywhere';
 import { IPC } from '../../../shared/ipcChannels';
 import type { AccountRuntime } from '../../account/runtime';
+import { aiAccessActivity } from '../../aiAccess/audit';
 import { sendToWindow } from '../../ipc/send';
 import { getMainWindow } from '../../mainWindow';
 import { showOsNotification } from '../../notifications/osNotification';
 import { decryptSecret, encryptSecret, registerSealedSecretStore } from '../../ssh/vault';
+import { store } from '../../store';
 import { InputInjector } from '../inputInjector';
+import { createManageMethods } from '../manage/methods';
+import { createManageSession, type ManageAudit } from '../manage/session';
 import { remoteManager } from '../manager';
 import { createAgentInstaller } from './agentInstaller';
 import { createAnywhereApi } from './api';
@@ -68,6 +72,28 @@ function broadcast(channel: string, payload: unknown): void {
     sendToWindow(window, channel, payload);
 }
 
+const manageMethods = createManageMethods({ listProjects: () => store.getProjects() });
+
+const AUDIT_RISK = { read: 'read', write: 'write', danger: 'sensitive' } as const;
+const AUDIT_OUTCOME = { ok: 'auto', failed: 'failed', forbidden: 'refused' } as const;
+
+/** What phones changed, or tried to, goes in the same record as what agents did. */
+const recordPhoneActivity: ManageAudit = ({ phone, method, risk, outcome }) => {
+  void aiAccessActivity
+    .record({
+      tool: method,
+      toolTitle: method,
+      area: null,
+      risk: AUDIT_RISK[risk],
+      agent: phone,
+      callerKind: 'external',
+      projectId: null,
+      projectName: null,
+      outcome: AUDIT_OUTCOME[outcome],
+    })
+    .catch(() => undefined);
+};
+
 /** The app's one Anywhere service (E61), made on first use against the account runtime. */
 export function getAnywhere(runtime: AccountRuntime): AnywhereService {
   if (service) return service;
@@ -114,6 +140,16 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
     }),
     links: rtc,
     manager: remoteManager,
+    manage: {
+      attach: (link, phone) =>
+        createManageSession({
+          link,
+          phone,
+          deviceName: hostname() || 'This computer',
+          methods: manageMethods,
+          audit: recordPhoneActivity,
+        }),
+    },
     passwords: saved,
     account: async () => {
       const status = await runtime.status();

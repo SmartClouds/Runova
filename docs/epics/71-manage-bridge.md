@@ -21,13 +21,13 @@ risk-rated and audited, after a single approval at the computer.
 
 ## Tasks
 
-- [ ] T1 Characterization test of terminal attach with a second listener
-- [ ] T2 `manage.ts` contract and `manage-v1.json` vectors, Vitest and Cargo both reading them
-- [ ] T3 Router with scopes, risk levels and audit, reusing AI Access
-- [ ] T4 Approve once, pinned phone keys, revocation
-- [ ] T5 Non-window event subscribers with flow control
-- [ ] T6 Workspace snapshot from the renderer
-- [ ] T7 Projects as the first real method set
+- [ ] T1 Characterization test of terminal attach with a second listener (moved to E74, where it is used; `terminal.ts` keeps a set of output subscribers per session, so following does not take over)
+- [x] T2 `manage.ts` contract and `manage-v1.json` vectors, Vitest and Cargo both reading them
+- [x] T3 Router with scopes, risk levels and audit, reusing AI Access
+- [x] T4 Approve once, pinned phone keys, revocation
+- [x] T5 Non-window event subscribers with flow control
+- [ ] T6 Workspace snapshot from the renderer (moved to E74, the first epic that shows workspace tabs)
+- [x] T7 Projects as the first real method set
 
 ## Acceptance criteria
 

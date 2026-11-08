@@ -1,8 +1,9 @@
+import { MANAGE_GRANTABLE_SCOPES, type ManageScope } from '@runova/protocol';
 import type { AnywherePermissions, AnywhereSettingsPatch, AnywhereState } from '@shared/anywhere';
 import { passwordProblem, passwordStrength } from '@shared/anywherePassword';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
-import { Key, Power, Route, Users, X } from '@/components/icons';
+import { Key, Monitor, Power, Route, Users, X } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { TrustedPhones } from './TrustedPhones';
 
 const STRENGTH = ['', 'Weak', 'Fair', 'Good', 'Strong'] as const;
 
@@ -142,6 +144,10 @@ export function AccessSettingsDialog({
             />
           </Section>
 
+          <Section title="Phones" icon={Monitor}>
+            <TrustedPhones phones={state.trustedPhones} />
+          </Section>
+
           <Section title="Privacy" icon={Route}>
             <ToggleRow
               label="Always connect through the Runova relay"
@@ -181,6 +187,45 @@ export function PermissionToggles({
         checked={value.files}
         onChange={(files) => onChange({ ...value, files })}
       />
+    </>
+  );
+}
+
+const SCOPE_LABELS: Record<ManageScope, { label: string; description: string }> = {
+  core: { label: 'Basics', description: 'See this computer and its projects.' },
+  terminal: { label: 'Terminals and CLIs', description: 'See them and send them commands.' },
+  git: { label: 'Git', description: 'See changes, commit and push.' },
+  vault: { label: 'The Vault', description: 'Open saved secrets after unlocking it.' },
+  deploy: {
+    label: 'Deploy and servers',
+    description: 'See servers and restart what runs on them.',
+  },
+  ops: { label: 'Monitoring and pipelines', description: 'See checks and CI, and start runs.' },
+  control: { label: 'Control the screen', description: 'See the screen and use the mouse.' },
+  files: { label: 'Files', description: 'Send and receive files.' },
+};
+
+/** What a phone may do on this computer, always written in the same order. */
+export function ManageScopeToggles({
+  value,
+  onChange,
+}: {
+  value: ManageScope[];
+  onChange: (value: ManageScope[]) => void;
+}): React.JSX.Element {
+  const toggle = (scope: ManageScope, on: boolean) =>
+    onChange(MANAGE_GRANTABLE_SCOPES.filter((s) => (s === scope ? on : value.includes(s))));
+  return (
+    <>
+      {MANAGE_GRANTABLE_SCOPES.map((scope) => (
+        <ToggleRow
+          key={scope}
+          label={SCOPE_LABELS[scope].label}
+          description={SCOPE_LABELS[scope].description}
+          checked={value.includes(scope)}
+          onChange={(on) => toggle(scope, on)}
+        />
+      ))}
     </>
   );
 }

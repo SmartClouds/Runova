@@ -1,12 +1,19 @@
+import type { ManageScope } from '@runova/protocol';
 import { b64u, derivePasswordSecret, fromB64u, identityFromSeed } from '@runova/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { AnywhereIncoming, AnywhereState } from '../../../shared/anywhere';
+import type { ManagePhone } from '../manage/session';
 import type { AgentConfigFile } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult } from './hub';
 import type { LinkTransport } from './link';
 import type { LinkOpener, OpenedLink } from './links';
-import { type AnywhereManagerPort, createAnywhereService, type SavedPasswords } from './service';
+import {
+  type AnywhereManagerPort,
+  createAnywhereService,
+  type ManagePort,
+  type SavedPasswords,
+} from './service';
 import { type AnywhereStoreIo, createAnywhereStore } from './settings';
 
 // --- A pretend website: devices, teams, presence and the hub's routing ---------------
@@ -390,6 +397,16 @@ function fakeInstaller(options: { fail?: boolean } = {}) {
   return installer;
 }
 
+function fakeManage() {
+  const port = {
+    sessions: [] as { link: { close(): void }; phone: ManagePhone }[],
+    attach: vi.fn((link: { close(): void }, phone: ManagePhone) => {
+      port.sessions.push({ link, phone });
+    }),
+  };
+  return port;
+}
+
 function computer(
   server: FakeServer,
   links: FakeLinks,
@@ -403,6 +420,7 @@ function computer(
   } = {},
 ) {
   const manager = fakeManager();
+  const manage = fakeManage();
   const installer = options.installer ?? fakeInstaller();
   const passwords = memoryPasswords();
   const incoming: AnywhereIncoming[] = [];
@@ -424,6 +442,7 @@ function computer(
     store: createAnywhereStore(memoryIo()),
     links: links.opener(),
     manager: manager as unknown as AnywhereManagerPort,
+    manage: manage as unknown as ManagePort,
     passwords,
     account: async () => ({
       deviceId: `device-${userId}`,
@@ -446,6 +465,7 @@ function computer(
     service,
     installer,
     manager,
+    manage,
     passwords,
     incoming,
     notices,
@@ -480,7 +500,7 @@ async function world(options: { ringMs?: number } = {}) {
   await kim.service.start();
   await lee.service.start();
   const samId = sam.state().device?.remoteId ?? '';
-  return { server, sam, kim, lee, samId };
+  return { server, links, sam, kim, lee, samId };
 }
 
 describe('Runova Anywhere service: starting', () => {
@@ -1004,5 +1024,135 @@ describe('Runova Anywhere service: signing out', () => {
     sam.hub.handlers?.disconnected();
 
     expect(checks).toBe(1);
+  });
+});
+
+describe('Runova Anywhere service: a phone asks to manage this computer', () => {
+  async function withPhone() {
+    const w = await world();
+    const phone = computer(w.server, w.links, 1, 'Runova app');
+    await phone.service.start();
+    await w.sam.service.refresh();
+    return { ...w, phone };
+  }
+
+  const approve = (scopes: ManageScope[]) => ({
+    accept: true,
+    permissions: { control: false, clipboard: false, files: false },
+    alwaysAllow: false,
+    scopes,
+  });
+
+  it('asks the person the first time, even when own devices may connect freely', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await sam.service.updateSettings({ allowOwnDevices: true });
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1, 'the request window');
+
+    expect(sam.incoming[0]).toMatchObject({ intent: 'manage', relation: 'own' });
+    expect(sam.manage.attach).not.toHaveBeenCalled();
+  });
+
+  it('opens a session with the scopes the person chose, and core always', async () => {
+    const { sam, phone, samId } = await withPhone();
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve(['git']));
+    await until(() => sam.manage.sessions.length === 1, 'a management session');
+
+    expect(sam.manage.sessions[0].phone).toMatchObject({
+      name: 'Runova app',
+      scopes: ['core', 'git'],
+    });
+    expect(sam.manager.attachHostPeer).not.toHaveBeenCalled();
+  });
+
+  it('lets an approved phone straight back in', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve([]));
+    await until(() => sam.manage.sessions.length === 1);
+    phone.service.disconnect();
+    await until(() => sam.state().trustedPhones[0]?.connected === false, 'hung up');
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.manage.sessions.length === 2, 'the second session');
+
+    expect(sam.incoming).toHaveLength(1);
+  });
+
+  it('asks again after the phone is forgotten, and ends the session it had', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve([]));
+    await until(() => sam.manage.sessions.length === 1);
+    const key = sam.state().trustedPhones[0].key;
+
+    await sam.service.forgetPhone(key);
+    await until(() => sam.state().trustedPhones.length === 0, 'forgotten');
+    await until(() => phone.state().outgoing === null, 'the phone sees the end');
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 2, 'asked again');
+  });
+
+  it('applies changed scopes by ending the session, so the phone reconnects with them', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve(['vault']));
+    await until(() => sam.manage.sessions.length === 1);
+    const key = sam.state().trustedPhones[0].key;
+
+    await sam.service.setPhoneScopes(key, ['git']);
+    await until(() => phone.state().outgoing === null, 'the old session ended');
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.manage.sessions.length === 2);
+
+    expect(sam.manage.sessions[1].phone.scopes).toEqual(['core', 'git']);
+  });
+
+  it('declines a teammate, whatever the server said', async () => {
+    const { server, sam, kim, samId } = await withPhone();
+    await sam.service.updateSettings({ teamIds: [10] });
+    await kim.service.refresh();
+
+    await kim.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => kim.state().outgoing?.phase === 'failed', 'declined');
+
+    expect(sam.incoming).toHaveLength(0);
+    expect(server.connected).toHaveLength(0);
+  });
+
+  it('declines every phone when connections are switched off', async () => {
+    const { sam, phone, samId } = await withPhone();
+    await sam.service.updateSettings({ acceptConnections: false });
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => phone.state().outgoing?.phase === 'failed', 'declined');
+
+    expect(sam.incoming).toHaveLength(0);
+  });
+
+  it('treats a new key on the same phone as a new phone', async () => {
+    const { server, sam, phone, samId } = await withPhone();
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, approve([]));
+    await until(() => sam.manage.sessions.length === 1);
+    phone.service.disconnect();
+    await until(() => sam.state().trustedPhones[0]?.connected === false);
+    const record = server.devices.find((d) => d.name === 'Runova app');
+    if (!record) throw new Error('no phone record');
+    record.identityKey = b64u(identityFromSeed(new Uint8Array(32).fill(5)).publicKey);
+
+    await phone.service.connect({ remoteId: samId, intent: 'manage' });
+    await until(() => sam.incoming.length === 2, 'asked about the new key');
+
+    expect(sam.manage.sessions).toHaveLength(1);
   });
 });

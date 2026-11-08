@@ -585,6 +585,8 @@ export const IPC = {
     refresh: 'anywhere:refresh',
     history: 'anywhere:history',
     deleteHistory: 'anywhere:deleteHistory',
+    forgetPhone: 'anywhere:forgetPhone',
+    setPhoneScopes: 'anywhere:setPhoneScopes',
     forgetRecent: 'anywhere:forgetRecent',
     forgetSavedPassword: 'anywhere:forgetSavedPassword',
     /** Opens the main window on the Anywhere tab, from the request window or the host bar. */

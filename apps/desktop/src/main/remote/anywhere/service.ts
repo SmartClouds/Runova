@@ -5,6 +5,7 @@ import {
   fromB64u,
   HandshakeError,
   type IdentityKeyPair,
+  type ManageScope,
   newIdentity,
 } from '@runova/protocol';
 import {
@@ -27,14 +28,15 @@ import {
   parseRemoteId,
 } from '../../../shared/anywhere';
 import { passwordProblem } from '../../../shared/anywherePassword';
+import type { ManagePhone } from '../manage/session';
 import type { AttachableSocket, PeerPermissions } from '../manager';
-import { decideIncoming, PasswordLockout } from './accessPolicy';
+import { decideIncoming, decideManage, PasswordLockout } from './accessPolicy';
 import type { AgentInstaller } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult, HubIncomingRequest } from './hub';
 import { SecureLink } from './link';
 import type { LinkOpener } from './links';
-import type { AnywhereSettings, AnywhereStore } from './settings';
+import type { AnywhereSettings, AnywhereStore, TrustedPhone } from './settings';
 
 /** The part of the remote-control manager the Anywhere service drives. */
 export interface AnywhereManagerPort {
@@ -56,6 +58,11 @@ export interface AnywhereManagerPort {
   openSessionWindow(): void;
 }
 
+/** Serves a phone once its link is secure (E71). */
+export interface ManagePort {
+  attach(link: SecureLink, phone: ManagePhone): void;
+}
+
 /** Password secrets saved for other computers, sealed in the Servers vault. */
 export interface SavedPasswords {
   get(remoteId: string, hostKey: string): Promise<Uint8Array | null>;
@@ -70,6 +77,7 @@ export interface AnywhereServiceDeps {
   store: AnywhereStore;
   links: LinkOpener;
   manager: AnywhereManagerPort;
+  manage?: ManagePort;
   passwords: SavedPasswords;
   /** The signed-in account and this install's device id, or null when signed out. */
   account(): Promise<{ deviceId: string; displayName: string; email: string } | null>;
@@ -148,6 +156,9 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   let attempts = 0;
   const pending = new Map<string, Pending>();
   const hosted = new Map<string, Hosted>();
+  /** Phones managing this computer right now, by session. */
+  const managed = new Map<string, { key: string; link: SecureLink }>();
+  let phones: TrustedPhone[] = [];
   /** Answers that came before this side knew the session id. */
   const earlyResolved = new Map<string, { accepted: boolean; reason: string | null }>();
   let inputPaused = false;
@@ -182,6 +193,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       outgoing: outgoing ? { ...outgoing.view } : null,
       incoming: [...pending.values()].map((p) => p.view),
       hosted: [...hosted.values()].map((h) => h.view),
+      trustedPhones: phones.map((phone) => ({
+        ...phone,
+        connected: [...managed.values()].some((session) => session.key === phone.key),
+      })),
       inputPaused,
       passwordLockedUntil: lockout.lockedUntil(),
       readiness: deps.readiness?.() ?? EMPTY_ANYWHERE_STATE.readiness,
@@ -263,6 +278,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       return;
     }
     settings = await deps.store.settings();
+    phones = await deps.store.phones();
     passwordSet = await deps.store.hasPasswordSecret();
     agentInstalled = deps.agent ? await deps.agent.installed().catch(() => false) : false;
     await loadRecent();
@@ -524,6 +540,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
 
     outgoing.pinKey = result.host.kind === 'agent' ? `${remoteId}#agent` : remoteId;
     const pinned = await deps.store.pin(outgoing.pinKey);
+    // An answer can arrive during that wait, and it must not be painted over below.
+    if (outgoing?.attempt !== attempt || outgoing.sessionId !== result.sessionId) return;
     if (pinned && pinned !== result.host.identityKey) {
       void deps.hub.end(result.sessionId).catch(() => undefined);
       outgoing.sessionId = null;
@@ -544,7 +562,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         return;
       }
       setOutgoing({ phase: 'connecting' });
-    } else {
+    } else if (outgoing.view.phase === 'requesting') {
       setOutgoing({ phase: 'waiting', ringsUntil: now() + ringMs });
     }
 
@@ -621,6 +639,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
           announce();
         }
       });
+      if (current.view.intent === 'manage') return;
       deps.manager.attachClient(link, {
         deviceName: hostName || formatRemoteId(remoteId),
         intent: current.view.intent,
@@ -677,19 +696,27 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
 
   async function onIncoming(request: HubIncomingRequest): Promise<void> {
     const current = settings ?? (await deps.store.settings());
-    const decision = !request.controller.identityKey
+    const key = request.controller.identityKey;
+    const decision = !key
       ? 'decline'
-      : decideIncoming(
-          {
-            mode: request.mode,
+      : request.intent === 'manage'
+        ? decideManage({
+            accepting: current.acceptConnections,
             relation: request.relation,
-            controllerUserId: request.controller.userId,
-            teams: request.teams,
-            hasPasswordSecret: passwordSet,
-            lockedOut: lockout.locked(),
-          },
-          current,
-        );
+            mode: request.mode,
+            trusted: (await deps.store.phone(key)) !== null,
+          })
+        : decideIncoming(
+            {
+              mode: request.mode,
+              relation: request.relation,
+              controllerUserId: request.controller.userId,
+              teams: request.teams,
+              hasPasswordSecret: passwordSet,
+              lockedOut: lockout.locked(),
+            },
+            current,
+          );
     if (decision === 'decline') {
       await deps.hub.respond(request.sessionId, false).catch(() => undefined);
       return;
@@ -748,6 +775,19 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       });
       announce();
     }
+    const phoneKey = entry.request.controller.identityKey;
+    if (entry.request.intent === 'manage' && phoneKey) {
+      await deps.store.trustPhone({
+        key: phoneKey,
+        name: entry.request.controller.deviceName ?? 'Phone',
+        platform: entry.request.controller.platform,
+        scopes: answer.scopes ?? [],
+        approvedAt: now(),
+        lastSeenAt: now(),
+      });
+      phones = await deps.store.phones();
+      announce();
+    }
     await deps.hub.respond(sessionId, true);
     void serve(entry.request, answer.permissions);
   }
@@ -784,6 +824,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       });
       if (request.mode === 'password') lockout.succeeded();
       await deps.hub.connected(sessionId, opened.kind).catch(() => undefined);
+      if (request.intent === 'manage') {
+        await serveManage(sessionId, request.controller.identityKey, link);
+        return;
+      }
       const name = request.controller.displayName || request.controller.email || 'Someone';
       const peerId = deps.manager.attachHostPeer(link, {
         deviceName: request.controller.deviceName
@@ -839,6 +883,53 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     }
   }
 
+  /** Hands a secured link to the phone's session. The key is checked once more, here. */
+  async function serveManage(sessionId: string, key: string, link: SecureLink): Promise<void> {
+    const phone = await deps.store.phone(key);
+    if (!phone || !deps.manage) {
+      link.close();
+      return;
+    }
+    await deps.store.touchPhone(key, now());
+    phones = await deps.store.phones();
+    managed.set(sessionId, { key, link });
+    link.onClose(() => {
+      if (managed.get(sessionId)?.link !== link) return;
+      managed.delete(sessionId);
+      announce();
+    });
+    deps.manage.attach(link, {
+      key,
+      name: phone.name,
+      scopes: ['core', ...phone.scopes],
+    });
+    announce();
+  }
+
+  function endPhoneSessions(key: string): void {
+    for (const [sessionId, session] of [...managed]) {
+      if (session.key !== key) continue;
+      managed.delete(sessionId);
+      session.link.close();
+    }
+  }
+
+  /** Takes a phone's approval away and ends whatever it has open. */
+  async function forgetPhone(key: string): Promise<void> {
+    await deps.store.forgetPhone(key);
+    endPhoneSessions(key);
+    phones = await deps.store.phones();
+    announce();
+  }
+
+  /** New scopes take effect on a new session, so a live one is ended and the phone reconnects. */
+  async function setPhoneScopes(key: string, scopes: ManageScope[]): Promise<void> {
+    await deps.store.setPhoneScopes(key, scopes);
+    endPhoneSessions(key);
+    phones = await deps.store.phones();
+    announce();
+  }
+
   function onEnded(sessionId: string, reason: string): void {
     const waiting = pending.get(sessionId);
     if (waiting) {
@@ -874,6 +965,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   }
 
   return {
+    forgetPhone,
+    setPhoneScopes,
     start,
     stop,
     refresh,

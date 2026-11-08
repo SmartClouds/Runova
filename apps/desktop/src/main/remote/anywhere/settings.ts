@@ -3,6 +3,8 @@ import {
   fromB64u,
   type IdentityKeyPair,
   identityFromSeed,
+  MANAGE_GRANTABLE_SCOPES,
+  type ManageScope,
   newIdentity,
 } from '@runova/protocol';
 
@@ -46,6 +48,20 @@ export interface AnywhereRecent {
   at: number;
 }
 
+/** A phone approved at this computer. Its key is what is trusted, not its account. */
+export interface TrustedPhone {
+  key: string;
+  name: string;
+  platform: string | null;
+  scopes: ManageScope[];
+  approvedAt: number;
+  lastSeenAt: number;
+}
+
+function grantable(scopes: readonly ManageScope[]): ManageScope[] {
+  return MANAGE_GRANTABLE_SCOPES.filter((scope) => scopes.includes(scope));
+}
+
 interface AnywhereFile {
   version: 1;
   settings?: Partial<AnywhereSettings>;
@@ -56,6 +72,7 @@ interface AnywhereFile {
   /** Host keys seen on earlier connections, by Runova ID (trust on first use). */
   pins?: Record<string, string>;
   recent?: AnywhereRecent[];
+  phones?: TrustedPhone[];
 }
 
 export interface AnywhereStoreIo {
@@ -172,6 +189,43 @@ export function createAnywhereStore(io: AnywhereStoreIo) {
     setPin(remoteId: string, key: string): Promise<void> {
       return change((file) => {
         file.pins = { ...(file.pins ?? {}), [remoteId]: key };
+      });
+    },
+
+    async phones(): Promise<TrustedPhone[]> {
+      return [...((await load()).phones ?? [])];
+    },
+
+    async phone(key: string): Promise<TrustedPhone | null> {
+      return (await load()).phones?.find((p) => p.key === key) ?? null;
+    },
+
+    trustPhone(phone: TrustedPhone): Promise<void> {
+      return change((file) => {
+        const entry = { ...phone, scopes: grantable(phone.scopes) };
+        file.phones = [...(file.phones ?? []).filter((p) => p.key !== phone.key), entry];
+      });
+    },
+
+    touchPhone(key: string, at: number): Promise<void> {
+      return change((file) => {
+        file.phones = (file.phones ?? []).map((p) =>
+          p.key === key ? { ...p, lastSeenAt: at } : p,
+        );
+      });
+    },
+
+    setPhoneScopes(key: string, scopes: ManageScope[]): Promise<void> {
+      return change((file) => {
+        file.phones = (file.phones ?? []).map((p) =>
+          p.key === key ? { ...p, scopes: grantable(scopes) } : p,
+        );
+      });
+    },
+
+    forgetPhone(key: string): Promise<void> {
+      return change((file) => {
+        file.phones = (file.phones ?? []).filter((p) => p.key !== key);
       });
     },
 

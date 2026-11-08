@@ -1,3 +1,4 @@
+import type { ManageScope } from '@runova/protocol';
 import { ipcMain, shell, systemPreferences } from 'electron';
 import {
   type AnywhereConnectRequest,
@@ -59,6 +60,14 @@ export function registerAnywhereHandlers(): void {
   ipcMain.handle(
     IPC.anywhere.deleteHistory,
     signedInOnly((id: number) => anywhere().deleteHistory(id)),
+  );
+  ipcMain.handle(
+    IPC.anywhere.forgetPhone,
+    signedInOnly((key: string) => anywhere().forgetPhone(key)),
+  );
+  ipcMain.handle(
+    IPC.anywhere.setPhoneScopes,
+    signedInOnly((key: string, scopes: ManageScope[]) => anywhere().setPhoneScopes(key, scopes)),
   );
   ipcMain.handle(
     IPC.anywhere.forgetRecent,
