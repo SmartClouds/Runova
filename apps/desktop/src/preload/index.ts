@@ -2603,6 +2603,9 @@ const anywhere = {
   openApp: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.openApp),
   grantPermission: (kind: 'accessibility' | 'screen'): Promise<void> =>
     ipcRenderer.invoke(IPC.anywhere.grantPermission, kind),
+  enableAgent: (password?: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.anywhere.enableAgent, password),
+  disableAgent: (): Promise<void> => ipcRenderer.invoke(IPC.anywhere.disableAgent),
   linkSignal: (sessionId: string, payload: string): void =>
     ipcRenderer.send(IPC.anywhere.linkSignal, sessionId, payload),
   linkOpened: (sessionId: string, fingerprints: { local: string; remote: string }): void =>

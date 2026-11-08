@@ -60,6 +60,10 @@ export function registerAnywhereHandlers(): void {
     window.webContents.send(IPC.app.onNavigate, '/remote?tab=anywhere');
   });
 
+  ipcMain.handle(IPC.anywhere.enableAgent, (_e, password?: string) =>
+    anywhere().enableAgent(password),
+  );
+  ipcMain.handle(IPC.anywhere.disableAgent, () => anywhere().disableAgent());
   ipcMain.handle(IPC.anywhere.grantPermission, async (_e, kind: 'accessibility' | 'screen') => {
     if (process.platform !== 'darwin') return;
     // Asking once shows macOS's own prompt; after that only System Settings can change it.

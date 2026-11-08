@@ -48,20 +48,38 @@ internal sealed partial class RemoteHub(
 
     private long Me => long.Parse(Context.UserIdentifier!, CultureInfo.InvariantCulture);
 
+    /// <summary>The computer this connection is the background agent of (E64), or null for the app.</summary>
+    private long? AgentOf => RemoteAgentTokens.AgentDevice(Context.User);
+
     /// <summary>This connection is now how one of the account's computers is reached.</summary>
     public async Task GoOnline(long deviceId)
     {
         var me = Me;
+        var agentOf = AgentOf;
         var device = await db.RemoteDevices.SingleOrDefaultAsync(d => d.Id == deviceId && d.UserId == me && d.RevokedAt == null)
             ?? throw new HubException("There is no such computer on this account.");
-        presence.Online(device.Id, me, Context.ConnectionId);
+        if (agentOf is not null && (agentOf != device.Id || device.AgentSecretHash is null))
+        {
+            throw new HubException("An agent can only host its own computer.");
+        }
+
+        var wasOnline = presence.IsOnline(device.Id);
+        presence.Online(device.Id, me, Context.ConnectionId, agentOf is null ? RemoteDeviceKinds.App : RemoteDeviceKinds.Agent);
         device.LastSeenAt = time.GetUtcNow();
         await db.SaveChangesAsync();
-        await audience.PresenceAsync(device, online: true);
+        if (!wasOnline)
+        {
+            await audience.PresenceAsync(device, online: true);
+        }
     }
 
     public async Task<ConnectResultDto> RequestConnect(ConnectRequestDto request)
     {
+        if (AgentOf is not null)
+        {
+            throw new HubException("A background agent can not start connections.");
+        }
+
         var me = Me;
         if (!limits.TryAcquire($"request:{me}", RemoteLimits.RequestsPerAccount, RemoteLimits.RequestWindow))
         {
@@ -97,10 +115,12 @@ internal sealed partial class RemoteHub(
             return Result(RemoteConnectStatuses.RateLimited);
         }
 
-        if (presence.ConnectionOf(target.Id) is not { } hostConnection)
+        if (presence.EndpointOf(target.Id) is not { } endpoint)
         {
             return Result(RemoteConnectStatuses.Offline);
         }
+
+        var hostConnection = endpoint.ConnectionId;
 
         if (sessions.CountFor(Context.ConnectionId) >= RemoteLimits.SessionsPerConnection
             || sessions.CountFor(hostConnection) >= RemoteLimits.SessionsPerConnection)
@@ -116,7 +136,9 @@ internal sealed partial class RemoteHub(
             new IncomingRequestDto(session.Id, request.Mode, relationName, request.Intent, controller, [.. teams.Select(t => t.Name)]));
         LogRinging(logger, target.Id, request.Mode, relationName);
 
-        var host = RemoteMapper.ToHost(target);
+        var host = endpoint.Kind == RemoteDeviceKinds.Agent
+            ? RemoteMapper.ToHost(target) with { Kind = RemoteDeviceKinds.Agent, IdentityKey = target.AgentIdentityKey ?? "" }
+            : RemoteMapper.ToHost(target);
         return new ConnectResultDto(
             RemoteConnectStatuses.Ringing,
             session.Id,
@@ -232,7 +254,7 @@ internal sealed partial class RemoteHub(
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        if (presence.Offline(Context.ConnectionId) is { } entry
+        if (presence.Offline(Context.ConnectionId) is { Change: PresenceChange.WentOffline, Entry: { } entry }
             && await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.Id == entry.DeviceId) is { } device)
         {
             await audience.PresenceAsync(device, online: false);

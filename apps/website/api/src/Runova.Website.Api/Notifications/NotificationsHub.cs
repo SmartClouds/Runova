@@ -56,7 +56,8 @@ internal sealed class HubAccessTokenMiddleware(RequestDelegate next)
         if ((http.Request.Path.StartsWithSegments(NotificationsHub.Path, StringComparison.Ordinal)
                 || http.Request.Path.StartsWithSegments(RemoteHub.Path, StringComparison.Ordinal))
             && http.Request.Query.TryGetValue("access_token", out var token)
-            && token.ToString().StartsWith(DeviceTokens.Prefix, StringComparison.Ordinal)
+            && (token.ToString().StartsWith(DeviceTokens.Prefix, StringComparison.Ordinal)
+                || (http.Request.Path.StartsWithSegments(RemoteHub.Path, StringComparison.Ordinal) && token.ToString().StartsWith(RemoteAgentTokens.Prefix, StringComparison.Ordinal)))
             && string.IsNullOrEmpty(http.Request.Headers.Authorization))
         {
             http.Request.Headers.Authorization = "Bearer " + token;

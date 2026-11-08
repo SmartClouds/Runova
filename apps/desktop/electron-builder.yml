@@ -37,6 +37,11 @@ extraResources:
   # fine (electron-builder only warns) and its Deploy section says it has no core to install.
   - from: build/server-core-manifest.json
     to: server-core-manifest.json
+  # The Runova Anywhere agent (E64), which CD publishes into build/remote-agent before packaging
+  # on Windows. A build without it packages fine and the app says the background service is not
+  # part of this build.
+  - from: build/remote-agent
+    to: remote-agent
   # The Runova Connector WordPress plugin (E19), built by `node scripts/wordpress-connector.mjs
   # build` (CD runs it before packaging). Deploy offers it as a download for wp-admin. Without
   # it the app still packages; the download button then says the zip is missing.

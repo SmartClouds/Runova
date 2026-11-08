@@ -29,6 +29,8 @@ public class RemoteMapperTests
         IdentityKey = "1pqHXcPHQKOHQ3xd0D6aiuWhPVE2t3n5mpg0wzBHTSI",
         AllowOwnDevices = true,
         UnattendedEnabled = true,
+        AgentIdentityKey = "agentKey",
+        AgentSecretHash = [1, 2, 3],
         CreatedAt = _at,
         LastSeenAt = _at.AddHours(1),
     };
@@ -37,7 +39,7 @@ public class RemoteMapperTests
     public void An_own_device_takes_its_teams_and_presence_from_the_caller()
     {
         Assert.Equal(
-            new RemoteDeviceDto(7, "482193775", "Sam's laptop", "windows", "app", "1pqHXcPHQKOHQ3xd0D6aiuWhPVE2t3n5mpg0wzBHTSI", true, true, [2, 5], true, _at, _at.AddHours(1)),
+            new RemoteDeviceDto(7, "482193775", "Sam's laptop", "windows", "app", "1pqHXcPHQKOHQ3xd0D6aiuWhPVE2t3n5mpg0wzBHTSI", true, true, [2, 5], true, "agentKey", _at, _at.AddHours(1)),
             RemoteMapper.ToDto(Device(), [2, 5], online: true),
             new RemoteDeviceDtoComparer());
     }

@@ -7,6 +7,7 @@ build/
 !apps/desktop/build/
 # CD puts the server core release manifest here before packaging; never commit one.
 apps/desktop/build/server-core-manifest.json
+apps/desktop/build/remote-agent/
 *.log
 .DS_Store
 .env
@@ -33,6 +34,10 @@ apps/server-core/artifacts/
 # Website API (.NET) build output and Verify snapshots that did not match
 apps/website/api/**/bin/
 apps/website/api/**/obj/
+# Runova Anywhere agent (.NET) build output
+apps/remote-agent/**/bin/
+apps/remote-agent/**/obj/
+apps/remote-agent/**/TestResults/
 apps/website/api/**/*.received.*
 # The local Monitoring Gateway certificate (apps/website/compose.yaml, monitoring profile).
 apps/website/monitoring-tls/

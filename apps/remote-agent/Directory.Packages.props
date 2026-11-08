@@ -1,0 +1,26 @@
+<Project>
+  <!-- One version per package for the whole solution. Bump here, never in a project file. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup Label="Protocol">
+    <!-- Ed25519, X25519, ristretto255 (CPace) and scrypt, the same primitives the app uses through
+         @noble; the package carries the native library for every desktop OS. -->
+    <PackageVersion Include="libsodium" Version="1.0.20.1" />
+  </ItemGroup>
+  <ItemGroup Label="Agent">
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.14" />
+    <!-- Seals the agent's key and secret to the machine (DPAPI) on Windows. -->
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <!-- JPEG encoding of screen tiles on Windows. -->
+    <PackageVersion Include="System.Drawing.Common" Version="10.0.14" />
+  </ItemGroup>
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+</Project>

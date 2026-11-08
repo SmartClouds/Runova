@@ -117,4 +117,65 @@ describe('AccessSettingsDialog', () => {
 
     expect(bridge.$fn('anywhere.updateSettings')).toHaveBeenCalledWith({ alwaysRelay: true });
   });
+
+  it('turns on the background service, asking for the password when one is set', async () => {
+    const { bridge } = open(state({ passwordSet: true }));
+
+    await userEvent.click(
+      screen.getByRole('switch', {
+        name: 'Keep this computer reachable while no one is signed in',
+      }),
+    );
+    await userEvent.type(
+      screen.getByLabelText('Password, for the background service'),
+      'purple monkey dishwasher',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+
+    expect(bridge.$fn('anywhere.enableAgent')).toHaveBeenCalledWith('purple monkey dishwasher');
+  });
+
+  it('turns on the background service straight away without a password', async () => {
+    const { bridge } = open(state());
+
+    await userEvent.click(
+      screen.getByRole('switch', {
+        name: 'Keep this computer reachable while no one is signed in',
+      }),
+    );
+
+    expect(bridge.$fn('anywhere.enableAgent')).toHaveBeenCalledWith(undefined);
+  });
+
+  it('turns the background service off', async () => {
+    const { bridge } = open(state({ agent: { installed: true, unavailableReason: null } }));
+
+    await userEvent.click(
+      screen.getByRole('switch', {
+        name: 'Keep this computer reachable while no one is signed in',
+      }),
+    );
+
+    expect(bridge.$fn('anywhere.disableAgent')).toHaveBeenCalled();
+  });
+
+  it('says why the background service is not here', () => {
+    open(
+      state({
+        agent: {
+          installed: false,
+          unavailableReason: 'The background service is available on Windows for now.',
+        },
+      }),
+    );
+
+    expect(
+      screen.getByText('The background service is available on Windows for now.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', {
+        name: 'Keep this computer reachable while no one is signed in',
+      }),
+    ).toBeDisabled();
+  });
 });

@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "handshake": [
+    {
+      "mode": "ask",
+      "sessionId": "Zm9vYmFyYmF6cXV4cXV1eA",
+      "hostSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "controllerSeed": "2222222222222222222222222222222222222222222222222222222222222222",
+      "password": null,
+      "passwordSecret": null,
+      "controllerFingerprint": "sha-256 AA:BB",
+      "hostFingerprint": "sha-256 CC:DD",
+      "controllerRandom": [
+        "3c5e81b40c5ec68e04a3406c97d63cfbdc53ae88371a125121b5956143c0ee2d",
+        "55fb638c77fee0b6f5f9275faf297e2c"
+      ],
+      "hostRandom": [
+        "3c7530bdb71e347886b2b41b91c976720357fb6be8aabd633f262e25125e8455",
+        "4c96c97852d0c6dbb0ddb6ed4a29e3ea"
+      ],
+      "hello": {
+        "t": "hs-hello",
+        "v": 1,
+        "eph": "GJyzToT5LaJmJ1b0f2ZVXt-AITeWiJ15L6Bu9BqddG0",
+        "id": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+        "nonce": "VftjjHf-4Lb1-Sdfryl-LA",
+        "fp": "sha-256 AA:BB"
+      },
+      "reply": {
+        "t": "hs-reply",
+        "eph": "BOaIj0heY2hnRj0j0XGTuGmNwsK06p4-r8p4kac79Dc",
+        "id": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "nonce": "TJbJeFLQxtuw3bbtSinj6g",
+        "fp": "sha-256 CC:DD",
+        "sig": "dcEyoDZb254Aq-t1THR8WZH0GRGmA0FF_W_ek_mKk_piPL_Hefl-VA3LETeExoORR1fUdkdvF5CIoeLmTOawBQ",
+        "confirm": "Ihbct5Cvcg6cdkDH8FfbPI3vNLHWB8zIpxlVYCnx918"
+      },
+      "finish": {
+        "t": "hs-finish",
+        "sig": "3dcOg7Fi866A3WogMjABcC_iwSu2GdEQ02B6CeZP8iKpm9ipIuYB6p4lMknPxHRMC5wI1QFnoS6SM3jovsEuAQ",
+        "confirm": "pFrYs00QRhVJxhgPR4bgWCJocGOwK7ZTOa7G6VCSlfQ"
+      },
+      "controllerToHost": "2d81d7bb51b6d83733a59d2914dabbdd532ad9bc8a1ec9fcf0835830eaf2fb09",
+      "hostToController": "8e785f645028328a642a1ec09ecd37d47ff982026990f6322db2753e91a0beca",
+      "safetyCode": "872106",
+      "transcript": "8be8acb89268855a26765bc389e3e8167fb23ecceffc27c8634615b62619118b"
+    },
+    {
+      "mode": "password",
+      "sessionId": "Zm9vYmFyYmF6cXV4cXV1eA",
+      "hostSeed": "1111111111111111111111111111111111111111111111111111111111111111",
+      "controllerSeed": "2222222222222222222222222222222222222222222222222222222222222222",
+      "password": "correct horse battery staple",
+      "passwordSecret": "56b672708e4bd0596098e4dec89cc5bdcca41629c85768c6dd9488f64d022235",
+      "controllerFingerprint": "sha-256 AA:BB",
+      "hostFingerprint": "sha-256 CC:DD",
+      "controllerRandom": [
+        "3c5e81b40c5ec68e04a3406c97d63cfbdc53ae88371a125121b5956143c0ee2d",
+        "55fb638c77fee0b6f5f9275faf297e2c",
+        "97df5404f33bd406620b5821cf68259ccbee0207ffcd7464abf7bb7d6a25e6bfa294890d6b90f256c646e9f06e6e5a05a9bf717fd7480059a9144b373ec5809d"
+      ],
+      "hostRandom": [
+        "3c7530bdb71e347886b2b41b91c976720357fb6be8aabd633f262e25125e8455",
+        "4c96c97852d0c6dbb0ddb6ed4a29e3ea",
+        "e33985e100039f6f599ca6c674f725c41e97bc42c57921e806a1ff0de100e89365a8aaaecf81b41262f37cfc813ae8f7ca55497837cc699587b29e7577a80a51"
+      ],
+      "hello": {
+        "t": "hs-hello",
+        "v": 1,
+        "eph": "GJyzToT5LaJmJ1b0f2ZVXt-AITeWiJ15L6Bu9BqddG0",
+        "id": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA",
+        "nonce": "VftjjHf-4Lb1-Sdfryl-LA",
+        "fp": "sha-256 AA:BB",
+        "cpace": "2MgYVTkahwuBmh4B5hBjACLrcBssv8M9wSwx05vANmE"
+      },
+      "reply": {
+        "t": "hs-reply",
+        "eph": "BOaIj0heY2hnRj0j0XGTuGmNwsK06p4-r8p4kac79Dc",
+        "id": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc",
+        "nonce": "TJbJeFLQxtuw3bbtSinj6g",
+        "fp": "sha-256 CC:DD",
+        "cpace": "2kNanq0D-mlT4IFHp3hg0XVSTuchUCHKNt_qCVg0bwg",
+        "sig": "p1pVy9JkpbKRffW-3G1nRxUIWkHEikZkpBwVY8bqh_5Up7-vMoBoaMzqRzEQW1wLexTU0tbZCbCofyQ8vMs3BA",
+        "confirm": "g-4Gjt_0aBfZrDx5bfxq6NRbfYDMhqadevLfv_LyaUA"
+      },
+      "finish": {
+        "t": "hs-finish",
+        "sig": "X5JInJoyaglYznqVkckCZtkITWFJ-TpTR6v0nmV4hQB00FdB-VGZEaDU3vqYd8kEc02IZzRhXH5haBxL3091Bw",
+        "confirm": "ySjDJlQrsjviZ0GnqN4TxTMmC14vasehij4bbOZV2Lk"
+      },
+      "controllerToHost": "b8d9b0d5d8ffcb873ef20743518d4369b24c4653a91db1ede43604abc542b65b",
+      "hostToController": "36dc8f30b89306993a9d41819558e47aa6e06f907091391c753c2a2e9af0f5c5",
+      "safetyCode": "194594",
+      "transcript": "83fd4228eea824e7c1917d774852a9cb5c6ae9ea7992c765d3a4be14b43b9e99"
+    }
+  ],
+  "framing": {
+    "textPayload": "7b2274223a22617574682d6f6b222c226465766963654e616d65223a2253414d2d4445534b222c2273637265656e223a7b227769647468223a313932302c22686569676874223a313038307d7d",
+    "textFrames": [
+      "017b2274223a22617574682d6f6b222c226465766963654e616d65223a2253414d2d4445534b222c2273637265656e223a7b227769647468223a313932302c22686569676874223a313038307d7d"
+    ],
+    "binaryLength": 70000,
+    "binaryMessageId": 42,
+    "binaryFrameHeaders": [
+      "030000002a0000000202",
+      "030000002a0001000202"
+    ],
+    "binaryFrameLengths": [
+      61440,
+      8580
+    ],
+    "binaryFrameSha256": [
+      "0b721155dad379d3e2b898df82d80ab31bf898469d2b342a2d8da8394e4cd2d0",
+      "1be8b7889b63648a46e498d2120f71900be27f1be6250383ba6a0c3cac02603c"
+    ]
+  },
+  "cipher": {
+    "key": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "frames": [
+      "01",
+      "02deadbeef",
+      "09090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909"
+    ],
+    "sealed": [
+      "0000000000000000070f2252c074c32d2ab47510e30934899e",
+      "00000000000000017f8a65eb2bade12d2c3fd8d3f242034fe6ff965cc2",
+      "0000000000000002d99d69e76ef9aa2d4147db004b5c276ceb40660816a7bd27aa26e1d74e8c87348041a75236b1652e9d306e3ab0faced146007be56154917f0b68ee3ae3348ba5f77b49a28de836cae10c8513261908b02e74d80a179ef7eaecf9174c9b9555f2d104d3a0967f5e50903ff9925c5ac2b12dfddbfc"
+    ]
+  }
+}

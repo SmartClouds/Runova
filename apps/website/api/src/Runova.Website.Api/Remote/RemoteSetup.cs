@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Data;
@@ -18,6 +19,8 @@ internal static class RemoteSetup
         services.AddSingleton<RemoteRateLimiter>();
         services.AddSingleton<RemoteRelayTickets>();
         services.AddSingleton<RemoteRelay>();
+        services.AddSingleton<RemoteAgentTokens>();
+        services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, RemoteAgentAuthenticationHandler>(RemoteAgentAuthenticationHandler.SchemeName, null);
         services.AddScoped<RemoteAudience>();
         services.AddScoped<RemoteSessionRetentionJob>();
         services.AddHostedService<RemoteRingingSweeper>();

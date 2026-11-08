@@ -1,9 +1,11 @@
 import {
   b64u,
   derivePasswordSecret,
+  equalBytes,
   fromB64u,
   HandshakeError,
   type IdentityKeyPair,
+  newIdentity,
 } from '@runova/protocol';
 import {
   type AnywhereConnectRequest,
@@ -27,6 +29,7 @@ import {
 import { passwordProblem } from '../../../shared/anywherePassword';
 import type { AttachableSocket, PeerPermissions } from '../manager';
 import { decideIncoming, PasswordLockout } from './accessPolicy';
+import type { AgentInstaller } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult, HubIncomingRequest } from './hub';
 import { SecureLink } from './link';
@@ -83,12 +86,18 @@ export interface AnywhereServiceDeps {
   ringMs?: number;
   /** What this computer still needs before it can be seen and controlled. */
   readiness?: () => AnywhereReadiness;
+  /** The website, for the background agent's config. */
+  siteUrl?: string;
+  /** Installs the background agent (E64), where this build and OS have one. */
+  agent?: AgentInstaller;
 }
 
 const RETRY_REGISTER_MS = 60_000;
 
 interface Outgoing {
   attempt: number;
+  /** Where the host key is pinned: the app and the background agent each have their own key. */
+  pinKey: string | null;
   view: AnywhereOutgoing;
   request: AnywhereConnectRequest;
   sessionId: string | null;
@@ -142,6 +151,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   let inputPaused = false;
   let retry: NodeJS.Timeout | null = null;
   let running = false;
+  let agentInstalled = false;
 
   function state(): AnywhereState {
     return {
@@ -151,9 +161,17 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       device: device
         ? { id: device.id, remoteId: device.remoteId, name: device.name, platform: device.platform }
         : null,
-      settings: settings
-        ? { ...settings, passwordSet, canKeepSecrets: deps.store.remembersIdentity() }
-        : { ...EMPTY_ANYWHERE_STATE.settings, canKeepSecrets: deps.store.remembersIdentity() },
+      settings: {
+        ...(settings ?? EMPTY_ANYWHERE_STATE.settings),
+        passwordSet: settings ? passwordSet : false,
+        canKeepSecrets: deps.store.remembersIdentity(),
+        agent: {
+          installed: agentInstalled,
+          unavailableReason: deps.agent
+            ? deps.agent.unavailable()
+            : 'The background service is not part of this build.',
+        },
+      },
       directory,
       recent,
       teams,
@@ -211,6 +229,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     account = await deps.account();
     settings = await deps.store.settings();
     passwordSet = await deps.store.hasPasswordSecret();
+    agentInstalled = deps.agent ? await deps.agent.installed().catch(() => false) : false;
     await loadRecent();
     if (!account) {
       status = 'signed-out';
@@ -305,6 +324,70 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     }
     await pushSettings();
     announce();
+    // The agent checks passwords with a secret of its own; it needs the new one too.
+    if (agentInstalled) await enableAgent(password ?? undefined);
+  }
+
+  /**
+   * Turns on the background agent (E64): a key of its own registered with the website, its
+   * one-time secret, and the owner's choices, handed to the agent's installer, which Windows asks
+   * permission for. With a password set, the person types it once more so the agent gets a password
+   * secret for its own key; it is checked against this computer's first.
+   */
+  async function enableAgent(password?: string): Promise<void> {
+    if (!device || !identity)
+      throw new Error('Runova Anywhere is not set up on this computer yet.');
+    const installer = deps.agent;
+    const reason = installer
+      ? installer.unavailable()
+      : 'The background service is not part of this build.';
+    if (!installer || reason) throw new Error(reason ?? 'The background service is not available.');
+    if (passwordSet) {
+      if (!password) {
+        throw new Error(
+          'Type the unattended-access password so the background service can check it too.',
+        );
+      }
+      const appKey = b64u(identity.publicKey);
+      const stored = await deps.store.passwordSecret(appKey);
+      const typed = await derivePasswordSecret(password, appKey);
+      if (!stored || !equalBytes(stored, typed)) {
+        throw new Error('That password does not match the one set on this computer.');
+      }
+    }
+    const current = settings ?? (await deps.store.settings());
+    const agentIdentity = newIdentity();
+    const agentKey = b64u(agentIdentity.publicKey);
+    const { agentSecret } = await deps.api.enableAgent(device.id, agentKey);
+    try {
+      await installer.install({
+        siteUrl: deps.siteUrl ?? '',
+        remoteId: device.remoteId,
+        deviceId: device.id,
+        deviceName: device.name,
+        identitySeed: b64u(agentIdentity.secretKey),
+        agentSecret,
+        passwordSecret:
+          passwordSet && password ? b64u(await derivePasswordSecret(password, agentKey)) : null,
+        allowOwnDevices: current.allowOwnDevices,
+        alwaysAllow: current.alwaysAllow.map((p) => p.userId),
+        defaultPermissions: current.defaultPermissions,
+      });
+    } catch (e) {
+      await deps.api.disableAgent(device.id).catch(() => undefined);
+      agentInstalled = await installer.installed().catch(() => false);
+      announce();
+      throw e;
+    }
+    agentInstalled = true;
+    announce();
+  }
+
+  async function disableAgent(): Promise<void> {
+    if (deps.agent) await deps.agent.uninstall();
+    if (device) await deps.api.disableAgent(device.id).catch(() => undefined);
+    agentInstalled = false;
+    announce();
   }
 
   // --- Connecting out --------------------------------------------------------------
@@ -332,6 +415,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     outgoing = {
       attempt,
       request,
+      pinKey: null,
       sessionId: null,
       hostKey: null,
       secret: null,
@@ -393,7 +477,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     outgoing.hostKey = result.host.identityKey;
     setOutgoing({ hostName: result.host.name, platform: result.host.platform });
 
-    const pinned = await deps.store.pin(remoteId);
+    outgoing.pinKey = result.host.kind === 'agent' ? `${remoteId}#agent` : remoteId;
+    const pinned = await deps.store.pin(outgoing.pinKey);
     if (pinned && pinned !== result.host.identityKey) {
       void deps.hub.end(result.sessionId).catch(() => undefined);
       outgoing.sessionId = null;
@@ -472,7 +557,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         return;
       }
       const { remoteId, hostName, platform } = current.view;
-      await deps.store.setPin(remoteId, current.hostKey);
+      await deps.store.setPin(current.pinKey ?? remoteId, current.hostKey);
       if (current.secret && current.request.savePassword) {
         await deps.passwords.set(remoteId, current.hostKey, current.secret);
       }
@@ -526,7 +611,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   /** The person checked the new key with the owner and trusts it from now on. */
   async function trustNewKey(): Promise<void> {
     if (!outgoing || outgoing.view.phase !== 'key-changed' || !outgoing.hostKey) return;
-    await deps.store.setPin(outgoing.view.remoteId, outgoing.hostKey);
+    await deps.store.setPin(outgoing.pinKey ?? outgoing.view.remoteId, outgoing.hostKey);
     await connect({ ...outgoing.request, remoteId: outgoing.view.remoteId });
   }
 
@@ -757,6 +842,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     updateSettings,
     setPassword,
     passwordFailures: () => lockout.failures(),
+    enableAgent,
+    disableAgent,
     history: (): Promise<AnywhereSessionRecord[]> => deps.api.sessions(),
     deleteHistory: (id: number) => deps.api.deleteSession(id),
     async forgetRecent(remoteId: string): Promise<void> {

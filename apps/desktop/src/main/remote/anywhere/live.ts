@@ -1,5 +1,7 @@
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { app, safeStorage, systemPreferences } from 'electron';
@@ -12,6 +14,7 @@ import { showOsNotification } from '../../notifications/osNotification';
 import { decryptSecret, encryptSecret, registerSealedSecretStore } from '../../ssh/vault';
 import { InputInjector } from '../inputInjector';
 import { remoteManager } from '../manager';
+import { createAgentInstaller } from './agentInstaller';
 import { createAnywhereApi } from './api';
 import { websiteAnywhereHub } from './hub';
 import { createRelayOpener } from './relay';
@@ -133,6 +136,29 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
       showOsNotification({ title, body, route: '/remote?tab=anywhere' });
     },
     log,
+    siteUrl: runtime.siteUrl,
+    agent: createAgentInstaller({
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+      exists: existsSync,
+      run: (command, args) =>
+        new Promise((resolve) => {
+          const child = spawn(command, args, { windowsHide: true });
+          let stdout = '';
+          child.stdout.on('data', (chunk: Buffer) => {
+            stdout += chunk.toString('utf-8');
+          });
+          child.on('error', () => resolve({ code: -1, stdout }));
+          child.on('close', (code) => resolve({ code: code ?? -1, stdout }));
+        }),
+      writePrivateFile: async (content) => {
+        const file = dataFile(`agent-config-${randomUUID()}.json`);
+        await mkdir(dirname(file), { recursive: true });
+        await writeFile(file, content, { encoding: 'utf-8', mode: 0o600 });
+        return file;
+      },
+      removeFile: (path) => unlink(path),
+    }),
     readiness: () => {
       const needs: ('accessibility' | 'screen')[] = [];
       if (process.platform === 'darwin') {

@@ -2,7 +2,7 @@ import type { AnywherePermissions, AnywhereSettingsPatch, AnywhereState } from '
 import { passwordProblem, passwordStrength } from '@shared/anywherePassword';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
-import { Key, Route, Users, X } from '@/components/icons';
+import { Key, Power, Route, Users, X } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -131,6 +131,10 @@ export function AccessSettingsDialog({
             <PasswordSetting set={settings.passwordSet} canKeepSecrets={settings.canKeepSecrets} />
           </Section>
 
+          <Section title="When no one is signed in" icon={Power}>
+            <AgentSetting state={state} />
+          </Section>
+
           <Section title="A new session may">
             <PermissionToggles
               value={settings.defaultPermissions}
@@ -178,6 +182,80 @@ export function PermissionToggles({
         onChange={(files) => onChange({ ...value, files })}
       />
     </>
+  );
+}
+
+/** The background service that keeps the computer reachable on the lock and sign-in screens (E64). */
+function AgentSetting({ state }: { state: AnywhereState }): React.JSX.Element {
+  const { installed, unavailableReason } = state.settings.agent;
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const id = useId();
+
+  async function run(action: () => Promise<void>, done: string): Promise<void> {
+    setBusy(true);
+    try {
+      await action();
+      setAsking(false);
+      setPassword('');
+      toast.success(done);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggle(on: boolean): void {
+    if (!on) {
+      void run(() => window.runova.anywhere.disableAgent(), 'Background service turned off');
+    } else if (state.settings.passwordSet) {
+      setAsking(true);
+    } else {
+      void run(() => window.runova.anywhere.enableAgent(undefined), 'Background service turned on');
+    }
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <ToggleRow
+        label="Keep this computer reachable while no one is signed in"
+        description="A small service that starts with Windows answers on the lock and sign-in screens, for your own computers, teammates you always let in, and the password. Windows asks for permission to set it up."
+        checked={installed || asking}
+        disabled={!!unavailableReason || busy}
+        onChange={toggle}
+      />
+      {unavailableReason ? (
+        <p className="text-xs text-muted-foreground">{unavailableReason}</p>
+      ) : null}
+      {asking ? (
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (password)
+              void run(
+                () => window.runova.anywhere.enableAgent(password),
+                'Background service turned on',
+              );
+          }}
+        >
+          <Input
+            id={id}
+            aria-label="Password, for the background service"
+            type="password"
+            autoComplete="off"
+            placeholder="This computer's unattended-access password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <Button type="submit" shape="pill" disabled={!password || busy}>
+            Turn on
+          </Button>
+        </form>
+      ) : null}
+    </div>
   );
 }
 
@@ -320,11 +398,13 @@ function ToggleRow({
   label,
   description,
   checked,
+  disabled = false,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
   const id = useId();
@@ -336,7 +416,7 @@ function ToggleRow({
         </Label>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
     </div>
   );
 }

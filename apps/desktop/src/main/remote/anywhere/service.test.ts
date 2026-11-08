@@ -1,5 +1,7 @@
+import { b64u, derivePasswordSecret, fromB64u, identityFromSeed } from '@runova/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { AnywhereIncoming, AnywhereState } from '../../../shared/anywhere';
+import type { AgentConfigFile } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult } from './hub';
 import type { LinkTransport } from './link';
@@ -32,6 +34,9 @@ class FakeServer {
   >();
   readonly connected: { sessionId: string; transport: string }[] = [];
   readonly requests: { remoteId: string; mode: string }[] = [];
+  readonly agents = new Map<number, string>();
+  /** Computers whose app is away, so requests reach the background agent. */
+  readonly agentAnswers = new Set<number>();
   private nextId = 1;
   private nextSession = 1;
 
@@ -122,6 +127,15 @@ class FakeServer {
           .map(([id, t]) => ({ id, name: t.name })),
       sessions: async () => [],
       deleteSession: async () => undefined,
+      enableAgent: async (id, identityKey) => {
+        const device = this.devices.find((d) => d.id === id && d.userId === userId);
+        if (!device) throw new Error('404');
+        this.agents.set(id, identityKey);
+        return { identityKey, agentSecret: `ras1.secret-for-${id}` };
+      },
+      disableAgent: async (id) => {
+        this.agents.delete(id);
+      },
     };
   }
 
@@ -190,8 +204,10 @@ class FakeServer {
             remoteId,
             name: relation === 'other' ? '' : target.name,
             platform: target.platform,
-            kind: 'app',
-            identityKey: target.identityKey,
+            kind: server.agentAnswers.has(target.id) ? 'agent' : 'app',
+            identityKey: server.agentAnswers.has(target.id)
+              ? (server.agents.get(target.id) ?? '')
+              : target.identityKey,
           },
         };
       },
@@ -355,14 +371,34 @@ function fakeManager() {
   return port;
 }
 
+function fakeInstaller(options: { fail?: boolean } = {}) {
+  const installer = {
+    configs: [] as AgentConfigFile[],
+    isInstalled: false,
+    unavailable: () => null,
+    installed: async () => installer.isInstalled,
+    install: async (config: AgentConfigFile) => {
+      if (options.fail)
+        throw new Error('Windows did not get permission to set up the background service.');
+      installer.configs.push(config);
+      installer.isInstalled = true;
+    },
+    uninstall: async () => {
+      installer.isInstalled = false;
+    },
+  };
+  return installer;
+}
+
 function computer(
   server: FakeServer,
   links: FakeLinks,
   userId: number,
   name: string,
-  options: { ringMs?: number } = {},
+  options: { ringMs?: number; installer?: ReturnType<typeof fakeInstaller> } = {},
 ) {
   const manager = fakeManager();
+  const installer = options.installer ?? fakeInstaller();
   const passwords = memoryPasswords();
   const incoming: AnywhereIncoming[] = [];
   const notices: string[] = [];
@@ -388,9 +424,12 @@ function computer(
     hostedChanged: () => undefined,
     notify: (title, body) => notices.push(`${title}: ${body}`),
     ringMs: options.ringMs ?? 60_000,
+    siteUrl: 'https://runovahq.test',
+    agent: installer,
   });
   return {
     service,
+    installer,
     manager,
     passwords,
     incoming,
@@ -745,5 +784,110 @@ describe('Runova Anywhere service: other outcomes', () => {
       teamIds: [10],
     });
     expect(sam.state().settings).toMatchObject({ allowOwnDevices: true, teamIds: [10] });
+  });
+});
+
+describe('Runova Anywhere service: the background agent', () => {
+  it('registers its own key, gets its secret and installs with the owner settings', async () => {
+    const { server, sam, samId } = await world();
+    await sam.service.updateSettings({ allowOwnDevices: true });
+
+    await sam.service.enableAgent();
+
+    const config = sam.installer.configs[0];
+    const device = server.devices.find((d) => d.remoteId === samId);
+    expect(config).toMatchObject({
+      siteUrl: 'https://runovahq.test',
+      remoteId: samId,
+      deviceId: device?.id,
+      deviceName: "Sam's desk",
+      agentSecret: `ras1.secret-for-${device?.id}`,
+      passwordSecret: null,
+      allowOwnDevices: true,
+      alwaysAllow: [],
+    });
+    expect(fromB64u(config.identitySeed)).toHaveLength(32);
+    expect(b64u(identityFromSeed(fromB64u(config.identitySeed)).publicKey)).toBe(
+      server.agents.get(device?.id ?? -1),
+    );
+    expect(server.agents.get(device?.id ?? -1)).not.toBe(device?.identityKey);
+    expect(sam.state().settings.agent).toMatchObject({ installed: true, unavailableReason: null });
+  });
+
+  it('needs the password again to give the agent its own password secret, and checks it', async () => {
+    const { server, sam, samId } = await world();
+    await sam.service.setPassword('purple monkey dishwasher');
+
+    await expect(sam.service.enableAgent()).rejects.toThrow(/password/);
+    await expect(sam.service.enableAgent('not it at all')).rejects.toThrow(/does not match/);
+    await sam.service.enableAgent('purple monkey dishwasher');
+
+    const agentKey =
+      server.agents.get(server.devices.find((d) => d.remoteId === samId)?.id ?? -1) ?? '';
+    const expected = await derivePasswordSecret('purple monkey dishwasher', agentKey);
+    expect(sam.installer.configs[0].passwordSecret).toBe(b64u(expected));
+  });
+
+  it('takes the agent off the website again when installing fails', async () => {
+    const server = new FakeServer();
+    server.user(1, 'Sam');
+    const links = new FakeLinks();
+    const sam = computer(server, links, 1, "Sam's desk", {
+      installer: fakeInstaller({ fail: true }),
+    });
+    await sam.service.start();
+
+    await expect(sam.service.enableAgent()).rejects.toThrow(/permission/);
+
+    expect(server.agents.size).toBe(0);
+    expect(sam.state().settings.agent.installed).toBe(false);
+  });
+
+  it('uninstalls and takes the agent off the website', async () => {
+    const { server, sam } = await world();
+    await sam.service.enableAgent();
+
+    await sam.service.disableAgent();
+
+    expect(sam.installer.isInstalled).toBe(false);
+    expect(server.agents.size).toBe(0);
+    expect(sam.state().settings.agent.installed).toBe(false);
+  });
+
+  it('sets the agent up again when the password changes, so it keeps working', async () => {
+    const { sam } = await world();
+    await sam.service.setPassword('purple monkey dishwasher');
+    await sam.service.enableAgent('purple monkey dishwasher');
+
+    await sam.service.setPassword('an entirely new phrase');
+
+    expect(sam.installer.configs).toHaveLength(2);
+    expect(sam.installer.configs[1].passwordSecret).not.toBe(
+      sam.installer.configs[0].passwordSecret,
+    );
+  });
+});
+
+describe('Runova Anywhere service: pinned keys', () => {
+  it('pins the agent key apart from the app key, so reaching the agent is not a changed key', async () => {
+    const { server, sam, kim, samId } = await world();
+    await sam.service.updateSettings({ teamIds: [10] });
+    await kim.service.refresh();
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: true,
+    });
+    await until(() => kim.state().outgoing?.phase === 'connected');
+    kim.service.disconnect();
+    const device = server.devices.find((d) => d.remoteId === samId);
+    server.agents.set(device?.id ?? -1, 'B'.repeat(43));
+    server.agentAnswers.add(device?.id ?? -1);
+
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+
+    expect(kim.state().outgoing?.phase).not.toBe('key-changed');
   });
 });

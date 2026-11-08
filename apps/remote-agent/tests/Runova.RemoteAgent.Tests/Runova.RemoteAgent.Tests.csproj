@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Runova.RemoteAgent.Core\Runova.RemoteAgent.Core.csproj" />
+    <ProjectReference Include="..\..\src\Runova.RemoteAgent\Runova.RemoteAgent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The vectors the app's protocol package writes; the agent must reproduce them byte for byte. -->
+    <None Include="..\..\..\..\packages\protocol\test-vectors\anywhere-v1.json" Link="Vectors\anywhere-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

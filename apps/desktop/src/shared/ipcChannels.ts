@@ -591,6 +591,9 @@ export const IPC = {
     openApp: 'anywhere:openApp',
     /** macOS: asks for, or opens the settings of, a permission the host still needs (E63). */
     grantPermission: 'anywhere:grantPermission',
+    /** The background service for when no one is signed in (E64). */
+    enableAgent: 'anywhere:enableAgent',
+    disableAgent: 'anywhere:disableAgent',
     // renderer -> main: the WebRTC peer that carries a direct link, in the main window
     linkSignal: 'anywhere:linkSignal',
     linkOpened: 'anywhere:linkOpened',

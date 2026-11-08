@@ -187,7 +187,7 @@ internal static class RemoteEndpoints
             return NotFound();
         }
 
-        var wasOnline = presence.Remove(id) is not null;
+        var wasOnline = presence.Remove(id).Count > 0;
         if (wasOnline)
         {
             await audience.PresenceAsync(device, online: false);

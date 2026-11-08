@@ -51,6 +51,7 @@ internal static class ApiV1
         api.MapMonitoring();
         api.MapCloudMonitors();
         api.MapRemote();
+        api.MapRemoteAgents();
         return api;
     }
 }

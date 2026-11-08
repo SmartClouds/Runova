@@ -36,6 +36,17 @@ public class RemoteDevice
     /// <summary>An unattended-access password is set on the computer. The password itself never leaves it.</summary>
     public bool UnattendedEnabled { get; set; }
 
+    /// <summary>
+    /// The background agent's own Ed25519 public key (E64), when the owner turned the agent on. The
+    /// agent keeps the computer reachable while no one is signed in to it, under the same ID.
+    /// </summary>
+    public string? AgentIdentityKey { get; set; }
+
+    /// <summary>SHA-256 of the agent's secret, which it trades for short hub tokens. The secret is shown once.</summary>
+    public byte[]? AgentSecretHash { get; set; }
+
+    public DateTimeOffset? AgentEnabledAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset LastSeenAt { get; set; }

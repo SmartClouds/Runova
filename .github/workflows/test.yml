@@ -443,6 +443,48 @@ jobs:
   # 24.04 and Rocky 9), logged in as root and as a user whose sudo asks for a password, driven by
   # the desktop's own installer, pool and REST client. Also a tampered download, a release that
   # will not start (it must roll back), and sshd with tunnels switched off (the bridge).
+  remote-agent:
+    name: Runova Anywhere agent
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          clean: ${{ runner.os != 'macOS' }}
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.4xx
+          cache: ${{ inputs.github-hosted }}
+          cache-dependency-path: apps/remote-agent/**/packages.lock.json
+
+      - name: Restore
+        working-directory: apps/remote-agent
+        run: dotnet restore Runova.RemoteAgent.slnx --locked-mode
+
+      - name: Format
+        working-directory: apps/remote-agent
+        run: dotnet format Runova.RemoteAgent.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        working-directory: apps/remote-agent
+        run: dotnet build Runova.RemoteAgent.slnx --no-restore --configuration Release
+
+      # Includes the protocol vectors from packages/protocol, so the agent and the app can not drift.
+      - name: Tests
+        working-directory: apps/remote-agent
+        run: dotnet test --project tests/Runova.RemoteAgent.Tests --no-build --configuration Release --output Detailed
+
   server-core-system:
     name: Server core on test servers
     if: ${{ inputs.e2e }}

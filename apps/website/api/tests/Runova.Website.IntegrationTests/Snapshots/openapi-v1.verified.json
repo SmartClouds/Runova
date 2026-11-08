@@ -1344,6 +1344,108 @@
         }
       }
     },
+    "/api/v1/remote-devices/{id}/agents": {
+      "post": {
+        "tags": [
+          "RemoteAgentEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentEnabledDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "RemoteAgentEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/v1/remote-agent-tokens": {
+      "post": {
+        "tags": [
+          "RemoteAgentEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentTokenDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "tags": [
@@ -6235,6 +6337,59 @@
         },
         "additionalProperties": false
       },
+      "AgentEnabledDto": {
+        "required": [
+          "identityKey",
+          "agentSecret"
+        ],
+        "type": "object",
+        "properties": {
+          "identityKey": {
+            "type": "string"
+          },
+          "agentSecret": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentTokenDto": {
+        "required": [
+          "accessToken",
+          "expiresIn"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentTokenRequest": {
+        "required": [
+          "remoteId",
+          "secret"
+        ],
+        "type": "object",
+        "properties": {
+          "remoteId": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "AnalyticsSettingsDto": {
         "required": [
           "tagsEnabled",
@@ -7730,6 +7885,18 @@
         "properties": {
           "signedIn": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnableAgentRequest": {
+        "required": [
+          "identityKey"
+        ],
+        "type": "object",
+        "properties": {
+          "identityKey": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -10687,6 +10854,7 @@
           "unattendedEnabled",
           "teamIds",
           "online",
+          "agentIdentityKey",
           "createdAt",
           "lastSeenAt"
         ],
@@ -10734,6 +10902,12 @@
           },
           "online": {
             "type": "boolean"
+          },
+          "agentIdentityKey": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -12904,6 +13078,9 @@
     },
     {
       "name": "RemoteEndpoints"
+    },
+    {
+      "name": "RemoteAgentEndpoints"
     },
     {
       "name": "MeEndpoints"

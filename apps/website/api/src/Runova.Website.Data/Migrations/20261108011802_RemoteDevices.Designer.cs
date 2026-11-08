@@ -14,7 +14,7 @@ using Runova.Website.Data;
 namespace Runova.Website.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261107222349_RemoteDevices")]
+    [Migration("20261108011802_RemoteDevices")]
     partial class RemoteDevices
     {
         /// <inheritdoc />
@@ -3246,6 +3246,17 @@ namespace Runova.Website.Data.Migrations
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset?>("AgentEnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AgentIdentityKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("AgentSecretHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("bytea");
 
                     b.Property<bool>("AllowOwnDevices")
                         .HasColumnType("boolean");

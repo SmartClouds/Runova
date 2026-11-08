@@ -58,6 +58,8 @@ export interface AnywhereSettingsView {
   passwordSet: boolean;
   /** The OS keychain can keep this computer's keys; without it no password can be set. */
   canKeepSecrets: boolean;
+  /** The background service that keeps this computer reachable while no one is signed in (E64). */
+  agent: { installed: boolean; unavailableReason: string | null };
 }
 
 export type OutgoingPhase =
@@ -219,6 +221,7 @@ export const EMPTY_ANYWHERE_STATE: AnywhereState = {
     defaultPermissions: { control: true, clipboard: true, files: false },
     passwordSet: false,
     canKeepSecrets: true,
+    agent: { installed: false, unavailableReason: null },
   },
   directory: { mine: [], teammates: [] },
   recent: [],

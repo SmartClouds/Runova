@@ -62,6 +62,16 @@ export function createAnywhereApi(request: Request) {
     },
 
     deleteSession: (id: number) => request<void>('DELETE', `/remote-sessions/${id}`),
+
+    /** Turns the background agent on with its own key; the secret comes back this once (E64). */
+    enableAgent: (id: number, identityKey: string) =>
+      request<{ identityKey: string; agentSecret: string }>(
+        'POST',
+        `/remote-devices/${id}/agents`,
+        { identityKey },
+      ),
+
+    disableAgent: (id: number) => request<void>('DELETE', `/remote-devices/${id}/agents`),
   };
 }
 

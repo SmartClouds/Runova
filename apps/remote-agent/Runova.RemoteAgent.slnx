@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Runova.RemoteAgent.Core/Runova.RemoteAgent.Core.csproj" />
+    <Project Path="src/Runova.RemoteAgent/Runova.RemoteAgent.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Runova.RemoteAgent.Tests/Runova.RemoteAgent.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -27,6 +27,9 @@ namespace Runova.Website.Data.Migrations
                     IdentityKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     AllowOwnDevices = table.Column<bool>(type: "boolean", nullable: false),
                     UnattendedEnabled = table.Column<bool>(type: "boolean", nullable: false),
+                    AgentIdentityKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    AgentSecretHash = table.Column<byte[]>(type: "bytea", maxLength: 32, nullable: true),
+                    AgentEnabledAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     LastSeenAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)

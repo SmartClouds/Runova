@@ -3244,6 +3244,17 @@ namespace Runova.Website.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<DateTimeOffset?>("AgentEnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AgentIdentityKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("AgentSecretHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("bytea");
+
                     b.Property<bool>("AllowOwnDevices")
                         .HasColumnType("boolean");
 

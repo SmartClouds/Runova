@@ -278,3 +278,5 @@ upload extraction, tunnel, installer verification, firewall guard) get coverage 
 | [E61](epics/61-connect-by-id.md) | Runova Anywhere: connect to any computer by ID, as a teammate or with a password, peer to peer and encrypted end to end | Standalone (Remote) | E60 |
 | [E62](epics/62-anywhere-relay.md) | Runova Anywhere relay: through the website when two computers can not reach each other directly | Standalone (Remote, Website) | E60, E61 |
 | [E63](epics/63-anywhere-cross-platform-input.md) | Runova Anywhere on macOS and Linux: mouse and keyboard control, permissions, Wayland told plainly | Standalone (Remote) | E61 |
+| [E64](epics/64-anywhere-agent-windows.md) | Runova Anywhere background agent on Windows: reachable on the lock and sign-in screens, under the same ID | Standalone (Remote, Website) | E60, E61, E62 |
+| [E65](epics/65-anywhere-agent-macos-linux.md) | Runova Anywhere background agent on macOS and Linux | Standalone (Remote) | E64 |

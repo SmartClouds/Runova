@@ -12,6 +12,7 @@ public sealed record RemoteDeviceDto(
     bool UnattendedEnabled,
     IReadOnlyList<long> TeamIds,
     bool Online,
+    string? AgentIdentityKey,
     DateTimeOffset CreatedAt,
     DateTimeOffset LastSeenAt);
 

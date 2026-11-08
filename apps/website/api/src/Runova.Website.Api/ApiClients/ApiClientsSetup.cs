@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Runova.Website.Api.Accounts;
+using Runova.Website.Api.Remote;
 using Runova.Website.Data;
 
 namespace Runova.Website.Api.ApiClients;
@@ -31,6 +32,7 @@ internal static class ApiClientsSetup
             .AddPolicyScheme(Scheme, null, options => options.ForwardDefaultSelector = http =>
                 SignatureAuthentication.IsSigned(http) ? SignatureAuthenticationHandler.SchemeName
                 : DeviceTokenAuthenticationHandler.HasToken(http) ? DeviceTokenAuthenticationHandler.SchemeName
+                : RemoteAgentAuthenticationHandler.HasToken(http) ? RemoteAgentAuthenticationHandler.SchemeName
                 : IdentityConstants.ApplicationScheme)
             .AddScheme<AuthenticationSchemeOptions, SignatureAuthenticationHandler>(SignatureAuthenticationHandler.SchemeName, null);
 

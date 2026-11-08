@@ -15,6 +15,8 @@ internal static class RemoteModel
             device.Property(d => d.Name).HasMaxLength(100);
             device.Property(d => d.Platform).HasMaxLength(32);
             device.Property(d => d.IdentityKey).HasMaxLength(64);
+            device.Property(d => d.AgentIdentityKey).HasMaxLength(64);
+            device.Property(d => d.AgentSecretHash).HasMaxLength(32);
             device.HasIndex(d => d.RemoteId).IsUnique();
             device.HasIndex(d => new { d.UserId, d.DeviceId, d.Kind }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
             device.HasOne<AppUser>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade);

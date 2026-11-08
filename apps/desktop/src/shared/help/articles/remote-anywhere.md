@@ -54,6 +54,14 @@ Nothing can connect to a new computer until you allow it. Click **Access setting
 - **Always connect through the Runova relay**: slower, but the other computer never learns this computer's network address.
 - **Allow connections to this computer** turns all of it off at once.
 
+### When no one is signed in to the computer
+
+On Windows, **Keep this computer reachable while no one is signed in** in **Access settings** sets up a small background service that starts with Windows. While no one is signed in, or the computer is locked, it answers instead of the app, under the same ID, and shows the lock or sign-in screen. Windows asks for administrator permission to set it up, and again to remove it.
+
+With no one there to accept, the service lets in only what you allowed without asking: your own computers (when **My other computers connect without asking** is on), teammates you always let in, and the unattended-access password. If a password is set, Runova asks for it once more when you turn the service on, and the service gets a key of its own made from it. Changing the password sets the service up again.
+
+The background service shows the screen as pictures rather than video, does not share the clipboard or files, and uses the Runova relay. It keeps the settings from when it was turned on: turn it off and on again after changing who can connect. It is not available on macOS and Linux yet.
+
 ### When someone asks
 
 A window comes up over everything else, even when Runova is minimized. It shows who is asking, their email, the computer they ask from and how you know them, for example **Teammate in Ops**. Change what they may do, then click **Accept** or **Decline**. Tick **Always let them in without asking** to skip this window for that teammate next time; you can undo it in **Access settings**. If no one answers within a minute, the request is declined.

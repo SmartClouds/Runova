@@ -910,13 +910,17 @@ turn away what the computer would refuse anyway; the computer always decides.
 | POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos" or "linux", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401 |
 | PATCH | `/api/v1/remote-devices/{id}` | Account (owner) | merge patch of `name`, `allowOwnDevices`, `unattendedEnabled`, `teamIds` | 200 `RemoteDeviceDto`; 400 (a team the owner is not in); 401; 404 |
 | DELETE | `/api/v1/remote-devices/{id}` | Account (owner) | none | 204 (the ID is retired, and the computer goes offline); 401; 404 |
+| POST | `/api/v1/remote-devices/{id}/agents` | Account (owner) | `{ "identityKey": string }` (the agent's own Ed25519 public key) | 201 `{ "identityKey": string, "agentSecret": string }` (the secret is shown this once; turning the agent on again gives a new one and retires the old one and its tokens); 400; 401; 404 |
+| DELETE | `/api/v1/remote-devices/{id}/agents` | Account (owner) | none | 204 (the agent goes offline and its tokens stop working); 401; 404 |
+| POST | `/api/v1/remote-agent-tokens` | none | `{ "remoteId": string, "secret": string }` | 200 `{ "accessToken": string, "expiresIn": 3600 }`; 401; 429 |
 | GET | `/api/v1/reachable-devices` | Account | none | 200 `{ "mine": RemoteDirectoryEntryDto[], "teammates": RemoteDirectoryEntryDto[] }`; 401 |
 | GET | `/api/v1/remote-sessions` | Account | query `page`, `pageSize` | 200 `Page<RemoteSessionDto>` (the last 30 days, either side); 400; 401 |
 | DELETE | `/api/v1/remote-sessions/{id}` | Account (either side) | none | 204; 401; 404 |
 
 `RemoteDeviceDto`: `{ "id": number, "remoteId": string, "name": string, "platform": string,
 "kind": "app" | "agent", "identityKey": string, "allowOwnDevices": bool, "unattendedEnabled":
-bool, "teamIds": number[], "online": bool, "createdAt": time, "lastSeenAt": time }`.
+bool, "teamIds": number[], "online": bool, "agentIdentityKey": string | null, "createdAt": time,
+"lastSeenAt": time }`.
 `RemoteDirectoryEntryDto`: `{ "id", "remoteId", "name", "platform", "kind", "identityKey",
 "unattendedEnabled", "online", "lastSeenAt", "owner": { "userId": number, "displayName": string,
 "email": string }, "teams": [{ "id": number, "name": string }] }`; a teammate's computer is listed
@@ -926,6 +930,14 @@ while it is shown to a team both accounts are in. `RemoteSessionDto`: `{ "id": n
 "controllerEmail": string, "startedAt": time, "endedAt": time | null }`. A session record says only
 who connected to which computer, how and when: never what was on screen, typed or copied, and no
 address. Records are kept 30 days.
+
+The background agent (E64) keeps a computer reachable while no one is signed in to it, under the
+same ID. Its owner turns it on from the app, which hands the one-time secret to the agent it
+installs; the server keeps only the secret's SHA-256. The agent trades it at
+`/api/v1/remote-agent-tokens` for an `ra1.` token that lasts an hour and is accepted on the remote
+hub only, anywhere else it is a 401. There it can go online for its own computer and host, never ask
+to connect. A request goes to the app when the app is online and to the agent otherwise; the
+`host` in the answer then says `"kind": "agent"` with the agent's own key.
 
 Connecting goes through the SignalR hub at `/hubs/remote` (outside `/api/v1`, Account auth as for
 the notifications hub, including the `access_token` query value on the hub path). The app calls:
