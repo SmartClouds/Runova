@@ -7,7 +7,10 @@ use thiserror::Error;
 pub mod backend;
 pub mod core;
 pub mod engine;
+pub(crate) mod labels;
+pub mod palette;
 pub mod secure;
+pub(crate) mod terminals;
 pub mod view;
 
 uniffi::setup_scaffolding!();

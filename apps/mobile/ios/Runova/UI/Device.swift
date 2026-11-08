@@ -1,0 +1,364 @@
+import SwiftUI
+
+let deviceTabs = [
+    TabItem(id: "projects", title: "Projects", icon: RunovaIcons.folder),
+    TabItem(id: "clis", title: "CLIs", icon: RunovaIcons.terminal),
+]
+
+/// The width of a JetBrains Mono cell, in ems.
+private let cellWidthEm: CGFloat = 0.6
+private let lineHeightEm: CGFloat = 1.25
+private let smallestCell: CGFloat = 7
+private let largestCell: CGFloat = 13
+
+/// Far enough to reach the live screen from anywhere in the history.
+private let backToLive: Int32 = -1_000_000
+
+private let terminalKeys: [(label: String, data: String)] = [
+    ("Esc", "\u{1b}"),
+    ("Tab", "\t"),
+    ("Ctrl C", "\u{03}"),
+    ("Ctrl D", "\u{04}"),
+    ("Up", "\u{1b}[A"),
+    ("Down", "\u{1b}[B"),
+    ("Left", "\u{1b}[D"),
+    ("Right", "\u{1b}[C"),
+    ("Enter", "\r"),
+]
+
+struct DeviceShell: View {
+    let view: AppView
+    let connection: ConnectionView
+    @Binding var tab: String
+    let intents: AppIntents
+
+    private var section: String { deviceTabs.first { $0.id == tab }?.id ?? "projects" }
+    private var onShow: Section? { view.terminal == nil && section == "clis" ? .clis : nil }
+
+    var body: some View {
+        Group {
+            if let terminal = view.terminal {
+                TerminalScreen(
+                    terminal: terminal, processes: view.terminalProcesses, error: view.error, intents: intents)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    DeviceTopBar(connection: connection, intents: intents)
+                    Group {
+                        if section == "clis" {
+                            ClisScreen(view: view, intents: intents)
+                        } else {
+                            ProjectsScreen(view: view, intents: intents, tab: $tab)
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    RunovaBottomBar(tabs: deviceTabs, selected: section) { tab = $0 }
+                }
+            }
+        }
+        .onAppear { intents.openSection(onShow) }
+        .onChange(of: onShow) { intents.openSection($0) }
+        .onDisappear { intents.openSection(nil) }
+    }
+}
+
+private struct DeviceTopBar: View {
+    let connection: ConnectionView
+    let intents: AppIntents
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaTopBar(title: connection.systemName, onBack: intents.disconnect) {
+            RunovaBadge(
+                text: connection.direct == true ? "Direct" : "Relay",
+                tone: connection.direct == true ? .primary : .warning
+            )
+            .padding(.trailing, 8)
+        }
+        if let code = connection.safetyCode {
+            RunovaText("Safety code \(code)", style: RunovaType.small, color: palette.mutedForeground)
+                .padding(.horizontal, 16)
+        }
+    }
+}
+
+private struct ProjectsScreen: View {
+    let view: AppView
+    let intents: AppIntents
+    @Binding var tab: String
+
+    var body: some View {
+        if view.projects.isEmpty && view.projectsLoading {
+            LoadingRows()
+        } else if view.projects.isEmpty {
+            RunovaEmptyState(
+                icon: RunovaIcons.folder, title: "No projects yet",
+                detail: "Add one in Runova on this computer.")
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(view.projects, id: \.id) { project in
+                        Button {
+                            intents.selectProject(project.id)
+                            tab = "clis"
+                        } label: {
+                            RunovaListRow(
+                                title: project.name,
+                                detail: project.tags.isEmpty ? nil : project.tags.joined(separator: ", "),
+                                icon: RunovaIcons.folder
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+}
+
+private func statusBadge(_ status: AgentState) -> RunovaBadge {
+    switch status {
+    case .needsInput: return RunovaBadge(text: "Needs input", tone: .warning)
+    case .working: return RunovaBadge(text: "Working", tone: .primary)
+    case .done: return RunovaBadge(text: "Done", tone: .success)
+    case .idle: return RunovaBadge(text: "Idle")
+    case .exited: return RunovaBadge(text: "Exited")
+    }
+}
+
+private struct ErrorLine: View {
+    let message: String
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaText(message, style: RunovaType.small, color: palette.destructive).padding(16)
+    }
+}
+
+private struct ClisScreen: View {
+    let view: AppView
+    let intents: AppIntents
+
+    private var chosen: ProjectView? { view.projects.first { $0.id == view.selectedProject } }
+
+    private var shown: [TerminalItem] {
+        guard let selected = view.selectedProject else { return view.terminals }
+        return view.terminals.filter { $0.projectId == selected }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let project = chosen {
+                RunovaChip(text: project.name) { intents.selectProject(nil) }
+                    .padding(.leading, 16)
+                    .padding(.top, 8)
+            }
+            if shown.isEmpty && view.terminalsLoading {
+                LoadingRows()
+            } else if shown.isEmpty {
+                RunovaEmptyState(
+                    icon: RunovaIcons.terminal, title: "No CLIs running",
+                    detail: "Start one in Runova on this computer and it shows up here.")
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(shown, id: \.sessionId) { item in
+                            // The chip above already names the project.
+                            TerminalRow(item: item, projects: chosen == nil ? view.projects : [], intents: intents)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            if let error = view.error { ErrorLine(message: error) }
+        }
+    }
+}
+
+private struct TerminalRow: View {
+    let item: TerminalItem
+    let projects: [ProjectView]
+    let intents: AppIntents
+
+    var body: some View {
+        Button {
+            intents.openTerminal(item.sessionId)
+        } label: {
+            HStack(spacing: 12) {
+                RunovaListRow(
+                    title: item.title,
+                    detail: projects.first { $0.id == item.projectId }?.name ?? item.cliId,
+                    icon: RunovaIcons.terminal)
+                if let status = item.status { statusBadge(status).padding(.trailing, 16) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct TerminalScreen: View {
+    let terminal: TerminalView
+    let processes: [TerminalProcessView]
+    let error: String?
+    let intents: AppIntents
+
+    @State private var showProcesses = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RunovaTopBar(title: terminal.title, onBack: intents.closeTerminal) {
+                RunovaChip(text: showProcesses ? "Screen" : "Processes") {
+                    if !showProcesses { intents.loadProcesses(terminal.sessionId) }
+                    showProcesses.toggle()
+                }
+                .padding(.trailing, 8)
+            }
+            ZStack(alignment: .bottomTrailing) {
+                if showProcesses {
+                    ProcessList(processes: processes)
+                } else {
+                    TerminalBody(frame: terminal.frame, onScroll: intents.terminalScroll)
+                    if terminal.scrolled {
+                        RunovaChip(text: "Back to live") { intents.terminalScroll(backToLive) }
+                            .padding(12)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let error { ErrorLine(message: error) }
+            if terminal.ended {
+                RunovaText(terminal.endReason ?? "This terminal has ended.", color: palette.mutedForeground)
+                    .padding(16)
+            } else {
+                TerminalInput(onInput: intents.terminalInput)
+            }
+        }
+    }
+}
+
+private struct ProcessList: View {
+    let processes: [TerminalProcessView]
+
+    var body: some View {
+        if processes.isEmpty {
+            RunovaEmptyState(
+                icon: RunovaIcons.server, title: "No processes",
+                detail: "Nothing is running in this terminal right now.")
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(processes.enumerated()), id: \.offset) { _, process in
+                        RunovaListRow(
+                            title: process.name,
+                            detail: "\(process.cpuLabel) CPU, \(process.memoryLabel)",
+                            icon: RunovaIcons.server)
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+}
+
+private struct TerminalInput: View {
+    let onInput: (String) -> Void
+
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(terminalKeys, id: \.label) { key in
+                        RunovaChip(text: key.label) { onInput(key.data) }
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                RunovaTextField(value: $text, placeholder: "Type a command")
+                RunovaButton(text: "Send", icon: RunovaIcons.send) {
+                    onInput(text + "\r")
+                    text = ""
+                }
+            }
+        }
+        .padding(8)
+    }
+}
+
+private func color(_ value: UInt32?, fallback: Color) -> Color {
+    value.map { Color(hex: $0) } ?? fallback
+}
+
+private func attributed(_ line: LineView, size: CGFloat) -> AttributedString {
+    let theme = RunovaTokens.terminal
+    var result = AttributedString()
+    for run in line.runs {
+        var part = AttributedString(run.text)
+        var ink = color(run.fg, fallback: theme.foreground)
+        var fill: Color? = run.bg.map { Color(hex: $0) }
+        if run.inverse {
+            let swapped = fill ?? theme.background
+            fill = ink
+            ink = swapped
+        }
+        if run.cursor {
+            fill = theme.cursor
+            ink = theme.background
+        }
+        part.foregroundColor = ink
+        if let fill { part.backgroundColor = fill }
+        part.font = Font.custom("JetBrainsMono-Regular", fixedSize: size)
+            .weight(run.bold ? .bold : .regular)
+            .italic(run.italic)
+        if run.underline { part.underlineStyle = .single }
+        result += part
+    }
+    return result
+}
+
+/// Fits the computer's screen to the phone. The computer's own size is never changed.
+private struct TerminalBody: View {
+    let frame: FrameView
+    let onScroll: (Int32) -> Void
+
+    @State private var dragged: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geometry in
+            if frame.rows > 0 {
+                let fit = (geometry.size.width - 12) / (CGFloat(frame.cols) * cellWidthEm)
+                let cell = min(max(fit, smallestCell), largestCell)
+                let lineHeight = cell * lineHeightEm
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(frame.lines.enumerated()), id: \.offset) { _, line in
+                            Text(attributed(line, size: cell))
+                                .lineLimit(1)
+                                .fixedSize()
+                                .frame(height: lineHeight, alignment: .leading)
+                        }
+                    }
+                    .padding(6)
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 4).onChanged { change in
+                        let lines = Int32((change.translation.height - dragged) / lineHeight)
+                        if lines != 0 {
+                            dragged += CGFloat(lines) * lineHeight
+                            onScroll(lines)
+                        }
+                    }
+                    .onEnded { _ in dragged = 0 }
+                )
+            }
+        }
+        .background(RunovaTokens.terminal.background)
+        .clipped()
+    }
+}

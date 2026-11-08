@@ -3,17 +3,22 @@
 
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::secure::{SecurePins, SecureStore, device_id, identity_key, identity_seed};
+use crate::terminals::OpenTerminal;
 use crate::view::{
-    AppView, AuthState, ConnectionPhase, ConnectionView, ProjectView, SystemView, ViewListener,
+    AppView, AuthState, ConnectionPhase, ConnectionView, ProjectView, Section, SystemView,
+    ViewListener,
 };
 use async_trait::async_trait;
 use runova_api::auth::{
     AuthError, DeviceInfo, Session, SignInRequest, begin_sign_in, read_callback,
 };
 use runova_crypto::handshake::os_random;
+use runova_rpc::{ManageClient, RpcError};
 use runova_session::connect::{ConnectTarget, ManageSession, Phase, Transports, connect_to};
 use runova_session::hub::{HubEvent, HubPort};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -22,6 +27,11 @@ use tokio::time::{Instant, sleep_until};
 
 const SIGN_IN_FAILED: &str = "Couldn't sign in. Try again.";
 const HUB_EVENT_QUEUE: usize = 256;
+const UNREADABLE: &str = "This computer sent something this version of the app can't read.";
+
+/// A change to what the screens show, made by finished work.
+pub(crate) type Apply = Box<dyn FnOnce(&mut AppView) + Send>;
+type Task = Box<dyn FnOnce(&mut Runner) + Send>;
 
 #[async_trait]
 pub trait HubConnector: Send + Sync {
@@ -50,6 +60,8 @@ pub struct Dependencies {
     pub backend: Arc<dyn Backend>,
     pub hub: Arc<dyn HubConnector>,
     pub transports: Arc<dyn Transports>,
+    /// How often a screen on show refreshes itself.
+    pub refresh_every: Duration,
 }
 
 enum Command {
@@ -59,9 +71,10 @@ enum Command {
     Disconnect,
     Lifecycle(AppLifecycle),
     SignOut,
+    Run(Task),
 }
 
-enum Done {
+pub(crate) enum Done {
     Boot(Result<Booted, BootError>),
     Systems(Result<Vec<SystemEntry>, BackendError>),
     Phase {
@@ -79,16 +92,23 @@ enum Done {
     LinkClosed {
         attempt: u64,
     },
+    Apply {
+        attempt: u64,
+        apply: Apply,
+    },
+    Tick {
+        attempt: u64,
+    },
 }
 
-struct Booted {
+pub(crate) struct Booted {
     hub: Arc<dyn HubPort>,
     events: mpsc::Receiver<HubEvent>,
     device_id: i64,
     systems: Vec<SystemEntry>,
 }
 
-enum BootError {
+pub(crate) enum BootError {
     SignedOut,
     Failed(String),
 }
@@ -164,24 +184,65 @@ impl Engine {
     pub fn sign_out(&self) {
         let _ = self.commands.send(Command::SignOut);
     }
+
+    fn run(&self, task: impl FnOnce(&mut Runner) + Send + 'static) {
+        let _ = self.commands.send(Command::Run(Box::new(task)));
+    }
+
+    /// `None` when no screen that refreshes itself is on show.
+    pub fn open_section(&self, section: Option<Section>) {
+        self.run(move |runner| runner.open_section(section));
+    }
+
+    pub fn select_project(&self, project_id: Option<String>) {
+        self.run(move |runner| runner.view.selected_project = project_id);
+    }
+
+    pub fn load_terminals(&self) {
+        self.run(Runner::load_terminals);
+    }
+
+    pub fn open_terminal(&self, session_id: String) {
+        self.run(move |runner| runner.open_terminal(session_id));
+    }
+
+    pub fn close_terminal(&self) {
+        self.run(Runner::close_terminal);
+    }
+
+    pub fn terminal_input(&self, data: String) {
+        self.run(move |runner| runner.terminal_input(data));
+    }
+
+    /// Positive goes back in time.
+    pub fn terminal_scroll(&self, lines: i32) {
+        self.run(move |runner| runner.terminal_scroll(lines));
+    }
+
+    pub fn load_terminal_processes(&self, session_id: String) {
+        self.run(move |runner| runner.load_terminal_processes(session_id));
+    }
 }
 
-struct Runner {
+pub(crate) struct Runner {
     deps: Dependencies,
-    done_tx: mpsc::UnboundedSender<Done>,
+    pub(crate) done_tx: mpsc::UnboundedSender<Done>,
     done_rx: Option<mpsc::UnboundedReceiver<Done>>,
-    view: AppView,
+    pub(crate) view: AppView,
     published: Option<AppView>,
     hub: Option<Arc<dyn HubPort>>,
     hub_events: Option<mpsc::Receiver<HubEvent>>,
     device_id: Option<i64>,
     systems: Vec<SystemEntry>,
-    attempt: u64,
+    pub(crate) attempt: u64,
     connecting: Option<(mpsc::Sender<HubEvent>, JoinHandle<()>)>,
     session: Option<ManageSession>,
     /// The computer to return to when the app comes back.
     return_to: Option<i64>,
     let_go_at: Option<Instant>,
+    pub(crate) open_terminal: Option<OpenTerminal>,
+    section: Option<Section>,
+    ticker: Option<JoinHandle<()>>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -231,7 +292,103 @@ impl Runner {
             session: None,
             return_to: None,
             let_go_at: None,
+            open_terminal: None,
+            section: None,
+            ticker: None,
         }
+    }
+
+    fn open_section(&mut self, section: Option<Section>) {
+        self.view.error = None;
+        self.section = section;
+        self.start_ticking();
+    }
+
+    fn start_ticking(&mut self) {
+        if let Some(ticker) = self.ticker.take() {
+            ticker.abort();
+        }
+        if self.section.is_none() || self.session.is_none() {
+            return;
+        }
+        self.refresh_section();
+        let attempt = self.attempt;
+        let every = self.deps.refresh_every;
+        let done = self.done_tx.clone();
+        self.ticker = Some(tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(every).await;
+                if done.send(Done::Tick { attempt }).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+
+    fn refresh_section(&mut self) {
+        match self.section {
+            Some(Section::Clis) => self.load_terminals(),
+            None => {}
+        }
+    }
+
+    pub(crate) fn client(&self) -> Option<ManageClient> {
+        self.session.as_ref().map(|s| s.client.clone())
+    }
+
+    /// Calls a method on the connected computer. Work from a connection that has since ended is
+    /// thrown away, and a refusal is shown to the user in the computer's own words.
+    pub(crate) fn call<T, Ok, Failed>(
+        &mut self,
+        method: &'static str,
+        params: Option<Value>,
+        ok: Ok,
+        failed: Failed,
+    ) where
+        T: DeserializeOwned + Send + 'static,
+        Ok: FnOnce(&mut AppView, T) + Send + 'static,
+        Failed: FnOnce(&mut AppView) + Send + 'static,
+    {
+        let Some(client) = self.client() else {
+            failed(&mut self.view);
+            return;
+        };
+        let attempt = self.attempt;
+        let done = self.done_tx.clone();
+        tokio::spawn(async move {
+            let outcome = client.call(method, params).await;
+            let apply: Apply = Box::new(move |view| {
+                let parsed = outcome.map(|value| serde_json::from_value::<T>(value));
+                match parsed {
+                    Ok(Ok(value)) => ok(view, value),
+                    Ok(Err(_)) => {
+                        failed(view);
+                        view.error = Some(UNREADABLE.to_owned());
+                    }
+                    // The link's end has its own message, on the connection.
+                    Err(RpcError::Closed) => failed(view),
+                    Err(error) => {
+                        failed(view);
+                        view.error = Some(error.to_string());
+                    }
+                }
+            });
+            let _ = done.send(Done::Apply { attempt, apply });
+        });
+    }
+
+    fn clear_device(&mut self) {
+        if let Some(ticker) = self.ticker.take() {
+            ticker.abort();
+        }
+        self.open_terminal = None;
+        self.view.selected_project = None;
+        self.view.projects.clear();
+        self.view.projects_loading = false;
+        self.view.terminals.clear();
+        self.view.terminals_loading = false;
+        self.view.terminal = None;
+        self.view.terminal_processes.clear();
     }
 
     fn publish(&mut self) {
@@ -282,8 +439,7 @@ impl Runner {
             tokio::spawn(async move { client.close().await });
         }
         self.view.connection = None;
-        self.view.projects.clear();
-        self.view.projects_loading = false;
+        self.clear_device();
     }
 
     fn let_go_of_hub(&mut self) {
@@ -381,6 +537,7 @@ impl Runner {
         let client = session.client.clone();
         self.session = Some(session);
         self.view.projects_loading = true;
+        self.start_ticking();
 
         let done = self.done_tx.clone();
         let projects = client.clone();
@@ -421,7 +578,7 @@ impl Runner {
             view.error = Some(message);
         }
         self.session = None;
-        self.view.projects_loading = false;
+        self.clear_device();
     }
 
     fn on_done(&mut self, done: Done) {
@@ -467,6 +624,8 @@ impl Runner {
             Done::LinkClosed { attempt } if attempt == self.attempt => {
                 self.fail_connection("The connection to this computer ended.".to_owned());
             }
+            Done::Apply { attempt, apply } if attempt == self.attempt => apply(&mut self.view),
+            Done::Tick { attempt } if attempt == self.attempt => self.refresh_section(),
             _ => {}
         }
     }
@@ -536,6 +695,7 @@ impl Runner {
                 self.deps.session.sign_out().await;
                 self.signed_out();
             }
+            Command::Run(task) => task(self),
         }
     }
 

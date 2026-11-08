@@ -215,6 +215,7 @@ fn world_with(store: Arc<MemoryStore>) -> World {
         Box::new(move || now.load(Ordering::SeqCst)),
     ));
     let engine = Engine::start(Dependencies {
+        refresh_every: std::time::Duration::from_secs(3600),
         site: "https://runovahq.test".into(),
         platform: "android".into(),
         app_version: "1.0.0".into(),

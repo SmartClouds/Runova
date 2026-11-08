@@ -49,6 +49,13 @@ class MainActivity : ComponentActivity(), ViewListener {
             connect = { core.connect(it) },
             disconnect = { core.disconnect() },
             signOut = { core.signOut() },
+            openSection = { core.openSection(it) },
+            selectProject = { core.selectProject(it) },
+            openTerminal = { core.openTerminal(it) },
+            closeTerminal = { core.closeTerminal() },
+            terminalInput = { core.terminalInput(it) },
+            terminalScroll = { core.terminalScroll(it) },
+            loadProcesses = { core.loadTerminalProcesses(it) },
         )
         setContent {
             RunovaTheme {

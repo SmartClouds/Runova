@@ -39,6 +39,10 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
 
 export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'projects.list': { scope: 'core', risk: 'read' },
+  'terminals.list': { scope: 'terminal', risk: 'read' },
+  'terminals.follow': { scope: 'terminal', risk: 'read' },
+  'terminals.write': { scope: 'terminal', risk: 'write' },
+  'terminals.processes': { scope: 'terminal', risk: 'read' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -51,6 +55,23 @@ export interface ManageProject {
   iconBgColor: string | null;
   iconColor: string | null;
   hasRepository: boolean;
+}
+
+/** A running terminal or CLI. */
+export interface ManageTerminal {
+  sessionId: string;
+  title: string;
+  projectId: string | null;
+  cliId: string | null;
+  /** What its agent is doing, when an agent runs in it. */
+  status: 'idle' | 'working' | 'needs-input' | 'done' | 'exited' | null;
+  createdAt: number;
+}
+
+export interface ManageTerminalProcess {
+  name: string;
+  cpuPercent: number;
+  memBytes: number;
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

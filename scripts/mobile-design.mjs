@@ -180,6 +180,41 @@ ${icons}
 `;
 }
 
+const ANSI_ORDER = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'brightBlack',
+  'brightRed',
+  'brightGreen',
+  'brightYellow',
+  'brightBlue',
+  'brightMagenta',
+  'brightCyan',
+  'brightWhite',
+];
+
+export function renderRust(tokens) {
+  const missing = ANSI_ORDER.filter((name) => !(name in tokens.terminal));
+  if (missing.length > 0) throw new Error(`The terminal theme has no ${missing.join(', ')}.`);
+  const entries = ANSI_ORDER.map((name) => `    0x${hex(tokens.terminal[name])},`).join('\n');
+  return `// ${HEADER}
+
+#[rustfmt::skip]
+pub const ANSI: [u32; 16] = [
+${entries}
+];
+
+pub const FOREGROUND: u32 = 0x${hex(tokens.terminal.foreground)};
+pub const BACKGROUND: u32 = 0x${hex(tokens.terminal.background)};
+`;
+}
+
 const ICONS = {
   systems: 'faDesktop',
   home: 'faHouse',
@@ -254,6 +289,7 @@ function main() {
       renderKotlin(tokens),
     ],
     ['apps/mobile/ios/Runova/Design/Tokens.swift', renderSwift(tokens)],
+    ['apps/mobile/core/crates/ffi/src/palette.rs', renderRust(tokens)],
     ['apps/mobile/design/icons.json', `${JSON.stringify(tokens.icons, null, 2)}\n`],
   ];
   const check = process.argv.includes('--check');

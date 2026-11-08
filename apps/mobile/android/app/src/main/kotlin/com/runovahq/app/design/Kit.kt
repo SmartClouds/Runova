@@ -248,6 +248,23 @@ fun RunovaTopBar(title: String, onBack: (() -> Unit)? = null, trailing: (@Compos
 
 data class TabItem(val id: String, val title: String, val icon: String)
 
+/** A small control: a terminal key, a filter, a shortcut. */
+@Composable
+fun RunovaChip(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = RunovaTheme.colors
+    Box(
+        modifier
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(RunovaShape.sm))
+            .background(colors.secondary)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        RunovaText(text, style = RunovaType.label, color = colors.secondaryForeground, maxLines = 1)
+    }
+}
+
 @Composable
 fun RunovaBottomBar(tabs: List<TabItem>, selected: String, onSelect: (String) -> Unit) {
     val colors = RunovaTheme.colors

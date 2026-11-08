@@ -68,7 +68,14 @@ final class AppModel: NSObject, ObservableObject {
             refresh: { [weak self] in self?.core?.refresh() },
             connect: { [weak self] in self?.core?.connect(systemId: $0) },
             disconnect: { [weak self] in self?.core?.disconnect() },
-            signOut: { [weak self] in self?.core?.signOut() })
+            signOut: { [weak self] in self?.core?.signOut() },
+            openSection: { [weak self] in self?.core?.openSection(section: $0) },
+            selectProject: { [weak self] in self?.core?.selectProject(projectId: $0) },
+            openTerminal: { [weak self] in self?.core?.openTerminal(sessionId: $0) },
+            closeTerminal: { [weak self] in self?.core?.closeTerminal() },
+            terminalInput: { [weak self] in self?.core?.terminalInput(data: $0) },
+            terminalScroll: { [weak self] in self?.core?.terminalScroll(lines: $0) },
+            loadProcesses: { [weak self] in self?.core?.loadTerminalProcesses(sessionId: $0) })
     }
 
     func scene(_ phase: ScenePhase) {

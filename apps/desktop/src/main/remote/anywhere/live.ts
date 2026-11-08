@@ -13,8 +13,8 @@ import { sendToWindow } from '../../ipc/send';
 import { getMainWindow } from '../../mainWindow';
 import { showOsNotification } from '../../notifications/osNotification';
 import { decryptSecret, encryptSecret, registerSealedSecretStore } from '../../ssh/vault';
-import { store } from '../../store';
 import { InputInjector } from '../inputInjector';
+import { liveManageDeps } from '../manage/liveDeps';
 import { createManageMethods } from '../manage/methods';
 import { createManageSession, type ManageAudit } from '../manage/session';
 import { remoteManager } from '../manager';
@@ -72,7 +72,7 @@ function broadcast(channel: string, payload: unknown): void {
     sendToWindow(window, channel, payload);
 }
 
-const manageMethods = createManageMethods({ listProjects: () => store.getProjects() });
+const manageMethods = createManageMethods(liveManageDeps);
 
 const AUDIT_RISK = { read: 'read', write: 'write', danger: 'sensitive' } as const;
 const AUDIT_OUTCOME = { ok: 'auto', failed: 'failed', forbidden: 'refused' } as const;

@@ -22,7 +22,8 @@ final class ScreensTests: XCTestCase {
     ) -> AppView {
         AppView(
             auth: auth, hubConnected: true, systems: list ?? systems, systemsLoading: false,
-            connection: connection, projects: projects, projectsLoading: false, error: error)
+            connection: connection, projects: projects, projectsLoading: false, selectedProject: nil,
+            terminals: [], terminalsLoading: false, terminal: nil, terminalProcesses: [], error: error)
     }
 
     private func connection(_ phase: ConnectionPhase, error: String? = nil) -> ConnectionView {

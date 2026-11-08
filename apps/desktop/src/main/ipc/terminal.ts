@@ -391,6 +391,34 @@ export async function createTerminalSession(
   return { sessionId, isNew: result.isNew, snapshot: result.snapshot };
 }
 
+/** What every running terminal's process tree is using right now. */
+export async function terminalUsage(): Promise<TerminalUsageResult> {
+  const running = await listRunningSessions();
+  const pids = running.map((info) => info.pid).filter((pid) => Number.isInteger(pid) && pid > 0);
+  const sample = await sampleProcessTrees(pids);
+  return {
+    available: sample.available,
+    cpuReady: sample.cpuReady,
+    sampledAt: Date.now(),
+    sessions: running.map((info) => {
+      const known = sessions.get(info.sessionId);
+      const tree = sample.trees.get(info.pid);
+      return {
+        sessionId: info.sessionId,
+        pid: info.pid,
+        projectId: known?.projectId ?? info.projectId,
+        cliId: known?.cliId,
+        surface: known?.surface,
+        createdAt: info.createdAt,
+        cpuPercent: tree?.cpuPercent ?? 0,
+        memBytes: tree?.memBytes ?? 0,
+        processCount: tree?.processCount ?? 0,
+        processes: tree?.processes ?? [],
+      };
+    }),
+  };
+}
+
 export function registerTerminalHandlers(): void {
   ipcMain.handle(
     IPC.terminal.create,
@@ -426,32 +454,7 @@ export function registerTerminalHandlers(): void {
     notifyExitSubscribers(sessionId);
   });
 
-  ipcMain.handle(IPC.terminal.usage, async (): Promise<TerminalUsageResult> => {
-    const running = await listRunningSessions();
-    const pids = running.map((info) => info.pid).filter((pid) => Number.isInteger(pid) && pid > 0);
-    const sample = await sampleProcessTrees(pids);
-    return {
-      available: sample.available,
-      cpuReady: sample.cpuReady,
-      sampledAt: Date.now(),
-      sessions: running.map((info) => {
-        const known = sessions.get(info.sessionId);
-        const tree = sample.trees.get(info.pid);
-        return {
-          sessionId: info.sessionId,
-          pid: info.pid,
-          projectId: known?.projectId ?? info.projectId,
-          cliId: known?.cliId,
-          surface: known?.surface,
-          createdAt: info.createdAt,
-          cpuPercent: tree?.cpuPercent ?? 0,
-          memBytes: tree?.memBytes ?? 0,
-          processCount: tree?.processCount ?? 0,
-          processes: tree?.processes ?? [],
-        };
-      }),
-    };
-  });
+  ipcMain.handle(IPC.terminal.usage, (): Promise<TerminalUsageResult> => terminalUsage());
 
   ipcMain.handle(
     IPC.terminal.runStatus,

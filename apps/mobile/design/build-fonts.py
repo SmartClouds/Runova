@@ -25,14 +25,17 @@ def find(pattern):
     return next(source.rglob(pattern))
 
 
-def convert(woff2, target):
+def convert(woff2, target, ligatures=True):
     font = TTFont(woff2)
     font.flavor = None
+    if not ligatures:
+        # A terminal draws every character in its own cell, as the desktop's does.
+        del font["GSUB"]
     font.save(fonts / target)
 
 
 convert(find("inter-latin-wght-normal.woff2"), "Inter.ttf")
-convert(find("jetbrains-mono-latin-wght-normal.woff2"), "JetBrainsMono.ttf")
+convert(find("jetbrains-mono-latin-wght-normal.woff2"), "JetBrainsMono.ttf", ligatures=False)
 
 icons = json.loads((here / "icons.json").read_text())
 options = subset.Options()

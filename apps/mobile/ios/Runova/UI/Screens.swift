@@ -7,6 +7,13 @@ struct AppIntents {
     var connect: (Int64) -> Void = { _ in }
     var disconnect: () -> Void = {}
     var signOut: () -> Void = {}
+    var openSection: (Section?) -> Void = { _ in }
+    var selectProject: (String?) -> Void = { _ in }
+    var openTerminal: (String) -> Void = { _ in }
+    var closeTerminal: () -> Void = {}
+    var terminalInput: (String) -> Void = { _ in }
+    var terminalScroll: (Int32) -> Void = { _ in }
+    var loadProcesses: (String) -> Void = { _ in }
 }
 
 let appTabs = [
@@ -35,7 +42,7 @@ struct AppRoot: View {
     @ViewBuilder private var signedIn: some View {
         if let connection = view.connection {
             if connection.phase == .connected {
-                ProjectsScreen(view: view, connection: connection, intents: intents)
+                DeviceShell(view: view, connection: connection, tab: $tab, intents: intents)
             } else {
                 ConnectionScreen(connection: connection, intents: intents)
             }
@@ -49,7 +56,7 @@ struct AppRoot: View {
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
-                RunovaBottomBar(tabs: appTabs, selected: tab) { tab = $0 }
+                RunovaBottomBar(tabs: appTabs, selected: tab == "account" ? "account" : "systems") { tab = $0 }
             }
         }
     }
@@ -96,7 +103,7 @@ private func platformName(_ platform: String) -> String {
     }
 }
 
-private struct LoadingRows: View {
+struct LoadingRows: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             RunovaSkeleton(width: 358)
@@ -209,51 +216,6 @@ struct ConnectionScreen: View {
             }
             .padding(32)
             .frame(maxHeight: .infinity)
-        }
-    }
-}
-
-struct ProjectsScreen: View {
-    let view: AppView
-    let connection: ConnectionView
-    let intents: AppIntents
-
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .trailing) {
-                RunovaTopBar(title: connection.systemName, onBack: intents.disconnect)
-                RunovaBadge(
-                    text: connection.direct == true ? "Direct" : "Relay",
-                    tone: connection.direct == true ? .primary : .warning
-                )
-                .padding(.trailing, 16)
-            }
-            if let code = connection.safetyCode {
-                RunovaText("Safety code \(code)", style: RunovaType.small, color: palette.mutedForeground)
-                    .padding(.horizontal, 16)
-            }
-            if view.projects.isEmpty && view.projectsLoading {
-                LoadingRows()
-            } else if view.projects.isEmpty {
-                RunovaEmptyState(
-                    icon: RunovaIcons.folder, title: "No projects yet",
-                    detail: "Add one in Runova on this computer.")
-            } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(view.projects, id: \.id) { project in
-                            RunovaListRow(
-                                title: project.name,
-                                detail: project.tags.isEmpty ? nil : project.tags.joined(separator: ", "),
-                                icon: RunovaIcons.folder)
-                        }
-                    }
-                    .padding(16)
-                }
-            }
-            Spacer(minLength: 0)
         }
     }
 }

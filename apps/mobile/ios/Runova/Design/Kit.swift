@@ -201,9 +201,10 @@ struct RunovaTextField: View {
     }
 }
 
-struct RunovaTopBar: View {
+struct RunovaTopBar<Trailing: View>: View {
     let title: String
     var onBack: (() -> Void)?
+    @ViewBuilder var trailing: () -> Trailing
 
     @Environment(\.palette) private var palette
 
@@ -220,9 +221,35 @@ struct RunovaTopBar: View {
             }
             RunovaText(title, style: RunovaType.heading, maxLines: 1)
             Spacer(minLength: 0)
+            trailing()
         }
         .padding(.horizontal, 8)
         .frame(height: 52)
+    }
+}
+
+extension RunovaTopBar where Trailing == EmptyView {
+    init(title: String, onBack: (() -> Void)? = nil) {
+        self.init(title: title, onBack: onBack) { EmptyView() }
+    }
+}
+
+/// A small control: a terminal key, a filter, a shortcut.
+struct RunovaChip: View {
+    let text: String
+    let action: () -> Void
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            RunovaText(text, style: RunovaType.label, color: palette.secondaryForeground, maxLines: 1)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 36)
+                .background(RoundedRectangle(cornerRadius: RunovaShape.sm).fill(palette.secondary))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

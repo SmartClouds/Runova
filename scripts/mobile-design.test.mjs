@@ -6,6 +6,7 @@ import {
   parseRadius,
   parseTerminalTheme,
   renderKotlin,
+  renderRust,
   renderSwift,
 } from './mobile-design.mjs';
 
@@ -94,6 +95,36 @@ test('writes Swift with the same names and values', () => {
   assert.match(swift, /let primaryForeground: Color/);
   assert.match(swift, /background: Color\(hex: 0x0A0A0A\)/);
   assert.match(swift, /static let radius: CGFloat = 10/);
+});
+
+test('writes the Rust terminal palette in ANSI order', () => {
+  const rust = renderRust({
+    terminal: {
+      black: '#000001',
+      red: '#000002',
+      green: '#000003',
+      yellow: '#000004',
+      blue: '#000005',
+      magenta: '#000006',
+      cyan: '#000007',
+      white: '#000008',
+      brightBlack: '#000009',
+      brightRed: '#00000A',
+      brightGreen: '#00000B',
+      brightYellow: '#00000C',
+      brightBlue: '#00000D',
+      brightMagenta: '#00000E',
+      brightCyan: '#00000F',
+      brightWhite: '#000010',
+      foreground: '#D4DDD6',
+      background: '#0A1210',
+    },
+  });
+
+  assert.match(rust, /ANSI: \[u32; 16\] = \[\s+0x000001,\s+0x000002,/);
+  assert.match(rust, /0x000010,\s+\];/);
+  assert.match(rust, /FOREGROUND: u32 = 0xD4DDD6/);
+  assert.match(rust, /BACKGROUND: u32 = 0x0A1210/);
 });
 
 test('generates the same text every time, so the drift check can compare it', () => {

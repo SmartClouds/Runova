@@ -44,7 +44,7 @@ private fun view(
     projects: List<ProjectView> = emptyList(),
     projectsLoading: Boolean = false,
     error: String? = null,
-) = AppView(auth, true, list, false, connection, projects, projectsLoading, error)
+) = AppView(auth, true, list, false, connection, projects, projectsLoading, null, emptyList(), false, null, emptyList(), error)
 
 private fun connection(
     phase: ConnectionPhase,

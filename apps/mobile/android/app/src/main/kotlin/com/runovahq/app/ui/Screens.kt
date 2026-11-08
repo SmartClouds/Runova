@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +37,7 @@ import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
-import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.Section
 import uniffi.runova_ffi.SystemView
 
 /** What the screens can ask for. Everything else is decided in the Rust core. */
@@ -48,6 +47,13 @@ data class AppIntents(
     val connect: (Long) -> Unit = {},
     val disconnect: () -> Unit = {},
     val signOut: () -> Unit = {},
+    val openSection: (Section?) -> Unit = {},
+    val selectProject: (String?) -> Unit = {},
+    val openTerminal: (String) -> Unit = {},
+    val closeTerminal: () -> Unit = {},
+    val terminalInput: (String) -> Unit = {},
+    val terminalScroll: (Int) -> Unit = {},
+    val loadProcesses: (String) -> Unit = {},
 )
 
 val AppTabs = listOf(
@@ -66,7 +72,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
                 val connection = view.connection
                 when {
                     connection == null -> Shell(view, tab, onTab, intents)
-                    connection.phase == ConnectionPhase.CONNECTED -> ProjectsScreen(view, connection, intents)
+                    connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
                     else -> ConnectionScreen(connection, intents)
                 }
             }
@@ -84,7 +90,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
                 SystemsScreen(view, intents)
             }
         }
-        RunovaBottomBar(AppTabs, tab, onTab)
+        RunovaBottomBar(AppTabs, if (tab == "account") "account" else "systems", onTab)
     }
 }
 
@@ -177,7 +183,7 @@ private fun SystemRow(system: SystemView, intents: AppIntents) {
 }
 
 @Composable
-private fun LoadingRows() {
+internal fun LoadingRows() {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         RunovaSkeleton(Modifier.fillMaxWidth())
         RunovaSkeleton(Modifier.fillMaxWidth(0.7f))
@@ -227,52 +233,6 @@ fun ConnectionScreen(connection: ConnectionView, intents: AppIntents) {
             }
         }
     }
-}
-
-@Composable
-fun ProjectsScreen(view: AppView, connection: ConnectionView, intents: AppIntents) {
-    val colors = RunovaTheme.colors
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(
-            connection.systemName,
-            onBack = intents.disconnect,
-            trailing = {
-                RunovaBadge(
-                    if (connection.direct == true) "Direct" else "Relay",
-                    if (connection.direct == true) BadgeTone.Primary else BadgeTone.Warning,
-                    Modifier.padding(end = 8.dp),
-                )
-            },
-        )
-        connection.safetyCode?.let {
-            RunovaText(
-                "Safety code $it",
-                Modifier.padding(horizontal = 16.dp),
-                style = RunovaType.small,
-                color = colors.mutedForeground,
-            )
-        }
-        when {
-            view.projects.isEmpty() && view.projectsLoading -> LoadingRows()
-            view.projects.isEmpty() -> RunovaEmptyState(
-                RunovaIcons.Folder,
-                "No projects yet",
-                "Add one in Runova on this computer.",
-            )
-            else -> LazyColumn(contentPadding = PaddingValues(16.dp)) {
-                items(view.projects, key = { it.id }) { ProjectRow(it) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProjectRow(project: ProjectView) {
-    RunovaListRow(
-        title = project.name,
-        detail = project.tags.joinToString(", ").ifEmpty { null },
-        icon = RunovaIcons.Folder,
-    )
 }
 
 @Composable

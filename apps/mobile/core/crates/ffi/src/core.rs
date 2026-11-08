@@ -3,7 +3,7 @@
 use crate::backend::LiveBackend;
 use crate::engine::{AppLifecycle, Dependencies, Engine, HubConnector};
 use crate::secure::{SecureStore, SecureTokens};
-use crate::view::ViewListener;
+use crate::view::{Section, ViewListener};
 use crate::{CoreError, SignInLink};
 use async_trait::async_trait;
 use runova_api::auth::Session;
@@ -12,13 +12,14 @@ use runova_session::hub::{HubEvent, HubPort, RemoteHub, read_event};
 use runova_session::live::LiveTransports;
 use runova_signalr::client::{HubClient, HubOptions, hub_url};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
 const HUB_EVENTS: usize = 256;
 /// Two workers: enough for a phone, and small on memory.
 const WORKERS: usize = 2;
+const REFRESH_EVERY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CoreConfig {
@@ -101,6 +102,7 @@ impl RunovaCore {
                     site: config.site.clone(),
                 }),
                 transports: Arc::new(LiveTransports { site: config.site }),
+                refresh_every: REFRESH_EVERY,
             })
         };
         Ok(Arc::new(Self { runtime, engine }))
@@ -138,5 +140,37 @@ impl RunovaCore {
 
     pub fn sign_out(&self) {
         self.engine.sign_out();
+    }
+
+    pub fn open_section(&self, section: Option<Section>) {
+        self.engine.open_section(section);
+    }
+
+    pub fn select_project(&self, project_id: Option<String>) {
+        self.engine.select_project(project_id);
+    }
+
+    pub fn load_terminals(&self) {
+        self.engine.load_terminals();
+    }
+
+    pub fn open_terminal(&self, session_id: String) {
+        self.engine.open_terminal(session_id);
+    }
+
+    pub fn close_terminal(&self) {
+        self.engine.close_terminal();
+    }
+
+    pub fn terminal_input(&self, data: String) {
+        self.engine.terminal_input(data);
+    }
+
+    pub fn terminal_scroll(&self, lines: i32) {
+        self.engine.terminal_scroll(lines);
+    }
+
+    pub fn load_terminal_processes(&self, session_id: String) {
+        self.engine.load_terminal_processes(session_id);
     }
 }

@@ -346,6 +346,21 @@ export const agentStatus = {
     return added;
   },
 
+  /** The tabs being tracked, for showing them somewhere else. */
+  tabs(): {
+    sessionId: string;
+    title: string;
+    projectId: string | undefined;
+    cliId: string | undefined;
+  }[] {
+    return [...tracked.entries()].map(([sessionId, tab]) => ({
+      sessionId,
+      title: tab.title,
+      projectId: tab.projectId,
+      cliId: tab.cliId,
+    }));
+  },
+
   output(id: string, bytes: number): void {
     apply(id, { type: 'output', bytes, at: Date.now() });
   },
