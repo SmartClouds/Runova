@@ -69,6 +69,9 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 ("POST", "/api/v1/nowpayments-events", false),
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),
+
+                // The Runova Anywhere agent trades its one-time secret for a token; it has no cookie (E64).
+                ("POST", "/api/v1/remote-agent-tokens", false),
                 ("POST", "/api/v1/sessions", true),
                 ("POST", "/api/v1/stripe-events", false),
 

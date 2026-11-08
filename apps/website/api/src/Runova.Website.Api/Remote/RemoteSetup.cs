@@ -31,7 +31,7 @@ internal static class RemoteSetup
     {
         app.MapHub<RemoteHub>(RemoteHub.Path);
         // The relay is a plain WebSocket outside /api/v1; its one-time ticket is its credential.
-        app.Map($"{RemoteRelay.PathPrefix}/{{sessionId}}", (HttpContext http, string sessionId, RemoteRelay relay) => relay.HandleAsync(http, sessionId))
+        app.MapGet($"{RemoteRelay.PathPrefix}/{{sessionId}}", (HttpContext http, string sessionId, RemoteRelay relay) => relay.HandleAsync(http, sessionId))
             .AllowAnonymous()
             .ExcludeFromDescription();
         return app;
