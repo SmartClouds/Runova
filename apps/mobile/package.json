@@ -43,10 +43,11 @@
     "testTimeout": 20000,
     "testMatch": ["<rootDir>/src/**/*.test.{ts,tsx}", "<rootDir>/App.test.tsx"],
     "moduleNameMapper": {
-      "^@runova/protocol$": "<rootDir>/../../packages/protocol/src/index.ts"
+      "^@runova/protocol$": "<rootDir>/../../packages/protocol/src/index.ts",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(?:-community)?|expo(?:nent)?|@expo(?:nent)?/.*|expo-.*|react-native-webrtc|react-native-safe-area-context|@react-native-async-storage/.*))"
+      "node_modules/(?!(?:\\.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(?:-community)?|expo(?:nent)?|@expo(?:nent)?/.*|expo-.*|react-native-webrtc|react-native-safe-area-context|@react-native-async-storage/.*|@noble/.*))"
     ],
     "collectCoverageFrom": ["src/**/*.{ts,tsx}", "App.tsx", "!src/theme/**"],
     "coverageReporters": ["text-summary", "json-summary", "lcov"]

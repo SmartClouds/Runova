@@ -5,10 +5,12 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
+      "!apps/remote-agent/**",
       "!apps/server-core/**",
       "!apps/website/**",
       "!apps/desktop/src/shared/deploy/protocol/generated/**",
-      "!packages/core/src/deploy/wordpress/vectors/**"
+      "!packages/core/src/deploy/wordpress/vectors/**",
+      "!packages/protocol/test-vectors/**"
     ]
   },
   "formatter": {

@@ -99,6 +99,20 @@ public sealed class RemoteHubTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(["Ops"], incoming.Teams);
     }
 
+    /// <summary>Everything on the hub needs a Runova account: presence, connecting and relay tickets.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-real-token")]
+    public async Task The_hub_turns_away_anyone_not_signed_in(string? token)
+    {
+        using var client = _factory.CreateClient();
+        var query = token is null ? string.Empty : $"&access_token={token}";
+
+        var response = await client.PostAsync(new Uri($"{RemoteHub.Path}/negotiate?negotiateVersion=1{query}", UriKind.Relative), null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task Accepting_lets_the_two_signal_and_the_host_records_the_session()
     {
