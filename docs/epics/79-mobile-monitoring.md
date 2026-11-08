@@ -15,9 +15,9 @@ Local targets use `health:*` through the computer under the `ops` scope. Cloud m
 
 ## Tasks
 
-- [ ] T1 Bridge methods for local targets and errors
-- [ ] T2 Cloud monitor client in `api`
-- [ ] T3 `store` and screens: list, detail, history, check now, pause
+- [x] T1 Bridge methods for local targets and errors
+- [x] T2 Cloud monitor client in `api`
+- [x] T3 `store` and screens: list, detail, history, check now, pause
 
 ## Acceptance criteria
 
@@ -28,3 +28,10 @@ Local targets use `health:*` through the computer under the `ops` scope. Cloud m
 ## Not in this epic
 
 Creating monitors with AI.
+
+## Status
+
+The bridge, the core and the Android screens are tested. Local and cloud monitors share one list,
+and cloud ones work with no computer connected. Cloud monitors refresh every 16 seconds until E82
+brings the live hub (AC3), and the Errors tab is not on the phone yet. Owed: a real account, and
+the iOS screens have never been compiled.

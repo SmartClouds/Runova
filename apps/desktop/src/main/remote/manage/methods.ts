@@ -2,6 +2,7 @@ import type { Project } from '@runova/core';
 import type { ManageProject, ManageTerminal, ManageTerminalProcess } from '@runova/protocol';
 import { deployMethods, type ManageDeployDeps } from './deployMethods';
 import { gitMethods, type ManageGitDeps } from './gitMethods';
+import { type ManageMonitoringDeps, type ManagePipelineDeps, opsMethods } from './opsMethods';
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
 import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
@@ -28,6 +29,8 @@ export interface ManageMethodDeps {
   status: ManageStatusDeps;
   vault: ManageVaultDeps;
   deploy: ManageDeployDeps;
+  monitoring: ManageMonitoringDeps;
+  pipelines: ManagePipelineDeps;
 }
 
 /** Far past anything typed or pasted on a phone. */
@@ -73,6 +76,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...statusMethods(deps.status),
       ...vaultMethods(deps.vault),
       ...deployMethods(deps.deploy),
+      ...opsMethods(deps.monitoring, deps.pipelines),
     },
     streams: {
       'terminals.follow': async (params, sink) => {

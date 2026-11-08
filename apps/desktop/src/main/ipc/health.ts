@@ -221,6 +221,46 @@ export interface HealthHandlerOptions {
   guard?: (event: IpcMainInvokeEvent) => boolean;
 }
 
+/** What the Health page lists, with cloud monitors' results in place of this computer's. */
+export async function listHealthSummaries(projectId?: string): Promise<HealthTargetSummary[]> {
+  const { targets, results } = await readHealthState();
+  const shown = targets.filter(
+    (target) => projectId === undefined || target.projectId === projectId,
+  );
+  return Promise.all(
+    shown.map(async (target) => summary(target, await resultOf(target, results[target.id]))),
+  );
+}
+
+export async function setHealthPaused(
+  idValue: string,
+  paused: boolean,
+): Promise<HealthTargetSummary> {
+  const updated = await mutateHealth(async (state) => {
+    const target = findTarget(state.targets, idValue);
+    // Resuming an online monitor has to fit the account type; the server says when it does not.
+    await (await onlineFor(target))?.push(target, { paused });
+    target.paused = paused;
+    target.updatedAt = Date.now();
+    const result = state.results[target.id];
+    if (!paused && result) result.nextCheckAt = null;
+    return target;
+  });
+  broadcastHealthChanged([idValue]);
+  return summary(updated, await resultOf(updated, (await readHealthState()).results[idValue]));
+}
+
+export async function checkHealthNow(idValue: string): Promise<HealthTargetDetail> {
+  const current = findTarget((await readHealthState()).targets, idValue);
+  // Runova Cloud checks it on its own schedule: "check now" reads what it found.
+  const cloud = await onlineFor(current);
+  if (cloud) await cloud.reload(current);
+  else await getHealthScheduler().checkNow(idValue);
+  const found = await detail(idValue);
+  if (!found) throw new Error('That healthcheck no longer exists.');
+  return found;
+}
+
 export function registerHealthHandlers(options: HealthHandlerOptions = {}): void {
   registerSealedSecretStore(healthSealedKeys);
 
@@ -233,16 +273,11 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     });
   };
 
-  handle(IPC.health.list, async (filter): Promise<HealthTargetSummary[]> => {
-    const projectId = parse(filterSchema, filter, 'filter')?.projectId;
-    const { targets, results } = await readHealthState();
-    const shown = targets.filter(
-      (target) => projectId === undefined || target.projectId === projectId,
-    );
-    return Promise.all(
-      shown.map(async (target) => summary(target, await resultOf(target, results[target.id]))),
-    );
-  });
+  handle(
+    IPC.health.list,
+    (filter): Promise<HealthTargetSummary[]> =>
+      listHealthSummaries(parse(filterSchema, filter, 'filter')?.projectId),
+  );
 
   handle(IPC.health.get, (value) => detail(targetId(value)));
 
@@ -299,34 +334,16 @@ export function registerHealthHandlers(options: HealthHandlerOptions = {}): void
     broadcastHealthChanged([idValue]);
   });
 
-  handle(IPC.health.setPaused, async (value, pausedValue): Promise<HealthTargetSummary> => {
-    const idValue = targetId(value);
-    const paused = parse(z.boolean(), pausedValue, 'pause switch');
-    const updated = await mutateHealth(async (state) => {
-      const target = findTarget(state.targets, idValue);
-      // Resuming an online monitor has to fit the account type; the server says when it does not.
-      await (await onlineFor(target))?.push(target, { paused });
-      target.paused = paused;
-      target.updatedAt = Date.now();
-      const result = state.results[target.id];
-      if (!paused && result) result.nextCheckAt = null;
-      return target;
-    });
-    broadcastHealthChanged([idValue]);
-    return summary(updated, await resultOf(updated, (await readHealthState()).results[idValue]));
-  });
+  handle(
+    IPC.health.setPaused,
+    (value, pausedValue): Promise<HealthTargetSummary> =>
+      setHealthPaused(targetId(value), parse(z.boolean(), pausedValue, 'pause switch')),
+  );
 
-  handle(IPC.health.checkNow, async (value): Promise<HealthTargetDetail> => {
-    const idValue = targetId(value);
-    const current = findTarget((await readHealthState()).targets, idValue);
-    // Runova Cloud checks it on its own schedule: "check now" reads what it found.
-    const cloud = await onlineFor(current);
-    if (cloud) await cloud.reload(current);
-    else await getHealthScheduler().checkNow(idValue);
-    const found = await detail(idValue);
-    if (!found) throw new Error('That healthcheck no longer exists.');
-    return found;
-  });
+  handle(
+    IPC.health.checkNow,
+    (value): Promise<HealthTargetDetail> => checkHealthNow(targetId(value)),
+  );
 
   handle(IPC.health.rotateSecret, async (value): Promise<HealthSecretReveal> => {
     const idValue = targetId(value);

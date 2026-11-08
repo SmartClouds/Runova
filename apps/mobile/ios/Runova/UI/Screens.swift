@@ -21,10 +21,13 @@ struct AppIntents {
     var status = StatusIntents()
     var vault = VaultIntents()
     var deploy = DeployIntents()
+    var monitoring = MonitoringIntents()
+    var pipelines = PipelineIntents()
 }
 
 let appTabs = [
     TabItem(id: "systems", title: "Systems", icon: RunovaIcons.systems),
+    TabItem(id: "monitors", title: "Monitors", icon: RunovaIcons.monitoring),
     TabItem(id: "account", title: "Account", icon: RunovaIcons.account),
 ]
 
@@ -49,6 +52,12 @@ struct AppRoot: View {
         }
     }
 
+    private var appSection: String { appTabs.first { $0.id == tab }?.id ?? "systems" }
+
+    private var openMonitor: MonitorView? {
+        (view.monitoring.local + view.monitoring.cloud).first { $0.id == view.monitoring.open }
+    }
+
     @ViewBuilder private var signedIn: some View {
         if let connection = view.connection {
             if connection.phase == .connected {
@@ -56,17 +65,25 @@ struct AppRoot: View {
             } else {
                 ConnectionScreen(connection: connection, intents: intents)
             }
+        } else if appSection == "monitors", let monitor = openMonitor {
+            MonitorScreen(monitor: monitor, intents: intents.monitoring)
         } else {
             VStack(spacing: 0) {
                 Group {
-                    if tab == "account" {
-                        AccountScreen(intents: intents)
-                    } else {
-                        SystemsScreen(view: view, intents: intents)
+                    switch appSection {
+                    case "account": AccountScreen(intents: intents)
+                    case "monitors":
+                        VStack(alignment: .leading, spacing: 0) {
+                            RunovaTopBar(title: "Monitors")
+                            MonitoringTab(view: view, intents: intents.monitoring)
+                                .onAppear { intents.openSection(.monitoring) }
+                                .onDisappear { intents.openSection(nil) }
+                        }
+                    default: SystemsScreen(view: view, intents: intents)
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
-                RunovaBottomBar(tabs: appTabs, selected: tab == "account" ? "account" : "systems") { tab = $0 }
+                RunovaBottomBar(tabs: appTabs, selected: appSection) { tab = $0 }
             }
         }
     }

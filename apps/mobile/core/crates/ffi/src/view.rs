@@ -130,6 +130,116 @@ pub enum Section {
     Status,
     Vault,
     Deploy,
+    Monitoring,
+    Pipelines,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MonitorSource {
+    /// Run by the computer, so only there while connected to it.
+    Local,
+    /// Run by Runova, so there with every computer off.
+    Cloud,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MonitorState {
+    Up,
+    Degraded,
+    Down,
+    Paused,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct MonitorView {
+    pub id: String,
+    pub name: String,
+    pub source: MonitorSource,
+    pub state: MonitorState,
+    pub detail: Option<String>,
+    pub latency_label: Option<String>,
+    pub uptime_label: Option<String>,
+    pub paused: bool,
+    pub can_check: bool,
+    pub can_pause: bool,
+    pub samples: Vec<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
+pub struct MonitoringScreen {
+    pub local: Vec<MonitorView>,
+    pub cloud: Vec<MonitorView>,
+    pub loading: bool,
+    /// Why there are no local monitors, when that is not because there are none.
+    pub local_note: Option<String>,
+    pub open: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum PipelineRunState {
+    Queued,
+    Running,
+    Success,
+    Failed,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PipelineRunView {
+    pub id: i64,
+    pub title: String,
+    pub branch: String,
+    pub number: u32,
+    pub state: PipelineRunState,
+    pub state_label: String,
+    pub can_cancel: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct WorkflowView {
+    pub id: i64,
+    pub name: String,
+    pub can_dispatch: bool,
+    pub run: Option<PipelineRunView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PipelinesStatusView {
+    pub problem: Option<String>,
+    pub workflows: Vec<WorkflowView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PipelineJobView {
+    pub id: i64,
+    pub name: String,
+    pub state: PipelineRunState,
+    pub state_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PipelineRunDetailView {
+    pub run_id: i64,
+    pub loading: bool,
+    pub jobs: Vec<PipelineJobView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct JobLogView {
+    pub job_id: i64,
+    pub name: String,
+    pub loading: bool,
+    pub truncated: bool,
+    pub lines: Vec<LogLineView>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct PipelinesScreen {
+    pub status: Option<PipelinesStatusView>,
+    pub loading: bool,
+    pub run: Option<PipelineRunDetailView>,
+    pub log: Option<JobLogView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -456,6 +566,8 @@ pub struct AppView {
     pub status: StatusScreen,
     pub vault: VaultScreen,
     pub deploy: DeployScreen,
+    pub monitoring: MonitoringScreen,
+    pub pipelines: PipelinesScreen,
     /// Something asked for is still being done on the computer.
     pub busy: bool,
     /// That it worked, for a moment.
@@ -483,6 +595,8 @@ impl AppView {
             status: StatusScreen::default(),
             vault: VaultScreen::default(),
             deploy: DeployScreen::default(),
+            monitoring: MonitoringScreen::default(),
+            pipelines: PipelinesScreen::default(),
             busy: false,
             notice: None,
             confirm: None,

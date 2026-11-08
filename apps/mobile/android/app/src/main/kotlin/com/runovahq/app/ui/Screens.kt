@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,10 +65,13 @@ data class AppIntents(
     val status: StatusIntents = StatusIntents(),
     val vault: VaultIntents = VaultIntents(),
     val deploy: DeployIntents = DeployIntents(),
+    val monitoring: MonitoringIntents = MonitoringIntents(),
+    val pipelines: PipelineIntents = PipelineIntents(),
 )
 
 val AppTabs = listOf(
     TabItem("systems", "Systems", RunovaIcons.Systems),
+    TabItem("monitors", "Monitors", RunovaIcons.Monitoring),
     TabItem("account", "Account", RunovaIcons.Account),
 )
 
@@ -121,15 +125,25 @@ private fun ConfirmOverlay(confirm: ConfirmView, onConfirm: () -> Unit, onDismis
 
 @Composable
 private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppIntents) {
+    val section = AppTabs.firstOrNull { it.id == tab }?.id ?: "systems"
+    val onShow = if (section == "monitors") Section.MONITORING else null
+    DisposableEffect(onShow) {
+        if (onShow != null) intents.openSection(onShow)
+        onDispose { if (onShow != null) intents.openSection(null) }
+    }
+    if (section == "monitors" && MonitorOverlay(view, intents.monitoring)) return
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
-            if (tab == "account") {
-                AccountScreen(intents)
-            } else {
-                SystemsScreen(view, intents)
+            when (section) {
+                "account" -> AccountScreen(intents)
+                "monitors" -> Column(Modifier.fillMaxSize()) {
+                    RunovaTopBar("Monitors")
+                    MonitoringTab(view, intents.monitoring)
+                }
+                else -> SystemsScreen(view, intents)
             }
         }
-        RunovaBottomBar(AppTabs, if (tab == "account") "account" else "systems", onTab)
+        RunovaBottomBar(AppTabs, section, onTab)
     }
 }
 

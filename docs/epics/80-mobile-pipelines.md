@@ -13,9 +13,9 @@ fetched in capped pages. Cancel and dispatch ask first.
 
 ## Tasks
 
-- [ ] T1 Bridge methods
-- [ ] T2 `store` and screens: status, runs, jobs, logs
-- [ ] T3 Dispatch and cancel
+- [x] T1 Bridge methods
+- [x] T2 `store` and screens: status, runs, jobs, logs
+- [x] T3 Dispatch and cancel
 
 ## Acceptance criteria
 
@@ -26,3 +26,9 @@ fetched in capped pages. Cancel and dispatch ask first.
 ## Not in this epic
 
 Auto-fix controls.
+
+## Status
+
+The bridge, the core and the Android screens are tested. A job log keeps its last 2000 lines rather
+than paging. Dispatch uses the default branch and has no form for workflow inputs yet. Owed: AC2
+against GitHub, and the iOS screens have never been compiled.

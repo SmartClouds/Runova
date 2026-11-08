@@ -63,7 +63,22 @@ impl HttpTransport for OneToken {
     }
 }
 
-struct FakeBackend;
+/// The website, answering from a table and remembering what was changed.
+#[derive(Default)]
+pub struct FakeBackend {
+    rest: Mutex<HashMap<String, Value>>,
+    changes: Mutex<Vec<(String, String, Value)>>,
+}
+
+impl FakeBackend {
+    pub fn answer(&self, path: &str, value: Value) {
+        self.rest.lock().unwrap().insert(path.to_owned(), value);
+    }
+
+    pub fn sent(&self) -> Vec<(String, String, Value)> {
+        self.changes.lock().unwrap().clone()
+    }
+}
 
 #[async_trait]
 impl Backend for FakeBackend {
@@ -81,6 +96,28 @@ impl Backend for FakeBackend {
             online: true,
             own: true,
         }])
+    }
+
+    async fn get_json(&self, path: &str) -> Result<Value, BackendError> {
+        self.rest
+            .lock()
+            .unwrap()
+            .get(path)
+            .cloned()
+            .ok_or_else(|| BackendError::Failed(format!("nothing at {path}")))
+    }
+
+    async fn send_json(
+        &self,
+        method: &str,
+        path: &str,
+        body: Value,
+    ) -> Result<Value, BackendError> {
+        self.changes
+            .lock()
+            .unwrap()
+            .push((method.to_owned(), path.to_owned(), body));
+        self.get_json(path).await
     }
 }
 
@@ -345,6 +382,7 @@ impl Computer {
 pub struct World {
     pub views: Arc<Views>,
     pub computer: Arc<Computer>,
+    pub backend: Arc<FakeBackend>,
     pub engine: Engine,
 }
 
@@ -369,8 +407,8 @@ impl World {
     }
 }
 
-/// An app already signed in and connected to the scripted computer.
-pub async fn connected() -> World {
+/// An app signed in and looking at its computers, connected to none of them.
+pub async fn signed_in() -> World {
     let store = Arc::new(MemoryStore::default());
     store.set(
         "identity-seed".to_owned(),
@@ -388,6 +426,7 @@ pub async fn connected() -> World {
     );
     let views = Arc::new(Views::default());
     let computer = Arc::new(Computer::default());
+    let backend = Arc::new(FakeBackend::default());
     let session = Arc::new(Session::new(
         "https://runovahq.test",
         Arc::new(OneToken),
@@ -401,7 +440,7 @@ pub async fn connected() -> World {
         secure: store,
         listener: views.clone(),
         session,
-        backend: Arc::new(FakeBackend),
+        backend: backend.clone(),
         hub: Arc::new(FakeConnector),
         transports: Arc::new(MemoryTransports(computer.clone())),
         refresh_every: Duration::from_millis(20),
@@ -409,6 +448,7 @@ pub async fn connected() -> World {
     let world = World {
         views,
         computer,
+        backend,
         engine,
     };
     world
@@ -417,6 +457,12 @@ pub async fn connected() -> World {
             "the computers",
         )
         .await;
+    world
+}
+
+/// An app already signed in and connected to the scripted computer.
+pub async fn connected() -> World {
+    let world = signed_in().await;
     world.engine.connect(5);
     world
         .until(

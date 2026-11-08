@@ -1,5 +1,6 @@
 import type { ManageTerminal } from '@runova/protocol';
 import { agentStatus } from '../../agents/statusTracker';
+import { checkHealthNow, listHealthSummaries, setHealthPaused } from '../../ipc/health';
 import { sampleSystemStats } from '../../ipc/systemStats';
 import {
   createTerminalSession,
@@ -9,6 +10,15 @@ import {
   terminalUsage,
   writeToSession,
 } from '../../ipc/terminal';
+import {
+  cancelWorkflowRun,
+  dispatchWorkflow,
+  fetchJobLog,
+  fetchRunDetails,
+  fetchWorkflowRefs,
+  githubRepoForFolder,
+} from '../../pipelines/githubActions';
+import { refreshProjectPipelineStatus, schedulePipelineCheck } from '../../pipelines/watcher';
 import { store } from '../../store';
 import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
@@ -73,4 +83,23 @@ export const liveManageDeps: ManageMethodDeps = {
     remove: (id) => getVaultService().remove([id]),
   },
   deploy: liveDeploy,
+  monitoring: {
+    list: () => listHealthSummaries(),
+    check: checkHealthNow,
+    setPaused: setHealthPaused,
+  },
+  pipelines: {
+    status: refreshProjectPipelineStatus,
+    repoOf: async (projectId) => {
+      const project = (await store.getProjects()).find((one) => one.id === projectId);
+      const repo = project ? await githubRepoForFolder(project.folderPath) : null;
+      return repo ? `${repo.owner}/${repo.repo}` : null;
+    },
+    details: fetchRunDetails,
+    jobLog: fetchJobLog,
+    refs: fetchWorkflowRefs,
+    dispatch: dispatchWorkflow,
+    cancel: cancelWorkflowRun,
+    afterAction: schedulePipelineCheck,
+  },
 };

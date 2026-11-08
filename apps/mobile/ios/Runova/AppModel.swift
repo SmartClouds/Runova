@@ -100,7 +100,19 @@ final class AppModel: NSObject, ObservableObject {
                 closeLogs: { [weak self] in self?.engine?.deployCloseLogs() },
                 containerAction: { [weak self] in self?.engine?.deployContainerAction(containerId: $0, action: $1) },
                 stackAction: { [weak self] in self?.engine?.deployStackAction(stack: $0, action: $1) },
-                redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) }))
+                redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) }),
+            monitoring: MonitoringIntents(
+                open: { [weak self] in self?.engine?.monitorOpen(id: $0) },
+                close: { [weak self] in self?.engine?.monitorClose() },
+                check: { [weak self] in self?.engine?.monitorCheck(id: $0) },
+                setPaused: { [weak self] in self?.engine?.monitorSetPaused(id: $0, source: $1, paused: $2) }),
+            pipelines: PipelineIntents(
+                openRun: { [weak self] in self?.engine?.pipelinesOpenRun(runId: $0) },
+                closeRun: { [weak self] in self?.engine?.pipelinesCloseRun() },
+                openJob: { [weak self] in self?.engine?.pipelinesOpenJob(jobId: $0) },
+                closeJob: { [weak self] in self?.engine?.pipelinesCloseJob() },
+                dispatch: { [weak self] in self?.engine?.pipelinesDispatch(workflowId: $0) },
+                cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) }))
     }
 
     private var engine: Engine? { core?.engine() }

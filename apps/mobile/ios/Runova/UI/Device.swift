@@ -12,6 +12,8 @@ let deviceTabs = [
 private let moreSections = [
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
     TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
+    TabItem(id: "monitoring", title: "Monitoring", icon: RunovaIcons.monitoring),
+    TabItem(id: "pipelines", title: "Pipelines", icon: RunovaIcons.pipelines),
 ]
 
 /// The width of a JetBrains Mono cell, in ems.
@@ -42,6 +44,10 @@ struct DeviceShell: View {
     let intents: AppIntents
 
     private var section: String { (deviceTabs + moreSections).first { $0.id == tab }?.id ?? "projects" }
+    private var openMonitor: MonitorView? {
+        (view.monitoring.local + view.monitoring.cloud).first { $0.id == view.monitoring.open }
+    }
+
     private var onShow: Section? {
         guard view.terminal == nil else { return nil }
         switch section {
@@ -50,6 +56,8 @@ struct DeviceShell: View {
         case "status": return .status
         case "vault": return .vault
         case "deploy": return .deploy
+        case "monitoring": return .monitoring
+        case "pipelines": return .pipelines
         default: return nil
         }
     }
@@ -71,6 +79,12 @@ struct DeviceShell: View {
                 LogsScreen(logs: logs, intents: intents.deploy)
             } else if let server = view.deploy.server {
                 ServerScreen(server: server, error: view.error, intents: intents.deploy)
+            } else if section == "monitoring", let monitor = openMonitor {
+                MonitorScreen(monitor: monitor, intents: intents.monitoring)
+            } else if let log = view.pipelines.log {
+                JobLogScreen(log: log, intents: intents.pipelines)
+            } else if let run = view.pipelines.run {
+                RunScreen(run: run, intents: intents.pipelines)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
@@ -91,6 +105,13 @@ struct DeviceShell: View {
                                 if let error = view.error { ErrorLine(message: error) }
                             }
                         case "deploy": DeployTab(view: view, intents: intents.deploy)
+                        case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
+                        case "pipelines":
+                            VStack(alignment: .leading, spacing: 0) {
+                                PipelinesTab(view: view, intents: intents.pipelines)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                if let error = view.error { ErrorLine(message: error) }
+                            }
                         case "more": MoreScreen(tab: $tab)
                         default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }

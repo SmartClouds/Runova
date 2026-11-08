@@ -165,6 +165,25 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(fixtureView(connection: connected, deploy: deploy), "deploy", tab: "deploy")
     }
 
+    func testMonitoring() throws {
+        let cloud = MonitorView(
+            id: "m1", name: "Shop", source: .cloud, state: .down, detail: "Timed out", latencyLabel: nil,
+            uptimeLabel: "90.0%", paused: false, canCheck: false, canPause: true, samples: [])
+        let monitoring = MonitoringScreen(local: [], cloud: [cloud], loading: false, localNote: nil, open: nil)
+        try renderSnapshot(fixtureView(connection: connected, monitoring: monitoring), "monitoring", tab: "monitoring")
+    }
+
+    func testPipelines() throws {
+        let run = PipelineRunView(
+            id: 100, title: "Fix it", branch: "master", number: 12, state: .running, stateLabel: "Running",
+            canCancel: true)
+        let status = PipelinesStatusView(
+            problem: nil, workflows: [WorkflowView(id: 7, name: "CI", canDispatch: true, run: run)])
+        let pipelines = PipelinesScreen(status: status, loading: false, run: nil, log: nil)
+        try renderSnapshot(
+            fixtureView(connection: connected, selected: "p1", pipelines: pipelines), "pipelines", tab: "pipelines")
+    }
+
     func testConfirm() throws {
         let question = ConfirmView(
             title: "Discard these changes?", detail: "a.ts goes back.", action: "Discard", danger: true)
@@ -183,12 +202,15 @@ func fixtureView(
         state: .unknown, loading: false, onShow: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
+    monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
+    pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil),
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
+        monitoring: monitoring, pipelines: pipelines,
         busy: false, notice: notice, confirm: confirm, error: error)
 }
 

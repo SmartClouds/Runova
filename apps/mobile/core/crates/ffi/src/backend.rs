@@ -39,6 +39,21 @@ pub struct SystemEntry {
 pub trait Backend: Send + Sync {
     async fn register_phone(&self, phone: PhoneRegistration) -> Result<i64, BackendError>;
     async fn systems(&self) -> Result<Vec<SystemEntry>, BackendError>;
+
+    /// Any read from the website's API, for screens that talk to it directly.
+    async fn get_json(&self, _path: &str) -> Result<Value, BackendError> {
+        Err(BackendError::Failed("Not available.".to_owned()))
+    }
+
+    /// Any change. `method` is an HTTP verb and an empty answer reads as null.
+    async fn send_json(
+        &self,
+        _method: &str,
+        _path: &str,
+        _body: Value,
+    ) -> Result<Value, BackendError> {
+        Err(BackendError::Failed("Not available.".to_owned()))
+    }
 }
 
 #[derive(Deserialize)]
@@ -99,6 +114,7 @@ impl LiveBackend {
     async fn read(&self, response: reqwest::Response) -> Result<Value, BackendError> {
         match response.status().as_u16() {
             401 => Err(BackendError::SignedOut),
+            204 => Ok(Value::Null),
             200..=299 => response.json().await.map_err(failed),
             status => Err(failed(format!("Runova answered {status}."))),
         }
@@ -124,6 +140,37 @@ impl Backend for LiveBackend {
         let dto: RegisteredDto =
             serde_json::from_value(self.read(response).await?).map_err(failed)?;
         Ok(dto.id)
+    }
+
+    async fn get_json(&self, path: &str) -> Result<Value, BackendError> {
+        let response = self
+            .client
+            .get(format!("{}{path}", self.site))
+            .bearer_auth(self.token().await?)
+            .send()
+            .await
+            .map_err(failed)?;
+        self.read(response).await
+    }
+
+    async fn send_json(
+        &self,
+        method: &str,
+        path: &str,
+        body: Value,
+    ) -> Result<Value, BackendError> {
+        let verb = reqwest::Method::from_bytes(method.as_bytes()).map_err(failed)?;
+        let response = self
+            .client
+            .request(verb, format!("{}{path}", self.site))
+            .bearer_auth(self.token().await?)
+            // The server refuses a change with no version unless it is told any version will do.
+            .header("if-match", "*")
+            .json(&body)
+            .send()
+            .await
+            .map_err(failed)?;
+        self.read(response).await
     }
 
     async fn systems(&self) -> Result<Vec<SystemEntry>, BackendError> {

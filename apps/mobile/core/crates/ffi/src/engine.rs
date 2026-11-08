@@ -7,7 +7,8 @@ use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
 use crate::view::{
     AppView, AuthState, ConfirmView, ConnectionPhase, ConnectionView, DeployScreen, GitScreen,
-    ProjectView, Section, StatusScreen, SystemView, ViewListener,
+    MonitoringScreen, PipelinesScreen, ProjectView, Section, StatusScreen, SystemView,
+    ViewListener,
 };
 use async_trait::async_trait;
 use runova_api::auth::{
@@ -405,7 +406,9 @@ impl Runner {
         if let Some(ticker) = self.ticker.take() {
             ticker.abort();
         }
-        if self.section.is_none() || self.session.is_none() {
+        // Cloud monitors come from Runova itself, so they need no computer.
+        let needs_computer = self.section != Some(Section::Monitoring);
+        if self.section.is_none() || (needs_computer && self.session.is_none()) {
             return;
         }
         self.ticks = 0;
@@ -430,6 +433,8 @@ impl Runner {
             Some(Section::Status) => self.refresh_status(),
             Some(Section::Vault) => self.refresh_vault(),
             Some(Section::Deploy) => self.refresh_deploy(),
+            Some(Section::Monitoring) => self.refresh_monitoring(),
+            Some(Section::Pipelines) => self.refresh_pipelines(),
             None => {}
         }
     }
@@ -489,6 +494,8 @@ impl Runner {
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();
+        self.view.pipelines = PipelinesScreen::default();
+        self.view.monitoring.local.clear();
         self.view.confirm = None;
         self.pending_confirm = None;
         self.view.busy = false;
@@ -558,7 +565,46 @@ impl Runner {
         self.view.hub_connected = false;
     }
 
+    pub(crate) fn on_signed_out(&mut self) {
+        self.signed_out();
+    }
+
+    pub(crate) fn deps_backend(&self) -> Arc<dyn Backend> {
+        self.deps.backend.clone()
+    }
+
+    /// Reads from the website, for screens that do not go through a computer.
+    pub(crate) fn rest<T, Ok, Failed>(&mut self, path: &'static str, ok: Ok, failed: Failed)
+    where
+        T: DeserializeOwned + Send + 'static,
+        Ok: FnOnce(&mut AppView, T) + Send + 'static,
+        Failed: FnOnce(&mut AppView) + Send + 'static,
+    {
+        let backend = self.deps.backend.clone();
+        let attempt = self.attempt;
+        let done = self.done_tx.clone();
+        tokio::spawn(async move {
+            let outcome = backend.get_json(path).await;
+            let task: Task = Box::new(move |runner| match outcome {
+                Ok(value) => match serde_json::from_value::<T>(value) {
+                    Ok(value) => ok(&mut runner.view, value),
+                    Err(_) => {
+                        failed(&mut runner.view);
+                        runner.view.error = Some(UNREADABLE.to_owned());
+                    }
+                },
+                Err(BackendError::SignedOut) => runner.signed_out(),
+                Err(BackendError::Failed(message)) => {
+                    failed(&mut runner.view);
+                    runner.view.error = Some(message);
+                }
+            });
+            let _ = done.send(Done::Run { attempt, task });
+        });
+    }
+
     fn signed_out(&mut self) {
+        self.view.monitoring = MonitoringScreen::default();
         self.end_connection();
         self.let_go_of_hub();
         self.device_id = None;

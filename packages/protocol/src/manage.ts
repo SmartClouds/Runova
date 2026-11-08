@@ -77,6 +77,14 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'deploy.containerAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackRedeploy': { scope: 'deploy', risk: 'danger' },
+  'monitoring.list': { scope: 'ops', risk: 'read' },
+  'monitoring.check': { scope: 'ops', risk: 'write' },
+  'monitoring.pause': { scope: 'ops', risk: 'write' },
+  'pipelines.status': { scope: 'ops', risk: 'read' },
+  'pipelines.run': { scope: 'ops', risk: 'read' },
+  'pipelines.jobLog': { scope: 'ops', risk: 'read' },
+  'pipelines.dispatch': { scope: 'ops', risk: 'danger' },
+  'pipelines.cancel': { scope: 'ops', risk: 'danger' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -219,6 +227,36 @@ export interface ManageDeployOverview {
 export interface ManageDeployLogLine {
   text: string;
   error: boolean;
+}
+
+export interface ManageLocalMonitor {
+  id: string;
+  name: string;
+  state: string;
+  paused: boolean;
+  latencyMs: number | null;
+  uptime24h: number | null;
+  headline: string | null;
+  samples: number[];
+}
+
+export interface ManagePipelineRun {
+  id: number;
+  title: string;
+  branch: string;
+  number: number;
+  status: string;
+  conclusion: string | null;
+}
+
+export interface ManagePipelineStatus {
+  problem: string | null;
+  workflows: { id: number; name: string; canDispatch: boolean; run: ManagePipelineRun | null }[];
+}
+
+export interface ManageJobLog {
+  truncated: boolean;
+  lines: { text: string; error: boolean }[];
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

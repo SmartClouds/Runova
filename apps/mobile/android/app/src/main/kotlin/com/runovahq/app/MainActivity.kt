@@ -28,6 +28,8 @@ import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
+import com.runovahq.app.ui.MonitoringIntents
+import com.runovahq.app.ui.PipelineIntents
 import com.runovahq.app.ui.StatusIntents
 import com.runovahq.app.ui.VaultIntents
 import com.runovahq.app.ui.StartingScreen
@@ -116,6 +118,20 @@ class MainActivity : FragmentActivity(), ViewListener {
                 containerAction = { id, action -> engine.deployContainerAction(id, action) },
                 stackAction = { stack, action -> engine.deployStackAction(stack, action) },
                 redeploy = { engine.deployStackRedeploy(it) },
+            ),
+            monitoring = MonitoringIntents(
+                open = { engine.monitorOpen(it) },
+                close = { engine.monitorClose() },
+                check = { engine.monitorCheck(it) },
+                setPaused = { id, source, paused -> engine.monitorSetPaused(id, source, paused) },
+            ),
+            pipelines = PipelineIntents(
+                openRun = { engine.pipelinesOpenRun(it) },
+                closeRun = { engine.pipelinesCloseRun() },
+                openJob = { engine.pipelinesOpenJob(it) },
+                closeJob = { engine.pipelinesCloseJob() },
+                dispatch = { engine.pipelinesDispatch(it) },
+                cancel = { engine.pipelinesCancel(it) },
             ),
         )
         setContent {
