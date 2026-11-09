@@ -10,6 +10,7 @@ import {
 } from './opsMethods';
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
+import { type ManageStudioDeps, studioMethods } from './studioMethods';
 import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
 
 export interface TerminalSnapshot {
@@ -39,6 +40,7 @@ export interface ManageMethodDeps {
   monitoring: ManageMonitoringDeps;
   pipelines: ManagePipelineDeps;
   errorTracking: ManageErrorTrackingDeps;
+  studio: ManageStudioDeps;
 }
 
 /** Far past anything typed or pasted on a phone. */
@@ -89,6 +91,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...vaultMethods(deps.vault),
       ...deployMethods(deps.deploy),
       ...opsMethods(deps.monitoring, deps.pipelines, deps.errorTracking),
+      ...studioMethods(deps.studio),
     },
     streams: {
       'terminals.follow': async (params, sink) => {

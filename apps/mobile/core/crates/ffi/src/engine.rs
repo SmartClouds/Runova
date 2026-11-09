@@ -8,6 +8,7 @@ use crate::remote::RemoteSession;
 use crate::secure::{
     SecurePins, SecureStore, device_id, identity_key, identity_seed, phone_fingerprint,
 };
+use crate::studio::SharedThumbnails;
 use crate::terminals::OpenTerminal;
 use crate::vault::PendingReveal;
 use crate::view::{
@@ -39,7 +40,7 @@ const UNREADABLE: &str = "This computer sent something this version of the app c
 
 /// A change to what the screens show, made by finished work.
 pub(crate) type Apply = Box<dyn FnOnce(&mut AppView) + Send>;
-type Task = Box<dyn FnOnce(&mut Runner) + Send>;
+pub(crate) type Task = Box<dyn FnOnce(&mut Runner) + Send>;
 
 #[async_trait]
 pub trait HubConnector: Send + Sync {
@@ -136,21 +137,24 @@ pub struct Engine {
     platform: String,
     app_version: String,
     secure: Arc<dyn SecureStore>,
+    pub(crate) thumbnails: SharedThumbnails,
 }
 
 impl Engine {
     /// Must be called inside the Tokio runtime that will run it.
     pub fn start(deps: Dependencies) -> Self {
         let (commands, queue) = mpsc::unbounded_channel();
+        let thumbnails = SharedThumbnails::default();
         let engine = Self {
             commands,
+            thumbnails: thumbnails.clone(),
             pending: Arc::new(Mutex::new(None)),
             site: deps.site.clone(),
             platform: deps.platform.clone(),
             app_version: deps.app_version.clone(),
             secure: deps.secure.clone(),
         };
-        tokio::spawn(Runner::new(deps).run(queue));
+        tokio::spawn(Runner::new(deps, thumbnails).run(queue));
         engine
     }
 
@@ -269,6 +273,7 @@ const INTRO_SEEN: &str = "intro-seen";
 
 pub(crate) struct Runner {
     pub(crate) deps: Dependencies,
+    pub(crate) thumbnails: SharedThumbnails,
     pub(crate) done_tx: mpsc::UnboundedSender<Done>,
     done_rx: Option<mpsc::UnboundedReceiver<Done>>,
     pub(crate) view: AppView,
@@ -334,10 +339,11 @@ struct ProjectDto {
 }
 
 impl Runner {
-    fn new(deps: Dependencies) -> Self {
+    fn new(deps: Dependencies, thumbnails: SharedThumbnails) -> Self {
         let (done_tx, done_rx) = mpsc::unbounded_channel();
         Self {
             deps,
+            thumbnails,
             done_tx,
             done_rx: Some(done_rx),
             view: AppView::starting(),
@@ -492,6 +498,7 @@ impl Runner {
             Some(Section::Pipelines) => self.refresh_pipelines(),
             Some(Section::Account) => self.refresh_account(),
             Some(Section::Notifications) => self.refresh_notifications(),
+            Some(Section::Studio) => self.refresh_studio(),
             None => {}
         }
     }

@@ -201,6 +201,7 @@ const SCOPE_LABELS: Record<ManageScope, { label: string; description: string }> 
     description: 'See servers and restart what runs on them.',
   },
   ops: { label: 'Monitoring and pipelines', description: 'See checks and CI, and start runs.' },
+  studio: { label: 'Studio', description: 'Make videos: write scenes, animate and render.' },
   control: { label: 'Control the screen', description: 'See the screen and use the mouse.' },
   files: { label: 'Files', description: 'Send and receive files.' },
 };

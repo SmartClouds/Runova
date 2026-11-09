@@ -44,6 +44,7 @@ import com.runovahq.app.ui.PipelineIntents
 import com.runovahq.app.ui.RemoteFrames
 import com.runovahq.app.ui.RemoteIntents
 import com.runovahq.app.ui.StatusIntents
+import com.runovahq.app.ui.StudioIntents
 import com.runovahq.app.ui.VaultIntents
 import com.runovahq.app.ui.StartingScreen
 import uniffi.runova_ffi.AppLifecycle
@@ -180,6 +181,25 @@ class MainActivity : FragmentActivity(), ViewListener {
                 setEnabled = { category, on -> engine.notificationSetEnabled(category, on) },
             ),
             remote = remoteIntents(),
+            studio = StudioIntents(
+                openComposer = { engine.studioOpenComposer() },
+                closeComposer = { engine.studioCloseComposer() },
+                create = { brief, aspect, language, seconds, style -> engine.studioCreate(brief, aspect, language, seconds, style) },
+                openVideo = { engine.studioOpenVideo(it) },
+                closeVideo = { engine.studioCloseVideo() },
+                ask = { engine.studioAsk(it) },
+                applyProposal = { engine.studioApplyProposal() },
+                discardProposal = { engine.studioDiscardProposal() },
+                undo = { engine.studioUndo() },
+                animate = { engine.studioAnimate(it) },
+                animateAll = { engine.studioAnimateAll() },
+                cancelRun = { engine.studioCancelRun() },
+                openRender = { engine.studioOpenRender() },
+                closeRender = { engine.studioCloseRender() },
+                render = { engine.studioRender(it) },
+                cancelRender = { engine.studioCancelRender(it) },
+                thumbnail = { engine.studioThumbnail(it) },
+            ),
         )
         setContent {
             RunovaTheme {

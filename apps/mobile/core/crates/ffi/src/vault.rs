@@ -196,7 +196,10 @@ impl Runner {
             "vault.list",
             None,
             move |view: &mut AppView, items: Vec<EntryDto>| {
-                view.vault.entries = items.into_iter().map(entry_of).collect();
+                // A reply still on its way when the vault locked must not bring the list back.
+                if view.vault.state == VaultLockState::Unlocked {
+                    view.vault.entries = items.into_iter().map(entry_of).collect();
+                }
                 finished();
             },
             move |_| failed(),
@@ -269,6 +272,7 @@ impl Runner {
 
     fn vault_lock(&mut self) {
         self.vault_is_locked();
+        self.view.vault.state = VaultLockState::Locked;
         self.call(
             "vault.lock",
             None,

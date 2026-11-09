@@ -267,7 +267,8 @@ func fixtureView(
         items: [], unread: 0, loading: false, preferences: [], settingsOpen: false, banner: nil),
     remote: RemoteView? = nil,
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil,
-    showIntro: Bool = false, appVersion: String = "1.0.0"
+    showIntro: Bool = false, appVersion: String = "1.0.0",
+    studio: StudioScreen = StudioScreen(loading: false, note: nil, videos: [], composer: nil, video: nil)
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -276,7 +277,7 @@ func fixtureView(
         monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
-        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion)
+        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio)
 }
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.

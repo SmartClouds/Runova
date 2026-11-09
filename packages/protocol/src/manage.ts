@@ -15,6 +15,7 @@ export type ManageScope =
   | 'vault'
   | 'deploy'
   | 'ops'
+  | 'studio'
   | 'control'
   | 'files';
 
@@ -35,6 +36,7 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
   'vault',
   'deploy',
   'ops',
+  'studio',
   'control',
   'files',
 ];
@@ -92,7 +94,97 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'errors.list': { scope: 'ops', risk: 'read' },
   'errors.show': { scope: 'ops', risk: 'read' },
   'errors.setStatus': { scope: 'ops', risk: 'write' },
+  'studio.options': { scope: 'studio', risk: 'read' },
+  'studio.list': { scope: 'studio', risk: 'read' },
+  'studio.video': { scope: 'studio', risk: 'read' },
+  'studio.leave': { scope: 'studio', risk: 'read' },
+  'studio.thumbnail': { scope: 'studio', risk: 'read' },
+  'studio.renderEstimate': { scope: 'studio', risk: 'read' },
+  'studio.create': { scope: 'studio', risk: 'write' },
+  'studio.ask': { scope: 'studio', risk: 'write' },
+  'studio.applyProposal': { scope: 'studio', risk: 'write' },
+  'studio.discardProposal': { scope: 'studio', risk: 'write' },
+  'studio.undo': { scope: 'studio', risk: 'write' },
+  'studio.updateScene': { scope: 'studio', risk: 'write' },
+  'studio.animate': { scope: 'studio', risk: 'write' },
+  'studio.animateAll': { scope: 'studio', risk: 'write' },
+  'studio.cancelRun': { scope: 'studio', risk: 'write' },
+  'studio.render': { scope: 'studio', risk: 'write' },
+  'studio.cancelRender': { scope: 'studio', risk: 'write' },
 };
+
+/** The choices a new video offers. */
+export interface ManageStudioOptions {
+  languages: { code: string; name: string; native: string }[];
+  styles: { id: string; name: string; summary: string; colors: string[] }[];
+}
+
+export interface ManageStudioRender {
+  id: string;
+  fileName: string;
+  status: string;
+  phase: 'capture' | 'encode' | null;
+  done: number;
+  total: number;
+  durationSeconds: number;
+  /** The file is there, on the computer. A phone never learns where. */
+  finished: boolean;
+  error: string | null;
+}
+
+export interface ManageStudioVideo {
+  id: string;
+  title: string;
+  pinned: boolean;
+  missing: boolean;
+  openedAgoMs: number;
+  render: ManageStudioRender | null;
+}
+
+export interface ManageStudioScene {
+  id: string;
+  title: string;
+  narration: string;
+  /** Flicks, as the video stores it. */
+  flicks: number;
+  /** The key of its picture, or null until the scene is animated. */
+  thumbnail: string | null;
+}
+
+export interface ManageStudioRun {
+  id: string;
+  stage: string;
+  status: string;
+  cliName: string | null;
+  instruction: string;
+  elapsedMs: number;
+  repairs: number;
+  lines: string[];
+  error: string | null;
+}
+
+export interface ManageStudioChange {
+  title: string;
+  fields: { label: string; before: string; after: string }[];
+}
+
+export interface ManageStudioVideoDetail {
+  id: string;
+  title: string;
+  aspect: string;
+  quality: string;
+  resolution: string;
+  fps: number;
+  canUndo: boolean;
+  undoLabel: string | null;
+  scenes: ManageStudioScene[];
+  run: ManageStudioRun | null;
+  failedRun: ManageStudioRun | null;
+  proposal: { generationId: string; summary: string; changes: ManageStudioChange[] } | null;
+  renders: ManageStudioRender[];
+  animatingAll: boolean;
+  stopped: string | null;
+}
 
 /** A project as a phone shows it: no paths, prompts or environment. */
 export interface ManageProject {

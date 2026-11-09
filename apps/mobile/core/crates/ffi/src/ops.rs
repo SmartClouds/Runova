@@ -250,7 +250,7 @@ fn status_of(dto: StatusDto) -> PipelinesStatusView {
     }
 }
 
-fn asking(title: &str, detail: String, action: &str) -> ConfirmView {
+pub(crate) fn asking(title: &str, detail: String, action: &str) -> ConfirmView {
     ConfirmView {
         title: title.to_owned(),
         detail,

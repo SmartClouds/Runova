@@ -49,6 +49,14 @@ const CHECK_SCALE = 0.25;
  * them next to itself: a packaged app ships them as resources (electron-builder.yml), and dev and
  * e2e builds read them from the package in node_modules.
  */
+const eventListeners = new Set<(event: StudioEvent) => void>();
+
+/** Hears what the windows hear, for what is watching Studio from outside them. */
+export function onStudioEvent(listener: (event: StudioEvent) => void): () => void {
+  eventListeners.add(listener);
+  return () => eventListeners.delete(listener);
+}
+
 export function studioPackageRoot(): string {
   if (app.isPackaged) return join(process.resourcesPath, 'studio');
   // dist/node/index.js, three folders below the package root.
@@ -96,6 +104,7 @@ export function createDesktopStudioHost(service: () => StudioService): StudioHos
     },
     notify: (event: StudioEvent) => {
       broadcastToWindows(IPC.studio.onEvent, event);
+      for (const listener of eventListeners) listener(event);
       if (event.type === 'render-finished') {
         forwardNotification({
           category: 'tasks',

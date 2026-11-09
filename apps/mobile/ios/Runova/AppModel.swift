@@ -145,10 +145,35 @@ final class AppModel: NSObject, ObservableObject {
                 openSettings: { [weak self] in self?.engine?.notificationsOpenSettings() },
                 closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
                 setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }),
-            remote: remoteIntents)
+            remote: remoteIntents,
+            studio: studioIntents)
     }
 
     private let frames = RemoteFrames()
+
+    private var studioIntents: StudioIntents {
+        StudioIntents(
+            openComposer: { [weak self] in self?.engine?.studioOpenComposer() },
+            closeComposer: { [weak self] in self?.engine?.studioCloseComposer() },
+            create: { [weak self] brief, aspect, language, seconds, style in
+                self?.engine?.studioCreate(
+                    brief: brief, aspect: aspect, language: language, seconds: seconds, styleId: style)
+            },
+            openVideo: { [weak self] in self?.engine?.studioOpenVideo(id: $0) },
+            closeVideo: { [weak self] in self?.engine?.studioCloseVideo() },
+            ask: { [weak self] in self?.engine?.studioAsk(instruction: $0) },
+            applyProposal: { [weak self] in self?.engine?.studioApplyProposal() },
+            discardProposal: { [weak self] in self?.engine?.studioDiscardProposal() },
+            undo: { [weak self] in self?.engine?.studioUndo() },
+            animate: { [weak self] in self?.engine?.studioAnimate(sceneId: $0) },
+            animateAll: { [weak self] in self?.engine?.studioAnimateAll() },
+            cancelRun: { [weak self] in self?.engine?.studioCancelRun() },
+            openRender: { [weak self] in self?.engine?.studioOpenRender() },
+            closeRender: { [weak self] in self?.engine?.studioCloseRender() },
+            render: { [weak self] in self?.engine?.studioRender(quality: $0) },
+            cancelRender: { [weak self] in self?.engine?.studioCancelRender(jobId: $0) },
+            thumbnail: { [weak self] in self?.engine?.studioThumbnail(hash: $0) })
+    }
 
     private var remoteIntents: RemoteIntents {
         RemoteIntents(

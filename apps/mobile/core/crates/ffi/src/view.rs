@@ -134,6 +134,7 @@ pub enum Section {
     Pipelines,
     Account,
     Notifications,
+    Studio,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -837,6 +838,154 @@ impl std::fmt::Debug for RemoteView {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum StudioRenderState {
+    Queued,
+    Running,
+    Done,
+    Failed,
+    Stopped,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum StudioStepState {
+    Todo,
+    Active,
+    Done,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioVideoItemView {
+    pub id: String,
+    pub title: String,
+    pub detail: String,
+    pub pinned: bool,
+    pub missing: bool,
+    pub render_label: Option<String>,
+    pub render_state: Option<StudioRenderState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioLanguageView {
+    pub code: String,
+    pub name: String,
+    pub native: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioStyleView {
+    pub id: String,
+    pub name: String,
+    pub summary: String,
+    /// `#RRGGBB`, background first.
+    pub colors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct StudioComposerView {
+    pub languages: Vec<StudioLanguageView>,
+    pub styles: Vec<StudioStyleView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioStepView {
+    pub label: String,
+    pub detail: String,
+    pub state: StudioStepState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioSceneView {
+    pub id: String,
+    pub number: u32,
+    pub title: String,
+    pub narration: String,
+    pub duration_label: String,
+    pub animated: bool,
+    pub can_animate: bool,
+    /// The key to ask `studio_thumbnail` with, once `thumbnail_ready`.
+    pub thumbnail: Option<String>,
+    pub thumbnail_ready: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioRunView {
+    pub id: String,
+    pub title: String,
+    pub detail: String,
+    pub lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioChangeField {
+    pub label: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioChangeView {
+    pub title: String,
+    pub fields: Vec<StudioChangeField>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioProposalView {
+    pub generation_id: String,
+    pub summary: String,
+    pub changes: Vec<StudioChangeView>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioRenderView {
+    pub id: String,
+    pub file_name: String,
+    pub state: StudioRenderState,
+    pub label: String,
+    pub percent: Option<f64>,
+    pub can_cancel: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioRenderSheetView {
+    pub loading: bool,
+    pub quality: String,
+    pub summary: Option<String>,
+    pub warnings: Vec<String>,
+    pub problems: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioVideoView {
+    pub loading: bool,
+    pub id: String,
+    pub title: String,
+    pub aspect: String,
+    pub quality: String,
+    pub can_undo: bool,
+    pub undo_label: Option<String>,
+    pub steps: Vec<StudioStepView>,
+    pub scenes: Vec<StudioSceneView>,
+    pub problem: Option<String>,
+    pub run: Option<StudioRunView>,
+    pub proposal: Option<StudioProposalView>,
+    pub renders: Vec<StudioRenderView>,
+    pub animating_all: bool,
+    pub animate_all_label: Option<String>,
+    pub can_ask: bool,
+    pub can_render: bool,
+    pub render_sheet: Option<StudioRenderSheetView>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
+pub struct StudioScreen {
+    pub loading: bool,
+    pub note: Option<String>,
+    pub videos: Vec<StudioVideoItemView>,
+    pub composer: Option<StudioComposerView>,
+    pub video: Option<StudioVideoView>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -872,6 +1021,7 @@ pub struct AppView {
     /// This install has not been through the welcome pages yet.
     pub show_intro: bool,
     pub app_version: String,
+    pub studio: StudioScreen,
 }
 
 impl AppView {
@@ -906,6 +1056,7 @@ impl AppView {
             error: None,
             show_intro: false,
             app_version: String::new(),
+            studio: StudioScreen::default(),
         }
     }
 }

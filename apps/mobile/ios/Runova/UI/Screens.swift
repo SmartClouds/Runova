@@ -29,6 +29,7 @@ struct AppIntents {
     var forgetThisPhone: () -> Void = {}
     var notifications = NotificationIntents()
     var remote = RemoteIntents()
+    var studio = StudioIntents()
 }
 
 let appTabs = [

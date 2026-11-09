@@ -14,6 +14,7 @@ import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.RemoteView
 import uniffi.runova_ffi.StatusScreen
+import uniffi.runova_ffi.StudioScreen
 import uniffi.runova_ffi.SystemView
 import uniffi.runova_ffi.TerminalItem
 import uniffi.runova_ffi.TerminalProcessView
@@ -58,6 +59,8 @@ fun appView(
     phoneFingerprint: String? = null,
     showIntro: Boolean = false,
     appVersion: String = "1.0.0",
+    studio: StudioScreen = StudioScreen(false, null, emptyList(), null, null),
+    busy: Boolean = false,
 ) = AppView(
     auth,
     true,
@@ -82,10 +85,11 @@ fun appView(
     notifications,
     remote,
     phoneFingerprint,
-    false,
+    busy,
     notice,
     confirm,
     error,
     showIntro,
     appVersion,
+    studio,
 )

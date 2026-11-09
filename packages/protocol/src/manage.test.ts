@@ -71,6 +71,7 @@ describe('the method table', () => {
       'vault',
       'deploy',
       'ops',
+      'studio',
       'control',
       'files',
     ]);

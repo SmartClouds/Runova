@@ -10,6 +10,7 @@ let deviceTabs = [
 
 /// Reached from More, so the bar stays at five.
 private let moreSections = [
+    TabItem(id: "studio", title: "Studio", icon: RunovaIcons.studio),
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
     TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
     TabItem(id: "monitoring", title: "Monitoring", icon: RunovaIcons.monitoring),
@@ -61,6 +62,7 @@ struct DeviceShell: View {
         case "monitoring": return .monitoring
         case "pipelines": return .pipelines
         case "notifications": return .notifications
+        case "studio": return .studio
         default: return nil
         }
     }
@@ -70,6 +72,11 @@ struct DeviceShell: View {
             if let terminal = view.terminal {
                 TerminalScreen(
                     terminal: terminal, processes: view.terminalProcesses, error: view.error, intents: intents)
+            } else if section == "studio", let composer = view.studio.composer {
+                StudioComposerScreen(composer: composer, busy: view.busy, error: view.error, intents: intents.studio)
+            } else if section == "studio", let video = view.studio.video {
+                StudioVideoScreen(
+                    video: video, busy: view.busy, error: view.error, notice: view.notice, intents: intents.studio)
             } else if let diff = view.git.diff {
                 DiffScreen(diff: diff, intents: intents.git)
             } else if view.git.branchesOpen {
@@ -115,6 +122,7 @@ struct DeviceShell: View {
                                     if let error = view.error { ErrorLine(message: error) }
                                 }
                             case "deploy": DeployTab(view: view, intents: intents.deploy)
+                            case "studio": StudioTab(view: view, intents: intents.studio)
                             case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
                             case "pipelines":
                                 VStack(alignment: .leading, spacing: 0) {

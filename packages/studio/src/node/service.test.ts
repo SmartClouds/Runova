@@ -1038,3 +1038,39 @@ describe('the render cache of a project', () => {
     expect((await service.clearCache({ videoIds: [video.id] })).freedBytes).toBe(300);
   });
 });
+
+describe('holding a video for a remote client', () => {
+  it('keeps the video open when the editor closes it, until the hold ends', async () => {
+    const { service } = await setup();
+    const video = await newVideo(service);
+    await openSession(service, video.id);
+    expect((await service.hold({ videoId: video.id })).state).toBe('open');
+
+    await service.close({ videoId: video.id });
+    await expect(service.undo({ videoId: video.id })).resolves.toBeNull();
+
+    await service.release({ videoId: video.id });
+    await expect(service.undo({ videoId: video.id })).rejects.toThrow('not open');
+  });
+
+  it('leaves the editor its video when the hold ends', async () => {
+    const { service } = await setup();
+    const video = await newVideo(service);
+    await openSession(service, video.id);
+    await service.hold({ videoId: video.id });
+
+    await service.release({ videoId: video.id });
+
+    await expect(service.undo({ videoId: video.id })).resolves.toBeNull();
+  });
+
+  it('closes a video nobody else has open when the hold ends', async () => {
+    const { service } = await setup();
+    const video = await newVideo(service);
+    await service.hold({ videoId: video.id });
+
+    await service.release({ videoId: video.id });
+
+    await expect(service.undo({ videoId: video.id })).rejects.toThrow('not open');
+  });
+});

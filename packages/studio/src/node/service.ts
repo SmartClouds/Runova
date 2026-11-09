@@ -221,6 +221,10 @@ export interface StudioService {
   open(input: { videoId: string }): Promise<OpenVideoResult>;
   takeOver(input: { videoId: string }): Promise<OpenVideoResult>;
   close(input: { videoId: string }): Promise<void>;
+  /** Keeps a video open for something other than the editor, whatever the editor does. */
+  hold(input: { videoId: string }): Promise<OpenVideoResult>;
+  /** Ends a hold, and closes the video if the editor does not have it either. */
+  release(input: { videoId: string }): Promise<void>;
   apply(input: {
     videoId: string;
     baseSeq: number;
@@ -505,6 +509,9 @@ export function createStudioService(host: StudioHost): StudioService {
   const sessions = new Map<string, Session>();
   /** Videos the editor closed while an AI run or a narration run was still working on them. */
   const closeAfterRun = new Set<string>();
+  /** Videos the editor has open, and those held for a remote client. */
+  const editorOpen = new Set<string>();
+  const held = new Set<string>();
   /** Closes still finishing, so opening the video again waits for them first. */
   const closing = new Map<string, Promise<void>>();
   const recipeStore = new RecipeStore(join(host.dataDir, 'recipes.json'), now, newId);
@@ -671,6 +678,18 @@ export function createStudioService(host: StudioHost): StudioService {
       document: store.document,
       status: store.status(),
     };
+  }
+
+  /**
+   * Leaving does not stop a scenario being written or scenes being spoken: the video stays open
+   * until the runs end, then closes. Quitting, moving or removing it does.
+   */
+  async function letGo(videoId: string): Promise<void> {
+    if (busy(videoId)) {
+      closeAfterRun.add(videoId);
+      return;
+    }
+    await closeSession(videoId);
   }
 
   async function openWith(videoId: string, takeOverStale: boolean): Promise<OpenVideoResult> {
@@ -1233,16 +1252,29 @@ export function createStudioService(host: StudioHost): StudioService {
       return summarize(await entry(made.id));
     },
 
-    open: ({ videoId }) => openWith(videoId, false),
-    takeOver: ({ videoId }) => openWith(videoId, true),
+    async open({ videoId }) {
+      const result = await openWith(videoId, false);
+      if (result.state === 'open') editorOpen.add(videoId);
+      return result;
+    },
+    async takeOver({ videoId }) {
+      const result = await openWith(videoId, true);
+      if (result.state === 'open') editorOpen.add(videoId);
+      return result;
+    },
     async close({ videoId }) {
-      // Leaving the editor does not stop a scenario being written or scenes being spoken: the
-      // video stays open until the runs end, then closes. Quitting, moving or removing it does.
-      if (busy(videoId)) {
-        closeAfterRun.add(videoId);
-        return;
-      }
-      await closeSession(videoId);
+      editorOpen.delete(videoId);
+      if (held.has(videoId)) return;
+      await letGo(videoId);
+    },
+    async hold({ videoId }) {
+      const result = await openWith(videoId, false);
+      if (result.state === 'open') held.add(videoId);
+      return result;
+    },
+    async release({ videoId }) {
+      if (!held.delete(videoId) || editorOpen.has(videoId)) return;
+      await letGo(videoId);
     },
 
     async apply({ videoId, baseSeq, ops, label }) {

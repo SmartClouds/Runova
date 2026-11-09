@@ -79,6 +79,7 @@ data class AppIntents(
     val forgetThisPhone: () -> Unit = {},
     val notifications: NotificationIntents = NotificationIntents(),
     val remote: RemoteIntents = RemoteIntents(),
+    val studio: StudioIntents = StudioIntents(),
 )
 
 val AppTabs = listOf(

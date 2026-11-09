@@ -37,6 +37,17 @@ final class ScreensTests: XCTestCase {
 
     func testSignIn() throws { try render(view(auth: .signedOut, systems: []), "sign-in") }
 
+    func testStudio() throws {
+        let videos = [
+            StudioVideoItemView(
+                id: "v1", title: "Launch film", detail: "Opened 2h ago", pinned: true, missing: false, renderLabel: nil,
+                renderState: nil)
+        ]
+        let screen = StudioScreen(loading: false, note: nil, videos: videos, composer: nil, video: nil)
+        try renderSnapshot(
+            fixtureView(connection: connection(.connected), studio: screen), "studio", tab: "studio")
+    }
+
     func testIntro() throws {
         try render(fixtureView(auth: .signedOut, showIntro: true), "intro-computers")
     }

@@ -30,6 +30,8 @@ import { keepAwake } from '../../power/keepAwake';
 import { getRelayRuntime } from '../../relay/runtime';
 import { runningSftpTransfers } from '../../sftp';
 import { store } from '../../store';
+import { studioService } from '../../studio';
+import { onStudioEvent } from '../../studio/host';
 import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
 import { liveDeploy } from './liveDeploy';
@@ -140,6 +142,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
     cancel: cancelWorkflowRun,
     afterAction: schedulePipelineCheck,
   },
+  studio: { service: studioService, onEvent: onStudioEvent, now: Date.now },
   errorTracking: {
     issues: (query) => getErrorTrackingService().listIssues(query),
     linked: async () => (await readErrorTracking()).links.length > 0,
