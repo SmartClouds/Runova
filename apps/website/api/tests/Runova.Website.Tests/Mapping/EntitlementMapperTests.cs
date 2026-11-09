@@ -13,7 +13,14 @@ public class EntitlementMapperTests
     {
         var type = new AccountType
         {
-            Id = 3, Key = "pro", Name = "Pro", MaxCloudMonitors = 50, MinIntervalSec = 60, HistoryDays = 90, IsFree = false, EncryptedItems = encrypted,
+            Id = 3,
+            Key = "pro",
+            Name = "Pro",
+            MaxCloudMonitors = 50,
+            MinIntervalSec = 60,
+            HistoryDays = 90,
+            IsFree = false,
+            EncryptedItems = encrypted,
             StripeProductId = "prod_1",
         };
 
