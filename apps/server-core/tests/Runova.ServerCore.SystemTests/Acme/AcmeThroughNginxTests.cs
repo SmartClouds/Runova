@@ -42,7 +42,7 @@ public sealed class AcmeThroughNginxTests(PebbleOnPort80Fixture pebble, DebianNg
         var issuer = new AcmeIssuer(pebble.CreateClient(), new InMemoryAcmeAccountStore(), certificates, publisher, null, TimeProvider.System, NullLogger<AcmeIssuer>.Instance);
         (await issuer.EnsureAccountAsync(new AcmeAccountSettings(["ops@runova.test"], TermsOfServiceAgreed: true), Cancel)).Dispose();
 
-        var issued = await issuer.IssueAsync(new AcmeIssueRequest { Name = "tls-site", Domains = [Domain] }, progress: null, Cancel);
+        var issued = await PebbleFixture.IssueRenewableAsync(() => issuer.IssueAsync(new AcmeIssueRequest { Name = "tls-site", Domains = [Domain] }, progress: null, Cancel));
         Assert.Equal([NginxHarness.AcmeToken], await core.Machine.ListAsync(core.Layout.AcmeChallengeDirectory, Cancel));
 
         using var root = await pebble.GetRootAsync(0, Cancel);

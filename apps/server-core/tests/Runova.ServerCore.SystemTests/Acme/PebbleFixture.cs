@@ -1,3 +1,4 @@
+using System.Buffers.Text;
 using System.Globalization;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -96,6 +97,29 @@ public class PebbleFixture : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         return X509Certificate2.CreateFromPem(await response.Content.ReadAsStringAsync(cancellationToken));
     }
+
+    /// <summary>
+    /// Issues until Pebble hands out a certificate it can find again for a "replaces". Pebble
+    /// 2.10.1 files an order under the serial's plain hex but looks up the bytes of the ARI
+    /// identifier as sent, which keep the zero byte DER puts in front of a serial with its top bit
+    /// set, so about one serial in 256 fails the renewal with "could not find an order". Fixed on
+    /// Pebble's main branch (letsencrypt/pebble#550) but not released yet. The identifier is right
+    /// per RFC 9773, so this goes when <see cref="PebbleImage"/> moves to a release with the fix.
+    /// </summary>
+    internal static async Task<AcmeCertificateRecord> IssueRenewableAsync(Func<Task<AcmeCertificateRecord>> issue)
+    {
+        AcmeCertificateRecord record;
+        do
+        {
+            record = await issue();
+        }
+        while (HasPaddedSerial(record.CertificateId));
+
+        return record;
+    }
+
+    private static bool HasPaddedSerial(string certificateId) =>
+        Base64Url.DecodeFromChars(certificateId.AsSpan(certificateId.IndexOf('.', StringComparison.Ordinal) + 1))[0] == 0;
 
     public async ValueTask InitializeAsync()
     {

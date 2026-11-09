@@ -24,10 +24,10 @@ public sealed class PebbleAcmeTests(PebbleFixture pebble, ITestOutputHelper outp
         var issuer = CreateIssuer(accounts, out var client);
         (await issuer.EnsureAccountAsync(_account, cancellationToken)).Dispose();
 
-        var first = await issuer.IssueAsync(
+        var first = await PebbleFixture.IssueRenewableAsync(() => issuer.IssueAsync(
             new AcmeIssueRequest { Name = "site", Domains = ["pebble.runova.test", "www.pebble.runova.test"] },
             progress: null,
-            cancellationToken);
+            cancellationToken));
 
         using var root = await pebble.GetRootAsync(0, cancellationToken);
         var chain = LoadChain(first.ChainPem);
