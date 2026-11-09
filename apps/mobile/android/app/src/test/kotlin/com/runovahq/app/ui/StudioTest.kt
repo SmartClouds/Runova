@@ -59,9 +59,9 @@ private val steps = listOf(
 )
 
 private val scenes = listOf(
-    StudioSceneView("a", 1u, "The problem", "Every team loses hours to the same small jobs.", "6s", true, true, "h", false),
-    StudioSceneView("b", 2u, "Meet Runova", "One place for your agents, your code and your releases.", "8s", false, true, null, false),
-    StudioSceneView("c", 3u, "Ship it", "Start free today.", "4s", false, true, null, false),
+    StudioSceneView("a", 1u, "The problem", "Every team loses hours to the same small jobs.", "6s", true, true, "h", false, false),
+    StudioSceneView("b", 2u, "Meet Runova", "One place for your agents, your code and your releases.", "8s", false, true, null, false, false),
+    StudioSceneView("c", 3u, "Ship it", "Start free today.", "4s", false, true, null, false, false),
 )
 
 private fun video(

@@ -1,3 +1,4 @@
+import { open, stat } from 'node:fs/promises';
 import type { ManageTerminal } from '@runova/protocol';
 import { agentStatus } from '../../agents/statusTracker';
 import { androidSnapshot } from '../../android/runtime';
@@ -143,7 +144,31 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
     cancel: cancelWorkflowRun,
     afterAction: schedulePipelineCheck,
   },
-  studio: { service: studioService, onEvent: onStudioEvent, now: Date.now },
+  studio: {
+    service: studioService,
+    onEvent: onStudioEvent,
+    now: Date.now,
+    files: {
+      stat: async (path) => {
+        try {
+          const { size, mtimeMs } = await stat(path);
+          return { size, mtimeMs };
+        } catch {
+          return null;
+        }
+      },
+      read: async (path, offset, length) => {
+        const handle = await open(path, 'r');
+        try {
+          const buffer = Buffer.alloc(length);
+          const { bytesRead } = await handle.read(buffer, 0, length, offset);
+          return buffer.subarray(0, bytesRead);
+        } finally {
+          await handle.close();
+        }
+      },
+    },
+  },
   agents: liveAgents,
   errorTracking: {
     issues: (query) => getErrorTrackingService().listIssues(query),

@@ -4,6 +4,7 @@
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::labels::{ago_label, bytes_label};
 use crate::ops::asking;
+use crate::studio_tools::{NarrationDto, apply_tools};
 use crate::view::{
     AppView, StudioChangeField, StudioChangeView, StudioComposerView, StudioLanguageView,
     StudioProposalView, StudioRenderSheetView, StudioRenderState, StudioRenderView, StudioRunView,
@@ -56,6 +57,8 @@ struct SceneDto {
     narration: String,
     flicks: f64,
     thumbnail: Option<String>,
+    #[serde(default)]
+    voiced: bool,
 }
 
 #[derive(Deserialize)]
@@ -107,6 +110,10 @@ struct DetailDto {
     renders: Vec<RenderDto>,
     animating_all: bool,
     stopped: Option<String>,
+    #[serde(default)]
+    language: String,
+    #[serde(default)]
+    narration: Option<NarrationDto>,
 }
 
 #[derive(Deserialize)]
@@ -348,6 +355,7 @@ fn detail_view(
                 .as_ref()
                 .is_some_and(|hash| thumbnails.bytes.contains_key(hash)),
             thumbnail: scene.thumbnail,
+            voiced: scene.voiced,
             id: scene.id,
             title: scene.title,
             narration: scene.narration,
@@ -468,7 +476,7 @@ impl Runner {
     }
 
     fn studio_video_arrived(&mut self, outcome: Result<Value, RpcError>) {
-        let dto = match outcome.map(serde_json::from_value::<DetailDto>) {
+        let mut dto = match outcome.map(serde_json::from_value::<DetailDto>) {
             Ok(Ok(dto)) => dto,
             Ok(Err(_)) | Err(RpcError::Closed) => return,
             Err(error) => {
@@ -489,6 +497,8 @@ impl Runner {
         else {
             return;
         };
+        self.studio_language.clone_from(&dto.language);
+        apply_tools(&mut self.view, dto.narration.take());
         let wanted: Vec<String> = dto
             .scenes
             .iter()

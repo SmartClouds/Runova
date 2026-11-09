@@ -18,6 +18,7 @@ import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.RemoteView
 import uniffi.runova_ffi.StatusScreen
 import uniffi.runova_ffi.StudioScreen
+import uniffi.runova_ffi.StudioToolsScreen
 import uniffi.runova_ffi.SystemView
 import uniffi.runova_ffi.TerminalItem
 import uniffi.runova_ffi.TerminalProcessView
@@ -67,6 +68,7 @@ fun appView(
     gitTools: GitToolsScreen = GitToolsScreen(null, null, null),
     autoFix: List<AutoFixSessionView> = emptyList(),
     prompts: PromptsScreen = PromptsScreen(null, false, null, null, emptyList(), emptyList(), emptyList()),
+    studioTools: StudioToolsScreen = StudioToolsScreen(null, null, null, null),
 ) = AppView(
     auth,
     true,
@@ -101,4 +103,5 @@ fun appView(
     gitTools,
     autoFix,
     prompts,
+    studioTools,
 )

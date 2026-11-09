@@ -19,6 +19,26 @@ struct StudioIntents {
     var render: (String) -> Void = { _ in }
     var cancelRender: (String) -> Void = { _ in }
     var thumbnail: (String) -> Data? = { _ in nil }
+    var openVoice: () -> Void = {}
+    var closeVoice: () -> Void = {}
+    var pickEngine: (String) -> Void = { _ in }
+    var pickVoice: (String) -> Void = { _ in }
+    var speak: () -> Void = {}
+    var cancelSpeak: () -> Void = {}
+    var caption: (String) -> Void = { _ in }
+    var openTimeline: () -> Void = {}
+    var closeTimeline: () -> Void = {}
+    var nudge: (String, Double) -> Void = { _, _ in }
+    var trim: (String, Bool, Double) -> Void = { _, _, _ in }
+    var gain: (String, Double) -> Void = { _, _ in }
+    var fades: (String, Double) -> Void = { _, _ in }
+    var removeClip: (String) -> Void = { _ in }
+    var addMusic: (String) -> Void = { _ in }
+    var muteTrack: (String, Bool) -> Void = { _, _ in }
+    var download: (String) -> Void = { _ in }
+    var downloadStop: () -> Void = {}
+    var downloadDismiss: () -> Void = {}
+    var shareVideo: (String) -> Void = { _ in }
 }
 
 /// A title always gets the same poster colour, so a library doesn't read as one grey list.
@@ -381,6 +401,7 @@ struct StudioVideoScreen: View {
     let busy: Bool
     let error: String?
     let notice: String?
+    var tools = StudioToolsScreen(voice: nil, narration: nil, timeline: nil, download: nil)
     let intents: StudioIntents
 
     @Environment(\.palette) private var palette
@@ -403,6 +424,7 @@ struct StudioVideoScreen: View {
                 }
             }
             if let sheet = video.renderSheet { RenderSheet(sheet: sheet, intents: intents) }
+            if let voice = tools.voice { VoiceSheet(voice: voice, intents: intents) }
         }
     }
 
@@ -413,9 +435,11 @@ struct StudioVideoScreen: View {
             if let notice { RunovaText(notice, style: RunovaType.small, color: palette.primary) }
             if let run = video.run { RunCard(run: run, animatingAll: video.animatingAll, onStop: intents.cancelRun) }
             if let proposal = video.proposal { ProposalCard(proposal: proposal, intents: intents) }
+            if let narration = tools.narration { NarrationCard(narration: narration, intents: intents) }
             if let render = video.renders.first(where: { $0.canCancel || $0.state == .done }) {
-                RenderCard(render: render, intents: intents)
+                RenderCard(render: render, canFetch: tools.download == nil, intents: intents)
             }
+            if let download = tools.download { DownloadCard(download: download, intents: intents) }
             actions
             if !video.scenes.isEmpty {
                 RunovaSectionTitle(text: "Scenes").padding(.top, 6)
@@ -425,6 +449,12 @@ struct StudioVideoScreen: View {
     }
 
     @ViewBuilder private var actions: some View {
+        if !video.scenes.isEmpty {
+            HStack(spacing: 6) {
+                RunovaChip(text: "Voice", icon: RunovaIcons.mic, action: intents.openVoice)
+                RunovaChip(text: "Timeline", icon: RunovaIcons.scenes, action: intents.openTimeline)
+            }
+        }
         if video.animateAllLabel != nil || video.canRender {
             HStack(spacing: 8) {
                 if let animate = video.animateAllLabel {
@@ -602,6 +632,7 @@ private struct ProposalCard: View {
 
 private struct RenderCard: View {
     let render: StudioRenderView
+    let canFetch: Bool
     let intents: StudioIntents
 
     @Environment(\.palette) private var palette
@@ -622,6 +653,10 @@ private struct RenderCard: View {
                 }
             }
             if let percent = render.percent { RunovaProgress(percent: percent) }
+            if render.state == .done && canFetch {
+                RunovaButton(text: "Get on this phone", kind: .soft, icon: RunovaIcons.pull) { intents.download(render.id) }
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(14)
         .runovaGlass()
@@ -670,11 +705,16 @@ private struct SceneCard: View {
                 HStack(spacing: 6) {
                     RunovaText(scene.title, style: RunovaType.labelStrong, maxLines: 1)
                     Spacer(minLength: 0)
+                    if scene.voiced { RunovaIcon(glyph: RunovaIcons.mic, size: 10, color: palette.primary) }
                     RunovaText(scene.durationLabel, style: RunovaType.caption, color: palette.mutedForeground)
                 }
                 RunovaText(scene.narration, style: RunovaType.small, color: palette.mutedForeground, maxLines: 2)
                 if !scene.animated && scene.canAnimate {
                     RunovaChip(text: "Animate", icon: RunovaIcons.sparkles, tone: .primary) { intents.animate(scene.id) }
+                        .padding(.top, 2)
+                }
+                if scene.voiced {
+                    RunovaChip(text: "Captions", icon: RunovaIcons.captions) { intents.caption(scene.id) }
                         .padding(.top, 2)
                 }
             }

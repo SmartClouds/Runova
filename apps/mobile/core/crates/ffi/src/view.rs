@@ -907,6 +907,7 @@ pub struct StudioSceneView {
     /// The key to ask `studio_thumbnail` with, once `thumbnail_ready`.
     pub thumbnail: Option<String>,
     pub thumbnail_ready: bool,
+    pub voiced: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -1131,6 +1132,114 @@ pub struct PromptsScreen {
     pub scheduled: Vec<PromptScheduledView>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioVoiceEngineView {
+    pub id: String,
+    pub label: String,
+    pub problem: Option<String>,
+    pub locked: bool,
+    pub local: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioVoiceOptionView {
+    pub label: String,
+    pub reference: String,
+    pub non_commercial: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioVoiceView {
+    pub loading: bool,
+    pub engines: Vec<StudioVoiceEngineView>,
+    pub engine: Option<String>,
+    pub voices: Vec<StudioVoiceOptionView>,
+    pub voice: Option<String>,
+    pub price_label: Option<String>,
+    pub usd: f64,
+    pub cost_known: bool,
+    pub scene_count: u32,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioNarrationView {
+    pub job_id: String,
+    pub label: String,
+    pub percent: Option<f64>,
+    pub running: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioClipView {
+    pub id: String,
+    pub label: String,
+    pub detail: String,
+    /// Where it starts and how much of the film it covers, from 0 to 1.
+    pub left: f64,
+    pub width: f64,
+    pub start: f64,
+    pub duration: f64,
+    pub gain: f64,
+    pub has_fades: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioTrackView {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub muted: bool,
+    pub locked: bool,
+    pub clips: Vec<StudioClipView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct StudioMediaView {
+    pub hash: String,
+    pub name: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioTimelineView {
+    pub loading: bool,
+    pub seq: i64,
+    pub length_label: String,
+    pub tracks: Vec<StudioTrackView>,
+    pub truncated: bool,
+    pub music: Vec<StudioMediaView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum StudioDownloadState {
+    Running,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct StudioDownloadView {
+    pub job_id: String,
+    pub file_name: String,
+    pub size_label: String,
+    pub percent: f64,
+    pub state: StudioDownloadState,
+    /// The file on this phone, once it is all here.
+    pub path: Option<String>,
+    pub error: Option<String>,
+    /// It uses a voice licensed for non-commercial use only.
+    pub non_commercial: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
+pub struct StudioToolsScreen {
+    pub voice: Option<StudioVoiceView>,
+    pub narration: Option<StudioNarrationView>,
+    pub timeline: Option<StudioTimelineView>,
+    pub download: Option<StudioDownloadView>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -1170,6 +1279,7 @@ pub struct AppView {
     pub git_tools: GitToolsScreen,
     pub auto_fix: Vec<AutoFixSessionView>,
     pub prompts: PromptsScreen,
+    pub studio_tools: StudioToolsScreen,
 }
 
 impl AppView {
@@ -1208,6 +1318,7 @@ impl AppView {
             git_tools: GitToolsScreen::default(),
             auto_fix: Vec::new(),
             prompts: PromptsScreen::default(),
+            studio_tools: StudioToolsScreen::default(),
         }
     }
 }

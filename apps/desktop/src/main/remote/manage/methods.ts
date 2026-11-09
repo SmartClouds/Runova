@@ -11,7 +11,7 @@ import {
 } from './opsMethods';
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
-import { type ManageStudioDeps, studioMethods } from './studioMethods';
+import { type ManageStudioDeps, studioDownloads, studioMethods } from './studioMethods';
 import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
 
 export interface TerminalSnapshot {
@@ -71,6 +71,7 @@ function sessionIdOf(params: unknown): string {
 
 /** Every method a phone can reach, by the names in `MANAGE_METHODS`. */
 export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
+  const downloads = studioDownloads(deps.studio);
   return {
     calls: {
       'projects.list': async () => (await deps.listProjects()).map(toManageProject),
@@ -94,6 +95,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...deployMethods(deps.deploy),
       ...opsMethods(deps.monitoring, deps.pipelines, deps.errorTracking),
       ...studioMethods(deps.studio),
+      ...downloads.calls,
       ...agentMethods(deps.agents),
     },
     streams: {
@@ -113,6 +115,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
           stopExit();
         };
       },
+      ...downloads.streams,
     },
   };
 }

@@ -121,6 +121,20 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'prompts.cancelScheduled': { scope: 'terminal', risk: 'write' },
   'agents.runPrompt': { scope: 'terminal', risk: 'danger' },
   'studio.options': { scope: 'studio', risk: 'read' },
+  'studio.voiceEngines': { scope: 'studio', risk: 'read' },
+  'studio.voices': { scope: 'studio', risk: 'read' },
+  'studio.voiceEstimate': { scope: 'studio', risk: 'read' },
+  'studio.speak': { scope: 'studio', risk: 'danger' },
+  'studio.cancelSpeak': { scope: 'studio', risk: 'write' },
+  'studio.captionScene': { scope: 'studio', risk: 'write' },
+  'studio.timeline': { scope: 'studio', risk: 'read' },
+  'studio.media': { scope: 'studio', risk: 'read' },
+  'studio.clipEdit': { scope: 'studio', risk: 'write' },
+  'studio.addMusic': { scope: 'studio', risk: 'write' },
+  'studio.trackSet': { scope: 'studio', risk: 'write' },
+  'studio.downloadOpen': { scope: 'studio', risk: 'read', audited: true },
+  'studio.downloadRead': { scope: 'studio', risk: 'read' },
+  'studio.downloadClose': { scope: 'studio', risk: 'read' },
   'studio.list': { scope: 'studio', risk: 'read' },
   'studio.video': { scope: 'studio', risk: 'read' },
   'studio.leave': { scope: 'studio', risk: 'read' },
@@ -175,6 +189,7 @@ export interface ManageStudioScene {
   flicks: number;
   /** The key of its picture, or null until the scene is animated. */
   thumbnail: string | null;
+  voiced: boolean;
 }
 
 export interface ManageStudioRun {
@@ -208,6 +223,14 @@ export interface ManageStudioVideoDetail {
   failedRun: ManageStudioRun | null;
   proposal: { generationId: string; summary: string; changes: ManageStudioChange[] } | null;
   renders: ManageStudioRender[];
+  language: string;
+  narration: {
+    id: string;
+    status: string;
+    done: number;
+    total: number;
+    error: string | null;
+  } | null;
   animatingAll: boolean;
   stopped: string | null;
 }

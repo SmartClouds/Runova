@@ -272,6 +272,10 @@ impl Engine {
 const INTRO_SEEN: &str = "intro-seen";
 
 pub(crate) struct Runner {
+    /// The language of the open video, which picks its voices.
+    pub(crate) studio_language: String,
+    /// Stops the download under way.
+    pub(crate) download_stop: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// The AI run the phone is waiting on, so it can be stopped.
     pub(crate) ai_request: Option<String>,
     pub(crate) deps: Dependencies,
@@ -344,6 +348,8 @@ impl Runner {
     fn new(deps: Dependencies, thumbnails: SharedThumbnails) -> Self {
         let (done_tx, done_rx) = mpsc::unbounded_channel();
         Self {
+            studio_language: String::new(),
+            download_stop: None,
             ai_request: None,
             deps,
             thumbnails,
@@ -563,6 +569,7 @@ impl Runner {
         self.view.studio = Default::default();
         self.view.auto_fix.clear();
         self.view.prompts = Default::default();
+        self.view.studio_tools = Default::default();
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();

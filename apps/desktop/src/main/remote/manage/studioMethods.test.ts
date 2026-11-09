@@ -1,6 +1,6 @@
 import type { StudioEvent } from '@runova/studio';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HOLD_MS, type ManageStudioDeps, studioMethods } from './studioMethods';
+import { HOLD_MS, type ManageStudioDeps, studioDownloads, studioMethods } from './studioMethods';
 
 const VIDEO = 'video-1';
 
@@ -21,6 +21,53 @@ function session(scenes = [scene('a', 'f'.repeat(64)), scene('b')]) {
       video: { id: VIDEO, title: 'Launch film' },
       status: { seq: 4, canUndo: true, canRedo: false, undoLabel: 'Edit', redoLabel: null },
       document: {
+        language: 'en',
+        timeline: {
+          tracks: [
+            {
+              id: 't1',
+              kind: 'music',
+              name: 'Music',
+              muted: false,
+              solo: false,
+              locked: false,
+              volume: 1,
+            },
+            {
+              id: 't2',
+              kind: 'voice',
+              name: 'Voice',
+              muted: false,
+              solo: false,
+              locked: true,
+              volume: 1,
+            },
+          ],
+          clips: [
+            {
+              id: 'c1',
+              trackId: 't1',
+              start: 0,
+              duration: 705_600_000,
+              gain: 1,
+              fadeIn: 0,
+              fadeOut: 0,
+              source: { type: 'media', hash: 'a'.repeat(64), in: 0, out: 705_600_000 },
+              transitionIn: null,
+            },
+            {
+              id: 'c2',
+              trackId: 't2',
+              start: 0,
+              duration: 705_600_000,
+              gain: 1,
+              fadeIn: 0,
+              fadeOut: 0,
+              source: { type: 'text', text: 'Hello' },
+              transitionIn: null,
+            },
+          ],
+        },
         renderSettings: { aspect: '16:9', quality: 'standard', resolution: '1080p', fps: 30 },
         scenario: { scenes },
       },
@@ -29,6 +76,10 @@ function session(scenes = [scene('a', 'f'.repeat(64)), scene('b')]) {
 }
 
 function setup() {
+  const files = {
+    stat: vi.fn(async () => ({ size: 10, mtimeMs: 5 }) as { size: number; mtimeMs: number } | null),
+    read: vi.fn(async () => new Uint8Array([9, 9])),
+  };
   let listener: (event: StudioEvent) => void = () => undefined;
   let now = 1_000_000;
   const service = {
@@ -63,6 +114,50 @@ function setup() {
     renderJobs: vi.fn(async () => [] as unknown[]),
     cancelRender: vi.fn(async () => undefined),
     thumbnail: vi.fn(async () => new Uint8Array([1, 2])),
+    voiceEngines: vi.fn(async () => [
+      {
+        id: 'openai',
+        label: 'OpenAI',
+        problem: null,
+        locked: false,
+        local: false,
+        nonCommercial: false,
+        pricePerMillionChars: 15_000,
+      },
+      {
+        id: 'gemini',
+        label: 'Gemini',
+        problem: null,
+        locked: false,
+        local: false,
+        nonCommercial: false,
+        pricePerMillionChars: null,
+      },
+      {
+        id: 'piper',
+        label: 'Piper',
+        problem: null,
+        locked: false,
+        local: true,
+        nonCommercial: false,
+        pricePerMillionChars: null,
+      },
+    ]),
+    voices: vi.fn(async () => [{ id: 'alloy', label: 'Alloy' }]),
+    speak: vi.fn(async () => ({})),
+    narrationJobs: vi.fn(async () => [] as unknown[]),
+    cancelNarration: vi.fn(async () => undefined),
+    captionScene: vi.fn(async () => ({})),
+    media: vi.fn(async () => [
+      {
+        hash: 'a'.repeat(64),
+        name: 'Song.mp3',
+        kind: 'audio',
+        duration: 705_600_000,
+        preparing: false,
+        problem: null,
+      },
+    ]),
   };
   const deps = {
     service: () => service,
@@ -71,10 +166,14 @@ function setup() {
       return () => undefined;
     },
     now: () => now,
+    files,
   } as unknown as ManageStudioDeps;
   const calls = studioMethods(deps);
+  const downloads = studioDownloads(deps);
   return {
     service,
+    files,
+    downloads,
     call: (name: string, params?: unknown) =>
       (calls[name] as (p: unknown) => Promise<never>)(params),
     emit: (event: StudioEvent) => listener(event),
@@ -339,5 +438,219 @@ describe('studio on a phone', () => {
       code: 'failed',
       message: 'An AI run is already working.',
     });
+  });
+});
+
+const PHONE = { phone: { key: 'phone-1' } } as never;
+
+describe('voice from a phone', () => {
+  it('gives the price of speaking the chosen scenes', async () => {
+    const { call } = setup();
+    await expect(
+      call('studio.voiceEstimate', {
+        videoId: VIDEO,
+        sceneIds: ['a', 'b'],
+        voiceRef: 'openai:alloy',
+      }),
+    ).resolves.toEqual({ chars: 10, usd: 0.15, costKnown: true });
+  });
+
+  it('refuses to speak at a price the person did not see', async () => {
+    const { call, service } = setup();
+    await expect(
+      call('studio.speak', {
+        videoId: VIDEO,
+        sceneIds: ['a', 'b'],
+        voiceRef: 'openai:alloy',
+        confirmedUsd: 0.01,
+      }),
+    ).rejects.toThrow('price changed');
+    expect(service.speak).not.toHaveBeenCalled();
+  });
+
+  it('speaks once the price agrees', async () => {
+    const { call, service } = setup();
+    await call('studio.speak', {
+      videoId: VIDEO,
+      sceneIds: ['a', 'b'],
+      voiceRef: 'openai:alloy',
+      confirmedUsd: 0.15,
+    });
+    expect(service.speak).toHaveBeenCalledWith({
+      videoId: VIDEO,
+      sceneIds: ['a', 'b'],
+      voiceRef: 'openai:alloy',
+    });
+  });
+
+  it('wants agreement when an online voice has no known price', async () => {
+    const { call, service } = setup();
+    await expect(
+      call('studio.speak', { videoId: VIDEO, sceneIds: ['a'], voiceRef: 'gemini:kore' }),
+    ).rejects.toThrow('no known price');
+    await call('studio.speak', {
+      videoId: VIDEO,
+      sceneIds: ['a'],
+      voiceRef: 'gemini:kore',
+      acceptUnknownCost: true,
+    });
+    expect(service.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a voice on this computer as free', async () => {
+    const { call } = setup();
+    await expect(
+      call('studio.voiceEstimate', { videoId: VIDEO, sceneIds: ['a'], voiceRef: 'piper:amy' }),
+    ).resolves.toMatchObject({ usd: 0, costKnown: true });
+  });
+});
+
+describe('the timeline from a phone', () => {
+  it('lists tracks and clips with readable names', async () => {
+    const { call } = setup();
+    const timeline = (await call('studio.timeline', { videoId: VIDEO })) as never as {
+      seq: number;
+      clips: { label: string }[];
+    };
+    expect(timeline.seq).toBe(4);
+    expect(timeline.clips.map((clip) => clip.label)).toEqual(['Song.mp3', 'Hello']);
+  });
+
+  it('changes a clip on the version the phone saw', async () => {
+    const { call, service } = setup();
+    await call('studio.clipEdit', {
+      videoId: VIDEO,
+      baseSeq: 4,
+      clipId: 'c1',
+      action: 'set',
+      gain: 0.5,
+    });
+    expect(service.apply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSeq: 4,
+        ops: [expect.objectContaining({ op: 'clip.update', clipId: 'c1' })],
+      }),
+    );
+  });
+
+  it('says so when the video moved on', async () => {
+    const { call, service } = setup();
+    service.apply.mockResolvedValue({ ok: false } as never);
+    await expect(
+      call('studio.clipEdit', {
+        videoId: VIDEO,
+        baseSeq: 1,
+        clipId: 'c1',
+        action: 'set',
+        gain: 0.5,
+      }),
+    ).resolves.toMatchObject({ ok: false });
+  });
+
+  it('leaves a locked track alone', async () => {
+    const { call, service } = setup();
+    await expect(
+      call('studio.clipEdit', { videoId: VIDEO, baseSeq: 4, clipId: 'c2', action: 'remove' }),
+    ).rejects.toThrow('locked');
+    expect(service.apply).not.toHaveBeenCalled();
+  });
+
+  it('offers only its own gestures', async () => {
+    const { call } = setup();
+    await expect(
+      call('studio.clipEdit', { videoId: VIDEO, baseSeq: 4, clipId: 'c1', action: 'doc.replace' }),
+    ).rejects.toThrow('not offered');
+  });
+
+  it('adds music only from what the video already has', async () => {
+    const { call, service } = setup();
+    await expect(
+      call('studio.addMusic', { videoId: VIDEO, baseSeq: 4, hash: 'z'.repeat(64) }),
+    ).rejects.toThrow('not in this video');
+    await call('studio.addMusic', { videoId: VIDEO, baseSeq: 4, hash: 'a'.repeat(64) });
+    expect(service.apply).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('downloading a video', () => {
+  const done = { id: 'r1', status: 'done', output: 'C:/videos/Launch.mp4', nonCommercial: [] };
+
+  function sink() {
+    return { event: vi.fn(), binary: vi.fn(), end: vi.fn() };
+  }
+
+  function open(world: ReturnType<typeof setup>) {
+    world.service.renderJobs.mockResolvedValue([done]);
+    return (
+      world.downloads.calls['studio.downloadOpen'] as never as (
+        p: unknown,
+        c: unknown,
+      ) => Promise<{ downloadId: string; fileName: string; bytes: number }>
+    )({ jobId: 'r1' }, PHONE);
+  }
+
+  function read(world: ReturnType<typeof setup>, params: unknown, out = sink(), context = PHONE) {
+    return (
+      world.downloads.streams['studio.downloadRead'] as never as (
+        p: unknown,
+        s: unknown,
+        c: unknown,
+      ) => Promise<unknown>
+    )(params, out, context);
+  }
+
+  it('opens from the render record and keeps the path to itself', async () => {
+    const world = setup();
+    const opened = await open(world);
+    expect(opened).toMatchObject({ fileName: 'Launch.mp4', bytes: 10 });
+    expect(JSON.stringify(opened)).not.toContain('C:/videos');
+  });
+
+  it('refuses a render that has not finished', async () => {
+    const world = setup();
+    world.service.renderJobs.mockResolvedValue([{ ...done, status: 'running', output: null }]);
+    await expect(
+      (
+        world.downloads.calls['studio.downloadOpen'] as never as (
+          p: unknown,
+          c: unknown,
+        ) => Promise<unknown>
+      )({ jobId: 'r1' }, PHONE),
+    ).rejects.toThrow('no finished file');
+  });
+
+  it('sends one piece and ends', async () => {
+    const world = setup();
+    const { downloadId } = await open(world);
+    const out = sink();
+    await read(world, { downloadId, offset: 0, length: 2 }, out);
+    expect(world.files.read).toHaveBeenCalledWith('C:/videos/Launch.mp4', 0, 2);
+    expect(out.binary).toHaveBeenCalledTimes(1);
+    expect(out.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("won't read for another phone", async () => {
+    const world = setup();
+    const { downloadId } = await open(world);
+    await expect(
+      read(world, { downloadId, offset: 0, length: 2 }, sink(), {
+        phone: { key: 'other' },
+      } as never),
+    ).rejects.toThrow('has ended');
+  });
+
+  it('refuses a piece too big to send safely', async () => {
+    const world = setup();
+    const { downloadId } = await open(world);
+    await expect(read(world, { downloadId, offset: 0, length: 2_000_000 })).rejects.toThrow(
+      'not valid',
+    );
+  });
+
+  it('stops if the file changes underneath it', async () => {
+    const world = setup();
+    const { downloadId } = await open(world);
+    world.files.stat.mockResolvedValue({ size: 10, mtimeMs: 99 });
+    await expect(read(world, { downloadId, offset: 0, length: 2 })).rejects.toThrow('changed');
   });
 });

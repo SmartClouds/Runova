@@ -76,9 +76,12 @@ struct DeviceShell: View {
                     terminal: terminal, processes: view.terminalProcesses, error: view.error, intents: intents)
             } else if section == "studio", let composer = view.studio.composer {
                 StudioComposerScreen(composer: composer, busy: view.busy, error: view.error, intents: intents.studio)
+            } else if section == "studio", let timeline = view.studioTools.timeline {
+                StudioTimelineScreen(timeline: timeline, error: view.error, intents: intents.studio)
             } else if section == "studio", let video = view.studio.video {
                 StudioVideoScreen(
-                    video: video, busy: view.busy, error: view.error, notice: view.notice, intents: intents.studio)
+                    video: video, busy: view.busy, error: view.error, notice: view.notice, tools: view.studioTools,
+                    intents: intents.studio)
             } else if let tags = view.gitTools.tags {
                 TagsScreen(tags: tags, error: view.error, intents: intents.git)
             } else if let diff = view.git.diff {

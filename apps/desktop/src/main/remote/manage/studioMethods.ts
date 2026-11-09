@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import type {
   ManageStudioChange,
   ManageStudioOptions,
@@ -7,7 +9,25 @@ import type {
   ManageStudioVideoDetail,
 } from '@runova/protocol';
 import type { GenerationView, RenderJobView, StudioEvent, VideoSession } from '@runova/studio';
-import { CONTENT_LANGUAGES, STYLE_PRESETS, studioAiInputs, studioInputs } from '@runova/studio';
+import {
+  addMediaClip,
+  type Clip,
+  CONTENT_LANGUAGES,
+  type MediaView,
+  moveClip,
+  type NarrationJobView,
+  narrationClip,
+  removeClip,
+  STYLE_PRESETS,
+  type StudioDocument,
+  studioAiInputs,
+  studioAudioInputs,
+  studioInputs,
+  type TimelineEdit,
+  trimClip,
+  updateClip,
+  videoLength,
+} from '@runova/studio';
 import type { StudioService } from '@runova/studio/node';
 import { ManageError, type ManageMethods } from './session';
 
@@ -29,6 +49,13 @@ type StudioParts = Pick<
   | 'renderEstimate'
   | 'startRender'
   | 'renderJobs'
+  | 'voiceEngines'
+  | 'voices'
+  | 'speak'
+  | 'narrationJobs'
+  | 'cancelNarration'
+  | 'captionScene'
+  | 'media'
   | 'cancelRender'
   | 'thumbnail'
 >;
@@ -37,6 +64,10 @@ export interface ManageStudioDeps {
   service(): StudioParts;
   onEvent(listener: (event: StudioEvent) => void): () => void;
   now(): number;
+  files: {
+    stat(path: string): Promise<{ size: number; mtimeMs: number } | null>;
+    read(path: string, offset: number, length: number): Promise<Uint8Array>;
+  };
 }
 
 /** Long enough to outlast a tick or two, short enough that a phone gone away lets go soon. */
@@ -54,6 +85,12 @@ const DEFAULT_RUN = { cliId: null };
 const VIDEO_ID = /^[\w-]{1,128}$/;
 const MAX_BRIEF = 20_000;
 const MAX_TITLE = 200;
+const MAX_VOICES = 200;
+const MAX_CLIPS = 400;
+const MAX_SCENES = 500;
+/** One read, small enough to go through the link without the sender getting ahead of it. */
+const MAX_CHUNK = 1024 * 1024;
+const DOWNLOAD_IDLE_MS = 10 * 60_000;
 
 function shorten(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
@@ -148,6 +185,169 @@ function changesOf(run: GenerationView): ManageStudioChange[] {
   });
 }
 
+function sceneList(params: unknown): string[] {
+  const value = field(params, 'sceneIds');
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > MAX_SCENES ||
+    !value.every((one) => typeof one === 'string' && one.length <= 128)
+  ) {
+    throw new ManageError('bad-params', 'Say which scenes.');
+  }
+  return value as string[];
+}
+
+function flicksOf(params: unknown, name: string): number {
+  const value = field(params, name);
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new ManageError('bad-params', 'That time is not valid.');
+  }
+  return value;
+}
+
+function newClipId(): string {
+  return `phone${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+}
+
+function clipLabel(
+  clip: Clip,
+  names: ReadonlyMap<string, string>,
+  titles: ReadonlyMap<string, string>,
+): string {
+  const source = clip.source;
+  if (source.type === 'scene') return titles.get(source.sceneId) ?? 'Scene';
+  if (source.type === 'media') return names.get(source.hash) ?? 'Media';
+  return source.text;
+}
+
+/** Nothing a phone sends can change a track someone locked. */
+function assertUnlocked(doc: StudioDocument, trackId: string): void {
+  if (doc.timeline.tracks.find((one) => one.id === trackId)?.locked) {
+    throw new ManageError('failed', 'That track is locked.');
+  }
+}
+
+/** Only these gestures, built by Studio's own rules. Never a raw edit from the phone. */
+function clipEditOf(
+  doc: StudioDocument,
+  clip: Clip,
+  params: unknown,
+  media: readonly MediaView[],
+): TimelineEdit | null {
+  const kindOf = (hash: string) => media.find((one) => one.hash === hash)?.kind;
+  const source = clip.source;
+  switch (field(params, 'action')) {
+    case 'move':
+      return moveClip(doc, clip.id, { start: flicksOf(params, 'start') }, kindOf);
+    case 'trim': {
+      const edge = field(params, 'edge');
+      if (edge !== 'start' && edge !== 'end') throw new ManageError('bad-params', 'Which end?');
+      const file = source.type === 'media' ? media.find((one) => one.hash === source.hash) : null;
+      return trimClip(doc, clip.id, edge, flicksOf(params, 'to'), file?.duration ?? null);
+    }
+    case 'set': {
+      const patch: { gain?: number; fadeIn?: number; fadeOut?: number } = {};
+      for (const key of ['gain', 'fadeIn', 'fadeOut'] as const) {
+        const value = field(params, key);
+        if (typeof value === 'number' && Number.isFinite(value)) patch[key] = value;
+      }
+      return updateClip(doc, clip.id, patch, 'Changed a clip');
+    }
+    case 'remove':
+      return removeClip(doc, clip.id, false);
+    default:
+      throw new ManageError('bad-params', 'That change is not offered.');
+  }
+}
+
+interface OpenDownload {
+  phone: string;
+  path: string;
+  size: number;
+  mtimeMs: number;
+  usedAt: number;
+}
+
+/**
+ * A finished video, pulled by the phone a piece at a time so neither end can be overrun. The path
+ * comes from the render's own record and stays here.
+ */
+export function studioDownloads(deps: ManageStudioDeps): Pick<ManageMethods, 'calls' | 'streams'> {
+  const open = new Map<string, OpenDownload>();
+
+  function sweep(): void {
+    const oldest = deps.now() - DOWNLOAD_IDLE_MS;
+    for (const [id, one] of open) if (one.usedAt < oldest) open.delete(id);
+  }
+
+  return {
+    calls: {
+      'studio.downloadOpen': async (params, context) =>
+        saying(async () => {
+          sweep();
+          const jobId = text(params, 'jobId', 'Say which render.');
+          const job = (await deps.service().renderJobs({})).find((one) => one.id === jobId);
+          if (!job?.output || job.status !== 'done') {
+            throw new ManageError('failed', 'That render has no finished file.');
+          }
+          const stat = await deps.files.stat(job.output);
+          if (!stat) throw new ManageError('failed', 'That file is not on this computer any more.');
+          const downloadId = randomUUID();
+          open.set(downloadId, {
+            phone: context.phone.key,
+            path: job.output,
+            size: stat.size,
+            mtimeMs: stat.mtimeMs,
+            usedAt: deps.now(),
+          });
+          return {
+            downloadId,
+            fileName: basename(job.output),
+            bytes: stat.size,
+            nonCommercial: job.nonCommercial,
+          };
+        }),
+      'studio.downloadClose': async (params) => {
+        open.delete(text(params, 'downloadId', 'Say which download.'));
+        return { ok: true, message: '' };
+      },
+    },
+    streams: {
+      'studio.downloadRead': async (params, sink, context) => {
+        const id = text(params, 'downloadId', 'Say which download.');
+        const entry = open.get(id);
+        if (!entry || entry.phone !== context.phone.key) {
+          throw new ManageError('failed', 'That download has ended. Start it again.');
+        }
+        const offset = field(params, 'offset');
+        const length = field(params, 'length');
+        if (
+          typeof offset !== 'number' ||
+          !Number.isInteger(offset) ||
+          offset < 0 ||
+          offset > entry.size ||
+          typeof length !== 'number' ||
+          !Number.isInteger(length) ||
+          length <= 0 ||
+          length > MAX_CHUNK
+        ) {
+          throw new ManageError('bad-params', 'That part of the file is not valid.');
+        }
+        const stat = await deps.files.stat(entry.path);
+        if (!stat || stat.size !== entry.size || stat.mtimeMs !== entry.mtimeMs) {
+          open.delete(id);
+          throw new ManageError('failed', 'The file changed. Start the download again.');
+        }
+        entry.usedAt = deps.now();
+        sink.binary(await deps.files.read(entry.path, offset, length));
+        sink.end();
+        return () => undefined;
+      },
+    },
+  };
+}
+
 /** The phone's way into Studio. It sees titles, scenes and progress; never a path. */
 export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
   const held = new Map<string, number>();
@@ -231,6 +431,10 @@ export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
     }
   });
 
+  function narrationOf(job: NarrationJobView) {
+    return { id: job.id, status: job.status, done: job.done, total: job.total, error: job.error };
+  }
+
   function runOf(run: GenerationView): ManageStudioRun {
     return {
       id: run.id,
@@ -243,6 +447,40 @@ export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
       lines: lines.get(run.id) ?? [],
       error: run.error === null ? null : shorten(run.error, MAX_FIELD),
     };
+  }
+
+  async function estimateVoice(session: VideoSession, sceneIds: string[], voiceRef: string) {
+    const engineId = voiceRef.split(':')[0];
+    const engine = (await deps.service().voiceEngines()).find((one) => one.id === engineId);
+    if (!engine) throw new ManageError('bad-params', 'Pick an offered voice.');
+    const wanted = new Set(sceneIds);
+    const chars = session.document.scenario.scenes
+      .filter((scene) => wanted.has(scene.id))
+      .reduce((sum, scene) => sum + scene.narration.length, 0);
+    const price = engine.local ? 0 : engine.pricePerMillionChars;
+    return {
+      chars,
+      usd: price === null ? 0 : Math.round((chars * price) / 100) / 10_000,
+      costKnown: price !== null,
+    };
+  }
+
+  /** One undo step, and it only lands on the version the phone was looking at. */
+  async function applyTimeline(videoId: string, params: unknown, edit: TimelineEdit | null) {
+    if (!edit) return { ok: true, message: '' };
+    const baseSeq = field(params, 'baseSeq');
+    if (typeof baseSeq !== 'number') throw new ManageError('bad-params', 'Say which version.');
+    const input = studioInputs.apply.safeParse({
+      videoId,
+      baseSeq,
+      ops: edit.ops,
+      label: edit.label,
+    });
+    if (!input.success) throw new ManageError('bad-params', 'That change could not be made.');
+    const result = await deps.service().apply(input.data);
+    return result.ok
+      ? { ok: true, message: edit.label }
+      : { ok: false, message: 'The video changed. Look again and retry.' };
   }
 
   return {
@@ -306,9 +544,10 @@ export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
         const videoId = videoRef(params);
         const service = deps.service();
         const session = await hold(videoId);
-        const [runs, renders] = await Promise.all([
+        const [runs, renders, narrations] = await Promise.all([
           service.generations({ videoId, limit: 5 }),
           service.renderJobs({ videoId }),
+          service.narrationJobs({ videoId }),
         ]);
         const running = runs.find((run) => run.status === 'running') ?? null;
         const proposed = runs.find((run) => run.status === 'proposed' && run.proposal) ?? null;
@@ -329,7 +568,10 @@ export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
             narration: shorten(scene.narration, MAX_NARRATION),
             flicks: scene.targetDuration,
             thumbnail: scene.code.treeHash,
+            voiced: narrationClip(session.document, scene.id) !== undefined,
           })),
+          language: session.document.language,
+          narration: narrations[0] ? narrationOf(narrations[0]) : null,
           run: running ? runOf(running) : null,
           failedRun: failed ? runOf(failed) : null,
           proposal: proposed
@@ -490,6 +732,191 @@ export function studioMethods(deps: ManageStudioDeps): ManageMethods['calls'] {
         if (session.document.renderSettings.quality !== quality) await service.apply(input.data);
         await service.startRender({ videoId });
         return { ok: true, message: 'Rendering on this computer.' };
+      }),
+
+    'studio.voiceEngines': async () =>
+      saying(async () =>
+        (await deps.service().voiceEngines()).map((engine) => ({
+          id: engine.id,
+          label: engine.label,
+          problem: engine.problem,
+          locked: engine.locked,
+          local: engine.local,
+          nonCommercial: engine.nonCommercial,
+        })),
+      ),
+
+    'studio.voices': async (params) =>
+      saying(async () => {
+        const input = studioAudioInputs.voices.safeParse({
+          engine: field(params, 'engine'),
+          lang: field(params, 'lang'),
+        });
+        if (!input.success) throw new ManageError('bad-params', 'Pick a voice engine.');
+        return (await deps.service().voices(input.data)).slice(0, MAX_VOICES).map((voice) => ({
+          id: voice.id,
+          label: voice.label,
+          ref: `${input.data.engine}:${voice.id}`,
+          nonCommercial: voice.nonCommercial === true,
+        }));
+      }),
+
+    'studio.voiceEstimate': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        return estimateVoice(session, sceneList(params), text(params, 'voiceRef', 'Pick a voice.'));
+      }),
+
+    'studio.speak': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        const voiceRef = text(params, 'voiceRef', 'Pick a voice.');
+        const sceneIds = sceneList(params);
+        const input = studioAudioInputs.speak.safeParse({ videoId, sceneIds, voiceRef });
+        if (!input.success) throw new ManageError('bad-params', 'Pick an offered voice.');
+        const estimate = await estimateVoice(session, sceneIds, voiceRef);
+        if (estimate.costKnown) {
+          const agreed = field(params, 'confirmedUsd');
+          if (typeof agreed !== 'number' || Math.abs(agreed - estimate.usd) > 0.00005) {
+            throw new ManageError('failed', 'The price changed. Check it and try again.');
+          }
+        } else if (field(params, 'acceptUnknownCost') !== true) {
+          throw new ManageError('failed', 'This voice has no known price. Agree to that first.');
+        }
+        await deps.service().speak(input.data);
+        return { ok: true, message: 'Speaking the scenes.' };
+      }),
+
+    'studio.cancelSpeak': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        await deps
+          .service()
+          .cancelNarration({ videoId, jobId: text(params, 'jobId', 'Say which run.') });
+        return { ok: true, message: 'Stopped.' };
+      }),
+
+    'studio.captionScene': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        await hold(videoId);
+        await deps
+          .service()
+          .captionScene({ videoId, sceneId: text(params, 'sceneId', 'Say which scene.') });
+        return { ok: true, message: 'Captions added.' };
+      }),
+
+    'studio.timeline': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        const media = await deps.service().media({ videoId });
+        const names = new Map(media.map((one) => [one.hash, one.name]));
+        const titles = new Map(session.document.scenario.scenes.map((s) => [s.id, s.title]));
+        const { tracks, clips } = session.document.timeline;
+        return {
+          seq: session.status.seq,
+          lengthFlicks: videoLength(session.document),
+          tracks: tracks.map(({ id, kind, name, muted, solo, locked, volume }) => ({
+            id,
+            kind,
+            name,
+            muted,
+            solo,
+            locked,
+            volume,
+          })),
+          clips: clips.slice(0, MAX_CLIPS).map((clip) => ({
+            id: clip.id,
+            trackId: clip.trackId,
+            start: clip.start,
+            duration: clip.duration,
+            gain: clip.gain,
+            fadeIn: clip.fadeIn,
+            fadeOut: clip.fadeOut,
+            label: shorten(clipLabel(clip, names, titles), MAX_LINE),
+          })),
+          truncated: clips.length > MAX_CLIPS,
+        };
+      }),
+
+    'studio.media': async (params) =>
+      saying(async () => {
+        const media = await deps.service().media({ videoId: videoRef(params) });
+        const kind = field(params, 'kind');
+        return media
+          .filter((one) => kind === undefined || kind === null || one.kind === kind)
+          .slice(0, MAX_CLIPS)
+          .map(({ hash, name, kind: type, duration, preparing, problem }) => ({
+            hash,
+            name,
+            kind: type,
+            duration,
+            preparing,
+            problem,
+          }));
+      }),
+
+    'studio.clipEdit': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        const clipId = text(params, 'clipId', 'Say which clip.');
+        const doc = session.document;
+        const clip = doc.timeline.clips.find((one) => one.id === clipId);
+        if (!clip) throw new ManageError('failed', 'That clip is not in the video any more.');
+        assertUnlocked(doc, clip.trackId);
+        const media = await deps.service().media({ videoId });
+        const edit = clipEditOf(doc, clip, params, media);
+        return applyTimeline(videoId, params, edit);
+      }),
+
+    'studio.addMusic': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        const hash = text(params, 'hash', 'Pick some music.');
+        const media = await deps.service().media({ videoId });
+        const file = media.find((one) => one.hash === hash && one.kind === 'audio');
+        if (!file) throw new ManageError('failed', 'That music is not in this video.');
+        const track = session.document.timeline.tracks.find(
+          (one) => one.kind === 'music' && !one.locked,
+        );
+        if (!track) throw new ManageError('failed', 'This video has no music track to add to.');
+        const at = field(params, 'at');
+        return applyTimeline(
+          videoId,
+          params,
+          addMediaClip(session.document, {
+            id: newClipId(),
+            trackId: track.id,
+            media: { hash, kind: 'audio', duration: file.duration, name: file.name },
+            at: typeof at === 'number' ? at : 0,
+          }),
+        );
+      }),
+
+    'studio.trackSet': async (params) =>
+      saying(async () => {
+        const videoId = videoRef(params);
+        const session = await hold(videoId);
+        const trackId = text(params, 'trackId', 'Say which track.');
+        if (!session.document.timeline.tracks.some((one) => one.id === trackId)) {
+          throw new ManageError('failed', 'That track is not in the video any more.');
+        }
+        const patch: { muted?: boolean; solo?: boolean; volume?: number } = {};
+        for (const key of ['muted', 'solo'] as const) {
+          const value = field(params, key);
+          if (typeof value === 'boolean') patch[key] = value;
+        }
+        const volume = field(params, 'volume');
+        if (typeof volume === 'number') patch.volume = Math.max(0, Math.min(2, volume));
+        return applyTimeline(videoId, params, {
+          ops: [{ op: 'track.update', trackId, patch }],
+          label: 'Changed a track',
+        });
       }),
 
     'studio.cancelRender': async (params) =>

@@ -89,6 +89,7 @@ import uniffi.runova_ffi.StudioSceneView
 import uniffi.runova_ffi.StudioStepState
 import uniffi.runova_ffi.StudioStepView
 import uniffi.runova_ffi.StudioStyleView
+import uniffi.runova_ffi.StudioToolsScreen
 import uniffi.runova_ffi.StudioVideoItemView
 import uniffi.runova_ffi.StudioVideoView
 
@@ -110,6 +111,26 @@ data class StudioIntents(
     val render: (String) -> Unit = {},
     val cancelRender: (String) -> Unit = {},
     val thumbnail: (String) -> ByteArray? = { null },
+    val openVoice: () -> Unit = {},
+    val closeVoice: () -> Unit = {},
+    val pickEngine: (String) -> Unit = {},
+    val pickVoice: (String) -> Unit = {},
+    val speak: () -> Unit = {},
+    val cancelSpeak: () -> Unit = {},
+    val caption: (String) -> Unit = {},
+    val openTimeline: () -> Unit = {},
+    val closeTimeline: () -> Unit = {},
+    val nudge: (String, Double) -> Unit = { _, _ -> },
+    val trim: (String, Boolean, Double) -> Unit = { _, _, _ -> },
+    val gain: (String, Double) -> Unit = { _, _ -> },
+    val fades: (String, Double) -> Unit = { _, _ -> },
+    val removeClip: (String) -> Unit = {},
+    val addMusic: (String) -> Unit = {},
+    val muteTrack: (String, Boolean) -> Unit = { _, _ -> },
+    val download: (String) -> Unit = {},
+    val downloadStop: () -> Unit = {},
+    val downloadDismiss: () -> Unit = {},
+    val shareVideo: (String) -> Unit = {},
 )
 
 private val FilmShape = RoundedCornerShape(10.dp)
@@ -163,8 +184,12 @@ fun StudioOverlay(view: AppView, intents: StudioIntents): Boolean {
         StudioComposer(it, view.busy, view.error, intents)
         return true
     }
+    view.studioTools.timeline?.let {
+        StudioTimelineScreen(it, view.error, intents)
+        return true
+    }
     view.studio.video?.let {
-        StudioVideoScreen(it, view.busy, view.error, view.notice, intents)
+        StudioVideoScreen(it, view.busy, view.error, view.notice, view.studioTools, intents)
         return true
     }
     return false
@@ -472,6 +497,7 @@ private fun StudioVideoScreen(
     busy: Boolean,
     error: String?,
     notice: String?,
+    tools: StudioToolsScreen,
     intents: StudioIntents,
 ) {
     val colors = RunovaTheme.colors
@@ -506,8 +532,14 @@ private fun StudioVideoScreen(
                     video.proposal?.let { proposal ->
                         item(key = "proposal") { ProposalCard(proposal, intents) }
                     }
+                    tools.narration?.let { narration ->
+                        item(key = "narration") { NarrationCard(narration, intents) }
+                    }
                     items(video.renders.filter { it.canCancel || it.state == StudioRenderState.DONE }.take(1), key = { "r/${it.id}" }) {
-                        RenderCard(it, intents)
+                        RenderCard(it, tools.download == null, intents)
+                    }
+                    tools.download?.let { download ->
+                        item(key = "download") { DownloadCard(download, intents) }
                     }
                     item(key = "actions") { VideoActions(video, busy, intents) }
                     if (video.scenes.isNotEmpty()) {
@@ -521,6 +553,7 @@ private fun StudioVideoScreen(
             }
         }
         video.renderSheet?.let { RenderSheet(it, intents) }
+        tools.voice?.let { VoiceSheet(it, intents) }
     }
 }
 
@@ -679,7 +712,7 @@ private fun ChangeBlock(change: StudioChangeView) {
 }
 
 @Composable
-private fun RenderCard(render: StudioRenderView, intents: StudioIntents) {
+private fun RenderCard(render: StudioRenderView, canFetch: Boolean, intents: StudioIntents) {
     val colors = RunovaTheme.colors
     Column(Modifier.fillMaxWidth().runovaGlass().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -697,12 +730,27 @@ private fun RenderCard(render: StudioRenderView, intents: StudioIntents) {
             }
         }
         render.percent?.let { RunovaProgress(it) }
+        if (render.state == StudioRenderState.DONE && canFetch) {
+            RunovaButton(
+                "Get on this phone",
+                onClick = { intents.download(render.id) },
+                Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+                icon = RunovaIcons.Pull,
+            )
+        }
     }
 }
 
 @Composable
 private fun VideoActions(video: StudioVideoView, busy: Boolean, intents: StudioIntents) {
     val animate = video.animateAllLabel
+    if (video.scenes.isNotEmpty()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            RunovaChip("Voice", intents.openVoice, icon = RunovaIcons.Mic)
+            RunovaChip("Timeline", intents.openTimeline, icon = RunovaIcons.Scenes)
+        }
+    }
     if (animate == null && !video.canRender) return
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (animate != null) {
@@ -775,6 +823,7 @@ private fun SceneCard(scene: StudioSceneView, aspect: String, busy: Boolean, int
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 RunovaText(scene.title, Modifier.weight(1f), RunovaType.labelStrong, maxLines = 1)
+                if (scene.voiced) RunovaIcon(RunovaIcons.Mic, size = 10.dp, color = colors.primary)
                 RunovaText(scene.durationLabel, style = RunovaType.caption, color = colors.mutedForeground)
             }
             RunovaText(scene.narration, style = RunovaType.small, color = colors.mutedForeground, maxLines = 2)
@@ -786,6 +835,10 @@ private fun SceneCard(scene: StudioSceneView, aspect: String, busy: Boolean, int
                     icon = RunovaIcons.Sparkles,
                     tone = ChipTone.Primary,
                 )
+            }
+            if (scene.voiced) {
+                Spacer(Modifier.height(2.dp))
+                RunovaChip("Captions", { intents.caption(scene.id) }, icon = RunovaIcons.Captions)
             }
         }
     }

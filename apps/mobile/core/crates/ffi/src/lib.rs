@@ -22,6 +22,7 @@ pub mod remote;
 pub mod secure;
 pub mod status;
 pub mod studio;
+pub mod studio_tools;
 pub(crate) mod terminals;
 pub mod vault;
 pub mod view;

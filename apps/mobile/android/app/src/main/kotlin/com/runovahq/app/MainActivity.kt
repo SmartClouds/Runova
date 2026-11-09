@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.setContent
@@ -15,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -228,6 +231,26 @@ class MainActivity : FragmentActivity(), ViewListener {
                 render = { engine.studioRender(it) },
                 cancelRender = { engine.studioCancelRender(it) },
                 thumbnail = { engine.studioThumbnail(it) },
+                openVoice = { engine.studioOpenVoice() },
+                closeVoice = { engine.studioCloseVoice() },
+                pickEngine = { engine.studioVoicePickEngine(it) },
+                pickVoice = { engine.studioVoicePick(it) },
+                speak = { engine.studioSpeak() },
+                cancelSpeak = { engine.studioCancelSpeak() },
+                caption = { engine.studioCaptionScene(it) },
+                openTimeline = { engine.studioOpenTimeline() },
+                closeTimeline = { engine.studioCloseTimeline() },
+                nudge = { clip, seconds -> engine.studioClipNudge(clip, seconds) },
+                trim = { clip, end, seconds -> engine.studioClipTrim(clip, end, seconds) },
+                gain = { clip, value -> engine.studioClipGain(clip, value) },
+                fades = { clip, seconds -> engine.studioClipFades(clip, seconds) },
+                removeClip = { engine.studioClipRemove(it) },
+                addMusic = { engine.studioAddMusic(it) },
+                muteTrack = { track, muted -> engine.studioTrackMute(track, muted) },
+                download = { engine.studioDownload(it, videosFolder()) },
+                downloadStop = { engine.studioDownloadStop() },
+                downloadDismiss = { engine.studioDownloadDismiss() },
+                shareVideo = ::shareVideo,
             ),
         )
         setContent {
@@ -271,6 +294,19 @@ class MainActivity : FragmentActivity(), ViewListener {
     )
 
     private fun clipboard() = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    /** The app's own folder for videos, which needs no storage permission. */
+    private fun videosFolder(): String =
+        (getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: filesDir).absolutePath
+
+    private fun shareVideo(path: String) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", File(path))
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("video/*")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "Share or save"))
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

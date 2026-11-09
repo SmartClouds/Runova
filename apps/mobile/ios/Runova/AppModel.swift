@@ -178,6 +178,20 @@ final class AppModel: NSObject, ObservableObject {
 
     private let frames = RemoteFrames()
 
+    /// The app's own folder for videos.
+    private static func videosFolder() -> String {
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Videos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.path
+    }
+
+    private static func share(_ path: String) {
+        let sheet = UIActivityViewController(activityItems: [URL(fileURLWithPath: path)], applicationActivities: nil)
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        scene?.keyWindow?.rootViewController?.present(sheet, animated: true)
+    }
+
     private var studioIntents: StudioIntents {
         StudioIntents(
             openComposer: { [weak self] in self?.engine?.studioOpenComposer() },
@@ -199,7 +213,29 @@ final class AppModel: NSObject, ObservableObject {
             closeRender: { [weak self] in self?.engine?.studioCloseRender() },
             render: { [weak self] in self?.engine?.studioRender(quality: $0) },
             cancelRender: { [weak self] in self?.engine?.studioCancelRender(jobId: $0) },
-            thumbnail: { [weak self] in self?.engine?.studioThumbnail(hash: $0) })
+            thumbnail: { [weak self] in self?.engine?.studioThumbnail(hash: $0) },
+            openVoice: { [weak self] in self?.engine?.studioOpenVoice() },
+            closeVoice: { [weak self] in self?.engine?.studioCloseVoice() },
+            pickEngine: { [weak self] in self?.engine?.studioVoicePickEngine(engine: $0) },
+            pickVoice: { [weak self] in self?.engine?.studioVoicePick(reference: $0) },
+            speak: { [weak self] in self?.engine?.studioSpeak() },
+            cancelSpeak: { [weak self] in self?.engine?.studioCancelSpeak() },
+            caption: { [weak self] in self?.engine?.studioCaptionScene(sceneId: $0) },
+            openTimeline: { [weak self] in self?.engine?.studioOpenTimeline() },
+            closeTimeline: { [weak self] in self?.engine?.studioCloseTimeline() },
+            nudge: { [weak self] clip, seconds in self?.engine?.studioClipNudge(clipId: clip, seconds: seconds) },
+            trim: { [weak self] clip, end, seconds in
+                self?.engine?.studioClipTrim(clipId: clip, end: end, seconds: seconds)
+            },
+            gain: { [weak self] clip, value in self?.engine?.studioClipGain(clipId: clip, gain: value) },
+            fades: { [weak self] clip, seconds in self?.engine?.studioClipFades(clipId: clip, seconds: seconds) },
+            removeClip: { [weak self] in self?.engine?.studioClipRemove(clipId: $0) },
+            addMusic: { [weak self] in self?.engine?.studioAddMusic(hash: $0) },
+            muteTrack: { [weak self] track, muted in self?.engine?.studioTrackMute(trackId: track, muted: muted) },
+            download: { [weak self] in self?.engine?.studioDownload(jobId: $0, folder: Self.videosFolder()) },
+            downloadStop: { [weak self] in self?.engine?.studioDownloadStop() },
+            downloadDismiss: { [weak self] in self?.engine?.studioDownloadDismiss() },
+            shareVideo: { Self.share($0) })
     }
 
     private var remoteIntents: RemoteIntents {
