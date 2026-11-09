@@ -45,6 +45,27 @@ function section(overrides: Partial<PackageManagerSection> = {}): PackageManager
   };
 }
 
+describe('the update prompt for the newer ecosystems', () => {
+  it.each([
+    ['python', 'pip', 'pip', 'requirements file'],
+    ['python', 'uv', 'uv', 'uv add'],
+    ['python', 'poetry', 'poetry', 'poetry add'],
+    ['rust', 'cargo', 'cargo', 'cargo update'],
+    ['kotlin', 'gradle', 'Gradle', 'libs.versions.toml'],
+    ['swift', 'spm', 'Swift Package Manager', 'Package.swift'],
+    ['swift', 'cocoapods', 'CocoaPods', 'pod update'],
+  ] as const)('tells the agent how %s with %s works', (ecosystem, manager, name, hint) => {
+    const prompt = buildPackageUpdatePrompt(
+      section({ ecosystem, manager, runtimes: [], toolchain: null }),
+      [pkg()],
+    );
+
+    expect(prompt).toContain(`Update each package with ${name}, for example:`);
+    expect(prompt).toContain(hint);
+    expect(prompt).not.toContain('npm install');
+  });
+});
+
 describe('runtimeLabel', () => {
   it('names each kind of runtime setting', () => {
     expect(runtimeLabel(runtime())).toBe('Dart SDK');

@@ -91,6 +91,45 @@ function sectionOf(heading: string): HTMLElement {
 }
 
 describe('PackagesTab', () => {
+  it.each([
+    ['python', 'pip', 'PyPI (pip)'],
+    ['python', 'uv', 'PyPI (uv)'],
+    ['python', 'poetry', 'PyPI (Poetry)'],
+    ['rust', 'cargo', 'Cargo (Rust)'],
+    ['kotlin', 'gradle', 'Gradle (Kotlin / Android)'],
+    ['swift', 'spm', 'Swift Package Manager (iOS)'],
+    ['swift', 'cocoapods', 'CocoaPods (iOS)'],
+  ] as const)('names a %s section managed by %s', async (ecosystem, manager, label) => {
+    renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: {
+        'packages.list': {
+          projectId: 'p1',
+          sections: [{ ...bunSection, ecosystem, manager, toolchain: null }],
+        },
+      },
+    });
+
+    expect(await screen.findByText(label, { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('names every manifest it looks for when it finds none', async () => {
+    renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: { 'packages.list': { projectId: 'p1', sections: [] } },
+    });
+
+    const message = await screen.findByText(/Runova looks for/);
+    for (const manifest of [
+      'pyproject.toml',
+      'requirements.txt',
+      'Cargo.toml',
+      'build.gradle',
+      'Package.swift',
+      'Podfile',
+    ]) {
+      expect(message.textContent).toContain(manifest);
+    }
+  });
+
   it('labels the web app section Bun and shows its toolchain', async () => {
     renderTab();
 

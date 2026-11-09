@@ -21,7 +21,7 @@ import { findProjectScope } from '../worktrees/resolve';
 import { sendToContents } from './send';
 
 /**
- * Package names and versions end up as arguments to npm/yarn/pnpm/dotnet, so
+ * Package names and versions end up as arguments to the package manager CLIs, so
  * they are checked against what each ecosystem actually allows before they get
  * anywhere near a spawn. Anything outside these sets is refused rather than
  * escaped: no real package is named with a shell metacharacter.
@@ -32,6 +32,12 @@ const NAME_PATTERNS: Record<PackageManagerEcosystem, RegExp> = {
   dotnet: /^[A-Za-z0-9][A-Za-z0-9._-]*$/,
   // Pub names are Dart identifiers. This one also keeps `:` out, which `pub add` reads as a separator.
   dart: /^[A-Za-z_][A-Za-z0-9_]*$/,
+  python: /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/,
+  rust: /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
+  // Either `group:artifact` or a plugin id.
+  kotlin: /^[A-Za-z0-9_][A-Za-z0-9_.-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?$/,
+  // A repository name, or a pod with its subspecs (`Firebase/Analytics`).
+  swift: /^[A-Za-z0-9_][A-Za-z0-9_.+-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_.+-]*)*$/,
 };
 /** Semver plus NuGet's four-part and pre-release/build forms. */
 const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;

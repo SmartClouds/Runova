@@ -79,6 +79,13 @@ function packageKey(pkg: PackageInfo): string {
 function ecosystemLabel(section: PackageManagerSection): string {
   if (section.ecosystem === 'dotnet') return 'NuGet (.NET)';
   if (section.ecosystem === 'dart') return 'pub (Dart / Flutter)';
+  if (section.manager === 'pip') return 'PyPI (pip)';
+  if (section.manager === 'uv') return 'PyPI (uv)';
+  if (section.manager === 'poetry') return 'PyPI (Poetry)';
+  if (section.manager === 'cargo') return 'Cargo (Rust)';
+  if (section.manager === 'gradle') return 'Gradle (Kotlin / Android)';
+  if (section.manager === 'spm') return 'Swift Package Manager (iOS)';
+  if (section.manager === 'cocoapods') return 'CocoaPods (iOS)';
   if (section.manager === 'yarn') return 'Yarn';
   if (section.manager === 'pnpm') return 'pnpm';
   if (section.manager === 'bun') return 'Bun';
@@ -651,7 +658,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
         <CenteredEmptyState
           icon={Package}
           title="No package manifests in this folder"
-          description="Runova looks for package.json, yarn.lock, pnpm-lock.yaml, bun.lock, pubspec.yaml, and .NET project files."
+          description="Runova looks for package.json, yarn.lock, pnpm-lock.yaml, bun.lock, pubspec.yaml, .NET project files, pyproject.toml, requirements.txt, Cargo.toml, build.gradle, Package.swift, Xcode projects and Podfile."
           action={
             <Button
               variant="outline"

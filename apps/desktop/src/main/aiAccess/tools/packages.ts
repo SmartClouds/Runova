@@ -114,7 +114,7 @@ export const packageTools = [
     area: 'packages',
     title: 'List packages',
     description:
-      "The project's dependencies for each package manager it uses (npm, pnpm, yarn, bun, NuGet, pub): installed and latest version, whether it is out of date, and which sub-project it belongs to.",
+      "The project's dependencies for each package manager it uses (npm, pnpm, yarn, bun, NuGet, pub, pip, uv, Poetry, Cargo, Gradle, Swift Package Manager, CocoaPods): installed and latest version, whether it is out of date, and which sub-project it belongs to.",
     risk: 'read',
     needsProject: true,
     input: z.object({ projectId: projectIdArg }),

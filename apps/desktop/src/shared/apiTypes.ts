@@ -2079,8 +2079,28 @@ export interface CloneProjectResult extends GitOpResult {
   needsAttachConfirm?: boolean;
 }
 
-export type PackageManagerEcosystem = 'node' | 'dotnet' | 'dart';
-export type PackageManagerKind = 'npm' | 'yarn' | 'pnpm' | 'bun' | 'nuget' | 'pub';
+export type PackageManagerEcosystem =
+  | 'node'
+  | 'dotnet'
+  | 'dart'
+  | 'python'
+  | 'rust'
+  | 'kotlin'
+  | 'swift';
+export type PackageManagerKind =
+  | 'npm'
+  | 'yarn'
+  | 'pnpm'
+  | 'bun'
+  | 'nuget'
+  | 'pub'
+  | 'pip'
+  | 'uv'
+  | 'poetry'
+  | 'cargo'
+  | 'gradle'
+  | 'spm'
+  | 'cocoapods';
 
 export interface PackageInfo {
   name: string;
@@ -2091,7 +2111,7 @@ export interface PackageInfo {
   isDev: boolean;
   /** False when only a declared range was found (e.g. node_modules missing). */
   isInstalled: boolean;
-  /** Absolute path to the manifest this package was read from (package.json, a specific .csproj, or pubspec.yaml). */
+  /** Absolute path to the manifest this package was read from (package.json, a specific .csproj, pubspec.yaml, Cargo.toml and so on). */
   manifestPath: string;
   /** Human-readable name of the sub-project this package belongs to (e.g. its package.json "name", or a relative folder path). */
   projectLabel: string;

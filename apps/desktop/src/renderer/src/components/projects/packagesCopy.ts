@@ -25,6 +25,9 @@ export function bumpKind(current: string, latest: string): BumpKind | null {
 
 function managerName(section: PackageManagerSection): string {
   if (section.ecosystem === 'dotnet') return 'NuGet';
+  if (section.manager === 'gradle') return 'Gradle';
+  if (section.manager === 'spm') return 'Swift Package Manager';
+  if (section.manager === 'cocoapods') return 'CocoaPods';
   return section.manager;
 }
 
@@ -34,6 +37,27 @@ function installHint(section: PackageManagerSection): string {
   }
   if (section.ecosystem === 'dart') {
     return 'flutter pub add <name>:^<version> (dart pub add for plain Dart packages, prefix dev: for dev dependencies)';
+  }
+  if (section.manager === 'pip') {
+    return 'change the version in the requirements file or pyproject.toml, then pip install it in the virtual environment';
+  }
+  if (section.manager === 'uv') {
+    return 'uv add "<name>>=<version>" (add --dev, --group <group> or --optional <extra> if that is where it is declared)';
+  }
+  if (section.manager === 'poetry') {
+    return 'poetry add <name>@^<version> (add --group <group> if that is where it is declared)';
+  }
+  if (section.manager === 'cargo') {
+    return 'change the version in Cargo.toml (or [workspace.dependencies]), then cargo update -p <name>';
+  }
+  if (section.manager === 'gradle') {
+    return 'change the version in gradle/libs.versions.toml or the build script that declares it';
+  }
+  if (section.manager === 'spm') {
+    return 'change the version in Package.swift or the Xcode project, then resolve the packages';
+  }
+  if (section.manager === 'cocoapods') {
+    return 'change the version in the Podfile, then pod update <name>';
   }
   if (section.manager === 'yarn') return 'yarn add <name>@<version> (add -D for dev dependencies)';
   if (section.manager === 'pnpm') return 'pnpm add <name>@<version> (add -D for dev dependencies)';

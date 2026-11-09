@@ -32,6 +32,10 @@ vi.mock('../packageManagers', () => ({
   PACKAGE_MANAGER_ADAPTERS: [
     { ecosystem: 'node', updatePackages: state.nodeUpdate, updateRuntime: state.nodeRuntime },
     { ecosystem: 'dart', updatePackages: vi.fn(), updateRuntime: state.dartRuntime },
+    { ecosystem: 'python', updatePackages: state.nodeUpdate, updateRuntime: vi.fn() },
+    { ecosystem: 'rust', updatePackages: state.nodeUpdate, updateRuntime: vi.fn() },
+    { ecosystem: 'kotlin', updatePackages: state.nodeUpdate, updateRuntime: vi.fn() },
+    { ecosystem: 'swift', updatePackages: state.nodeUpdate, updateRuntime: vi.fn() },
   ],
 }));
 
@@ -102,6 +106,41 @@ describe('packages:update', () => {
     ]);
 
     expect(state.upload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('package names of the newer ecosystems', () => {
+  async function tryName(ecosystem: string, name: string) {
+    state.nodeUpdate.mockResolvedValue({ ok: true, results: [] });
+    await invoke(IPC.packages.update, 'p1', [
+      { ecosystem, name, targetVersion: '1.2.3', manifestPath: join(ROOT, 'manifest') },
+    ]);
+    return state.nodeUpdate.mock.calls.length > 0;
+  }
+
+  it.each([
+    ['python', 'Django'],
+    ['python', 'zope.interface'],
+    ['rust', 'serde_json'],
+    ['kotlin', 'androidx.core:core-ktx'],
+    ['kotlin', 'com.android.application'],
+    ['swift', 'swift-log'],
+    ['swift', 'Firebase/Analytics'],
+  ])('passes the real %s name %s', async (ecosystem, name) => {
+    await expect(tryName(ecosystem, name)).resolves.toBe(true);
+  });
+
+  it.each([
+    ['python', 'a b'],
+    ['python', 'requests>=1'],
+    ['rust', 'serde@1'],
+    ['rust', '--help'],
+    ['kotlin', 'a:b:c'],
+    ['kotlin', '"x'],
+    ['swift', '../../evil'],
+    ['swift', 'a&b'],
+  ])('refuses %s name %s before running anything', async (ecosystem, name) => {
+    await expect(tryName(ecosystem, name)).resolves.toBe(false);
   });
 });
 

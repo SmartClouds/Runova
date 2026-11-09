@@ -2,13 +2,21 @@ import type { PackageManagerSection } from '../../shared/apiTypes';
 import { type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { dartAdapter } from './dartAdapter';
 import { dotnetAdapter } from './dotnetAdapter';
+import { gradleAdapter } from './gradleAdapter';
 import { nodeAdapter } from './nodeAdapter';
+import { pythonAdapter } from './pythonAdapter';
+import { rustAdapter } from './rustAdapter';
+import { swiftAdapter } from './swiftAdapter';
 import type { PackageManagerAdapter } from './types';
 
 export const PACKAGE_MANAGER_ADAPTERS: PackageManagerAdapter[] = [
   nodeAdapter,
   dotnetAdapter,
   dartAdapter,
+  pythonAdapter,
+  rustAdapter,
+  gradleAdapter,
+  swiftAdapter,
 ];
 
 export async function scanProjectPackages(folderPath: string): Promise<PackageManagerSection[]> {

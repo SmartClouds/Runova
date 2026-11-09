@@ -11,6 +11,7 @@ import type {
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
 import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
+import { HostHealth } from './adapterKit';
 import { CliNotFoundError, mapWithConcurrency, runCli } from './execUtils';
 import { runtimeFeeds } from './runtimeFeeds';
 import {
@@ -48,8 +49,6 @@ const PRUNED_DIRS = new Set([
 const DEFAULT_PUB_HOST = 'https://pub.dev';
 const REGISTRY_TIMEOUT_MS = 15000;
 const REGISTRY_CONCURRENCY = 6;
-/** Packages that must fail on the network, after their retry, before a host is given up on. */
-const DEAD_HOST_FAILURES = 3;
 /** `pub add` resolves the whole graph and may download the new versions, so give it room. */
 const UPDATE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -258,23 +257,6 @@ function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
 
 function defaultPubHost(): string {
   return (process.env.PUB_HOSTED_URL || DEFAULT_PUB_HOST).replace(/\/+$/, '');
-}
-
-/** Tracks network failures per host across one scan. */
-class HostHealth {
-  private readonly failures = new Map<string, number>();
-
-  isDead(host: string): boolean {
-    return (this.failures.get(host) ?? 0) >= DEAD_HOST_FAILURES;
-  }
-
-  recordFailure(host: string): void {
-    this.failures.set(host, (this.failures.get(host) ?? 0) + 1);
-  }
-
-  failedHosts(): string[] {
-    return [...this.failures.keys()];
-  }
 }
 
 /**
