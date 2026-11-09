@@ -79,6 +79,7 @@
   "envelope": "F0E0",
   "ban": "F05E",
   "mobile": "F3CF",
+  "qrCode": "F029",
   "code": "F121",
   "eraser": "F12D"
 }

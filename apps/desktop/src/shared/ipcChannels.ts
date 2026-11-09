@@ -809,6 +809,12 @@ export const IPC = {
     sessions: 'account:sessions',
     // ({ id }) -> void
     endSession: 'account:endSession',
+    // () -> QrSignInCode, a QR code that lets the Runova app on a phone in
+    qrSignIn: 'account:qrSignIn',
+    // ({ id }) -> QrSignInReading
+    qrSignInStatus: 'account:qrSignInStatus',
+    // ({ id, approve }) -> void
+    qrSignInDecide: 'account:qrSignInDecide',
     // (StepUp) -> void, ends every session but this computer's
     endOtherSessions: 'account:endOtherSessions',
     // ({ page }) -> AccountActivityPage

@@ -360,6 +360,114 @@ async fn saying_no_in_the_browser_stays_signed_out_and_says_so() {
     assert_eq!(view.auth, AuthState::SignedOut);
 }
 
+fn reply(status: u16, body: Value) -> HttpReply {
+    HttpReply {
+        status,
+        body: body.to_string(),
+    }
+}
+
+const QR: &str = "rq1.abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_scanned_and_approved_qr_code_signs_in() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    {
+        let mut replies = world.http.replies.lock().unwrap();
+        replies.push_back(reply(200, json!({ "matchCode": "0420" })));
+        replies.push_back(reply(200, json!({ "status": "approved", "code": "c" })));
+        replies.push_back(tokens());
+    }
+
+    world.engine.scan_sign_in(QR.into());
+
+    let view = until(&world, |v| v.auth == AuthState::SignedIn, "signed in").await;
+    assert_eq!(view.qr_sign_in, None);
+    until(&world, |v| !v.systems_loading, "the first load").await;
+    assert_eq!(world.connector.connects.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_digits_show_while_waiting_and_cancelling_stops() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    {
+        let mut replies = world.http.replies.lock().unwrap();
+        replies.push_back(reply(200, json!({ "matchCode": "0420" })));
+        replies.push_back(reply(200, json!({ "status": "waiting", "code": null })));
+    }
+
+    world.engine.scan_sign_in(QR.into());
+    let view = until(
+        &world,
+        |v| {
+            v.qr_sign_in
+                .as_ref()
+                .is_some_and(|q| q.match_code.is_some())
+        },
+        "the digits",
+    )
+    .await;
+    assert_eq!(view.qr_sign_in.unwrap().match_code.as_deref(), Some("0420"));
+
+    world.engine.cancel_qr_sign_in();
+    let view = until(&world, |v| v.qr_sign_in.is_none(), "cancelled").await;
+    assert_eq!(view.auth, AuthState::SignedOut);
+    assert_eq!(view.error, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stray_qr_code_says_so_and_asks_nothing() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+
+    world.engine.scan_sign_in("https://example.com".into());
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert_eq!(
+        view.error.as_deref(),
+        Some("That isn't a Runova sign-in code.")
+    );
+    assert_eq!(view.qr_sign_in, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_used_qr_code_says_so() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(reply(401, json!({})));
+
+    world.engine.scan_sign_in(QR.into());
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("no longer valid"));
+    assert_eq!(view.qr_sign_in, None);
+    assert_eq!(view.auth, AuthState::SignedOut);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_declined_qr_code_stays_signed_out_and_says_so() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    {
+        let mut replies = world.http.replies.lock().unwrap();
+        replies.push_back(reply(200, json!({ "matchCode": "0420" })));
+        replies.push_back(reply(200, json!({ "status": "declined", "code": null })));
+    }
+
+    world.engine.scan_sign_in(QR.into());
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("declined"));
+    assert_eq!(view.auth, AuthState::SignedOut);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_computer_going_offline_updates_the_list() {
     let world = world();

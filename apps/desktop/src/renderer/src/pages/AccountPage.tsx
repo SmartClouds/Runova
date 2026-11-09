@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { EncryptionPanel } from '@/components/account/EncryptionPanel';
+import { QrSignInCard } from '@/components/account/QrSignInCard';
 import { SyncPanel, SyncStatusLine } from '@/components/account/SyncPanel';
 import { TeamsPanel } from '@/components/account/TeamsPanel';
 import {
@@ -84,7 +85,12 @@ export default function AccountPage(): React.JSX.Element {
           <SyncPanel />
         </>
       )}
-      {tab === 'devices' && <DevicesTab />}
+      {tab === 'devices' && (
+        <>
+          <QrSignInCard />
+          <DevicesTab />
+        </>
+      )}
       {tab === 'activity' && <ActivityTab />}
       {tab === 'teams' && <TeamsPanel />}
     </div>

@@ -18,6 +18,8 @@ struct AppIntents {
     var dismissConfirm: () -> Void = {}
     var dismissNotice: () -> Void = {}
     var finishIntro: () -> Void = {}
+    var scanSignIn: (String) -> Void = { _ in }
+    var cancelQrSignIn: () -> Void = {}
     var openAbout: () -> Void = {}
     var git = GitIntents()
     var status = StatusIntents()
@@ -46,6 +48,7 @@ struct AppRoot: View {
     let appIntents: AppIntents
 
     @State private var aboutOpen = false
+    @State private var scanning = false
     @Environment(\.palette) private var palette
 
     init(view: AppView, tab: Binding<String>, intents: AppIntents) {
@@ -69,8 +72,17 @@ struct AppRoot: View {
             case .signedOut:
                 if view.showIntro {
                     IntroScreen(onDone: intents.finishIntro)
+                } else if let qr = view.qrSignIn {
+                    QrWaitingScreen(view: qr, onCancel: intents.cancelQrSignIn)
+                } else if scanning {
+                    QrScanScreen(
+                        onCode: {
+                            scanning = false
+                            intents.scanSignIn($0)
+                        },
+                        onCancel: { scanning = false })
                 } else {
-                    SignInScreen(error: view.error, onSignIn: intents.signIn)
+                    SignInScreen(error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true })
                 }
             case .signedIn: signedIn
             }
@@ -148,6 +160,7 @@ struct StartingScreen: View {
 struct SignInScreen: View {
     let error: String?
     let onSignIn: () -> Void
+    var onScanQr: () -> Void = {}
 
     @Environment(\.palette) private var palette
 
@@ -162,6 +175,9 @@ struct SignInScreen: View {
                 color: palette.mutedForeground, alignment: .center)
             Spacer().frame(height: 24)
             RunovaButton(text: "Sign in", icon: RunovaIcons.forward, action: onSignIn).frame(maxWidth: .infinity)
+            Spacer().frame(height: 8)
+            RunovaButton(text: "Scan QR code", kind: .soft, icon: RunovaIcons.qrCode, action: onScanQr)
+                .frame(maxWidth: .infinity)
             if let error {
                 Spacer().frame(height: 12)
                 RunovaText(error, style: RunovaType.small, color: palette.destructive, alignment: .center)

@@ -1325,6 +1325,12 @@ pub struct EncryptionItemView {
     pub can_change: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct QrSignInView {
+    /// The digits both screens show. None until the server has taken the code.
+    pub match_code: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct EncryptionScreen {
     pub items: Vec<EncryptionItemView>,
@@ -1378,6 +1384,8 @@ pub struct AppView {
     pub git_more: GitMoreScreen,
     /// None until the server has answered, and on a server too old to.
     pub encryption: Option<EncryptionScreen>,
+    /// A scanned QR sign-in on its way. None the rest of the time.
+    pub qr_sign_in: Option<QrSignInView>,
 }
 
 impl AppView {
@@ -1419,6 +1427,7 @@ impl AppView {
             studio_tools: StudioToolsScreen::default(),
             git_more: GitMoreScreen::default(),
             encryption: None,
+            qr_sign_in: None,
         }
     }
 }

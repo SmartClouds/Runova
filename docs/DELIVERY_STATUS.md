@@ -124,6 +124,7 @@ Plan: docs/ROADMAP.md
 | E90 | Pull requests and version updates on the phone | In progress | see git log | Pull request state, AI written text, AI review posted as a comment, and following a version update in files with undo per file. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E91 | Runs and Relay plans in the phone's status | In progress | see git log | Each run with state, CPU, memory and address, and each Relay plan with progress or result. The window publishes them to main, and the phone says when no window is open. iOS change is written but never compiled. Owed: trying it against a real computer |
 | E92 | Encrypted notifications and sync on paid plans | In progress | see git log | Per-item switches on the computer and the phone, gated to Go, Pro and Ultra on the server. Notifications are sealed per phone with shared vectors, and whole-record sync sealing is gated. Owed: a real FCM and APNs push, compiling iOS and its notification extension, trying it on a real phone |
+| E93 | Sign in to the app with a QR code | Complete | see git log | A signed-in desktop app or website account shows a one-time QR, the phone claims it with PKCE, both screens show four digits and the signed-in side approves. The phone then trades an ordinary one-time code. Table `QrSignIns`. Swift not compiled and no real camera tried yet |
 
 Status values: Not started, In progress, Blocked, Complete.
 

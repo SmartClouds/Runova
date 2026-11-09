@@ -20,6 +20,7 @@ pub(crate) mod labels;
 pub mod notifications;
 pub mod ops;
 pub mod palette;
+pub mod qr;
 pub mod remote;
 pub mod secure;
 pub mod status;

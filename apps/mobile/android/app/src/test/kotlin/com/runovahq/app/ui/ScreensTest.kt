@@ -21,6 +21,7 @@ import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.QrSignInView
 import uniffi.runova_ffi.SystemView
 
 @OptIn(ExperimentalRoborazziApi::class)
@@ -76,6 +77,14 @@ class ScreensTest {
 
         assertTrue(signedIn)
         snapshot("sign-in")
+    }
+
+    @Test
+    fun qrDigits() {
+        show(appView(AuthState.SIGNED_OUT, qrSignIn = QrSignInView("0420")))
+
+        compose.onNodeWithText("0420").assertExists()
+        snapshot("qr-sign-in")
     }
 
     @Test

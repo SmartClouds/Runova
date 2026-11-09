@@ -28,6 +28,7 @@ import {
   type Team,
 } from '@/lib/account/api';
 import { AppInput } from './fields';
+import { QrSignIn } from './QrSignIn';
 import {
   Card,
   CardHeader,
@@ -546,7 +547,8 @@ export function Sessions() {
           {message}
         </Notice>
       )}
-      <Card>
+      <QrSignIn />
+      <Card className="mt-4">
         {sessions.problem ? (
           <LoadFailure problem={sessions.problem} retry={sessions.reload} />
         ) : !sessions.value ? (

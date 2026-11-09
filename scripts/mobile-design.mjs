@@ -296,6 +296,7 @@ const ICONS = {
   envelope: 'faEnvelope',
   ban: 'faBan',
   mobile: 'faMobileScreen',
+  qrCode: 'faQrcode',
   code: 'faCode',
   eraser: 'faEraser',
 };

@@ -18,6 +18,11 @@ internal static class AuthRateLimits
     /// <summary>The name endpoints give <c>RequireRateLimiting</c>.</summary>
     public const string Policy = "auth";
 
+    /// <summary>For a device waiting on an answer. It asks every few seconds, and its code can not be guessed.</summary>
+    public const string PollPolicy = "auth-poll";
+
+    private const int PollsPerMinute = 120;
+
     /// <summary>
     /// A fixed window per caller address (after forwarded headers), shared by every route under the
     /// policy, so a guesser can not spread tries over sign-in, sign-up and resets. A request with no
@@ -36,6 +41,20 @@ internal static class AuthRateLimits
                     {
                         PermitLimit = limits.Value.PermitLimit,
                         Window = limits.Value.Window,
+                        QueueLimit = 0,
+                        AutoReplenishment = true,
+                    });
+            }));
+        services.Configure<RateLimiterOptions>(options =>
+            options.AddPolicy(PollPolicy, http =>
+            {
+                var address = http.Connection.RemoteIpAddress?.ToString();
+                return address is null
+                    ? RateLimitPartition.GetNoLimiter("none")
+                    : RateLimitPartition.GetFixedWindowLimiter(address, _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = PollsPerMinute,
+                        Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                         AutoReplenishment = true,
                     });

@@ -17,6 +17,7 @@ import uniffi.runova_ffi.MonitoringScreen
 import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.QrSignInView
 import uniffi.runova_ffi.RemoteView
 import uniffi.runova_ffi.StatusScreen
 import uniffi.runova_ffi.StudioScreen
@@ -73,6 +74,7 @@ fun appView(
     studioTools: StudioToolsScreen = StudioToolsScreen(null, null, null, null),
     gitMore: GitMoreScreen = GitMoreScreen(null, null),
     encryption: EncryptionScreen? = null,
+    qrSignIn: QrSignInView? = null,
 ) = AppView(
     auth,
     true,
@@ -110,4 +112,5 @@ fun appView(
     studioTools,
     gitMore,
     encryption,
+    qrSignIn,
 )

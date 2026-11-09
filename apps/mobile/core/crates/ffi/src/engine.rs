@@ -307,6 +307,8 @@ pub(crate) struct Runner {
     pub(crate) feed_events: Option<mpsc::Receiver<FeedEvent>>,
     pub(crate) push_token: Option<String>,
     pub(crate) seal_key: Option<Arc<runova_crypto::sealed::SealKey>>,
+    pub(crate) qr_task: Option<JoinHandle<()>>,
+    pub(crate) qr_generation: u64,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -380,6 +382,8 @@ impl Runner {
             feed_events: None,
             push_token: None,
             seal_key: None,
+            qr_task: None,
+            qr_generation: 0,
         }
     }
 
@@ -611,7 +615,7 @@ impl Runner {
     }
 
     /// Connects the hub, makes sure the phone is registered, and lists the computers.
-    fn boot(&mut self) {
+    pub(crate) fn boot(&mut self) {
         self.view.systems_loading = true;
         let done = self.done_tx.clone();
         let session = self.deps.session.clone();

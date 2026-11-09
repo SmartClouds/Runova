@@ -5,6 +5,7 @@ export const queryKeys = {
   accountStatus: ['account', 'status'] as const,
   accountProfile: ['account', 'profile'] as const,
   accountSessions: ['account', 'sessions'] as const,
+  accountQrSignIn: (id: number) => ['account', 'qr-sign-in', id] as const,
   accountActivities: (page: number) => ['account', 'activities', page] as const,
   syncOverview: ['sync', 'overview'] as const,
   encryption: ['account', 'encryption'] as const,

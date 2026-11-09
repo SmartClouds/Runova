@@ -1,9 +1,14 @@
 //! Trading the code for tokens and keeping them fresh, against a recording fake of the server.
 
 use async_trait::async_trait;
-use runova_api::auth::{AuthError, Session, StoredTokens, TokenStore};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use runova_api::auth::{
+    AuthError, DeviceInfo, QrPoll, Session, StoredTokens, TokenStore, read_qr_code,
+};
 use runova_api::http::{HttpError, HttpReply, HttpTransport};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -257,4 +262,122 @@ async fn signing_out_forgets_the_tokens() {
 
     assert!(!world.session.is_signed_in().await);
     assert!(world.store.load().is_none());
+}
+
+const QR_CODE: &str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+
+fn phone() -> DeviceInfo {
+    DeviceInfo {
+        device_id: "4b2c0c0e-1111-4222-8333-944444444444".into(),
+        name: "Runova app".into(),
+        platform: "android".into(),
+        app_version: "3.4.0".into(),
+    }
+}
+
+fn sevens(length: usize) -> Vec<u8> {
+    vec![7; length]
+}
+
+#[test]
+fn a_qr_code_is_read_only_when_it_is_ours() {
+    assert_eq!(
+        read_qr_code(&format!("rq1.{QR_CODE}")).as_deref(),
+        Some(QR_CODE)
+    );
+    assert_eq!(
+        read_qr_code(&format!("  rq1.{QR_CODE}\n")).as_deref(),
+        Some(QR_CODE)
+    );
+    assert_eq!(read_qr_code(QR_CODE), None);
+    assert_eq!(read_qr_code("rq1.short"), None);
+    assert_eq!(read_qr_code(&format!("rq2.{QR_CODE}")), None);
+    assert_eq!(read_qr_code("https://example.com/"), None);
+    assert_eq!(read_qr_code(&format!("rq1.{}!", &QR_CODE[1..])), None);
+}
+
+#[tokio::test]
+async fn claiming_a_qr_code_sends_a_challenge_for_a_kept_verifier() {
+    let world = world();
+    world.http.answer(
+        200,
+        json!({ "matchCode": "0420", "expiresAt": "2026-11-09T12:00:00Z" }),
+    );
+
+    let claim = world
+        .session
+        .claim_qr(QR_CODE, &phone(), &mut sevens)
+        .await
+        .expect("claimed");
+
+    assert_eq!(claim.match_code, "0420");
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/qr-sign-in-claims");
+    assert_eq!(body["code"], QR_CODE);
+    assert_eq!(body["codeChallengeMethod"], "S256");
+    assert_eq!(body["platform"], "android");
+    assert_eq!(body["appVersion"], "3.4.0");
+    assert_eq!(body["deviceId"], "4b2c0c0e-1111-4222-8333-944444444444");
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(claim.verifier.as_bytes()));
+    assert_eq!(body["codeChallenge"], challenge.as_str());
+}
+
+#[tokio::test]
+async fn a_refused_claim_is_signed_out_and_a_busy_server_is_not() {
+    let world = world();
+    world.http.answer(401, json!({}));
+    world.http.answer(429, json!({}));
+
+    assert_eq!(
+        world
+            .session
+            .claim_qr(QR_CODE, &phone(), &mut sevens)
+            .await
+            .err(),
+        Some(AuthError::SignedOut)
+    );
+    assert!(matches!(
+        world
+            .session
+            .claim_qr(QR_CODE, &phone(), &mut sevens)
+            .await
+            .err(),
+        Some(AuthError::Network(_))
+    ));
+}
+
+#[tokio::test]
+async fn polling_reads_each_answer() {
+    let world = world();
+    world
+        .http
+        .answer(200, json!({ "status": "waiting", "code": null }));
+    world
+        .http
+        .answer(200, json!({ "status": "approved", "code": "one-time" }));
+    world
+        .http
+        .answer(200, json!({ "status": "declined", "code": null }));
+    world.http.answer(401, json!({}));
+
+    assert_eq!(
+        world.session.poll_qr(QR_CODE, "v").await,
+        Ok(QrPoll::Waiting)
+    );
+    assert_eq!(
+        world.session.poll_qr(QR_CODE, "v").await,
+        Ok(QrPoll::Approved("one-time".into()))
+    );
+    assert_eq!(
+        world.session.poll_qr(QR_CODE, "v").await,
+        Ok(QrPoll::Declined)
+    );
+    assert_eq!(
+        world.session.poll_qr(QR_CODE, "v").await,
+        Err(AuthError::SignedOut)
+    );
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/qr-sign-in-polls");
+    assert_eq!(body, json!({ "code": QR_CODE, "codeVerifier": "v" }));
 }

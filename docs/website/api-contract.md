@@ -511,6 +511,25 @@ the code at `POST /device-tokens`.
 |---|---|---|---|---|
 | POST | `/api/v1/device-authorizations` | Account (cookie, with antiforgery) | `DeviceAuthorizationRequest` | 201 `{ "redirectUrl": string, "expiresAt": time }`; 400; 401 |
 | POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 429 |
+| POST | `/api/v1/qr-sign-ins` | Account | none | 201 `QrSignInDto`; 401 |
+| GET | `/api/v1/qr-sign-ins/{id}` | Account | none | 200 `QrSignInStatusDto`; 401; 404 |
+| POST | `/api/v1/qr-sign-ins/{id}/decisions` | Account | `{ "approve": boolean }` | 204; 400; 401; 404; 409 |
+| POST | `/api/v1/qr-sign-in-claims` | Anonymous (no cookie, no antiforgery) | `QrSignInClaimRequest` | 200 `QrSignInClaimDto`; 400; 401 `unauthorized` (code not valid); 429 |
+| POST | `/api/v1/qr-sign-in-polls` | Anonymous (no cookie, no antiforgery) | `QrSignInPollRequest` | 200 `QrSignInPollDto`; 400; 401 `unauthorized` (code or verifier not valid); 429 |
+
+A signed-in browser or desktop app can also let the Runova app in with a QR code. `QrSignInDto`:
+`{ "id": number, "qrText": "rq1." + code, "expiresAt": time }`. The code is 32 random bytes, kept
+only as its SHA-256, good for two minutes and one claim, and asking for a new one retires any code
+of that person nobody has scanned. `QrSignInClaimRequest`: `{ "code": string, "codeChallenge":
+string (base64url SHA-256), "codeChallengeMethod": "S256", "platform": "android" | "ios",
+"appVersion": string | null, "deviceId": uuid | null }`. `QrSignInClaimDto`: `{ "matchCode": four
+digits, "expiresAt": time }`, and a claim gives two more minutes. `QrSignInStatusDto`: `{ "status":
+"waiting" | "scanned" | "approved" | "declined" | "expired", "matchCode": string | null,
+"expiresAt": time }`. Both screens show the match code, and only the signed-in side can approve.
+Approving needs a scan; declining before a scan closes the code. `QrSignInPollRequest`: `{ "code":
+string, "codeVerifier": string }`. `QrSignInPollDto`: `{ "status": "waiting" | "approved" |
+"declined", "code": string | null }`, where `code` is an ordinary one-time code for
+`POST /device-tokens` with the redirect URI `com.runovahq.app:/auth/callback`, handed over once.
 
 `DeviceAuthorizationRequest`: `{ "clientId": "runova-desktop" | "runova-mobile", "redirectUri":
 string (for the desktop only http://127.0.0.1:<port>/callback or http://[::1]:<port>/callback, port

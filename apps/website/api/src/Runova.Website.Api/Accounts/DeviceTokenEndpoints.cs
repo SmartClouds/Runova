@@ -71,7 +71,7 @@ internal static partial class DeviceTokenEndpoints
         ["linux"] = "Linux",
     };
 
-    private static readonly Dictionary<string, string> _phonePlatforms = new(StringComparer.Ordinal)
+    internal static readonly Dictionary<string, string> PhonePlatforms = new(StringComparer.Ordinal)
     {
         ["android"] = "Phone",
         ["ios"] = "Phone",
@@ -94,7 +94,7 @@ internal static partial class DeviceTokenEndpoints
         && port is >= 1024 and <= 65535;
 
     [GeneratedRegex("^[A-Za-z0-9_-]{43,128}$", RegexOptions.CultureInvariant)]
-    private static partial Regex Base64UrlToken();
+    internal static partial Regex Base64UrlToken();
 
     [GeneratedRegex("^[A-Za-z0-9_-]{8,200}$", RegexOptions.CultureInvariant)]
     private static partial Regex StateValue();
@@ -135,7 +135,7 @@ internal static partial class DeviceTokenEndpoints
             errors["deviceName"] = ["Name the computer, up to 100 characters."];
         }
 
-        var platforms = isPhone ? _phonePlatforms : _platforms;
+        var platforms = isPhone ? PhonePlatforms : _platforms;
         if (request.Platform is null || !platforms.ContainsKey(request.Platform))
         {
             errors["platform"] = [isPhone ? "platform is android or ios." : "platform is windows, macos or linux."];
@@ -332,7 +332,7 @@ internal static partial class DeviceTokenEndpoints
 
     internal static byte[] Hash(string token) => SHA256.HashData(Encoding.ASCII.GetBytes(token));
 
-    private static string Challenge(string verifier) => Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+    internal static string Challenge(string verifier) => Base64Url.EncodeToString(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
 }
 
 /// <summary>

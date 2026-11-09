@@ -30,6 +30,20 @@ export interface AccountSession {
   current: boolean;
 }
 
+export type QrSignInState = 'waiting' | 'scanned' | 'approved' | 'declined' | 'expired';
+
+export interface QrSignInCode {
+  id: number;
+  qrDataUrl: string;
+  expiresAt: string;
+}
+
+export interface QrSignInReading {
+  status: QrSignInState;
+  matchCode: string | null;
+  expiresAt: string;
+}
+
 export interface AccountActivityEntry {
   id: number;
   action: string;

@@ -37,6 +37,11 @@ final class ScreensTests: XCTestCase {
 
     func testSignIn() throws { try render(view(auth: .signedOut, systems: []), "sign-in") }
 
+    func testQrDigits() throws {
+        try renderSnapshot(
+            fixtureView(auth: .signedOut, qrSignIn: QrSignInView(matchCode: "0420")), "qr-sign-in", dark: true)
+    }
+
     func testStudio() throws {
         let videos = [
             StudioVideoItemView(

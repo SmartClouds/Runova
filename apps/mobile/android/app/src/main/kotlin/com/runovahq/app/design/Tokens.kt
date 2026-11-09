@@ -229,6 +229,7 @@ object RunovaIcons {
     const val Envelope = "\uF0E0"
     const val Ban = "\uF05E"
     const val Mobile = "\uF3CF"
+    const val QrCode = "\uF029"
     const val Code = "\uF121"
     const val Eraser = "\uF12D"
 }

@@ -46,6 +46,7 @@ targets:
       path: Runova/Info.plist
       properties:
         NSFaceIDUsageDescription: Confirms it's you before showing a Vault secret.
+        NSCameraUsageDescription: Reads the QR code that signs you in.
         RunovaKeychainGroup: $(AppIdentifierPrefix)com.runovahq.app.shared
         UIAppFonts:
           - fonts/Inter.ttf

@@ -87,6 +87,8 @@ final class AppModel: NSObject, ObservableObject {
             dismissConfirm: { [weak self] in self?.engine?.dismissConfirm() },
             dismissNotice: { [weak self] in self?.engine?.dismissNotice() },
             finishIntro: { [weak self] in self?.engine?.introDone() },
+            scanSignIn: { [weak self] in self?.engine?.scanSignIn(text: $0) },
+            cancelQrSignIn: { [weak self] in self?.engine?.cancelQrSignIn() },
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },

@@ -56,6 +56,18 @@ internal static class AccountsModel
             approval.HasOne<AppUser>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<QrSignIn>(qr =>
+        {
+            qr.Property(q => q.CodeChallenge).HasMaxLength(128);
+            qr.Property(q => q.MatchCode).HasMaxLength(4);
+            qr.Property(q => q.Platform).HasMaxLength(32);
+            qr.Property(q => q.AppVersion).HasMaxLength(32);
+            qr.HasIndex(q => q.CodeHash).IsUnique();
+            qr.HasIndex(q => q.ExpiresAt);
+            qr.HasIndex(q => q.UserId);
+            qr.HasOne<AppUser>().WithMany().HasForeignKey(q => q.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<Team>(team =>
         {
             team.Property(t => t.Name).HasMaxLength(80);

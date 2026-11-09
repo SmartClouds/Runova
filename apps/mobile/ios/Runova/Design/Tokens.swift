@@ -236,6 +236,7 @@ enum RunovaIcons {
     static let envelope = "\u{F0E0}"
     static let ban = "\u{F05E}"
     static let mobile = "\u{F3CF}"
+    static let qrCode = "\u{F029}"
     static let code = "\u{F121}"
     static let eraser = "\u{F12D}"
 }

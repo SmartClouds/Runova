@@ -69,6 +69,8 @@ data class AppIntents(
     val dismissConfirm: () -> Unit = {},
     val dismissNotice: () -> Unit = {},
     val finishIntro: () -> Unit = {},
+    val scanSignIn: (String) -> Unit = {},
+    val cancelQrSignIn: () -> Unit = {},
     val openAbout: () -> Unit = {},
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
@@ -95,6 +97,7 @@ val AppTabs = listOf(
 fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: AppIntents) {
     val colors = RunovaTheme.colors
     var aboutOpen by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
     val intents = remember(appIntents) { appIntents.copy(openAbout = { aboutOpen = true }) }
     // The chrome: what the desktop's title bar and menu are drawn on.
     CompositionLocalProvider(LocalGitTools provides view.gitTools) {
@@ -102,7 +105,18 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
         when (view.auth) {
             AuthState.STARTING -> StartingScreen()
             AuthState.SIGNED_OUT ->
-                if (view.showIntro) IntroScreen(intents.finishIntro) else SignInScreen(view.error, intents.signIn)
+                when {
+                    view.showIntro -> IntroScreen(intents.finishIntro)
+                    view.qrSignIn != null -> QrWaitingScreen(view.qrSignIn!!, intents.cancelQrSignIn)
+                    scanning -> QrScanScreen(
+                        onCode = {
+                            scanning = false
+                            intents.scanSignIn(it)
+                        },
+                        onCancel = { scanning = false },
+                    )
+                    else -> SignInScreen(view.error, intents.signIn) { scanning = true }
+                }
             AuthState.SIGNED_IN -> {
                 val connection = view.connection
                 val remote = view.remote
@@ -189,7 +203,7 @@ fun StartingScreen() {
 }
 
 @Composable
-fun SignInScreen(error: String?, onSignIn: () -> Unit) {
+fun SignInScreen(error: String?, onSignIn: () -> Unit, onScanQr: () -> Unit = {}) {
     val colors = RunovaTheme.colors
     Column(
         Modifier.fillMaxSize().padding(32.dp),
@@ -207,6 +221,8 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit) {
         )
         Spacer(Modifier.height(24.dp))
         RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth(), icon = RunovaIcons.Forward)
+        Spacer(Modifier.height(8.dp))
+        ScanQrButton(onScanQr)
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             RunovaText(error, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)

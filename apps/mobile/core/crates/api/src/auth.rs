@@ -20,6 +20,11 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub const PHONE_CLIENT: &str = "runova-mobile";
 pub const PHONE_REDIRECT: &str = "com.runovahq.app:/auth/callback";
 
+/// What a sign-in QR code starts with, so a stray code is never sent to the server.
+const QR_PREFIX: &str = "rq1.";
+/// 32 random bytes in base64url.
+const QR_CODE_LENGTH: usize = 43;
+
 /// A token this close to its end is replaced before use, seconds.
 const EXPIRY_MARGIN: u64 = 60;
 
@@ -117,6 +122,43 @@ pub fn read_callback(url: &str, expected_state: &str) -> Result<String, AuthErro
     query_value(query, "code").ok_or(AuthError::BadCallback)
 }
 
+/// The code in a sign-in QR, or `None` for any other QR.
+pub fn read_qr_code(text: &str) -> Option<String> {
+    let code = text.trim().strip_prefix(QR_PREFIX)?;
+    let valid = code.len() == QR_CODE_LENGTH
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    valid.then(|| code.to_owned())
+}
+
+/// A QR code this phone has claimed: the digits to show, and the proof that it was this phone.
+#[derive(Debug)]
+pub struct QrClaim {
+    pub match_code: String,
+    pub verifier: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QrPoll {
+    Waiting,
+    /// Carries the one-time code for [`Session::complete_sign_in`].
+    Approved(String),
+    Declined,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QrClaimReply {
+    match_code: String,
+}
+
+#[derive(Deserialize)]
+struct QrPollReply {
+    status: String,
+    code: Option<String>,
+}
+
 /// A session's tokens. Only the platform's secure storage should ever hold these outside memory.
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct StoredTokens {
@@ -149,6 +191,7 @@ struct State {
 }
 
 pub struct Session {
+    site: String,
     token_url: String,
     http: Arc<dyn HttpTransport>,
     store: Arc<dyn TokenStore>,
@@ -164,8 +207,10 @@ impl Session {
         store: Arc<dyn TokenStore>,
         clock: Box<dyn Fn() -> u64 + Send + Sync>,
     ) -> Self {
+        let site = site.trim_end_matches('/').to_owned();
         Self {
-            token_url: format!("{}/api/v1/device-tokens", site.trim_end_matches('/')),
+            token_url: format!("{site}/api/v1/device-tokens"),
+            site,
             http,
             store,
             clock,
@@ -218,6 +263,71 @@ impl Session {
             200 => {
                 state.loaded = true;
                 self.accept(&mut state, &reply)
+            }
+            401 => Err(AuthError::SignedOut),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// Takes a scanned code for this phone. The verifier it comes back with proves that later.
+    pub async fn claim_qr(
+        &self,
+        code: &str,
+        device: &DeviceInfo,
+        random: &mut (dyn FnMut(usize) -> Vec<u8> + Send),
+    ) -> Result<QrClaim, AuthError> {
+        let verifier = URL_SAFE_NO_PAD.encode(random(32));
+        let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+        let reply = self
+            .http
+            .post_json(
+                &format!("{}/api/v1/qr-sign-in-claims", self.site),
+                json!({
+                    "code": code,
+                    "codeChallenge": challenge,
+                    "codeChallengeMethod": "S256",
+                    "platform": device.platform,
+                    "appVersion": device.app_version,
+                    "deviceId": device.device_id,
+                }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            200 => {
+                let parsed: QrClaimReply = serde_json::from_str(&reply.body).map_err(|_| {
+                    AuthError::Network("an answer that could not be read".to_owned())
+                })?;
+                Ok(QrClaim {
+                    match_code: parsed.match_code,
+                    verifier,
+                })
+            }
+            401 => Err(AuthError::SignedOut),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// Whether the signed-in side has answered a claimed code yet.
+    pub async fn poll_qr(&self, code: &str, verifier: &str) -> Result<QrPoll, AuthError> {
+        let reply = self
+            .http
+            .post_json(
+                &format!("{}/api/v1/qr-sign-in-polls", self.site),
+                json!({ "code": code, "codeVerifier": verifier }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            200 => {
+                let parsed: QrPollReply = serde_json::from_str(&reply.body).map_err(|_| {
+                    AuthError::Network("an answer that could not be read".to_owned())
+                })?;
+                match (parsed.status.as_str(), parsed.code) {
+                    ("approved", Some(code)) => Ok(QrPoll::Approved(code)),
+                    ("declined", _) => Ok(QrPoll::Declined),
+                    _ => Ok(QrPoll::Waiting),
+                }
             }
             401 => Err(AuthError::SignedOut),
             status => Err(AuthError::Network(format!("status {status}"))),

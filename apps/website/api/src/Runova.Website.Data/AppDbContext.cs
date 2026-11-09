@@ -61,6 +61,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<DeviceAuthorization> DeviceAuthorizations => Set<DeviceAuthorization>();
 
+    public DbSet<QrSignIn> QrSignIns => Set<QrSignIn>();
+
     public DbSet<SyncScope> SyncScopes => Set<SyncScope>();
 
     public DbSet<Team> Teams => Set<Team>();

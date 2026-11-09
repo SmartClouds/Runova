@@ -6,6 +6,8 @@ import type {
   AccountStatus,
   EncryptionItemName,
   EncryptionStatus,
+  QrSignInCode,
+  QrSignInReading,
   StepUp,
 } from '../shared/accountTypes';
 import { IPC } from '../shared/ipcChannels';
@@ -42,6 +44,11 @@ export function createAccount() {
     profile: (): Promise<AccountProfile> => ipcRenderer.invoke(IPC.account.profile),
     sessions: (): Promise<AccountSession[]> => ipcRenderer.invoke(IPC.account.sessions),
     endSession: (id: number): Promise<void> => ipcRenderer.invoke(IPC.account.endSession, { id }),
+    qrSignIn: (): Promise<QrSignInCode> => ipcRenderer.invoke(IPC.account.qrSignIn),
+    qrSignInStatus: (id: number): Promise<QrSignInReading> =>
+      ipcRenderer.invoke(IPC.account.qrSignInStatus, { id }),
+    qrSignInDecide: (id: number, approve: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC.account.qrSignInDecide, { id, approve }),
     endOtherSessions: (stepUp: StepUp): Promise<void> =>
       ipcRenderer.invoke(IPC.account.endOtherSessions, stepUp),
     activities: (page = 1): Promise<AccountActivityPage> =>

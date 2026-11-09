@@ -86,6 +86,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.camera:camera-camera2:1.5.0")
+    implementation("androidx.camera:camera-lifecycle:1.5.0")
+    implementation("androidx.camera:camera-view:1.5.0")
+    implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.firebase:firebase-messaging:24.1.0")
     implementation("net.java.dev.jna:jna:5.17.0@aar")
 

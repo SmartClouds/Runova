@@ -1,6 +1,12 @@
 import { ipcMain } from 'electron';
+import QRCode from 'qrcode';
 import { z } from 'zod';
-import type { EncryptionItemName, EncryptionStatus } from '../../shared/accountTypes';
+import type {
+  EncryptionItemName,
+  EncryptionStatus,
+  QrSignInCode,
+  QrSignInReading,
+} from '../../shared/accountTypes';
 import { IPC } from '../../shared/ipcChannels';
 import type { AccountRuntime } from '../account/runtime';
 import { refreshNotificationForwarding } from '../notifications/forward';
@@ -61,6 +67,30 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
   handle(IPC.account.sessions, null, () => runtime().sessions());
   handle(IPC.account.endSession, z.strictObject({ id }), (input: { id: number }) =>
     runtime().endSession(input.id),
+  );
+  handle(IPC.account.qrSignIn, null, async (): Promise<QrSignInCode> => {
+    const code = await runtime().api<{ id: number; qrText: string; expiresAt: string }>(
+      'POST',
+      '/qr-sign-ins',
+    );
+    const qrDataUrl = await QRCode.toDataURL(code.qrText, {
+      margin: 1,
+      width: 320,
+      errorCorrectionLevel: 'M',
+    });
+    return { id: code.id, qrDataUrl, expiresAt: code.expiresAt };
+  });
+  handle(IPC.account.qrSignInStatus, z.strictObject({ id }), (input: { id: number }) =>
+    runtime().api<QrSignInReading>('GET', `/qr-sign-ins/${input.id}`),
+  );
+  handle(
+    IPC.account.qrSignInDecide,
+    z.strictObject({ id, approve: z.boolean() }),
+    async (input: { id: number; approve: boolean }) => {
+      await runtime().api<void>('POST', `/qr-sign-ins/${input.id}/decisions`, {
+        approve: input.approve,
+      });
+    },
   );
   handle(IPC.account.endOtherSessions, stepUp, (input: z.infer<typeof stepUp>) =>
     runtime().endOtherSessions(input),
