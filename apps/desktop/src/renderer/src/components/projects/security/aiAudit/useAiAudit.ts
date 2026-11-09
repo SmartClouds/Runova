@@ -65,6 +65,11 @@ export function useAiAudit(project: Project) {
   const installing = installTabId !== null;
   const [pickedRun, setPickedRun] = useProjectUiState<string | null>('security.audit.run', null);
   const [dismissed, setDismissed] = useProjectUiState<string[]>('security.audit.dismissed', []);
+  // Which workspace tab each run's agent was started in, so Stop can end that agent.
+  const [agentTabs, setAgentTabs] = useProjectUiState<Record<string, string>>(
+    'security.audit.agentTabs',
+    {},
+  );
 
   const statusQuery = useQuery({
     queryKey: queryKeys.aiAuditStatus(projectId),
@@ -104,6 +109,17 @@ export function useAiAudit(project: Project) {
   const phase = run?.phase ?? selectedSummary?.phase;
   const live =
     selectedRunName !== null && !dismissed.includes(selectedRunName) && isLivePhase(phase);
+
+  const selectedTabId = selectedRunName ? agentTabs[selectedRunName] : undefined;
+  const selectedTabOpen = useWorkspaceStore((s) =>
+    selectedTabId ? Boolean(s.workspaces[projectId]?.tabs[selectedTabId]) : false,
+  );
+  // 'unknown' is a run started before tabs were recorded, or whose record has been lost.
+  const agentTab: 'open' | 'closed' | 'unknown' = !selectedTabId
+    ? 'unknown'
+    : selectedTabOpen
+      ? 'open'
+      : 'closed';
 
   // The run list carries each run's phase too, so it follows the detail while a run is live.
   useEffect(() => {
@@ -214,16 +230,27 @@ export function useAiAudit(project: Project) {
       if (!tabId) return false;
       startTabNow(project.id, tabId);
       setPickedRun(prepared.runName);
+      setAgentTabs((current) => ({ ...current, [prepared.runName]: tabId }));
       setDismissed((current) => current.filter((name) => name !== prepared.runName));
       void queryClient.invalidateQueries({ queryKey: queryKeys.aiAuditRuns(projectId) });
       return true;
     },
-    [project, projectId, queryClient, setPickedRun, setDismissed],
+    [project, projectId, queryClient, setPickedRun, setDismissed, setAgentTabs],
   );
 
-  const stopTracking = useCallback(
-    (runName: string) =>
-      setDismissed((current) => (current.includes(runName) ? current : [...current, runName])),
+  /** Ends the run's agent, along with everything it started, and stops following the run. */
+  const stopAudit = useCallback(
+    (runName: string) => {
+      const tabId = agentTabs[runName];
+      const store = useWorkspaceStore.getState();
+      if (tabId && store.workspaces[projectId]?.tabs[tabId]) store.closeTab(projectId, tabId);
+      setDismissed((current) => (current.includes(runName) ? current : [...current, runName]));
+    },
+    [agentTabs, projectId, setDismissed],
+  );
+
+  const keepTracking = useCallback(
+    (runName: string) => setDismissed((current) => current.filter((name) => name !== runName)),
     [setDismissed],
   );
 
@@ -256,7 +283,11 @@ export function useAiAudit(project: Project) {
     runLoading: runQuery.isPending && selectedSummary !== null,
     live,
     isDismissed: (runName: string) => dismissed.includes(runName),
-    stopTracking,
+    /** Whether Runova knows which tab this run's agent was started in. */
+    hasAgentTab: (runName: string) => runName in agentTabs,
+    agentTab,
+    stopAudit,
+    keepTracking,
     installing,
     installTabId,
     installSkill,

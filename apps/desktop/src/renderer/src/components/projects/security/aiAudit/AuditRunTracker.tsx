@@ -1,7 +1,7 @@
 import type { AiAuditRunSummary } from '@runova/core';
 import { AI_AUDIT_PHASE_STEPS, completedAuditSteps } from '@runova/core';
 import { useEffect, useState } from 'react';
-import { Check, Spinner, TerminalSquare, TriangleAlert } from '@/components/icons';
+import { Check, Spinner, StopCircle, TerminalSquare, TriangleAlert } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,11 +28,14 @@ function minutes(ms: number): string {
 export function AuditRunTracker({
   run,
   onOpenAgent,
-  onStopTracking,
+  onStop,
+  canStopAgent,
 }: {
   run: AiAuditRunSummary;
   onOpenAgent: () => void;
-  onStopTracking: () => void;
+  onStop: () => void;
+  /** False when Runova does not know the agent's tab, so all it can do is stop following it. */
+  canStopAgent: boolean;
 }): React.JSX.Element {
   const [now, setNow] = useState(() => Date.now());
 
@@ -78,8 +81,9 @@ export function AuditRunTracker({
             <Button variant="outline" size="sm" className="gap-1.5" onClick={onOpenAgent}>
               <TerminalSquare className="h-3.5 w-3.5" /> Open agent tab
             </Button>
-            <Button variant="ghost" size="sm" onClick={onStopTracking}>
-              Stop tracking
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={onStop}>
+              {canStopAgent && <StopCircle className="h-3.5 w-3.5" />}
+              {canStopAgent ? 'Stop audit' : 'Stop tracking'}
             </Button>
           </div>
         </div>

@@ -26,9 +26,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { launchPromptTab, projectCliId } from '@/lib/workspace/launch';
+import { confirmDialog } from '@/stores/confirmStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { AiAuditReport } from './AiAuditReport';
 import { AiAuditWizard, type AiAuditWizardStep } from './AiAuditWizard';
+import { AuditRunStopped, AuditRunUntracked } from './AuditRunStopped';
 import { AuditRunTracker } from './AuditRunTracker';
 import { useAiAudit } from './useAiAudit';
 
@@ -101,6 +103,20 @@ export function AiAuditPanel({ project }: { project: Project }): React.JSX.Eleme
     toast.success(`Starting ${getCliDefinition(cliId)?.label ?? 'the agent'}`, {
       description: 'The fix prompt goes in once it is ready. Read it over and press Enter.',
     });
+  }
+
+  async function stopAudit(runName: string): Promise<void> {
+    if (audit.agentTab === 'open') {
+      const confirmed = await confirmDialog({
+        title: 'Stop this audit?',
+        description:
+          'This closes the agent and everything it started. What it wrote so far stays in the run folder, but the run will not produce a report.',
+        confirmLabel: 'Stop audit',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
+    }
+    audit.stopAudit(runName);
   }
 
   function openPath(target: 'folder' | 'report'): void {
@@ -239,7 +255,11 @@ export function AiAuditPanel({ project }: { project: Project }): React.JSX.Eleme
                         <Badge variant={PHASE_BADGE[entry.phase].variant}>
                           {entry.counts && entry.phase === 'complete'
                             ? `${entry.counts.confirmed} confirmed`
-                            : PHASE_BADGE[entry.phase].label}
+                            : audit.isDismissed(entry.runName) && entry.phase !== 'incomplete'
+                              ? audit.hasAgentTab(entry.runName)
+                                ? 'Stopped'
+                                : 'Not tracked'
+                              : PHASE_BADGE[entry.phase].label}
                         </Badge>
                       </span>
                     </DropdownMenuItem>
@@ -288,19 +308,23 @@ export function AiAuditPanel({ project }: { project: Project }): React.JSX.Eleme
         <AuditRunTracker
           run={run ?? selectedSummary}
           onOpenAgent={openAgentTab}
-          onStopTracking={() => audit.stopTracking(selectedSummary.runName)}
+          canStopAgent={audit.agentTab !== 'unknown'}
+          onStop={() => void stopAudit(selectedSummary.runName)}
         />
       ) : dismissedLive && selectedSummary ? (
-        <Card className="glass">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <p className="text-sm text-muted-foreground">
-              {selectedSummary.runName} has not finished and is no longer being tracked.
-            </p>
-            <Button variant="outline" size="sm" onClick={openAgentTab}>
-              Open agent tab
-            </Button>
-          </CardContent>
-        </Card>
+        audit.agentTab === 'closed' ? (
+          <AuditRunStopped
+            run={run ?? selectedSummary}
+            onNewAudit={openWizard}
+            onOpenFolder={() => openPath('folder')}
+          />
+        ) : (
+          <AuditRunUntracked
+            run={run ?? selectedSummary}
+            onOpenAgent={openAgentTab}
+            onKeepTracking={() => audit.keepTracking(selectedSummary.runName)}
+          />
+        )
       ) : run ? (
         <AiAuditReport
           run={run}

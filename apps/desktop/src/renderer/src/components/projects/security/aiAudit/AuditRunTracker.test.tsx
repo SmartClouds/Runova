@@ -31,12 +31,17 @@ function run(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {
 
 afterEach(() => vi.useRealTimers());
 
-function renderAt(now: string, summary: AiAuditRunSummary) {
+function renderAt(now: string, summary: AiAuditRunSummary, canStopAgent = true) {
   vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date(now) });
   const onOpenAgent = vi.fn();
   const onStopTracking = vi.fn();
   const view = renderWithProviders(
-    <AuditRunTracker run={summary} onOpenAgent={onOpenAgent} onStopTracking={onStopTracking} />,
+    <AuditRunTracker
+      run={summary}
+      onOpenAgent={onOpenAgent}
+      onStop={onStopTracking}
+      canStopAgent={canStopAgent}
+    />,
   );
   return { ...view, onOpenAgent, onStopTracking };
 }
@@ -82,13 +87,20 @@ describe('AuditRunTracker', () => {
     expect(screen.getByText(/may have stopped/i)).toBeInTheDocument();
   });
 
-  it('opens the agent tab and stops tracking on request', async () => {
+  it('opens the agent tab and stops the audit on request', async () => {
     const { user, onOpenAgent, onStopTracking } = renderAt('2026-11-08T10:21:00Z', run());
 
     await user.click(screen.getByRole('button', { name: 'Open agent tab' }));
-    await user.click(screen.getByRole('button', { name: 'Stop tracking' }));
+    await user.click(screen.getByRole('button', { name: 'Stop audit' }));
 
     expect(onOpenAgent).toHaveBeenCalledTimes(1);
     expect(onStopTracking).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer to stop an agent it cannot reach', () => {
+    renderAt('2026-11-08T10:21:00Z', run(), false);
+
+    expect(screen.queryByRole('button', { name: 'Stop audit' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop tracking' })).toBeInTheDocument();
   });
 });

@@ -129,17 +129,49 @@ describe('useAiAudit', () => {
     expect(bridge.$fn('securityAudit.getRun').mock.calls.length).toBe(settled);
   });
 
-  it('stops tracking a run the user gives up on', async () => {
+  it('ends the agent of a run it started when the audit is stopped', async () => {
+    const { result } = setup({
+      'securityAudit.listRuns': [summary(live)],
+      'securityAudit.getRun': detail(live),
+      'securityAudit.prepareRun': { runName: 'run-1', outputDir: '/x/run-1' },
+    });
+    await waitFor(() => expect(result.current.live).toBe(true));
+    const store = useWorkspaceStore.getState();
+    store.openProject('p1');
+    const tabId = store.addTerminal('p1', { title: 'Claude', cwd: '/work/shop', cliId: 'claude' });
+    launch.launchPromptTab.mockReturnValueOnce(tabId);
+    await act(() =>
+      result.current.startAudit({ cliId: 'claude-code', profile: 'standard', scopePaths: [] }),
+    );
+    expect(result.current.agentTab).toBe('open');
+
+    act(() => result.current.stopAudit('run-1'));
+
+    expect(useWorkspaceStore.getState().workspaces.p1?.tabs[tabId]).toBeUndefined();
+    expect(result.current.agentTab).toBe('closed');
+    expect(result.current.live).toBe(false);
+    expect(result.current.isDismissed('run-1')).toBe(true);
+    expect(result.current.hasAgentTab('run-1')).toBe(true);
+  });
+
+  it('touches no tab for a run whose agent it cannot place, and can follow it again', async () => {
     const { result } = setup({
       'securityAudit.listRuns': [summary(live)],
       'securityAudit.getRun': detail(live),
     });
     await waitFor(() => expect(result.current.live).toBe(true));
+    const store = useWorkspaceStore.getState();
+    store.openProject('p1');
+    const tabId = store.addTerminal('p1', { title: 'Claude', cwd: '/work/shop', cliId: 'claude' });
+    expect(result.current.agentTab).toBe('unknown');
 
-    act(() => result.current.stopTracking('run-1'));
+    act(() => result.current.stopAudit('run-1'));
 
     expect(result.current.live).toBe(false);
-    expect(result.current.isDismissed('run-1')).toBe(true);
+    expect(useWorkspaceStore.getState().workspaces.p1?.tabs[tabId]).toBeDefined();
+
+    act(() => result.current.keepTracking('run-1'));
+    expect(result.current.live).toBe(true);
   });
 
   it('starts an audit in an agent tab, aimed at a fresh run folder', async () => {
