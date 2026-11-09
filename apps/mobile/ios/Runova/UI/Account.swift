@@ -22,7 +22,7 @@ private struct Heading: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RunovaText(text, style: RunovaType.caption, color: palette.mutedForeground)
+        RunovaSectionTitle(text: text)
             .padding(.top, 16)
             .padding(.bottom, 4)
     }
@@ -44,8 +44,8 @@ struct StepUpOverlay: View {
                 VStack(alignment: .leading, spacing: 8) {
                     RunovaText(stepUp.title, style: RunovaType.title)
                     RunovaText(stepUp.detail, color: palette.mutedForeground)
-                    RunovaTextField(value: $password, placeholder: "Password", secure: true)
-                    RunovaTextField(value: $code, placeholder: "Two-factor code")
+                    RunovaTextField(value: $password, placeholder: "Password", secure: true, icon: RunovaIcons.key)
+                    RunovaTextField(value: $code, placeholder: "Two-factor code", icon: RunovaIcons.shield)
                     if let error = stepUp.error {
                         RunovaText(error, style: RunovaType.small, color: palette.destructive)
                     }
@@ -73,8 +73,7 @@ struct AccountTab: View {
         if let team = view.account.team {
             TeamScreen(team: team, intents: intents.account)
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                RunovaTopBar(title: "Account")
+            RunovaScreen(title: "Account") {
                 if let profile = view.account.profile {
                     AccountList(profile: profile, account: view.account, intents: intents)
                 } else {
@@ -101,7 +100,7 @@ private struct AccountList: View {
                         RunovaText(profile.name.isEmpty ? profile.email : profile.name, style: RunovaType.title)
                         RunovaText(profile.email, style: RunovaType.small, color: palette.mutedForeground)
                         if profile.twoFactor {
-                            RunovaBadge(text: "Two-factor on", tone: .success).padding(.top, 6)
+                            RunovaBadge(text: "Two-factor on", tone: .success, dot: true).padding(.top, 6)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,25 +113,39 @@ private struct AccountList: View {
                                 title: invitation.team,
                                 detail: invitation.invitedBy.map { "From \($0), as \(invitation.role)" }
                                     ?? invitation.role,
-                                icon: RunovaIcons.team)
-                            RunovaChip(text: "Accept") { intents.account.acceptInvitation(invitation.id) }
-                            RunovaChip(text: "Decline") { intents.account.declineInvitation(invitation.id) }
+                                icon: RunovaIcons.envelope, flat: true)
+                            RunovaChip(text: "Accept", icon: RunovaIcons.check, tone: .primary) {
+                                intents.account.acceptInvitation(invitation.id)
+                            }
+                            RunovaChip(text: "Decline", icon: RunovaIcons.close) {
+                                intents.account.declineInvitation(invitation.id)
+                            }
                         }
+                        .padding(.trailing, 12)
+                        .rowCard()
                     }
                 }
                 Heading(text: "Sessions")
                 ForEach(account.sessions, id: \.id) { session in
                     HStack(spacing: 6) {
-                        RunovaListRow(title: session.title, detail: session.detail, icon: RunovaIcons.shield)
+                        RunovaListRow(
+                            title: session.title, detail: session.detail,
+                            icon: session.current ? RunovaIcons.mobile : RunovaIcons.systems, flat: true)
                         if session.current {
-                            RunovaBadge(text: "This phone", tone: .primary)
+                            RunovaBadge(text: "This phone", tone: .primary, dot: true)
                         } else {
-                            RunovaChip(text: "End") { intents.account.endSession(session.id) }
+                            RunovaChip(text: "End", icon: RunovaIcons.signOut, tone: .danger) {
+                                intents.account.endSession(session.id)
+                            }
                                 .accessibilityLabel("End \(session.title)")
                         }
                     }
+                    .padding(.trailing, 12)
+                    .rowCard()
                 }
-                RunovaButton(text: "End all other sessions", kind: .soft, action: intents.account.endOtherSessions)
+                RunovaButton(
+                    text: "End all other sessions", kind: .danger, icon: RunovaIcons.signOut,
+                    action: intents.account.endOtherSessions)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
                 Heading(text: "Teams")
@@ -142,18 +155,20 @@ private struct AccountList: View {
                     } label: {
                         HStack(spacing: 8) {
                             RunovaListRow(
-                                title: team.name, detail: "\(team.memberCount) members", icon: RunovaIcons.team)
-                            RunovaBadge(text: team.role).padding(.trailing, 16)
+                                title: team.name, detail: "\(team.memberCount) members", icon: RunovaIcons.team, flat: true)
+                            RunovaBadge(text: team.role)
                         }
+                        .padding(.trailing, 12)
+                        .rowCard()
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
                 Heading(text: "Recent activity")
                 ForEach(account.activity, id: \.id) { activity in
-                    RunovaListRow(title: activity.action, detail: activity.detail, icon: RunovaIcons.shield)
+                    RunovaListRow(title: activity.action, detail: activity.detail, icon: RunovaIcons.history, iconTone: .neutral)
                 }
-                RunovaButton(text: "Sign out", kind: .soft, action: intents.signOut)
+                RunovaButton(text: "Sign out", kind: .soft, icon: RunovaIcons.signOut, action: intents.signOut)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 16)
             }
@@ -170,17 +185,17 @@ private struct TeamScreen: View {
     @State private var expanded: Int64?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: team.name, onBack: intents.closeTeam)
+        RunovaScreen(title: team.name, onBack: intents.closeTeam) {
             if team.canManage {
                 HStack(spacing: 8) {
-                    RunovaTextField(value: $email, placeholder: "Email address")
-                    RunovaButton(text: "Invite", enabled: !email.isEmpty) {
+                    RunovaTextField(value: $email, placeholder: "Email address", icon: RunovaIcons.envelope)
+                    RunovaButton(text: "Invite", enabled: !email.isEmpty, icon: RunovaIcons.invite) {
                         intents.invite(email, "member")
                         email = ""
                     }
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 14)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -198,11 +213,13 @@ private struct TeamScreen: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 6) {
                                     ForEach(member.roleOptions, id: \.key) { option in
-                                        RunovaChip(text: "Make \(option.label)") {
+                                        RunovaChip(text: "Make \(option.label)", icon: RunovaIcons.sliders) {
                                             intents.setMemberRole(member.userId, option.key)
                                         }
                                     }
-                                    RunovaChip(text: "Remove") { intents.removeMember(member.userId) }
+                                    RunovaChip(text: "Remove", icon: RunovaIcons.trash, tone: .danger) {
+                                        intents.removeMember(member.userId)
+                                    }
                                         .accessibilityLabel("Remove \(member.name)")
                                 }
                             }
@@ -213,9 +230,11 @@ private struct TeamScreen: View {
                         Heading(text: "Invitations")
                         ForEach(team.invitations, id: \.id) { invitation in
                             HStack(spacing: 6) {
-                                RunovaListRow(title: invitation.email, detail: invitation.role, icon: RunovaIcons.send)
-                                RunovaChip(text: "Take back") { intents.cancelInvitation(invitation.id) }
+                                RunovaListRow(title: invitation.email, detail: invitation.role, icon: RunovaIcons.envelope, flat: true)
+                                RunovaChip(text: "Take back", icon: RunovaIcons.close) { intents.cancelInvitation(invitation.id) }
                             }
+                            .padding(.trailing, 12)
+                            .rowCard()
                         }
                     }
                 }

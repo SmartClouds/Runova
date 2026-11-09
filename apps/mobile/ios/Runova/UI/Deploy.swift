@@ -29,10 +29,12 @@ struct DeployTab: View {
                         } label: {
                             HStack(spacing: 8) {
                                 RunovaListRow(
-                                    title: server.name, detail: server.problem ?? server.host, icon: RunovaIcons.server)
-                                RunovaBadge(text: server.stateLabel, tone: server.online ? .success : .warning)
-                                    .padding(.trailing, 16)
+                                    title: server.name, detail: server.problem ?? server.host, icon: RunovaIcons.server,
+                                    iconTone: server.online ? .primary : .warning, flat: true)
+                                RunovaBadge(text: server.stateLabel, tone: server.online ? .success : .warning, dot: true)
                             }
+                            .padding(.trailing, 12)
+                            .rowCard()
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -50,8 +52,8 @@ private struct Heading: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RunovaText(text, style: RunovaType.caption, color: palette.mutedForeground)
-            .padding(.top, 12)
+        RunovaSectionTitle(text: text)
+            .padding(.top, 14)
             .padding(.bottom, 4)
     }
 }
@@ -64,8 +66,7 @@ struct ServerScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: server.name, onBack: intents.closeServer)
+        RunovaScreen(title: server.name, onBack: intents.closeServer) {
             if server.loading {
                 LoadingRows()
             } else if let unreachable = server.unreachable {
@@ -111,10 +112,14 @@ private struct ProblemRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            RunovaListRow(title: problem.title, detail: problem.detail, icon: RunovaIcons.warning)
+            RunovaListRow(
+                title: problem.title, detail: problem.detail, icon: RunovaIcons.warning,
+                iconTone: problem.severity == .critical ? .danger : .warning, flat: true)
             problem.severity == .critical
-                ? RunovaBadge(text: "Critical", tone: .warning) : RunovaBadge(text: "Warning")
+                ? RunovaBadge(text: "Critical", tone: .danger, dot: true) : RunovaBadge(text: "Warning")
         }
+        .padding(.trailing, 12)
+        .rowCard()
     }
 }
 
@@ -122,8 +127,13 @@ private struct ContainerRow: View {
     let container: ContainerView
     let intents: DeployIntents
 
-    private func chip(_ label: String, _ action: String) -> some View {
-        RunovaChip(text: label) { intents.containerAction(container.id, action) }
+    private var tone: BadgeTone {
+        if container.healthy == false { return .danger }
+        return container.running ? .success : .neutral
+    }
+
+    private func chip(_ label: String, _ action: String, _ icon: String, _ tone: ChipTone = .soft) -> some View {
+        RunovaChip(text: label, icon: icon, tone: tone) { intents.containerAction(container.id, action) }
             .accessibilityLabel("\(label) \(container.name)")
     }
 
@@ -132,17 +142,19 @@ private struct ContainerRow: View {
             Button {
                 intents.openLogs(container.id)
             } label: {
-                RunovaListRow(title: container.name, detail: container.status, icon: RunovaIcons.server)
+                RunovaListRow(title: container.name, detail: container.status, icon: RunovaIcons.deploy, iconTone: tone, flat: true)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             if container.running {
-                chip("Restart", "restart")
-                chip("Stop", "stop")
+                chip("Restart", "restart", RunovaIcons.refresh)
+                chip("Stop", "stop", RunovaIcons.stop, .danger)
             } else {
-                chip("Start", "start")
+                chip("Start", "start", RunovaIcons.play)
             }
         }
+        .padding(.trailing, 12)
+        .rowCard()
     }
 }
 
@@ -152,13 +164,15 @@ private struct StackRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            RunovaListRow(title: stack.name, detail: stack.detail, icon: RunovaIcons.deploy)
+            RunovaListRow(title: stack.name, detail: stack.detail, icon: RunovaIcons.deploy, flat: true)
             if stack.canRedeploy {
-                RunovaChip(text: "Redeploy") { intents.redeploy(stack.id) }
+                RunovaChip(text: "Redeploy", icon: RunovaIcons.bolt, tone: .primary) { intents.redeploy(stack.id) }
             }
-            RunovaChip(text: "Restart") { intents.stackAction(stack.id, "restart") }
+            RunovaChip(text: "Restart", icon: RunovaIcons.refresh) { intents.stackAction(stack.id, "restart") }
                 .accessibilityLabel("Restart \(stack.name)")
         }
+        .padding(.trailing, 12)
+        .rowCard()
     }
 }
 
@@ -167,8 +181,7 @@ struct LogsScreen: View {
     let intents: DeployIntents
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: logs.name, onBack: intents.closeLogs)
+        RunovaScreen(title: logs.name, onBack: intents.closeLogs) {
             if logs.loading {
                 LoadingRows()
             } else {

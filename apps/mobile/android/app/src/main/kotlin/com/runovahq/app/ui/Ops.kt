@@ -32,6 +32,9 @@ import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaEmptyState
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaIconTile
+import com.runovahq.app.design.RunovaSectionTitle
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
@@ -39,6 +42,7 @@ import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaToggle
 import com.runovahq.app.design.RunovaTokens
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -74,26 +78,21 @@ data class PipelineIntents(
 private fun monitorBadge(state: MonitorState) = when (state) {
     MonitorState.UP -> "Up" to BadgeTone.Success
     MonitorState.DEGRADED -> "Degraded" to BadgeTone.Warning
-    MonitorState.DOWN -> "Down" to BadgeTone.Warning
+    MonitorState.DOWN -> "Down" to BadgeTone.Danger
     MonitorState.PAUSED -> "Paused" to BadgeTone.Neutral
     MonitorState.UNKNOWN -> "Unknown" to BadgeTone.Neutral
 }
 
 private fun runTone(state: PipelineRunState) = when (state) {
     PipelineRunState.SUCCESS -> BadgeTone.Success
-    PipelineRunState.FAILED -> BadgeTone.Warning
+    PipelineRunState.FAILED -> BadgeTone.Danger
     PipelineRunState.RUNNING -> BadgeTone.Primary
     PipelineRunState.QUEUED, PipelineRunState.OTHER -> BadgeTone.Neutral
 }
 
 private fun LazyListScope.groupTitle(text: String) {
     item(key = "h/$text") {
-        RunovaText(
-            text,
-            Modifier.padding(top = 12.dp, bottom = 4.dp),
-            RunovaType.caption,
-            RunovaTheme.colors.mutedForeground,
-        )
+        RunovaSectionTitle(text, Modifier.padding(top = 14.dp, bottom = 4.dp))
     }
 }
 
@@ -132,9 +131,10 @@ private fun MonitorRow(monitor: MonitorView, intents: MonitoringIntents) {
     RunovaListRow(
         title = monitor.name,
         detail = monitor.detail ?: monitor.latencyLabel,
-        icon = RunovaIcons.Monitoring,
+        icon = if (monitor.source == MonitorSource.CLOUD) RunovaIcons.Cloud else RunovaIcons.Monitoring,
+        iconTone = tone,
         onClick = { intents.open(monitor.id) },
-        trailing = { RunovaBadge(text, tone) },
+        trailing = { RunovaBadge(text, tone, dot = true) },
     )
 }
 
@@ -142,10 +142,9 @@ private fun MonitorRow(monitor: MonitorView, intents: MonitoringIntents) {
 private fun MonitorScreen(monitor: MonitorView, intents: MonitoringIntents) {
     val colors = RunovaTheme.colors
     val (text, tone) = monitorBadge(monitor.state)
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(monitor.name, onBack = intents.close)
+    RunovaScreen(monitor.name, onBack = intents.close) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            RunovaBadge(text, tone)
+            RunovaBadge(text, tone, dot = true)
             monitor.detail?.let { RunovaText(it, color = colors.mutedForeground) }
             RunovaCard(Modifier.fillMaxWidth()) {
                 Row {
@@ -156,7 +155,7 @@ private fun MonitorScreen(monitor: MonitorView, intents: MonitoringIntents) {
             if (monitor.samples.isNotEmpty()) LatencyBars(monitor.samples)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (monitor.canCheck) {
-                    RunovaButton("Check now", onClick = { intents.check(monitor.id) }, Modifier.weight(1f))
+                    RunovaButton("Check now", onClick = { intents.check(monitor.id) }, Modifier.weight(1f), icon = RunovaIcons.Refresh)
                 }
                 if (monitor.canPause) {
                     RunovaButton(
@@ -164,6 +163,7 @@ private fun MonitorScreen(monitor: MonitorView, intents: MonitoringIntents) {
                         onClick = { intents.setPaused(monitor.id, monitor.source, !monitor.paused) },
                         Modifier.weight(1f),
                         kind = ButtonKind.Soft,
+                        icon = if (monitor.paused) RunovaIcons.Play else RunovaIcons.Stop,
                     )
                 }
             }
@@ -251,9 +251,10 @@ private fun WorkflowCard(workflow: WorkflowView, intents: PipelineIntents) {
     val colors = RunovaTheme.colors
     RunovaCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RunovaIconTile(RunovaIcons.Pipelines, workflow.run?.let { runTone(it.state) } ?: BadgeTone.Neutral)
                 RunovaText(workflow.name, Modifier.weight(1f), RunovaType.title)
-                if (workflow.canDispatch) RunovaChip("Run", { intents.dispatch(workflow.id) })
+                if (workflow.canDispatch) RunovaChip("Run", { intents.dispatch(workflow.id) }, icon = RunovaIcons.Play, tone = ChipTone.Primary)
             }
             val run = workflow.run
             if (run == null) {
@@ -262,12 +263,12 @@ private fun WorkflowCard(workflow: WorkflowView, intents: PipelineIntents) {
                 RunovaListRow(
                     title = run.title,
                     detail = "#${run.number} on ${run.branch}",
-                    icon = RunovaIcons.Git,
                     onClick = { intents.openRun(run.id) },
+                    flat = true,
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RunovaBadge(run.stateLabel, runTone(run.state))
-                            if (run.canCancel) RunovaChip("Cancel", { intents.cancel(run.id) })
+                            RunovaBadge(run.stateLabel, runTone(run.state), dot = true)
+                            if (run.canCancel) RunovaChip("Cancel", { intents.cancel(run.id) }, icon = RunovaIcons.Ban, tone = ChipTone.Danger)
                         }
                     },
                 )
@@ -284,8 +285,7 @@ private fun DispatchForm(form: DispatchFormView, intents: PipelineIntents) {
             form.inputs.forEach { put(it.name, it.defaultValue) }
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(form.name, onBack = intents.closeDispatch)
+    RunovaScreen(form.name, onBack = intents.closeDispatch) {
         LazyColumn(
             Modifier.weight(1f),
             contentPadding = PaddingValues(16.dp),
@@ -326,14 +326,14 @@ private fun DispatchForm(form: DispatchFormView, intents: PipelineIntents) {
             "Run workflow",
             onClick = { intents.submitDispatch(values.toMap()) },
             Modifier.fillMaxWidth().padding(16.dp),
+            icon = RunovaIcons.Play,
         )
     }
 }
 
 @Composable
 private fun RunScreen(run: PipelineRunDetailView, intents: PipelineIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Run", onBack = intents.closeRun)
+    RunovaScreen("Run", onBack = intents.closeRun) {
         if (run.loading) {
             LoadingRows()
         } else {
@@ -341,9 +341,10 @@ private fun RunScreen(run: PipelineRunDetailView, intents: PipelineIntents) {
                 items(run.jobs, key = { it.id }) { job ->
                     RunovaListRow(
                         title = job.name,
-                        icon = RunovaIcons.Pipelines,
+                        icon = RunovaIcons.Logs,
+                        iconTone = runTone(job.state),
                         onClick = { intents.openJob(job.id) },
-                        trailing = { RunovaBadge(job.stateLabel, runTone(job.state)) },
+                        trailing = { RunovaBadge(job.stateLabel, runTone(job.state), dot = true) },
                     )
                 }
             }
@@ -354,8 +355,7 @@ private fun RunScreen(run: PipelineRunDetailView, intents: PipelineIntents) {
 @Composable
 private fun JobLogScreen(log: JobLogView, intents: PipelineIntents) {
     val theme = RunovaTokens.Terminal
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(log.name, onBack = intents.closeJob)
+    RunovaScreen(log.name, onBack = intents.closeJob) {
         if (log.truncated) {
             RunovaText(
                 "Only the end of this log is shown.",

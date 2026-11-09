@@ -47,6 +47,9 @@ import com.runovahq.app.design.RunovaBottomBar
 import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaEmptyState
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaIsland
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
@@ -95,17 +98,17 @@ private const val LARGEST_CELL_DP = 13f
 /** Far enough to reach the live screen from anywhere in the history. */
 private const val BACK_TO_LIVE = -1_000_000
 
-private data class TerminalKey(val label: String, val data: String)
+private data class TerminalKey(val label: String, val data: String, val icon: String? = null)
 
 private val TerminalKeys = listOf(
     TerminalKey("Esc", "\u001b"),
     TerminalKey("Tab", "\t"),
     TerminalKey("Ctrl C", "\u0003"),
     TerminalKey("Ctrl D", "\u0004"),
-    TerminalKey("Up", "\u001b[A"),
-    TerminalKey("Down", "\u001b[B"),
-    TerminalKey("Left", "\u001b[D"),
-    TerminalKey("Right", "\u001b[C"),
+    TerminalKey("Up", "\u001b[A", RunovaIcons.Push),
+    TerminalKey("Down", "\u001b[B", RunovaIcons.Pull),
+    TerminalKey("Left", "\u001b[D", RunovaIcons.Left),
+    TerminalKey("Right", "\u001b[C", RunovaIcons.Right),
     TerminalKey("Enter", "\r"),
 )
 
@@ -151,6 +154,7 @@ fun DeviceShell(
     }
     Column(Modifier.fillMaxSize()) {
         DeviceTopBar(connection, intents)
+        RunovaIsland(Modifier.weight(1f)) {
         Box(Modifier.weight(1f)) {
             when (section) {
                 "clis" -> ClisScreen(view, intents)
@@ -176,6 +180,7 @@ fun DeviceShell(
             }
         }
         view.notice?.let { NoticeBar(it, intents.dismissNotice) }
+        }
         RunovaBottomBar(DeviceTabs, if (MoreSections.any { it.id == section }) "more" else section, onTab)
     }
 }
@@ -209,26 +214,19 @@ private fun NoticeBar(message: String, onDismiss: () -> Unit) {
 
 @Composable
 private fun DeviceTopBar(connection: ConnectionView, intents: AppIntents) {
-    val colors = RunovaTheme.colors
     RunovaTopBar(
         connection.systemName,
+        subtitle = connection.safetyCode?.let { "Safety code $it" },
         onBack = intents.disconnect,
         trailing = {
             RunovaBadge(
                 if (connection.direct == true) "Direct" else "Relay",
                 if (connection.direct == true) BadgeTone.Primary else BadgeTone.Warning,
                 Modifier.padding(end = 8.dp),
+                dot = true,
             )
         },
     )
-    connection.safetyCode?.let {
-        RunovaText(
-            "Safety code $it",
-            Modifier.padding(horizontal = 16.dp),
-            style = RunovaType.small,
-            color = colors.mutedForeground,
-        )
-    }
 }
 
 @Composable
@@ -257,6 +255,7 @@ private fun ProjectRow(project: ProjectView, onClick: () -> Unit) {
         title = project.name,
         detail = project.tags.joinToString(", ").ifEmpty { null },
         icon = RunovaIcons.Folder,
+        iconTone = BadgeTone.Primary,
         onClick = onClick,
     )
 }
@@ -276,7 +275,13 @@ private fun ClisScreen(view: AppView, intents: AppIntents) {
     val shown = if (selected == null) view.terminals else view.terminals.filter { it.projectId == selected }
     Column(Modifier.fillMaxSize()) {
         if (project != null) {
-            RunovaChip(project.name, { intents.selectProject(null) }, Modifier.padding(start = 16.dp, top = 8.dp))
+            RunovaChip(
+                project.name,
+                { intents.selectProject(null) },
+                Modifier.padding(start = 16.dp, top = 12.dp),
+                icon = RunovaIcons.Folder,
+                tone = ChipTone.Primary,
+            )
         }
         when {
             shown.isEmpty() && view.terminalsLoading -> LoadingRows()
@@ -311,12 +316,13 @@ private fun TerminalRow(item: TerminalItem, projects: List<ProjectView>, intents
     RunovaListRow(
         title = item.title,
         detail = projects.firstOrNull { it.id == item.projectId }?.name ?: item.cliId,
-        icon = RunovaIcons.Terminal,
+        icon = if (item.status != null) RunovaIcons.Agent else RunovaIcons.Terminal,
+        iconTone = item.status?.let { statusBadge(it).second } ?: BadgeTone.Neutral,
         onClick = { intents.openTerminal(item.sessionId) },
         trailing = {
             item.status?.let {
                 val (text, tone) = statusBadge(it)
-                RunovaBadge(text, tone)
+                RunovaBadge(text, tone, dot = true)
             }
         },
     )
@@ -330,21 +336,21 @@ fun TerminalScreen(
     intents: AppIntents,
 ) {
     var showProcesses by remember(terminal.sessionId) { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(
-            terminal.title,
-            onBack = intents.closeTerminal,
-            trailing = {
-                RunovaChip(
-                    if (showProcesses) "Screen" else "Processes",
-                    {
-                        if (!showProcesses) intents.loadProcesses(terminal.sessionId)
-                        showProcesses = !showProcesses
-                    },
-                    Modifier.padding(end = 8.dp),
-                )
-            },
-        )
+    RunovaScreen(
+        terminal.title,
+        onBack = intents.closeTerminal,
+        trailing = {
+            RunovaChip(
+                if (showProcesses) "Screen" else "Processes",
+                {
+                    if (!showProcesses) intents.loadProcesses(terminal.sessionId)
+                    showProcesses = !showProcesses
+                },
+                Modifier.padding(end = 8.dp),
+                icon = if (showProcesses) RunovaIcons.Terminal else RunovaIcons.Processes,
+            )
+        },
+    ) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (showProcesses) {
                 ProcessList(processes)
@@ -355,6 +361,8 @@ fun TerminalScreen(
                         "Back to live",
                         { intents.terminalScroll(BACK_TO_LIVE) },
                         Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                        icon = RunovaIcons.Pull,
+                        tone = ChipTone.Primary,
                     )
                 }
             }
@@ -375,12 +383,12 @@ fun TerminalScreen(
 @Composable
 private fun ProcessList(processes: List<TerminalProcessView>) {
     if (processes.isEmpty()) {
-        RunovaEmptyState(RunovaIcons.Server, "No processes", "Nothing is running in this terminal right now.")
+        RunovaEmptyState(RunovaIcons.Processes, "No processes", "Nothing is running in this terminal right now.")
         return
     }
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         items(processes) {
-            RunovaListRow(title = it.name, detail = "${it.cpuLabel} CPU, ${it.memoryLabel}", icon = RunovaIcons.Server)
+            RunovaListRow(title = it.name, detail = "${it.cpuLabel} CPU, ${it.memoryLabel}", icon = RunovaIcons.Cpu)
         }
     }
 }
@@ -393,10 +401,10 @@ private fun TerminalInput(onInput: (String) -> Unit) {
             Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TerminalKeys.forEach { key -> RunovaChip(key.label, { onInput(key.data) }) }
+            TerminalKeys.forEach { key -> RunovaChip(key.label, { onInput(key.data) }, icon = key.icon) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            RunovaTextField(text, { text = it }, "Type a command", Modifier.weight(1f))
+            RunovaTextField(text, { text = it }, "Type a command", Modifier.weight(1f), icon = RunovaIcons.Terminal)
             RunovaButton("Send", onClick = {
                 onInput(text + "\r")
                 text = ""

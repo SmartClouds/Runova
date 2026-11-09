@@ -37,10 +37,10 @@ private struct UnlockForm: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            RunovaIcon(glyph: RunovaIcons.lock, size: 36, color: palette.primary)
+            RunovaHeroIcon(icon: RunovaIcons.vault).padding(.bottom, 8)
             RunovaText("The vault is locked", style: RunovaType.title)
-            RunovaTextField(value: $password, placeholder: "Vault password", secure: true)
-            RunovaButton(text: "Unlock", enabled: !password.isEmpty) {
+            RunovaTextField(value: $password, placeholder: "Vault password", secure: true, icon: RunovaIcons.key)
+            RunovaButton(text: "Unlock", enabled: !password.isEmpty, icon: RunovaIcons.unlock) {
                 onUnlock(password)
                 password = ""
             }
@@ -62,7 +62,7 @@ private struct VaultList: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer(minLength: 0)
-                RunovaChip(text: "Lock", action: intents.lock)
+                RunovaChip(text: "Lock", icon: RunovaIcons.lock, action: intents.lock)
             }
             .padding(16)
             if entries.isEmpty {
@@ -76,7 +76,7 @@ private struct VaultList: View {
                             Button {
                                 intents.openEntry(entry.id)
                             } label: {
-                                RunovaListRow(title: entry.title, detail: entry.subtitle, icon: RunovaIcons.lock)
+                                RunovaListRow(title: entry.title, detail: entry.subtitle, icon: RunovaIcons.key)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -97,8 +97,7 @@ struct VaultEntryScreen: View {
     @State private var editing = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: entry.title, onBack: intents.closeEntry)
+        RunovaScreen(title: entry.title, onBack: intents.closeEntry) {
             if editing {
                 EditForm(entry: entry, intents: intents) { editing = false }
             } else {
@@ -125,9 +124,10 @@ private struct EntryDetail: View {
             }
             HStack(spacing: 8) {
                 if entry.editable {
-                    RunovaButton(text: "Edit", kind: .soft, action: onEdit).frame(maxWidth: .infinity)
+                    RunovaButton(text: "Edit", kind: .soft, icon: RunovaIcons.edit, action: onEdit).frame(maxWidth: .infinity)
                 }
-                RunovaButton(text: "Delete", kind: .danger) { intents.remove(entry.id) }.frame(maxWidth: .infinity)
+                RunovaButton(text: "Delete", kind: .danger, icon: RunovaIcons.trash) { intents.remove(entry.id) }
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(16)
@@ -150,10 +150,12 @@ private struct SecretRow: View {
                 }
                 Spacer(minLength: 0)
                 if revealed != nil {
-                    RunovaChip(text: "Hide", action: intents.hide)
+                    RunovaChip(text: "Hide", icon: RunovaIcons.hide, action: intents.hide)
                 } else {
-                    RunovaChip(text: "Reveal") { intents.requestReveal(secret.key, secret.custom) }
-                        .accessibilityLabel("Reveal \(secret.label)")
+                    RunovaChip(text: "Reveal", icon: RunovaIcons.show, tone: .primary) {
+                        intents.requestReveal(secret.key, secret.custom)
+                    }
+                    .accessibilityLabel("Reveal \(secret.label)")
                 }
             }
         }
@@ -171,10 +173,11 @@ private struct EditForm: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            RunovaTextField(value: $title, placeholder: "Title")
-            RunovaTextField(value: $username, placeholder: "Username")
-            RunovaTextField(value: $password, placeholder: "New password (leave empty to keep it)", secure: true)
-            RunovaButton(text: "Save", enabled: !title.isEmpty) {
+            RunovaTextField(value: $title, placeholder: "Title", icon: RunovaIcons.edit)
+            RunovaTextField(value: $username, placeholder: "Username", icon: RunovaIcons.account)
+            RunovaTextField(
+                value: $password, placeholder: "New password (leave empty to keep it)", secure: true, icon: RunovaIcons.key)
+            RunovaButton(text: "Save", enabled: !title.isEmpty, icon: RunovaIcons.check) {
                 intents.save(entry.id, title, username, password.isEmpty ? nil : password)
                 onDone()
             }

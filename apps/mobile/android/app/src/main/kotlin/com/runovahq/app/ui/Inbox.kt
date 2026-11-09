@@ -1,6 +1,7 @@
 package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import com.runovahq.app.design.RunovaShape
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaToggle
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -65,17 +67,27 @@ fun InboxTab(view: AppView, intents: NotificationIntents, onTab: (String) -> Uni
         NotificationSettings(screen, intents)
         return
     }
-    Column(Modifier.fillMaxSize()) {
-        if (showTitle) {
-            RunovaTopBar(
-                "Inbox",
-                trailing = { RunovaChip("Settings", intents.openSettings, Modifier.padding(end = 8.dp)) },
-            )
-        } else {
+    if (showTitle) {
+        RunovaScreen(
+            "Inbox",
+            trailing = {
+                RunovaChip("Settings", intents.openSettings, Modifier.padding(end = 8.dp), icon = RunovaIcons.Settings)
+            },
+        ) { InboxBody(view, intents, onTab) }
+    } else {
+        Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
-                RunovaChip("Settings", intents.openSettings)
+                RunovaChip("Settings", intents.openSettings, icon = RunovaIcons.Settings)
             }
+            InboxBody(view, intents, onTab)
         }
+    }
+}
+
+@Composable
+private fun InboxBody(view: AppView, intents: NotificationIntents, onTab: (String) -> Unit) {
+    val screen = view.notifications
+    Column(Modifier.fillMaxSize()) {
         when {
             screen.items.isEmpty() && screen.loading -> LoadingRows()
             screen.items.isEmpty() -> RunovaEmptyState(
@@ -87,7 +99,7 @@ fun InboxTab(view: AppView, intents: NotificationIntents, onTab: (String) -> Uni
                 if (screen.unread > 0u) {
                     item(key = "mark") {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            RunovaChip("Mark all read", intents.markAllRead)
+                            RunovaChip("Mark all read", intents.markAllRead, icon = RunovaIcons.DoneAll)
                         }
                     }
                 }
@@ -96,6 +108,7 @@ fun InboxTab(view: AppView, intents: NotificationIntents, onTab: (String) -> Uni
                         title = item.title,
                         detail = item.body.ifEmpty { null },
                         icon = RunovaIcons.Notifications,
+                        iconTone = if (item.read) BadgeTone.Neutral else BadgeTone.Primary,
                         onClick = {
                             intents.open(item.id)
                             onTab(tabFor(item.destination, isConnected(view)))
@@ -110,8 +123,7 @@ fun InboxTab(view: AppView, intents: NotificationIntents, onTab: (String) -> Uni
 
 @Composable
 private fun NotificationSettings(screen: NotificationsScreen, intents: NotificationIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Notifications", onBack = intents.closeSettings)
+    RunovaScreen("Notifications", onBack = intents.closeSettings) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(screen.preferences, key = { it.category }) { preference ->
                 Row(
@@ -139,7 +151,8 @@ fun NotificationBanner(item: NotificationItemView, connected: Boolean, intents: 
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(RunovaShape.lg))
-                .background(colors.card)
+                .background(colors.popover)
+                .border(1.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(RunovaShape.lg))
                 .clickable(role = Role.Button) {
                     intents.open(item.id)
                     onTab(tabFor(item.destination, connected))

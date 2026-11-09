@@ -26,11 +26,14 @@ import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaEmptyState
 import com.runovahq.app.design.RunovaIcon
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaHeroIcon
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -81,9 +84,9 @@ private fun UnlockForm(error: String?, onUnlock: (String) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
-        RunovaIcon(RunovaIcons.Lock, size = 36.dp, color = colors.primary)
+        RunovaHeroIcon(RunovaIcons.Vault, modifier = Modifier.padding(bottom = 8.dp))
         RunovaText("The vault is locked", style = RunovaType.title)
-        RunovaTextField(password, { password = it }, "Vault password", secure = true)
+        RunovaTextField(password, { password = it }, "Vault password", secure = true, icon = RunovaIcons.Key)
         RunovaButton(
             "Unlock",
             onClick = {
@@ -92,6 +95,7 @@ private fun UnlockForm(error: String?, onUnlock: (String) -> Unit) {
             },
             Modifier.fillMaxWidth(),
             enabled = password.isNotEmpty(),
+            icon = RunovaIcons.Unlock,
         )
         error?.let {
             RunovaText(it, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)
@@ -103,7 +107,7 @@ private fun UnlockForm(error: String?, onUnlock: (String) -> Unit) {
 private fun VaultList(entries: List<VaultEntryView>, intents: VaultIntents) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.End) {
-            RunovaChip("Lock", intents.lock)
+            RunovaChip("Lock", intents.lock, icon = RunovaIcons.Lock)
         }
         if (entries.isEmpty()) {
             RunovaEmptyState(RunovaIcons.Vault, "Nothing saved yet", "Add entries in Runova on this computer.")
@@ -113,7 +117,7 @@ private fun VaultList(entries: List<VaultEntryView>, intents: VaultIntents) {
                     RunovaListRow(
                         title = entry.title,
                         detail = entry.subtitle,
-                        icon = RunovaIcons.Lock,
+                        icon = RunovaIcons.Key,
                         onClick = { intents.openEntry(entry.id) },
                     )
                 }
@@ -125,8 +129,7 @@ private fun VaultList(entries: List<VaultEntryView>, intents: VaultIntents) {
 @Composable
 private fun EntryScreen(entry: VaultEntryView, revealed: RevealedSecretView?, intents: VaultIntents) {
     var editing by remember(entry.id) { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(entry.title, onBack = intents.closeEntry)
+    RunovaScreen(entry.title, onBack = intents.closeEntry) {
         if (editing) {
             EditForm(entry, intents) { editing = false }
         } else {
@@ -147,8 +150,8 @@ private fun EntryDetail(
         entry.subtitle?.let { RunovaText(it, color = colors.mutedForeground) }
         entry.secrets.forEach { SecretRow(it, revealed?.takeIf { shown -> shown.label == it.label }, intents) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (entry.editable) RunovaButton("Edit", onClick = onEdit, Modifier.weight(1f), kind = ButtonKind.Soft)
-            RunovaButton("Delete", onClick = { intents.remove(entry.id) }, Modifier.weight(1f), kind = ButtonKind.Danger)
+            if (entry.editable) RunovaButton("Edit", onClick = onEdit, Modifier.weight(1f), kind = ButtonKind.Soft, icon = RunovaIcons.Edit)
+            RunovaButton("Delete", onClick = { intents.remove(entry.id) }, Modifier.weight(1f), kind = ButtonKind.Danger, icon = RunovaIcons.Trash)
         }
     }
 }
@@ -163,12 +166,14 @@ private fun SecretRow(secret: VaultSecretField, revealed: RevealedSecretView?, i
                 RunovaText(revealed?.value ?: "••••••••", style = RunovaType.mono)
             }
             if (revealed != null) {
-                RunovaChip("Hide", intents.hide)
+                RunovaChip("Hide", intents.hide, icon = RunovaIcons.Hide)
             } else {
                 RunovaChip(
                     "Reveal",
                     { intents.requestReveal(secret.key, secret.custom) },
                     Modifier.semantics { contentDescription = "Reveal ${secret.label}" },
+                    icon = RunovaIcons.Show,
+                    tone = ChipTone.Primary,
                 )
             }
         }
@@ -181,9 +186,9 @@ private fun EditForm(entry: VaultEntryView, intents: VaultIntents, onDone: () ->
     var username by remember { mutableStateOf(entry.subtitle.orEmpty()) }
     var password by remember { mutableStateOf("") }
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        RunovaTextField(title, { title = it }, "Title")
-        RunovaTextField(username, { username = it }, "Username")
-        RunovaTextField(password, { password = it }, "New password (leave empty to keep it)", secure = true)
+        RunovaTextField(title, { title = it }, "Title", icon = RunovaIcons.Edit)
+        RunovaTextField(username, { username = it }, "Username", icon = RunovaIcons.Account)
+        RunovaTextField(password, { password = it }, "New password (leave empty to keep it)", secure = true, icon = RunovaIcons.Key)
         RunovaButton(
             "Save",
             onClick = {
@@ -192,6 +197,7 @@ private fun EditForm(entry: VaultEntryView, intents: VaultIntents, onDone: () ->
             },
             Modifier.fillMaxWidth(),
             enabled = title.isNotBlank(),
+            icon = RunovaIcons.Check,
         )
     }
 }

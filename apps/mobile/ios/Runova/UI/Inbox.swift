@@ -27,6 +27,14 @@ struct InboxTab: View {
     var body: some View {
         if view.notifications.settingsOpen {
             NotificationSettings(screen: view.notifications, intents: intents)
+        } else if showTitle {
+            RunovaScreen(
+                title: "Inbox",
+                trailing: {
+                    RunovaChip(text: "Settings", icon: RunovaIcons.settings, action: intents.openSettings)
+                        .padding(.trailing, 8)
+                }
+            ) { list }
         } else {
             list
         }
@@ -35,14 +43,10 @@ struct InboxTab: View {
     @ViewBuilder private var list: some View {
         let screen = view.notifications
         VStack(alignment: .leading, spacing: 0) {
-            if showTitle {
-                RunovaTopBar(title: "Inbox") {
-                    RunovaChip(text: "Settings", action: intents.openSettings).padding(.trailing, 8)
-                }
-            } else {
+            if !showTitle {
                 HStack {
                     Spacer(minLength: 0)
-                    RunovaChip(text: "Settings", action: intents.openSettings)
+                    RunovaChip(text: "Settings", icon: RunovaIcons.settings, action: intents.openSettings)
                 }
                 .padding(16)
             }
@@ -57,7 +61,7 @@ struct InboxTab: View {
                         if screen.unread > 0 {
                             HStack {
                                 Spacer(minLength: 0)
-                                RunovaChip(text: "Mark all read", action: intents.markAllRead)
+                                RunovaChip(text: "Mark all read", icon: RunovaIcons.doneAll, action: intents.markAllRead)
                             }
                         }
                         ForEach(screen.items, id: \.id) { item in
@@ -68,11 +72,13 @@ struct InboxTab: View {
                                 HStack(spacing: 8) {
                                     RunovaListRow(
                                         title: item.title, detail: item.body.isEmpty ? nil : item.body,
-                                        icon: RunovaIcons.notifications)
+                                        icon: RunovaIcons.notifications, iconTone: item.read ? .neutral : .primary, flat: true)
                                     if !item.read {
-                                        RunovaBadge(text: "New", tone: .primary).padding(.trailing, 16)
+                                        RunovaBadge(text: "New", tone: .primary)
                                     }
                                 }
+                                .padding(.trailing, 12)
+                                .rowCard()
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -91,8 +97,7 @@ private struct NotificationSettings: View {
     let intents: NotificationIntents
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: "Notifications", onBack: intents.closeSettings)
+        RunovaScreen(title: "Notifications", onBack: intents.closeSettings) {
             ScrollView {
                 VStack(spacing: 4) {
                     ForEach(screen.preferences, id: \.category) { preference in
@@ -143,7 +148,12 @@ struct NotificationBanner: View {
         }
         .padding(.leading, 14)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: RunovaShape.lg).fill(palette.card))
+        .background(
+            RoundedRectangle(cornerRadius: RunovaShape.lg)
+                .fill(palette.popover)
+                .overlay(
+                    RoundedRectangle(cornerRadius: RunovaShape.lg).strokeBorder(palette.primary.opacity(0.35), lineWidth: 1))
+        )
         .padding(12)
     }
 }

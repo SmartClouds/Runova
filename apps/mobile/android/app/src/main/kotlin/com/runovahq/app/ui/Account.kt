@@ -32,11 +32,14 @@ import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaChip
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaSectionTitle
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AccountScreen
@@ -65,12 +68,7 @@ data class AccountIntents(
 
 private fun LazyListScope.heading(text: String) {
     item(key = "h/$text") {
-        RunovaText(
-            text,
-            Modifier.padding(top = 16.dp, bottom = 4.dp),
-            RunovaType.caption,
-            RunovaTheme.colors.mutedForeground,
-        )
+        RunovaSectionTitle(text, Modifier.padding(top = 16.dp, bottom = 4.dp))
     }
 }
 
@@ -91,8 +89,8 @@ fun StepUpOverlay(stepUp: StepUpView, intents: AccountIntents) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 RunovaText(stepUp.title, style = RunovaType.title)
                 RunovaText(stepUp.detail, color = colors.mutedForeground)
-                RunovaTextField(password, { password = it }, "Password", secure = true)
-                RunovaTextField(code, { code = it }, "Two-factor code")
+                RunovaTextField(password, { password = it }, "Password", secure = true, icon = RunovaIcons.Key)
+                RunovaTextField(code, { code = it }, "Two-factor code", icon = RunovaIcons.Shield)
                 stepUp.error?.let { RunovaText(it, style = RunovaType.small, color = colors.destructive) }
                 Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RunovaButton("Cancel", onClick = intents.cancelStepUp, Modifier.weight(1f), kind = ButtonKind.Soft)
@@ -117,8 +115,7 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         TeamScreen(team, intents.account)
         return
     }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Account")
+    RunovaScreen("Account") {
         val profile = account.profile
         if (profile == null) {
             LoadingRows()
@@ -143,7 +140,8 @@ private fun AccountList(profile: ProfileView, account: AccountScreen, intents: A
                 "End all other sessions",
                 onClick = intents.account.endOtherSessions,
                 Modifier.fillMaxWidth().padding(top = 8.dp),
-                kind = ButtonKind.Soft,
+                kind = ButtonKind.Danger,
+                icon = RunovaIcons.SignOut,
             )
         }
         heading("Teams")
@@ -158,7 +156,7 @@ private fun AccountList(profile: ProfileView, account: AccountScreen, intents: A
         }
         heading("Recent activity")
         items(account.activity, key = { "a/${it.id}" }) { activity ->
-            RunovaListRow(title = activity.action, detail = activity.detail, icon = RunovaIcons.Shield)
+            RunovaListRow(title = activity.action, detail = activity.detail, icon = RunovaIcons.History, iconTone = BadgeTone.Neutral)
         }
         item(key = "sign-out") {
             RunovaButton(
@@ -166,6 +164,7 @@ private fun AccountList(profile: ProfileView, account: AccountScreen, intents: A
                 onClick = intents.signOut,
                 Modifier.fillMaxWidth().padding(top = 16.dp),
                 kind = ButtonKind.Soft,
+                icon = RunovaIcons.SignOut,
             )
         }
     }
@@ -178,7 +177,7 @@ private fun ProfileCard(profile: ProfileView) {
             RunovaText(profile.name.ifEmpty { profile.email }, style = RunovaType.title)
             RunovaText(profile.email, style = RunovaType.small, color = RunovaTheme.colors.mutedForeground)
             if (profile.twoFactor) {
-                RunovaBadge("Two-factor on", BadgeTone.Success, Modifier.padding(top = 6.dp))
+                RunovaBadge("Two-factor on", BadgeTone.Success, Modifier.padding(top = 6.dp), dot = true)
             }
         }
     }
@@ -189,15 +188,17 @@ private fun SessionRow(session: SessionView, intents: AccountIntents) {
     RunovaListRow(
         title = session.title,
         detail = session.detail,
-        icon = RunovaIcons.Shield,
+        icon = if (session.current) RunovaIcons.Mobile else RunovaIcons.Systems,
         trailing = {
             if (session.current) {
-                RunovaBadge("This phone", BadgeTone.Primary)
+                RunovaBadge("This phone", BadgeTone.Primary, dot = true)
             } else {
                 RunovaChip(
                     "End",
                     { intents.endSession(session.id) },
                     Modifier.semantics { contentDescription = "End ${session.title}" },
+                    icon = RunovaIcons.SignOut,
+                    tone = ChipTone.Danger,
                 )
             }
         },
@@ -209,11 +210,11 @@ private fun InvitationRow(invitation: MyInvitationView, intents: AccountIntents)
     RunovaListRow(
         title = invitation.team,
         detail = invitation.invitedBy?.let { "From $it, as ${invitation.role}" } ?: invitation.role,
-        icon = RunovaIcons.Team,
+        icon = RunovaIcons.Envelope,
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                RunovaChip("Accept", { intents.acceptInvitation(invitation.id) })
-                RunovaChip("Decline", { intents.declineInvitation(invitation.id) })
+                RunovaChip("Accept", { intents.acceptInvitation(invitation.id) }, icon = RunovaIcons.Check, tone = ChipTone.Primary)
+                RunovaChip("Decline", { intents.declineInvitation(invitation.id) }, icon = RunovaIcons.Close)
             }
         },
     )
@@ -222,8 +223,7 @@ private fun InvitationRow(invitation: MyInvitationView, intents: AccountIntents)
 @Composable
 private fun TeamScreen(team: TeamDetailView, intents: AccountIntents) {
     var expanded by remember(team.id) { mutableStateOf<Long?>(null) }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(team.name, onBack = intents.closeTeam)
+    RunovaScreen(team.name, onBack = intents.closeTeam) {
         if (team.canManage) InviteForm(intents)
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
             heading("Members")
@@ -243,12 +243,14 @@ private fun TeamScreen(team: TeamDetailView, intents: AccountIntents) {
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             member.roleOptions.forEach { option ->
-                                RunovaChip("Make ${option.label}", { intents.setMemberRole(member.userId, option.key) })
+                                RunovaChip("Make ${option.label}", { intents.setMemberRole(member.userId, option.key) }, icon = RunovaIcons.Sliders)
                             }
                             RunovaChip(
                                 "Remove",
                                 { intents.removeMember(member.userId) },
                                 Modifier.semantics { contentDescription = "Remove ${member.name}" },
+                                icon = RunovaIcons.Trash,
+                                tone = ChipTone.Danger,
                             )
                         }
                     }
@@ -260,8 +262,8 @@ private fun TeamScreen(team: TeamDetailView, intents: AccountIntents) {
                     RunovaListRow(
                         title = invitation.email,
                         detail = invitation.role,
-                        icon = RunovaIcons.Send,
-                        trailing = { RunovaChip("Take back", { intents.cancelInvitation(invitation.id) }) },
+                        icon = RunovaIcons.Envelope,
+                        trailing = { RunovaChip("Take back", { intents.cancelInvitation(invitation.id) }, icon = RunovaIcons.Close) },
                     )
                 }
             }
@@ -273,11 +275,11 @@ private fun TeamScreen(team: TeamDetailView, intents: AccountIntents) {
 private fun InviteForm(intents: AccountIntents) {
     var email by remember { mutableStateOf("") }
     Row(
-        Modifier.padding(horizontal = 16.dp),
+        Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RunovaTextField(email, { email = it }, "Email address", Modifier.weight(1f))
+        RunovaTextField(email, { email = it }, "Email address", Modifier.weight(1f), icon = RunovaIcons.Envelope)
         RunovaButton(
             "Invite",
             onClick = {
@@ -285,6 +287,7 @@ private fun InviteForm(intents: AccountIntents) {
                 email = ""
             },
             enabled = email.isNotBlank(),
+            icon = RunovaIcons.Invite,
         )
     }
 }

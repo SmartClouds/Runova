@@ -45,7 +45,8 @@ struct AppRoot: View {
 
     var body: some View {
         ZStack {
-            palette.background.ignoresSafeArea()
+            // The chrome: what the desktop's title bar and menu are drawn on.
+            palette.card.ignoresSafeArea()
             switch view.auth {
             case .starting: StartingScreen()
             case .signedOut: SignInScreen(error: view.error, onSignIn: intents.signIn)
@@ -97,8 +98,7 @@ struct AppRoot: View {
                             .onAppear { intents.openSection(.notifications) }
                             .onDisappear { intents.openSection(nil) }
                     case "monitors":
-                        VStack(alignment: .leading, spacing: 0) {
-                            RunovaTopBar(title: "Monitors")
+                        RunovaScreen(title: "Monitors") {
                             MonitoringTab(view: view, intents: intents.monitoring)
                                 .onAppear { intents.openSection(.monitoring) }
                                 .onDisappear { intents.openSection(nil) }
@@ -127,15 +127,15 @@ struct SignInScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            RunovaIcon(glyph: RunovaIcons.systems, size: 40, color: palette.primary)
-            Spacer().frame(height: 16)
+            RunovaHeroIcon(icon: RunovaIcons.systems)
+            Spacer().frame(height: 24)
             RunovaText("Runova", style: RunovaType.heading)
             Spacer().frame(height: 6)
             RunovaText(
                 "Your computers, terminals and deployments, wherever you are.",
                 color: palette.mutedForeground, alignment: .center)
             Spacer().frame(height: 24)
-            RunovaButton(text: "Sign in", action: onSignIn).frame(maxWidth: .infinity)
+            RunovaButton(text: "Sign in", icon: RunovaIcons.forward, action: onSignIn).frame(maxWidth: .infinity)
             if let error {
                 Spacer().frame(height: 12)
                 RunovaText(error, style: RunovaType.small, color: palette.destructive, alignment: .center)
@@ -172,8 +172,7 @@ struct SystemsScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: "Systems")
+        RunovaScreen(title: "Systems") {
             if view.systems.isEmpty && view.systemsLoading {
                 LoadingRows()
             } else if view.systems.isEmpty {
@@ -203,17 +202,18 @@ private struct SystemRow: View {
     let intents: AppIntents
 
     private var badge: RunovaBadge {
-        if !system.online { return RunovaBadge(text: "Offline") }
-        if !system.canManage { return RunovaBadge(text: "Screen only", tone: .warning) }
-        return RunovaBadge(text: "Online", tone: .success)
+        if !system.online { return RunovaBadge(text: "Offline", dot: true) }
+        if !system.canManage { return RunovaBadge(text: "Screen only", tone: .warning, dot: true) }
+        return RunovaBadge(text: "Online", tone: .success, dot: true)
     }
 
     var body: some View {
         let row = HStack(spacing: 12) {
             RunovaListRow(
-                title: system.name, detail: platformName(system.platform), icon: RunovaIcons.systems
+                title: system.name, detail: platformName(system.platform), icon: RunovaIcons.systems,
+                iconTone: system.online ? .primary : .neutral, flat: true
             )
-            badge.padding(.trailing, 16)
+            badge.padding(.trailing, 12)
         }
         if system.online {
             // Only its screen can be reached, by the background agent or as someone else's computer.
@@ -253,12 +253,10 @@ struct ConnectionScreen: View {
     var body: some View {
         let failed = connection.phase == .failed
         let text = phaseText(connection)
-        VStack(spacing: 0) {
-            RunovaTopBar(title: connection.systemName, onBack: intents.disconnect)
+        RunovaScreen(title: connection.systemName, onBack: intents.disconnect) {
             VStack(spacing: 10) {
-                RunovaIcon(
-                    glyph: failed ? RunovaIcons.warning : RunovaIcons.shield, size: 36,
-                    color: failed ? palette.destructive : palette.primary)
+                RunovaHeroIcon(icon: failed ? RunovaIcons.warning : RunovaIcons.shield, tone: failed ? .danger : .primary)
+                    .padding(.bottom, 8)
                 RunovaText(text.title, style: RunovaType.title, alignment: .center)
                 RunovaText(text.detail, color: palette.mutedForeground, alignment: .center)
                 if connection.phase == .waitingForApproval, let fingerprint {
@@ -267,7 +265,7 @@ struct ConnectionScreen: View {
                 if failed {
                     HStack(spacing: 8) {
                         RunovaButton(text: "Back", kind: .soft, action: intents.disconnect)
-                        RunovaButton(text: "Try again") { intents.connect(connection.systemId) }
+                        RunovaButton(text: "Try again", icon: RunovaIcons.refresh) { intents.connect(connection.systemId) }
                     }
                     .padding(.top, 6)
                 }

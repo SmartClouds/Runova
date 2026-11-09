@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.runovahq.app.design.BadgeTone
 import com.runovahq.app.design.ButtonKind
 import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaButton
@@ -28,12 +29,16 @@ import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaEmptyState
 import com.runovahq.app.design.RunovaIcon
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaIconTile
+import com.runovahq.app.design.RunovaSectionTitle
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaTokens
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -138,9 +143,9 @@ private fun LoadedChanges(state: GitStateView, intents: GitIntents) {
                         Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RunovaIcon(RunovaIcons.Warning, size = 14.dp, color = colors.warning)
-                        RunovaText("A $operation is in progress", Modifier.weight(1f).padding(start = 8.dp))
-                        RunovaChip("Stop", intents.abort)
+                        RunovaIconTile(RunovaIcons.Warning, BadgeTone.Warning)
+                        RunovaText("A $operation is in progress", Modifier.weight(1f).padding(start = 10.dp))
+                        RunovaChip("Stop", intents.abort, icon = RunovaIcons.Stop, tone = ChipTone.Danger)
                     }
                 }
             }
@@ -148,7 +153,7 @@ private fun LoadedChanges(state: GitStateView, intents: GitIntents) {
                 val entries = state.files.filter { it.group == group }
                 if (entries.isNotEmpty()) {
                     item(key = title) {
-                        RunovaText(title, Modifier.padding(top = 12.dp, bottom = 4.dp), RunovaType.caption, colors.mutedForeground)
+                        RunovaSectionTitle(title, Modifier.padding(top = 14.dp, bottom = 4.dp))
                     }
                     items(entries, key = { "$title/${it.path}" }) { FileRow(it, intents) }
                 }
@@ -169,16 +174,16 @@ private fun BranchCard(state: GitStateView, intents: GitIntents) {
     RunovaCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RunovaChip(state.branch ?: "Detached", intents.openBranches)
+                RunovaChip(state.branch ?: "Detached", intents.openBranches, icon = RunovaIcons.Git, tone = ChipTone.Primary)
                 aheadBehind(state)?.let {
                     RunovaText(it, Modifier.padding(start = 10.dp), RunovaType.small, colors.mutedForeground)
                 }
             }
             if (state.hasRemote) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RunovaChip("Fetch", intents.fetch)
-                    RunovaChip("Pull", intents.pull)
-                    RunovaChip("Push", intents.push)
+                    RunovaChip("Fetch", intents.fetch, icon = RunovaIcons.Fetch)
+                    RunovaChip("Pull", intents.pull, icon = RunovaIcons.Pull)
+                    RunovaChip("Push", intents.push, icon = RunovaIcons.Push)
                 }
             }
         }
@@ -191,7 +196,13 @@ private fun FileRow(file: GitFileView, intents: GitIntents) {
     RunovaListRow(
         title = file.path,
         detail = changeDetail(file),
-        icon = RunovaIcons.Folder,
+        icon = RunovaIcons.File,
+        iconTone = when (file.group) {
+            GitGroup.CONFLICT -> BadgeTone.Danger
+            GitGroup.STAGED -> BadgeTone.Success
+            GitGroup.UNSTAGED -> BadgeTone.Warning
+            GitGroup.UNTRACKED -> BadgeTone.Primary
+        },
         onClick = if (conflict) null else ({ intents.openDiff(file.path, file.group) }),
         trailing = {
             when (file.group) {
@@ -199,9 +210,9 @@ private fun FileRow(file: GitFileView, intents: GitIntents) {
                     RunovaChip("Mine", { intents.resolve(file.path, "ours") })
                     RunovaChip("Theirs", { intents.resolve(file.path, "theirs") })
                 }
-                GitGroup.STAGED -> RunovaChip("Unstage", { intents.unstage(listOf(file.path)) })
-                GitGroup.UNSTAGED -> RunovaChip("Stage", { intents.stage(listOf(file.path)) })
-                GitGroup.UNTRACKED -> RunovaChip("Add", { intents.stage(listOf(file.path)) })
+                GitGroup.STAGED -> RunovaChip("Unstage", { intents.unstage(listOf(file.path)) }, icon = RunovaIcons.Minus)
+                GitGroup.UNSTAGED -> RunovaChip("Stage", { intents.stage(listOf(file.path)) }, icon = RunovaIcons.Add)
+                GitGroup.UNTRACKED -> RunovaChip("Add", { intents.stage(listOf(file.path)) }, icon = RunovaIcons.Add)
             }
         },
     )
@@ -211,7 +222,7 @@ private fun FileRow(file: GitFileView, intents: GitIntents) {
 private fun CommitBox(intents: GitIntents) {
     var message by remember { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        RunovaTextField(message, { message = it }, "Commit message")
+        RunovaTextField(message, { message = it }, "Commit message", icon = RunovaIcons.Commit)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RunovaButton(
                 "Commit",
@@ -222,6 +233,7 @@ private fun CommitBox(intents: GitIntents) {
                 Modifier.weight(1f),
                 kind = ButtonKind.Soft,
                 enabled = message.isNotBlank(),
+                icon = RunovaIcons.Commit,
             )
             RunovaButton(
                 "Commit and push",
@@ -231,6 +243,7 @@ private fun CommitBox(intents: GitIntents) {
                 },
                 Modifier.weight(1f),
                 enabled = message.isNotBlank(),
+                icon = RunovaIcons.Push,
             )
         }
     }
@@ -238,14 +251,13 @@ private fun CommitBox(intents: GitIntents) {
 
 @Composable
 private fun DiffScreen(diff: GitDiffView, intents: GitIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(diff.path, onBack = intents.closeDiff)
-        Row(Modifier.padding(start = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    RunovaScreen(diff.path, onBack = intents.closeDiff) {
+        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             when (diff.group) {
-                GitGroup.STAGED -> RunovaChip("Unstage", { intents.unstage(listOf(diff.path)) })
+                GitGroup.STAGED -> RunovaChip("Unstage", { intents.unstage(listOf(diff.path)) }, icon = RunovaIcons.Minus)
                 GitGroup.UNSTAGED, GitGroup.UNTRACKED -> {
-                    RunovaChip("Stage", { intents.stage(listOf(diff.path)) })
-                    RunovaChip("Discard", { intents.discard(diff.path, diff.group) })
+                    RunovaChip("Stage", { intents.stage(listOf(diff.path)) }, icon = RunovaIcons.Add)
+                    RunovaChip("Discard", { intents.discard(diff.path, diff.group) }, icon = RunovaIcons.Eraser, tone = ChipTone.Danger)
                 }
                 GitGroup.CONFLICT -> {}
             }
@@ -286,14 +298,13 @@ private fun DiffLine(line: DiffLineView) {
 private fun BranchesScreen(git: GitScreen, intents: GitIntents) {
     val colors = RunovaTheme.colors
     var name by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Branches", onBack = intents.closeBranches)
+    RunovaScreen("Branches", onBack = intents.closeBranches) {
         Row(
-            Modifier.padding(horizontal = 16.dp),
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RunovaTextField(name, { name = it }, "New branch name", Modifier.weight(1f))
+            RunovaTextField(name, { name = it }, "New branch name", Modifier.weight(1f), icon = RunovaIcons.Git)
             RunovaButton(
                 "Create",
                 onClick = {
@@ -301,14 +312,15 @@ private fun BranchesScreen(git: GitScreen, intents: GitIntents) {
                     name = ""
                 },
                 enabled = name.isNotBlank(),
+                icon = RunovaIcons.Add,
             )
         }
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
             items(git.branches, key = { "b/${it.name}" }) { BranchRow(it, intents) }
             item(key = "stash-title") {
                 Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RunovaText("Stashes", Modifier.weight(1f), RunovaType.caption, colors.mutedForeground)
-                    RunovaChip("Stash changes", { intents.stashPush(null) })
+                    RunovaSectionTitle("Stashes", Modifier.weight(1f))
+                    RunovaChip("Stash changes", { intents.stashPush(null) }, icon = RunovaIcons.Stash)
                 }
             }
             items(git.stashes, key = { "s/${it.reference}" }) { StashRow(it, intents) }
@@ -325,8 +337,8 @@ private fun BranchRow(branch: GitBranchView, intents: GitIntents) {
         onClick = if (branch.current) null else ({ intents.checkout(branch.name) }),
         trailing = {
             when {
-                branch.current -> RunovaBadge("Current")
-                branch.local -> RunovaChip("Delete", { intents.deleteBranch(branch.name) })
+                branch.current -> RunovaBadge("Current", BadgeTone.Primary, dot = true)
+                branch.local -> RunovaChip("Delete", { intents.deleteBranch(branch.name) }, icon = RunovaIcons.Trash, tone = ChipTone.Danger)
                 else -> Box {}
             }
         },
@@ -338,11 +350,11 @@ private fun StashRow(stash: GitStashView, intents: GitIntents) {
     RunovaListRow(
         title = stash.message,
         detail = stash.reference,
-        icon = RunovaIcons.Folder,
+        icon = RunovaIcons.Stash,
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                RunovaChip("Pop", { intents.stashPop(stash.reference) })
-                RunovaChip("Drop", { intents.stashDrop(stash.reference) })
+                RunovaChip("Pop", { intents.stashPop(stash.reference) }, icon = RunovaIcons.Pull)
+                RunovaChip("Drop", { intents.stashDrop(stash.reference) }, icon = RunovaIcons.Trash, tone = ChipTone.Danger)
             }
         },
     )

@@ -36,6 +36,15 @@ private func aheadBehind(_ state: GitStateView) -> String? {
     return "\(state.ahead) ahead, \(state.behind) behind"
 }
 
+private func fileTone(_ group: GitGroup) -> BadgeTone {
+    switch group {
+    case .conflict: return .danger
+    case .staged: return .success
+    case .unstaged: return .warning
+    case .untracked: return .primary
+    }
+}
+
 private func changeDetail(_ file: GitFileView) -> String? {
     if file.conflict != nil { return "In conflict" }
     if file.binary { return "Binary file" }
@@ -83,18 +92,18 @@ private struct LoadedChanges: View {
                     BranchCard(state: state, intents: intents)
                     if let operation = state.operation {
                         HStack(spacing: 8) {
-                            RunovaIcon(glyph: RunovaIcons.warning, size: 14, color: palette.warning)
+                            RunovaIconTile(icon: RunovaIcons.warning, tone: .warning)
                             RunovaText("A \(operation) is in progress")
                             Spacer(minLength: 0)
-                            RunovaChip(text: "Stop", action: intents.abort)
+                            RunovaChip(text: "Stop", icon: RunovaIcons.stop, tone: .danger, action: intents.abort)
                         }
                         .padding(.vertical, 8)
                     }
                     ForEach(groupTitles, id: \.title) { entry in
                         let files = state.files.filter { $0.group == entry.group }
                         if !files.isEmpty {
-                            RunovaText(entry.title, style: RunovaType.caption, color: palette.mutedForeground)
-                                .padding(.top, 12)
+                            RunovaSectionTitle(text: entry.title)
+                                .padding(.top, 14)
                                 .padding(.bottom, 4)
                             ForEach(files, id: \.path) { FileRow(file: $0, intents: intents) }
                         }
@@ -122,16 +131,18 @@ private struct BranchCard: View {
         RunovaCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    RunovaChip(text: state.branch ?? "Detached", action: intents.openBranches)
+                    RunovaChip(
+                        text: state.branch ?? "Detached", icon: RunovaIcons.git, tone: .primary,
+                        action: intents.openBranches)
                     if let text = aheadBehind(state) {
                         RunovaText(text, style: RunovaType.small, color: palette.mutedForeground)
                     }
                 }
                 if state.hasRemote {
                     HStack(spacing: 6) {
-                        RunovaChip(text: "Fetch", action: intents.fetch)
-                        RunovaChip(text: "Pull", action: intents.pull)
-                        RunovaChip(text: "Push", action: intents.push)
+                        RunovaChip(text: "Fetch", icon: RunovaIcons.fetch, action: intents.fetch)
+                        RunovaChip(text: "Pull", icon: RunovaIcons.pull, action: intents.pull)
+                        RunovaChip(text: "Push", icon: RunovaIcons.push, action: intents.push)
                     }
                 }
             }
@@ -147,12 +158,12 @@ private struct FileRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if file.group == .conflict {
-                RunovaListRow(title: file.path, detail: changeDetail(file), icon: RunovaIcons.folder)
+                RunovaListRow(title: file.path, detail: changeDetail(file), icon: RunovaIcons.file, iconTone: fileTone(file.group), flat: true)
             } else {
                 Button {
                     intents.openDiff(file.path, file.group)
                 } label: {
-                    RunovaListRow(title: file.path, detail: changeDetail(file), icon: RunovaIcons.folder)
+                    RunovaListRow(title: file.path, detail: changeDetail(file), icon: RunovaIcons.file, iconTone: fileTone(file.group), flat: true)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -162,13 +173,15 @@ private struct FileRow: View {
                 RunovaChip(text: "Mine") { intents.resolve(file.path, "ours") }
                 RunovaChip(text: "Theirs") { intents.resolve(file.path, "theirs") }
             case .staged:
-                RunovaChip(text: "Unstage") { intents.unstage([file.path]) }
+                RunovaChip(text: "Unstage", icon: RunovaIcons.minus) { intents.unstage([file.path]) }
             case .unstaged:
-                RunovaChip(text: "Stage") { intents.stage([file.path]) }
+                RunovaChip(text: "Stage", icon: RunovaIcons.add) { intents.stage([file.path]) }
             case .untracked:
-                RunovaChip(text: "Add") { intents.stage([file.path]) }
+                RunovaChip(text: "Add", icon: RunovaIcons.add) { intents.stage([file.path]) }
             }
         }
+        .padding(.trailing, 12)
+        .rowCard()
     }
 }
 
@@ -181,14 +194,14 @@ private struct CommitBox: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            RunovaTextField(value: $message, placeholder: "Commit message")
+            RunovaTextField(value: $message, placeholder: "Commit message", icon: RunovaIcons.commit)
             HStack(spacing: 8) {
-                RunovaButton(text: "Commit", kind: .soft, enabled: !blank) {
+                RunovaButton(text: "Commit", kind: .soft, enabled: !blank, icon: RunovaIcons.commit) {
                     intents.commit(message, false)
                     message = ""
                 }
                 .frame(maxWidth: .infinity)
-                RunovaButton(text: "Commit and push", enabled: !blank) {
+                RunovaButton(text: "Commit and push", enabled: !blank, icon: RunovaIcons.push) {
                     intents.commit(message, true)
                     message = ""
                 }
@@ -204,20 +217,22 @@ struct DiffScreen: View {
     let intents: GitIntents
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: diff.path, onBack: intents.closeDiff)
+        RunovaScreen(title: diff.path, onBack: intents.closeDiff) {
             HStack(spacing: 6) {
                 switch diff.group {
                 case .staged:
-                    RunovaChip(text: "Unstage") { intents.unstage([diff.path]) }
+                    RunovaChip(text: "Unstage", icon: RunovaIcons.minus) { intents.unstage([diff.path]) }
                 case .unstaged, .untracked:
-                    RunovaChip(text: "Stage") { intents.stage([diff.path]) }
-                    RunovaChip(text: "Discard") { intents.discard(diff.path, diff.group) }
+                    RunovaChip(text: "Stage", icon: RunovaIcons.add) { intents.stage([diff.path]) }
+                    RunovaChip(text: "Discard", icon: RunovaIcons.eraser, tone: .danger) {
+                        intents.discard(diff.path, diff.group)
+                    }
                 case .conflict:
                     EmptyView()
                 }
             }
             .padding(.leading, 16)
+            .padding(.top, 12)
             .padding(.bottom, 8)
             if diff.loading {
                 LoadingRows()
@@ -274,32 +289,36 @@ struct BranchesScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: "Branches", onBack: intents.closeBranches)
+        RunovaScreen(title: "Branches", onBack: intents.closeBranches) {
             HStack(spacing: 8) {
-                RunovaTextField(value: $name, placeholder: "New branch name")
-                RunovaButton(text: "Create", enabled: !name.isEmpty) {
+                RunovaTextField(value: $name, placeholder: "New branch name", icon: RunovaIcons.git)
+                RunovaButton(text: "Create", enabled: !name.isEmpty, icon: RunovaIcons.add) {
                     intents.createBranch(name)
                     name = ""
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 14)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(git.branches, id: \.name) { BranchRow(branch: $0, intents: intents) }
                     HStack {
-                        RunovaText("Stashes", style: RunovaType.caption, color: palette.mutedForeground)
+                        RunovaSectionTitle(text: "Stashes")
                         Spacer(minLength: 0)
-                        RunovaChip(text: "Stash changes") { intents.stashPush(nil) }
+                        RunovaChip(text: "Stash changes", icon: RunovaIcons.stash) { intents.stashPush(nil) }
                     }
                     .padding(.top, 16)
                     .padding(.bottom, 4)
                     ForEach(git.stashes, id: \.reference) { stash in
                         HStack(spacing: 6) {
-                            RunovaListRow(title: stash.message, detail: stash.reference, icon: RunovaIcons.folder)
-                            RunovaChip(text: "Pop") { intents.stashPop(stash.reference) }
-                            RunovaChip(text: "Drop") { intents.stashDrop(stash.reference) }
+                            RunovaListRow(title: stash.message, detail: stash.reference, icon: RunovaIcons.stash, flat: true)
+                            RunovaChip(text: "Pop", icon: RunovaIcons.pull) { intents.stashPop(stash.reference) }
+                            RunovaChip(text: "Drop", icon: RunovaIcons.trash, tone: .danger) {
+                                intents.stashDrop(stash.reference)
+                            }
                         }
+                        .padding(.trailing, 12)
+                        .rowCard()
                     }
                 }
                 .padding(16)
@@ -315,23 +334,27 @@ private struct BranchRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if branch.current {
-                RunovaListRow(title: branch.name, detail: nil, icon: RunovaIcons.git)
-                RunovaBadge(text: "Current")
+                RunovaListRow(title: branch.name, detail: nil, icon: RunovaIcons.git, flat: true)
+                RunovaBadge(text: "Current", tone: .primary, dot: true)
             } else {
                 Button {
                     intents.checkout(branch.name)
                 } label: {
                     RunovaListRow(
                         title: branch.name, detail: branch.local ? nil : "On the remote", icon: RunovaIcons.git
-                    )
+                    , flat: true)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if branch.local {
-                    RunovaChip(text: "Delete") { intents.deleteBranch(branch.name) }
+                    RunovaChip(text: "Delete", icon: RunovaIcons.trash, tone: .danger) {
+                        intents.deleteBranch(branch.name)
+                    }
                 }
             }
         }
+        .padding(.trailing, 12)
+        .rowCard()
     }
 }
 

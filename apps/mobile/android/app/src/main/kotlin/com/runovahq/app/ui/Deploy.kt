@@ -23,11 +23,14 @@ import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaEmptyState
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaSectionTitle
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaTokens
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -83,28 +86,23 @@ private fun ServerRow(server: DeployServerView, intents: DeployIntents) {
         title = server.name,
         detail = server.problem ?: server.host,
         icon = RunovaIcons.Server,
+        iconTone = if (server.online) BadgeTone.Primary else BadgeTone.Warning,
         onClick = { intents.openServer(server.id) },
         trailing = {
-            RunovaBadge(server.stateLabel, if (server.online) BadgeTone.Success else BadgeTone.Warning)
+            RunovaBadge(server.stateLabel, if (server.online) BadgeTone.Success else BadgeTone.Warning, dot = true)
         },
     )
 }
 
 private fun LazyListScope.heading(text: String) {
     item(key = "h/$text") {
-        RunovaText(
-            text,
-            Modifier.padding(top = 12.dp, bottom = 4.dp),
-            RunovaType.caption,
-            RunovaTheme.colors.mutedForeground,
-        )
+        RunovaSectionTitle(text, Modifier.padding(top = 14.dp, bottom = 4.dp))
     }
 }
 
 @Composable
 private fun ServerScreen(server: ServerDetailView, error: String?, intents: DeployIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(server.name, onBack = intents.closeServer)
+    RunovaScreen(server.name, onBack = intents.closeServer) {
         when {
             server.loading -> LoadingRows()
             server.unreachable != null -> RunovaEmptyState(RunovaIcons.Warning, server.unreachable!!, "")
@@ -148,9 +146,10 @@ private fun ProblemRow(problem: ProblemView) {
         title = problem.title,
         detail = problem.detail,
         icon = RunovaIcons.Warning,
+        iconTone = if (problem.severity == ProblemSeverity.CRITICAL) BadgeTone.Danger else BadgeTone.Warning,
         trailing = {
             if (problem.severity == ProblemSeverity.CRITICAL) {
-                RunovaBadge("Critical", BadgeTone.Warning)
+                RunovaBadge("Critical", BadgeTone.Danger, dot = true)
             } else {
                 RunovaBadge("Warning")
             }
@@ -160,7 +159,18 @@ private fun ProblemRow(problem: ProblemView) {
 
 @Composable
 private fun ActionChip(label: String, name: String, onClick: () -> Unit) {
-    RunovaChip(label, onClick, Modifier.semantics { contentDescription = "$label $name" })
+    val icon = when (label) {
+        "Restart" -> RunovaIcons.Refresh
+        "Stop" -> RunovaIcons.Stop
+        else -> RunovaIcons.Play
+    }
+    RunovaChip(
+        label,
+        onClick,
+        Modifier.semantics { contentDescription = "$label $name" },
+        icon = icon,
+        tone = if (label == "Stop") ChipTone.Danger else ChipTone.Soft,
+    )
 }
 
 @Composable
@@ -168,7 +178,12 @@ private fun ContainerRow(container: ContainerView, intents: DeployIntents) {
     RunovaListRow(
         title = container.name,
         detail = container.status,
-        icon = RunovaIcons.Server,
+        icon = RunovaIcons.Deploy,
+        iconTone = when {
+            container.healthy == false -> BadgeTone.Danger
+            container.running -> BadgeTone.Success
+            else -> BadgeTone.Neutral
+        },
         onClick = { intents.openLogs(container.id) },
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -191,7 +206,7 @@ private fun StackRow(stack: StackView, intents: DeployIntents) {
         icon = RunovaIcons.Deploy,
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (stack.canRedeploy) RunovaChip("Redeploy", { intents.redeploy(stack.id) })
+                if (stack.canRedeploy) RunovaChip("Redeploy", { intents.redeploy(stack.id) }, icon = RunovaIcons.Bolt, tone = ChipTone.Primary)
                 ActionChip("Restart", stack.name) { intents.stackAction(stack.id, "restart") }
             }
         },
@@ -201,8 +216,7 @@ private fun StackRow(stack: StackView, intents: DeployIntents) {
 @Composable
 private fun LogsScreen(logs: ContainerLogsView, intents: DeployIntents) {
     val theme = RunovaTokens.Terminal
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(logs.name, onBack = intents.closeLogs)
+    RunovaScreen(logs.name, onBack = intents.closeLogs) {
         if (logs.loading) {
             LoadingRows()
         } else {

@@ -94,8 +94,8 @@ class OpsTest {
     fun localAndCloudMonitorsAreBothShownAndLabeled() {
         show(appView(connection = connected, monitoring = monitoring()), "monitoring")
 
-        compose.onNodeWithText("On this computer").assertExists()
-        compose.onNodeWithText("Runova Cloud").assertExists()
+        compose.onNodeWithText("ON THIS COMPUTER").assertExists()
+        compose.onNodeWithText("RUNOVA CLOUD").assertExists()
         compose.onNodeWithText("API").assertExists()
         compose.onNodeWithText("Shop").assertExists()
         snapshot("monitoring")

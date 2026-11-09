@@ -87,10 +87,10 @@ class GitTest {
     fun theScreenListsEveryKindOfChange() {
         show(view())
 
-        compose.onNodeWithText("Conflicts").assertExists()
-        compose.onNodeWithText("Staged").assertExists()
-        compose.onNodeWithText("Changes").assertExists()
-        compose.onNodeWithText("Untracked").assertExists()
+        compose.onNodeWithText("CONFLICTS").assertExists()
+        compose.onNodeWithText("STAGED").assertExists()
+        compose.onNodeWithText("CHANGES").assertExists()
+        compose.onNodeWithText("UNTRACKED").assertExists()
         compose.onNodeWithText("master").assertExists()
         compose.onNodeWithText("1 ahead, 2 behind").assertExists()
         snapshot("git")

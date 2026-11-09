@@ -20,20 +20,38 @@ struct PipelineIntents {
 
 private func monitorBadge(_ state: MonitorState) -> RunovaBadge {
     switch state {
-    case .up: return RunovaBadge(text: "Up", tone: .success)
-    case .degraded: return RunovaBadge(text: "Degraded", tone: .warning)
-    case .down: return RunovaBadge(text: "Down", tone: .warning)
-    case .paused: return RunovaBadge(text: "Paused")
-    case .unknown: return RunovaBadge(text: "Unknown")
+    case .up: return RunovaBadge(text: "Up", tone: .success, dot: true)
+    case .degraded: return RunovaBadge(text: "Degraded", tone: .warning, dot: true)
+    case .down: return RunovaBadge(text: "Down", tone: .danger, dot: true)
+    case .paused: return RunovaBadge(text: "Paused", dot: true)
+    case .unknown: return RunovaBadge(text: "Unknown", dot: true)
+    }
+}
+
+private func monitorTone(_ state: MonitorState) -> BadgeTone {
+    switch state {
+    case .up: return .success
+    case .degraded: return .warning
+    case .down: return .danger
+    case .paused, .unknown: return .neutral
+    }
+}
+
+private func runTone(_ state: PipelineRunState) -> BadgeTone {
+    switch state {
+    case .success: return .success
+    case .failed: return .danger
+    case .running: return .primary
+    case .queued, .other: return .neutral
     }
 }
 
 private func runBadge(_ label: String, _ state: PipelineRunState) -> RunovaBadge {
     switch state {
-    case .success: return RunovaBadge(text: label, tone: .success)
-    case .failed: return RunovaBadge(text: label, tone: .warning)
-    case .running: return RunovaBadge(text: label, tone: .primary)
-    case .queued, .other: return RunovaBadge(text: label)
+    case .success: return RunovaBadge(text: label, tone: .success, dot: true)
+    case .failed: return RunovaBadge(text: label, tone: .danger, dot: true)
+    case .running: return RunovaBadge(text: label, tone: .primary, dot: true)
+    case .queued, .other: return RunovaBadge(text: label, dot: true)
     }
 }
 
@@ -43,8 +61,8 @@ private struct GroupTitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RunovaText(text, style: RunovaType.caption, color: palette.mutedForeground)
-            .padding(.top, 12)
+        RunovaSectionTitle(text: text)
+            .padding(.top, 14)
             .padding(.bottom, 4)
     }
 }
@@ -86,9 +104,13 @@ private struct MonitorRow: View {
         } label: {
             HStack(spacing: 8) {
                 RunovaListRow(
-                    title: monitor.name, detail: monitor.detail ?? monitor.latencyLabel, icon: RunovaIcons.monitoring)
-                monitorBadge(monitor.state).padding(.trailing, 16)
+                    title: monitor.name, detail: monitor.detail ?? monitor.latencyLabel,
+                    icon: monitor.source == .cloud ? RunovaIcons.cloud : RunovaIcons.monitoring,
+                    iconTone: monitorTone(monitor.state), flat: true)
+                monitorBadge(monitor.state)
             }
+            .padding(.trailing, 12)
+            .rowCard()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -102,8 +124,7 @@ struct MonitorScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: monitor.name, onBack: intents.close)
+        RunovaScreen(title: monitor.name, onBack: intents.close) {
             VStack(alignment: .leading, spacing: 12) {
                 monitorBadge(monitor.state)
                 if let detail = monitor.detail { RunovaText(detail, color: palette.mutedForeground) }
@@ -116,10 +137,14 @@ struct MonitorScreen: View {
                 if !monitor.samples.isEmpty { LatencyBars(samples: monitor.samples) }
                 HStack(spacing: 8) {
                     if monitor.canCheck {
-                        RunovaButton(text: "Check now") { intents.check(monitor.id) }.frame(maxWidth: .infinity)
+                        RunovaButton(text: "Check now", icon: RunovaIcons.refresh) { intents.check(monitor.id) }
+                            .frame(maxWidth: .infinity)
                     }
                     if monitor.canPause {
-                        RunovaButton(text: monitor.paused ? "Resume" : "Pause", kind: .soft) {
+                        RunovaButton(
+                            text: monitor.paused ? "Resume" : "Pause", kind: .soft,
+                            icon: monitor.paused ? RunovaIcons.play : RunovaIcons.stop
+                        ) {
                             intents.setPaused(monitor.id, monitor.source, !monitor.paused)
                         }
                         .frame(maxWidth: .infinity)
@@ -208,11 +233,12 @@ private struct WorkflowCard: View {
     var body: some View {
         RunovaCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 10) {
+                    RunovaIconTile(icon: RunovaIcons.pipelines, tone: workflow.run.map { runTone($0.state) } ?? .neutral)
                     RunovaText(workflow.name, style: RunovaType.title)
                     Spacer(minLength: 0)
                     if workflow.canDispatch {
-                        RunovaChip(text: "Run") { intents.dispatch(workflow.id) }
+                        RunovaChip(text: "Run", icon: RunovaIcons.play, tone: .primary) { intents.dispatch(workflow.id) }
                     }
                 }
                 if let run = workflow.run {
@@ -221,14 +247,14 @@ private struct WorkflowCard: View {
                             intents.openRun(run.id)
                         } label: {
                             RunovaListRow(
-                                title: run.title, detail: "#\(run.number) on \(run.branch)", icon: RunovaIcons.git
+                                title: run.title, detail: "#\(run.number) on \(run.branch)", flat: true
                             )
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         runBadge(run.stateLabel, run.state)
                         if run.canCancel {
-                            RunovaChip(text: "Cancel") { intents.cancel(run.id) }
+                            RunovaChip(text: "Cancel", icon: RunovaIcons.ban, tone: .danger) { intents.cancel(run.id) }
                         }
                     }
                 } else {
@@ -251,8 +277,7 @@ struct DispatchForm: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: form.name, onBack: intents.closeDispatch)
+        RunovaScreen(title: form.name, onBack: intents.closeDispatch) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(form.inputs, id: \.name) { input in
@@ -288,7 +313,7 @@ struct DispatchForm: View {
             if let error = form.error {
                 RunovaText(error, style: RunovaType.small, color: palette.destructive).padding(.horizontal, 16)
             }
-            RunovaButton(text: "Run workflow") { intents.submitDispatch(values) }
+            RunovaButton(text: "Run workflow", icon: RunovaIcons.play) { intents.submitDispatch(values) }
                 .frame(maxWidth: .infinity)
                 .padding(16)
         }
@@ -305,8 +330,7 @@ struct RunScreen: View {
     let intents: PipelineIntents
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: "Run", onBack: intents.closeRun)
+        RunovaScreen(title: "Run", onBack: intents.closeRun) {
             if run.loading {
                 LoadingRows()
             } else {
@@ -317,9 +341,11 @@ struct RunScreen: View {
                                 intents.openJob(job.id)
                             } label: {
                                 HStack(spacing: 8) {
-                                    RunovaListRow(title: job.name, detail: nil, icon: RunovaIcons.pipelines)
-                                    runBadge(job.stateLabel, job.state).padding(.trailing, 16)
+                                    RunovaListRow(title: job.name, detail: nil, icon: RunovaIcons.logs, iconTone: runTone(job.state), flat: true)
+                                    runBadge(job.stateLabel, job.state)
                                 }
+                                .padding(.trailing, 12)
+                                .rowCard()
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -340,8 +366,7 @@ struct JobLogScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: log.name, onBack: intents.closeJob)
+        RunovaScreen(title: log.name, onBack: intents.closeJob) {
             if log.truncated {
                 RunovaText(
                     "Only the end of this log is shown.", style: RunovaType.small, color: palette.mutedForeground

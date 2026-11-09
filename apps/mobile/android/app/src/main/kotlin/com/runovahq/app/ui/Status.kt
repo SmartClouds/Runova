@@ -23,11 +23,14 @@ import androidx.compose.ui.unit.dp
 import com.runovahq.app.design.BadgeTone
 import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaCard
+import com.runovahq.app.design.RunovaSectionTitle
+import com.runovahq.app.design.RunovaIcon
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaProgress
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
@@ -81,14 +84,15 @@ fun StatusTab(view: AppView, intents: StatusIntents) {
 
 @Composable
 private fun Heading(text: String) {
-    RunovaText(text, style = RunovaType.caption, color = RunovaTheme.colors.mutedForeground)
+    RunovaSectionTitle(text)
 }
 
 @Composable
-private fun Meter(label: String, value: String, percent: Double, detail: String) {
+private fun Meter(label: String, value: String, percent: Double, detail: String, icon: String? = null) {
     val colors = RunovaTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (icon != null) RunovaIcon(icon, size = 14.dp, color = colors.primary)
             RunovaText(label, Modifier.weight(1f), RunovaType.label)
             RunovaText(value, style = RunovaType.label)
         }
@@ -102,13 +106,16 @@ private fun ComputerCard(system: SystemStatsView) {
     val colors = RunovaTheme.colors
     RunovaCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Meter("CPU", system.cpuLabel, system.cpuPercent, system.cpuDetail)
-            Meter("Memory", "${system.memPercent.toInt()}%", system.memPercent, system.memLabel)
-            RunovaText(
-                "Down ${system.netDownLabel}, up ${system.netUpLabel}",
-                style = RunovaType.small,
-                color = colors.mutedForeground,
-            )
+            Meter("CPU", system.cpuLabel, system.cpuPercent, system.cpuDetail, RunovaIcons.Cpu)
+            Meter("Memory", "${system.memPercent.toInt()}%", system.memPercent, system.memLabel, RunovaIcons.Memory)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RunovaIcon(RunovaIcons.Network, size = 14.dp, color = colors.primary)
+                RunovaText(
+                    "Down ${system.netDownLabel}, up ${system.netUpLabel}",
+                    style = RunovaType.small,
+                    color = colors.mutedForeground,
+                )
+            }
         }
     }
 }
@@ -120,6 +127,7 @@ private fun LimitCard(limit: LimitChipView) {
     RunovaCard(Modifier.fillMaxWidth().alpha(if (faded) 0.7f else 1f)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RunovaIcon(RunovaIcons.Agent, size = 15.dp, color = colors.primary)
                 RunovaText(limit.name, style = RunovaType.title)
                 limit.plan?.let { RunovaBadge(it) }
                 Box(Modifier.weight(1f))
@@ -144,17 +152,17 @@ private fun ProviderRow(provider: ProviderUsageView, intents: StatusIntents) {
     RunovaListRow(
         title = provider.name,
         detail = provider.todayLabel?.let { "$it today" },
-        icon = RunovaIcons.Monitoring,
+        icon = RunovaIcons.Agent,
+        iconTone = tone,
         onClick = { intents.openProvider(provider.providerId) },
-        trailing = { RunovaBadge(text, tone) },
+        trailing = { RunovaBadge(text, tone, dot = true) },
     )
 }
 
 @Composable
 private fun ProviderScreen(provider: ProviderUsageView, intents: StatusIntents) {
     val colors = RunovaTheme.colors
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(provider.name, onBack = intents.closeProvider)
+    RunovaScreen(provider.name, onBack = intents.closeProvider) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             provider.error?.let { RunovaText(it, color = colors.destructive) }
             RunovaCard(Modifier.fillMaxWidth()) {

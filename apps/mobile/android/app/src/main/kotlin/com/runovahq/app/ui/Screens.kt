@@ -28,11 +28,13 @@ import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaEmptyState
 import com.runovahq.app.design.RunovaIcon
+import com.runovahq.app.design.RunovaHeroIcon
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaSkeleton
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import com.runovahq.app.design.TabItem
@@ -83,7 +85,8 @@ val AppTabs = listOf(
 @Composable
 fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppIntents) {
     val colors = RunovaTheme.colors
-    Box(Modifier.fillMaxSize().background(colors.background)) {
+    // The chrome: what the desktop's title bar and menu are drawn on.
+    Box(Modifier.fillMaxSize().background(colors.card)) {
         when (view.auth) {
             AuthState.STARTING -> StartingScreen()
             AuthState.SIGNED_OUT -> SignInScreen(view.error, intents.signIn)
@@ -155,8 +158,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
             when (section) {
                 "account" -> AccountTab(view, intents)
                 "inbox" -> InboxTab(view, intents.notifications, onTab)
-                "monitors" -> Column(Modifier.fillMaxSize()) {
-                    RunovaTopBar("Monitors")
+                "monitors" -> RunovaScreen("Monitors") {
                     MonitoringTab(view, intents.monitoring)
                 }
                 else -> SystemsScreen(view, intents)
@@ -181,8 +183,8 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        RunovaIcon(RunovaIcons.Systems, size = 40.dp, color = colors.primary)
-        Spacer(Modifier.height(16.dp))
+        RunovaHeroIcon(RunovaIcons.Systems)
+        Spacer(Modifier.height(24.dp))
         RunovaText("Runova", style = RunovaType.heading)
         Spacer(Modifier.height(6.dp))
         RunovaText(
@@ -191,7 +193,7 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit) {
             align = TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
-        RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth())
+        RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth(), icon = RunovaIcons.Forward)
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             RunovaText(error, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)
@@ -208,8 +210,7 @@ private fun platformName(platform: String) = when (platform) {
 
 @Composable
 fun SystemsScreen(view: AppView, intents: AppIntents) {
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar("Systems")
+    RunovaScreen("Systems") {
         when {
             view.systems.isEmpty() && view.systemsLoading -> LoadingRows()
             view.systems.isEmpty() -> RunovaEmptyState(
@@ -242,6 +243,8 @@ private fun SystemRow(system: SystemView, intents: AppIntents) {
         title = system.name,
         detail = platformName(system.platform),
         icon = RunovaIcons.Systems,
+        iconTone = if (system.online) BadgeTone.Primary else BadgeTone.Neutral,
+        flat = true,
         onClick = when {
             !system.online -> null
             system.canManage -> ({ intents.connect(system.id) })
@@ -250,9 +253,9 @@ private fun SystemRow(system: SystemView, intents: AppIntents) {
         },
         trailing = {
             when {
-                !system.online -> RunovaBadge("Offline")
-                !system.canManage -> RunovaBadge("Screen only", BadgeTone.Warning)
-                else -> RunovaBadge("Online", BadgeTone.Success)
+                !system.online -> RunovaBadge("Offline", dot = true)
+                !system.canManage -> RunovaBadge("Screen only", BadgeTone.Warning, dot = true)
+                else -> RunovaBadge("Online", BadgeTone.Success, dot = true)
             }
         },
     )
@@ -286,17 +289,16 @@ fun ConnectionScreen(connection: ConnectionView, intents: AppIntents, fingerprin
     val colors = RunovaTheme.colors
     val failed = connection.phase == ConnectionPhase.FAILED
     val text = phaseText(connection)
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(connection.systemName, onBack = intents.disconnect)
+    RunovaScreen(connection.systemName, onBack = intents.disconnect) {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
         ) {
-            RunovaIcon(
+            RunovaHeroIcon(
                 if (failed) RunovaIcons.Warning else RunovaIcons.Shield,
-                size = 36.dp,
-                color = if (failed) colors.destructive else colors.primary,
+                if (failed) BadgeTone.Danger else BadgeTone.Primary,
+                Modifier.padding(bottom = 8.dp),
             )
             RunovaText(text.title, style = RunovaType.title, align = TextAlign.Center)
             RunovaText(text.detail, color = colors.mutedForeground, align = TextAlign.Center)
@@ -307,7 +309,7 @@ fun ConnectionScreen(connection: ConnectionView, intents: AppIntents, fingerprin
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RunovaButton("Back", onClick = intents.disconnect, kind = ButtonKind.Soft)
-                    RunovaButton("Try again", onClick = { intents.connect(connection.systemId) })
+                    RunovaButton("Try again", onClick = { intents.connect(connection.systemId) }, icon = RunovaIcons.Refresh)
                 }
             }
         }

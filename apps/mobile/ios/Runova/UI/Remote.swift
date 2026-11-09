@@ -74,12 +74,12 @@ struct RemoteTab: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            RunovaIcon(glyph: RunovaIcons.remote, size: 36, color: palette.primary)
+            RunovaHeroIcon(icon: RunovaIcons.remote).padding(.bottom, 8)
             RunovaText("Remote", style: RunovaType.title, alignment: .center)
             RunovaText(
                 "See and use \(connection.systemName)'s screen. The rest of this computer's tools pause until you close it.",
                 color: palette.mutedForeground, alignment: .center)
-            RunovaButton(text: "Open screen") { intents.open(connection.systemId) }
+            RunovaButton(text: "Open screen", icon: RunovaIcons.remote) { intents.open(connection.systemId) }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -122,12 +122,10 @@ private struct RemoteMessage: View {
 
     var body: some View {
         let text = waitingText(view)
-        VStack(spacing: 0) {
-            RunovaTopBar(title: view.systemName, onBack: intents.close)
+        RunovaScreen(title: view.systemName, onBack: intents.close) {
             VStack(spacing: 10) {
-                RunovaIcon(
-                    glyph: failed ? RunovaIcons.warning : RunovaIcons.remote, size: 36,
-                    color: failed ? palette.destructive : palette.primary)
+                RunovaHeroIcon(icon: failed ? RunovaIcons.warning : RunovaIcons.remote, tone: failed ? .danger : .primary)
+                    .padding(.bottom, 8)
                 RunovaText(text.title, style: RunovaType.title, alignment: .center)
                 RunovaText(text.detail, color: palette.mutedForeground, alignment: .center)
                 if failed {
@@ -151,14 +149,13 @@ private struct PasswordPrompt: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: view.systemName, onBack: intents.close)
+        RunovaScreen(title: view.systemName, onBack: intents.close) {
             VStack(alignment: .leading, spacing: 12) {
                 RunovaText("Enter this computer's password", style: RunovaType.title)
                 RunovaText(
                     "The password set for unattended access on \(view.systemName).",
                     color: palette.mutedForeground)
-                RunovaTextField(value: $password, placeholder: "Password", secure: true)
+                RunovaTextField(value: $password, placeholder: "Password", secure: true, icon: RunovaIcons.key)
                 if let error = view.error {
                     RunovaText(error, style: RunovaType.small, color: palette.destructive)
                 }
@@ -251,12 +248,12 @@ private struct KeyboardPanel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(shortcutKeys, id: \.label) { item in
-                        RunovaChip(text: item.label) { intents.key(item.key) }
+                        RunovaChip(text: item.label, icon: RunovaIcons.keyboard) { intents.key(item.key) }
                     }
                 }
             }
             HStack(spacing: 8) {
-                RunovaTextField(value: $text, placeholder: "Type on the computer")
+                RunovaTextField(value: $text, placeholder: "Type on the computer", icon: RunovaIcons.keyboard)
                 RunovaButton(text: "Send", icon: RunovaIcons.send) {
                     if !text.isEmpty { intents.text(text) }
                     intents.key(.enter)
@@ -280,8 +277,8 @@ private struct ClipboardBar: View {
         HStack(spacing: 8) {
             RunovaText("The computer shared its clipboard.", style: RunovaType.small, maxLines: 1)
             Spacer(minLength: 0)
-            RunovaChip(text: "Copy") { intents.copyClipboard(text) }
-            RunovaChip(text: "Ignore", action: intents.clipboardTaken)
+            RunovaChip(text: "Copy", icon: RunovaIcons.copy, tone: .primary) { intents.copyClipboard(text) }
+            RunovaChip(text: "Ignore", icon: RunovaIcons.close, action: intents.clipboardTaken)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

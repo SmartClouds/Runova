@@ -27,16 +27,16 @@ private let largestCell: CGFloat = 13
 /// Far enough to reach the live screen from anywhere in the history.
 private let backToLive: Int32 = -1_000_000
 
-private let terminalKeys: [(label: String, data: String)] = [
-    ("Esc", "\u{1b}"),
-    ("Tab", "\t"),
-    ("Ctrl C", "\u{03}"),
-    ("Ctrl D", "\u{04}"),
-    ("Up", "\u{1b}[A"),
-    ("Down", "\u{1b}[B"),
-    ("Left", "\u{1b}[D"),
-    ("Right", "\u{1b}[C"),
-    ("Enter", "\r"),
+private let terminalKeys: [(label: String, data: String, icon: String?)] = [
+    ("Esc", "\u{1b}", nil),
+    ("Tab", "\t", nil),
+    ("Ctrl C", "\u{03}", nil),
+    ("Ctrl D", "\u{04}", nil),
+    ("Up", "\u{1b}[A", RunovaIcons.push),
+    ("Down", "\u{1b}[B", RunovaIcons.pull),
+    ("Left", "\u{1b}[D", RunovaIcons.left),
+    ("Right", "\u{1b}[C", RunovaIcons.right),
+    ("Enter", "\r", nil),
 ]
 
 struct DeviceShell: View {
@@ -93,40 +93,42 @@ struct DeviceShell: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     DeviceTopBar(connection: connection, intents: intents)
-                    Group {
-                        switch section {
-                        case "clis": ClisScreen(view: view, intents: intents)
-                        case "git":
-                            VStack(alignment: .leading, spacing: 0) {
-                                GitChangesScreen(view: view, intents: intents.git)
-                                    .frame(maxHeight: .infinity, alignment: .top)
-                                if let error = view.error { ErrorLine(message: error) }
+                    RunovaIsland {
+                        Group {
+                            switch section {
+                            case "clis": ClisScreen(view: view, intents: intents)
+                            case "git":
+                                VStack(alignment: .leading, spacing: 0) {
+                                    GitChangesScreen(view: view, intents: intents.git)
+                                        .frame(maxHeight: .infinity, alignment: .top)
+                                    if let error = view.error { ErrorLine(message: error) }
+                                }
+                            case "status": StatusTab(view: view, intents: intents.status)
+                            case "vault":
+                                VStack(alignment: .leading, spacing: 0) {
+                                    VaultTab(view: view, intents: intents.vault)
+                                        .frame(maxHeight: .infinity, alignment: .top)
+                                    if let error = view.error { ErrorLine(message: error) }
+                                }
+                            case "deploy": DeployTab(view: view, intents: intents.deploy)
+                            case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
+                            case "pipelines":
+                                VStack(alignment: .leading, spacing: 0) {
+                                    PipelinesTab(view: view, intents: intents.pipelines)
+                                        .frame(maxHeight: .infinity, alignment: .top)
+                                    if let error = view.error { ErrorLine(message: error) }
+                                }
+                            case "notifications":
+                                InboxTab(view: view, intents: intents.notifications, tab: $tab, showTitle: false)
+                            case "remote": RemoteTab(connection: connection, intents: intents.remote)
+                            case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone)
+                            default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                             }
-                        case "status": StatusTab(view: view, intents: intents.status)
-                        case "vault":
-                            VStack(alignment: .leading, spacing: 0) {
-                                VaultTab(view: view, intents: intents.vault)
-                                    .frame(maxHeight: .infinity, alignment: .top)
-                                if let error = view.error { ErrorLine(message: error) }
-                            }
-                        case "deploy": DeployTab(view: view, intents: intents.deploy)
-                        case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
-                        case "pipelines":
-                            VStack(alignment: .leading, spacing: 0) {
-                                PipelinesTab(view: view, intents: intents.pipelines)
-                                    .frame(maxHeight: .infinity, alignment: .top)
-                                if let error = view.error { ErrorLine(message: error) }
-                            }
-                        case "notifications":
-                            InboxTab(view: view, intents: intents.notifications, tab: $tab, showTitle: false)
-                        case "remote": RemoteTab(connection: connection, intents: intents.remote)
-                        case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone)
-                        default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                         }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    if let notice = view.notice {
-                        NoticeBar(message: notice, onDismiss: intents.dismissNotice)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        if let notice = view.notice {
+                            NoticeBar(message: notice, onDismiss: intents.dismissNotice)
+                        }
                     }
                     RunovaBottomBar(
                         tabs: deviceTabs, selected: moreSections.contains { $0.id == section } ? "more" : section
@@ -191,16 +193,15 @@ private struct DeviceTopBar: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RunovaTopBar(title: connection.systemName, onBack: intents.disconnect) {
+        RunovaTopBar(
+            title: connection.systemName, subtitle: connection.safetyCode.map { "Safety code \($0)" },
+            onBack: intents.disconnect
+        ) {
             RunovaBadge(
                 text: connection.direct == true ? "Direct" : "Relay",
-                tone: connection.direct == true ? .primary : .warning
+                tone: connection.direct == true ? .primary : .warning, dot: true
             )
             .padding(.trailing, 8)
-        }
-        if let code = connection.safetyCode {
-            RunovaText("Safety code \(code)", style: RunovaType.small, color: palette.mutedForeground)
-                .padding(.horizontal, 16)
         }
     }
 }
@@ -243,11 +244,20 @@ private struct ProjectsScreen: View {
 
 private func statusBadge(_ status: AgentState) -> RunovaBadge {
     switch status {
-    case .needsInput: return RunovaBadge(text: "Needs input", tone: .warning)
-    case .working: return RunovaBadge(text: "Working", tone: .primary)
-    case .done: return RunovaBadge(text: "Done", tone: .success)
-    case .idle: return RunovaBadge(text: "Idle")
-    case .exited: return RunovaBadge(text: "Exited")
+    case .needsInput: return RunovaBadge(text: "Needs input", tone: .warning, dot: true)
+    case .working: return RunovaBadge(text: "Working", tone: .primary, dot: true)
+    case .done: return RunovaBadge(text: "Done", tone: .success, dot: true)
+    case .idle: return RunovaBadge(text: "Idle", dot: true)
+    case .exited: return RunovaBadge(text: "Exited", dot: true)
+    }
+}
+
+private func statusTone(_ status: AgentState?) -> BadgeTone {
+    switch status {
+    case .needsInput: return .warning
+    case .working: return .primary
+    case .done: return .success
+    default: return .neutral
     }
 }
 
@@ -275,9 +285,9 @@ private struct ClisScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let project = chosen {
-                RunovaChip(text: project.name) { intents.selectProject(nil) }
+                RunovaChip(text: project.name, icon: RunovaIcons.folder, tone: .primary) { intents.selectProject(nil) }
                     .padding(.leading, 16)
-                    .padding(.top, 8)
+                    .padding(.top, 12)
             }
             if shown.isEmpty && view.terminalsLoading {
                 LoadingRows()
@@ -314,9 +324,12 @@ private struct TerminalRow: View {
                 RunovaListRow(
                     title: item.title,
                     detail: projects.first { $0.id == item.projectId }?.name ?? item.cliId,
-                    icon: RunovaIcons.terminal)
-                if let status = item.status { statusBadge(status).padding(.trailing, 16) }
+                    icon: item.status == nil ? RunovaIcons.terminal : RunovaIcons.agent,
+                    iconTone: statusTone(item.status), flat: true)
+                if let status = item.status { statusBadge(status) }
             }
+            .padding(.trailing, 12)
+            .rowCard()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -333,21 +346,28 @@ struct TerminalScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: terminal.title, onBack: intents.closeTerminal) {
-                RunovaChip(text: showProcesses ? "Screen" : "Processes") {
+        RunovaScreen(
+            title: terminal.title, onBack: intents.closeTerminal,
+            trailing: {
+                RunovaChip(
+                    text: showProcesses ? "Screen" : "Processes",
+                    icon: showProcesses ? RunovaIcons.terminal : RunovaIcons.processes
+                ) {
                     if !showProcesses { intents.loadProcesses(terminal.sessionId) }
                     showProcesses.toggle()
                 }
                 .padding(.trailing, 8)
             }
+        ) {
             ZStack(alignment: .bottomTrailing) {
                 if showProcesses {
                     ProcessList(processes: processes)
                 } else {
                     TerminalBody(frame: terminal.frame, onScroll: intents.terminalScroll)
                     if terminal.scrolled {
-                        RunovaChip(text: "Back to live") { intents.terminalScroll(backToLive) }
+                        RunovaChip(text: "Back to live", icon: RunovaIcons.pull, tone: .primary) {
+                            intents.terminalScroll(backToLive)
+                        }
                             .padding(12)
                     }
                 }
@@ -370,7 +390,7 @@ private struct ProcessList: View {
     var body: some View {
         if processes.isEmpty {
             RunovaEmptyState(
-                icon: RunovaIcons.server, title: "No processes",
+                icon: RunovaIcons.processes, title: "No processes",
                 detail: "Nothing is running in this terminal right now.")
         } else {
             ScrollView {
@@ -379,7 +399,7 @@ private struct ProcessList: View {
                         RunovaListRow(
                             title: process.name,
                             detail: "\(process.cpuLabel) CPU, \(process.memoryLabel)",
-                            icon: RunovaIcons.server)
+                            icon: RunovaIcons.cpu)
                     }
                 }
                 .padding(16)
@@ -398,12 +418,12 @@ private struct TerminalInput: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(terminalKeys, id: \.label) { key in
-                        RunovaChip(text: key.label) { onInput(key.data) }
+                        RunovaChip(text: key.label, icon: key.icon) { onInput(key.data) }
                     }
                 }
             }
             HStack(spacing: 8) {
-                RunovaTextField(value: $text, placeholder: "Type a command")
+                RunovaTextField(value: $text, placeholder: "Type a command", icon: RunovaIcons.terminal)
                 RunovaButton(text: "Send", icon: RunovaIcons.send) {
                     onInput(text + "\r")
                     text = ""

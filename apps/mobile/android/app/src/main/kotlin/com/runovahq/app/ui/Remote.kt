@@ -52,10 +52,13 @@ import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaIcon
+import com.runovahq.app.design.ChipTone
+import com.runovahq.app.design.RunovaHeroIcon
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
+import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import kotlin.math.abs
@@ -150,14 +153,14 @@ fun RemoteTab(connection: ConnectionView, intents: RemoteIntents) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
-        RunovaIcon(RunovaIcons.Remote, size = 36.dp, color = colors.primary)
+        RunovaHeroIcon(RunovaIcons.Remote, modifier = Modifier.padding(bottom = 8.dp))
         RunovaText("Remote", style = RunovaType.title, align = TextAlign.Center)
         RunovaText(
             "See and use ${connection.systemName}'s screen. The rest of this computer's tools pause until you close it.",
             color = colors.mutedForeground,
             align = TextAlign.Center,
         )
-        RunovaButton("Open screen", onClick = { intents.open(connection.systemId) })
+        RunovaButton("Open screen", onClick = { intents.open(connection.systemId) }, icon = RunovaIcons.Remote)
     }
 }
 
@@ -185,8 +188,7 @@ private fun waitingText(view: RemoteView) = when (view.phase) {
 private fun RemoteMessage(view: RemoteView, failed: Boolean, intents: RemoteIntents) {
     val colors = RunovaTheme.colors
     val (title, detail) = waitingText(view)
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(view.systemName, onBack = intents.close)
+    RunovaScreen(view.systemName, onBack = intents.close) {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -219,8 +221,7 @@ private fun PasswordPrompt(view: RemoteView, intents: RemoteIntents) {
             password = ""
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        RunovaTopBar(view.systemName, onBack = intents.close)
+    RunovaScreen(view.systemName, onBack = intents.close) {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -230,7 +231,7 @@ private fun PasswordPrompt(view: RemoteView, intents: RemoteIntents) {
                 "The password set for unattended access on ${view.systemName}.",
                 color = colors.mutedForeground,
             )
-            RunovaTextField(password, { password = it }, "Password", secure = true)
+            RunovaTextField(password, { password = it }, "Password", secure = true, icon = RunovaIcons.Key)
             view.error?.let {
                 RunovaText(it, style = RunovaType.small, color = colors.destructive)
             }
@@ -306,10 +307,10 @@ private fun KeyboardPanel(intents: RemoteIntents) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ShortcutKeys.forEach { (label, key) -> RunovaChip(label, { intents.key(key) }) }
+            ShortcutKeys.forEach { (label, key) -> RunovaChip(label, { intents.key(key) }, icon = RunovaIcons.Keyboard) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            RunovaTextField(text, { text = it }, "Type on the computer", Modifier.weight(1f))
+            RunovaTextField(text, { text = it }, "Type on the computer", Modifier.weight(1f), icon = RunovaIcons.Keyboard)
             RunovaButton(
                 "Send",
                 onClick = {
@@ -332,8 +333,8 @@ private fun ClipboardBar(text: String, intents: RemoteIntents) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         RunovaText("The computer shared its clipboard.", Modifier.weight(1f), style = RunovaType.small, maxLines = 1)
-        RunovaChip("Copy", { intents.copyClipboard(text) })
-        RunovaChip("Ignore", intents.clipboardTaken)
+        RunovaChip("Copy", { intents.copyClipboard(text) }, icon = RunovaIcons.Copy, tone = ChipTone.Primary)
+        RunovaChip("Ignore", intents.clipboardTaken, icon = RunovaIcons.Close)
     }
 }
 

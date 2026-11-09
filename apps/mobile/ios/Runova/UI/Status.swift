@@ -16,9 +16,17 @@ private func limitBadge(_ state: LimitState) -> RunovaBadge? {
 
 private func providerBadge(_ state: ProviderState) -> RunovaBadge {
     switch state {
-    case .ok: return RunovaBadge(text: "Connected", tone: .success)
-    case .connect: return RunovaBadge(text: "Not connected")
-    case .error: return RunovaBadge(text: "Problem", tone: .warning)
+    case .ok: return RunovaBadge(text: "Connected", tone: .success, dot: true)
+    case .connect: return RunovaBadge(text: "Not connected", dot: true)
+    case .error: return RunovaBadge(text: "Problem", tone: .warning, dot: true)
+    }
+}
+
+private func providerTone(_ state: ProviderState) -> BadgeTone {
+    switch state {
+    case .ok: return .success
+    case .connect: return .neutral
+    case .error: return .warning
     }
 }
 
@@ -34,7 +42,7 @@ struct StatusTab: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ComputerCard(system: system)
                     ForEach(view.status.limits, id: \.providerId) { LimitCard(limit: $0) }
-                    RunovaText("All providers", style: RunovaType.caption, color: palette.mutedForeground)
+                    RunovaSectionTitle(text: "All providers")
                     ForEach(view.status.providers, id: \.providerId) { provider in
                         Button {
                             intents.openProvider(provider.providerId)
@@ -42,9 +50,11 @@ struct StatusTab: View {
                             HStack(spacing: 8) {
                                 RunovaListRow(
                                     title: provider.name, detail: provider.todayLabel.map { "\($0) today" },
-                                    icon: RunovaIcons.monitoring)
-                                providerBadge(provider.state).padding(.trailing, 16)
+                                    icon: RunovaIcons.agent, iconTone: providerTone(provider.state), flat: true)
+                                providerBadge(provider.state)
                             }
+                            .padding(.trailing, 12)
+                            .rowCard()
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -63,12 +73,14 @@ private struct Meter: View {
     let value: String
     let percent: Double
     let detail: String
+    var icon: String?
 
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 8) {
+                if let icon { RunovaIcon(glyph: icon, size: 14, color: palette.primary) }
                 RunovaText(label, style: RunovaType.label)
                 Spacer(minLength: 0)
                 RunovaText(value, style: RunovaType.label)
@@ -87,13 +99,18 @@ private struct ComputerCard: View {
     var body: some View {
         RunovaCard {
             VStack(alignment: .leading, spacing: 14) {
-                Meter(label: "CPU", value: system.cpuLabel, percent: system.cpuPercent, detail: system.cpuDetail)
+                Meter(
+                    label: "CPU", value: system.cpuLabel, percent: system.cpuPercent, detail: system.cpuDetail,
+                    icon: RunovaIcons.cpu)
                 Meter(
                     label: "Memory", value: "\(Int(system.memPercent))%", percent: system.memPercent,
-                    detail: system.memLabel)
-                RunovaText(
-                    "Down \(system.netDownLabel), up \(system.netUpLabel)", style: RunovaType.small,
-                    color: palette.mutedForeground)
+                    detail: system.memLabel, icon: RunovaIcons.memory)
+                HStack(spacing: 8) {
+                    RunovaIcon(glyph: RunovaIcons.network, size: 14, color: palette.primary)
+                    RunovaText(
+                        "Down \(system.netDownLabel), up \(system.netUpLabel)", style: RunovaType.small,
+                        color: palette.mutedForeground)
+                }
             }
         }
     }
@@ -108,6 +125,7 @@ private struct LimitCard: View {
         RunovaCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
+                    RunovaIcon(glyph: RunovaIcons.agent, size: 15, color: palette.primary)
                     RunovaText(limit.name, style: RunovaType.title)
                     if let plan = limit.plan { RunovaBadge(text: plan) }
                     Spacer(minLength: 0)
@@ -134,8 +152,7 @@ struct ProviderScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RunovaTopBar(title: provider.name, onBack: intents.closeProvider)
+        RunovaScreen(title: provider.name, onBack: intents.closeProvider) {
             VStack(alignment: .leading, spacing: 12) {
                 if let error = provider.error { RunovaText(error, color: palette.destructive) }
                 RunovaCard {
