@@ -2,7 +2,9 @@
 
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::ops::asking;
-use crate::view::{GitAiKind, GitAiView, GitTagOptionView, GitTagSuggestionView, GitTagsView};
+use crate::view::{
+    GitAiKind, GitAiView, GitTagChannelView, GitTagOptionView, GitTagSuggestionView, GitTagsView,
+};
 use runova_rpc::RpcError;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -15,10 +17,15 @@ fn request_id() -> String {
 }
 
 #[derive(Deserialize)]
-struct NextDto {
-    patch: String,
-    minor: String,
-    major: String,
+struct OptionDto {
+    kind: String,
+    tag: String,
+}
+
+#[derive(Deserialize)]
+struct ChannelDto {
+    channel: String,
+    options: Vec<OptionDto>,
 }
 
 #[derive(Deserialize)]
@@ -28,7 +35,7 @@ struct TagsDto {
     recent: Vec<String>,
     commits_since: u32,
     has_remote: bool,
-    next: NextDto,
+    channels: Vec<ChannelDto>,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +67,31 @@ struct ResolvedDto {
     message: String,
     summary: Option<String>,
     cancelled: bool,
+}
+
+fn channel_view(dto: ChannelDto) -> GitTagChannelView {
+    let label = match dto.channel.as_str() {
+        "beta" => "Beta",
+        "preview" => "Preview",
+        _ => "Stable",
+    };
+    GitTagChannelView {
+        label: label.to_owned(),
+        channel: dto.channel,
+        options: dto
+            .options
+            .into_iter()
+            .map(|option| GitTagOptionView {
+                kind: match option.kind.as_str() {
+                    "minor" => "Minor",
+                    "major" => "Major",
+                    _ => "Patch",
+                }
+                .to_owned(),
+                tag: option.tag,
+            })
+            .collect(),
+    }
 }
 
 fn written_by(cli: Option<String>) -> Option<String> {
@@ -116,20 +148,7 @@ impl Runner {
                         tags.latest = dto.latest;
                         tags.recent = dto.recent;
                         tags.has_remote = dto.has_remote;
-                        tags.options = vec![
-                            GitTagOptionView {
-                                kind: "Patch".to_owned(),
-                                tag: dto.next.patch,
-                            },
-                            GitTagOptionView {
-                                kind: "Minor".to_owned(),
-                                tag: dto.next.minor,
-                            },
-                            GitTagOptionView {
-                                kind: "Major".to_owned(),
-                                tag: dto.next.major,
-                            },
-                        ];
+                        tags.channels = dto.channels.into_iter().map(channel_view).collect();
                     }
                     Ok(Err(_)) | Err(RpcError::Closed) => {}
                     Err(error) => tags.error = Some(error.to_string()),
@@ -280,7 +299,7 @@ impl Engine {
                 commits_label: String::new(),
                 has_remote: false,
                 recent: Vec::new(),
-                options: Vec::new(),
+                channels: Vec::new(),
                 suggesting: false,
                 suggestion: None,
                 error: None,
@@ -311,6 +330,30 @@ impl Engine {
             } else {
                 r.create_tag(tag, message, false);
             }
+        });
+    }
+
+    pub fn git_delete_tag(&self, tag: String) {
+        self.run(move |r| {
+            let Some(project) = r.git_project() else {
+                return;
+            };
+            let remote = r.view.git_tools.tags.as_ref().is_some_and(|tags| tags.has_remote);
+            let detail = if remote {
+                format!("{tag} goes from this computer and from the remote. A release or workflow may depend on it.")
+            } else {
+                format!("{tag} goes from this computer.")
+            };
+            r.ask(
+                asking("Delete this tag?", detail, "Delete"),
+                move |runner| {
+                    runner.op(
+                        "git.deleteTag",
+                        Some(json!({"projectId": project, "tag": tag, "remote": remote})),
+                        Runner::load_tags,
+                    );
+                },
+            );
         });
     }
 

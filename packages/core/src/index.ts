@@ -62,6 +62,7 @@ export * from './git/lineHunks.js';
 export * from './git/pullRequest.js';
 export * from './git/remoteUrl.js';
 export * from './git/statusV2.js';
+export * from './git/version.js';
 export * from './git/worktrees.js';
 export * from './grammar/languagetool.js';
 export * from './health/index.js';

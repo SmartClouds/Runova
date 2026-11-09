@@ -1,10 +1,12 @@
 package com.runovahq.app.ui
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.RoborazziOptions
@@ -25,6 +27,7 @@ import uniffi.runova_ffi.GitFileView
 import uniffi.runova_ffi.GitGroup
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.GitStateView
+import uniffi.runova_ffi.GitTagChannelView
 import uniffi.runova_ffi.GitTagOptionView
 import uniffi.runova_ffi.GitTagSuggestionView
 import uniffi.runova_ffi.GitTagsView
@@ -53,7 +56,18 @@ private val options = listOf(
 )
 
 private fun tags(suggesting: Boolean = false, suggestion: GitTagSuggestionView? = null) = GitTagsView(
-    false, "v1.4.2", "3 commits since this tag", true, listOf("v1.4.2", "v1.4.1"), options, suggesting, suggestion, null,
+    false,
+    "v1.4.2",
+    "3 commits since this tag",
+    true,
+    listOf("v1.4.2", "v1.4.1"),
+    listOf(
+        GitTagChannelView("stable", "Stable", options),
+        GitTagChannelView("beta", "Beta", listOf(GitTagOptionView("Patch", "v1.4.3-beta.1"))),
+    ),
+    suggesting,
+    suggestion,
+    null,
 )
 
 @RunWith(AndroidJUnit4::class)
@@ -152,6 +166,31 @@ class GitToolsTest {
         compose.onNodeWithContentDescription("Stop").performClick()
 
         assertEquals(1, stopped)
+    }
+
+    @Test
+    fun aChannelChangesTheChoices() {
+        var created: Triple<String, String, Boolean>? = null
+        show(
+            view(emptyList(), GitToolsScreen(tags(), null, null)),
+            GitIntents(createTag = { tag, message, push -> created = Triple(tag, message, push) }),
+        )
+
+        compose.onNodeWithText("Beta").performClick()
+        compose.onNodeWithText("v1.4.3-beta.1").performClick()
+        compose.onNodeWithText("Create and push").performClick()
+
+        assertEquals(Triple("v1.4.3-beta.1", "", true), created)
+    }
+
+    @Test
+    fun aRecentTagCanBeDeleted() {
+        var deleted = ""
+        show(view(emptyList(), GitToolsScreen(tags(), null, null)), GitIntents(deleteTag = { deleted = it }))
+
+        compose.onAllNodesWithText("Delete")[1].performScrollTo().performClick()
+
+        assertEquals("v1.4.1", deleted)
     }
 
     @Test

@@ -119,6 +119,7 @@ Plan: docs/ROADMAP.md
 | E85 | Studio on the phone | In progress | see git log | Library, a new video from a sentence, live AI runs, Ask AI proposals, animating and rendering, all running on the computer through a new `studio` scope. Voice, the timeline and fetching the file stay on the desktop. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E86 | Tags and AI in Git on the phone | In progress | see git log | Tag a version with next-version picks and Suggest with AI, commit message and branch name suggestions, and AI conflict fixes, all run by the CLI on the computer. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E87 | Pipeline fixes and prompts on the phone | In progress | see git log | Fix with AI and auto-fix on a failed run, and the Prompt Builder writing on the computer and sending to an agent, which also shows as a desktop tab. iOS screens are written but never compiled. Owed: trying it against a real computer |
+| E88 | Agent choice and the prompt library on the phone | In progress | see git log | CLI, model and effort for agents, stable, beta and preview tags, tag deletion, and Prompt Builder templates, history and scheduling. iOS screens are written but never compiled. Owed: trying it against a real computer |
 
 Status values: Not started, In progress, Blocked, Complete.
 

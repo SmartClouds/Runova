@@ -93,25 +93,14 @@ async fn waiting_on_an_answer_points_at_the_agent_not_retry() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn turning_auto_fix_on_asks_and_names_the_run() {
+async fn turning_auto_fix_on_names_the_run() {
     let world = on_pipelines("failure", json!([])).await;
     world.computer.answer(
         "autofix.start",
         json!({"ok": true, "message": "Auto-fix is on."}),
     );
 
-    world.engine.auto_fix_start(7);
-    let asked = world.until(|v| v.confirm.is_some(), "the question").await;
-    assert!(
-        asked
-            .confirm
-            .expect("question")
-            .detail
-            .contains("pushes to main")
-    );
-    assert!(world.computer.params_of("autofix.start").is_empty());
-
-    world.engine.confirm();
+    world.engine.auto_fix_start(7, None, None, None);
     world.until(|v| v.notice.is_some(), "the answer").await;
     assert_eq!(
         world.computer.params_of("autofix.start"),
@@ -133,11 +122,23 @@ async fn fix_with_ai_opens_the_agent_it_started() {
         json!({"cols": 80, "rows": 24, "data": ""}),
     );
 
-    world.engine.pipelines_fix_with_ai(7);
-    world.until(|v| v.confirm.is_some(), "the question").await;
-    world.engine.confirm();
+    world.engine.pipelines_fix_with_ai(
+        7,
+        Some("claude-code".to_owned()),
+        Some("opus".to_owned()),
+        Some("high".to_owned()),
+    );
 
     let view = world.until(|v| v.terminal.is_some(), "the terminal").await;
+    let sent = world
+        .computer
+        .params_of("agents.fixRun")
+        .pop()
+        .flatten()
+        .expect("params");
+    assert_eq!(sent["cliId"], "claude-code");
+    assert_eq!(sent["model"], "opus");
+    assert_eq!(sent["effort"], "high");
     let terminal = view.terminal.expect("terminal");
     assert_eq!(terminal.session_id, "tab-9");
     assert_eq!(terminal.title, "Claude Code · from phone");
@@ -147,17 +148,17 @@ async fn fix_with_ai_opens_the_agent_it_started() {
 async fn a_run_that_passed_cannot_be_fixed() {
     let world = on_pipelines("success", json!([])).await;
 
-    world.engine.pipelines_fix_with_ai(7);
+    world.engine.pipelines_fix_with_ai(7, None, None, None);
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    assert!(world.latest().expect("view").confirm.is_none());
+    assert!(world.computer.params_of("agents.fixRun").is_empty());
 }
 
 async fn on_prompts() -> World {
     let world = connected().await;
     world.computer.answer(
         "prompts.options",
-        json!({"types": ["Bug Fix", "Testing"], "targets": [{"id": "codex", "name": "Codex"}], "defaultTarget": "Codex"}),
+        json!({"types": ["Bug Fix", "Testing"], "targets": [{"id": "codex", "name": "Codex", "models": [{"value": "gpt", "label": "GPT", "tier": "Fast", "efforts": ["low", "high"]}]}], "defaultTarget": "Codex"}),
     );
     world.engine.select_project(Some("p1".to_owned()));
     world.engine.open_section(Some(Section::Prompts));
@@ -228,9 +229,12 @@ async fn sending_starts_an_agent_and_opens_it() {
         json!({"cols": 80, "rows": 24, "data": ""}),
     );
 
-    world
-        .engine
-        .prompts_send("Do it".to_owned(), Some("codex".to_owned()));
+    world.engine.prompts_send(
+        "Do it".to_owned(),
+        Some("codex".to_owned()),
+        Some("gpt".to_owned()),
+        Some("high".to_owned()),
+    );
     world.until(|v| v.confirm.is_some(), "the question").await;
     assert!(world.computer.params_of("agents.runPrompt").is_empty());
     world.engine.confirm();
@@ -240,7 +244,126 @@ async fn sending_starts_an_agent_and_opens_it() {
     assert_eq!(
         world.computer.params_of("agents.runPrompt"),
         vec![Some(
-            json!({"projectId": "p1", "prompt": "Do it", "cliId": "codex"})
+            json!({"projectId": "p1", "prompt": "Do it", "cliId": "codex", "model": "gpt", "effort": "high"})
         )]
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_library_lists_templates_history_and_what_is_waiting() {
+    let world = on_prompts().await;
+    world.computer.answer("prompts.templates", json!([{"id": "t1", "name": "Bug", "promptType": "Bug Fix", "targetAI": "Codex", "content": "C"}]));
+    world.computer.answer("prompts.history", json!([{"id": "h1", "rawInput": "Fix login", "promptType": "Bug Fix", "targetAI": "Codex", "content": "P", "agoMs": 7_200_000}]));
+    world.computer.answer(
+        "prompts.scheduled",
+        json!([{"id": "a", "summary": "Do it", "targetAI": "Codex", "runsInMs": 3_600_000}]),
+    );
+
+    world.engine.prompts_load_library(None);
+
+    let view = world
+        .until(
+            |v| {
+                !v.prompts.templates.is_empty()
+                    && !v.prompts.history.is_empty()
+                    && !v.prompts.scheduled.is_empty()
+            },
+            "the library",
+        )
+        .await;
+    assert_eq!(view.prompts.templates[0].name, "Bug");
+    assert!(
+        view.prompts.history[0]
+            .meta
+            .starts_with("Bug Fix, for Codex, ")
+    );
+    assert_eq!(view.prompts.scheduled[0].when_label, "In 1 hour");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scheduling_asks_first_and_carries_the_pick() {
+    let world = on_prompts().await;
+    world.computer.answer(
+        "prompts.schedule",
+        json!({"ok": true, "message": "Scheduled."}),
+    );
+    world.computer.answer("prompts.templates", json!([]));
+    world.computer.answer("prompts.history", json!([]));
+    world.computer.answer("prompts.scheduled", json!([]));
+
+    world
+        .engine
+        .prompts_schedule(runova_ffi::agents::PromptScheduleInput {
+            raw_input: "R".to_owned(),
+            prompt_type: "Bug Fix".to_owned(),
+            target: "Codex".to_owned(),
+            content: "C".to_owned(),
+            in_ms: 3_600_000,
+            cli_id: Some("codex".to_owned()),
+            model: Some("gpt".to_owned()),
+            effort: None,
+        });
+    let asked = world.until(|v| v.confirm.is_some(), "the question").await;
+    assert!(
+        asked
+            .confirm
+            .expect("question")
+            .detail
+            .contains("in 1 hour")
+    );
+    assert!(world.computer.params_of("prompts.schedule").is_empty());
+    world.engine.confirm();
+
+    world.until(|v| v.notice.is_some(), "scheduled").await;
+    let sent = world
+        .computer
+        .params_of("prompts.schedule")
+        .pop()
+        .flatten()
+        .expect("params");
+    assert_eq!(sent["inMs"], 3_600_000);
+    assert_eq!(sent["cliId"], "codex");
+    assert_eq!(sent["model"], "gpt");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_template_is_saved_and_deleting_one_asks() {
+    let world = on_prompts().await;
+    world.computer.answer(
+        "prompts.saveTemplate",
+        json!({"ok": true, "message": "Template saved."}),
+    );
+    world.computer.answer(
+        "prompts.deleteTemplate",
+        json!({"ok": true, "message": "Template deleted."}),
+    );
+    world.computer.answer("prompts.templates", json!([]));
+    world.computer.answer("prompts.history", json!([]));
+    world.computer.answer("prompts.scheduled", json!([]));
+
+    world.engine.prompts_save_template(
+        "N".to_owned(),
+        "Bug Fix".to_owned(),
+        "Codex".to_owned(),
+        "C".to_owned(),
+    );
+    world
+        .until(|v| v.notice.as_deref() == Some("Template saved."), "saved")
+        .await;
+
+    world.engine.prompts_delete_template("t1".to_owned());
+    world.until(|v| v.confirm.is_some(), "the question").await;
+    assert!(
+        world
+            .computer
+            .params_of("prompts.deleteTemplate")
+            .is_empty()
+    );
+    world.engine.confirm();
+    world
+        .until(
+            |v| v.notice.as_deref() == Some("Template deleted."),
+            "deleted",
+        )
+        .await;
 }

@@ -2,9 +2,11 @@
 //! there, and the phone follows it in the terminal it already knows how to show.
 
 use crate::engine::{Done, Engine, Runner, Task};
+use crate::labels::ago_label;
 use crate::ops::asking;
 use crate::view::{
-    AutoFixSessionView, AutoFixTone, PipelineRunState, PromptOptionsView, PromptTargetView,
+    AutoFixSessionView, AutoFixTone, PipelineRunState, PromptHistoryView, PromptModelView,
+    PromptOptionsView, PromptScheduledView, PromptTargetView, PromptTemplateView,
 };
 use runova_rpc::RpcError;
 use serde::Deserialize;
@@ -45,9 +47,49 @@ struct StartedDto {
 }
 
 #[derive(Deserialize)]
+struct ModelDto {
+    value: String,
+    label: String,
+    tier: Option<String>,
+    efforts: Vec<String>,
+}
+
+#[derive(Deserialize)]
 struct TargetDto {
     id: String,
     name: String,
+    models: Vec<ModelDto>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TemplateDto {
+    id: String,
+    name: String,
+    prompt_type: String,
+    #[serde(rename = "targetAI")]
+    target_ai: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryDto {
+    id: String,
+    raw_input: String,
+    prompt_type: String,
+    #[serde(rename = "targetAI")]
+    target_ai: String,
+    content: String,
+    ago_ms: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScheduledDto {
+    id: String,
+    summary: String,
+    runs_in_ms: i64,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +106,44 @@ struct GeneratedDto {
     text: String,
     error: Option<String>,
     cancelled: bool,
+}
+
+/// What a phone hands over to schedule a prompt.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PromptScheduleInput {
+    pub raw_input: String,
+    pub prompt_type: String,
+    pub target: String,
+    pub content: String,
+    pub in_ms: i64,
+    pub cli_id: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
+
+fn with_pick(
+    params: &mut Value,
+    cli_id: Option<String>,
+    model: Option<String>,
+    effort: Option<String>,
+) {
+    if cli_id.is_some() {
+        params["cliId"] = json!(cli_id);
+        params["model"] = json!(model);
+        params["effort"] = json!(effort);
+    }
+}
+
+fn when_label(in_ms: i64) -> String {
+    let minutes = (in_ms.max(0) + 59_999) / 60_000;
+    match minutes {
+        0..=1 => "In a minute".to_owned(),
+        2..=59 => format!("In {minutes} minutes"),
+        60..=119 => "In 1 hour".to_owned(),
+        120..=1439 => format!("In {} hours", minutes / 60),
+        1440..=2879 => "In 1 day".to_owned(),
+        _ => format!("In {} days", minutes / 1440),
+    }
 }
 
 fn run_name(number: Option<u32>) -> String {
@@ -204,6 +284,16 @@ impl Runner {
                         .map(|target| PromptTargetView {
                             id: target.id,
                             name: target.name,
+                            models: target
+                                .models
+                                .into_iter()
+                                .map(|model| PromptModelView {
+                                    value: model.value,
+                                    label: model.label,
+                                    tier: model.tier,
+                                    efforts: model.efforts,
+                                })
+                                .collect(),
                         })
                         .collect(),
                     default_target: dto.default_target,
@@ -211,6 +301,76 @@ impl Runner {
             },
             |_| {},
         );
+    }
+
+    fn load_prompt_library(&mut self, query: Option<String>) {
+        self.call(
+            "prompts.templates",
+            None,
+            |view, templates: Vec<TemplateDto>| {
+                view.prompts.templates = templates
+                    .into_iter()
+                    .map(|one| PromptTemplateView {
+                        id: one.id,
+                        name: one.name,
+                        prompt_type: one.prompt_type,
+                        target_ai: one.target_ai,
+                        content: one.content,
+                    })
+                    .collect();
+            },
+            |_| {},
+        );
+        self.call(
+            "prompts.history",
+            Some(json!({"query": query})),
+            |view, entries: Vec<HistoryDto>| {
+                view.prompts.history = entries
+                    .into_iter()
+                    .map(|one| PromptHistoryView {
+                        meta: format!(
+                            "{}, for {}, {}",
+                            one.prompt_type,
+                            one.target_ai,
+                            ago_label(one.ago_ms)
+                        ),
+                        id: one.id,
+                        raw_input: one.raw_input,
+                        prompt_type: one.prompt_type,
+                        target_ai: one.target_ai,
+                        content: one.content,
+                    })
+                    .collect();
+            },
+            |_| {},
+        );
+        self.load_scheduled();
+    }
+
+    fn load_scheduled(&mut self) {
+        let Some(project) = self.view.selected_project.clone() else {
+            self.view.prompts.scheduled.clear();
+            return;
+        };
+        self.call(
+            "prompts.scheduled",
+            Some(json!({"projectId": project})),
+            |view, tasks: Vec<ScheduledDto>| {
+                view.prompts.scheduled = tasks
+                    .into_iter()
+                    .map(|one| PromptScheduledView {
+                        when_label: when_label(one.runs_in_ms),
+                        id: one.id,
+                        summary: one.summary,
+                    })
+                    .collect();
+            },
+            |_| {},
+        );
+    }
+
+    fn after_library_change(&mut self) {
+        self.load_prompt_library(None);
     }
 
     fn generate_prompt(&mut self, raw_input: String, prompt_type: String, target: String) {
@@ -227,6 +387,7 @@ impl Runner {
         self.ai_request = Some(request.clone());
         let params = json!({
             "rawInput": raw_input, "promptType": prompt_type, "targetAI": target, "requestId": request,
+            "projectId": self.view.selected_project,
         });
         let attempt = self.attempt;
         let done = self.done_tx.clone();
@@ -250,20 +411,20 @@ impl Runner {
 
 #[uniffi::export]
 impl Engine {
-    pub fn auto_fix_start(&self, workflow_id: i64) {
+    /// The phone's sheet has already said what this does and taken the choice of agent.
+    pub fn auto_fix_start(
+        &self,
+        workflow_id: i64,
+        cli_id: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+    ) {
         self.run(move |r| {
-            let Some((params, _)) = r.workflow_params(workflow_id) else {
+            let Some((mut params, _)) = r.workflow_params(workflow_id) else {
                 return;
             };
-            let branch = params["branch"].as_str().unwrap_or("this branch").to_owned();
-            r.ask(
-                asking(
-                    "Turn on auto-fix?",
-                    format!("If this run fails, an agent on this computer fixes it, then commits and pushes to {branch}. It tries up to the limit in your Settings."),
-                    "Turn on",
-                ),
-                move |runner| runner.op("autofix.start", Some(params), Runner::refresh_auto_fix),
-            );
+            with_pick(&mut params, cli_id, model, effort);
+            r.op("autofix.start", Some(params), Runner::refresh_auto_fix);
         });
     }
 
@@ -301,19 +462,20 @@ impl Engine {
         });
     }
 
-    pub fn pipelines_fix_with_ai(&self, workflow_id: i64) {
+    /// The phone's sheet has already said what this does and taken the choice of agent.
+    pub fn pipelines_fix_with_ai(
+        &self,
+        workflow_id: i64,
+        cli_id: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+    ) {
         self.run(move |r| {
-            let Some((params, true)) = r.workflow_params(workflow_id) else {
+            let Some((mut params, true)) = r.workflow_params(workflow_id) else {
                 return;
             };
-            r.ask(
-                asking(
-                    "Fix this run with AI?",
-                    "An agent starts on this computer with the failure in hand. You can follow it here and answer it. Nothing is pushed unless you ask it to.".to_owned(),
-                    "Start",
-                ),
-                move |runner| runner.start_agent("agents.fixRun", params),
-            );
+            with_pick(&mut params, cli_id, model, effort);
+            r.start_agent("agents.fixRun", params);
         });
     }
 
@@ -340,7 +502,89 @@ impl Engine {
         self.run(|r| r.view.prompts.result = None);
     }
 
-    pub fn prompts_send(&self, prompt: String, cli_id: Option<String>) {
+    pub fn prompts_load_library(&self, query: Option<String>) {
+        self.run(move |r| r.load_prompt_library(query));
+    }
+
+    pub fn prompts_save_template(
+        &self,
+        name: String,
+        prompt_type: String,
+        target: String,
+        content: String,
+    ) {
+        self.run(move |r| {
+            r.op(
+                "prompts.saveTemplate",
+                Some(json!({"name": name, "promptType": prompt_type, "targetAI": target, "content": content})),
+                Runner::after_library_change,
+            );
+        });
+    }
+
+    pub fn prompts_delete_template(&self, id: String) {
+        self.run(move |r| {
+            r.ask(
+                asking(
+                    "Delete this template?",
+                    "It goes from this computer too.".to_owned(),
+                    "Delete",
+                ),
+                move |runner| {
+                    runner.op(
+                        "prompts.deleteTemplate",
+                        Some(json!({"id": id})),
+                        Runner::after_library_change,
+                    );
+                },
+            );
+        });
+    }
+
+    pub fn prompts_schedule(&self, task: PromptScheduleInput) {
+        self.run(move |r| {
+            let Some(project) = r.view.selected_project.clone() else {
+                r.view.prompts.error = Some("Choose a project first.".to_owned());
+                return;
+            };
+            r.ask(
+                asking(
+                    "Schedule this prompt?",
+                    format!(
+                        "An agent starts in this project on your computer {}, as long as Runova is running there.",
+                        when_label(task.in_ms).to_lowercase(),
+                    ),
+                    "Schedule",
+                ),
+                move |runner| {
+                    let mut params = json!({
+                        "projectId": project, "rawInput": task.raw_input, "promptType": task.prompt_type,
+                        "targetAI": task.target, "content": task.content, "inMs": task.in_ms,
+                    });
+                    with_pick(&mut params, task.cli_id, task.model, task.effort);
+                    runner.op("prompts.schedule", Some(params), Runner::after_library_change);
+                },
+            );
+        });
+    }
+
+    pub fn prompts_cancel_scheduled(&self, id: String) {
+        self.run(move |r| {
+            r.op(
+                "prompts.cancelScheduled",
+                Some(json!({"id": id})),
+                Runner::after_library_change,
+            );
+        });
+    }
+
+    pub fn prompts_send(
+        &self,
+        prompt: String,
+        cli_id: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+    ) {
         self.run(move |r| {
             let Some(project) = r.view.selected_project.clone() else {
                 r.view.prompts.error = Some("Choose a project first.".to_owned());
@@ -355,7 +599,7 @@ impl Engine {
                 move |runner| {
                     runner.start_agent(
                         "agents.runPrompt",
-                        json!({"projectId": project, "prompt": prompt, "cliId": cli_id}),
+                        json!({"projectId": project, "prompt": prompt, "cliId": cli_id, "model": model, "effort": effort}),
                     );
                 },
             );

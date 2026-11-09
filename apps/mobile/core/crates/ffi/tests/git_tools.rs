@@ -27,7 +27,12 @@ async fn on_git(staged: bool) -> World {
 
 fn tags() -> Value {
     json!({"latest": "v1.4.2", "recent": ["v1.4.2", "v1.4.1"], "commitsSince": 3, "hasRemote": true,
-           "next": {"patch": "v1.4.3", "minor": "v1.5.0", "major": "v2.0.0"}})
+    "channels": [
+        {"channel": "stable", "options": [
+            {"kind": "patch", "tag": "v1.4.3"}, {"kind": "minor", "tag": "v1.5.0"}, {"kind": "major", "tag": "v2.0.0"},
+        ]},
+        {"channel": "beta", "options": [{"kind": "minor", "tag": "v1.5.0-beta.1"}]},
+    ]})
 }
 
 async fn on_tags() -> World {
@@ -50,8 +55,11 @@ async fn tags_show_the_latest_and_the_next_of_each_size() {
 
     assert_eq!(view.latest.as_deref(), Some("v1.4.2"));
     assert_eq!(view.commits_label, "3 commits since this tag");
-    assert_eq!(view.options[1].kind, "Minor");
-    assert_eq!(view.options[1].tag, "v1.5.0");
+    assert_eq!(view.channels[0].label, "Stable");
+    assert_eq!(view.channels[0].options[1].kind, "Minor");
+    assert_eq!(view.channels[0].options[1].tag, "v1.5.0");
+    assert_eq!(view.channels[1].label, "Beta");
+    assert_eq!(view.channels[1].options[0].tag, "v1.5.0-beta.1");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -259,4 +267,32 @@ async fn fixing_a_conflict_asks_first_and_shows_the_result() {
     let view = world.until(|v| v.notice.is_some(), "the result").await;
     assert_eq!(view.notice.as_deref(), Some("Kept both changes"));
     assert!(view.git_tools.resolving.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_tag_asks_and_says_the_remote_goes_too() {
+    let world = on_tags().await;
+    world
+        .computer
+        .answer("git.deleteTag", json!({"ok": true, "message": "Deleted."}));
+
+    world.engine.git_delete_tag("v1.4.1".to_owned());
+    let asked = world.until(|v| v.confirm.is_some(), "the question").await;
+    assert!(
+        asked
+            .confirm
+            .expect("question")
+            .detail
+            .contains("from the remote")
+    );
+    assert!(world.computer.params_of("git.deleteTag").is_empty());
+
+    world.engine.confirm();
+    world.until(|v| v.notice.is_some(), "deleted").await;
+    assert_eq!(
+        world.computer.params_of("git.deleteTag"),
+        vec![Some(
+            json!({"projectId": "p1", "tag": "v1.4.1", "remote": true})
+        )]
+    );
 }

@@ -39,6 +39,8 @@ const session = {
   updatedAt: 2,
 } as unknown as AutoFixSession;
 
+const NOW = 1_800_000_000_000;
+
 function deps(change: Partial<ManageAgentDeps> = {}): ManageAgentDeps {
   return {
     autoFix: {
@@ -54,17 +56,75 @@ function deps(change: Partial<ManageAgentDeps> = {}): ManageAgentDeps {
     runPrompt: vi.fn(async () => ({ sessionId: 'tab-9', title: 'Claude Code' })),
     promptOptions: async () => ({
       types: ['Bug Fix'],
-      targets: [{ id: 'claude-code', name: 'Claude Code' }],
+      targets: [{ id: 'claude-code', name: 'Claude Code', models: [] }],
       defaultTarget: 'Claude Code',
     }),
     generatePrompt: vi.fn(async () => ({ ok: true, text: 'A good prompt' })),
     cancelPrompt: () => true,
+    pickArgs: vi.fn(() => ({ runArgs: ['--model', 'opus'], runLabel: 'Opus' })),
+    templates: async () => [
+      {
+        id: 't1',
+        name: 'Bug',
+        promptType: 'Bug Fix',
+        targetAI: 'Codex',
+        content: 'C',
+        createdAt: 'x',
+      },
+    ],
+    saveTemplate: vi.fn(async () => ({}) as never),
+    deleteTemplate: vi.fn(async () => undefined),
+    history: vi.fn(async () => [
+      {
+        id: 'h1',
+        rawInput: 'Fix login',
+        promptType: 'Bug Fix',
+        targetAI: 'Codex',
+        content: 'P',
+        source: 'generate' as const,
+        tags: [],
+        projectId: null,
+        createdAt: new Date(NOW - 5000).toISOString(),
+      },
+    ]),
+    scheduled: async () =>
+      [
+        {
+          id: 'a',
+          projectId: 'p1',
+          rawInput: 'Do it',
+          content: 'C',
+          targetAI: 'Codex',
+          status: 'pending',
+          runAt: new Date(NOW + 60000).toISOString(),
+        },
+        {
+          id: 'b',
+          projectId: 'p1',
+          rawInput: 'Done',
+          content: 'C',
+          targetAI: 'Codex',
+          status: 'completed',
+          runAt: new Date(NOW).toISOString(),
+        },
+        {
+          id: 'c',
+          projectId: 'other',
+          rawInput: 'No',
+          content: 'C',
+          targetAI: 'Codex',
+          status: 'pending',
+          runAt: new Date(NOW).toISOString(),
+        },
+      ] as never,
+    schedule: vi.fn(async () => undefined),
+    cancelScheduled: vi.fn(async () => true),
     ...change,
   };
 }
 
 function call(all: ManageAgentDeps, method: string, params?: unknown) {
-  return (agentMethods(all)[method] as (p: unknown) => Promise<unknown>)(params);
+  return (agentMethods(all, () => NOW)[method] as (p: unknown) => Promise<unknown>)(params);
 }
 
 describe('agents from a phone', () => {
@@ -191,13 +251,151 @@ describe('agents from a phone', () => {
       projectId: 'p1',
       prompt: 'Do it',
       cliId: 'codex',
+      model: null,
+      effort: null,
     });
   });
 
   it('lets the computer choose the CLI when none is named', async () => {
     const all = deps();
     await call(all, 'agents.runPrompt', { projectId: 'p1', prompt: 'Do it' });
-    expect(all.runPrompt).toHaveBeenCalledWith({ projectId: 'p1', prompt: 'Do it', cliId: null });
+    expect(all.runPrompt).toHaveBeenCalledWith({
+      projectId: 'p1',
+      prompt: 'Do it',
+      cliId: null,
+      model: null,
+      effort: null,
+    });
+  });
+
+  it('sends the chosen model and effort on', async () => {
+    const all = deps();
+    await call(all, 'agents.runPrompt', {
+      projectId: 'p1',
+      prompt: 'Do it',
+      cliId: 'claude-code',
+      model: 'opus',
+      effort: 'high',
+    });
+    expect(all.runPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'opus', effort: 'high' }),
+    );
+  });
+
+  it('refuses an effort nobody offers', async () => {
+    await expect(
+      call(deps(), 'agents.runPrompt', { projectId: 'p1', prompt: 'Do it', effort: '--yolo' }),
+    ).rejects.toThrow('effort');
+  });
+
+  it('passes a pick to auto-fix as flags and a label', async () => {
+    const all = deps();
+    await call(all, 'autofix.start', {
+      projectId: 'p1',
+      workflowId: 7,
+      workflowName: 'CI',
+      branch: 'main',
+      cliId: 'claude-code',
+      model: 'opus',
+    });
+    expect(all.autoFix.enable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cliId: 'claude-code',
+        runArgs: ['--model', 'opus'],
+        runLabel: 'Opus',
+      }),
+    );
+  });
+
+  it("says so when a model isn't offered", async () => {
+    const all = deps({
+      pickArgs: () => {
+        throw new Error('That model is not offered for this CLI.');
+      },
+    });
+    await expect(
+      call(all, 'autofix.start', {
+        projectId: 'p1',
+        workflowId: 7,
+        workflowName: 'CI',
+        branch: 'main',
+        cliId: 'x',
+        model: 'y',
+      }),
+    ).rejects.toMatchObject({ code: 'failed', message: 'That model is not offered for this CLI.' });
+  });
+
+  it('lists templates without when they were made', async () => {
+    await expect(call(deps(), 'prompts.templates')).resolves.toEqual([
+      { id: 't1', name: 'Bug', promptType: 'Bug Fix', targetAI: 'Codex', content: 'C' },
+    ]);
+  });
+
+  it('saves and deletes a template', async () => {
+    const all = deps();
+    await call(all, 'prompts.saveTemplate', {
+      name: 'N',
+      promptType: 'Bug Fix',
+      targetAI: 'Codex',
+      content: 'C',
+    });
+    expect(all.saveTemplate).toHaveBeenCalledWith({
+      name: 'N',
+      promptType: 'Bug Fix',
+      targetAI: 'Codex',
+      content: 'C',
+    });
+    await call(all, 'prompts.deleteTemplate', { id: 't1' });
+    expect(all.deleteTemplate).toHaveBeenCalledWith('t1');
+  });
+
+  it('gives history with how long ago, capped', async () => {
+    const all = deps();
+    const [entry] = (await call(all, 'prompts.history', { query: 'login' })) as Record<
+      string,
+      unknown
+    >[];
+    expect(entry).toMatchObject({ id: 'h1', content: 'P', agoMs: 5000 });
+    expect(all.history).toHaveBeenCalledWith('login', 30);
+  });
+
+  it('lists only what is still waiting in this project', async () => {
+    await expect(call(deps(), 'prompts.scheduled', { projectId: 'p1' })).resolves.toEqual([
+      { id: 'a', summary: 'Do it', targetAI: 'Codex', runsInMs: 60000 },
+    ]);
+  });
+
+  it('schedules by the computer clock', async () => {
+    const all = deps();
+    await call(all, 'prompts.schedule', {
+      projectId: 'p1',
+      rawInput: 'R',
+      promptType: 'Bug Fix',
+      targetAI: 'Codex',
+      content: 'C',
+      inMs: 3_600_000,
+    });
+    expect(all.schedule).toHaveBeenCalledWith({
+      projectId: 'p1',
+      rawInput: 'R',
+      promptType: 'Bug Fix',
+      targetAI: 'Codex',
+      content: 'C',
+      runAt: new Date(NOW + 3_600_000).toISOString(),
+    });
+  });
+
+  it('refuses to schedule too far ahead', async () => {
+    await expect(
+      call(deps(), 'prompts.schedule', {
+        projectId: 'p1',
+        rawInput: 'R',
+        promptType: 'Bug Fix',
+        targetAI: 'Codex',
+        content: 'C',
+        inMs: 8 * 86_400_000,
+      }),
+    ).rejects.toThrow('too far');
   });
 
   it('refuses a prompt past what a phone could mean to send', async () => {

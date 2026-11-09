@@ -22,8 +22,8 @@ struct PipelineIntents {
     var submitDispatch: ([String: String]) -> Void = { _ in }
     var closeDispatch: () -> Void = {}
     var cancel: (Int64) -> Void = { _ in }
-    var fixWithAi: (Int64) -> Void = { _ in }
-    var autoFixStart: (Int64) -> Void = { _ in }
+    var fixWithAi: (Int64, String?, String?, String?) -> Void = { _, _, _, _ in }
+    var autoFixStart: (Int64, String?, String?, String?) -> Void = { _, _, _, _ in }
     var autoFixStop: (String) -> Void = { _ in }
     var autoFixRetry: (String) -> Void = { _ in }
     var autoFixCommit: (String) -> Void = { _ in }
@@ -416,6 +416,8 @@ struct PipelinesTab: View {
     let view: AppView
     let intents: PipelineIntents
 
+    @State private var sheet: FixSheet?
+
     var body: some View {
         if view.selectedProject == nil {
             RunovaEmptyState(
@@ -429,11 +431,22 @@ struct PipelinesTab: View {
                     icon: RunovaIcons.pipelines, title: "No workflows",
                     detail: "This repository has no GitHub Actions workflows.")
             } else {
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(status.workflows, id: \.id) { WorkflowCard(workflow: $0, sessions: view.autoFix, intents: intents) }
+                ZStack {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach(status.workflows, id: \.id) {
+                                WorkflowCard(workflow: $0, sessions: view.autoFix, intents: intents) { sheet = $0 }
+                            }
+                        }
+                        .padding(16)
                     }
-                    .padding(16)
+                    if let open = sheet {
+                        FixAgentSheet(
+                            sheet: open,
+                            branch: status.workflows.first { $0.id == open.workflowId }?.run?.branch,
+                            options: view.prompts.options, intents: intents
+                        ) { sheet = nil }
+                    }
                 }
             }
         } else {
@@ -446,6 +459,7 @@ private struct WorkflowCard: View {
     let workflow: WorkflowView
     let sessions: [AutoFixSessionView]
     let intents: PipelineIntents
+    let onSheet: (FixSheet) -> Void
 
     @Environment(\.palette) private var palette
 
@@ -479,7 +493,7 @@ private struct WorkflowCard: View {
                 } else {
                     RunovaText("Never run", style: RunovaType.small, color: palette.mutedForeground)
                 }
-                WorkflowFixes(workflow: workflow, sessions: sessions, intents: intents)
+                WorkflowFixes(workflow: workflow, sessions: sessions, intents: intents, onSheet: onSheet)
             }
         }
     }

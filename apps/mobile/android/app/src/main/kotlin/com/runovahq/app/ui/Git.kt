@@ -85,6 +85,7 @@ data class GitIntents(
     val aiTaken: () -> Unit = {},
     val cancelAi: () -> Unit = {},
     val resolveWithAi: (String) -> Unit = {},
+    val deleteTag: (String) -> Unit = {},
 )
 
 private val GroupTitles = listOf(

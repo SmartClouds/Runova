@@ -26,6 +26,7 @@ import {
 import {
   commitStagedChanges,
   createTag,
+  deleteProjectTag,
   discardChanges,
   getProjectPath,
   pushProject,
@@ -43,6 +44,7 @@ export const liveGit: ManageGitDeps = {
   tags: async (projectId) => readTagInfo(await getProjectPath(projectId)),
   suggestTag: (projectId, requestId) => suggestTag(projectId, requestId),
   createTag,
+  deleteTag: deleteProjectTag,
   suggestCommitMessage,
   suggestBranchName,
   resolveWithAi: resolveConflictWithAi,

@@ -344,6 +344,7 @@ impl Runner {
             |view| view.pipelines.loading = false,
         );
         self.refresh_auto_fix();
+        self.refresh_prompts();
         self.load_run();
     }
 

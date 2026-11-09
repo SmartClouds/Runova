@@ -271,7 +271,8 @@ func fixtureView(
     studio: StudioScreen = StudioScreen(loading: false, note: nil, videos: [], composer: nil, video: nil),
     gitTools: GitToolsScreen = GitToolsScreen(tags: nil, ai: nil, resolving: nil),
     autoFix: [AutoFixSessionView] = [],
-    prompts: PromptsScreen = PromptsScreen(options: nil, generating: false, result: nil, error: nil)
+    prompts: PromptsScreen = PromptsScreen(
+        options: nil, generating: false, result: nil, error: nil, templates: [], history: [], scheduled: [])
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,

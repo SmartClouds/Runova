@@ -66,7 +66,7 @@ fun appView(
     busy: Boolean = false,
     gitTools: GitToolsScreen = GitToolsScreen(null, null, null),
     autoFix: List<AutoFixSessionView> = emptyList(),
-    prompts: PromptsScreen = PromptsScreen(null, false, null, null),
+    prompts: PromptsScreen = PromptsScreen(null, false, null, null, emptyList(), emptyList(), emptyList()),
 ) = AppView(
     auth,
     true,

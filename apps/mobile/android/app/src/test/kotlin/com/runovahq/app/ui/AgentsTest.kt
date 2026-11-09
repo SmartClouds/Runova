@@ -1,10 +1,12 @@
 package com.runovahq.app.ui
 
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.RoborazziOptions
@@ -26,7 +28,11 @@ import uniffi.runova_ffi.PipelineRunView
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.PipelinesStatusView
 import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.PromptHistoryView
+import uniffi.runova_ffi.PromptModelView
 import uniffi.runova_ffi.PromptOptionsView
+import uniffi.runova_ffi.PromptScheduledView
+import uniffi.runova_ffi.PromptTemplateView
 import uniffi.runova_ffi.PromptTargetView
 import uniffi.runova_ffi.PromptsScreen
 import uniffi.runova_ffi.WorkflowView
@@ -57,11 +63,22 @@ private fun session(
     agent, !canDismiss, canRetry, agent != null, canDismiss,
 )
 
+private val models = listOf(PromptModelView("opus", "Opus", "Deep", listOf("low", "high")))
+
 private val options = PromptOptionsView(
     listOf("Bug Fix", "Testing", "Refactoring"),
-    listOf(PromptTargetView("claude-code", "Claude Code"), PromptTargetView("codex", "Codex")),
+    listOf(PromptTargetView("claude-code", "Claude Code", models), PromptTargetView("codex", "Codex", emptyList())),
     "Claude Code",
 )
+
+private fun promptsScreen(
+    generating: Boolean = false,
+    result: String? = null,
+    error: String? = null,
+    templates: List<PromptTemplateView> = emptyList(),
+    history: List<PromptHistoryView> = emptyList(),
+    scheduled: List<PromptScheduledView> = emptyList(),
+) = PromptsScreen(options, generating, result, error, templates, history, scheduled)
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -81,7 +98,7 @@ class AgentsTest {
         autoFix = sessions,
     )
 
-    private fun onPrompts(screen: PromptsScreen = PromptsScreen(options, false, null, null), selected: String? = "p1") =
+    private fun onPrompts(screen: PromptsScreen = promptsScreen(), selected: String? = "p1") =
         appView(connection = computer, projects = listOf(project), selected = selected, prompts = screen)
 
     private fun snapshot(name: String) {
@@ -95,15 +112,38 @@ class AgentsTest {
         show(
             onPipelines(PipelineRunState.FAILED),
             "pipelines",
-            AppIntents(pipelines = PipelineIntents(fixWithAi = { fixed = it }, autoFixStart = { auto = it })),
+            AppIntents(
+                pipelines = PipelineIntents(
+                    fixWithAi = { id, _, _, _ -> fixed = id },
+                    autoFixStart = { id, _, _, _ -> auto = id },
+                ),
+            ),
         )
         snapshot("pipelines-failed")
 
         compose.onNodeWithText("Fix with AI").performClick()
+        compose.onNodeWithText("Start the agent").performClick()
         compose.onNodeWithText("Auto-fix").performClick()
+        compose.onNodeWithText("Turn on auto-fix").performClick()
 
         assertEquals(7L, fixed)
         assertEquals(7L, auto)
+    }
+
+    @Test
+    fun theSheetTakesTheAgentModelAndEffort() {
+        var picked: List<String?> = emptyList()
+        val view = onPipelines(PipelineRunState.FAILED).copy(prompts = promptsScreen())
+        show(view, "pipelines", AppIntents(pipelines = PipelineIntents(fixWithAi = { _, cli, model, effort -> picked = listOf(cli, model, effort) })))
+
+        compose.onNodeWithText("Fix with AI").performClick()
+        compose.onNodeWithText("Claude Code").performClick()
+        compose.onNodeWithText("Opus").performClick()
+        compose.onNodeWithText("high").performClick()
+        snapshot("pipelines-agent-sheet")
+        compose.onNodeWithText("Start the agent").performClick()
+
+        assertEquals(listOf("claude-code", "opus", "high"), picked)
     }
 
     @Test
@@ -197,7 +237,7 @@ class AgentsTest {
     @Test
     fun whileWritingItCanBeStopped() {
         var stopped = 0
-        show(onPrompts(PromptsScreen(options, true, null, null)), "prompts", AppIntents(prompts = PromptIntents(cancel = { stopped++ })))
+        show(onPrompts(promptsScreen(generating = true)), "prompts", AppIntents(prompts = PromptIntents(cancel = { stopped++ })))
 
         compose.onNodeWithText("The AI on this computer is writing it.").assertExists()
         compose.onNodeWithText("Stop").performClick()
@@ -210,9 +250,9 @@ class AgentsTest {
         var sent: Pair<String, String?>? = null
         var taken = 0
         show(
-            onPrompts(PromptsScreen(options, false, "A sharp prompt", null)),
+            onPrompts(promptsScreen(result = "A sharp prompt")),
             "prompts",
-            AppIntents(prompts = PromptIntents(taken = { taken++ }, send = { p, cli -> sent = p to cli })),
+            AppIntents(prompts = PromptIntents(taken = { taken++ }, send = { p, cli, _, _ -> sent = p to cli })),
         )
         snapshot("prompts-result")
 
@@ -227,9 +267,9 @@ class AgentsTest {
     fun withNoProjectItSaysToChooseOne() {
         var sent = false
         show(
-            onPrompts(PromptsScreen(options, false, "A sharp prompt", null), selected = null),
+            onPrompts(promptsScreen(result = "A sharp prompt"), selected = null),
             "prompts",
-            AppIntents(prompts = PromptIntents(send = { _, _ -> sent = true })),
+            AppIntents(prompts = PromptIntents(send = { _, _, _, _ -> sent = true })),
         )
 
         compose.onNodeWithText("Choose a project to send it to an agent.").assertExists()
@@ -239,8 +279,75 @@ class AgentsTest {
     }
 
     @Test
+    fun aTemplateFillsThePrompt() {
+        val template = PromptTemplateView("t1", "Bug report", "Testing", "Codex", "Write the tests")
+        show(onPrompts(promptsScreen(templates = listOf(template))), "prompts")
+        compose.onNodeWithText("Templates").performClick()
+        snapshot("prompts-templates")
+
+        compose.onNodeWithText("Bug report").performClick()
+
+        compose.onNodeWithText("Write the tests").assertExists()
+    }
+
+    @Test
+    fun aTemplateCanBeDeleted() {
+        var deleted = ""
+        val template = PromptTemplateView("t1", "Bug report", "Testing", "Codex", "C")
+        show(onPrompts(promptsScreen(templates = listOf(template))), "prompts", AppIntents(prompts = PromptIntents(deleteTemplate = { deleted = it })))
+
+        compose.onNodeWithText("Templates").performClick()
+        compose.onNodeWithText("Delete").performClick()
+
+        assertEquals("t1", deleted)
+    }
+
+    @Test
+    fun historyBringsBackTheRequestToo() {
+        val entry = PromptHistoryView("h1", "Fix login", "Bug Fix, for Codex, 2h ago", "Bug Fix", "Codex", "Old prompt")
+        show(onPrompts(promptsScreen(history = listOf(entry))), "prompts")
+
+        compose.onNodeWithText("History").performClick()
+        compose.onNodeWithText("Fix login").performClick()
+
+        compose.onNodeWithText("Old prompt").assertExists()
+    }
+
+    @Test
+    fun aPromptIsSavedAndScheduled() {
+        var saved = ""
+        var delay = 0L
+        show(
+            onPrompts(promptsScreen(result = "A sharp prompt")),
+            "prompts",
+            AppIntents(prompts = PromptIntents(saveTemplate = { name, _, _, _ -> saved = name }, schedule = { delay = it.inMs })),
+        )
+
+        compose.onNodeWithText("Save as template").performScrollTo().performClick()
+        compose.onAllNodes(hasSetTextAction())[2].performTextInput("Mine")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.onNodeWithText("Schedule").performScrollTo().performClick()
+        compose.onNodeWithText("In 1 hour").performScrollTo().performClick()
+
+        assertEquals("Mine", saved)
+        assertEquals(3_600_000L, delay)
+    }
+
+    @Test
+    fun aWaitingTaskCanBeCancelled() {
+        var cancelled = ""
+        val task = PromptScheduledView("a", "Do it", "In 1 hour")
+        show(onPrompts(promptsScreen(scheduled = listOf(task))), "prompts", AppIntents(prompts = PromptIntents(cancelScheduled = { cancelled = it })))
+
+        compose.onNodeWithText("Scheduled").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals("a", cancelled)
+    }
+
+    @Test
     fun aFailureIsShown() {
-        show(onPrompts(PromptsScreen(options, false, null, "No CLI is set up.")), "prompts")
+        show(onPrompts(promptsScreen(error = "No CLI is set up.")), "prompts")
 
         compose.onNodeWithText("No CLI is set up.").assertExists()
     }

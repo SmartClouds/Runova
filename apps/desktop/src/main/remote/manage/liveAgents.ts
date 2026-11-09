@@ -1,103 +1,36 @@
-import { randomUUID } from 'node:crypto';
 import {
-  buildAgentLaunchCommand,
   buildPromptGenerationRequest,
   CLI_REGISTRY,
-  getCliDefinition,
+  launchPickOptions,
   PROMPT_TYPES,
   type PromptType,
-  shellKindFor,
 } from '@runova/core';
 import { IPC } from '../../../shared/ipcChannels';
-import { claudeHookSettingsPath, supportsStatusHooks } from '../../agents/claudeHooks';
-import { agentStatus } from '../../agents/statusTracker';
+import { agentPickArgs, launchPromptAgent } from '../../agents/promptLaunch';
 import { cancelHeadlessPrompt } from '../../cli/headlessPrompt';
 import { askCli, runAiPrompt } from '../../ipc/ai';
 import { parseStartInput } from '../../ipc/ciAutoFix';
+import { createScheduledTasks, updateScheduledTask } from '../../ipc/scheduledTasks';
 import { broadcastToWindows } from '../../ipc/send';
-import {
-  createTerminalSession,
-  defaultTerminalShell,
-  subscribeTerminalOutput,
-  writeToShell,
-} from '../../ipc/terminal';
+import { deleteTemplate, saveTemplate } from '../../ipc/templates';
 import { ciAutoFixService } from '../../pipelines/autoFix/wiring';
 import { fetchRunFailureText, githubRepoForFolder } from '../../pipelines/githubActions';
-import { deliverWhenReady } from '../../relay/delivery';
+import { promptHistoryDb } from '../../promptHistoryDb';
 import { store } from '../../store';
 import type { ManageAgentDeps } from './agentMethods';
-
-/** A CLI in the project, in its normal mode, shown as a tab on the desktop as well. */
-async function runPrompt(input: {
-  projectId: string;
-  prompt: string;
-  cliId: string | null;
-}): Promise<{ sessionId: string; title: string }> {
-  const [projects, settings] = await Promise.all([store.getProjects(), store.getSettings()]);
-  const project = projects.find((one) => one.id === input.projectId);
-  if (!project) throw new Error('That project is not on this computer.');
-  const cliId = input.cliId ?? project.cliId ?? settings.defaultCliId;
-  const cli = cliId ? getCliDefinition(cliId) : undefined;
-  if (!cliId || !cli) throw new Error('Pick an AI CLI in Runova on this computer first.');
-  const shell = defaultTerminalShell();
-  const hooks = supportsStatusHooks(cliId);
-  const hookSettingsPath = hooks ? await claudeHookSettingsPath() : null;
-  const command = buildAgentLaunchCommand({
-    cliId,
-    shellKind: shellKindFor(shell, process.platform),
-    hookSettingsPath,
-    launchDefaults: settings.cliLaunchDefaults?.[cliId],
-    runArgs: [],
-  });
-  if (!command) throw new Error(`${cli.name} has no launch command.`);
-
-  const sessionId = randomUUID();
-  const title = `${cli.name} · from phone`;
-  agentStatus.pin({ sessionId, projectId: project.id, cliId, title });
-  const created = await createTerminalSession(
-    {
-      sessionId,
-      shell,
-      cwd: project.folderPath,
-      initialInput: `${command}\r`,
-      projectId: project.id,
-      cliId,
-      surface: 'workspace',
-    },
-    null,
-  ).catch((error: unknown) => {
-    agentStatus.unpin(sessionId);
-    throw error;
-  });
-  if (!created) {
-    agentStatus.unpin(sessionId);
-    throw new Error('The terminal could not start.');
-  }
-  void deliverWhenReady(input.prompt, {
-    subscribe: (listener) => subscribeTerminalOutput(sessionId, listener),
-    write: (data) => writeToShell(sessionId, data),
-  });
-  broadcastToWindows(IPC.ciAutoFix.onTab, {
-    projectId: project.id,
-    tabId: sessionId,
-    sessionId,
-    cliId,
-    title,
-    cwd: project.folderPath,
-  });
-  return { sessionId, title };
-}
 
 const providerRequests = new Map<string, AbortController>();
 const PROVIDER_TIMEOUT_MS = 10 * 60_000;
 
+type GenerateResult = { ok: boolean; text: string; error?: string; cancelled?: boolean };
+
 /** Writes the prompt where Settings says Generate Prompt should go, as the desktop page does. */
-async function generatePrompt(input: {
+async function writePrompt(input: {
   rawInput: string;
   promptType: string;
   targetAI: string;
   requestId: string;
-}) {
+}): Promise<GenerateResult> {
   if (!PROMPT_TYPES.includes(input.promptType as PromptType)) {
     return { ok: false, text: '', error: 'That kind of prompt is not offered.' };
   }
@@ -140,6 +73,12 @@ async function generatePrompt(input: {
   }
 }
 
+function parsedStart(raw: unknown) {
+  const input = parseStartInput(raw);
+  if (!input) throw new Error('That run could not be followed.');
+  return input;
+}
+
 export const liveAgents: ManageAgentDeps = {
   autoFix: {
     list: () => ciAutoFixService().list(),
@@ -155,17 +94,42 @@ export const liveAgents: ManageAgentDeps = {
     return repo ? `${repo.owner}/${repo.repo}` : null;
   },
   failureText: fetchRunFailureText,
-  runPrompt,
+  pickArgs: agentPickArgs,
+  runPrompt: ({ projectId, prompt, cliId, model, effort }) =>
+    launchPromptAgent({ projectId, prompt, cliId, pick: { model, effort }, origin: 'from phone' }),
   promptOptions: async () => {
     const settings = await store.getSettings();
     const fallback = CLI_REGISTRY.find((cli) => cli.id === settings.defaultCliId);
     return {
       types: PROMPT_TYPES,
-      targets: CLI_REGISTRY.map((cli) => ({ id: cli.id, name: cli.name })),
+      targets: CLI_REGISTRY.map((cli) => ({
+        id: cli.id,
+        name: cli.name,
+        // The picker's own data: cliLaunchOptions holds a function, so it can't go on the wire.
+        models: (launchPickOptions(cli.id)?.models ?? []).map((model) => ({
+          value: model.value,
+          label: model.label,
+          tier: model.tier ?? null,
+          efforts: Object.keys(model.effortCost ?? {}),
+        })),
+      })),
       defaultTarget: fallback?.name ?? null,
     };
   },
-  generatePrompt,
+  generatePrompt: async ({ projectId, ...input }) => {
+    const result = await writePrompt(input);
+    if (result.ok) {
+      promptHistoryDb.add({
+        rawInput: input.rawInput,
+        promptType: input.promptType,
+        targetAI: input.targetAI,
+        content: result.text,
+        source: 'generate',
+        projectId,
+      });
+    }
+    return result;
+  },
   cancelPrompt: (requestId) => {
     const controller = providerRequests.get(requestId);
     if (controller) {
@@ -174,10 +138,19 @@ export const liveAgents: ManageAgentDeps = {
     }
     return cancelHeadlessPrompt(requestId);
   },
+  templates: () => store.getTemplates(),
+  saveTemplate,
+  deleteTemplate,
+  history: async (query, limit) =>
+    query ? promptHistoryDb.search(query, null, limit) : promptHistoryDb.list(null, limit),
+  scheduled: () => store.getScheduledTasks(),
+  schedule: async ({ projectId, ...task }) => {
+    await createScheduledTasks(projectId, [{ ...task, runMode: 'auto' }]);
+    broadcastToWindows(IPC.scheduledTasks.onChanged);
+  },
+  cancelScheduled: async (id) => {
+    const updated = await updateScheduledTask(id, { status: 'cancelled' });
+    broadcastToWindows(IPC.scheduledTasks.onChanged);
+    return updated !== null;
+  },
 };
-
-function parsedStart(raw: unknown) {
-  const input = parseStartInput(raw);
-  if (!input) throw new Error('That run could not be followed.');
-  return input;
-}

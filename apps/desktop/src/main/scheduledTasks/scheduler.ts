@@ -1,5 +1,6 @@
 import type { ScheduledTask } from '@runova/core';
 import { IPC } from '../../shared/ipcChannels';
+import { launchScheduledTask } from '../agents/promptLaunch';
 import { updateScheduledTask } from '../ipc/scheduledTasks';
 import { broadcastToWindows, sendToWindow } from '../ipc/send';
 import { getMainWindow } from '../mainWindow';
@@ -64,13 +65,16 @@ export async function runScheduledTaskTick(now: Date = new Date()): Promise<void
 
     const due = dueTasks(tasks, now);
     const win = getMainWindow();
-    if (due.length > 0 && win && !win.webContents.isLoading()) {
+    // No window at all (macOS with the window closed): main can start it. One still loading will
+    // be ready for its listener soon, so that waits for the next tick.
+    if (due.length > 0 && (!win || !win.webContents.isLoading())) {
       for (const task of due) {
         const fired = await updateScheduledTask(task.id, {
           status: 'completed',
           ranAt: now.toISOString(),
         });
-        if (fired) sendToWindow(win, IPC.scheduledTasks.onDue, fired);
+        if (fired && win) sendToWindow(win, IPC.scheduledTasks.onDue, fired);
+        else if (fired) void launchScheduledTask(fired);
         changed = true;
       }
     }

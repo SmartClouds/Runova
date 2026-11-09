@@ -16,6 +16,8 @@ const window = vi.hoisted(() => ({
 }));
 
 vi.mock('../mainWindow', () => ({ getMainWindow: () => window.current }));
+const launch = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('../agents/promptLaunch', () => ({ launchScheduledTask: launch }));
 
 const userData = useTempUserData();
 
@@ -115,6 +117,15 @@ describe('scheduler tick', () => {
 
     expect(stored[0].status).toBe('missed');
     expect(send).not.toHaveBeenCalledWith(IPC.scheduledTasks.onDue, expect.anything());
+  });
+
+  it('starts a due task itself when there is no window', async () => {
+    window.current = null;
+
+    const stored = await tick([task({ id: 'due', runAt: ago(1000) })]);
+
+    expect(stored[0]?.status).toBe('completed');
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ id: 'due' }));
   });
 
   it('leaves a due task waiting while the window is still loading', async () => {

@@ -15,6 +15,7 @@ struct GitIntents {
     var aiTaken: () -> Void = {}
     var cancelAi: () -> Void = {}
     var resolveWithAi: (String) -> Void = { _ in }
+    var deleteTag: (String) -> Void = { _ in }
     var stage: ([String]) -> Void = { _ in }
     var unstage: ([String]) -> Void = { _ in }
     var discard: (String, GitGroup) -> Void = { _, _ in }

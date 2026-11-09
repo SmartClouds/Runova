@@ -123,8 +123,12 @@ final class AppModel: NSObject, ObservableObject {
                 submitDispatch: { [weak self] in self?.engine?.pipelinesSubmitDispatch(values: $0) },
                 closeDispatch: { [weak self] in self?.engine?.pipelinesCloseDispatch() },
                 cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) },
-                fixWithAi: { [weak self] in self?.engine?.pipelinesFixWithAi(workflowId: $0) },
-                autoFixStart: { [weak self] in self?.engine?.autoFixStart(workflowId: $0) },
+                fixWithAi: { [weak self] id, cli, model, effort in
+                    self?.engine?.pipelinesFixWithAi(workflowId: id, cliId: cli, model: model, effort: effort)
+                },
+                autoFixStart: { [weak self] id, cli, model, effort in
+                    self?.engine?.autoFixStart(workflowId: id, cliId: cli, model: model, effort: effort)
+                },
                 autoFixStop: { [weak self] in self?.engine?.autoFixStop(id: $0) },
                 autoFixRetry: { [weak self] in self?.engine?.autoFixRetry(id: $0) },
                 autoFixCommit: { [weak self] in self?.engine?.autoFixCommit(id: $0) },
@@ -160,7 +164,16 @@ final class AppModel: NSObject, ObservableObject {
                 },
                 cancel: { [weak self] in self?.engine?.promptsCancel() },
                 taken: { [weak self] in self?.engine?.promptsTaken() },
-                send: { [weak self] prompt, cli in self?.engine?.promptsSend(prompt: prompt, cliId: cli) }))
+                send: { [weak self] prompt, cli, model, effort in
+                    self?.engine?.promptsSend(prompt: prompt, cliId: cli, model: model, effort: effort)
+                },
+                loadLibrary: { [weak self] in self?.engine?.promptsLoadLibrary(query: $0) },
+                saveTemplate: { [weak self] name, type, target, content in
+                    self?.engine?.promptsSaveTemplate(name: name, promptType: type, target: target, content: content)
+                },
+                deleteTemplate: { [weak self] in self?.engine?.promptsDeleteTemplate(id: $0) },
+                schedule: { [weak self] in self?.engine?.promptsSchedule(task: $0) },
+                cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }))
     }
 
     private let frames = RemoteFrames()
@@ -266,6 +279,7 @@ final class AppModel: NSObject, ObservableObject {
             aiTaken: { [weak self] in self?.engine?.gitAiTaken() },
             cancelAi: { [weak self] in self?.engine?.gitCancelAi() },
             resolveWithAi: { [weak self] in self?.engine?.gitResolveWithAi(path: $0) },
+            deleteTag: { [weak self] in self?.engine?.gitDeleteTag(tag: $0) },
             stage: { [weak self] in self?.engine?.gitStage(paths: $0) },
             unstage: { [weak self] in self?.engine?.gitUnstage(paths: $0) },
             discard: { [weak self] in self?.engine?.gitDiscard(path: $0, group: $1) },

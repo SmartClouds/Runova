@@ -32,6 +32,21 @@ export const BRANCH_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
  * Refuses shell-ish and git-illegal tag names up front; git itself is the final word.
  * `@` is in there for monorepos that tag packages the npm way, as `@acme/web@1.4.0`.
  */
+/** Deletes a tag here and, when asked, on the remote. The full ref leaves a same-named branch alone. */
+export async function deleteTag(cwd: string, tag: string, remote: boolean): Promise<string> {
+  await git(cwd, ['tag', '-d', tag]);
+  if (!remote) return `Deleted ${tag} on this computer.`;
+  const name = (await primaryRemote(cwd)) ?? 'origin';
+  try {
+    await git(cwd, ['push', name, '--delete', `refs/tags/${tag}`], PUSH_TIMEOUT_MS);
+  } catch (error) {
+    const reason =
+      (error as { stderr?: string; message?: string }).stderr ?? (error as Error).message;
+    throw new Error(`Deleted ${tag} on this computer, but ${name} refused: ${reason}`);
+  }
+  return `Deleted ${tag} here and on ${name}.`;
+}
+
 export const TAG_NAME_PATTERN = /^[A-Za-z0-9@][A-Za-z0-9._/+@-]*$/;
 
 const RECENT_TAG_LIMIT = 8;

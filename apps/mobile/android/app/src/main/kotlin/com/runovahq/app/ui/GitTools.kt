@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.runovahq.app.design.ButtonKind
+import com.runovahq.app.design.ChipTone
 import com.runovahq.app.design.RunovaButton
 import com.runovahq.app.design.RunovaChip
 import com.runovahq.app.design.RunovaIcon
@@ -99,6 +100,8 @@ fun TagsScreen(tags: GitTagsView, error: String?, intents: GitIntents) {
     var message by remember { mutableStateOf("") }
     var push by remember(tags.hasRemote) { mutableStateOf(tags.hasRemote) }
     val suggestion = tags.suggestion
+    var channel by remember { mutableStateOf("stable") }
+    val options = tags.channels.firstOrNull { it.channel == channel }?.options.orEmpty()
     LaunchedEffect(suggestion) {
         suggestion?.let {
             tag = it.tag
@@ -117,10 +120,19 @@ fun TagsScreen(tags: GitTagsView, error: String?, intents: GitIntents) {
                     RunovaText(tags.commitsLabel, style = RunovaType.small, color = colors.mutedForeground)
                 }
             }
-            if (tags.options.isNotEmpty()) {
+            if (tags.channels.isNotEmpty()) {
                 RunovaSectionTitle("Next", Modifier.padding(top = 4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tags.channels.forEach {
+                        RunovaChip(
+                            it.label,
+                            { channel = it.channel },
+                            tone = if (it.channel == channel) ChipTone.Primary else ChipTone.Soft,
+                        )
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    tags.options.forEach { option ->
+                    options.forEach { option ->
                         BumpOption(option.kind, option.tag, option.tag == tag, Modifier.weight(1f)) { tag = option.tag }
                     }
                 }
@@ -165,7 +177,8 @@ fun TagsScreen(tags: GitTagsView, error: String?, intents: GitIntents) {
                 tags.recent.forEach {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         RunovaIcon(RunovaIcons.Tag, size = 11.dp, color = colors.mutedForeground)
-                        RunovaText(it, style = RunovaType.mono, color = colors.mutedForeground)
+                        RunovaText(it, Modifier.weight(1f), RunovaType.mono, colors.mutedForeground)
+                        RunovaChip("Delete", { intents.deleteTag(it) }, icon = RunovaIcons.Trash, tone = ChipTone.Danger)
                     }
                 }
             }
@@ -208,6 +221,6 @@ fun FixConflictChip(path: String, intents: GitIntents) {
         if (working) "Stop" else "AI",
         { if (working) intents.cancelAi() else intents.resolveWithAi(path) },
         icon = if (working) RunovaIcons.Stop else RunovaIcons.Sparkles,
-        tone = if (working) com.runovahq.app.design.ChipTone.Danger else com.runovahq.app.design.ChipTone.Primary,
+        tone = if (working) ChipTone.Danger else ChipTone.Primary,
     )
 }

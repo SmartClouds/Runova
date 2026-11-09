@@ -1,3 +1,4 @@
+import { versionOnChannel } from '@runova/core';
 import type {
   ManageGitBranch,
   ManageGitDiff,
@@ -56,6 +57,7 @@ export interface ManageGitDeps {
   tags(projectId: string): Promise<GitTagInfo>;
   suggestTag(projectId: string, requestId: string): Promise<SuggestTagResult>;
   createTag(input: CreateTagInput): Promise<GitOpResult>;
+  deleteTag(projectId: string, tag: string, remote: boolean): Promise<GitOpResult>;
   suggestCommitMessage(
     projectId: string,
     requestId: string,
@@ -85,6 +87,19 @@ export function nextVersions(latest: string | null): {
     minor: `${prefix}${major}.${pre && patch === 0 ? minor : minor + 1}.0`,
     major: `${prefix}${pre && minor === 0 && patch === 0 ? major : major + 1}.0.0`,
   };
+}
+
+/** Every next tag on every release channel, with the repository's own prefix kept. */
+export function tagChannels(latest: string | null, recent: readonly string[]) {
+  const prefix = latest?.match(/^(.*?)\d+\.\d+\.\d+/)?.[1] ?? 'v';
+  const next = nextVersions(latest);
+  return (['stable', 'beta', 'preview'] as const).map((channel) => ({
+    channel,
+    options: (['patch', 'minor', 'major'] as const).map((kind) => ({
+      kind,
+      tag: `${prefix}${versionOnChannel(next[kind].slice(prefix.length), channel, prefix, recent)}`,
+    })),
+  }));
 }
 
 function suggestion(result: SuggestGitTextResult) {
@@ -240,8 +255,16 @@ export function gitMethods(git: ManageGitDeps): Calls {
         recent: info.recentTags,
         commitsSince: info.commitsSinceLatestTag,
         hasRemote: info.hasRemote,
-        next: nextVersions(info.latestTag),
+        channels: tagChannels(info.latestTag, info.recentTags),
       };
+    },
+    'git.deleteTag': async (params) => {
+      const remote = field(params, 'remote');
+      if (typeof remote !== 'boolean')
+        throw new ManageError('bad-params', 'Here only, or there too?');
+      return plain(
+        await git.deleteTag(project(params), text(params, 'tag', 'Say which tag.'), remote),
+      );
     },
     'git.suggestTag': async (params) => {
       const result = await git.suggestTag(project(params), requestOf(params));

@@ -5,6 +5,7 @@ import {
   type ManageGitDeps,
   nextVersions,
   parseUnifiedDiff,
+  tagChannels,
   untrackedLines,
 } from './gitMethods';
 import { ManageError } from './session';
@@ -66,6 +67,7 @@ function git(change: Partial<ManageGitDeps> = {}): ManageGitDeps {
       cliName: 'Claude Code',
     }),
     createTag: async () => done,
+    deleteTag: async () => done,
     suggestCommitMessage: async () => ({ ok: true, text: 'fix: a thing', cliName: 'Codex' }),
     suggestBranchName: async () => ({ ok: true, text: 'fix/a-thing', cliName: 'Codex' }),
     resolveWithAi: async () => ({ ok: true, message: 'Resolved.', summary: 'Kept both' }),
@@ -307,7 +309,32 @@ describe('tags and AI on a phone', () => {
     await expect(call(git(), 'git.tags', { projectId: 'p1' })).resolves.toMatchObject({
       latest: 'web-v1.4.2',
       commitsSince: 3,
-      next: { patch: 'web-v1.4.3', minor: 'web-v1.5.0', major: 'web-v2.0.0' },
+      channels: [
+        {
+          channel: 'stable',
+          options: [
+            { kind: 'patch', tag: 'web-v1.4.3' },
+            { kind: 'minor', tag: 'web-v1.5.0' },
+            { kind: 'major', tag: 'web-v2.0.0' },
+          ],
+        },
+        {
+          channel: 'beta',
+          options: [
+            { kind: 'patch', tag: 'web-v1.4.3-beta.1' },
+            { kind: 'minor', tag: 'web-v1.5.0-beta.1' },
+            { kind: 'major', tag: 'web-v2.0.0-beta.1' },
+          ],
+        },
+        {
+          channel: 'preview',
+          options: [
+            { kind: 'patch', tag: 'web-v1.4.3-preview.1' },
+            { kind: 'minor', tag: 'web-v1.5.0-preview.1' },
+            { kind: 'major', tag: 'web-v2.0.0-preview.1' },
+          ],
+        },
+      ],
     });
   });
 
@@ -386,6 +413,24 @@ describe('tags and AI on a phone', () => {
       summary: 'Kept both',
       cancelled: false,
     });
+  });
+
+  it('deletes a tag only once told whether the remote goes too', async () => {
+    const deleteTag = vi.fn(async () => ({ ok: true, message: 'Deleted.' }));
+    await call(git({ deleteTag }), 'git.deleteTag', {
+      projectId: 'p1',
+      tag: 'v1.0.0',
+      remote: true,
+    });
+    expect(deleteTag).toHaveBeenCalledWith('p1', 'v1.0.0', true);
+    await expect(
+      call(git({ deleteTag }), 'git.deleteTag', { projectId: 'p1', tag: 'v1.0.0' }),
+    ).rejects.toThrow('there too');
+  });
+
+  it('counts past the pre-releases already tagged', () => {
+    const channels = tagChannels('v1.4.2', ['v1.4.3-beta.1', 'v1.4.3-beta.2']);
+    expect(channels[1]?.options[0]).toEqual({ kind: 'patch', tag: 'v1.4.3-beta.3' });
   });
 
   it('stops a suggestion by its request', async () => {

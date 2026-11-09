@@ -13,6 +13,7 @@ import {
   DIFFRAY_TOOL_ID,
   notificationHookChannel,
   runCommandSummary,
+  versionOnChannel,
 } from '@runova/core';
 import type {
   ApplyVersionResult,
@@ -1885,28 +1886,6 @@ function releaseChannelOf(version: string): ReleaseChannel | null {
 /** `1.3.0` out of `1.3.0`, `1.3.0-beta.2` or `1.3.0+build`, or null for anything else. */
 function stableVersionOf(version: string): string | null {
   return version.match(/^(\d+\.\d+\.\d+)(?:[-+]|$)/)?.[1] ?? null;
-}
-
-/**
- * `version` on `channel`: the plain number for a stable release, else the next free
- * pre-release of it (`1.3.0-beta.1`, then `-beta.2` once that one is tagged). Only the
- * tags in hand are counted, and git still turns down a duplicate this misses.
- */
-function versionOnChannel(
-  version: string,
-  channel: ReleaseChannel,
-  prefix: string,
-  existingTags: string[],
-): string {
-  if (channel === 'stable') return version;
-  const stem = `${prefix}${version}-${channel}.`;
-  let highest = 0;
-  for (const existing of existingTags) {
-    if (!existing.startsWith(stem)) continue;
-    const n = Number(existing.slice(stem.length));
-    if (Number.isInteger(n) && n > highest) highest = n;
-  }
-  return `${version}-${channel}.${highest + 1}`;
 }
 
 function GitIconWell({ children }: { children: React.ReactNode }): React.JSX.Element {

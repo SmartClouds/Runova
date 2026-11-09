@@ -21,6 +21,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +49,7 @@ import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AutoFixSessionView
+import uniffi.runova_ffi.PromptOptionsView
 import uniffi.runova_ffi.DispatchFormView
 import uniffi.runova_ffi.ErrorDetailView
 import uniffi.runova_ffi.ErrorExceptionView
@@ -84,8 +88,8 @@ data class PipelineIntents(
     val submitDispatch: (Map<String, String>) -> Unit = {},
     val closeDispatch: () -> Unit = {},
     val cancel: (Long) -> Unit = {},
-    val fixWithAi: (Long) -> Unit = {},
-    val autoFixStart: (Long) -> Unit = {},
+    val fixWithAi: (Long, String?, String?, String?) -> Unit = { _, _, _, _ -> },
+    val autoFixStart: (Long, String?, String?, String?) -> Unit = { _, _, _, _ -> },
     val autoFixStop: (String) -> Unit = {},
     val autoFixRetry: (String) -> Unit = {},
     val autoFixCommit: (String) -> Unit = {},
@@ -413,19 +417,36 @@ fun PipelinesTab(view: AppView, intents: PipelineIntents) {
             "No workflows",
             "This repository has no GitHub Actions workflows.",
         )
-        else -> WorkflowList(status, view.autoFix, intents)
+        else -> WorkflowList(status, view.autoFix, view.prompts.options, intents)
     }
 }
 
 @Composable
-private fun WorkflowList(status: PipelinesStatusView, sessions: List<AutoFixSessionView>, intents: PipelineIntents) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(status.workflows, key = { it.id }) { WorkflowCard(it, sessions, intents) }
+private fun WorkflowList(
+    status: PipelinesStatusView,
+    sessions: List<AutoFixSessionView>,
+    options: PromptOptionsView?,
+    intents: PipelineIntents,
+) {
+    var sheet by remember { mutableStateOf<FixSheet?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(status.workflows, key = { it.id }) { WorkflowCard(it, sessions, intents) { sheet = it } }
+        }
+        sheet?.let { open ->
+            val branch = status.workflows.firstOrNull { it.id == open.workflowId }?.run?.branch
+            FixAgentSheet(open, branch, options, intents) { sheet = null }
+        }
     }
 }
 
 @Composable
-private fun WorkflowCard(workflow: WorkflowView, sessions: List<AutoFixSessionView>, intents: PipelineIntents) {
+private fun WorkflowCard(
+    workflow: WorkflowView,
+    sessions: List<AutoFixSessionView>,
+    intents: PipelineIntents,
+    onSheet: (FixSheet) -> Unit,
+) {
     val colors = RunovaTheme.colors
     RunovaCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -451,7 +472,7 @@ private fun WorkflowCard(workflow: WorkflowView, sessions: List<AutoFixSessionVi
                     },
                 )
             }
-            WorkflowFixes(workflow, sessions, intents)
+            WorkflowFixes(workflow, sessions, intents, onSheet)
         }
     }
 }

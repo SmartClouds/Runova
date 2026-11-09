@@ -75,6 +75,7 @@ struct TagsScreen: View {
     @State private var tag = ""
     @State private var message = ""
     @State private var push: Bool?
+    @State private var channel = "stable"
     @Environment(\.palette) private var palette
 
     private var pushing: Bool { push ?? tags.hasRemote }
@@ -93,10 +94,17 @@ struct TagsScreen: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .runovaGlass()
-                    if !tags.options.isEmpty {
+                    if !tags.channels.isEmpty {
                         RunovaSectionTitle(text: "Next").padding(.top, 4)
+                        HStack(spacing: 6) {
+                            ForEach(tags.channels, id: \.channel) { item in
+                                RunovaChip(text: item.label, tone: item.channel == channel ? .primary : .soft) {
+                                    channel = item.channel
+                                }
+                            }
+                        }
                         HStack(spacing: 8) {
-                            ForEach(tags.options, id: \.kind) { option in
+                            ForEach(tags.channels.first { $0.channel == channel }?.options ?? [], id: \.kind) { option in
                                 BumpOption(kind: option.kind, tag: option.tag, on: option.tag == tag) { tag = option.tag }
                             }
                         }
@@ -144,6 +152,8 @@ struct TagsScreen: View {
                             HStack(spacing: 8) {
                                 RunovaIcon(glyph: RunovaIcons.tag, size: 11, color: palette.mutedForeground)
                                 RunovaText(recent, style: RunovaType.mono, color: palette.mutedForeground)
+                                Spacer(minLength: 0)
+                                RunovaChip(text: "Delete", icon: RunovaIcons.trash, tone: .danger) { intents.deleteTag(recent) }
                             }
                         }
                     }

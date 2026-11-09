@@ -1002,13 +1002,20 @@ pub struct GitTagSuggestionView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitTagChannelView {
+    pub channel: String,
+    pub label: String,
+    pub options: Vec<GitTagOptionView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct GitTagsView {
     pub loading: bool,
     pub latest: Option<String>,
     pub commits_label: String,
     pub has_remote: bool,
     pub recent: Vec<String>,
-    pub options: Vec<GitTagOptionView>,
+    pub channels: Vec<GitTagChannelView>,
     pub suggesting: bool,
     pub suggestion: Option<GitTagSuggestionView>,
     pub error: Option<String>,
@@ -1065,9 +1072,44 @@ pub struct AutoFixSessionView {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptModelView {
+    pub value: String,
+    pub label: String,
+    pub tier: Option<String>,
+    pub efforts: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PromptTargetView {
     pub id: String,
     pub name: String,
+    pub models: Vec<PromptModelView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptTemplateView {
+    pub id: String,
+    pub name: String,
+    pub prompt_type: String,
+    pub target_ai: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptHistoryView {
+    pub id: String,
+    pub raw_input: String,
+    pub meta: String,
+    pub prompt_type: String,
+    pub target_ai: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptScheduledView {
+    pub id: String,
+    pub summary: String,
+    pub when_label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -1084,6 +1126,9 @@ pub struct PromptsScreen {
     /// A freshly written prompt, until the field has taken it.
     pub result: Option<String>,
     pub error: Option<String>,
+    pub templates: Vec<PromptTemplateView>,
+    pub history: Vec<PromptHistoryView>,
+    pub scheduled: Vec<PromptScheduledView>,
 }
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]

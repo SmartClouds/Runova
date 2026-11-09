@@ -77,6 +77,7 @@ import {
   createBranch,
   currentBranch,
   deleteBranch,
+  deleteTag,
   detectDefaultBranch,
   git,
   gitOrNull,
@@ -280,6 +281,18 @@ export async function suggestCommitMessage(
     scope === 'staged',
     commitMessage.cliId,
   );
+}
+
+export async function deleteProjectTag(
+  projectId: string,
+  tag: string,
+  remote: boolean,
+): Promise<GitOpResult> {
+  const cwd = await getProjectPath(projectId);
+  if (!TAG_NAME_PATTERN.test(tag) || tag.includes('..') || tag.includes('@{')) {
+    return { ok: false, message: 'That is not a tag name.' };
+  }
+  return runGitOp(() => deleteTag(cwd, tag, remote));
 }
 
 export async function createTag(input: CreateTagInput): Promise<GitOpResult> {
