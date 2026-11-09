@@ -15,6 +15,7 @@ import type {
   GithubRunDetailsResult,
   GithubRunnersInput,
   GithubRunnersResult,
+  GithubRunRerunRequest,
   GithubWorkflowDispatchRequest,
   GithubWorkflowRefsResult,
   ProjectPipelineStatus,
@@ -31,6 +32,7 @@ import {
   fetchRunDetails,
   fetchRunFailureText,
   fetchWorkflowRefs,
+  rerunWorkflowRun,
   setProjectMutedActions,
 } from '../pipelines/githubActions';
 import { fetchRunnerStatus } from '../pipelines/githubRunners';
@@ -121,6 +123,15 @@ export function registerPipelineHandlers(): void {
     IPC.pipelines.cancelRun,
     async (_event, input: GithubRunCancelRequest): Promise<GithubPipelineActionResult> => {
       const result = await cancelWorkflowRun(input);
+      if (result.ok) schedulePipelineCheck();
+      return result;
+    },
+  );
+
+  ipcMain.handle(
+    IPC.pipelines.rerunRun,
+    async (_event, input: GithubRunRerunRequest): Promise<GithubPipelineActionResult> => {
+      const result = await rerunWorkflowRun(input);
       if (result.ok) schedulePipelineCheck();
       return result;
     },

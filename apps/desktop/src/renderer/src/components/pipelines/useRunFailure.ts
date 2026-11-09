@@ -8,7 +8,7 @@ import { queryKeys } from '@/lib/queryKeys';
  */
 export function useRunFailure(run: GithubActionsRunErrorInput, enabled: boolean) {
   return useQuery({
-    queryKey: queryKeys.runFailure(run.repo, run.runId),
+    queryKey: queryKeys.runFailure(run.repo, run.runId, run.attempt),
     queryFn: async () => {
       const result = await window.runova.pipelines.runError(run);
       if (!result.ok) throw new Error(result.error);

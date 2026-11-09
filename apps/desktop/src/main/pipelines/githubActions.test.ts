@@ -850,6 +850,120 @@ describe('cancelWorkflowRun', () => {
   });
 });
 
+describe('rerunWorkflowRun', () => {
+  it.each([
+    ['all', 'rerun'],
+    ['failed', 'rerun-failed-jobs'],
+  ] as const)('posts scope %s to the %s endpoint', async (scope, action) => {
+    scenario.api[`repos/acme/demo/actions/runs/5001/${action}`] = {};
+
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 5001, scope }),
+    ).resolves.toEqual({ ok: true });
+    expect(ghCalls()).toContainEqual([
+      'api',
+      '-H',
+      'Accept: application/vnd.github+json',
+      `repos/acme/demo/actions/runs/5001/${action}`,
+      '--method',
+      'POST',
+    ]);
+  });
+
+  it('explains a run that has already started again', async () => {
+    scenario.apiErrors['repos/acme/demo/actions/runs/5001/rerun'] =
+      'gh: This workflow is already running (HTTP 403)';
+
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 5001, scope: 'all' }),
+    ).resolves.toEqual({ ok: false, error: 'That run has already started again.' });
+  });
+
+  it('explains a run too old for GitHub to re-run', async () => {
+    scenario.apiErrors['repos/acme/demo/actions/runs/5001/rerun-failed-jobs'] =
+      'gh: Unable to retry this workflow run because it was created over a month ago (HTTP 403)';
+
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 5001, scope: 'failed' }),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'GitHub can only re-run workflows from the last 30 days.',
+    });
+  });
+
+  it('passes any other failure through', async () => {
+    scenario.apiErrors['repos/acme/demo/actions/runs/5001/rerun'] = 'HTTP 403: Forbidden';
+
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 5001, scope: 'all' }),
+    ).resolves.toEqual({ ok: false, error: 'HTTP 403: Forbidden' });
+  });
+
+  it('refuses a bad run or a scope it does not know', async () => {
+    const refused = { ok: false, error: 'That workflow run could not be identified.' };
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme', runId: 5001, scope: 'all' }),
+    ).resolves.toEqual(refused);
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 0, scope: 'all' }),
+    ).resolves.toEqual(refused);
+    await expect(
+      actions.rerunWorkflowRun({
+        repo: 'acme/demo',
+        runId: 5001,
+        scope: 'some' as unknown as 'all',
+      }),
+    ).resolves.toEqual(refused);
+  });
+
+  it('needs the CLI to be installed', async () => {
+    scenario.ghAvailable = false;
+    await expect(
+      actions.rerunWorkflowRun({ repo: 'acme/demo', runId: 5001, scope: 'all' }),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Install the GitHub CLI and sign in to re-run workflows.',
+    });
+  });
+
+  const jobsPath = 'repos/acme/demo/actions/runs/5001/jobs?per_page=100';
+  const finishedJob = (name: string) => ({
+    id: 1,
+    name,
+    status: 'completed',
+    conclusion: 'failure',
+  });
+  const jobNames = (result: Awaited<ReturnType<typeof actions.fetchRunDetails>>) =>
+    result.ok ? result.jobs.map((job) => job.name) : [];
+
+  it('forgets the jobs it remembered, for callers that do not name an attempt', async () => {
+    scenario.api[jobsPath] = { jobs: [finishedJob('first try')] };
+    scenario.api['repos/acme/demo/actions/runs/5001/rerun'] = {};
+    const input = { repo: 'acme/demo', runId: 5001 };
+    await actions.fetchRunDetails(input);
+
+    scenario.api[jobsPath] = { jobs: [finishedJob('second try')] };
+    expect(jobNames(await actions.fetchRunDetails(input))).toEqual(['first try']);
+
+    await actions.rerunWorkflowRun({ ...input, scope: 'all' });
+    expect(jobNames(await actions.fetchRunDetails(input))).toEqual(['second try']);
+  });
+
+  it('keeps each attempt of a run apart', async () => {
+    scenario.api[jobsPath] = { jobs: [finishedJob('first try')] };
+    const input = { repo: 'acme/demo', runId: 5001 };
+    await actions.fetchRunDetails({ ...input, attempt: 1 });
+
+    scenario.api[jobsPath] = { jobs: [finishedJob('second try')] };
+    expect(jobNames(await actions.fetchRunDetails({ ...input, attempt: 2 }))).toEqual([
+      'second try',
+    ]);
+    expect(jobNames(await actions.fetchRunDetails({ ...input, attempt: 1 }))).toEqual([
+      'first try',
+    ]);
+  });
+});
+
 describe('fetchWorkflowRefs', () => {
   it('lists the default branch, branches and tags', async () => {
     scenario.api['repos/acme/demo'] = { default_branch: 'main' };

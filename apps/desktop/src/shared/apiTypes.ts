@@ -3295,6 +3295,13 @@ export interface GithubRunCancelRequest {
   runId: number;
 }
 
+export interface GithubRunRerunRequest {
+  repo: string;
+  runId: number;
+  /** `failed` also brings back the jobs that depend on the failed ones, as GitHub does. */
+  scope: 'all' | 'failed';
+}
+
 export type GithubPipelineActionResult = { ok: true } | { ok: false; error: string };
 
 export interface GithubWorkflowRunInfo {
@@ -3372,6 +3379,8 @@ export interface GithubRunAnnotationsInput {
   repo: string;
   runId: number;
   checkSuiteId?: number;
+  /** A re-run keeps the run id, so this is what tells its answer from the previous attempt's. */
+  attempt?: number;
 }
 
 export type GithubRunAnnotationsResult =
@@ -3386,6 +3395,8 @@ export type GithubRunAnnotationsResult =
 export interface GithubRunDetailsInput {
   repo: string;
   runId: number;
+  /** A re-run keeps the run id, so this is what tells its answer from the previous attempt's. */
+  attempt?: number;
 }
 
 /** One step of a job, in the order GitHub ran (or will run) it. Times are null until it starts. */
@@ -3590,6 +3601,8 @@ export interface GithubActionsRunErrorInput {
   displayTitle?: string;
   runNumber?: number;
   headBranch?: string;
+  /** A re-run keeps the run id, so this is what tells its answer from the previous attempt's. */
+  attempt?: number;
 }
 
 export type GithubActionsRunErrorResult = { ok: true; text: string } | { ok: false; error: string };

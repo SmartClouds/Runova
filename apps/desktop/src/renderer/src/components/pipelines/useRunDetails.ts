@@ -25,6 +25,7 @@ export function useRunDetails(
       const result = await window.runova.pipelines.runDetails({
         repo,
         runId: run?.id ?? 0,
+        attempt: run?.runAttempt,
       });
       if (!result.ok) throw new Error(result.error);
       return result.jobs;

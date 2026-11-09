@@ -22,7 +22,7 @@ type AnnotatedRun = Pick<
   | 'workflowName'
   | 'runNumber'
   | 'headBranch'
->;
+> & { attempt?: number };
 
 const LEVEL_LABEL: Record<GithubRunAnnotationLevel, { one: string; many: string }> = {
   failure: { one: 'error', many: 'errors' },
@@ -62,12 +62,13 @@ export function useSeenOnce<T extends Element>(): [(node: T | null) => void, boo
 /** A finished run's annotations. Running runs are skipped since their jobs are still writing them. */
 export function useRunAnnotations(item: AnnotatedRun, enabled: boolean) {
   return useQuery({
-    queryKey: queryKeys.runAnnotations(item.repo, item.id),
+    queryKey: queryKeys.runAnnotations(item.repo, item.id, item.attempt),
     queryFn: () =>
       window.runova.pipelines.runAnnotations({
         repo: item.repo,
         runId: item.id,
         checkSuiteId: item.checkSuiteId,
+        attempt: item.attempt,
       }),
     enabled: enabled && item.status === 'completed',
     staleTime: Number.POSITIVE_INFINITY,

@@ -47,7 +47,7 @@ describe('useRunDetails', () => {
     const { result } = render({ run: DONE, enabled: true });
 
     await waitFor(() => expect(result.current.data).toEqual([job(1, 'build')]));
-    expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100 });
+    expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100, attempt: 1 });
   });
 
   it('turns a failed read into an error that carries the reason', async () => {
@@ -83,7 +83,9 @@ describe('useRunDetails', () => {
 
     rerender({ run: { ...DONE, id: 200 }, enabled: true });
 
-    await waitFor(() => expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 200 }));
+    await waitFor(() =>
+      expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 200, attempt: 1 }),
+    );
     expect(result.current.data).toBeUndefined();
   });
 });

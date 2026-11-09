@@ -5,8 +5,13 @@ import type {
   GithubWorkflowInfo,
   GithubWorkflowRunInfo,
 } from '@shared/apiTypes';
+import { useQuery } from '@tanstack/react-query';
 import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/queryKeys';
+import { resolveConfirm, useConfirmStore } from '@/stores/confirmStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { RunDetails } from './RunDetails';
 
@@ -221,6 +226,165 @@ describe('RunDetails header', () => {
   });
 });
 
+describe('RunDetails re-run', () => {
+  const rerunRun = vi.fn();
+  const status = vi.fn();
+
+  beforeEach(() => {
+    rerunRun.mockResolvedValue({ ok: true });
+    status.mockResolvedValue(null);
+    useConfirmStore.setState({ open: false });
+  });
+
+  function renderRerun(run: GithubWorkflowRunInfo) {
+    return renderDetails(run, {
+      'pipelines.rerunRun': rerunRun,
+      'pipelines.status': status,
+    });
+  }
+
+  async function pick(label: string): Promise<void> {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Re-run jobs' }));
+    await user.click(await screen.findByRole('menuitem', { name: new RegExp(`^${label}`) }));
+  }
+
+  async function answerConfirm(yes: boolean): Promise<void> {
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(true));
+    act(() => resolveConfirm(yes));
+  }
+
+  it('offers both choices on a failed or cancelled run', async () => {
+    const failed = renderRerun(FAILED_RUN);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Re-run jobs' }));
+    expect(await screen.findByRole('menuitem', { name: /^Re-run all jobs/ })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: /^Re-run failed jobs/ })).toBeVisible();
+    failed.unmount();
+
+    renderRerun({ ...FAILED_RUN, conclusion: 'cancelled' });
+    expect(screen.getByRole('button', { name: 'Re-run jobs' })).toBeVisible();
+  });
+
+  it('is one plain button when nothing failed, since there is only one choice', () => {
+    renderRerun(PASSED_RUN);
+    expect(screen.getByRole('button', { name: 'Re-run all jobs' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Re-run jobs' })).not.toBeInTheDocument();
+  });
+
+  it('is not offered while the run is still going', () => {
+    renderRerun(LIVE_RUN);
+    expect(screen.queryByRole('button', { name: /^Re-run/ })).not.toBeInTheDocument();
+  });
+
+  it('asks first, then re-runs only the failed jobs', async () => {
+    renderRerun(FAILED_RUN);
+    await pick('Re-run failed jobs');
+    expect(useConfirmStore.getState().title).toBe('Re-run failed jobs of CD?');
+    await answerConfirm(true);
+
+    await waitFor(() =>
+      expect(rerunRun).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100, scope: 'failed' }),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Asked GitHub to re-run the failed jobs.'),
+    );
+  });
+
+  it('warns that re-running everything repeats what the pipeline deploys', async () => {
+    renderRerun(FAILED_RUN);
+    await pick('Re-run all jobs');
+    expect(useConfirmStore.getState().description).toMatch(/deploys or publishes happens again/);
+    await answerConfirm(true);
+
+    await waitFor(() =>
+      expect(rerunRun).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100, scope: 'all' }),
+    );
+  });
+
+  it('does nothing when the confirmation is declined', async () => {
+    renderRerun(PASSED_RUN);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Re-run all jobs' }));
+    await answerConfirm(false);
+
+    await waitFor(() => expect(useConfirmStore.getState().open).toBe(false));
+    expect(rerunRun).not.toHaveBeenCalled();
+  });
+
+  it('shows why GitHub refused and lets the user try again', async () => {
+    rerunRun.mockResolvedValue({ ok: false, error: 'That run has already started again.' });
+    renderRerun(PASSED_RUN);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Re-run all jobs' }));
+    await answerConfirm(true);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('That run has already started again.'),
+    );
+    expect(screen.getByRole('button', { name: 'Re-run all jobs' })).toBeEnabled();
+  });
+
+  it('holds on Starting until GitHub shows the new attempt', async () => {
+    let showRun: (run: GithubWorkflowRunInfo) => void = () => undefined;
+    function ChangingRun(): React.JSX.Element {
+      const [run, setRun] = useState(PASSED_RUN);
+      showRun = setRun;
+      return <RunDetails project={project} repo="acme/app" workflow={workflow} run={run} />;
+    }
+    renderWithProviders(<ChangingRun />, {
+      bridge: {
+        'pipelines.runDetails': runDetails,
+        'pipelines.runAnnotations': runAnnotations,
+        'pipelines.rerunRun': rerunRun,
+      },
+    });
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Re-run all jobs' }));
+    await answerConfirm(true);
+
+    expect(await screen.findByRole('button', { name: 'Starting' })).toBeDisabled();
+
+    act(() => showRun({ ...PASSED_RUN, runAttempt: 2 }));
+    expect(await screen.findByRole('button', { name: 'Re-run all jobs' })).toBeEnabled();
+  });
+
+  it('keeps asking GitHub while it waits, and comes back if the attempt never shows', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    function StatusReader(): null {
+      useQuery({ queryKey: queryKeys.pipelineStatus(project.id), queryFn: status });
+      return null;
+    }
+    renderWithProviders(
+      <>
+        <StatusReader />
+        <RunDetails project={project} repo="acme/app" workflow={workflow} run={PASSED_RUN} />
+      </>,
+      {
+        bridge: {
+          'pipelines.runDetails': runDetails,
+          'pipelines.runAnnotations': runAnnotations,
+          'pipelines.rerunRun': rerunRun,
+        },
+      },
+    );
+    await waitFor(() => expect(status).toHaveBeenCalledTimes(1));
+
+    await userEvent
+      .setup({ advanceTimers: vi.advanceTimersByTime })
+      .click(screen.getByRole('button', { name: 'Re-run all jobs' }));
+    await answerConfirm(true);
+    await screen.findByRole('button', { name: 'Starting' });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(status.mock.calls.length).toBeGreaterThan(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(screen.getByRole('button', { name: 'Re-run all jobs' })).toBeEnabled();
+  });
+});
+
 describe('RunDetails jobs', () => {
   it('shimmers while the jobs load, then lists them with a summary', async () => {
     let finish: (value: unknown) => void = () => undefined;
@@ -283,7 +447,7 @@ describe('RunDetails jobs', () => {
     renderDetails(FAILED_RUN);
     await screen.findByRole('region', { name: 'Jobs' });
     expect(runDetails).toHaveBeenCalledTimes(1);
-    expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100 });
+    expect(runDetails).toHaveBeenCalledWith({ repo: 'acme/app', runId: 100, attempt: 2 });
   });
 
   it('explains a failed read, keeps the reason in a tooltip, and retries', async () => {

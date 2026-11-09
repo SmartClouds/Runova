@@ -1342,6 +1342,8 @@ export const IPC = {
     refs: 'pipelines:refs',
     dispatch: 'pipelines:dispatch',
     cancelRun: 'pipelines:cancelRun',
+    /** (GithubRunRerunRequest) -> GithubPipelineActionResult: all of a finished run, or its failed jobs. */
+    rerunRun: 'pipelines:rerunRun',
     runners: 'pipelines:runners',
     /** (RunnerMachineLink) -> RunnerMachineStatsResult: CPU, memory and disk of a runner's machine. */
     runnerMachineStats: 'pipelines:runnerMachineStats',

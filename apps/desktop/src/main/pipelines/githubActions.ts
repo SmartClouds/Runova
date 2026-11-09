@@ -21,6 +21,7 @@ import type {
   GithubRunDetailsInput,
   GithubRunDetailsResult,
   GithubRunJob,
+  GithubRunRerunRequest,
   GithubStepLog,
   GithubWorkflowDispatchRequest,
   GithubWorkflowInfo,
@@ -531,6 +532,15 @@ function parseOwnerRepo(repo: string): { owner: string; repo: string } | null {
   return { owner, repo: name };
 }
 
+/**
+ * Where one run's answers are cached. A re-run keeps the run id, so a caller that knows the attempt
+ * gets an entry of its own and can never be handed what the previous attempt left behind.
+ */
+function runCacheKey(owner: string, repo: string, runId: number, attempt?: number): string {
+  const base = `${owner}/${repo}#${runId}`;
+  return attempt ? `${base}@${attempt}` : base;
+}
+
 function stripAnsi(value: string): string {
   return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '');
 }
@@ -589,7 +599,7 @@ export async function fetchRunFailureText(
     return { ok: false, error: 'That workflow run could not be identified.' };
   }
 
-  const cacheKey = `${parsed.owner}/${parsed.repo}#${runId}`;
+  const cacheKey = runCacheKey(parsed.owner, parsed.repo, runId, input.attempt);
   const cached = errorCache.get(cacheKey);
   if (cached && Date.now() - cached.at < ERROR_CACHE_MS) {
     return { ok: true, text: cached.text };
@@ -717,7 +727,7 @@ export async function fetchRunDetails(
     return { ok: false, error: 'That workflow run could not be identified.' };
   }
 
-  const cacheKey = `${parsed.owner}/${parsed.repo}#${runId}`;
+  const cacheKey = runCacheKey(parsed.owner, parsed.repo, runId, input.attempt);
   const cached = detailsCache.get(cacheKey);
   if (cached && Date.now() - cached.at < DETAILS_CACHE_MS) return cached.result;
 
@@ -918,7 +928,7 @@ export async function fetchRunAnnotations(
     return { ok: false, error: 'That workflow run could not be identified.' };
   }
 
-  const cacheKey = `${parsed.owner}/${parsed.repo}#${runId}`;
+  const cacheKey = runCacheKey(parsed.owner, parsed.repo, runId, input.attempt);
   const cached = annotationCache.get(cacheKey);
   if (cached) return cached;
 
@@ -1143,6 +1153,45 @@ export async function cancelWorkflowRun(
     const message = ghErrorMessage(error);
     if (/409|Conflict/i.test(message)) {
       return { ok: false, error: 'That run already finished, so there was nothing to stop.' };
+    }
+    return { ok: false, error: message };
+  }
+}
+
+/** Starts a finished run again, all of it or only the jobs that did not pass. */
+export async function rerunWorkflowRun(
+  input: GithubRunRerunRequest,
+): Promise<GithubPipelineActionResult> {
+  const parsed = parseOwnerRepo(input.repo);
+  const runId = Number(input.runId);
+  const action =
+    input.scope === 'all' ? 'rerun' : input.scope === 'failed' ? 'rerun-failed-jobs' : null;
+  if (!parsed || !Number.isInteger(runId) || runId <= 0 || !action) {
+    return { ok: false, error: 'That workflow run could not be identified.' };
+  }
+  if (!(await isGhCliAvailable())) {
+    return { ok: false, error: 'Install the GitHub CLI and sign in to re-run workflows.' };
+  }
+
+  try {
+    await ghApiAllowEmpty(`repos/${parsed.owner}/${parsed.repo}/actions/runs/${runId}/${action}`, [
+      '--method',
+      'POST',
+    ]);
+    // Callers that don't name an attempt (auto-fix, the phone) share this entry. The ones that do
+    // have their own and need nothing cleared.
+    const cacheKey = runCacheKey(parsed.owner, parsed.repo, runId);
+    detailsCache.delete(cacheKey);
+    errorCache.delete(cacheKey);
+    annotationCache.delete(cacheKey);
+    return { ok: true };
+  } catch (error) {
+    const message = ghErrorMessage(error);
+    if (/already running/i.test(message)) {
+      return { ok: false, error: 'That run has already started again.' };
+    }
+    if (/month ago/i.test(message)) {
+      return { ok: false, error: 'GitHub can only re-run workflows from the last 30 days.' };
     }
     return { ok: false, error: message };
   }

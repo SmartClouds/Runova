@@ -166,8 +166,10 @@ export const queryKeys = {
   /** CPU, memory and disk of a runner's machine: `local`, or `ssh:<server id>`. */
   runnerMachineStats: (machine: string) => ['runner-machine-stats', machine] as const,
   /** Annotations one finished Actions run left behind. */
-  runAnnotations: (repo: string, runId: number) => ['run-annotations', repo, runId] as const,
-  runFailure: (repo: string, runId: number) => ['pipeline-run-error', repo, runId] as const,
+  runAnnotations: (repo: string, runId: number, attempt?: number) =>
+    ['run-annotations', repo, runId, attempt] as const,
+  runFailure: (repo: string, runId: number, attempt?: number) =>
+    ['pipeline-run-error', repo, runId, attempt] as const,
   /** Every run's details, for refreshing whichever one is on screen. */
   runDetailsAll: ['run-details'] as const,
   /** `live` is part of the key so a run that just finished is read once more, not left half done. */

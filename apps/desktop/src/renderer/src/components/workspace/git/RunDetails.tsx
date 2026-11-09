@@ -12,6 +12,7 @@ import { AutoFixPanel } from '@/components/pipelines/autoFix/AutoFixPanel';
 import { sessionForRun } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
 import { InlineProblem } from '@/components/pipelines/InlineProblem';
+import { RerunRunButton } from '@/components/pipelines/RerunRunButton';
 import { copyText, RunAnnotations, useRunAnnotations } from '@/components/pipelines/RunAnnotations';
 import {
   isLiveRun,
@@ -132,6 +133,7 @@ function AnnotationsSection({
     workflowName: workflow.name,
     runNumber: run.runNumber,
     headBranch: run.headBranch,
+    attempt: run.runAttempt,
   };
   const annotations = useRunAnnotations(item, true);
   const data = annotations.data;
@@ -289,6 +291,7 @@ export function RunDetails({
     displayTitle: run.displayTitle,
     runNumber: run.runNumber,
     headBranch: run.headBranch,
+    attempt: run.runAttempt,
   };
 
   return (
@@ -338,7 +341,15 @@ export function RunDetails({
                 }}
                 className="h-6 px-2 text-[11px]"
               />
-            ) : null}
+            ) : (
+              <RerunRunButton
+                projectId={project.id}
+                repo={repo}
+                workflowName={workflow.name}
+                run={run}
+                canRerunFailed={tone.outcome === 'failed' || tone.outcome === 'cancelled'}
+              />
+            )}
             <Button
               type="button"
               variant="ghost"

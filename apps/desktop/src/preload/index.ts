@@ -219,6 +219,7 @@ import type {
   GithubRunDetailsResult,
   GithubRunnersInput,
   GithubRunnersResult,
+  GithubRunRerunRequest,
   GithubWorkflowDispatchRequest,
   GithubWorkflowRefsResult,
   GitImageDiff,
@@ -1893,6 +1894,9 @@ const pipelines = {
   /** Stops a queued or in-progress run. */
   cancelRun: (input: GithubRunCancelRequest): Promise<GithubPipelineActionResult> =>
     ipcRenderer.invoke(IPC.pipelines.cancelRun, input),
+  /** Starts a finished run again, all of it or only the jobs that did not pass. */
+  rerunRun: (input: GithubRunRerunRequest): Promise<GithubPipelineActionResult> =>
+    ipcRenderer.invoke(IPC.pipelines.rerunRun, input),
   /** Self-hosted runners behind the projects' repos, and jobs stuck waiting for one. */
   runners: (input: GithubRunnersInput): Promise<GithubRunnersResult> =>
     ipcRenderer.invoke(IPC.pipelines.runners, input),

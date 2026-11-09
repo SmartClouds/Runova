@@ -120,6 +120,7 @@ export function PipelinesSection({
                   displayTitle: run.displayTitle,
                   runNumber: run.runNumber,
                   headBranch: run.headBranch,
+                  attempt: run.runAttempt,
                 }}
               />
             ) : null}
