@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +96,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
     var aboutOpen by remember { mutableStateOf(false) }
     val intents = remember(appIntents) { appIntents.copy(openAbout = { aboutOpen = true }) }
     // The chrome: what the desktop's title bar and menu are drawn on.
+    CompositionLocalProvider(LocalGitTools provides view.gitTools) {
     Box(Modifier.fillMaxSize().background(colors.card)) {
         when (view.auth) {
             AuthState.STARTING -> StartingScreen()
@@ -119,6 +121,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
         view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
         view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
         if (aboutOpen) AboutSheet(view.appVersion, { aboutOpen = false })
+    }
     }
 }
 

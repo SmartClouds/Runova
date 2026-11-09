@@ -474,6 +474,36 @@ fun RunovaToggle(on: Boolean, onChange: (Boolean) -> Unit, label: String, modifi
     }
 }
 
+/** A field for more than one line. */
+@Composable
+fun RunovaTextArea(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = 96.dp,
+) {
+    val colors = RunovaTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.foreground.copy(alpha = 0.05f))
+            .border(1.dp, colors.foreground.copy(alpha = 0.08f), shape)
+            .padding(14.dp),
+    ) {
+        if (value.isEmpty()) RunovaText(placeholder, color = colors.mutedForeground.copy(alpha = 0.75f))
+        BasicTextField(
+            value,
+            onChange,
+            Modifier.fillMaxWidth().heightIn(min = minHeight).semantics { contentDescription = placeholder },
+            textStyle = RunovaType.body.copy(color = colors.foreground),
+            cursorBrush = SolidColor(colors.primary),
+        )
+    }
+}
+
 enum class ChipTone { Soft, Primary, Danger }
 
 /** A small pill control: a terminal key, a filter, a shortcut. */

@@ -512,6 +512,34 @@ struct RunovaToggle: View {
     }
 }
 
+/// A field for more than one line.
+struct RunovaTextArea: View {
+    @Binding var value: String
+    let placeholder: String
+    var minHeight: CGFloat = 96
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 16)
+        ZStack(alignment: .topLeading) {
+            if value.isEmpty { RunovaText(placeholder, color: palette.mutedForeground.opacity(0.75)) }
+            TextEditor(text: $value)
+                .font(RunovaType.body.font)
+                .foregroundColor(palette.foreground)
+                .tint(palette.primary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: minHeight)
+                .padding(.horizontal, -4)
+                .padding(.vertical, -8)
+                .accessibilityLabel(placeholder)
+        }
+        .padding(14)
+        .background(shape.fill(palette.foreground.opacity(0.05)))
+        .overlay(shape.strokeBorder(palette.foreground.opacity(0.08), lineWidth: 1))
+    }
+}
+
 enum ChipTone { case soft, primary, danger }
 
 /// A small pill control: a terminal key, a filter, a shortcut.

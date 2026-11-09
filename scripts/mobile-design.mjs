@@ -251,6 +251,8 @@ const ICONS = {
   play: 'faPlay',
   stop: 'faStop',
   shield: 'faShieldHalved',
+  tag: 'faTag',
+  wand: 'faWandSparkles',
   info: 'faCircleInfo',
   globe: 'faGlobe',
   external: 'faArrowUpRightFromSquare',

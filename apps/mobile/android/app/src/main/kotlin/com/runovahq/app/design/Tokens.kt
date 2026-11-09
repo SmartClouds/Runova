@@ -184,6 +184,8 @@ object RunovaIcons {
     const val Play = "\uF04B"
     const val Stop = "\uF04D"
     const val Shield = "\uF3ED"
+    const val Tag = "\uF02B"
+    const val Wand = "\uF72B"
     const val Info = "\uF05A"
     const val Globe = "\uF0AC"
     const val External = "\uF08E"

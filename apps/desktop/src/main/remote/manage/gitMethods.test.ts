@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GitOpResult, WorkspaceGitState } from '../../../shared/apiTypes';
-import { gitMethods, type ManageGitDeps, parseUnifiedDiff, untrackedLines } from './gitMethods';
+import {
+  gitMethods,
+  type ManageGitDeps,
+  nextVersions,
+  parseUnifiedDiff,
+  untrackedLines,
+} from './gitMethods';
 import { ManageError } from './session';
 
 const context = { phone: { key: 'k', name: 'Runova app', scopes: ['git' as const] } };
@@ -45,6 +51,25 @@ function git(change: Partial<ManageGitDeps> = {}): ManageGitDeps {
     stashDrop: async () => done,
     resolve: async () => done,
     abort: async () => done,
+    tags: async () => ({
+      latestTag: 'web-v1.4.2',
+      recentTags: ['web-v1.4.2', 'web-v1.4.1'],
+      commitsSinceLatestTag: 3,
+      hasRemote: true,
+      prefixes: ['web-v'],
+    }),
+    suggestTag: async () => ({
+      ok: true,
+      tag: 'web-v1.5.0',
+      reason: 'New feature',
+      message: 'Notes',
+      cliName: 'Claude Code',
+    }),
+    createTag: async () => done,
+    suggestCommitMessage: async () => ({ ok: true, text: 'fix: a thing', cliName: 'Codex' }),
+    suggestBranchName: async () => ({ ok: true, text: 'fix/a-thing', cliName: 'Codex' }),
+    resolveWithAi: async () => ({ ok: true, message: 'Resolved.', summary: 'Kept both' }),
+    cancelAi: () => true,
     ...change,
   };
 }
@@ -274,5 +299,100 @@ describe('git methods', () => {
     const named = Object.keys(MANAGE_METHODS).filter((name) => name.startsWith('git.'));
 
     expect(Object.keys(gitMethods(git())).sort()).toEqual(named.sort());
+  });
+});
+
+describe('tags and AI on a phone', () => {
+  it('offers the next version of each size, keeping the prefix', async () => {
+    await expect(call(git(), 'git.tags', { projectId: 'p1' })).resolves.toMatchObject({
+      latest: 'web-v1.4.2',
+      commitsSince: 3,
+      next: { patch: 'web-v1.4.3', minor: 'web-v1.5.0', major: 'web-v2.0.0' },
+    });
+  });
+
+  it('starts a repository with no tags at the beginning', () => {
+    expect(nextVersions(null)).toEqual({ patch: 'v0.0.1', minor: 'v0.1.0', major: 'v1.0.0' });
+  });
+
+  it('finishes a pre-release instead of skipping past it', () => {
+    expect(nextVersions('v2.0.0-beta.3')).toEqual({
+      patch: 'v2.0.0',
+      minor: 'v2.0.0',
+      major: 'v2.0.0',
+    });
+  });
+
+  it('passes a tag on and refuses one with no decision about pushing', async () => {
+    const createTag = vi.fn(async () => ({ ok: true, message: 'Created.' }));
+    await call(git({ createTag }), 'git.createTag', {
+      projectId: 'p1',
+      tag: 'v1.0.0',
+      message: 'Notes',
+      push: true,
+    });
+    expect(createTag).toHaveBeenCalledWith({
+      projectId: 'p1',
+      tag: 'v1.0.0',
+      message: 'Notes',
+      push: true,
+    });
+    await expect(
+      call(git({ createTag }), 'git.createTag', { projectId: 'p1', tag: 'v1' }),
+    ).rejects.toThrow('Push it');
+  });
+
+  it('runs a suggestion on the computer and sends the answer back', async () => {
+    await expect(
+      call(git(), 'git.suggestCommitMessage', {
+        projectId: 'p1',
+        requestId: 'r1',
+        scope: 'staged',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      text: 'fix: a thing',
+      cliName: 'Codex',
+      cancelled: false,
+    });
+  });
+
+  it('turns down a scope it does not know', async () => {
+    await expect(
+      call(git(), 'git.suggestCommitMessage', {
+        projectId: 'p1',
+        requestId: 'r1',
+        scope: 'everything',
+      }),
+    ).rejects.toThrow('scope');
+  });
+
+  it('never sends an undo token to the phone', async () => {
+    const result = await call(
+      git({
+        resolveWithAi: async () => ({
+          ok: true,
+          message: 'Resolved.',
+          summary: 'Kept both',
+          undoToken: 'secret',
+        }),
+      }),
+      'git.resolveWithAi',
+      { projectId: 'p1', path: 'a.ts', requestId: 'r1' },
+    );
+    expect(result).toEqual({
+      ok: true,
+      message: 'Resolved.',
+      summary: 'Kept both',
+      cancelled: false,
+    });
+  });
+
+  it('stops a suggestion by its request', async () => {
+    const cancelAi = vi.fn(() => true);
+    await expect(call(git({ cancelAi }), 'git.cancelAi', { requestId: 'r1' })).resolves.toEqual({
+      cancelled: true,
+    });
+    expect(cancelAi).toHaveBeenCalledWith('r1');
   });
 });

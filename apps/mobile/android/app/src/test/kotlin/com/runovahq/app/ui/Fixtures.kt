@@ -8,6 +8,7 @@ import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.DeployScreen
 import uniffi.runova_ffi.ErrorsScreen
 import uniffi.runova_ffi.GitScreen
+import uniffi.runova_ffi.GitToolsScreen
 import uniffi.runova_ffi.MonitoringScreen
 import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
@@ -61,6 +62,7 @@ fun appView(
     appVersion: String = "1.0.0",
     studio: StudioScreen = StudioScreen(false, null, emptyList(), null, null),
     busy: Boolean = false,
+    gitTools: GitToolsScreen = GitToolsScreen(null, null, null),
 ) = AppView(
     auth,
     true,
@@ -92,4 +94,5 @@ fun appView(
     showIntro,
     appVersion,
     studio,
+    gitTools,
 )

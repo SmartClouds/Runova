@@ -1,8 +1,10 @@
+import { cancelHeadlessPrompt } from '../../cli/headlessPrompt';
 import {
   checkoutBranch,
   createBranch,
   deleteBranch,
   readStatus,
+  readTagInfo,
   git as runGit,
   runGitOp,
 } from '../../git/plumbing';
@@ -23,16 +25,28 @@ import {
 } from '../../git/workspaceGit';
 import {
   commitStagedChanges,
+  createTag,
   discardChanges,
   getProjectPath,
   pushProject,
   requireRepo,
+  resolveConflictWithAi,
+  suggestBranchName,
+  suggestCommitMessage,
+  suggestTag,
   workspaceGitOp,
 } from '../../ipc/git';
 import type { ManageGitDeps } from './gitMethods';
 
 /** The same git the desktop's changes panel runs. */
 export const liveGit: ManageGitDeps = {
+  tags: async (projectId) => readTagInfo(await getProjectPath(projectId)),
+  suggestTag: (projectId, requestId) => suggestTag(projectId, requestId),
+  createTag,
+  suggestCommitMessage,
+  suggestBranchName,
+  resolveWithAi: resolveConflictWithAi,
+  cancelAi: cancelHeadlessPrompt,
   state: async (projectId) => readWorkspaceGitState(await getProjectPath(projectId)),
   diff: async (projectId, path, side, origPath) => {
     const { root } = await requireRepo(projectId);

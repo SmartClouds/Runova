@@ -1,6 +1,8 @@
 package com.runovahq.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +49,7 @@ import uniffi.runova_ffi.DiffLineView
 import uniffi.runova_ffi.GitBranchView
 import uniffi.runova_ffi.GitDiffView
 import uniffi.runova_ffi.GitFileView
+import uniffi.runova_ffi.GitAiKind
 import uniffi.runova_ffi.GitGroup
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.GitStashView
@@ -73,6 +76,15 @@ data class GitIntents(
     val stashDrop: (String) -> Unit = {},
     val resolve: (String, String) -> Unit = { _, _ -> },
     val abort: () -> Unit = {},
+    val openTags: () -> Unit = {},
+    val closeTags: () -> Unit = {},
+    val suggestTag: () -> Unit = {},
+    val createTag: (String, String, Boolean) -> Unit = { _, _, _ -> },
+    val suggestCommit: () -> Unit = {},
+    val suggestBranch: () -> Unit = {},
+    val aiTaken: () -> Unit = {},
+    val cancelAi: () -> Unit = {},
+    val resolveWithAi: (String) -> Unit = {},
 )
 
 private val GroupTitles = listOf(
@@ -98,6 +110,10 @@ private fun changeDetail(file: GitFileView): String? = when {
 /** A sub-screen of git that replaces the whole device screen, or null for the normal tabs. */
 @Composable
 fun GitOverlay(view: AppView, intents: AppIntents): Boolean {
+    view.gitTools.tags?.let {
+        TagsScreen(it, view.error, intents.git)
+        return true
+    }
     val diff = view.git.diff
     if (diff != null) {
         DiffScreen(diff, intents.git)
@@ -179,12 +195,13 @@ private fun BranchCard(state: GitStateView, intents: GitIntents) {
                     RunovaText(it, Modifier.padding(start = 10.dp), RunovaType.small, colors.mutedForeground)
                 }
             }
-            if (state.hasRemote) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (state.hasRemote) {
                     RunovaChip("Fetch", intents.fetch, icon = RunovaIcons.Fetch)
                     RunovaChip("Pull", intents.pull, icon = RunovaIcons.Pull)
                     RunovaChip("Push", intents.push, icon = RunovaIcons.Push)
                 }
+                RunovaChip("Tags", intents.openTags, icon = RunovaIcons.Tag)
             }
         }
     }
@@ -209,6 +226,7 @@ private fun FileRow(file: GitFileView, intents: GitIntents) {
                 GitGroup.CONFLICT -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RunovaChip("Mine", { intents.resolve(file.path, "ours") })
                     RunovaChip("Theirs", { intents.resolve(file.path, "theirs") })
+                    FixConflictChip(file.path, intents)
                 }
                 GitGroup.STAGED -> RunovaChip("Unstage", { intents.unstage(listOf(file.path)) }, icon = RunovaIcons.Minus)
                 GitGroup.UNSTAGED -> RunovaChip("Stage", { intents.stage(listOf(file.path)) }, icon = RunovaIcons.Add)
@@ -221,8 +239,14 @@ private fun FileRow(file: GitFileView, intents: GitIntents) {
 @Composable
 private fun CommitBox(intents: GitIntents) {
     var message by remember { mutableStateOf("") }
+    val asking = LocalGitTools.current.ai?.let { it.kind == GitAiKind.COMMIT && it.loading } == true
+    TakeAiAnswer(GitAiKind.COMMIT, { message = it }, intents.aiTaken)
     Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        RunovaTextField(message, { message = it }, "Commit message", icon = RunovaIcons.Commit)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RunovaTextField(message, { message = it }, "Commit message", Modifier.weight(1f), icon = RunovaIcons.Commit)
+            AiButton(asking, "Suggest a commit message", intents.suggestCommit, intents.cancelAi)
+        }
+        AiNote(GitAiKind.COMMIT)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RunovaButton(
                 "Commit",
@@ -298,6 +322,8 @@ private fun DiffLine(line: DiffLineView) {
 private fun BranchesScreen(git: GitScreen, intents: GitIntents) {
     val colors = RunovaTheme.colors
     var name by remember { mutableStateOf("") }
+    val asking = LocalGitTools.current.ai?.let { it.kind == GitAiKind.BRANCH && it.loading } == true
+    TakeAiAnswer(GitAiKind.BRANCH, { name = it }, intents.aiTaken)
     RunovaScreen("Branches", onBack = intents.closeBranches) {
         Row(
             Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
@@ -305,6 +331,7 @@ private fun BranchesScreen(git: GitScreen, intents: GitIntents) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RunovaTextField(name, { name = it }, "New branch name", Modifier.weight(1f), icon = RunovaIcons.Git)
+            AiButton(asking, "Suggest a branch name", intents.suggestBranch, intents.cancelAi)
             RunovaButton(
                 "Create",
                 onClick = {
@@ -315,6 +342,7 @@ private fun BranchesScreen(git: GitScreen, intents: GitIntents) {
                 icon = RunovaIcons.Add,
             )
         }
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { AiNote(GitAiKind.BRANCH) }
         LazyColumn(contentPadding = PaddingValues(16.dp)) {
             items(git.branches, key = { "b/${it.name}" }) { BranchRow(it, intents) }
             item(key = "stash-title") {

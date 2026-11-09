@@ -34,6 +34,8 @@
   "play": "F04B",
   "stop": "F04D",
   "shield": "F3ED",
+  "tag": "F02B",
+  "wand": "F72B",
   "info": "F05A",
   "globe": "F0AC",
   "external": "F08E",

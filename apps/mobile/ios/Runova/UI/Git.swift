@@ -6,6 +6,15 @@ struct GitIntents {
     var closeDiff: () -> Void = {}
     var openBranches: () -> Void = {}
     var closeBranches: () -> Void = {}
+    var openTags: () -> Void = {}
+    var closeTags: () -> Void = {}
+    var suggestTag: () -> Void = {}
+    var createTag: (String, String, Bool) -> Void = { _, _, _ in }
+    var suggestCommit: () -> Void = {}
+    var suggestBranch: () -> Void = {}
+    var aiTaken: () -> Void = {}
+    var cancelAi: () -> Void = {}
+    var resolveWithAi: (String) -> Void = { _ in }
     var stage: ([String]) -> Void = { _ in }
     var unstage: ([String]) -> Void = { _ in }
     var discard: (String, GitGroup) -> Void = { _, _ in }
@@ -143,6 +152,7 @@ private struct BranchCard: View {
                         RunovaChip(text: "Fetch", icon: RunovaIcons.fetch, action: intents.fetch)
                         RunovaChip(text: "Pull", icon: RunovaIcons.pull, action: intents.pull)
                         RunovaChip(text: "Push", icon: RunovaIcons.push, action: intents.push)
+                        RunovaChip(text: "Tags", icon: RunovaIcons.tag, action: intents.openTags)
                     }
                 }
             }
@@ -172,6 +182,7 @@ private struct FileRow: View {
             case .conflict:
                 RunovaChip(text: "Mine") { intents.resolve(file.path, "ours") }
                 RunovaChip(text: "Theirs") { intents.resolve(file.path, "theirs") }
+                FixConflictChip(path: file.path, intents: intents)
             case .staged:
                 RunovaChip(text: "Unstage", icon: RunovaIcons.minus) { intents.unstage([file.path]) }
             case .unstaged:
@@ -189,12 +200,19 @@ private struct CommitBox: View {
     let intents: GitIntents
 
     @State private var message = ""
+    @Environment(\.gitTools) private var tools
 
     private var blank: Bool { message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         VStack(spacing: 8) {
-            RunovaTextField(value: $message, placeholder: "Commit message", icon: RunovaIcons.commit)
+            HStack(spacing: 8) {
+                RunovaTextField(value: $message, placeholder: "Commit message", icon: RunovaIcons.commit)
+                AiButton(
+                    loading: tools.ai?.kind == .commit && tools.ai?.loading == true,
+                    label: "Suggest a commit message", onAsk: intents.suggestCommit, onStop: intents.cancelAi)
+            }
+            AiNote(kind: .commit)
             HStack(spacing: 8) {
                 RunovaButton(text: "Commit", kind: .soft, enabled: !blank, icon: RunovaIcons.commit) {
                     intents.commit(message, false)
@@ -209,6 +227,7 @@ private struct CommitBox: View {
             }
         }
         .padding(8)
+        .takingAiAnswer(tools, kind: .commit, into: $message, onTaken: intents.aiTaken)
     }
 }
 
@@ -287,11 +306,15 @@ struct BranchesScreen: View {
 
     @State private var name = ""
     @Environment(\.palette) private var palette
+    @Environment(\.gitTools) private var tools
 
     var body: some View {
         RunovaScreen(title: "Branches", onBack: intents.closeBranches) {
             HStack(spacing: 8) {
                 RunovaTextField(value: $name, placeholder: "New branch name", icon: RunovaIcons.git)
+                AiButton(
+                    loading: tools.ai?.kind == .branch && tools.ai?.loading == true,
+                    label: "Suggest a branch name", onAsk: intents.suggestBranch, onStop: intents.cancelAi)
                 RunovaButton(text: "Create", enabled: !name.isEmpty, icon: RunovaIcons.add) {
                     intents.createBranch(name)
                     name = ""

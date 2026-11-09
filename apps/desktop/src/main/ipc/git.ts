@@ -251,6 +251,283 @@ export async function pushProject(projectId: string): Promise<GitOpResult> {
   return result;
 }
 
+export async function suggestBranchName(
+  projectId: string,
+  requestId?: string,
+): Promise<SuggestGitTextResult> {
+  return suggestGitText(
+    projectId,
+    (summary) =>
+      'Generate a single short git branch name (kebab-case, e.g. "feat/add-login" or ' +
+      '"fix/null-check", max 60 characters, no spaces, no quotes, no markdown) describing these ' +
+      'uncommitted changes. Do not read or edit any files; judge only from the information below. ' +
+      `Reply with ONLY the branch name and nothing else.\n\n${summary}`,
+    requestId,
+  );
+}
+
+export async function suggestCommitMessage(
+  projectId: string,
+  requestId?: string,
+  scope?: 'staged' | 'all',
+): Promise<SuggestGitTextResult> {
+  // The style, extra rules and writing CLI come from Settings > Commit messages.
+  const { commitMessage } = await store.getSettings();
+  return suggestGitText(
+    projectId,
+    (summary) => buildCommitMessagePrompt(commitMessage, summary),
+    requestId,
+    scope === 'staged',
+    commitMessage.cliId,
+  );
+}
+
+export async function createTag(input: CreateTagInput): Promise<GitOpResult> {
+  const cwd = await getProjectPath(input.projectId);
+  const tag = input.tag.trim();
+  if (!tag) return { ok: false, message: 'Tag name cannot be empty.' };
+  if (!TAG_NAME_PATTERN.test(tag) || tag.includes('..') || tag.includes('@{')) {
+    return {
+      ok: false,
+      message:
+        'Invalid tag name. Use letters, digits, dots, dashes, underscores, slashes or @ (e.g. v1.0.1 or web-v1.0.1).',
+    };
+  }
+
+  const localSha = (
+    await gitOrNull(cwd, ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`])
+  )?.trim();
+
+  if (localSha) {
+    // The tag is already there locally, most often because the version-bump CLI ran a tool
+    // like `npm version` that tags on its own despite being told not to. As long as it still
+    // points at HEAD, treat this as "already made, just needs pushing" instead of a conflict.
+    const headSha = (await git(cwd, ['rev-parse', 'HEAD'])).trim();
+    if (localSha !== headSha) {
+      return {
+        ok: false,
+        message: `Tag ${tag} already exists locally but points at a different commit than HEAD. Delete it (or pick a different name) before retrying.`,
+      };
+    }
+    if (!input.push) return { ok: false, message: `Tag ${tag} already exists locally.` };
+
+    const existingResult = await runGitOp(async () => {
+      const remote = (await primaryRemote(cwd)) ?? 'origin';
+      // Annotated tags list under their own object sha; the "^{}" peeled ref is what
+      // resolves that back to the commit, which is what `localSha` was compared against above.
+      const remoteRefs = (
+        (await gitOrNull(cwd, ['ls-remote', remote, `refs/tags/${tag}`, `refs/tags/${tag}^{}`])) ??
+        ''
+      )
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const peeled = remoteRefs.find((line) => line.endsWith('^{}'));
+      const remoteSha = (peeled ?? remoteRefs[0])?.split(/\s+/)[0];
+      if (remoteSha && remoteSha !== localSha) {
+        throw new Error(`Tag ${tag} already exists on ${remote} and points at a different commit.`);
+      }
+      await pushBranchAndTag(cwd, tag);
+      return remoteSha
+        ? `Tag ${tag} already exists locally and on ${remote}.`
+        : `Tag ${tag} already existed locally, pushed the branch and tag to ${remote}.`;
+    });
+    if (existingResult.ok) schedulePipelineCheck(input.projectId);
+    return existingResult;
+  }
+
+  const createdResult = await runGitOp(async () => {
+    await git(cwd, ['tag', '-a', tag, '-m', input.message?.trim() || tag]);
+    if (!input.push) return `Created tag ${tag} locally.`;
+    try {
+      await pushBranchAndTag(cwd, tag);
+    } catch (error) {
+      // Leave the repo as we found it so the user can retry the same tag after fixing the remote.
+      await gitOrNull(cwd, ['tag', '-d', tag]);
+      throw error;
+    }
+    return `Created tag ${tag} and pushed the branch and tag to origin.`;
+  });
+  if (createdResult.ok && input.push) schedulePipelineCheck(input.projectId);
+  return createdResult;
+}
+
+export async function suggestTag(
+  projectId: string,
+  requestId?: string,
+  prefix?: string,
+): Promise<SuggestTagResult> {
+  const project = await getProject(projectId);
+  const cwd = project.folderPath;
+  const { latestTag, commitsSinceLatestTag } = await readTagInfo(cwd, prefix);
+  if (latestTag && commitsSinceLatestTag === 0) {
+    return {
+      ok: false,
+      error: `No new commits since ${latestTag}, so there is nothing to tag yet.`,
+    };
+  }
+
+  const subjects = await readCommitSubjects(cwd, latestTag);
+  const diffStat = latestTag
+    ? ((await gitOrNull(cwd, ['diff', '--shortstat', `${latestTag}..HEAD`])) ?? '').trim()
+    : '';
+  const summary = buildReleaseSummary(latestTag, subjects, diffStat);
+  const namedSeries = prefix !== undefined && prefix !== '' && prefix.toLowerCase() !== 'v';
+  const prompt =
+    'You are picking the next git tag for a release, following semantic versioning: bump the major ' +
+    'version for breaking changes, the minor version for new features, the patch version for fixes ' +
+    'and chores only. Do not read or edit any files; judge only from the information below.\n\n' +
+    (namedSeries ? `Tags in this series are named ${prefix}<version>.\n\n` : '') +
+    (latestTag
+      ? `The ${namedSeries ? 'latest tag in this series' : "repository's latest tag"} is ${latestTag}. ` +
+        'Your answer MUST be a bump of exactly that version and must be greater than it. ' +
+        'Never invent an unrelated version number.\n\n'
+      : '') +
+    'Answer in exactly this format, with no markdown and nothing else:\n' +
+    'TAG: <the new tag>\n' +
+    'WHY: <one short sentence explaining the bump>\n' +
+    'NOTES:\n' +
+    '<release notes for the tag annotation: a one-line summary, then a few "- " bullets ' +
+    'grouping the notable changes. Keep it under 15 lines.>\n\n' +
+    summary;
+
+  const result = await runHeadlessCliPrompt(prompt, cwd, {
+    requestId,
+    preferredCliId: project.cliId,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      cliName: result.cliName,
+      error: result.error,
+      cancelled: result.cancelled,
+    };
+  }
+
+  // The typed prefix is put back on whatever the model answered, so a `web-v` release
+  // never comes back as a bare `v1.4.0` or with some other prefix the model made up.
+  const parsed = parseSuggestedTag(result.text, latestTag, prefix);
+  const notes = extractTagNotes(result.text);
+  const latestParts = latestTag ? parseSemver(latestTag) : null;
+
+  // Models often skip a concrete semver ("TAG: patch", prose only, etc.). When we
+  // already know the latest tag, turn that into a real bump instead of failing the run.
+  let tag = parsed?.tag;
+  let reason = parsed?.reason ?? notes.reason;
+  if (!tag && latestParts) {
+    const bumpKind = parseBumpKind(result.text);
+    const derived = bumpKind
+      ? bumpVersion(latestParts, bumpKind)
+      : deriveNextVersion(latestParts, subjects);
+    tag = formatTagForRepo(derived, latestTag, prefix);
+    reason = bumpKind
+      ? `${result.cliName} suggested a ${bumpKind} bump; used ${tag}.`
+      : `${result.cliName} did not return a version number; used ${tag} from the commit history instead.`;
+  }
+
+  if (!tag) {
+    return {
+      ok: false,
+      cliName: result.cliName,
+      error: `${result.cliName} did not return a version number.`,
+    };
+  }
+
+  // Models regularly answer with a stock version ("1.2.3") that has nothing to do with
+  // the repo. Anything that isn't a plausible bump of the latest tag is dropped in
+  // favour of one derived from the commits themselves.
+  if (latestParts && latestTag) {
+    const problem = rejectSuggestedVersion(parseSemver(tag), latestParts, latestTag);
+    if (problem) {
+      const rejected = tag;
+      tag = formatTagForRepo(deriveNextVersion(latestParts, subjects), latestTag, prefix);
+      reason = `${result.cliName} suggested ${rejected}, which ${problem}; used ${tag} from the commit history instead.`;
+    }
+  }
+
+  return {
+    ok: true,
+    tag,
+    reason,
+    // A CLI that ignored the NOTES section still gets a usable annotation, straight from the log.
+    message: parsed?.message || notes.message || fallbackTagMessage(tag, subjects),
+    cliName: result.cliName,
+  };
+}
+
+export async function resolveConflictWithAi(
+  projectId: string,
+  path: string,
+  requestId?: string,
+): Promise<ResolveConflictWithAiResult> {
+  let folder: string | null = null;
+  try {
+    const project = await getProject(projectId);
+    const repo = await requireRepo(projectId);
+    folder = repo.folder;
+    const [safe] = assertRepoPaths(repo.root, [path]);
+    const state = await readWorkspaceGitState(repo.root);
+    const entry = state.conflicts.find((e) => e.path === safe);
+    if (!entry) throw new Error(`${safe} is no longer in conflict.`);
+    const before = await readConflictedText(repo.root, safe);
+    if (before === null) {
+      throw new Error(`${safe} is not a text file on disk. Keep ours or theirs instead.`);
+    }
+    if (!hasConflictMarkers(before)) {
+      throw new Error(
+        `${safe} has no conflict markers left. Review it and mark it as resolved, or keep one side.`,
+      );
+    }
+
+    // The agent writes straight to disk, so the markers are kept to put back if it stops
+    // half way, leaves some behind, or the user wants their own go at it after all.
+    const undoToken = await backupPaths(repo.root, [safe]);
+    const restore = (): Promise<void> => undoDiscard(undoToken).catch(() => undefined);
+    const result = await runHeadlessCliPrompt(
+      buildConflictResolutionPrompt(safe, state.operation, entry.conflict),
+      repo.root,
+      {
+        requestId: typeof requestId === 'string' ? requestId : undefined,
+        preferredCliId: project.cliId,
+        allowWrites: true,
+        timeoutMs: CONFLICT_RESOLVE_TIMEOUT_MS,
+      },
+    );
+    const cli = result.cliName ?? 'The AI CLI';
+    if (result.cancelled) {
+      await restore();
+      return { ok: false, cancelled: true, message: 'Stopped. The file is back as it was.' };
+    }
+    if (result.timedOut) {
+      await restore();
+      return { ok: false, message: `${result.error} The file is back as it was.` };
+    }
+
+    // What's on disk decides, not the exit code: a CLI can finish the edit and still
+    // end without a closing answer.
+    const after = await readConflictedText(repo.root, safe);
+    if (after === null || hasConflictMarkers(after)) {
+      await restore();
+      const reason = !result.ok
+        ? (result.error ?? `${cli} did not answer.`)
+        : after === null
+          ? `${cli} removed or broke the file.`
+          : `${cli} left conflict markers in the file.`;
+      return { ok: false, message: `${reason} The file is back as it was.` };
+    }
+    return {
+      ok: true,
+      message: `${cli} resolved ${safe}. Review it, then mark it as resolved.`,
+      summary: result.ok ? resolutionSummary(result.text) : undefined,
+      undoToken,
+    };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  } finally {
+    if (folder) void refreshWorkspaceState(projectId, folder);
+  }
+}
+
 function registerRepoHandlers(): void {
   ipcMain.handle(IPC.git.status, async (_event, projectId: string): Promise<GitStatus> => {
     return readStatus(await getProjectPath(projectId));
@@ -520,19 +797,8 @@ function registerBranchHandlers(): void {
     },
   );
 
-  ipcMain.handle(
-    IPC.git.suggestBranchName,
-    async (_event, projectId: string, requestId?: string): Promise<SuggestGitTextResult> => {
-      return suggestGitText(
-        projectId,
-        (summary) =>
-          'Generate a single short git branch name (kebab-case, e.g. "feat/add-login" or ' +
-          '"fix/null-check", max 60 characters, no spaces, no quotes, no markdown) describing these ' +
-          'uncommitted changes. Do not read or edit any files; judge only from the information below. ' +
-          `Reply with ONLY the branch name and nothing else.\n\n${summary}`,
-        requestId,
-      );
-    },
+  ipcMain.handle(IPC.git.suggestBranchName, (_event, projectId: string, requestId?: string) =>
+    suggestBranchName(projectId, requestId),
   );
 
   ipcMain.handle(IPC.git.cancelSuggestBranchName, (_event, requestId: string): boolean => {
@@ -541,22 +807,8 @@ function registerBranchHandlers(): void {
 
   ipcMain.handle(
     IPC.git.suggestCommitMessage,
-    async (
-      _event,
-      projectId: string,
-      requestId?: string,
-      scope?: 'staged' | 'all',
-    ): Promise<SuggestGitTextResult> => {
-      // The style, extra rules and writing CLI come from Settings > Commit messages.
-      const { commitMessage } = await store.getSettings();
-      return suggestGitText(
-        projectId,
-        (summary) => buildCommitMessagePrompt(commitMessage, summary),
-        requestId,
-        scope === 'staged',
-        commitMessage.cliId,
-      );
-    },
+    (_event, projectId: string, requestId?: string, scope?: 'staged' | 'all') =>
+      suggestCommitMessage(projectId, requestId, scope),
   );
 
   ipcMain.handle(IPC.git.cancelSuggestCommitMessage, (_event, requestId: string): boolean => {
@@ -572,187 +824,12 @@ function registerTagHandlers(): void {
     },
   );
 
-  ipcMain.handle(IPC.git.createTag, async (_event, input: CreateTagInput): Promise<GitOpResult> => {
-    const cwd = await getProjectPath(input.projectId);
-    const tag = input.tag.trim();
-    if (!tag) return { ok: false, message: 'Tag name cannot be empty.' };
-    if (!TAG_NAME_PATTERN.test(tag) || tag.includes('..') || tag.includes('@{')) {
-      return {
-        ok: false,
-        message:
-          'Invalid tag name. Use letters, digits, dots, dashes, underscores, slashes or @ (e.g. v1.0.1 or web-v1.0.1).',
-      };
-    }
-
-    const localSha = (
-      await gitOrNull(cwd, ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`])
-    )?.trim();
-
-    if (localSha) {
-      // The tag is already there locally, most often because the version-bump CLI ran a tool
-      // like `npm version` that tags on its own despite being told not to. As long as it still
-      // points at HEAD, treat this as "already made, just needs pushing" instead of a conflict.
-      const headSha = (await git(cwd, ['rev-parse', 'HEAD'])).trim();
-      if (localSha !== headSha) {
-        return {
-          ok: false,
-          message: `Tag ${tag} already exists locally but points at a different commit than HEAD. Delete it (or pick a different name) before retrying.`,
-        };
-      }
-      if (!input.push) return { ok: false, message: `Tag ${tag} already exists locally.` };
-
-      const existingResult = await runGitOp(async () => {
-        const remote = (await primaryRemote(cwd)) ?? 'origin';
-        // Annotated tags list under their own object sha; the "^{}" peeled ref is what
-        // resolves that back to the commit, which is what `localSha` was compared against above.
-        const remoteRefs = (
-          (await gitOrNull(cwd, [
-            'ls-remote',
-            remote,
-            `refs/tags/${tag}`,
-            `refs/tags/${tag}^{}`,
-          ])) ?? ''
-        )
-          .split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean);
-        const peeled = remoteRefs.find((line) => line.endsWith('^{}'));
-        const remoteSha = (peeled ?? remoteRefs[0])?.split(/\s+/)[0];
-        if (remoteSha && remoteSha !== localSha) {
-          throw new Error(
-            `Tag ${tag} already exists on ${remote} and points at a different commit.`,
-          );
-        }
-        await pushBranchAndTag(cwd, tag);
-        return remoteSha
-          ? `Tag ${tag} already exists locally and on ${remote}.`
-          : `Tag ${tag} already existed locally, pushed the branch and tag to ${remote}.`;
-      });
-      if (existingResult.ok) schedulePipelineCheck(input.projectId);
-      return existingResult;
-    }
-
-    const createdResult = await runGitOp(async () => {
-      await git(cwd, ['tag', '-a', tag, '-m', input.message?.trim() || tag]);
-      if (!input.push) return `Created tag ${tag} locally.`;
-      try {
-        await pushBranchAndTag(cwd, tag);
-      } catch (error) {
-        // Leave the repo as we found it so the user can retry the same tag after fixing the remote.
-        await gitOrNull(cwd, ['tag', '-d', tag]);
-        throw error;
-      }
-      return `Created tag ${tag} and pushed the branch and tag to origin.`;
-    });
-    if (createdResult.ok && input.push) schedulePipelineCheck(input.projectId);
-    return createdResult;
-  });
+  ipcMain.handle(IPC.git.createTag, (_event, input: CreateTagInput) => createTag(input));
 
   ipcMain.handle(
     IPC.git.suggestTag,
-    async (
-      _event,
-      projectId: string,
-      requestId?: string,
-      prefix?: string,
-    ): Promise<SuggestTagResult> => {
-      const project = await getProject(projectId);
-      const cwd = project.folderPath;
-      const { latestTag, commitsSinceLatestTag } = await readTagInfo(cwd, prefix);
-      if (latestTag && commitsSinceLatestTag === 0) {
-        return {
-          ok: false,
-          error: `No new commits since ${latestTag}, so there is nothing to tag yet.`,
-        };
-      }
-
-      const subjects = await readCommitSubjects(cwd, latestTag);
-      const diffStat = latestTag
-        ? ((await gitOrNull(cwd, ['diff', '--shortstat', `${latestTag}..HEAD`])) ?? '').trim()
-        : '';
-      const summary = buildReleaseSummary(latestTag, subjects, diffStat);
-      const namedSeries = prefix !== undefined && prefix !== '' && prefix.toLowerCase() !== 'v';
-      const prompt =
-        'You are picking the next git tag for a release, following semantic versioning: bump the major ' +
-        'version for breaking changes, the minor version for new features, the patch version for fixes ' +
-        'and chores only. Do not read or edit any files; judge only from the information below.\n\n' +
-        (namedSeries ? `Tags in this series are named ${prefix}<version>.\n\n` : '') +
-        (latestTag
-          ? `The ${namedSeries ? 'latest tag in this series' : "repository's latest tag"} is ${latestTag}. ` +
-            'Your answer MUST be a bump of exactly that version and must be greater than it. ' +
-            'Never invent an unrelated version number.\n\n'
-          : '') +
-        'Answer in exactly this format, with no markdown and nothing else:\n' +
-        'TAG: <the new tag>\n' +
-        'WHY: <one short sentence explaining the bump>\n' +
-        'NOTES:\n' +
-        '<release notes for the tag annotation: a one-line summary, then a few "- " bullets ' +
-        'grouping the notable changes. Keep it under 15 lines.>\n\n' +
-        summary;
-
-      const result = await runHeadlessCliPrompt(prompt, cwd, {
-        requestId,
-        preferredCliId: project.cliId,
-      });
-      if (!result.ok) {
-        return {
-          ok: false,
-          cliName: result.cliName,
-          error: result.error,
-          cancelled: result.cancelled,
-        };
-      }
-
-      // The typed prefix is put back on whatever the model answered, so a `web-v` release
-      // never comes back as a bare `v1.4.0` or with some other prefix the model made up.
-      const parsed = parseSuggestedTag(result.text, latestTag, prefix);
-      const notes = extractTagNotes(result.text);
-      const latestParts = latestTag ? parseSemver(latestTag) : null;
-
-      // Models often skip a concrete semver ("TAG: patch", prose only, etc.). When we
-      // already know the latest tag, turn that into a real bump instead of failing the run.
-      let tag = parsed?.tag;
-      let reason = parsed?.reason ?? notes.reason;
-      if (!tag && latestParts) {
-        const bumpKind = parseBumpKind(result.text);
-        const derived = bumpKind
-          ? bumpVersion(latestParts, bumpKind)
-          : deriveNextVersion(latestParts, subjects);
-        tag = formatTagForRepo(derived, latestTag, prefix);
-        reason = bumpKind
-          ? `${result.cliName} suggested a ${bumpKind} bump; used ${tag}.`
-          : `${result.cliName} did not return a version number; used ${tag} from the commit history instead.`;
-      }
-
-      if (!tag) {
-        return {
-          ok: false,
-          cliName: result.cliName,
-          error: `${result.cliName} did not return a version number.`,
-        };
-      }
-
-      // Models regularly answer with a stock version ("1.2.3") that has nothing to do with
-      // the repo. Anything that isn't a plausible bump of the latest tag is dropped in
-      // favour of one derived from the commits themselves.
-      if (latestParts && latestTag) {
-        const problem = rejectSuggestedVersion(parseSemver(tag), latestParts, latestTag);
-        if (problem) {
-          const rejected = tag;
-          tag = formatTagForRepo(deriveNextVersion(latestParts, subjects), latestTag, prefix);
-          reason = `${result.cliName} suggested ${rejected}, which ${problem}; used ${tag} from the commit history instead.`;
-        }
-      }
-
-      return {
-        ok: true,
-        tag,
-        reason,
-        // A CLI that ignored the NOTES section still gets a usable annotation, straight from the log.
-        message: parsed?.message || notes.message || fallbackTagMessage(tag, subjects),
-        cliName: result.cliName,
-      };
-    },
+    (_event, projectId: string, requestId?: string, prefix?: string) =>
+      suggestTag(projectId, requestId, prefix),
   );
 
   ipcMain.handle(IPC.git.cancelSuggestTag, (_event, requestId: string): boolean => {
@@ -1215,79 +1292,8 @@ function registerWorkspaceHandlers(): void {
 
   ipcMain.handle(
     IPC.git.resolveConflictWithAi,
-    async (
-      _event,
-      projectId: string,
-      path: string,
-      requestId?: string,
-    ): Promise<ResolveConflictWithAiResult> => {
-      let folder: string | null = null;
-      try {
-        const project = await getProject(projectId);
-        const repo = await requireRepo(projectId);
-        folder = repo.folder;
-        const [safe] = assertRepoPaths(repo.root, [path]);
-        const state = await readWorkspaceGitState(repo.root);
-        const entry = state.conflicts.find((e) => e.path === safe);
-        if (!entry) throw new Error(`${safe} is no longer in conflict.`);
-        const before = await readConflictedText(repo.root, safe);
-        if (before === null) {
-          throw new Error(`${safe} is not a text file on disk. Keep ours or theirs instead.`);
-        }
-        if (!hasConflictMarkers(before)) {
-          throw new Error(
-            `${safe} has no conflict markers left. Review it and mark it as resolved, or keep one side.`,
-          );
-        }
-
-        // The agent writes straight to disk, so the markers are kept to put back if it stops
-        // half way, leaves some behind, or the user wants their own go at it after all.
-        const undoToken = await backupPaths(repo.root, [safe]);
-        const restore = (): Promise<void> => undoDiscard(undoToken).catch(() => undefined);
-        const result = await runHeadlessCliPrompt(
-          buildConflictResolutionPrompt(safe, state.operation, entry.conflict),
-          repo.root,
-          {
-            requestId: typeof requestId === 'string' ? requestId : undefined,
-            preferredCliId: project.cliId,
-            allowWrites: true,
-            timeoutMs: CONFLICT_RESOLVE_TIMEOUT_MS,
-          },
-        );
-        const cli = result.cliName ?? 'The AI CLI';
-        if (result.cancelled) {
-          await restore();
-          return { ok: false, cancelled: true, message: 'Stopped. The file is back as it was.' };
-        }
-        if (result.timedOut) {
-          await restore();
-          return { ok: false, message: `${result.error} The file is back as it was.` };
-        }
-
-        // What's on disk decides, not the exit code: a CLI can finish the edit and still
-        // end without a closing answer.
-        const after = await readConflictedText(repo.root, safe);
-        if (after === null || hasConflictMarkers(after)) {
-          await restore();
-          const reason = !result.ok
-            ? (result.error ?? `${cli} did not answer.`)
-            : after === null
-              ? `${cli} removed or broke the file.`
-              : `${cli} left conflict markers in the file.`;
-          return { ok: false, message: `${reason} The file is back as it was.` };
-        }
-        return {
-          ok: true,
-          message: `${cli} resolved ${safe}. Review it, then mark it as resolved.`,
-          summary: result.ok ? resolutionSummary(result.text) : undefined,
-          undoToken,
-        };
-      } catch (error) {
-        return { ok: false, message: (error as Error).message };
-      } finally {
-        if (folder) void refreshWorkspaceState(projectId, folder);
-      }
-    },
+    (_event, projectId: string, path: string, requestId?: string) =>
+      resolveConflictWithAi(projectId, path, requestId),
   );
 
   ipcMain.handle(IPC.git.cancelResolveConflictWithAi, (_event, requestId: string): boolean => {

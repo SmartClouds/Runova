@@ -77,6 +77,8 @@ struct DeviceShell: View {
             } else if section == "studio", let video = view.studio.video {
                 StudioVideoScreen(
                     video: video, busy: view.busy, error: view.error, notice: view.notice, intents: intents.studio)
+            } else if let tags = view.gitTools.tags {
+                TagsScreen(tags: tags, error: view.error, intents: intents.git)
             } else if let diff = view.git.diff {
                 DiffScreen(diff: diff, intents: intents.git)
             } else if view.git.branchesOpen {

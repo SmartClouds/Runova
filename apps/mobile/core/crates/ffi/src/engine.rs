@@ -272,6 +272,8 @@ impl Engine {
 const INTRO_SEEN: &str = "intro-seen";
 
 pub(crate) struct Runner {
+    /// The AI run the phone is waiting on, so it can be stopped.
+    pub(crate) ai_request: Option<String>,
     pub(crate) deps: Dependencies,
     pub(crate) thumbnails: SharedThumbnails,
     pub(crate) done_tx: mpsc::UnboundedSender<Done>,
@@ -342,6 +344,7 @@ impl Runner {
     fn new(deps: Dependencies, thumbnails: SharedThumbnails) -> Self {
         let (done_tx, done_rx) = mpsc::unbounded_channel();
         Self {
+            ai_request: None,
             deps,
             thumbnails,
             done_tx,
@@ -555,6 +558,8 @@ impl Runner {
         self.open_terminal = None;
         self.view.selected_project = None;
         self.view.git = GitScreen::default();
+        self.view.git_tools = Default::default();
+        self.view.studio = Default::default();
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();

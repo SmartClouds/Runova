@@ -241,6 +241,17 @@ final class AppModel: NSObject, ObservableObject {
             closeDiff: { [weak self] in self?.engine?.closeGitDiff() },
             openBranches: { [weak self] in self?.engine?.openGitBranches() },
             closeBranches: { [weak self] in self?.engine?.closeGitBranches() },
+            openTags: { [weak self] in self?.engine?.gitOpenTags() },
+            closeTags: { [weak self] in self?.engine?.gitCloseTags() },
+            suggestTag: { [weak self] in self?.engine?.gitSuggestTag() },
+            createTag: { [weak self] tag, message, push in
+                self?.engine?.gitCreateTag(tag: tag, message: message, push: push)
+            },
+            suggestCommit: { [weak self] in self?.engine?.gitSuggestCommitMessage() },
+            suggestBranch: { [weak self] in self?.engine?.gitSuggestBranchName() },
+            aiTaken: { [weak self] in self?.engine?.gitAiTaken() },
+            cancelAi: { [weak self] in self?.engine?.gitCancelAi() },
+            resolveWithAi: { [weak self] in self?.engine?.gitResolveWithAi(path: $0) },
             stage: { [weak self] in self?.engine?.gitStage(paths: $0) },
             unstage: { [weak self] in self?.engine?.gitUnstage(paths: $0) },
             discard: { [weak self] in self?.engine?.gitDiscard(path: $0, group: $1) },

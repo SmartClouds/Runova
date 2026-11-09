@@ -986,6 +986,57 @@ pub struct StudioScreen {
     pub video: Option<StudioVideoView>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitTagOptionView {
+    pub kind: String,
+    pub tag: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitTagSuggestionView {
+    pub tag: String,
+    pub reason: Option<String>,
+    pub message: String,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitTagsView {
+    pub loading: bool,
+    pub latest: Option<String>,
+    pub commits_label: String,
+    pub has_remote: bool,
+    pub recent: Vec<String>,
+    pub options: Vec<GitTagOptionView>,
+    pub suggesting: bool,
+    pub suggestion: Option<GitTagSuggestionView>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum GitAiKind {
+    Commit,
+    Branch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitAiView {
+    pub kind: GitAiKind,
+    pub loading: bool,
+    /// The answer, until the field has taken it.
+    pub text: Option<String>,
+    pub note: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct GitToolsScreen {
+    pub tags: Option<GitTagsView>,
+    pub ai: Option<GitAiView>,
+    /// The conflicted file the AI is working on.
+    pub resolving: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -1022,6 +1073,7 @@ pub struct AppView {
     pub show_intro: bool,
     pub app_version: String,
     pub studio: StudioScreen,
+    pub git_tools: GitToolsScreen,
 }
 
 impl AppView {
@@ -1057,6 +1109,7 @@ impl AppView {
             show_intro: false,
             app_version: String::new(),
             studio: StudioScreen::default(),
+            git_tools: GitToolsScreen::default(),
         }
     }
 }

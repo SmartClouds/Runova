@@ -191,6 +191,8 @@ enum RunovaIcons {
     static let play = "\u{F04B}"
     static let stop = "\u{F04D}"
     static let shield = "\u{F3ED}"
+    static let tag = "\u{F02B}"
+    static let wand = "\u{F72B}"
     static let info = "\u{F05A}"
     static let globe = "\u{F0AC}"
     static let external = "\u{F08E}"

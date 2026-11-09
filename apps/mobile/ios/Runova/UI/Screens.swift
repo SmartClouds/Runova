@@ -90,6 +90,7 @@ struct AppRoot: View {
                 AboutSheet(version: view.appVersion) { aboutOpen = false }
             }
         }
+        .environment(\.gitTools, view.gitTools)
     }
 
     private var appSection: String { appTabs.first { $0.id == tab }?.id ?? "systems" }

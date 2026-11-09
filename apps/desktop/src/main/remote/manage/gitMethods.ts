@@ -4,7 +4,15 @@ import type {
   ManageGitDiffLine,
   ManageGitStash,
 } from '@runova/protocol';
-import type { GitOpResult, WorkspaceGitState } from '../../../shared/apiTypes';
+import type {
+  CreateTagInput,
+  GitOpResult,
+  GitTagInfo,
+  ResolveConflictWithAiResult,
+  SuggestGitTextResult,
+  SuggestTagResult,
+  WorkspaceGitState,
+} from '../../../shared/apiTypes';
 import { ManageError, type ManageMethods } from './session';
 
 type Calls = ManageMethods['calls'];
@@ -45,6 +53,48 @@ export interface ManageGitDeps {
   stashDrop(projectId: string, ref: string): Promise<GitOpResult>;
   resolve(projectId: string, path: string, pick: 'ours' | 'theirs'): Promise<GitOpResult>;
   abort(projectId: string): Promise<GitOpResult>;
+  tags(projectId: string): Promise<GitTagInfo>;
+  suggestTag(projectId: string, requestId: string): Promise<SuggestTagResult>;
+  createTag(input: CreateTagInput): Promise<GitOpResult>;
+  suggestCommitMessage(
+    projectId: string,
+    requestId: string,
+    scope: 'staged' | 'all',
+  ): Promise<SuggestGitTextResult>;
+  suggestBranchName(projectId: string, requestId: string): Promise<SuggestGitTextResult>;
+  resolveWithAi(
+    projectId: string,
+    path: string,
+    requestId: string,
+  ): Promise<ResolveConflictWithAiResult>;
+  cancelAi(requestId: string): boolean;
+}
+
+/** The next release of each size after `latest`, keeping whatever comes before the number. */
+export function nextVersions(latest: string | null): {
+  patch: string;
+  minor: string;
+  major: string;
+} {
+  const match = latest?.match(/^(.*?)(\d+)\.(\d+)\.(\d+)(-[\w.]+)?$/);
+  if (!match) return { patch: 'v0.0.1', minor: 'v0.1.0', major: 'v1.0.0' };
+  const [, prefix = '', a = '0', b = '0', c = '0', pre] = match;
+  const [major, minor, patch] = [Number(a), Number(b), Number(c)];
+  return {
+    patch: `${prefix}${major}.${minor}.${pre ? patch : patch + 1}`,
+    minor: `${prefix}${major}.${pre && patch === 0 ? minor : minor + 1}.0`,
+    major: `${prefix}${pre && minor === 0 && patch === 0 ? major : major + 1}.0.0`,
+  };
+}
+
+function suggestion(result: SuggestGitTextResult) {
+  return {
+    ok: result.ok,
+    text: result.text ?? null,
+    cliName: result.cliName ?? null,
+    error: result.error ?? null,
+    cancelled: result.cancelled === true,
+  };
 }
 
 /** Past these a diff is no use on a phone, and would only cost its memory. */
@@ -104,6 +154,12 @@ function text(params: unknown, name: string, say: string): string {
 
 function project(params: unknown): string {
   return text(params, 'projectId', 'Say which project.');
+}
+
+function requestOf(params: unknown): string {
+  const value = text(params, 'requestId', 'Say which request.');
+  if (value.length > 128) throw new ManageError('bad-params', 'That request is not valid.');
+  return value;
 }
 
 function paths(params: unknown): string[] {
@@ -177,6 +233,71 @@ export function gitMethods(git: ManageGitDeps): Calls {
     'git.fetch': async (params) => plain(await git.fetch(project(params))),
     'git.pull': async (params) => plain(await git.pull(project(params))),
     'git.push': async (params) => plain(await git.push(project(params))),
+    'git.tags': async (params) => {
+      const info = await git.tags(project(params));
+      return {
+        latest: info.latestTag,
+        recent: info.recentTags,
+        commitsSince: info.commitsSinceLatestTag,
+        hasRemote: info.hasRemote,
+        next: nextVersions(info.latestTag),
+      };
+    },
+    'git.suggestTag': async (params) => {
+      const result = await git.suggestTag(project(params), requestOf(params));
+      return {
+        ok: result.ok,
+        tag: result.tag ?? null,
+        reason: result.reason ?? null,
+        message: result.message ?? null,
+        cliName: result.cliName ?? null,
+        error: result.error ?? null,
+        cancelled: result.cancelled === true,
+      };
+    },
+    'git.createTag': async (params) => {
+      const message = field(params, 'message');
+      if (message !== undefined && message !== null && typeof message !== 'string') {
+        throw new ManageError('bad-params', 'That message could not be read.');
+      }
+      if (typeof message === 'string' && message.length > MAX_MESSAGE_CHARS) {
+        throw new ManageError('bad-params', 'That message is too long.');
+      }
+      const push = field(params, 'push');
+      if (typeof push !== 'boolean') throw new ManageError('bad-params', 'Push it or not?');
+      return plain(
+        await git.createTag({
+          projectId: project(params),
+          tag: text(params, 'tag', 'Name the tag.'),
+          message: message ?? undefined,
+          push,
+        }),
+      );
+    },
+    'git.suggestCommitMessage': async (params) =>
+      suggestion(
+        await git.suggestCommitMessage(
+          project(params),
+          requestOf(params),
+          oneOf(params, 'scope', ['staged', 'all'] as const),
+        ),
+      ),
+    'git.suggestBranchName': async (params) =>
+      suggestion(await git.suggestBranchName(project(params), requestOf(params))),
+    'git.resolveWithAi': async (params) => {
+      const result = await git.resolveWithAi(
+        project(params),
+        text(params, 'path', 'Say which file.'),
+        requestOf(params),
+      );
+      return {
+        ok: result.ok,
+        message: result.message,
+        summary: result.summary ?? null,
+        cancelled: result.cancelled === true,
+      };
+    },
+    'git.cancelAi': async (params) => ({ cancelled: git.cancelAi(requestOf(params)) }),
     'git.checkout': async (params) =>
       plain(await git.checkout(project(params), text(params, 'name', 'Say which branch.'))),
     'git.createBranch': async (params) =>
