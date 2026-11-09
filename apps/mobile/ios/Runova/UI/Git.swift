@@ -16,6 +16,19 @@ struct GitIntents {
     var cancelAi: () -> Void = {}
     var resolveWithAi: (String) -> Void = { _ in }
     var deleteTag: (String) -> Void = { _ in }
+    var openPr: () -> Void = {}
+    var closePr: () -> Void = {}
+    var suggestPr: () -> Void = {}
+    var prSuggestionTaken: () -> Void = {}
+    var createPr: (String, String, Bool) -> Void = { _, _, _ in }
+    var reviewPr: () -> Void = {}
+    var prReviewTaken: () -> Void = {}
+    var postReview: (String) -> Void = { _ in }
+    var cancelPrAi: () -> Void = {}
+    var applyVersion: (String) -> Void = { _ in }
+    var cancelVersion: () -> Void = {}
+    var versionToggle: (String) -> Void = { _ in }
+    var closeVersion: () -> Void = {}
     var stage: ([String]) -> Void = { _ in }
     var unstage: ([String]) -> Void = { _ in }
     var discard: (String, GitGroup) -> Void = { _, _ in }
@@ -154,6 +167,7 @@ private struct BranchCard: View {
                         RunovaChip(text: "Pull", icon: RunovaIcons.pull, action: intents.pull)
                         RunovaChip(text: "Push", icon: RunovaIcons.push, action: intents.push)
                         RunovaChip(text: "Tags", icon: RunovaIcons.tag, action: intents.openTags)
+                        RunovaChip(text: "Pull request", icon: RunovaIcons.git, action: intents.openPr)
                     }
                 }
             }

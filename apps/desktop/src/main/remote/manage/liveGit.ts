@@ -24,7 +24,9 @@ import {
   unstagePaths,
 } from '../../git/workspaceGit';
 import {
+  cancelApplyVersion,
   commitStagedChanges,
+  createPullRequest,
   createTag,
   deleteProjectTag,
   discardChanges,
@@ -32,11 +34,19 @@ import {
   pushProject,
   requireRepo,
   resolveConflictWithAi,
+  runApplyVersion,
   suggestBranchName,
   suggestCommitMessage,
   suggestTag,
+  swapVersionFile,
   workspaceGitOp,
 } from '../../ipc/git';
+import {
+  commentOnProjectPullRequest,
+  readStatus as readPullRequestStatus,
+  reviewPullRequestLocally,
+  suggestPullRequestText,
+} from '../../ipc/pullRequests';
 import type { ManageGitDeps } from './gitMethods';
 
 /** The same git the desktop's changes panel runs. */
@@ -45,6 +55,14 @@ export const liveGit: ManageGitDeps = {
   suggestTag: (projectId, requestId) => suggestTag(projectId, requestId),
   createTag,
   deleteTag: deleteProjectTag,
+  prStatus: readPullRequestStatus,
+  suggestPrText: suggestPullRequestText,
+  createPr: createPullRequest,
+  reviewPr: reviewPullRequestLocally,
+  prComment: commentOnProjectPullRequest,
+  applyVersion: runApplyVersion,
+  cancelVersion: cancelApplyVersion,
+  swapVersionFile,
   suggestCommitMessage,
   suggestBranchName,
   resolveWithAi: resolveConflictWithAi,

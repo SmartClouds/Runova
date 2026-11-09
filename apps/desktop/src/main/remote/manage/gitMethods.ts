@@ -1,4 +1,4 @@
-import { versionOnChannel } from '@runova/core';
+import { summarizeChecks, versionOnChannel } from '@runova/core';
 import type {
   ManageGitBranch,
   ManageGitDiff,
@@ -6,12 +6,21 @@ import type {
   ManageGitStash,
 } from '@runova/protocol';
 import type {
+  ApplyVersionInput,
+  ApplyVersionResult,
+  CreatePullRequestInput,
+  CreatePullRequestResult,
   CreateTagInput,
   GitOpResult,
   GitTagInfo,
+  PrActionResult,
+  PrCommentInput,
+  PullRequestStatus,
   ResolveConflictWithAiResult,
   SuggestGitTextResult,
+  SuggestPullRequestTextResult,
   SuggestTagResult,
+  SwapVersionFileInput,
   WorkspaceGitState,
 } from '../../../shared/apiTypes';
 import { ManageError, type ManageMethods } from './session';
@@ -58,6 +67,21 @@ export interface ManageGitDeps {
   suggestTag(projectId: string, requestId: string): Promise<SuggestTagResult>;
   createTag(input: CreateTagInput): Promise<GitOpResult>;
   deleteTag(projectId: string, tag: string, remote: boolean): Promise<GitOpResult>;
+  prStatus(projectId: string): Promise<PullRequestStatus>;
+  suggestPrText(
+    projectId: string,
+    requestId: string,
+    base: string,
+  ): Promise<SuggestPullRequestTextResult>;
+  createPr(input: CreatePullRequestInput): Promise<CreatePullRequestResult>;
+  reviewPr(projectId: string, requestId: string): Promise<SuggestGitTextResult>;
+  prComment(input: PrCommentInput): Promise<PrActionResult>;
+  applyVersion(
+    input: ApplyVersionInput,
+    onLines: (lines: string[]) => void,
+  ): Promise<ApplyVersionResult>;
+  cancelVersion(requestId: string): boolean;
+  swapVersionFile(input: SwapVersionFileInput): Promise<GitOpResult>;
   suggestCommitMessage(
     projectId: string,
     requestId: string,
@@ -117,6 +141,18 @@ const MAX_DIFF_LINES = 3000;
 const MAX_DIFF_CHARS = 256 * 1024;
 const MAX_PATHS = 1000;
 const MAX_MESSAGE_CHARS = 16 * 1024;
+const MAX_PR_BODY = 64 * 1024;
+const MAX_VERSION_RUNS = 10;
+const MAX_VERSION_LINES = 8;
+
+interface VersionRun {
+  projectId: string;
+  status: 'running' | 'done' | 'failed' | 'cancelled';
+  lines: string[];
+  result: ApplyVersionResult | null;
+  /** Each file in the run, and whether the run's edit is what is on disk now. */
+  kept: Map<string, boolean>;
+}
 const NOT_SHOWN: Pick<ManageGitDiff, 'tooLarge' | 'lines'> = { tooLarge: true, lines: [] };
 
 const HEADER =
@@ -159,9 +195,14 @@ function field(params: unknown, name: string): unknown {
   return (params as Record<string, unknown> | null | undefined)?.[name];
 }
 
-function text(params: unknown, name: string, say: string): string {
+function text(
+  params: unknown,
+  name: string,
+  say: string,
+  limit = Number.POSITIVE_INFINITY,
+): string {
   const value = field(params, name);
-  if (typeof value !== 'string' || value.trim().length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > limit) {
     throw new ManageError('bad-params', say);
   }
   return value;
@@ -204,6 +245,16 @@ function plain(result: GitOpResult): GitOpResult {
 
 /** Git for a phone. Only names of files in a repository cross the link, never where it is. */
 export function gitMethods(git: ManageGitDeps): Calls {
+  /** A version run outlives the call that started it, so a dropped link can't lose the result. */
+  const runs = new Map<string, VersionRun>();
+
+  function forget(): void {
+    while (runs.size > MAX_VERSION_RUNS) {
+      const oldest = runs.keys().next().value;
+      if (oldest === undefined) break;
+      runs.delete(oldest);
+    }
+  }
   return {
     'git.state': async (params) => {
       const { head: _head, projectPrefix: _prefix, ...state } = await git.state(project(params));
@@ -265,6 +316,173 @@ export function gitMethods(git: ManageGitDeps): Calls {
       return plain(
         await git.deleteTag(project(params), text(params, 'tag', 'Say which tag.'), remote),
       );
+    },
+    'git.pr': async (params) => {
+      const status = await git.prStatus(project(params));
+      const pr = status.pr;
+      const checks = pr ? summarizeChecks(pr.checks) : null;
+      return {
+        cliAvailable: status.cliAvailable,
+        authenticated: status.authenticated,
+        repo: status.github ? `${status.github.owner}/${status.github.repo}` : null,
+        branch: status.branch,
+        defaultBranch: status.defaultBranch,
+        onDefaultBranch: status.onDefaultBranch,
+        ahead: status.ahead,
+        dirty: status.dirty,
+        error: status.error ?? null,
+        pr:
+          pr && checks
+            ? {
+                number: pr.number,
+                title: pr.title,
+                url: pr.url,
+                state: pr.state,
+                isDraft: pr.isDraft,
+                base: pr.base,
+                review: pr.reviewDecision,
+                additions: pr.additions,
+                deletions: pr.deletions,
+                checksTotal: checks.total,
+                checksFailed: checks.failed,
+                checksRunning: checks.running,
+                unresolved: pr.threads.filter((one) => !one.isResolved).length,
+              }
+            : null,
+      };
+    },
+    'git.suggestPrText': async (params) => {
+      const result = await git.suggestPrText(
+        project(params),
+        requestOf(params),
+        text(params, 'base', 'Say which branch it goes into.'),
+      );
+      return {
+        ok: result.ok,
+        title: result.title ?? null,
+        body: result.body ?? null,
+        text: null,
+        cliName: result.cliName ?? null,
+        error: result.error ?? null,
+        cancelled: result.cancelled === true,
+      };
+    },
+    'git.createPr': async (params) => {
+      const draft = field(params, 'draft');
+      const body = field(params, 'body');
+      if (typeof body !== 'string' || body.length > MAX_PR_BODY) {
+        throw new ManageError('bad-params', 'That description could not be read.');
+      }
+      const result = await git.createPr({
+        projectId: project(params),
+        title: text(params, 'title', 'Give it a title.'),
+        body,
+        base: text(params, 'base', 'Say which branch it goes into.'),
+        draft: draft === true,
+      });
+      return {
+        ok: result.ok,
+        url: result.url ?? null,
+        error: result.error ?? null,
+        usedFallback: result.usedFallback === true,
+      };
+    },
+    'git.reviewPr': async (params) => ({
+      ...suggestion(await git.reviewPr(project(params), requestOf(params))),
+      title: null,
+      body: null,
+    }),
+    'git.prComment': async (params) => {
+      const number = field(params, 'number');
+      const body = text(params, 'body', 'There is nothing to post.', MAX_PR_BODY);
+      if (typeof number !== 'number' || !Number.isInteger(number) || number <= 0) {
+        throw new ManageError('bad-params', 'Say which pull request.');
+      }
+      const result = await git.prComment({ projectId: project(params), number, body });
+      return result.ok
+        ? { ok: true, message: 'Posted.' }
+        : { ok: false, message: result.error ?? 'That could not be posted.' };
+    },
+    'git.applyVersion': async (params) => {
+      const requestId = requestOf(params);
+      const projectId = project(params);
+      const tag = text(params, 'tag', 'Say which version.');
+      if (runs.has(requestId)) throw new ManageError('bad-params', 'That run has already started.');
+      const run: VersionRun = {
+        projectId,
+        status: 'running',
+        lines: [],
+        result: null,
+        kept: new Map(),
+      };
+      runs.set(requestId, run);
+      forget();
+      void git
+        .applyVersion({ projectId, tag, requestId }, (lines) => {
+          run.lines = [...run.lines, ...lines]
+            .slice(-MAX_VERSION_LINES)
+            .map((line) => line.slice(0, 200));
+        })
+        .then((result) => {
+          run.result = result;
+          run.status = result.cancelled ? 'cancelled' : result.ok ? 'done' : 'failed';
+          for (const change of result.changes) run.kept.set(change.path, true);
+        })
+        .catch((error: unknown) => {
+          run.status = 'failed';
+          run.result = {
+            ok: false,
+            output: '',
+            changes: [],
+            error: error instanceof Error ? error.message : String(error),
+          };
+        });
+      return { ok: true };
+    },
+    'git.versionRun': async (params) => {
+      const run = runs.get(requestOf(params));
+      if (!run) throw new ManageError('failed', 'That version update is not known here.');
+      return {
+        status: run.status,
+        lines: run.lines,
+        changes: (run.result?.changes ?? []).map((change) => ({
+          path: change.path,
+          kind: change.kind,
+          additions: change.additions,
+          deletions: change.deletions,
+          kept: run.kept.get(change.path) ?? true,
+        })),
+        warning: run.result?.warning ?? null,
+        error: run.result?.error ?? null,
+        committedByCli: run.result?.committedByCli === true,
+      };
+    },
+    'git.cancelVersion': async (params) => ({ cancelled: git.cancelVersion(requestOf(params)) }),
+    'git.versionToggle': async (params) => {
+      const run = runs.get(requestOf(params));
+      const path = text(params, 'path', 'Say which file.', 4096);
+      const change = run?.result?.changes.find((one) => one.path === path);
+      if (!run || !change) throw new ManageError('failed', 'That file is not part of this update.');
+      const kept = run.kept.get(path) ?? true;
+      const result = await git.swapVersionFile(
+        kept
+          ? {
+              projectId: run.projectId,
+              path,
+              fromId: change.afterId,
+              toId: change.beforeId,
+              toRawId: change.beforeRawId,
+            }
+          : {
+              projectId: run.projectId,
+              path,
+              fromId: change.beforeId,
+              toId: change.afterId,
+              toRawId: change.afterRawId,
+            },
+      );
+      if (result.ok) run.kept.set(path, !kept);
+      return plain(result);
     },
     'git.suggestTag': async (params) => {
       const result = await git.suggestTag(project(params), requestOf(params));

@@ -70,6 +70,7 @@ extension View {
 struct TagsScreen: View {
     let tags: GitTagsView
     let error: String?
+    var version: GitVersionView?
     let intents: GitIntents
 
     @State private var tag = ""
@@ -134,6 +135,13 @@ struct TagsScreen: View {
                     }
                     RunovaTextField(value: $tag, placeholder: "Tag name", icon: RunovaIcons.tag)
                     RunovaTextArea(value: $message, placeholder: "Release notes (optional)", minHeight: 96)
+                    if let version {
+                        VersionCard(version: version, intents: intents)
+                    } else if !tag.trimmingCharacters(in: .whitespaces).isEmpty {
+                        RunovaChip(text: "Update the version in files", icon: RunovaIcons.sparkles) {
+                            intents.applyVersion(tag.trimmingCharacters(in: .whitespaces))
+                        }
+                    }
                     if tags.hasRemote {
                         HStack {
                             VStack(alignment: .leading, spacing: 0) {
@@ -199,6 +207,163 @@ private struct BumpOption: View {
             .contentShape(shape)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct VersionCard: View {
+    let version: GitVersionView
+    let intents: GitIntents
+
+    @Environment(\.palette) private var palette
+
+    private var heading: String {
+        switch version.state {
+        case .running: return "Updating to \(version.tag)"
+        case .done: return "Updated to \(version.tag)"
+        case .failed: return "That did not work"
+        case .stopped: return "Stopped"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                RunovaIconTile(icon: version.state == .running ? RunovaIcons.sparkles : RunovaIcons.check, size: 30)
+                RunovaText(heading, style: RunovaType.labelStrong)
+                Spacer(minLength: 0)
+                if version.state == .running {
+                    RunovaChip(text: "Stop", icon: RunovaIcons.stop, tone: .danger, action: intents.cancelVersion)
+                } else {
+                    RunovaChip(text: "Clear", icon: RunovaIcons.close, action: intents.closeVersion)
+                }
+            }
+            ForEach(Array(version.lines.suffix(3).enumerated()), id: \.offset) { _, line in
+                RunovaText(line, style: RunovaType.mono, color: palette.mutedForeground, maxLines: 1)
+            }
+            if let error = version.error { RunovaText(error, style: RunovaType.small, color: palette.destructive) }
+            if let warning = version.warning { RunovaText(warning, style: RunovaType.small, color: palette.warning) }
+            if version.committed {
+                RunovaText("The CLI committed this itself.", style: RunovaType.small, color: palette.mutedForeground)
+            }
+            ForEach(version.files, id: \.path) { file in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        RunovaText(file.path, style: RunovaType.label, maxLines: 1)
+                        RunovaText(file.detail, style: RunovaType.small, color: palette.mutedForeground)
+                    }
+                    Spacer(minLength: 0)
+                    RunovaChip(text: file.kept ? "Undo" : "Redo") { intents.versionToggle(file.path) }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .runovaGlass()
+    }
+}
+
+/// A branch's pull request, or the form to open one.
+struct PrScreen: View {
+    let pr: GitPrView
+    let intents: GitIntents
+
+    @State private var title = ""
+    @State private var body_ = ""
+    @State private var draft = false
+    @State private var review = ""
+    @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        RunovaScreen(title: "Pull request", subtitle: pr.branchLabel.isEmpty ? nil : pr.branchLabel, onBack: intents.closePr) {
+            if pr.loading {
+                LoadingRows().frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                ScrollView { content.padding(16) }
+            }
+        }
+        .onChange(of: pr.suggestion) { suggestion in
+            guard let suggestion else { return }
+            title = suggestion.title
+            body_ = suggestion.body
+            intents.prSuggestionTaken()
+        }
+        .onChange(of: pr.review) { text in
+            guard let text else { return }
+            review = text
+            intents.prReviewTaken()
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let note = pr.note { RunovaText(note, style: RunovaType.small, color: palette.warning) }
+            if let error = pr.error { RunovaText(error, style: RunovaType.small, color: palette.destructive) }
+            if let info = pr.pr { existing(info) }
+            if pr.canCreate { form }
+            if let link = pr.fallbackUrl, let url = URL(string: link) {
+                RunovaChip(text: "Finish on GitHub", icon: RunovaIcons.external, tone: .primary) { openURL(url) }
+            }
+        }
+    }
+
+    @ViewBuilder private func existing(_ info: GitPrInfoView) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                RunovaBadge(text: info.stateLabel, tone: .primary, dot: true)
+                if let label = info.reviewLabel { RunovaBadge(text: label, tone: .success) }
+                RunovaText("#\(info.number)", style: RunovaType.small, color: palette.mutedForeground)
+            }
+            RunovaText(info.title, style: RunovaType.title)
+            RunovaText(info.meta, style: RunovaType.small, color: info.checksFailed ? palette.destructive : palette.mutedForeground)
+            if let label = info.unresolvedLabel { RunovaText(label, style: RunovaType.small, color: palette.warning) }
+            if let url = URL(string: info.url) {
+                RunovaChip(text: "Open on GitHub", icon: RunovaIcons.external) { openURL(url) }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .runovaGlass()
+        RunovaButton(
+            text: pr.reviewing ? "Stop" : "Review with AI", kind: pr.reviewing ? .danger : .tint,
+            icon: pr.reviewing ? RunovaIcons.stop : RunovaIcons.sparkles,
+            action: pr.reviewing ? intents.cancelPrAi : intents.reviewPr
+        )
+        .frame(maxWidth: .infinity)
+        if pr.reviewing {
+            RunovaText("The AI on this computer is reading the changes.", style: RunovaType.small, color: palette.primary)
+        }
+        if !review.isEmpty {
+            if let note = pr.reviewNote { RunovaText(note, style: RunovaType.small, color: palette.mutedForeground) }
+            RunovaTextArea(value: $review, placeholder: "The review", minHeight: 160)
+            RunovaButton(text: "Post as a comment", icon: RunovaIcons.send) { intents.postReview(review) }
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder private var form: some View {
+        RunovaText("\(pr.branchLabel) into \(pr.base), \(pr.aheadLabel)", style: RunovaType.small, color: palette.mutedForeground)
+        if pr.dirty {
+            RunovaText("You have uncommitted changes that won't be included.", style: RunovaType.small, color: palette.warning)
+        }
+        RunovaButton(
+            text: pr.suggesting ? "Stop" : "Write it with AI", kind: pr.suggesting ? .danger : .tint,
+            icon: pr.suggesting ? RunovaIcons.stop : RunovaIcons.sparkles,
+            action: pr.suggesting ? intents.cancelPrAi : intents.suggestPr
+        )
+        .frame(maxWidth: .infinity)
+        RunovaTextField(value: $title, placeholder: "Title", icon: RunovaIcons.edit)
+        RunovaTextArea(value: $body_, placeholder: "What changed and why", minHeight: 120)
+        HStack {
+            RunovaText("Open as a draft", style: RunovaType.label)
+            Spacer(minLength: 0)
+            RunovaToggle(isOn: draft, label: "Open as a draft") { draft = $0 }
+        }
+        RunovaButton(
+            text: "Open pull request", enabled: !title.trimmingCharacters(in: .whitespaces).isEmpty && !pr.suggesting,
+            icon: RunovaIcons.git
+        ) { intents.createPr(title.trimmingCharacters(in: .whitespaces), body_, draft) }
+        .frame(maxWidth: .infinity)
     }
 }
 

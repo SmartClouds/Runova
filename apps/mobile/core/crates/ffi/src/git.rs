@@ -153,6 +153,7 @@ impl Runner {
         self.view.selected_project = project_id;
         self.view.git = GitScreen::default();
         self.view.git_tools = Default::default();
+        self.view.git_more = Default::default();
         self.refresh_section();
     }
 

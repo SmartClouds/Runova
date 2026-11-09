@@ -86,6 +86,19 @@ data class GitIntents(
     val cancelAi: () -> Unit = {},
     val resolveWithAi: (String) -> Unit = {},
     val deleteTag: (String) -> Unit = {},
+    val openPr: () -> Unit = {},
+    val closePr: () -> Unit = {},
+    val suggestPr: () -> Unit = {},
+    val prSuggestionTaken: () -> Unit = {},
+    val createPr: (String, String, Boolean) -> Unit = { _, _, _ -> },
+    val reviewPr: () -> Unit = {},
+    val prReviewTaken: () -> Unit = {},
+    val postReview: (String) -> Unit = {},
+    val cancelPrAi: () -> Unit = {},
+    val applyVersion: (String) -> Unit = {},
+    val cancelVersion: () -> Unit = {},
+    val versionToggle: (String) -> Unit = {},
+    val closeVersion: () -> Unit = {},
 )
 
 private val GroupTitles = listOf(
@@ -111,8 +124,12 @@ private fun changeDetail(file: GitFileView): String? = when {
 /** A sub-screen of git that replaces the whole device screen, or null for the normal tabs. */
 @Composable
 fun GitOverlay(view: AppView, intents: AppIntents): Boolean {
+    view.gitMore.pr?.let {
+        PrScreen(it, intents.git)
+        return true
+    }
     view.gitTools.tags?.let {
-        TagsScreen(it, view.error, intents.git)
+        TagsScreen(it, view.error, view.gitMore.version, intents.git)
         return true
     }
     val diff = view.git.diff
@@ -203,6 +220,7 @@ private fun BranchCard(state: GitStateView, intents: GitIntents) {
                     RunovaChip("Push", intents.push, icon = RunovaIcons.Push)
                 }
                 RunovaChip("Tags", intents.openTags, icon = RunovaIcons.Tag)
+                RunovaChip("Pull request", intents.openPr, icon = RunovaIcons.Git)
             }
         }
     }

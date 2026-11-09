@@ -1240,6 +1240,81 @@ pub struct StudioToolsScreen {
     pub download: Option<StudioDownloadView>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitPrInfoView {
+    pub number: u32,
+    pub title: String,
+    pub url: String,
+    pub state_label: String,
+    pub review_label: Option<String>,
+    pub meta: String,
+    pub unresolved_label: Option<String>,
+    pub checks_failed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitPrSuggestionView {
+    pub title: String,
+    pub body: String,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitPrView {
+    pub loading: bool,
+    pub branch_label: String,
+    pub base: String,
+    pub ahead_label: String,
+    pub dirty: bool,
+    pub can_create: bool,
+    pub note: Option<String>,
+    pub pr: Option<GitPrInfoView>,
+    pub suggesting: bool,
+    /// Written by the AI, until the form has taken it.
+    pub suggestion: Option<GitPrSuggestionView>,
+    pub reviewing: bool,
+    /// Written by the AI, until the editor has taken it.
+    pub review: Option<String>,
+    pub review_note: Option<String>,
+    /// With no GitHub CLI, the page that finishes opening it.
+    pub fallback_url: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum GitVersionState {
+    Running,
+    Done,
+    Failed,
+    Stopped,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitVersionFileView {
+    pub path: String,
+    pub detail: String,
+    pub kept: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GitVersionView {
+    pub request_id: String,
+    pub tag: String,
+    pub state: GitVersionState,
+    pub lines: Vec<String>,
+    pub files: Vec<GitVersionFileView>,
+    pub warning: Option<String>,
+    pub error: Option<String>,
+    /// The CLI committed by itself, so there is nothing left to review here.
+    pub committed: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct GitMoreScreen {
+    pub pr: Option<GitPrView>,
+    pub version: Option<GitVersionView>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -1280,6 +1355,7 @@ pub struct AppView {
     pub auto_fix: Vec<AutoFixSessionView>,
     pub prompts: PromptsScreen,
     pub studio_tools: StudioToolsScreen,
+    pub git_more: GitMoreScreen,
 }
 
 impl AppView {
@@ -1319,6 +1395,7 @@ impl AppView {
             auto_fix: Vec::new(),
             prompts: PromptsScreen::default(),
             studio_tools: StudioToolsScreen::default(),
+            git_more: GitMoreScreen::default(),
         }
     }
 }

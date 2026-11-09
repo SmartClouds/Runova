@@ -1,5 +1,6 @@
 package com.runovahq.app.ui
 
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +25,10 @@ import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.GitAiKind
 import uniffi.runova_ffi.GitAiView
 import uniffi.runova_ffi.GitFileView
+import uniffi.runova_ffi.GitMoreScreen
+import uniffi.runova_ffi.GitPrInfoView
+import uniffi.runova_ffi.GitPrSuggestionView
+import uniffi.runova_ffi.GitPrView
 import uniffi.runova_ffi.GitGroup
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.GitStateView
@@ -32,6 +37,9 @@ import uniffi.runova_ffi.GitTagOptionView
 import uniffi.runova_ffi.GitTagSuggestionView
 import uniffi.runova_ffi.GitTagsView
 import uniffi.runova_ffi.GitToolsScreen
+import uniffi.runova_ffi.GitVersionFileView
+import uniffi.runova_ffi.GitVersionState
+import uniffi.runova_ffi.GitVersionView
 import uniffi.runova_ffi.ProjectView
 
 private val SCREENSHOTS = RoborazziOptions(
@@ -80,8 +88,20 @@ class GitToolsTest {
         compose.setContent { RunovaTheme(dark = true) { AppRoot(view, "git", {}, AppIntents(git = intents)) } }
     }
 
-    private fun view(files: List<GitFileView>, tools: GitToolsScreen = GitToolsScreen(null, null, null)) =
-        appView(connection = computer, projects = listOf(project), selected = "p1", git = gitWith(files), gitTools = tools)
+    private fun view(
+        files: List<GitFileView>,
+        tools: GitToolsScreen = GitToolsScreen(null, null, null),
+        more: GitMoreScreen = GitMoreScreen(null, null),
+    ) = appView(connection = computer, projects = listOf(project), selected = "p1", git = gitWith(files), gitTools = tools, gitMore = more)
+
+    private val noPr = GitPrView(
+        false, "fix/login", "main", "2 commits to send", false, true, null, null, false, null, false, null, null, null, null,
+    )
+
+    private val openPr = noPr.copy(
+        canCreate = false,
+        pr = GitPrInfoView(12u, "Fix login", "https://x/12", "Open", "Approved", "+10 -2, 3 checks passed", "1 open review thread", false),
+    )
 
     private fun snapshot(name: String) {
         compose.onRoot().captureRoboImage("src/test/snapshots/$name.png", SCREENSHOTS)
@@ -191,6 +211,59 @@ class GitToolsTest {
         compose.onAllNodesWithText("Delete")[1].performScrollTo().performClick()
 
         assertEquals("v1.4.1", deleted)
+    }
+
+    @Test
+    fun aPullRequestOpensFromTheForm() {
+        var made: Triple<String, String, Boolean>? = null
+        show(view(emptyList(), more = GitMoreScreen(noPr, null)), GitIntents(createPr = { title, body, draft -> made = Triple(title, body, draft) }))
+        snapshot("git-pr-new")
+
+        compose.onAllNodes(hasSetTextAction())[0].performTextInput("Fix login")
+        compose.onNodeWithContentDescription("Open as a draft").performClick()
+        compose.onNodeWithText("Open pull request").performClick()
+
+        assertEquals(Triple("Fix login", "", true), made)
+    }
+
+    @Test
+    fun theAiFillsInThePullRequest() {
+        var taken = 0
+        val suggested = noPr.copy(suggestion = GitPrSuggestionView("Fix login", "Why it changed", "Written by Codex"))
+        show(view(emptyList(), more = GitMoreScreen(suggested, null)), GitIntents(prSuggestionTaken = { taken++ }))
+
+        compose.onNodeWithText("Why it changed").assertExists()
+
+        assertEquals(1, taken)
+    }
+
+    @Test
+    fun anOpenPullRequestCanBeReviewedAndPosted() {
+        var posted = ""
+        val reviewed = openPr.copy(review = "Looks fine", reviewNote = "Written by Codex on this computer")
+        show(view(emptyList(), more = GitMoreScreen(reviewed, null)), GitIntents(postReview = { posted = it }))
+        snapshot("git-pr")
+
+        compose.onNodeWithText("Approved").assertExists()
+        compose.onNodeWithText("Post as a comment").performClick()
+
+        assertEquals("Looks fine", posted)
+    }
+
+    @Test
+    fun theVersionRunIsFollowedAndAFileCanBeUndone() {
+        var undone = ""
+        val run = GitVersionView(
+            "r1", "v1.5.0", GitVersionState.DONE, listOf("Reading package.json"),
+            listOf(GitVersionFileView("package.json", "modified, +1 -1", true)), null, null, false,
+        )
+        show(view(emptyList(), GitToolsScreen(tags(), null, null), GitMoreScreen(null, run)), GitIntents(versionToggle = { undone = it }))
+        snapshot("git-version")
+
+        compose.onNodeWithText("Updated to v1.5.0").assertExists()
+        compose.onNodeWithText("Undo").performScrollTo().performClick()
+
+        assertEquals("package.json", undone)
     }
 
     @Test

@@ -13,6 +13,7 @@ pub mod engine;
 pub mod errors;
 pub mod frames;
 pub mod git;
+pub mod git_more;
 pub mod git_tools;
 pub(crate) mod labels;
 pub mod notifications;

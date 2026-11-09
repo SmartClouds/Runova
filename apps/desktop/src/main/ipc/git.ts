@@ -541,6 +541,180 @@ export async function resolveConflictWithAi(
   }
 }
 
+export async function createPullRequest(
+  input: CreatePullRequestInput,
+): Promise<CreatePullRequestResult> {
+  const cwd = await getProjectPath(input.projectId);
+  const branch = await currentBranch(cwd);
+  if (!branch) return { ok: false, error: 'No current branch found.' };
+
+  try {
+    await pushCurrentBranch(cwd, branch);
+  } catch (error) {
+    const err = error as { stderr?: string; message?: string };
+    return {
+      ok: false,
+      error: `Failed to push branch before creating the PR: ${(err.stderr || err.message || '').trim()}`,
+    };
+  }
+
+  if (await isGhCliAvailable()) {
+    try {
+      const args = ['pr', 'create', '--title', input.title, '--body', input.body];
+      if (input.base) args.push('--base', input.base);
+      if (input.draft) args.push('--draft');
+      const { stdout } = await runGh(args, { cwd, timeout: GH_TIMEOUT_MS });
+      const url = stdout.trim().split('\n').pop() ?? '';
+      return { ok: true, url };
+    } catch (error) {
+      return { ok: false, error: `gh pr create failed: ${ghErrorMessage(error)}` };
+    }
+  }
+
+  // No GitHub CLI, fall back to opening a pre-filled compare page in the browser.
+  // The remote is resolved the same way as everywhere else in this file, so a repo
+  // whose only remote is called something other than origin still works.
+  const remote = (await primaryRemote(cwd)) ?? 'origin';
+  const remoteUrl = ((await gitOrNull(cwd, ['remote', 'get-url', remote])) ?? '').trim();
+  const parsed = parseGithubRemote(remoteUrl);
+  if (!parsed) {
+    return {
+      ok: false,
+      error: `GitHub CLI (gh) is not installed and the ${remote} remote is not a GitHub URL.`,
+    };
+  }
+  const base = input.base || (await detectDefaultBranch(cwd)) || 'main';
+  const params = new URLSearchParams({ expand: '1', title: input.title, body: input.body });
+  const url = `https://github.com/${parsed.owner}/${parsed.repo}/compare/${base}...${branch}?${params.toString()}`;
+  return { ok: true, url, usedFallback: true };
+}
+
+async function applyVersion(
+  input: ApplyVersionInput,
+  signal: AbortSignal,
+  onLines?: (lines: string[]) => void,
+): Promise<ApplyVersionResult> {
+  const project = await getProject(input.projectId);
+  const cwd = project.folderPath;
+  const tag = input.tag.trim();
+  if (!tag) {
+    return { ok: false, output: '', changes: [], error: 'No version to apply.' };
+  }
+
+  // Snapshot first: the CLI's own summary of what it edited can't be trusted, and
+  // comparing file contents before and after is the only account of it that can.
+  const root = (await repoRoot(cwd).catch(() => '')) || cwd;
+  const before = await snapshotChangedFiles(root);
+  const headBefore = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
+
+  // The dialog shows each step as it happens, so the run streams instead of answering at
+  // the end. The lines go to every window: the dialog may have been closed and opened again.
+  const { requestId } = input;
+  const log = batchLines((lines) => {
+    if (requestId) broadcastToWindows(IPC.git.onApplyVersionLog, { requestId, lines });
+    onLines?.(lines);
+  });
+  const result = await streamHeadlessCliPrompt(buildVersionBumpPrompt(tag), cwd, {
+    preferredCliId: project.cliId,
+    allowWrites: true,
+    timeoutMs: VERSION_BUMP_TIMEOUT_MS,
+    readableProgress: true,
+    signal,
+    onLine: log.push,
+  });
+  log.flush();
+
+  // The CLI may edit anything, so every file it touched is listed for the user to keep
+  // or revert, rather than guessing up front which ones belong to this release.
+  const after = await snapshotChangedFiles(root);
+  const changes = await compareSnapshots(root, before, after);
+
+  // Despite the prompt telling it not to, a CLI occasionally reaches for a tool like
+  // `npm version` that commits (and tags) by itself; that leaves no working-tree diff to
+  // report, so this is the only way to tell the UI the bump actually landed in a commit.
+  const headAfter = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
+  const committedByCli = headBefore !== null && headAfter !== null && headBefore !== headAfter;
+
+  // Agent CLIs are unreliable narrators of their own exit: OpenCode ends a run whose
+  // last act was a tool call with an empty stdout, and a run we stop for running long
+  // exits non-zero. Neither says the bump failed, and the working tree above already
+  // knows whether it landed. A cancel still reads as a cancel, since the user asked.
+  const landed = (changes.length > 0 || committedByCli) && !result.cancelled;
+
+  const applyResult: ApplyVersionResult = {
+    ok: result.ok || landed,
+    // Falls back to the progress log for CLIs that keep stdout for the final message
+    // and print everything they did to stderr.
+    output: result.text || result.log || '',
+    changes,
+    committedByCli,
+    cliName: result.cliName,
+    // A run that wrote files but ended badly is a partial success, not a failure: say
+    // what went wrong without burying the edits the user now has to deal with.
+    warning: landed && !result.ok ? result.error : undefined,
+    error: result.ok || landed ? undefined : result.error,
+    cancelled: result.cancelled,
+  };
+
+  // The run can take minutes, so this says it's done even if the dialog watching it has
+  // since closed or the user moved to another project or page entirely. Clicking it
+  // reopens the review, same as the in-app toast the still-open dialog would show.
+  if (!applyResult.cancelled) {
+    forwardNotification({
+      category: 'tasks',
+      status: applyResult.ok ? 'finished' : 'failed',
+      subject: 'Version update',
+      project: project.name,
+      itemId: input.projectId,
+    });
+    const settings = await store.getSettings();
+    if (settings.workspaceNotifications !== false) {
+      showOsNotification({
+        title: applyResult.ok
+          ? `${project.name}: version files updated`
+          : `${project.name}: version update failed`,
+        body: applyResult.ok
+          ? `${changes.length} file${changes.length === 1 ? '' : 's'} changed for ${tag}. Review and commit when ready.`
+          : (applyResult.error ?? 'The CLI did not finish.'),
+        route: `/workspace/${input.projectId}?tag=1`,
+      });
+    }
+  }
+
+  return applyResult;
+}
+
+/** Runs the version bump so that a Cancel sent right after the start finds it. */
+export async function runApplyVersion(
+  input: ApplyVersionInput,
+  onLines?: (lines: string[]) => void,
+): Promise<ApplyVersionResult> {
+  const controller = new AbortController();
+  const requestId = input.requestId;
+  if (requestId) versionBumpRuns.set(requestId, controller);
+  try {
+    return await applyVersion(input, controller.signal, onLines);
+  } finally {
+    if (requestId) versionBumpRuns.delete(requestId);
+  }
+}
+
+export function cancelApplyVersion(requestId: string): boolean {
+  const run = versionBumpRuns.get(requestId);
+  if (!run) return false;
+  run.abort();
+  return true;
+}
+
+export async function swapVersionFile(input: SwapVersionFileInput): Promise<GitOpResult> {
+  const cwd = await getProjectPath(input.projectId);
+  return runGitOp(async () => {
+    const root = await repoRoot(cwd);
+    await swapFileVersion(root, input.path, input.fromId, input.toId, input.toRawId);
+    return input.toId === null ? `Removed ${input.path}.` : `Updated ${input.path}.`;
+  });
+}
+
 function registerRepoHandlers(): void {
   ipcMain.handle(IPC.git.status, async (_event, projectId: string): Promise<GitStatus> => {
     return readStatus(await getProjectPath(projectId));
@@ -852,127 +1026,18 @@ function registerTagHandlers(): void {
   ipcMain.handle(
     IPC.git.applyVersion,
     async (_event, input: ApplyVersionInput): Promise<ApplyVersionResult> => {
-      // Registered before the first await, so a Cancel sent right after the start finds it.
-      const controller = new AbortController();
-      const requestId = input.requestId;
-      if (requestId) versionBumpRuns.set(requestId, controller);
-      try {
-        return await applyVersion(input, controller.signal);
-      } finally {
-        if (requestId) versionBumpRuns.delete(requestId);
-      }
+      return runApplyVersion(input);
     },
   );
 
-  async function applyVersion(
-    input: ApplyVersionInput,
-    signal: AbortSignal,
-  ): Promise<ApplyVersionResult> {
-    const project = await getProject(input.projectId);
-    const cwd = project.folderPath;
-    const tag = input.tag.trim();
-    if (!tag) {
-      return { ok: false, output: '', changes: [], error: 'No version to apply.' };
-    }
-
-    // Snapshot first: the CLI's own summary of what it edited can't be trusted, and
-    // comparing file contents before and after is the only account of it that can.
-    const root = (await repoRoot(cwd).catch(() => '')) || cwd;
-    const before = await snapshotChangedFiles(root);
-    const headBefore = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
-
-    // The dialog shows each step as it happens, so the run streams instead of answering at
-    // the end. The lines go to every window: the dialog may have been closed and opened again.
-    const { requestId } = input;
-    const log = batchLines((lines) => {
-      if (requestId) broadcastToWindows(IPC.git.onApplyVersionLog, { requestId, lines });
-    });
-    const result = await streamHeadlessCliPrompt(buildVersionBumpPrompt(tag), cwd, {
-      preferredCliId: project.cliId,
-      allowWrites: true,
-      timeoutMs: VERSION_BUMP_TIMEOUT_MS,
-      readableProgress: true,
-      signal,
-      onLine: log.push,
-    });
-    log.flush();
-
-    // The CLI may edit anything, so every file it touched is listed for the user to keep
-    // or revert, rather than guessing up front which ones belong to this release.
-    const after = await snapshotChangedFiles(root);
-    const changes = await compareSnapshots(root, before, after);
-
-    // Despite the prompt telling it not to, a CLI occasionally reaches for a tool like
-    // `npm version` that commits (and tags) by itself; that leaves no working-tree diff to
-    // report, so this is the only way to tell the UI the bump actually landed in a commit.
-    const headAfter = (await gitOrNull(cwd, ['rev-parse', 'HEAD']))?.trim() ?? null;
-    const committedByCli = headBefore !== null && headAfter !== null && headBefore !== headAfter;
-
-    // Agent CLIs are unreliable narrators of their own exit: OpenCode ends a run whose
-    // last act was a tool call with an empty stdout, and a run we stop for running long
-    // exits non-zero. Neither says the bump failed, and the working tree above already
-    // knows whether it landed. A cancel still reads as a cancel, since the user asked.
-    const landed = (changes.length > 0 || committedByCli) && !result.cancelled;
-
-    const applyResult: ApplyVersionResult = {
-      ok: result.ok || landed,
-      // Falls back to the progress log for CLIs that keep stdout for the final message
-      // and print everything they did to stderr.
-      output: result.text || result.log || '',
-      changes,
-      committedByCli,
-      cliName: result.cliName,
-      // A run that wrote files but ended badly is a partial success, not a failure: say
-      // what went wrong without burying the edits the user now has to deal with.
-      warning: landed && !result.ok ? result.error : undefined,
-      error: result.ok || landed ? undefined : result.error,
-      cancelled: result.cancelled,
-    };
-
-    // The run can take minutes, so this says it's done even if the dialog watching it has
-    // since closed or the user moved to another project or page entirely. Clicking it
-    // reopens the review, same as the in-app toast the still-open dialog would show.
-    if (!applyResult.cancelled) {
-      forwardNotification({
-        category: 'tasks',
-        status: applyResult.ok ? 'finished' : 'failed',
-        subject: 'Version update',
-        project: project.name,
-        itemId: input.projectId,
-      });
-      const settings = await store.getSettings();
-      if (settings.workspaceNotifications !== false) {
-        showOsNotification({
-          title: applyResult.ok
-            ? `${project.name}: version files updated`
-            : `${project.name}: version update failed`,
-          body: applyResult.ok
-            ? `${changes.length} file${changes.length === 1 ? '' : 's'} changed for ${tag}. Review and commit when ready.`
-            : (applyResult.error ?? 'The CLI did not finish.'),
-          route: `/workspace/${input.projectId}?tag=1`,
-        });
-      }
-    }
-
-    return applyResult;
-  }
-
-  ipcMain.handle(IPC.git.cancelApplyVersion, (_event, requestId: string): boolean => {
-    const run = versionBumpRuns.get(requestId);
-    if (!run) return false;
-    run.abort();
-    return true;
-  });
+  ipcMain.handle(IPC.git.cancelApplyVersion, (_event, requestId: string): boolean =>
+    cancelApplyVersion(requestId),
+  );
 
   ipcMain.handle(
     IPC.git.swapVersionFile,
     async (_event, input: SwapVersionFileInput): Promise<GitOpResult> => {
-      const cwd = await getProjectPath(input.projectId);
-      return runGitOp(async () => {
-        const root = await repoRoot(cwd);
-        await swapFileVersion(root, input.path, input.fromId, input.toId, input.toRawId);
-        return input.toId === null ? `Removed ${input.path}.` : `Updated ${input.path}.`;
-      });
+      return swapVersionFile(input);
     },
   );
 
@@ -991,53 +1056,8 @@ function registerTagHandlers(): void {
 }
 
 function registerGithubHandlers(): void {
-  ipcMain.handle(
-    IPC.git.createPullRequest,
-    async (_event, input: CreatePullRequestInput): Promise<CreatePullRequestResult> => {
-      const cwd = await getProjectPath(input.projectId);
-      const branch = await currentBranch(cwd);
-      if (!branch) return { ok: false, error: 'No current branch found.' };
-
-      try {
-        await pushCurrentBranch(cwd, branch);
-      } catch (error) {
-        const err = error as { stderr?: string; message?: string };
-        return {
-          ok: false,
-          error: `Failed to push branch before creating the PR: ${(err.stderr || err.message || '').trim()}`,
-        };
-      }
-
-      if (await isGhCliAvailable()) {
-        try {
-          const args = ['pr', 'create', '--title', input.title, '--body', input.body];
-          if (input.base) args.push('--base', input.base);
-          if (input.draft) args.push('--draft');
-          const { stdout } = await runGh(args, { cwd, timeout: GH_TIMEOUT_MS });
-          const url = stdout.trim().split('\n').pop() ?? '';
-          return { ok: true, url };
-        } catch (error) {
-          return { ok: false, error: `gh pr create failed: ${ghErrorMessage(error)}` };
-        }
-      }
-
-      // No GitHub CLI, fall back to opening a pre-filled compare page in the browser.
-      // The remote is resolved the same way as everywhere else in this file, so a repo
-      // whose only remote is called something other than origin still works.
-      const remote = (await primaryRemote(cwd)) ?? 'origin';
-      const remoteUrl = ((await gitOrNull(cwd, ['remote', 'get-url', remote])) ?? '').trim();
-      const parsed = parseGithubRemote(remoteUrl);
-      if (!parsed) {
-        return {
-          ok: false,
-          error: `GitHub CLI (gh) is not installed and the ${remote} remote is not a GitHub URL.`,
-        };
-      }
-      const base = input.base || (await detectDefaultBranch(cwd)) || 'main';
-      const params = new URLSearchParams({ expand: '1', title: input.title, body: input.body });
-      const url = `https://github.com/${parsed.owner}/${parsed.repo}/compare/${base}...${branch}?${params.toString()}`;
-      return { ok: true, url, usedFallback: true };
-    },
+  ipcMain.handle(IPC.git.createPullRequest, (_event, input: CreatePullRequestInput) =>
+    createPullRequest(input),
   );
 
   ipcMain.handle(IPC.git.githubAccount, async (): Promise<GithubAccount> => readGithubAccount());

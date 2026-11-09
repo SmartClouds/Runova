@@ -499,7 +499,10 @@ impl Runner {
     pub(crate) fn refresh_section(&mut self) {
         match self.section {
             Some(Section::Clis) => self.load_terminals(),
-            Some(Section::Git) => self.load_git(),
+            Some(Section::Git) => {
+                self.load_git();
+                self.refresh_version_run();
+            }
             Some(Section::Status) => self.refresh_status(),
             Some(Section::Vault) => self.refresh_vault(),
             Some(Section::Deploy) => self.refresh_deploy(),
@@ -570,6 +573,7 @@ impl Runner {
         self.view.auto_fix.clear();
         self.view.prompts = Default::default();
         self.view.studio_tools = Default::default();
+        self.view.git_more = Default::default();
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();

@@ -82,8 +82,10 @@ struct DeviceShell: View {
                 StudioVideoScreen(
                     video: video, busy: view.busy, error: view.error, notice: view.notice, tools: view.studioTools,
                     intents: intents.studio)
+            } else if let pr = view.gitMore.pr {
+                PrScreen(pr: pr, intents: intents.git)
             } else if let tags = view.gitTools.tags {
-                TagsScreen(tags: tags, error: view.error, intents: intents.git)
+                TagsScreen(tags: tags, error: view.error, version: view.gitMore.version, intents: intents.git)
             } else if let diff = view.git.diff {
                 DiffScreen(diff: diff, intents: intents.git)
             } else if view.git.branchesOpen {

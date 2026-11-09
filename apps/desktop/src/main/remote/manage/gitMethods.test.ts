@@ -31,6 +31,18 @@ const state: WorkspaceGitState = {
   projectPrefix: 'apps/web',
 };
 
+const FILE_CHANGE = {
+  path: 'package.json',
+  kind: 'modified' as const,
+  beforeId: 'a',
+  afterId: 'b',
+  beforeRawId: 'ra',
+  afterRawId: 'rb',
+  additions: 1,
+  deletions: 1,
+  diff: '',
+};
+
 function git(change: Partial<ManageGitDeps> = {}): ManageGitDeps {
   return {
     state: async () => state,
@@ -72,6 +84,46 @@ function git(change: Partial<ManageGitDeps> = {}): ManageGitDeps {
     suggestBranchName: async () => ({ ok: true, text: 'fix/a-thing', cliName: 'Codex' }),
     resolveWithAi: async () => ({ ok: true, message: 'Resolved.', summary: 'Kept both' }),
     cancelAi: () => true,
+    prStatus: async () =>
+      ({
+        cliAvailable: true,
+        authenticated: true,
+        github: { owner: 'a', repo: 'b' },
+        branch: 'x',
+        defaultBranch: 'main',
+        onDefaultBranch: false,
+        ahead: 1,
+        hasUpstream: true,
+        dirty: false,
+        pr: {
+          number: 12,
+          title: 'T',
+          url: 'u',
+          state: 'OPEN',
+          isDraft: false,
+          base: 'main',
+          head: 'x',
+          mergeable: 'MERGEABLE',
+          mergeStateStatus: 'CLEAN',
+          reviewDecision: 'APPROVED',
+          additions: 1,
+          deletions: 2,
+          checks: [],
+          threads: [
+            { id: 't', isResolved: false, isOutdated: false, path: 'a', line: 1, comments: [] },
+          ],
+        },
+      }) as never,
+    suggestPrText: async () => ({ ok: true, title: 'T', body: 'B', cliName: 'Codex' }),
+    createPr: vi.fn(async () => ({ ok: true, url: 'u' })),
+    reviewPr: async () => ({ ok: true, text: 'Fine', cliName: 'Codex' }),
+    prComment: vi.fn(async () => ({ ok: true })),
+    applyVersion: vi.fn(async (_input, onLines) => {
+      onLines(['Reading']);
+      return { ok: true, output: '', changes: [FILE_CHANGE] };
+    }),
+    cancelVersion: () => true,
+    swapVersionFile: vi.fn(async () => done),
     ...change,
   };
 }
@@ -439,5 +491,94 @@ describe('tags and AI on a phone', () => {
       cancelled: true,
     });
     expect(cancelAi).toHaveBeenCalledWith('r1');
+  });
+});
+
+describe('pull requests and version updates on a phone', () => {
+  it('sums up a pull request without its threads', async () => {
+    const status = (await call(git(), 'git.pr', { projectId: 'p1' })) as {
+      repo: string;
+      pr: Record<string, unknown>;
+    };
+    expect(status.repo).toBe('a/b');
+    expect(status.pr).toMatchObject({
+      number: 12,
+      review: 'APPROVED',
+      unresolved: 1,
+      checksTotal: 0,
+    });
+    expect(status.pr.threads).toBeUndefined();
+  });
+
+  it('opens a pull request with what it was given', async () => {
+    const createPr = vi.fn(async () => ({ ok: true, url: 'u' }));
+    await call(git({ createPr }), 'git.createPr', {
+      projectId: 'p1',
+      title: 'T',
+      body: 'B',
+      base: 'main',
+      draft: true,
+    });
+    expect(createPr).toHaveBeenCalledWith({
+      projectId: 'p1',
+      title: 'T',
+      body: 'B',
+      base: 'main',
+      draft: true,
+    });
+  });
+
+  it('runs the version update in the background and keeps the result', async () => {
+    const deps = git();
+    const methods = gitMethods(deps);
+    const invoke = (name: string, params: unknown) =>
+      (methods[name] as (p: unknown) => Promise<never>)(params);
+    await expect(
+      invoke('git.applyVersion', { projectId: 'p1', tag: 'v1', requestId: 'r1' }),
+    ).resolves.toEqual({ ok: true });
+    await vi.waitFor(async () => {
+      const run = (await invoke('git.versionRun', { requestId: 'r1' })) as {
+        status: string;
+        lines: string[];
+        changes: unknown[];
+      };
+      expect(run.status).toBe('done');
+      expect(run.lines).toEqual(['Reading']);
+      expect(run.changes).toEqual([
+        { path: 'package.json', kind: 'modified', additions: 1, deletions: 1, kept: true },
+      ]);
+    });
+  });
+
+  it('puts a file back and brings it back again', async () => {
+    const swapVersionFile = vi.fn(async () => ({ ok: true, message: 'Done' }));
+    const methods = gitMethods(git({ swapVersionFile }));
+    const invoke = (name: string, params: unknown) =>
+      (methods[name] as (p: unknown) => Promise<never>)(params);
+    await invoke('git.applyVersion', { projectId: 'p1', tag: 'v1', requestId: 'r2' });
+    await vi.waitFor(async () => {
+      expect(
+        ((await invoke('git.versionRun', { requestId: 'r2' })) as { status: string }).status,
+      ).toBe('done');
+    });
+
+    await invoke('git.versionToggle', { requestId: 'r2', path: 'package.json' });
+    expect(swapVersionFile).toHaveBeenLastCalledWith(
+      expect.objectContaining({ fromId: 'b', toId: 'a', toRawId: 'ra' }),
+    );
+    await invoke('git.versionToggle', { requestId: 'r2', path: 'package.json' });
+    expect(swapVersionFile).toHaveBeenLastCalledWith(
+      expect.objectContaining({ fromId: 'a', toId: 'b', toRawId: 'rb' }),
+    );
+  });
+
+  it('only touches files that were part of the run', async () => {
+    const methods = gitMethods(git());
+    const invoke = (name: string, params: unknown) =>
+      (methods[name] as (p: unknown) => Promise<never>)(params);
+    await invoke('git.applyVersion', { projectId: 'p1', tag: 'v1', requestId: 'r3' });
+    await expect(
+      invoke('git.versionToggle', { requestId: 'r3', path: '../secret' }),
+    ).rejects.toThrow('not part');
   });
 });

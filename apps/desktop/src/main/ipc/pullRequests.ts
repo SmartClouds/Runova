@@ -65,7 +65,7 @@ async function baseRef(cwd: string, base: string): Promise<string> {
   return remote ? `${remote}/${base}` : base;
 }
 
-async function readStatus(projectId: string): Promise<PullRequestStatus> {
+export async function readStatus(projectId: string): Promise<PullRequestStatus> {
   const cwd = (await getProject(projectId)).folderPath;
   const [cliAvailable, github, branch, remote] = await Promise.all([
     isGhCliAvailable(),
@@ -105,6 +105,70 @@ async function readStatus(projectId: string): Promise<PullRequestStatus> {
   return status;
 }
 
+export async function suggestPullRequestText(
+  projectId: string,
+  requestId: string,
+  base: string,
+): Promise<SuggestPullRequestTextResult> {
+  const project = await getProject(projectId);
+  const cwd = project.folderPath;
+  const range = `${await baseRef(cwd, base)}..HEAD`;
+  const subjects = ((await gitOrNull(cwd, ['log', '--format=%s', range])) ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const diffStat = (await gitOrNull(cwd, ['diff', '--shortstat', range])) ?? '';
+  const result = await runHeadlessCliPrompt(buildPrTextPrompt(base, subjects, diffStat), cwd, {
+    requestId,
+    preferredCliId: project.cliId,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      cliName: result.cliName,
+      error: result.error,
+      cancelled: result.cancelled,
+    };
+  }
+  return { ok: true, ...parsePrText(result.text), cliName: result.cliName };
+}
+
+export async function reviewPullRequestLocally(
+  projectId: string,
+  requestId: string,
+): Promise<SuggestGitTextResult> {
+  const project = await getProject(projectId);
+  const cwd = project.folderPath;
+  const branch = await currentBranch(cwd);
+  const pr = branch ? await readBranchPullRequest(cwd, branch).catch(() => null) : null;
+  if (!pr) return { ok: false, error: 'This branch has no pull request to review.' };
+  let diff: string;
+  try {
+    diff = await readPullRequestDiff(cwd, pr.number);
+  } catch (error) {
+    return { ok: false, error: ghErrorMessage(error) };
+  }
+  if (diff.length > REVIEW_DIFF_LIMIT) {
+    diff = `${diff.slice(0, REVIEW_DIFF_LIMIT)}\n\n(diff cut here, read the rest from the repository)`;
+  }
+  const result = await runHeadlessCliPrompt(buildLocalReviewPrompt(pr, diff), cwd, {
+    requestId,
+    preferredCliId: project.cliId,
+  });
+  return {
+    ok: result.ok,
+    text: result.text,
+    cliName: result.cliName,
+    error: result.error,
+    cancelled: result.cancelled,
+  };
+}
+
+export async function commentOnProjectPullRequest(input: PrCommentInput): Promise<PrActionResult> {
+  const cwd = (await getProject(input.projectId)).folderPath;
+  return run(() => commentOnPullRequest(cwd, input.number, input.body));
+}
+
 export function registerPullRequestHandlers(): void {
   ipcMain.handle(
     IPC.pullRequests.status,
@@ -113,77 +177,20 @@ export function registerPullRequestHandlers(): void {
 
   ipcMain.handle(
     IPC.pullRequests.suggestText,
-    async (
-      _event,
-      projectId: string,
-      requestId: string,
-      base: string,
-    ): Promise<SuggestPullRequestTextResult> => {
-      const project = await getProject(projectId);
-      const cwd = project.folderPath;
-      const range = `${await baseRef(cwd, base)}..HEAD`;
-      const subjects = ((await gitOrNull(cwd, ['log', '--format=%s', range])) ?? '')
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const diffStat = (await gitOrNull(cwd, ['diff', '--shortstat', range])) ?? '';
-      const result = await runHeadlessCliPrompt(buildPrTextPrompt(base, subjects, diffStat), cwd, {
-        requestId,
-        preferredCliId: project.cliId,
-      });
-      if (!result.ok) {
-        return {
-          ok: false,
-          cliName: result.cliName,
-          error: result.error,
-          cancelled: result.cancelled,
-        };
-      }
-      return { ok: true, ...parsePrText(result.text), cliName: result.cliName };
-    },
+    (_event, projectId: string, requestId: string, base: string) =>
+      suggestPullRequestText(projectId, requestId, base),
   );
 
-  ipcMain.handle(
-    IPC.pullRequests.localReview,
-    async (_event, projectId: string, requestId: string): Promise<SuggestGitTextResult> => {
-      const project = await getProject(projectId);
-      const cwd = project.folderPath;
-      const branch = await currentBranch(cwd);
-      const pr = branch ? await readBranchPullRequest(cwd, branch).catch(() => null) : null;
-      if (!pr) return { ok: false, error: 'This branch has no pull request to review.' };
-      let diff: string;
-      try {
-        diff = await readPullRequestDiff(cwd, pr.number);
-      } catch (error) {
-        return { ok: false, error: ghErrorMessage(error) };
-      }
-      if (diff.length > REVIEW_DIFF_LIMIT) {
-        diff = `${diff.slice(0, REVIEW_DIFF_LIMIT)}\n\n(diff cut here, read the rest from the repository)`;
-      }
-      const result = await runHeadlessCliPrompt(buildLocalReviewPrompt(pr, diff), cwd, {
-        requestId,
-        preferredCliId: project.cliId,
-      });
-      return {
-        ok: result.ok,
-        text: result.text,
-        cliName: result.cliName,
-        error: result.error,
-        cancelled: result.cancelled,
-      };
-    },
+  ipcMain.handle(IPC.pullRequests.localReview, (_event, projectId: string, requestId: string) =>
+    reviewPullRequestLocally(projectId, requestId),
   );
 
   ipcMain.handle(IPC.pullRequests.cancelAi, (_event, requestId: string): boolean =>
     cancelHeadlessPrompt(requestId),
   );
 
-  ipcMain.handle(
-    IPC.pullRequests.comment,
-    async (_event, input: PrCommentInput): Promise<PrActionResult> => {
-      const cwd = (await getProject(input.projectId)).folderPath;
-      return run(() => commentOnPullRequest(cwd, input.number, input.body));
-    },
+  ipcMain.handle(IPC.pullRequests.comment, (_event, input: PrCommentInput) =>
+    commentOnProjectPullRequest(input),
   );
 
   ipcMain.handle(
