@@ -9,6 +9,11 @@ core=$(dirname "$ios")/core
 frameworks="$ios/Frameworks"
 generated="$ios/Generated"
 
+# The oldest iOS the app runs on, the same as deploymentTarget in project.yml. Without it rustc links
+# for iOS 10 while the C code in ring and aws-lc is built for the SDK's own version, and the link
+# fails on ___chkstk_darwin.
+export IPHONEOS_DEPLOYMENT_TARGET=16.0
+
 cd "$core"
 for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
   cargo build --release --target "$target" -p runova-ffi

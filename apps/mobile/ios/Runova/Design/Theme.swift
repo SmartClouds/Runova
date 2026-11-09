@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -17,7 +18,7 @@ private func variable(name: String, size: CGFloat, weight: CGFloat) -> UIFont {
     let tag = 0x7767_6874  // 'wght'
     let descriptor = UIFontDescriptor(fontAttributes: [
         .name: name,
-        kCTFontVariationAttribute as UIFontDescriptor.AttributeName: [tag: weight],
+        UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [tag: weight],
     ])
     return UIFont(descriptor: descriptor, size: size)
 }

@@ -6,7 +6,7 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    SWIFT_VERSION: "5.10"
+    SWIFT_VERSION: "5.0"
 targets:
   Runova:
     type: application
@@ -24,8 +24,10 @@ targets:
     entitlements:
       path: Runova/Runova.entitlements
       properties:
-        aps-environment: production
+        aps-environment: development
         keychain-access-groups:
+          # The first group is where items go by default, so the identity seed stays out of the shared one.
+          - $(AppIdentifierPrefix)com.runovahq.app
           - $(AppIdentifierPrefix)com.runovahq.app.shared
     dependencies:
       - framework: Frameworks/RunovaCore.xcframework
@@ -37,8 +39,9 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Runova
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
-        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
     info:
       path: Runova/Info.plist
       properties:
@@ -49,6 +52,15 @@ targets:
           - fonts/JetBrainsMono.ttf
           - fonts/FontAwesomeSolid.ttf
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - com.runovahq.app
@@ -73,7 +85,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Runova Notifications
         SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
-        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
     info:
       path: RunovaNotifications/Info.plist
       properties:
@@ -91,7 +103,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+        OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
 schemes:
   Runova:
     build:

@@ -29,7 +29,13 @@ vi.mock('../aiAccess/external', () => ({
   disconnectExternalClient: (id: string) => external.disconnect(id),
 }));
 
-vi.mock('./terminal', () => ({ terminalSessionInfo: () => undefined }));
+vi.mock('./terminal', () => ({
+  terminalSessionInfo: () => undefined,
+  // The phone's bridge reads these as it loads, and the tools reach it.
+  terminalSessionShell: () => 'bash',
+  subscribeTerminalOutput: () => () => undefined,
+  writeToSession: () => undefined,
+}));
 
 // The tools reach into nearly every main-process area. Each test rebuilds the module graph, but
 // Vitest keeps the transformed files, so loading them once here moves the cold transform (slow

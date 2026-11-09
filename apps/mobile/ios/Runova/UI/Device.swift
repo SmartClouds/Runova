@@ -480,10 +480,10 @@ private func attributed(_ line: LineView, size: CGFloat) -> AttributedString {
         }
         part.foregroundColor = ink
         if let fill { part.backgroundColor = fill }
-        part.font = Font.custom("JetBrainsMono-Regular", fixedSize: size)
-            .weight(run.bold ? .bold : .regular)
-            .italic(run.italic)
-        if run.underline { part.underlineStyle = .single }
+        let font = Font.custom("JetBrainsMono-Regular", fixedSize: size).weight(run.bold ? .bold : .regular)
+        part.font = run.italic ? font.italic() : font
+        // Named in full because UIKit's underline attribute has a `.single` too, and Text only reads this one.
+        if run.underline { part.underlineStyle = Text.LineStyle.single }
         result += part
     }
     return result

@@ -151,9 +151,9 @@ final class AppModel: NSObject, ObservableObject {
                 cancelInvitation: { [weak self] in self?.engine?.accountCancelInvitation(id: $0) },
                 removeMember: { [weak self] in self?.engine?.accountRemoveMember(userId: $0) },
                 setMemberRole: { [weak self] in self?.engine?.accountSetMemberRole(userId: $0, role: $1) },
-                setEncryption: { [weak self] in self?.engine?.setEncryption(item: $0, enabled: $1) },
                 acceptInvitation: { [weak self] in self?.engine?.accountAcceptInvitation(id: $0) },
-                declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) }),
+                declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) },
+                setEncryption: { [weak self] in self?.engine?.setEncryption(item: $0, enabled: $1) }),
             forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() },
             notifications: NotificationIntents(
                 open: { [weak self] in self?.engine?.notificationOpen(id: $0) },

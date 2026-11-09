@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GpuUsage, SystemStatsSample } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { withPlatform } from '../../test/main/fixtures';
@@ -69,7 +69,13 @@ vi.mock('node:child_process', () => ({
 
 useTempUserData({ home: false });
 
+const realNow = Date.now;
+let clockAhead = 0;
+
 beforeEach(async () => {
+  clockAhead = 0;
+  // The module keeps a reference to this when it loads, so it has to be in place first.
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + clockAhead);
   probes.sampleCpuTemperature.mockReset();
   probes.sampleCpuTemperature.mockResolvedValue({ cpuTempC: null, cpuThermalState: null });
   probes.sampleGpus.mockReset();
@@ -89,10 +95,18 @@ function sample(): Promise<SystemStatsSample> {
   return withPlatform('win32', () => invoke<SystemStatsSample>(IPC.system.sample));
 }
 
-/** Lets the background temperature probe land in the cache. */
+/**
+ * Lets the background temperature probe land in the cache, and moves past the two seconds in which
+ * another sample would just be the same reading.
+ */
 function settle(): Promise<void> {
+  clockAhead += 2500;
   return new Promise((resolve) => setImmediate(resolve));
 }
+
+afterEach(() => {
+  vi.mocked(Date.now).mockRestore();
+});
 
 const RTX: GpuUsage = {
   id: 'nvidia-0',

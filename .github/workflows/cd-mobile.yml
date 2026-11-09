@@ -3,8 +3,8 @@ name: CD Mobile
 # Builds the signed Android app and sends the iOS app to TestFlight for a release tag. It is its
 # own workflow so a problem with a phone build can never hold up a desktop release.
 #
-# Both builds need secrets the repository owner sets once, listed in docs/mobile/release.md. A
-# build whose secrets are missing says so and is skipped, so the workflow is safe before then.
+# Both builds need secrets the repository owner sets once, listed in docs/mobile-release-setup.md.
+# A build whose secrets are missing says so and is skipped, so the workflow is safe before then.
 
 on:
   push:
@@ -64,7 +64,8 @@ jobs:
     name: Android
     needs: ci-passed
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The build, then up to an hour waiting for the desktop workflow's release (the last step).
+    timeout-minutes: 120
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
       KEYSTORE_BASE64: ${{ secrets.RUNOVA_ANDROID_KEYSTORE_BASE64 }}
@@ -79,12 +80,20 @@ jobs:
       - name: Are the signing secrets set?
         id: secrets
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::RUNOVA_ANDROID_KEYSTORE_BASE64 is not set, so no Android build was made. See docs/mobile/release.md."
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$RUNOVA_ANDROID_STORE_PASSWORD" ] || [ -z "$RUNOVA_ANDROID_KEY_ALIAS" ] || [ -z "$RUNOVA_ANDROID_KEY_PASSWORD" ]; then
+            echo "::warning::The Android signing secrets are not all set, so no Android build was made. See docs/mobile-release-setup.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
+          # None set is a working app with no push. Some set is worse: with the API key there, the
+          # app starts Firebase with the other values empty, and that throws at launch.
+          firebase=$(printf '%s\n' "$RUNOVA_FIREBASE_API_KEY" "$RUNOVA_FIREBASE_APP_ID" "$RUNOVA_FIREBASE_PROJECT_ID" "$RUNOVA_FIREBASE_SENDER_ID" | grep -c . || true)
+          case "$firebase" in
+            4) ;;
+            0) echo "::warning::The RUNOVA_FIREBASE_* secrets are not set, so this build will not receive push notifications. See docs/mobile-release-setup.md." ;;
+            *) echo "::error::Only $firebase of the 4 RUNOVA_FIREBASE_* secrets are set. See docs/mobile-release-setup.md."; exit 1 ;;
+          esac
 
       - name: Checkout
         if: steps.secrets.outputs.ready == 'true'
@@ -127,7 +136,9 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: |
-          eval "$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          # In two lines because eval would hide a tag the script refuses, such as v1.2.3-beta.1.
+          version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          eval "$version"
           keystore="$RUNNER_TEMP/release.keystore"
           base64 --decode <<< "$KEYSTORE_BASE64" > "$keystore"
           RUNOVA_ANDROID_KEYSTORE="$keystore" ./gradlew :app:assembleRelease :app:bundleRelease \
@@ -175,8 +186,8 @@ jobs:
       - name: Is everything needed here?
         id: secrets
         run: |
-          if [ -z "$KEY_BASE64" ] || [ -z "$TEAM_ID" ]; then
-            echo "::warning::The App Store Connect secrets are not set, so nothing went to TestFlight. See docs/mobile/release.md."
+          if [ -z "$KEY_BASE64" ] || [ -z "$TEAM_ID" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
+            echo "::warning::The App Store Connect secrets are not all set, so nothing went to TestFlight. See docs/mobile-release-setup.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           elif ! xcodebuild -version > /dev/null 2>&1; then
             echo "::warning::Xcode is not installed on this runner, so nothing went to TestFlight."
@@ -188,6 +199,13 @@ jobs:
       - name: Checkout
         if: steps.secrets.outputs.ready == 'true'
         uses: actions/checkout@v7
+        with:
+          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest.
+          clean: false
+
+      - name: Runner cleanup
+        if: steps.secrets.outputs.ready == 'true'
+        uses: ./.github/actions/runner-cleanup
 
       - name: Setup Rust
         if: steps.secrets.outputs.ready == 'true'
@@ -212,22 +230,29 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         working-directory: apps/mobile/ios
         run: |
-          eval "$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
+          eval "$version"
           key="$RUNNER_TEMP/AuthKey.p8"
           base64 --decode <<< "$KEY_BASE64" > "$key"
           trap 'rm -f "$key"' EXIT
           auth=(-allowProvisioningUpdates -authenticationKeyPath "$key"
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          # Automatic signing, so Xcode makes a profile for each target (the app and its
+          # notification extension) with the API key. The settings here apply to both targets.
+          # XcodeGen only sets an identity on the app, hence CODE_SIGN_IDENTITY.
           xcodebuild archive -project Runova.xcodeproj -scheme Runova \
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" \
             MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}"
+          # The version comes from the tag, so Xcode must not renumber the build on its way up.
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <plist version="1.0"><dict>
           <key>method</key><string>app-store-connect</string>
           <key>destination</key><string>upload</string>
           <key>teamID</key><string>$TEAM_ID</string>
+          <key>signingStyle</key><string>automatic</string>
+          <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Runova.xcarchive" \

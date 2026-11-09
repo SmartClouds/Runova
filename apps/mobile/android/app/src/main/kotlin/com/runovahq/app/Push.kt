@@ -84,7 +84,7 @@ class PushService : FirebaseMessagingService() {
         manager.notify(
             id,
             Notification.Builder(this, CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("Runova")
                 .setContentText(line)
                 .setContentIntent(tap)

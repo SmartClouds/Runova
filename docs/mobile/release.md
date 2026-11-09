@@ -31,7 +31,7 @@ The signed APK and App Bundle are attached to the GitHub Release.
 ### iOS
 
 Needs Xcode on the Mac runner, the app `com.runovahq.app` created in App Store Connect, and an App
-Store Connect API key with the App Manager role.
+Store Connect API key with the Admin role.
 
 | Repository secret | Value |
 |---|---|

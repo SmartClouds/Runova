@@ -67,9 +67,10 @@ describe('AI CLI launches use the user CLI settings', () => {
       'main/cli/headlessPrompt.ts',
       'main/store.ts',
     ]);
-    // A Relay leg's terminal and a CI auto-fix tab are started by main, so their launch lines
-    // are built there.
+    // A Relay leg's terminal, a CI auto-fix tab and an agent started from a saved prompt are
+    // started by main, so their launch lines are built there.
     expect(filesMatching('main', /\bcliLaunchDefaults\b/)).toEqual([
+      'main/agents/promptLaunch.ts',
       'main/pipelines/autoFix/launch.ts',
       'main/relay/launch.ts',
       'main/store.ts',
