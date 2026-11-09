@@ -43,10 +43,14 @@ import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaToggle
 import com.runovahq.app.design.RunovaTokens
 import com.runovahq.app.design.RunovaScreen
-import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.DispatchFormView
+import uniffi.runova_ffi.ErrorDetailView
+import uniffi.runova_ffi.ErrorExceptionView
+import uniffi.runova_ffi.ErrorIssueView
+import uniffi.runova_ffi.ErrorLevel
+import uniffi.runova_ffi.ErrorsScreen
 import uniffi.runova_ffi.JobLogView
 import uniffi.runova_ffi.WorkflowInputKind
 import uniffi.runova_ffi.MonitorSource
@@ -62,6 +66,12 @@ data class MonitoringIntents(
     val close: () -> Unit = {},
     val check: (String) -> Unit = {},
     val setPaused: (String, MonitorSource, Boolean) -> Unit = { _, _, _ -> },
+    val openErrors: () -> Unit = {},
+    val closeErrors: () -> Unit = {},
+    val openIssue: (String, String) -> Unit = { _, _ -> },
+    val closeIssue: () -> Unit = {},
+    val resolveIssue: () -> Unit = {},
+    val reopenIssue: () -> Unit = {},
 )
 
 data class PipelineIntents(
@@ -83,6 +93,13 @@ private fun monitorBadge(state: MonitorState) = when (state) {
     MonitorState.UNKNOWN -> "Unknown" to BadgeTone.Neutral
 }
 
+private fun levelTone(level: ErrorLevel) = when (level) {
+    ErrorLevel.FATAL, ErrorLevel.ERROR -> BadgeTone.Danger
+    ErrorLevel.WARNING -> BadgeTone.Warning
+    ErrorLevel.INFO -> BadgeTone.Primary
+    ErrorLevel.DEBUG -> BadgeTone.Neutral
+}
+
 private fun runTone(state: PipelineRunState) = when (state) {
     PipelineRunState.SUCCESS -> BadgeTone.Success
     PipelineRunState.FAILED -> BadgeTone.Danger
@@ -96,9 +113,17 @@ private fun LazyListScope.groupTitle(text: String) {
     }
 }
 
-/** The open monitor takes over the screen. */
+/** The open monitor, or the Errors screens reached from Monitoring, take over the screen. */
 @Composable
 fun MonitorOverlay(view: AppView, intents: MonitoringIntents): Boolean {
+    view.errors.detail?.let {
+        IssueDetailPage(it, view.error, intents)
+        return true
+    }
+    if (view.errors.open) {
+        IssueListPage(view.errors, view.error, intents)
+        return true
+    }
     val all = view.monitoring.local + view.monitoring.cloud
     val monitor = all.firstOrNull { it.id == view.monitoring.open } ?: return false
     MonitorScreen(monitor, intents)
@@ -113,6 +138,18 @@ fun MonitoringTab(view: AppView, intents: MonitoringIntents) {
         return
     }
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
+        // Errors come through the computer, so the row is there only while one is open.
+        if (view.connection != null) {
+            item(key = "errors") {
+                RunovaListRow(
+                    title = "Errors",
+                    detail = "Issues Sentry reports to this computer",
+                    icon = RunovaIcons.Warning,
+                    iconTone = BadgeTone.Danger,
+                    onClick = intents.openErrors,
+                )
+            }
+        }
         groupTitle("On this computer")
         screen.localNote?.let { note ->
             item(key = "note") {
@@ -199,6 +236,139 @@ private fun LatencyBars(samples: List<Double>) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProblemLine(message: String) {
+    RunovaText(
+        message,
+        Modifier.padding(16.dp),
+        style = RunovaType.small,
+        color = RunovaTheme.colors.destructive,
+    )
+}
+
+@Composable
+private fun IssueListPage(screen: ErrorsScreen, error: String?, intents: MonitoringIntents) {
+    val muted = RunovaTheme.colors.mutedForeground
+    RunovaScreen("Errors", onBack = intents.closeErrors) {
+        Box(Modifier.weight(1f)) {
+            when {
+                screen.issues.isEmpty() && screen.loading -> LoadingRows()
+                screen.issues.isEmpty() && screen.problems.isEmpty() ->
+                    RunovaEmptyState(RunovaIcons.Warning, screen.note.orEmpty(), "")
+                else -> LazyColumn(contentPadding = PaddingValues(16.dp)) {
+                    items(screen.problems) {
+                        RunovaText(it, Modifier.padding(bottom = 6.dp), RunovaType.small, RunovaTheme.colors.warning)
+                    }
+                    items(screen.issues, key = { "${it.connectionId}/${it.id}" }) { IssueRow(it, intents) }
+                    screen.cutNote?.let { note ->
+                        item(key = "cut") {
+                            RunovaText(note, Modifier.padding(top = 8.dp), RunovaType.small, muted)
+                        }
+                    }
+                }
+            }
+        }
+        error?.let { ProblemLine(it) }
+    }
+}
+
+@Composable
+private fun IssueRow(issue: ErrorIssueView, intents: MonitoringIntents) {
+    RunovaListRow(
+        title = issue.title,
+        detail = issue.detailLabel,
+        icon = RunovaIcons.Warning,
+        iconTone = levelTone(issue.level),
+        onClick = { intents.openIssue(issue.connectionId, issue.id) },
+        trailing = { RunovaBadge(issue.levelLabel, levelTone(issue.level), dot = true) },
+    )
+}
+
+@Composable
+private fun IssueDetailPage(detail: ErrorDetailView, error: String?, intents: MonitoringIntents) {
+    val colors = RunovaTheme.colors
+    val issue = detail.issue
+    RunovaScreen(issue?.shortId ?: "Error", onBack = intents.closeIssue) {
+        Box(Modifier.weight(1f)) {
+            if (issue == null) {
+                LoadingRows()
+            } else {
+                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item(key = "summary") { IssueSummary(issue, detail) }
+                    if (detail.loading) item(key = "loading") { LoadingRows() }
+                    detail.message?.let { message -> item(key = "message") { BasicText(message, style = RunovaType.mono.copy(color = colors.foreground)) } }
+                    items(detail.exceptions) { ExceptionCard(it) }
+                    detail.request?.let { request ->
+                        item(key = "request") { LabelledText("Request", request) }
+                    }
+                    if (detail.tags.isNotEmpty()) {
+                        item(key = "tags") { LabelledText("Tags", detail.tags.joinToString("\n")) }
+                    }
+                    item(key = "actions") { IssueActions(detail, intents) }
+                }
+            }
+        }
+        error?.let { ProblemLine(it) }
+    }
+}
+
+@Composable
+private fun IssueSummary(issue: ErrorIssueView, detail: ErrorDetailView) {
+    val colors = RunovaTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            RunovaBadge(issue.levelLabel, levelTone(issue.level), dot = true)
+            RunovaBadge(issue.statusLabel)
+            issue.newLabel?.let { RunovaBadge(it, BadgeTone.Primary) }
+        }
+        RunovaText(issue.title, style = RunovaType.title)
+        issue.culprit?.let { RunovaText(it, style = RunovaType.small, color = colors.mutedForeground) }
+        detail.metaLabel?.let { RunovaText(it, style = RunovaType.small, color = colors.mutedForeground) }
+        RunovaText(issue.activityLabel, style = RunovaType.small, color = colors.mutedForeground)
+    }
+}
+
+@Composable
+private fun ExceptionCard(exception: ErrorExceptionView) {
+    val colors = RunovaTheme.colors
+    RunovaCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            RunovaText(exception.title, style = RunovaType.label)
+            if (exception.unhandled) RunovaBadge("Unhandled", BadgeTone.Danger)
+            exception.frames.forEach { frame ->
+                BasicText(frame, style = RunovaType.mono.copy(color = colors.mutedForeground))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabelledText(label: String, text: String) {
+    val colors = RunovaTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        RunovaSectionTitle(label)
+        RunovaText(text, style = RunovaType.small)
+    }
+}
+
+@Composable
+private fun IssueActions(detail: ErrorDetailView, intents: MonitoringIntents) {
+    val colors = RunovaTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (detail.canResolve) RunovaButton("Resolve", onClick = intents.resolveIssue, Modifier.fillMaxWidth(), icon = RunovaIcons.Check)
+        if (detail.canReopen) {
+            RunovaButton(
+                "Reopen",
+                onClick = intents.reopenIssue,
+                Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+                icon = RunovaIcons.Refresh,
+            )
+        }
+        detail.writeNote?.let { RunovaText(it, style = RunovaType.small, color = colors.mutedForeground) }
     }
 }
 

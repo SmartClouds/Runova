@@ -307,6 +307,79 @@ pub struct MonitoringScreen {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ErrorLevel {
+    Fatal,
+    Error,
+    Warning,
+    Info,
+    Debug,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ErrorStatus {
+    Unresolved,
+    Resolved,
+    Ignored,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ErrorIssueView {
+    pub connection_id: String,
+    pub id: String,
+    pub short_id: String,
+    pub title: String,
+    pub culprit: Option<String>,
+    pub level: ErrorLevel,
+    pub level_label: String,
+    pub status: ErrorStatus,
+    pub status_label: String,
+    /// Set when it first appeared in the time the list looks at.
+    pub new_label: Option<String>,
+    /// Project, last seen and counts, for the row in the list.
+    pub detail_label: String,
+    /// Counts and when it was last seen, for the top of the detail.
+    pub activity_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ErrorExceptionView {
+    pub title: String,
+    pub unhandled: bool,
+    pub frames: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ErrorDetailView {
+    pub connection_id: String,
+    pub issue_id: String,
+    pub loading: bool,
+    /// The row it was opened from until the computer answers.
+    pub issue: Option<ErrorIssueView>,
+    pub meta_label: Option<String>,
+    pub message: Option<String>,
+    pub exceptions: Vec<ErrorExceptionView>,
+    pub request: Option<String>,
+    pub tags: Vec<String>,
+    pub can_resolve: bool,
+    pub can_reopen: bool,
+    /// Why neither of those is on offer.
+    pub write_note: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct ErrorsScreen {
+    pub open: bool,
+    pub loading: bool,
+    pub issues: Vec<ErrorIssueView>,
+    /// Why the list is empty, in words, when there is a reason worth giving.
+    pub note: Option<String>,
+    /// Connections this computer could not read, by name.
+    pub problems: Vec<String>,
+    pub cut_note: Option<String>,
+    pub detail: Option<ErrorDetailView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum PipelineRunState {
     Queued,
     Running,
@@ -607,6 +680,17 @@ pub struct ProviderUsageView {
     pub series: Vec<f64>,
 }
 
+/// A line of what the computer is up to, in the order the desktop's status bar has them.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ComputerItemView {
+    pub id: String,
+    pub title: String,
+    pub value: String,
+    pub detail: Option<String>,
+    /// It wants someone to look at it.
+    pub attention: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
 pub struct StatusScreen {
     pub system: Option<SystemStatsView>,
@@ -615,6 +699,7 @@ pub struct StatusScreen {
     pub providers: Vec<ProviderUsageView>,
     /// The provider whose detail is open.
     pub detail: Option<String>,
+    pub computer: Vec<ComputerItemView>,
 }
 
 /// Asked before anything hard to undo.
@@ -771,6 +856,7 @@ pub struct AppView {
     pub vault: VaultScreen,
     pub deploy: DeployScreen,
     pub monitoring: MonitoringScreen,
+    pub errors: ErrorsScreen,
     pub pipelines: PipelinesScreen,
     pub account: AccountScreen,
     pub notifications: NotificationsScreen,
@@ -805,6 +891,7 @@ impl AppView {
             vault: VaultScreen::default(),
             deploy: DeployScreen::default(),
             monitoring: MonitoringScreen::default(),
+            errors: ErrorsScreen::default(),
             pipelines: PipelinesScreen::default(),
             account: AccountScreen::default(),
             notifications: NotificationsScreen::default(),

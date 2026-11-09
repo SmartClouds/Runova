@@ -1,6 +1,11 @@
 import { MANAGE_METHODS } from '@runova/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { type ManageMonitoringDeps, type ManagePipelineDeps, opsMethods } from './opsMethods';
+import {
+  type ManageErrorTrackingDeps,
+  type ManageMonitoringDeps,
+  type ManagePipelineDeps,
+  opsMethods,
+} from './opsMethods';
 import { ManageError } from './session';
 
 const context = { phone: { key: 'k', name: 'Runova app', scopes: ['ops' as const] } };
@@ -106,8 +111,48 @@ function pipelines(change: Partial<ManagePipelineDeps> = {}): ManagePipelineDeps
   };
 }
 
-function call(method: string, params: unknown, m = monitoring(), p = pipelines()) {
-  return opsMethods(m, p)[method](params, context);
+const NOW = Date.parse('2026-03-01T12:00:00.000Z');
+
+const issue = {
+  id: '42',
+  shortId: 'WEB-3F',
+  title: 'TypeError: boom',
+  culprit: 'checkout/index',
+  level: 'error',
+  status: 'unresolved',
+  count: 12,
+  userCount: 3,
+  firstSeen: '2026-02-20T00:00:00.000Z',
+  lastSeen: '2026-03-01T11:00:00.000Z',
+  permalink: 'https://sentry.example/42',
+  remoteProjectId: 'r1',
+  remoteProjectSlug: 'web',
+  trend: [1, 2],
+  connectionId: 'c1',
+  projectId: 'p1',
+  isNew: true,
+};
+
+function errorTracking(change: Partial<ManageErrorTrackingDeps> = {}): ManageErrorTrackingDeps {
+  return {
+    issues: async () =>
+      ({ issues: [issue], nextCursor: null, failures: [], fetchedAt: NOW }) as never,
+    linked: async () => true,
+    issue: async () => ({ issue, event: null, canWrite: true }) as never,
+    setStatus: async () => issue as never,
+    now: () => NOW,
+    ...change,
+  };
+}
+
+function call(
+  method: string,
+  params: unknown,
+  m = monitoring(),
+  p = pipelines(),
+  e = errorTracking(),
+) {
+  return opsMethods(m, p, e)[method](params, context);
 }
 
 describe('monitoring methods', () => {
@@ -156,6 +201,261 @@ describe('monitoring methods', () => {
     await expect(call('monitoring.pause', { id: 'h1' }, monitoring())).rejects.toBeInstanceOf(
       ManageError,
     );
+  });
+});
+
+describe('error tracking methods', () => {
+  const ref = { connectionId: 'c1', issueId: '42' };
+  const errorsCall = (method: string, params: unknown, e: ManageErrorTrackingDeps) =>
+    call(method, params, monitoring(), pipelines(), e);
+
+  it('asks for what the desktop shows first: unresolved, last 14 days, newest first', async () => {
+    const issues = vi.fn(async () => ({ issues: [], nextCursor: null, failures: [] }) as never);
+
+    await errorsCall('errors.list', undefined, errorTracking({ issues }));
+
+    expect(issues).toHaveBeenCalledWith({ status: 'unresolved', period: '14d', sort: 'lastSeen' });
+  });
+
+  it('lists issues with no provider link and a time measured here', async () => {
+    const result = (await call('errors.list', undefined)) as {
+      linked: boolean;
+      truncated: boolean;
+      issues: Record<string, unknown>[];
+    };
+
+    expect(result.linked).toBe(true);
+    expect(result.truncated).toBe(false);
+    expect(result.issues[0]).toEqual({
+      connectionId: 'c1',
+      id: '42',
+      shortId: 'WEB-3F',
+      title: 'TypeError: boom',
+      culprit: 'checkout/index',
+      level: 'error',
+      status: 'unresolved',
+      count: 12,
+      userCount: 3,
+      isNew: true,
+      projectId: 'p1',
+      remoteProject: 'web',
+      lastSeenAgoMs: 3_600_000,
+    });
+  });
+
+  it('says so when nothing is linked', async () => {
+    const result = (await errorsCall(
+      'errors.list',
+      undefined,
+      errorTracking({ linked: async () => false }),
+    )) as { linked: boolean };
+
+    expect(result.linked).toBe(false);
+  });
+
+  it('caps a very long list and very long text', async () => {
+    const issues = Array.from({ length: 80 }, (_, n) => ({
+      ...issue,
+      id: String(n),
+      title: 'x'.repeat(5000),
+    }));
+    const result = (await errorsCall(
+      'errors.list',
+      undefined,
+      errorTracking({
+        issues: async () => ({ issues, nextCursor: null, failures: [], fetchedAt: NOW }) as never,
+      }),
+    )) as { truncated: boolean; issues: { title: string }[] };
+
+    expect(result.issues).toHaveLength(50);
+    expect(result.truncated).toBe(true);
+    expect(result.issues[0].title.length).toBeLessThanOrEqual(200);
+  });
+
+  it('marks the list as cut when there are more pages', async () => {
+    const result = (await errorsCall(
+      'errors.list',
+      undefined,
+      errorTracking({
+        issues: async () =>
+          ({ issues: [issue], nextCursor: 'abc', failures: [], fetchedAt: NOW }) as never,
+      }),
+    )) as { truncated: boolean };
+
+    expect(result.truncated).toBe(true);
+  });
+
+  it('passes on connections it could not read', async () => {
+    const failures = [
+      { connectionId: 'c1', label: 'Acme', message: 'Vault is locked', locked: true },
+    ];
+    const result = (await errorsCall(
+      'errors.list',
+      undefined,
+      errorTracking({
+        issues: async () => ({ issues: [], nextCursor: null, failures, fetchedAt: NOW }) as never,
+      }),
+    )) as { problems: { label: string; locked: boolean }[] };
+
+    expect(result.problems).toEqual([{ label: 'Acme', message: 'Vault is locked', locked: true }]);
+  });
+
+  const frame = (filename: string, inApp: boolean) => ({
+    filename,
+    function: 'run',
+    module: null,
+    lineNo: 7,
+    colNo: 2,
+    inApp,
+    context: [[7, 'secret source line']],
+  });
+
+  function detailOf(event: Record<string, unknown>) {
+    return async () => ({ issue, event, canWrite: false }) as never;
+  }
+
+  const event = {
+    eventId: 'e1',
+    dateCreated: '2026-03-01T11:00:00.000Z',
+    platform: 'node',
+    message: null,
+    exceptions: [
+      {
+        type: 'RangeError',
+        value: 'first',
+        module: null,
+        handled: true,
+        frames: [frame('a.ts', true)],
+      },
+      {
+        type: 'TypeError',
+        value: 'thrown',
+        module: null,
+        handled: false,
+        frames: [frame('lib.js', false), frame('app.ts', true)],
+      },
+    ],
+    breadcrumbs: [{ timestamp: null, category: 'ui', level: 'info', message: 'clicked' }],
+    request: { method: 'POST', url: 'https://x.test/pay?card=*' },
+    tags: [{ key: 'browser', value: 'Chrome' }],
+    environment: 'production',
+    release: '1.4.2',
+    userId: 'u1',
+  };
+
+  it('shows the thrown exception first, its own code only, and no source lines', async () => {
+    const result = (await errorsCall(
+      'errors.show',
+      ref,
+      errorTracking({ issue: detailOf(event) }),
+    )) as {
+      canChange: boolean;
+      event: Record<string, unknown> & {
+        exceptions: { type: string; handled: boolean; frames: Record<string, unknown>[] }[];
+      };
+    };
+
+    expect(result.canChange).toBe(false);
+    expect(result.event.exceptions.map((one) => one.type)).toEqual(['TypeError', 'RangeError']);
+    expect(result.event.exceptions[0].frames).toEqual([
+      { file: 'app.ts', function: 'run', line: 7 },
+    ]);
+    expect(result.event.request).toBe('POST https://x.test/pay?card=*');
+    expect(result.event.environment).toBe('production');
+    expect(JSON.stringify(result)).not.toContain('secret source line');
+    expect(JSON.stringify(result)).not.toContain('clicked');
+    expect(JSON.stringify(result)).not.toContain('u1');
+  });
+
+  it('shows library frames when none of the frames are the app own', async () => {
+    const libraryOnly = {
+      ...event,
+      exceptions: [
+        { type: 'E', value: 'v', module: null, handled: null, frames: [frame('lib.js', false)] },
+      ],
+    };
+    const result = (await errorsCall(
+      'errors.show',
+      ref,
+      errorTracking({ issue: detailOf(libraryOnly) }),
+    )) as { event: { exceptions: { frames: { file: string }[] }[] } };
+
+    expect(result.event.exceptions[0].frames[0].file).toBe('lib.js');
+  });
+
+  it('caps frames, exceptions and tags', async () => {
+    const big = {
+      ...event,
+      message: 'm'.repeat(5000),
+      exceptions: Array.from({ length: 6 }, () => ({
+        type: 'E',
+        value: 'v'.repeat(5000),
+        module: null,
+        handled: null,
+        frames: Array.from({ length: 60 }, () => frame('a.ts', true)),
+      })),
+      tags: Array.from({ length: 60 }, (_, n) => ({ key: `k${n}`, value: 'v' })),
+    };
+    const result = (await errorsCall(
+      'errors.show',
+      ref,
+      errorTracking({ issue: detailOf(big) }),
+    )) as {
+      event: {
+        message: string;
+        exceptions: { value: string; frames: unknown[] }[];
+        tags: unknown[];
+      };
+    };
+
+    expect(result.event.exceptions).toHaveLength(3);
+    expect(result.event.exceptions[0].frames).toHaveLength(20);
+    expect(result.event.exceptions[0].value.length).toBeLessThanOrEqual(500);
+    expect(result.event.tags).toHaveLength(20);
+    expect(result.event.message.length).toBeLessThanOrEqual(500);
+  });
+
+  it('refuses an issue id that is not one the provider could have made', async () => {
+    await expect(
+      call('errors.show', { connectionId: 'c1', issueId: '../../secrets' }),
+    ).rejects.toBeInstanceOf(ManageError);
+  });
+
+  it('resolves and reopens, and nothing else', async () => {
+    const setStatus = vi.fn(async () => issue as never);
+
+    await expect(
+      errorsCall('errors.setStatus', { ...ref, status: 'resolved' }, errorTracking({ setStatus })),
+    ).resolves.toEqual({ ok: true, message: 'Resolved.' });
+    await expect(
+      errorsCall(
+        'errors.setStatus',
+        { ...ref, status: 'unresolved' },
+        errorTracking({ setStatus }),
+      ),
+    ).resolves.toEqual({ ok: true, message: 'Reopened.' });
+    await expect(
+      errorsCall('errors.setStatus', { ...ref, status: 'ignored' }, errorTracking({ setStatus })),
+    ).rejects.toBeInstanceOf(ManageError);
+
+    expect(setStatus).toHaveBeenCalledTimes(2);
+    expect(setStatus).toHaveBeenCalledWith({ ...ref, status: 'resolved' });
+  });
+
+  it('says why when the provider refuses, in the service own words', async () => {
+    const setStatus = async () => {
+      throw new Error('The token lacks event:write.');
+    };
+
+    await expect(
+      errorsCall('errors.setStatus', { ...ref, status: 'resolved' }, errorTracking({ setStatus })),
+    ).resolves.toEqual({ ok: false, message: 'The token lacks event:write.' });
+  });
+
+  it('files listing and reading as reads and changes as a write', () => {
+    expect(MANAGE_METHODS['errors.list']).toEqual({ scope: 'ops', risk: 'read' });
+    expect(MANAGE_METHODS['errors.show']).toEqual({ scope: 'ops', risk: 'read' });
+    expect(MANAGE_METHODS['errors.setStatus']).toEqual({ scope: 'ops', risk: 'write' });
   });
 });
 
@@ -347,7 +647,11 @@ describe('pipeline methods', () => {
     expect(MANAGE_METHODS['pipelines.dispatch'].risk).toBe('danger');
     expect(MANAGE_METHODS['pipelines.cancel'].risk).toBe('danger');
     for (const [name, method] of Object.entries(MANAGE_METHODS)) {
-      if (name.startsWith('pipelines.') || name.startsWith('monitoring.')) {
+      if (
+        name.startsWith('pipelines.') ||
+        name.startsWith('monitoring.') ||
+        name.startsWith('errors.')
+      ) {
         expect(method.scope).toBe('ops');
       }
     }
@@ -355,9 +659,14 @@ describe('pipeline methods', () => {
 
   it('runs every method the protocol names for ops', () => {
     const named = Object.keys(MANAGE_METHODS).filter(
-      (name) => name.startsWith('pipelines.') || name.startsWith('monitoring.'),
+      (name) =>
+        name.startsWith('pipelines.') ||
+        name.startsWith('monitoring.') ||
+        name.startsWith('errors.'),
     );
 
-    expect(Object.keys(opsMethods(monitoring(), pipelines())).sort()).toEqual(named.sort());
+    expect(Object.keys(opsMethods(monitoring(), pipelines(), errorTracking())).sort()).toEqual(
+      named.sort(),
+    );
   });
 });

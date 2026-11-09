@@ -33,5 +33,5 @@ Creating monitors with AI.
 
 The bridge, the core and the Android screens are tested. Local and cloud monitors share one list,
 and cloud ones work with no computer connected. Cloud monitors refresh every 16 seconds until E82
-brings the live hub (AC3), and the Errors tab is not on the phone yet. Owed: a real account, and
+brings the live hub (AC3). Errors are on the phone while a computer is open, with resolve and reopen. Owed: a real account, and
 the iOS screens have never been compiled.

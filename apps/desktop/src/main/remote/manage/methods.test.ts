@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ManageDeployDeps } from './deployMethods';
 import type { ManageGitDeps } from './gitMethods';
 import { createManageMethods, type ManageMethodDeps } from './methods';
-import type { ManageMonitoringDeps, ManagePipelineDeps } from './opsMethods';
+import type {
+  ManageErrorTrackingDeps,
+  ManageMonitoringDeps,
+  ManagePipelineDeps,
+} from './opsMethods';
 import type { ManageStreamSink } from './session';
 import type { ManageStatusDeps } from './statusMethods';
 import type { ManageVaultDeps } from './vaultMethods';
@@ -27,6 +31,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     forgetPhone: async () => undefined,
     monitoring: {} as ManageMonitoringDeps,
     pipelines: {} as ManagePipelineDeps,
+    errorTracking: {} as ManageErrorTrackingDeps,
     ...change,
   };
 }

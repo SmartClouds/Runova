@@ -38,9 +38,34 @@ pub(crate) fn reset_label(in_ms: i64) -> String {
     }
 }
 
+/// How long ago something was, from the milliseconds the computer measured.
+pub(crate) fn ago_label(ago_ms: i64) -> String {
+    let minutes = ago_ms / 60_000;
+    if minutes <= 0 {
+        return "just now".to_owned();
+    }
+    let (days, hours) = (minutes / 1440, minutes / 60);
+    if days > 0 {
+        format!("{days}d ago")
+    } else if hours > 0 {
+        format!("{hours}h ago")
+    } else {
+        format!("{minutes}m ago")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ago_uses_the_biggest_unit_and_never_says_a_negative() {
+        assert_eq!(ago_label(30_000), "just now");
+        assert_eq!(ago_label(-5_000), "just now");
+        assert_eq!(ago_label(5 * 60_000), "5m ago");
+        assert_eq!(ago_label(2 * 3_600_000), "2h ago");
+        assert_eq!(ago_label(3 * 86_400_000), "3d ago");
+    }
 
     #[test]
     fn a_reset_uses_the_two_biggest_units() {

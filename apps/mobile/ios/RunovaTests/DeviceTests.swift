@@ -117,7 +117,10 @@ final class DeviceTests: XCTestCase {
                 LimitChipView(
                     providerId: "claude-code", name: "Claude", plan: "Max", state: .ok, windows: [window], problem: nil)
             ],
-            providers: [], detail: nil)
+            providers: [], detail: nil,
+            computer: [
+                ComputerItemView(id: "agents", title: "Agents", value: "2 working", detail: nil, attention: false)
+            ])
         try renderSnapshot(fixtureView(connection: connected, status: status), "status", tab: "status")
     }
 
@@ -173,6 +176,33 @@ final class DeviceTests: XCTestCase {
         try renderSnapshot(fixtureView(connection: connected, monitoring: monitoring), "monitoring", tab: "monitoring")
     }
 
+    private var errorIssue: ErrorIssueView {
+        ErrorIssueView(
+            connectionId: "c1", id: "42", shortId: "WEB-3F", title: "TypeError: boom", culprit: "checkout/index",
+            level: .error, levelLabel: "Error", status: .unresolved, statusLabel: "Unresolved", newLabel: "New",
+            detailLabel: "Website, 2h ago, 12 events, 1 user", activityLabel: "12 events, 1 user, 2h ago")
+    }
+
+    func testErrors() throws {
+        let errors = ErrorsScreen(
+            open: true, loading: false, issues: [errorIssue], note: nil, problems: [], cutNote: nil, detail: nil)
+        try renderSnapshot(fixtureView(connection: connected, errors: errors), "errors", tab: "monitoring")
+    }
+
+    func testErrorDetail() throws {
+        let detail = ErrorDetailView(
+            connectionId: "c1", issueId: "42", loading: false, issue: errorIssue,
+            metaLabel: "production, release 1.4.2", message: nil,
+            exceptions: [
+                ErrorExceptionView(title: "TypeError: boom", unhandled: true, frames: ["app.ts:7 in run", "lib.ts"])
+            ],
+            request: "POST https://x.test/pay", tags: ["browser: Chrome"], canResolve: true, canReopen: false,
+            writeNote: nil)
+        let errors = ErrorsScreen(
+            open: true, loading: false, issues: [errorIssue], note: nil, problems: [], cutNote: nil, detail: detail)
+        try renderSnapshot(fixtureView(connection: connected, errors: errors), "error-detail", tab: "monitoring")
+    }
+
     func testPipelines() throws {
         let run = PipelineRunView(
             id: 100, title: "Fix it", branch: "master", number: 12, state: .running, stateLabel: "Running",
@@ -222,12 +252,14 @@ func fixtureView(
     projects: [ProjectView] = [], selected: String? = nil, terminals: [TerminalItem] = [],
     terminal: TerminalView? = nil, processes: [TerminalProcessView] = [],
     git: GitScreen = GitScreen(state: nil, loading: false, diff: nil, branchesOpen: false, branches: [], stashes: []),
-    status: StatusScreen = StatusScreen(system: nil, loading: false, limits: [], providers: [], detail: nil),
+    status: StatusScreen = StatusScreen(system: nil, loading: false, limits: [], providers: [], detail: nil, computer: []),
     vault: VaultScreen = VaultScreen(
         state: .unknown, loading: false, onShow: false, inBackground: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
+    errors: ErrorsScreen = ErrorsScreen(
+        open: false, loading: false, issues: [], note: nil, problems: [], cutNote: nil, detail: nil),
     pipelines: PipelinesScreen = PipelinesScreen(status: nil, loading: false, run: nil, log: nil, dispatchForm: nil),
     account: AccountScreen = AccountScreen(
         profile: nil, loading: false, sessions: [], activity: [], teams: [], invitations: [], team: nil, stepUp: nil),
@@ -240,7 +272,7 @@ func fixtureView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
-        monitoring: monitoring, pipelines: pipelines, account: account,
+        monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error)

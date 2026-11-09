@@ -261,7 +261,8 @@ fn asking(title: &str, detail: String, action: &str) -> ConfirmView {
 
 impl Runner {
     pub(crate) fn refresh_monitoring(&mut self) {
-        let cloud_due = self.ticks.is_multiple_of(CLOUD_EVERY_TICKS);
+        let tick = self.ticks;
+        let cloud_due = tick.is_multiple_of(CLOUD_EVERY_TICKS);
         self.ticks = self.ticks.wrapping_add(1);
         if self.client().is_some() {
             self.view.monitoring.local_note = None;
@@ -280,6 +281,7 @@ impl Runner {
         if cloud_due {
             self.load_cloud();
         }
+        self.refresh_errors_on(tick);
     }
 
     pub(crate) fn reload_cloud(&mut self) {

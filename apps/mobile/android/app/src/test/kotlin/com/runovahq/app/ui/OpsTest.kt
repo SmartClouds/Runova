@@ -23,6 +23,12 @@ import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.DispatchFormView
+import uniffi.runova_ffi.ErrorDetailView
+import uniffi.runova_ffi.ErrorExceptionView
+import uniffi.runova_ffi.ErrorIssueView
+import uniffi.runova_ffi.ErrorLevel
+import uniffi.runova_ffi.ErrorStatus
+import uniffi.runova_ffi.ErrorsScreen
 import uniffi.runova_ffi.JobLogView
 import uniffi.runova_ffi.WorkflowInputKind
 import uniffi.runova_ffi.WorkflowInputView
@@ -55,6 +61,24 @@ private fun monitoring(
     note: String? = null,
     open: String? = null,
 ) = MonitoringScreen(local, listOf(shop), false, note, open)
+
+private val issue = ErrorIssueView(
+    "c1", "42", "WEB-3F", "TypeError: boom", "checkout/index", ErrorLevel.ERROR, "Error",
+    ErrorStatus.UNRESOLVED, "Unresolved", "New", "Website, 2h ago, 12 events, 1 user", "12 events, 1 user, 2h ago",
+)
+
+private fun errorsList(
+    issues: List<ErrorIssueView> = listOf(issue),
+    note: String? = null,
+    problems: List<String> = emptyList(),
+    cutNote: String? = null,
+) = ErrorsScreen(true, false, issues, note, problems, cutNote, null)
+
+private fun errorDetail(canResolve: Boolean = true, canReopen: Boolean = false, writeNote: String? = null) = ErrorDetailView(
+    "c1", "42", false, issue, "production, release 1.4.2", null,
+    listOf(ErrorExceptionView("TypeError: boom", true, listOf("app.ts:7 in run", "lib.ts"))),
+    "POST https://x.test/pay", listOf("browser: Chrome"), canResolve, canReopen, writeNote,
+)
 
 private val running = PipelineRunView(100, "Fix it", "master", 12u, PipelineRunState.RUNNING, "Running", true)
 private val workflows = listOf(
@@ -156,6 +180,109 @@ class OpsTest {
         compose.onNodeWithText("API").performClick()
 
         assertEquals("h1", opened)
+    }
+
+    @Test
+    fun errorsAreOneTapFromMonitoring() {
+        var opened = false
+        show(
+            appView(connection = connected, monitoring = monitoring()),
+            "monitoring",
+            AppIntents(monitoring = MonitoringIntents(openErrors = { opened = true })),
+        )
+
+        compose.onNodeWithText("Errors").performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
+    fun errorsNeedAComputerToBeOpen() {
+        show(appView(monitoring = monitoring()), "monitors")
+
+        compose.onNodeWithText("Errors").assertDoesNotExist()
+    }
+
+    @Test
+    fun errorsAreListedWithTheirLevelAndOpen() {
+        var opened = Pair("", "")
+        show(
+            appView(connection = connected, monitoring = monitoring(), errors = errorsList()),
+            "monitoring",
+            AppIntents(monitoring = MonitoringIntents(openIssue = { c, i -> opened = Pair(c, i) })),
+        )
+
+        compose.onNodeWithText("Website, 2h ago, 12 events, 1 user").assertExists()
+        compose.onNodeWithText("Error").assertExists()
+        snapshot("errors")
+        compose.onNodeWithText("TypeError: boom").performClick()
+
+        assertEquals(Pair("c1", "42"), opened)
+    }
+
+    @Test
+    fun anEmptyErrorListSaysWhy() {
+        val note = "No unresolved errors in the last 14 days."
+        show(
+            appView(connection = connected, monitoring = monitoring(), errors = errorsList(emptyList(), note)),
+            "monitoring",
+        )
+
+        compose.onNodeWithText(note).assertExists()
+    }
+
+    @Test
+    fun aConnectionItCouldNotReadIsNamedAboveTheList() {
+        val screen = errorsList(problems = listOf("Acme: The vault is locked."), cutNote = "Showing the 50 most recent.")
+        show(appView(connection = connected, monitoring = monitoring(), errors = screen), "monitoring")
+
+        compose.onNodeWithText("Acme: The vault is locked.").assertExists()
+        compose.onNodeWithText("Showing the 50 most recent.").assertExists()
+    }
+
+    @Test
+    fun anIssueShowsWhatWentWrongAndCanBeResolved() {
+        var resolved = false
+        show(
+            appView(connection = connected, monitoring = monitoring(), errors = errorsList().copy(detail = errorDetail())),
+            "monitoring",
+            AppIntents(monitoring = MonitoringIntents(resolveIssue = { resolved = true })),
+        )
+
+        compose.onNodeWithText("app.ts:7 in run").assertExists()
+        compose.onNodeWithText("production, release 1.4.2").assertExists()
+        compose.onNodeWithText("Unhandled").assertExists()
+        snapshot("error-detail")
+        compose.onNodeWithText("Resolve").performClick()
+
+        assertTrue(resolved)
+    }
+
+    @Test
+    fun aResolvedIssueCanBeReopened() {
+        var reopened = false
+        val detail = errorDetail(canResolve = false, canReopen = true)
+        show(
+            appView(connection = connected, monitoring = monitoring(), errors = errorsList().copy(detail = detail)),
+            "monitoring",
+            AppIntents(monitoring = MonitoringIntents(reopenIssue = { reopened = true })),
+        )
+
+        compose.onNodeWithText("Resolve").assertDoesNotExist()
+        compose.onNodeWithText("Reopen").performClick()
+
+        assertTrue(reopened)
+    }
+
+    @Test
+    fun aTokenThatCannotWriteOffersNothingAndSaysWhy() {
+        val note = "The Sentry token on this computer can't change issues."
+        val detail = errorDetail(canResolve = false, writeNote = note)
+        show(appView(connection = connected, monitoring = monitoring(), errors = errorsList().copy(detail = detail)), "monitoring")
+
+        compose.onNodeWithText("Resolve").assertDoesNotExist()
+        compose.onNodeWithText("Reopen").assertDoesNotExist()
+        compose.onNodeWithText(note).assertExists()
     }
 
     @Test

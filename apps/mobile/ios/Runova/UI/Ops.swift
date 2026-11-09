@@ -5,6 +5,12 @@ struct MonitoringIntents {
     var close: () -> Void = {}
     var check: (String) -> Void = { _ in }
     var setPaused: (String, MonitorSource, Bool) -> Void = { _, _, _ in }
+    var openErrors: () -> Void = {}
+    var closeErrors: () -> Void = {}
+    var openIssue: (String, String) -> Void = { _, _ in }
+    var closeIssue: () -> Void = {}
+    var resolveIssue: () -> Void = {}
+    var reopenIssue: () -> Void = {}
 }
 
 struct PipelineIntents {
@@ -46,6 +52,24 @@ private func runTone(_ state: PipelineRunState) -> BadgeTone {
     }
 }
 
+private func levelBadge(_ label: String, _ level: ErrorLevel) -> RunovaBadge {
+    switch level {
+    case .fatal, .error: return RunovaBadge(text: label, tone: .danger, dot: true)
+    case .warning: return RunovaBadge(text: label, tone: .warning, dot: true)
+    case .info: return RunovaBadge(text: label, tone: .primary, dot: true)
+    case .debug: return RunovaBadge(text: label, dot: true)
+    }
+}
+
+private func levelTone(_ level: ErrorLevel) -> BadgeTone {
+    switch level {
+    case .fatal, .error: return .danger
+    case .warning: return .warning
+    case .info: return .primary
+    case .debug: return .neutral
+    }
+}
+
 private func runBadge(_ label: String, _ state: PipelineRunState) -> RunovaBadge {
     switch state {
     case .success: return RunovaBadge(text: label, tone: .success, dot: true)
@@ -80,6 +104,17 @@ struct MonitoringTab: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Errors come through the computer, so the row is there only while one is open.
+                    if view.connection != nil {
+                        Button(action: intents.openErrors) {
+                            RunovaListRow(
+                                title: "Errors", detail: "Issues Sentry reports to this computer",
+                                icon: RunovaIcons.warning, iconTone: .danger
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                     GroupTitle(text: "On this computer")
                     if let note = screen.localNote {
                         RunovaText(note, style: RunovaType.small, color: palette.mutedForeground)
@@ -191,6 +226,182 @@ private struct LatencyBars: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .frame(height: 80)
+    }
+}
+
+private struct ProblemLine: View {
+    let message: String
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaText(message, style: RunovaType.small, color: palette.destructive).padding(16)
+    }
+}
+
+struct IssueListPage: View {
+    let screen: ErrorsScreen
+    let error: String?
+    let intents: MonitoringIntents
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaScreen(title: "Errors", onBack: intents.closeErrors) {
+            Group {
+                if screen.issues.isEmpty && screen.loading {
+                    LoadingRows()
+                } else if screen.issues.isEmpty && screen.problems.isEmpty {
+                    RunovaEmptyState(icon: RunovaIcons.warning, title: screen.note ?? "", detail: "")
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(screen.problems, id: \.self) { problem in
+                                RunovaText(problem, style: RunovaType.small, color: palette.warning)
+                                    .padding(.bottom, 6)
+                            }
+                            ForEach(Array(screen.issues.enumerated()), id: \.offset) { _, issue in
+                                IssueRow(issue: issue, intents: intents)
+                            }
+                            if let note = screen.cutNote {
+                                RunovaText(note, style: RunovaType.small, color: palette.mutedForeground)
+                                    .padding(.top, 8)
+                            }
+                        }
+                        .padding(16)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            if let error { ProblemLine(message: error) }
+        }
+    }
+}
+
+private struct IssueRow: View {
+    let issue: ErrorIssueView
+    let intents: MonitoringIntents
+
+    var body: some View {
+        Button {
+            intents.openIssue(issue.connectionId, issue.id)
+        } label: {
+            HStack(spacing: 8) {
+                RunovaListRow(
+                    title: issue.title, detail: issue.detailLabel, icon: RunovaIcons.warning,
+                    iconTone: levelTone(issue.level), flat: true)
+                levelBadge(issue.levelLabel, issue.level)
+            }
+            .padding(.trailing, 12)
+            .rowCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct IssueDetailPage: View {
+    let detail: ErrorDetailView
+    let error: String?
+    let intents: MonitoringIntents
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaScreen(title: detail.issue?.shortId ?? "Error", onBack: intents.closeIssue) {
+            Group {
+                if let issue = detail.issue {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            summary(issue)
+                            if detail.loading { LoadingRows() }
+                            if let message = detail.message {
+                                RunovaText(message, style: RunovaType.mono)
+                            }
+                            ForEach(Array(detail.exceptions.enumerated()), id: \.offset) { _, exception in
+                                ExceptionCard(exception: exception)
+                            }
+                            if let request = detail.request { LabelledText(label: "Request", text: request) }
+                            if !detail.tags.isEmpty {
+                                LabelledText(label: "Tags", text: detail.tags.joined(separator: "\n"))
+                            }
+                            actions
+                        }
+                        .padding(16)
+                    }
+                } else {
+                    LoadingRows()
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+            if let error { ProblemLine(message: error) }
+        }
+    }
+
+    private func summary(_ issue: ErrorIssueView) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                levelBadge(issue.levelLabel, issue.level)
+                RunovaBadge(text: issue.statusLabel)
+                if let label = issue.newLabel { RunovaBadge(text: label, tone: .primary) }
+            }
+            RunovaText(issue.title, style: RunovaType.title)
+            if let culprit = issue.culprit {
+                RunovaText(culprit, style: RunovaType.small, color: palette.mutedForeground)
+            }
+            if let meta = detail.metaLabel {
+                RunovaText(meta, style: RunovaType.small, color: palette.mutedForeground)
+            }
+            RunovaText(issue.activityLabel, style: RunovaType.small, color: palette.mutedForeground)
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if detail.canResolve {
+                RunovaButton(text: "Resolve", icon: RunovaIcons.check, action: intents.resolveIssue)
+                    .frame(maxWidth: .infinity)
+            }
+            if detail.canReopen {
+                RunovaButton(text: "Reopen", kind: .soft, icon: RunovaIcons.refresh, action: intents.reopenIssue)
+                    .frame(maxWidth: .infinity)
+            }
+            if let note = detail.writeNote {
+                RunovaText(note, style: RunovaType.small, color: palette.mutedForeground)
+            }
+        }
+    }
+}
+
+private struct ExceptionCard: View {
+    let exception: ErrorExceptionView
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaCard {
+            VStack(alignment: .leading, spacing: 6) {
+                RunovaText(exception.title, style: RunovaType.label)
+                if exception.unhandled { RunovaBadge(text: "Unhandled", tone: .danger) }
+                ForEach(Array(exception.frames.enumerated()), id: \.offset) { _, frame in
+                    RunovaText(frame, style: RunovaType.mono, color: palette.mutedForeground)
+                }
+            }
+        }
+    }
+}
+
+private struct LabelledText: View {
+    let label: String
+    let text: String
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            RunovaSectionTitle(text: label)
+            RunovaText(text, style: RunovaType.small)
+        }
     }
 }
 

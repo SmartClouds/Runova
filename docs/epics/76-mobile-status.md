@@ -32,6 +32,6 @@ Usage alerts, which are E82.
 ## Status
 
 The bridge, the core and the Android screens are tested, and the desktop and a phone share one
-system reading so the CPU figures stay steady. Only limits, CPU, memory and network are here so far:
-the bar's Relay, Run, SFTP, Docker, Android and Keep awake items are not on the phone. Owed: AC1 on a
+system reading so the CPU figures stay steady. The bar's other items are in an On this computer card,
+except Run and the Relay plan, whose state lives in the desktop window. Owed: AC1 on a
 real computer, and the iOS screens have never been compiled.

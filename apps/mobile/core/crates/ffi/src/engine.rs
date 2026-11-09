@@ -540,6 +540,7 @@ impl Runner {
         self.view.deploy = DeployScreen::default();
         self.view.pipelines = PipelinesScreen::default();
         self.view.monitoring.local.clear();
+        self.view.errors = Default::default();
         self.view.confirm = None;
         self.pending_confirm = None;
         self.view.busy = false;

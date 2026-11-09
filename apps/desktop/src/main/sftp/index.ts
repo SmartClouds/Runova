@@ -99,6 +99,11 @@ export function registerSftpIpc(deps: {
   return sftp;
 }
 
+/** Batches not over yet across every session, for the phone's status list. */
+export function runningSftpTransfers(): number {
+  return service?.runningTransfers() ?? 0;
+}
+
 /**
  * At quit: every session ends and its windows are told, then the pop-outs close. Not awaited, so
  * quitting never waits.

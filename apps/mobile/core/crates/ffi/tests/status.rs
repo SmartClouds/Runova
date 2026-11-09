@@ -17,6 +17,20 @@ fn system() -> Value {
     })
 }
 
+fn bar() -> Value {
+    json!({
+        "agents": {"working": 2, "waiting": 1, "finished": 0, "idle": 3},
+        "terminals": 4,
+        "relays": {"running": 1, "paused": 0, "scheduled": 1, "needsYou": 1},
+        "transfers": 2,
+        "sync": {"needsSignIn": false, "conflicts": 2, "phase": "idle", "keysNeeded": 0},
+        "github": {"login": "sam", "signedIn": true, "checkFailed": false},
+        "docker": {"running": 2, "total": 5},
+        "android": {"running": 1, "booting": 1},
+        "keepAwake": {"mode": "agent", "awake": true, "busy": ["agents", "sftp"]},
+    })
+}
+
 fn usage() -> Value {
     json!({
         "limits": [
@@ -64,6 +78,180 @@ async fn the_computers_numbers_arrive_ready_to_read() {
     assert_eq!(system.mem_label, "8 GB of 16 GB");
     assert_eq!(system.net_down_label, "1.5 MB/s");
     assert_eq!(system.net_up_label, "2 KB/s");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_rest_of_the_status_bar_arrives_ready_to_read_in_its_order() {
+    let world = connected().await;
+    world.computer.answer("status.system", system());
+    world.computer.answer("status.bar", bar());
+
+    world.engine.open_section(Some(Section::Status));
+    let view = world
+        .until(|v| !v.status.computer.is_empty(), "the list")
+        .await;
+
+    let items = view.status.computer;
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "agents",
+            "relay",
+            "transfers",
+            "terminals",
+            "sync",
+            "github",
+            "docker",
+            "android",
+            "keep-awake"
+        ]
+    );
+    assert_eq!(items[0].value, "1 waiting on you, 2 working, 3 idle");
+    assert!(items[0].attention);
+    assert_eq!(items[1].value, "1 needs you, 1 running, 1 scheduled");
+    assert_eq!(items[2].value, "2 running");
+    assert_eq!(items[3].value, "4 running");
+    assert_eq!(items[4].value, "2 to review");
+    assert_eq!(items[5].value, "@sam");
+    assert_eq!(items[6].value, "2 running");
+    assert_eq!(items[7].value, "1 running");
+    assert_eq!(items[7].detail.as_deref(), Some("1 starting"));
+    assert_eq!(items[8].value, "Awake now");
+    assert_eq!(
+        items[8].detail.as_deref(),
+        Some("Set to Agent, awake for an agent at work, file transfers")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn what_the_computer_lacks_stays_off_the_list() {
+    let world = connected().await;
+    world.computer.answer(
+        "status.bar",
+        json!({"agents": {"working": 0, "waiting": 0, "finished": 0, "idle": 0}, "terminals": 0,
+               "relays": {"running": 0, "paused": 0, "scheduled": 0, "needsYou": 0}, "transfers": 0,
+               "sync": null, "github": null, "docker": null, "android": null,
+               "keepAwake": {"mode": "off", "awake": false, "busy": []}}),
+    );
+
+    world.engine.open_section(Some(Section::Status));
+    let view = world
+        .until(|v| !v.status.computer.is_empty(), "the list")
+        .await;
+
+    let items = view.status.computer;
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    assert_eq!(ids, ["agents", "keep-awake"]);
+    assert_eq!(items[0].value, "None running");
+    assert_eq!(items[1].value, "Sleep allowed");
+    assert_eq!(items[1].detail.as_deref(), Some("Set to Off"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_github_check_that_failed_keeps_the_login_and_says_so() {
+    let world = connected().await;
+    world.computer.answer(
+        "status.bar",
+        json!({"github": {"login": "sam", "signedIn": true, "checkFailed": true}}),
+    );
+
+    world.engine.open_section(Some(Section::Status));
+    let view = world
+        .until(
+            |v| v.status.computer.iter().any(|i| i.id == "github"),
+            "the list",
+        )
+        .await;
+
+    let github = view
+        .status
+        .computer
+        .iter()
+        .find(|i| i.id == "github")
+        .unwrap();
+    assert_eq!(github.value, "@sam");
+    assert_eq!(github.detail.as_deref(), Some("Couldn't check it just now"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sync_says_the_most_pressing_thing() {
+    let cases = [
+        (
+            json!({"needsSignIn": true, "conflicts": 2, "phase": "error", "keysNeeded": 1}),
+            "Sign in again",
+            true,
+        ),
+        (
+            json!({"needsSignIn": false, "conflicts": 0, "phase": "syncing", "keysNeeded": 0}),
+            "Syncing",
+            false,
+        ),
+        (
+            json!({"needsSignIn": false, "conflicts": 0, "phase": "offline", "keysNeeded": 0}),
+            "Offline",
+            false,
+        ),
+        (
+            json!({"needsSignIn": false, "conflicts": 0, "phase": "error", "keysNeeded": 0}),
+            "Sync stopped",
+            true,
+        ),
+        (
+            json!({"needsSignIn": false, "conflicts": 0, "phase": "idle", "keysNeeded": 1}),
+            "Key needed",
+            false,
+        ),
+        (
+            json!({"needsSignIn": false, "conflicts": 0, "phase": "idle", "keysNeeded": 0}),
+            "Synced",
+            false,
+        ),
+    ];
+    for (sync, label, attention) in cases {
+        let world = connected().await;
+        world.computer.answer("status.bar", json!({"sync": sync}));
+        world.engine.open_section(Some(Section::Status));
+        let view = world
+            .until(
+                |v| v.status.computer.iter().any(|i| i.id == "sync"),
+                "the list",
+            )
+            .await;
+        let line = view
+            .status
+            .computer
+            .iter()
+            .find(|i| i.id == "sync")
+            .unwrap()
+            .clone();
+        assert_eq!(line.value, label);
+        assert_eq!(line.attention, attention);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computer_that_cannot_answer_the_list_shows_no_error() {
+    let world = connected().await;
+    world.computer.answer("status.system", system());
+    world
+        .computer
+        .refuse("status.bar", "unknown-method", "Unknown method.");
+
+    world.engine.open_section(Some(Section::Status));
+    world
+        .until(|v| v.status.system.is_some(), "the numbers")
+        .await;
+    world
+        .until(
+            |_| world.computer.params_of("status.bar").len() >= 2,
+            "asked twice",
+        )
+        .await;
+
+    let view = world.latest().unwrap();
+    assert_eq!(view.error, None);
+    assert!(view.status.computer.is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -161,4 +349,5 @@ async fn leaving_the_computer_forgets_its_numbers() {
         .await;
     assert!(view.status.system.is_none());
     assert!(view.status.limits.is_empty());
+    assert!(view.status.computer.is_empty());
 }

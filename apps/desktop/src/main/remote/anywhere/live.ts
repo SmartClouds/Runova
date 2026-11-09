@@ -72,8 +72,21 @@ function broadcast(channel: string, payload: unknown): void {
     sendToWindow(window, channel, payload);
 }
 
+/** Handed in by the account code when this service is made, so a phone can read its sync state. */
+let accountRuntime: AccountRuntime | null = null;
+
 const manageMethods = createManageMethods({
   ...liveManageDeps,
+  status: {
+    ...liveManageDeps.status,
+    bar: {
+      ...liveManageDeps.status.bar,
+      sync: async () =>
+        accountRuntime
+          ? { status: await accountRuntime.status(), overview: await accountRuntime.overview() }
+          : null,
+    },
+  },
   forgetPhone: async (key) => service?.forgetPhone(key),
 });
 
@@ -99,6 +112,7 @@ const recordPhoneActivity: ManageAudit = ({ phone, method, risk, outcome }) => {
 
 /** The app's one Anywhere service (E61), made on first use against the account runtime. */
 export function getAnywhere(runtime: AccountRuntime): AnywhereService {
+  accountRuntime = runtime;
   if (service) return service;
 
   const hub = websiteAnywhereHub({

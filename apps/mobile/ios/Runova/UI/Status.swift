@@ -41,6 +41,7 @@ struct StatusTab: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ComputerCard(system: system)
+                    if !view.status.computer.isEmpty { ComputerList(items: view.status.computer) }
                     ForEach(view.status.limits, id: \.providerId) { LimitCard(limit: $0) }
                     RunovaSectionTitle(text: "All providers")
                     ForEach(view.status.providers, id: \.providerId) { provider in
@@ -110,6 +111,49 @@ private struct ComputerCard: View {
                     RunovaText(
                         "Down \(system.netDownLabel), up \(system.netUpLabel)", style: RunovaType.small,
                         color: palette.mutedForeground)
+                }
+            }
+        }
+    }
+}
+
+private func computerIcon(_ id: String) -> String {
+    switch id {
+    case "agents": return RunovaIcons.agent
+    case "relay": return RunovaIcons.bolt
+    case "transfers": return RunovaIcons.file
+    case "terminals": return RunovaIcons.terminal
+    case "sync": return RunovaIcons.cloud
+    case "github": return RunovaIcons.git
+    case "docker": return RunovaIcons.deploy
+    case "android": return RunovaIcons.mobile
+    case "keep-awake": return RunovaIcons.clock
+    default: return RunovaIcons.monitoring
+    }
+}
+
+/// The rest of the desktop's status bar: what this computer can tell with no window open.
+private struct ComputerList: View {
+    let items: [ComputerItemView]
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaCard {
+            VStack(alignment: .leading, spacing: 10) {
+                RunovaSectionTitle(text: "On this computer")
+                ForEach(items, id: \.id) { item in
+                    HStack(spacing: 10) {
+                        RunovaIconTile(icon: computerIcon(item.id), tone: item.attention ? .warning : .primary, size: 30)
+                        VStack(alignment: .leading, spacing: 0) {
+                            RunovaText(item.title, style: RunovaType.label)
+                            if let detail = item.detail {
+                                RunovaText(detail, style: RunovaType.small, color: palette.mutedForeground)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        RunovaBadge(text: item.value, tone: item.attention ? .warning : .neutral, dot: item.attention)
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.DeployScreen
+import uniffi.runova_ffi.ErrorsScreen
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.MonitoringScreen
 import uniffi.runova_ffi.NotificationsScreen
@@ -21,9 +22,10 @@ import uniffi.runova_ffi.VaultLockState
 import uniffi.runova_ffi.VaultScreen
 
 val emptyGit = GitScreen(null, false, null, false, emptyList(), emptyList())
-val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null)
+val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null, emptyList())
 val emptyDeploy = DeployScreen(emptyList(), false, null, null)
 val emptyMonitoring = MonitoringScreen(emptyList(), emptyList(), false, null, null)
+val emptyErrors = ErrorsScreen(false, false, emptyList(), null, emptyList(), null, null)
 val emptyPipelines = PipelinesScreen(null, false, null, null, null)
 val emptyAccount = AccountScreen(null, false, emptyList(), emptyList(), emptyList(), emptyList(), null, null)
 val emptyNotifications = NotificationsScreen(emptyList(), 0u, false, emptyList(), false, null)
@@ -45,6 +47,7 @@ fun appView(
     vault: VaultScreen = emptyVault,
     deploy: DeployScreen = emptyDeploy,
     monitoring: MonitoringScreen = emptyMonitoring,
+    errors: ErrorsScreen = emptyErrors,
     pipelines: PipelinesScreen = emptyPipelines,
     account: AccountScreen = emptyAccount,
     notifications: NotificationsScreen = emptyNotifications,
@@ -71,6 +74,7 @@ fun appView(
     vault,
     deploy,
     monitoring,
+    errors,
     pipelines,
     account,
     notifications,

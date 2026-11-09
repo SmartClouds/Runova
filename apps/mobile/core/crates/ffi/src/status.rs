@@ -1,10 +1,10 @@
 //! What the desktop's status bar shows. The computer's numbers refresh often, AI usage rarely.
 
-use crate::engine::{Engine, Runner};
+use crate::engine::{Apply, Done, Engine, Runner};
 use crate::labels::{bytes_label, percent_label, reset_label, usd_label};
 use crate::view::{
-    AppView, LimitChipView, LimitState, LimitWindowView, ProviderState, ProviderUsageView,
-    SystemStatsView,
+    AppView, ComputerItemView, LimitChipView, LimitState, LimitWindowView, ProviderState,
+    ProviderUsageView, SystemStatsView,
 };
 use serde::Deserialize;
 
@@ -72,6 +72,250 @@ struct UsageDto {
     limits: Vec<LimitDto>,
     #[serde(default)]
     providers: Vec<ProviderDto>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct AgentsDto {
+    working: u32,
+    waiting: u32,
+    finished: u32,
+    idle: u32,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct RelaysDto {
+    running: u32,
+    paused: u32,
+    scheduled: u32,
+    needs_you: u32,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct SyncDto {
+    needs_sign_in: bool,
+    conflicts: u32,
+    phase: String,
+    keys_needed: u32,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct GithubDto {
+    login: Option<String>,
+    signed_in: bool,
+    check_failed: bool,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct DockerDto {
+    running: u32,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct AndroidDto {
+    running: u32,
+    booting: u32,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct KeepAwakeDto {
+    mode: String,
+    awake: bool,
+    busy: Vec<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct BarDto {
+    agents: AgentsDto,
+    terminals: u32,
+    relays: RelaysDto,
+    transfers: u32,
+    sync: Option<SyncDto>,
+    github: Option<GithubDto>,
+    docker: Option<DockerDto>,
+    android: Option<AndroidDto>,
+    keep_awake: Option<KeepAwakeDto>,
+}
+
+fn item(
+    id: &str,
+    title: &str,
+    value: String,
+    detail: Option<String>,
+    attention: bool,
+) -> ComputerItemView {
+    ComputerItemView {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        value,
+        detail,
+        attention,
+    }
+}
+
+/// The non-zero parts of a count, joined up, such as "2 working, 1 waiting on you".
+fn counts(parts: &[(u32, &str)]) -> String {
+    parts
+        .iter()
+        .filter(|(count, _)| *count > 0)
+        .map(|(count, what)| format!("{count} {what}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn sync_label(sync: &SyncDto) -> (String, bool) {
+    if sync.needs_sign_in {
+        ("Sign in again".to_owned(), true)
+    } else if sync.conflicts > 0 {
+        (format!("{} to review", sync.conflicts), true)
+    } else if sync.phase == "syncing" {
+        ("Syncing".to_owned(), false)
+    } else if sync.phase == "offline" {
+        ("Offline".to_owned(), false)
+    } else if sync.phase == "error" {
+        ("Sync stopped".to_owned(), true)
+    } else if sync.keys_needed > 0 {
+        ("Key needed".to_owned(), false)
+    } else {
+        ("Synced".to_owned(), false)
+    }
+}
+
+fn github_item(github: GithubDto) -> ComputerItemView {
+    let (value, detail, attention) = match (github.login, github.signed_in, github.check_failed) {
+        (Some(login), true, false) => (format!("@{login}"), None, false),
+        (Some(login), true, true) => (
+            format!("@{login}"),
+            Some("Couldn't check it just now".to_owned()),
+            false,
+        ),
+        (_, _, true) => ("Couldn't check".to_owned(), None, true),
+        _ => ("Not signed in".to_owned(), None, false),
+    };
+    item("github", "GitHub", value, detail, attention)
+}
+
+fn keep_awake_item(keep_awake: KeepAwakeDto) -> ComputerItemView {
+    let mode = match keep_awake.mode.as_str() {
+        "on" => "On",
+        "off" => "Off",
+        _ => "Agent",
+    };
+    let busy: Vec<String> = keep_awake
+        .busy
+        .iter()
+        .map(|reason| match reason.as_str() {
+            "agents" => "an agent at work".to_owned(),
+            "terminals" => "a command in a terminal".to_owned(),
+            "ssh" => "an SSH session".to_owned(),
+            "sftp" => "file transfers".to_owned(),
+            other => other.to_owned(),
+        })
+        .collect();
+    let detail = if keep_awake.mode == "agent" && !busy.is_empty() {
+        format!("Set to {mode}, awake for {}", busy.join(", "))
+    } else {
+        format!("Set to {mode}")
+    };
+    let value = if keep_awake.awake {
+        "Awake now"
+    } else {
+        "Sleep allowed"
+    };
+    item(
+        "keep-awake",
+        "Keep awake",
+        value.to_owned(),
+        Some(detail),
+        false,
+    )
+}
+
+/// What the desktop's bar would show, in its order, without what it would hide.
+fn items_of(bar: BarDto) -> Vec<ComputerItemView> {
+    let mut items = Vec::new();
+    let agents = &bar.agents;
+    let doing = counts(&[
+        (agents.waiting, "waiting on you"),
+        (agents.working, "working"),
+        (agents.finished, "finished"),
+        (agents.idle, "idle"),
+    ]);
+    items.push(item(
+        "agents",
+        "Agents",
+        if doing.is_empty() {
+            "None running".to_owned()
+        } else {
+            doing
+        },
+        None,
+        agents.waiting > 0,
+    ));
+    let relays = &bar.relays;
+    let relay = counts(&[
+        (relays.needs_you, "needs you"),
+        (relays.running, "running"),
+        (relays.paused, "paused"),
+        (relays.scheduled, "scheduled"),
+    ]);
+    if !relay.is_empty() {
+        items.push(item("relay", "Relay", relay, None, relays.needs_you > 0));
+    }
+    if bar.transfers > 0 {
+        items.push(item(
+            "transfers",
+            "File transfers",
+            format!("{} running", bar.transfers),
+            None,
+            false,
+        ));
+    }
+    if bar.terminals > 0 {
+        items.push(item(
+            "terminals",
+            "Terminals",
+            format!("{} running", bar.terminals),
+            None,
+            false,
+        ));
+    }
+    if let Some(sync) = &bar.sync {
+        let (value, attention) = sync_label(sync);
+        items.push(item("sync", "Cloud sync", value, None, attention));
+    }
+    if let Some(github) = bar.github {
+        items.push(github_item(github));
+    }
+    if let Some(docker) = &bar.docker {
+        items.push(item(
+            "docker",
+            "Docker",
+            format!("{} running", docker.running),
+            None,
+            false,
+        ));
+    }
+    if let Some(android) = &bar.android {
+        items.push(item(
+            "android",
+            "Android emulators",
+            format!("{} running", android.running),
+            (android.booting > 0).then(|| format!("{} starting", android.booting)),
+            false,
+        ));
+    }
+    if let Some(keep_awake) = bar.keep_awake {
+        items.push(keep_awake_item(keep_awake));
+    }
+    items
 }
 
 fn system_of(dto: SystemDto) -> SystemStatsView {
@@ -146,6 +390,7 @@ impl Runner {
             },
             |view| view.status.loading = false,
         );
+        self.load_bar();
         if usage_due {
             self.call(
                 "status.usage",
@@ -157,6 +402,26 @@ impl Runner {
                 |_| {},
             );
         }
+    }
+
+    /// Goes around `call` because this list is extra: a computer too old to answer, or one source
+    /// that fails, shouldn't put an error over numbers that are fine.
+    fn load_bar(&mut self) {
+        let Some(client) = self.client() else {
+            return;
+        };
+        let attempt = self.attempt;
+        let done = self.done_tx.clone();
+        tokio::spawn(async move {
+            let Ok(value) = client.call("status.bar", None).await else {
+                return;
+            };
+            let Ok(bar) = serde_json::from_value::<BarDto>(value) else {
+                return;
+            };
+            let apply: Apply = Box::new(move |view| view.status.computer = items_of(bar));
+            let _ = done.send(Done::Apply { attempt, apply });
+        });
     }
 }
 

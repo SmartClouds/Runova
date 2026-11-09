@@ -137,6 +137,12 @@ class MainActivity : FragmentActivity(), ViewListener {
                 close = { engine.monitorClose() },
                 check = { engine.monitorCheck(it) },
                 setPaused = { id, source, paused -> engine.monitorSetPaused(id, source, paused) },
+                openErrors = { engine.errorsOpen() },
+                closeErrors = { engine.errorsClose() },
+                openIssue = { connection, issue -> engine.errorsOpenIssue(connection, issue) },
+                closeIssue = { engine.errorsCloseIssue() },
+                resolveIssue = { engine.errorsResolve() },
+                reopenIssue = { engine.errorsReopen() },
             ),
             pipelines = PipelineIntents(
                 openRun = { engine.pipelinesOpenRun(it) },

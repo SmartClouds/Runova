@@ -16,6 +16,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.ComputerItemView
 import uniffi.runova_ffi.ConnectionPhase
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.LimitChipView
@@ -48,7 +49,14 @@ private val providers = listOf(
     ProviderUsageView("gemini", "Gemini", ProviderState.ERROR, "Bad key", null, null, null, emptyList()),
 )
 
-private fun status(detail: String? = null) = StatusScreen(system, false, limits, providers, detail)
+private val computer = listOf(
+    ComputerItemView("agents", "Agents", "1 waiting on you, 2 working", null, true),
+    ComputerItemView("github", "GitHub", "@sam", null, false),
+    ComputerItemView("keep-awake", "Keep awake", "Awake now", "Set to Agent, awake for an agent at work", false),
+)
+
+private fun status(detail: String? = null, items: List<ComputerItemView> = computer) =
+    StatusScreen(system, false, limits, providers, detail, items)
 
 private fun view(screen: StatusScreen = status()) = appView(connection = connected, status = screen)
 
@@ -73,6 +81,23 @@ class StatusTest {
         compose.onNodeWithText("12.5%").assertExists()
         compose.onNodeWithText("8 GB of 16 GB").assertExists()
         snapshot("status")
+    }
+
+    @Test
+    fun whatTheComputerIsDoingIsListed() {
+        show(view())
+
+        compose.onNodeWithText("ON THIS COMPUTER").assertExists()
+        compose.onNodeWithText("1 waiting on you, 2 working").assertExists()
+        compose.onNodeWithText("@sam").assertExists()
+        compose.onNodeWithText("Set to Agent, awake for an agent at work").assertExists()
+    }
+
+    @Test
+    fun nothingToListLeavesTheHeadingOut() {
+        show(view(status(items = emptyList())))
+
+        compose.onNodeWithText("ON THIS COMPUTER").assertDoesNotExist()
     }
 
     @Test
@@ -106,7 +131,7 @@ class StatusTest {
     @Test
     fun aProviderOpensItsDetail() {
         var opened = ""
-        show(view(), AppIntents(status = StatusIntents(openProvider = { opened = it })))
+        show(view(status(items = emptyList())), AppIntents(status = StatusIntents(openProvider = { opened = it })))
 
         compose.onNodeWithText("Gemini").performClick()
 
@@ -135,7 +160,7 @@ class StatusTest {
 
     @Test
     fun beforeTheFirstReadingItIsLoading() {
-        show(view(StatusScreen(null, true, emptyList(), emptyList(), null)))
+        show(view(StatusScreen(null, true, emptyList(), emptyList(), null, emptyList())))
 
         compose.onNodeWithText("CPU").assertDoesNotExist()
     }

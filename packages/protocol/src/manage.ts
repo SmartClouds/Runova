@@ -67,6 +67,7 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'git.abort': { scope: 'git', risk: 'danger' },
   'status.system': { scope: 'core', risk: 'read' },
   'status.usage': { scope: 'core', risk: 'read' },
+  'status.bar': { scope: 'core', risk: 'read' },
   'vault.status': { scope: 'vault', risk: 'read' },
   'vault.unlock': { scope: 'vault', risk: 'write' },
   'vault.lock': { scope: 'vault', risk: 'write' },
@@ -88,6 +89,9 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'pipelines.jobLog': { scope: 'ops', risk: 'read' },
   'pipelines.dispatch': { scope: 'ops', risk: 'danger' },
   'pipelines.cancel': { scope: 'ops', risk: 'danger' },
+  'errors.list': { scope: 'ops', risk: 'read' },
+  'errors.show': { scope: 'ops', risk: 'read' },
+  'errors.setStatus': { scope: 'ops', risk: 'write' },
 };
 
 /** A project as a phone shows it: no paths, prompts or environment. */
@@ -273,6 +277,73 @@ export interface ManagePipelineStatus {
 export interface ManageJobLog {
   truncated: boolean;
   lines: { text: string; error: boolean }[];
+}
+
+/** One tracked issue. Times are measured on the computer, since a phone's clock may disagree. */
+export interface ManageErrorIssue {
+  connectionId: string;
+  id: string;
+  shortId: string;
+  title: string;
+  culprit: string;
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug';
+  status: 'unresolved' | 'resolved' | 'ignored';
+  count: number;
+  userCount: number;
+  isNew: boolean;
+  projectId: string;
+  remoteProject: string;
+  lastSeenAgoMs: number | null;
+}
+
+export interface ManageErrorList {
+  /** False when no Sentry project is linked on this computer, so an empty list means nothing. */
+  linked: boolean;
+  issues: ManageErrorIssue[];
+  truncated: boolean;
+  /** Connections this computer could not read just now, in their own words. */
+  problems: { label: string; message: string; locked: boolean }[];
+}
+
+/** An issue up close. Never the source code around a frame or the breadcrumb trail. */
+export interface ManageErrorDetail {
+  issue: ManageErrorIssue;
+  canChange: boolean;
+  event: {
+    message: string | null;
+    environment: string | null;
+    release: string | null;
+    request: string | null;
+    exceptions: {
+      type: string;
+      value: string;
+      handled: boolean | null;
+      frames: { file: string; function: string | null; line: number | null }[];
+    }[];
+    tags: { key: string; value: string }[];
+  } | null;
+}
+
+/** The parts of the desktop's status bar this computer can answer with no window open. */
+export interface ManageStatusBar {
+  agents: { working: number; waiting: number; finished: number; idle: number };
+  terminals: number;
+  relays: { running: number; paused: number; scheduled: number; needsYou: number };
+  transfers: number;
+  /** Null while no Runova account is signed in on this computer. */
+  sync: {
+    needsSignIn: boolean;
+    conflicts: number;
+    phase: string;
+    keysNeeded: number;
+  } | null;
+  /** Null when the GitHub CLI is not installed. */
+  github: { login: string | null; signedIn: boolean; checkFailed: boolean } | null;
+  /** Null when Docker is not available. */
+  docker: { running: number; total: number } | null;
+  /** Null when no Android SDK is found. */
+  android: { running: number; booting: number } | null;
+  keepAwake: { mode: string; awake: boolean; busy: string[] };
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

@@ -25,6 +25,7 @@ import com.runovahq.app.design.RunovaBadge
 import com.runovahq.app.design.RunovaCard
 import com.runovahq.app.design.RunovaSectionTitle
 import com.runovahq.app.design.RunovaIcon
+import com.runovahq.app.design.RunovaIconTile
 import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaProgress
@@ -34,6 +35,7 @@ import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.ComputerItemView
 import uniffi.runova_ffi.LimitChipView
 import uniffi.runova_ffi.LimitState
 import uniffi.runova_ffi.LimitWindowView
@@ -76,6 +78,7 @@ fun StatusTab(view: AppView, intents: StatusIntents) {
     }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { ComputerCard(system) }
+        if (view.status.computer.isNotEmpty()) item(key = "computer") { ComputerList(view.status.computer) }
         items(view.status.limits, key = { it.providerId }) { LimitCard(it) }
         item { Heading("All providers") }
         items(view.status.providers, key = { "p/${it.providerId}" }) { ProviderRow(it, intents) }
@@ -115,6 +118,41 @@ private fun ComputerCard(system: SystemStatsView) {
                     style = RunovaType.small,
                     color = colors.mutedForeground,
                 )
+            }
+        }
+    }
+}
+
+private fun computerIcon(id: String) = when (id) {
+    "agents" -> RunovaIcons.Agent
+    "relay" -> RunovaIcons.Bolt
+    "transfers" -> RunovaIcons.File
+    "terminals" -> RunovaIcons.Terminal
+    "sync" -> RunovaIcons.Cloud
+    "github" -> RunovaIcons.Git
+    "docker" -> RunovaIcons.Deploy
+    "android" -> RunovaIcons.Mobile
+    "keep-awake" -> RunovaIcons.Clock
+    else -> RunovaIcons.Monitoring
+}
+
+/** The rest of the desktop's status bar: what this computer can tell with no window open. */
+@Composable
+private fun ComputerList(items: List<ComputerItemView>) {
+    val colors = RunovaTheme.colors
+    RunovaCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Heading("On this computer")
+            items.forEach { item ->
+                val tone = if (item.attention) BadgeTone.Warning else BadgeTone.Neutral
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    RunovaIconTile(computerIcon(item.id), if (item.attention) BadgeTone.Warning else BadgeTone.Primary, size = 30.dp)
+                    Column(Modifier.weight(1f)) {
+                        RunovaText(item.title, style = RunovaType.label)
+                        item.detail?.let { RunovaText(it, style = RunovaType.small, color = colors.mutedForeground) }
+                    }
+                    RunovaBadge(item.value, tone, dot = item.attention)
+                }
             }
         }
     }
