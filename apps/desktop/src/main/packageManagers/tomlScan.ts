@@ -127,6 +127,18 @@ export function scanToml(source: string): TomlEntry[] {
   return entries;
 }
 
+/** The file with one string value replaced, or null when that key holds no string. */
+export function rewriteTomlString(
+  source: string,
+  table: string,
+  key: string,
+  value: string,
+): string | null {
+  const entry = scanToml(source).find((one) => one.table === table && one.key === key);
+  const current = entry ? stringValue(entry) : null;
+  return current ? source.slice(0, current.start) + value + source.slice(current.end) : null;
+}
+
 /** The value as a string, when it is one. */
 export function stringValue(entry: TomlEntry): TomlString | null {
   if (!QUOTES.has(entry.text[0]) || skipString(entry.text, 0) !== entry.text.length) return null;

@@ -5,8 +5,12 @@ import type {
   PackageUpdateItemResult,
   PackageUpdateRequest,
   PackageUpdateResult,
-  RuntimeUpdateResult,
 } from '../../shared/apiTypes';
+import {
+  type InventoryEcosystem,
+  type InventoryPackage,
+  tidyInventory,
+} from '../../shared/dependencyAlerts';
 import { mapWithConcurrency } from './execUtils';
 import type { UpdateProgressTick } from './types';
 
@@ -153,6 +157,15 @@ export interface PackageRow extends Omit<PackageInfo, 'latestVersion' | 'isOutda
   lookup: (() => Promise<string | null>) | null;
   /** Whether the latest version counts as an update for this row. */
   behind: (latest: string) => boolean;
+  /** What goes up for dependency alerts, when the row is something a registry would know. */
+  inventory?: { ecosystem: InventoryEcosystem; name: string; version: string };
+}
+
+/** The rows that go up for dependency alerts. Reads nothing but the rows themselves. */
+export function inventoryOf(rows: PackageRow[]): InventoryPackage[] {
+  return tidyInventory(
+    rows.flatMap((row) => (row.inventory ? [{ ...row.inventory, dev: row.isDev }] : [])),
+  );
 }
 
 export interface CheckedPackages {
@@ -166,7 +179,7 @@ export async function checkPackages(rows: PackageRow[]): Promise<CheckedPackages
   const packages = await mapWithConcurrency(
     rows,
     REGISTRY_CONCURRENCY,
-    async ({ lookup, behind, ...base }): Promise<PackageInfo> => {
+    async ({ lookup, behind, inventory: _inventory, ...base }): Promise<PackageInfo> => {
       if (!lookup) return { ...base, latestVersion: base.currentVersion, isOutdated: false };
       const latestVersion = await lookup();
       if (!latestVersion) {
@@ -252,9 +265,4 @@ export async function updateByManifest(
     }
   }
   return { ok: results.every((result) => result.ok), results };
-}
-
-/** For the adapters that list no runtime versions: nothing can ask for one of these. */
-export async function noRuntimeUpdates(): Promise<RuntimeUpdateResult> {
-  return { ok: false, message: 'Unknown runtime setting.' };
 }

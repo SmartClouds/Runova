@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compareLoose, isBehind, isPrerelease, pickLatest, withPrecisionOf } from './versionText';
+import {
+  compareLoose,
+  isBehind,
+  isPrerelease,
+  pickLatest,
+  withoutFlavor,
+  withPrecisionOf,
+} from './versionText';
 
 describe('isPrerelease', () => {
   it.each([
@@ -62,6 +69,17 @@ describe('pickLatest', () => {
   it('is null when nothing qualifies', () => {
     expect(pickLatest(['2.0.0-beta1'], '1.0.0')).toBeNull();
     expect(pickLatest([], '1.0.0')).toBeNull();
+  });
+});
+
+describe('withoutFlavor', () => {
+  it.each([
+    ['32.0.0-android', '32.0.0'],
+    ['4.1.100.Final', '4.1.100'],
+    ['1.0.0', '1.0.0'],
+    ['1.0.0-alpha01', '1.0.0-alpha01'],
+  ])('turns %s into %s', (version, expected) => {
+    expect(withoutFlavor(version)).toBe(expected);
   });
 });
 

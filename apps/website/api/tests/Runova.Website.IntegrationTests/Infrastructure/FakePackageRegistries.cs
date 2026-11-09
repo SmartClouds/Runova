@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,14 +20,43 @@ internal sealed class FakePackageRegistries
     private readonly ConcurrentQueue<string> _requests = new();
     private readonly ConcurrentDictionary<string, bool> _down = new(StringComparer.Ordinal);
 
+    private readonly ConcurrentQueue<string> _osvEcosystems = new();
+
     public IReadOnlyList<string> Requests => [.. _requests];
+
+    /// <summary>Every ecosystem name OSV has been asked about.</summary>
+    public IReadOnlyList<string> OsvEcosystems => [.. _osvEcosystems];
+
+    private static string Stored(string ecosystem, string name) => Runova.Website.Core.Dependencies.Ecosystems.PackageKey(ecosystem, name);
+
+    private static string OsvName(string ecosystem) => ecosystem switch
+    {
+        "npm" => "npm",
+        "nuget" => "NuGet",
+        "pypi" => "PyPI",
+        "crates" => "crates.io",
+        "maven" => "Maven",
+        "swift" => "SwiftURL",
+        _ => "Pub",
+    };
+
+    private static string Ecosystem(string osvName) => osvName switch
+    {
+        "npm" => "npm",
+        "NuGet" => "nuget",
+        "PyPI" => "pypi",
+        "crates.io" => "crates",
+        "Maven" => "maven",
+        "SwiftURL" => "swift",
+        _ => "pub",
+    };
 
     public int RequestsTo(string registry) => _requests.Count(r => r.StartsWith(registry + " ", StringComparison.Ordinal));
 
     /// <summary>The registry's newest version of a package, and its deprecation note if any.</summary>
     public FakePackageRegistries Has(string ecosystem, string name, string latest, string? deprecated = null)
     {
-        _packages[(ecosystem, ecosystem == "nuget" ? name.ToLowerInvariant() : name)] = (latest, deprecated);
+        _packages[(ecosystem, Stored(ecosystem, name))] = (latest, deprecated);
         return this;
     }
 
@@ -35,10 +65,10 @@ internal sealed class FakePackageRegistries
     {
         foreach (var version in versions)
         {
-            _affected.GetOrAdd((ecosystem, ecosystem == "nuget" ? name.ToLowerInvariant() : name, version), _ => []).Add(id);
+            _affected.GetOrAdd((ecosystem, Stored(ecosystem, name), version), _ => []).Add(id);
         }
 
-        var osvEcosystem = ecosystem switch { "npm" => "npm", "nuget" => "NuGet", _ => "Pub" };
+        var osvEcosystem = OsvName(ecosystem);
         var events = new JsonArray(new JsonObject { ["introduced"] = "0" });
         if (fixedIn is not null)
         {
@@ -68,6 +98,11 @@ internal sealed class FakePackageRegistries
         services.AddHttpClient<NuGetRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "nuget"));
         services.AddHttpClient<PubRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "pub"));
         services.AddHttpClient<OsvClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "osv"));
+        services.AddHttpClient<PyPiRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "pypi"));
+        services.AddHttpClient<CratesRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "crates"));
+        services.AddHttpClient<MavenRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "maven"));
+        services.AddHttpClient<SwiftRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "swift"));
+        services.AddHttpClient<CocoaPodsRegistryClient>().ConfigurePrimaryHttpMessageHandler(() => new Handler(this, "pods"));
     }
 
     private static HttpResponseMessage Json(string json) =>
@@ -114,6 +149,28 @@ internal sealed class FakePackageRegistries
                             new JsonObject { ["catalogEntry"] = entry }),
                     }),
                 }.ToJsonString());
+            case "pypi":
+                var pypiName = path.Split('/')[1];
+                return _packages.TryGetValue(("pypi", pypiName), out var pypi)
+                    ? Json(new JsonObject { ["info"] = new JsonObject { ["version"] = pypi.Latest } }.ToJsonString())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            case "crates":
+                return _packages.TryGetValue(("crates", path.Split('/')[^1]), out var crate)
+                    ? Json(new JsonObject { ["vers"] = crate.Latest, ["yanked"] = false }.ToJsonString())
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            case "maven":
+                var coordinates = path[(path.IndexOf("maven2/", StringComparison.Ordinal) + "maven2/".Length)..];
+                var known = _packages.Where(p => p.Key.Ecosystem == "maven").FirstOrDefault(p => coordinates.StartsWith(p.Key.Name.Replace('.', '/').Replace(':', '/') + "/", StringComparison.Ordinal));
+                return known.Key.Name is null
+                    ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                    : Json($"<metadata><versioning><versions><version>{known.Value.Latest}</version></versions></versioning></metadata>");
+            case "swift":
+                var repository = "github.com/" + path[..path.IndexOf(".git/", StringComparison.Ordinal)];
+                return _packages.TryGetValue(("swift", repository), out var swift)
+                    ? Json($"003f{new string('a', 40)} refs/tags/{swift.Latest}\n0000")
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
+            case "pods":
+                return Json(string.Join('\n', _packages.Where(p => p.Key.Ecosystem == "pods").Select(p => $"{p.Key.Name}/{p.Value.Latest}")));
             default:
                 if (path == "v1/querybatch")
                 {
@@ -121,7 +178,8 @@ internal sealed class FakePackageRegistries
                     var results = new JsonArray();
                     foreach (var query in queries)
                     {
-                        var ecosystem = query!["package"]!["ecosystem"]!.GetValue<string>() switch { "npm" => "npm", "NuGet" => "nuget", _ => "pub" };
+                        _osvEcosystems.Enqueue(query!["package"]!["ecosystem"]!.GetValue<string>());
+                        var ecosystem = Ecosystem(query["package"]!["ecosystem"]!.GetValue<string>());
                         var key = (ecosystem, query["package"]!["name"]!.GetValue<string>(), query["version"]!.GetValue<string>());
                         var vulns = new JsonArray();
                         foreach (var vuln in _affected.GetValueOrDefault(key) ?? [])

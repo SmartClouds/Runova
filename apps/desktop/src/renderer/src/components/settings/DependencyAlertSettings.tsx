@@ -133,7 +133,7 @@ export function DependencyAlertSettings(): React.JSX.Element {
       <Row
         icon={Package}
         title="Package update alerts"
-        description="Once a day runovahq.com checks the packages of each project (npm, NuGet and pub) and tells you what changed. Team projects tell every member. Turning it off removes the package lists of your own projects from the server."
+        description="Once a day runovahq.com checks the packages of each project (npm, NuGet, pub, PyPI, Cargo, Maven, Swift and CocoaPods) and tells you what changed. Team projects tell every member. Turning it off removes the package lists of your own projects from the server."
         control={
           <Switch
             checked={settings.enabled}

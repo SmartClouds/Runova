@@ -105,6 +105,43 @@ public sealed class DependencyCheckJobTests(PostgresFixture postgres) : IAsyncLi
     }
 
     [Fact]
+    public async Task Python_Rust_Android_and_iOS_packages_are_checked_like_the_rest()
+    {
+        _registries
+            .Has("pypi", "django", "5.1.0")
+            .Has("crates", "serde", "2.0.0")
+            .Has("maven", "com.google.guava:guava", "33.0.0")
+            .Has("swift", "github.com/Alamofire/Alamofire", "6.0.0")
+            .Has("pods", "Firebase", "11.0.0")
+            .Advisory("GHSA-py", "pypi", "django", "high", "SQL injection in Django", "4.2.0", "4.0.0")
+            .Advisory("GHSA-sw", "swift", "github.com/Alamofire/Alamofire", "high", "Bad redirect", "5.9.0", "5.0.0");
+        var (_, client) = await AccountAsync(_factory);
+        var scope = await PersonalScopeAsync(client);
+        await UploadedAsync(client, scope, "p-mobile", Inventory(
+            "Mobile",
+            Package("Django", "4.0.0", "pypi"),
+            Package("serde", "1.0.0", "crates"),
+            Package("com.google.guava:guava", "32.0.0", "maven"),
+            Package("github.com/Alamofire/Alamofire", "5.0.0", "swift"),
+            Package("Firebase", "10.0.0", "pods")));
+        _time.Advance(TimeSpan.FromHours(1));
+
+        await RunChecksAsync(_factory);
+
+        var mobile = (await FindingsAsync(client)).GetProperty("items").EnumerateArray().Single();
+        var counts = mobile.GetProperty("counts");
+        Assert.Equal(2, counts.GetProperty("security").GetInt32());
+        Assert.Equal(5, counts.GetProperty("major").GetInt32());
+        // The name goes back as it was uploaded, which is what the Packages tab looks it up by.
+        var names = mobile.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("name").GetString()).ToHashSet();
+        Assert.Contains("Django", names);
+        Assert.Contains("github.com/Alamofire/Alamofire", names);
+        Assert.Contains("Firebase", names);
+        // OSV has no CocoaPods database, so asking it about a pod would only be refused.
+        Assert.DoesNotContain(_registries.OsvEcosystems, e => e == "CocoaPods");
+    }
+
+    [Fact]
     public async Task Nothing_is_told_twice_and_the_next_check_is_a_day_later()
     {
         await SamWithShopAsync();

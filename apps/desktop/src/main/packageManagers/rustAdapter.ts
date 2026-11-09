@@ -1,8 +1,11 @@
-import { basename, dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type {
   PackageManagerSection,
   PackageUpdateItemResult,
   PackageUpdateRequest,
+  RuntimeSource,
+  RuntimeUpdateRequest,
+  RuntimeUpdateResult,
 } from '../../shared/apiTypes';
 import {
   applyEdits,
@@ -11,8 +14,8 @@ import {
   findManifests,
   findUpward,
   HostHealth,
+  inventoryOf,
   missingFromManifest,
-  noRuntimeUpdates,
   type PackageRow,
   projectLabel,
   readFileSafe,
@@ -22,10 +25,19 @@ import {
   writeManifest,
 } from './adapterKit';
 import { CliNotFoundError, runCli } from './execUtils';
+import { runtimeFeeds } from './runtimeFeeds';
+import { samePrecision } from './runtimeTargets';
+import {
+  applyRuntimeUpdate,
+  type RuntimeCandidate,
+  type RuntimeUpdateDeps,
+  runtimeCandidate,
+} from './runtimeUpdate';
 import {
   inlineHas,
   inlineString,
   lockedVersions,
+  rewriteTomlString,
   scanToml,
   stringValue,
   type TomlEntry,
@@ -214,9 +226,96 @@ async function scanManifest(
           ? () => latestOnCratesIo(dep.crate, resolved ?? lower ?? '0', health)
           : null,
       behind: (latest) => isBehind(resolved, lower, latest),
+      inventory:
+        simple && !dep.otherRegistry
+          ? { ecosystem: 'crates', name: dep.crate, version: resolved ?? lower ?? '0' }
+          : undefined,
     });
   }
   return [...rows.values()];
+}
+
+const RUST_RELEASE = /^\d+\.\d+(?:\.\d+)?$/;
+
+interface RustTarget {
+  source: RuntimeSource;
+  declared: string;
+  rewrite: (text: string, value: string) => string | null;
+}
+
+function tomlTargets(source: string): RustTarget[] {
+  const targets: RustTarget[] = [];
+  for (const entry of scanToml(source)) {
+    const value = stringValue(entry)?.value;
+    if (!value || !RUST_RELEASE.test(value)) continue;
+    const { table, key } = entry;
+    const rewrite = (text: string, next: string) => rewriteTomlString(text, table, key, next);
+    if ((table === 'package' || table === 'workspace.package') && key === 'rust-version') {
+      targets.push({ source: 'rust-version', declared: value, rewrite });
+    } else if (table === 'toolchain' && key === 'channel') {
+      targets.push({ source: 'rust-toolchain', declared: value, rewrite });
+    }
+  }
+  return targets;
+}
+
+function targetsInFile(path: string, source: string): RustTarget[] {
+  if (basename(path) !== 'rust-toolchain' || source.includes('[toolchain]')) {
+    return tomlTargets(source);
+  }
+  const declared = source.trim();
+  if (!RUST_RELEASE.test(declared)) return [];
+  return [
+    {
+      source: 'rust-toolchain',
+      declared,
+      rewrite: (text, value) => text.replace(declared, value),
+    },
+  ];
+}
+
+async function candidatesInFile(
+  path: string,
+  source: string,
+  label: string,
+): Promise<RuntimeCandidate[]> {
+  const targets = targetsInFile(path, source);
+  if (targets.length === 0) return [];
+  const latestVersion = await runtimeFeeds.rust();
+  return targets.map(({ source: where, declared, rewrite }) =>
+    runtimeCandidate({
+      kind: 'rust',
+      source: where,
+      declared,
+      currentVersion: declared,
+      latestVersion,
+      next: (latest) => samePrecision(latest, declared),
+      requires: null,
+      manifestPath: path,
+      projectLabel: label,
+      rewrite,
+    }),
+  );
+}
+
+/** What each Cargo.toml names, and the toolchain file pinned beside it. */
+async function runtimesOf(root: string, manifests: string[]): Promise<RuntimeCandidate[]> {
+  const found = await Promise.all(
+    manifests.map(async (manifestPath) => {
+      const dir = dirname(manifestPath);
+      const source = await readFileSafe(manifestPath);
+      const name = source === null ? null : readManifest(source).packageName;
+      const label = projectLabel(root, dir, name);
+      const files = [manifestPath, join(dir, 'rust-toolchain.toml'), join(dir, 'rust-toolchain')];
+      return Promise.all(
+        files.map(async (file) => {
+          const text = await readFileSafe(file);
+          return text === null ? [] : candidatesInFile(file, text, label);
+        }),
+      );
+    }),
+  );
+  return found.flat(2);
 }
 
 async function listPackages(folderPath: string): Promise<PackageManagerSection[]> {
@@ -225,7 +324,8 @@ async function listPackages(folderPath: string): Promise<PackageManagerSection[]
   const rows = (
     await Promise.all(manifests.map((path) => scanManifest(folderPath, path, health)))
   ).flat();
-  if (rows.length === 0) return [];
+  const runtimes = (await runtimesOf(folderPath, manifests)).map((one) => one.target);
+  if (rows.length === 0 && runtimes.length === 0) return [];
   const { packages, unresolved } = await checkPackages(rows);
   return [
     {
@@ -234,7 +334,7 @@ async function listPackages(folderPath: string): Promise<PackageManagerSection[]
       status: 'ok',
       message: unresolvedNote(unresolved, health),
       packages,
-      runtimes: [],
+      runtimes,
       toolchain: null,
     },
   ];
@@ -337,13 +437,29 @@ export const rustAdapter: PackageManagerAdapter = {
   async detect(folderPath) {
     return (await findManifests(folderPath, isManifest)).length > 0;
   },
-  // Dependency alerts are checked on the server, which does not know crates.io yet.
-  readInventory: async () => [],
+  async readInventory(folderPath) {
+    const manifests = await findManifests(folderPath, isManifest);
+    const health = new HostHealth();
+    const rows = await Promise.all(manifests.map((path) => scanManifest(folderPath, path, health)));
+    return inventoryOf(rows.flat());
+  },
   listPackages,
   updatePackages(folderPath, updates, onProgress) {
     return updateByManifest(updates, onProgress, (manifestPath, group) =>
       applyToManifest(folderPath, manifestPath, group),
     );
   },
-  updateRuntime: noRuntimeUpdates,
+  async updateRuntime(
+    _folderPath: string,
+    request: RuntimeUpdateRequest,
+    deps: RuntimeUpdateDeps,
+  ): Promise<RuntimeUpdateResult> {
+    const source = await readFileSafe(request.manifestPath);
+    if (source === null) return { ok: false, message: `Failed to read ${request.manifestPath}.` };
+    return applyRuntimeUpdate(
+      request,
+      await candidatesInFile(request.manifestPath, source, ''),
+      deps,
+    );
+  },
 };

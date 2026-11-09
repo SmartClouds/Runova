@@ -114,8 +114,7 @@ internal sealed partial class DependencyCheckJob(
         return [.. kept.Values];
     }
 
-    /// <summary>NuGet ignores case in names; npm and pub names are lower case already.</summary>
-    internal static string Key(string ecosystem, string name) => ecosystem == Ecosystems.NuGet ? name.ToLowerInvariant() : name;
+    internal static string Key(string ecosystem, string name) => Ecosystems.PackageKey(ecosystem, name);
 
     private async Task<Dictionary<(string, string), PackageFactsView?>> FactsAsync(IReadOnlyList<InventoryPackage> packages, CancellationToken cancellationToken)
     {
@@ -167,7 +166,11 @@ internal sealed partial class DependencyCheckJob(
     {
         var now = time.GetUtcNow();
         var fresh = now - options.Value.CacheFor;
-        var wanted = packages.Select(p => (p.Ecosystem, Name: Key(p.Ecosystem, p.Name), p.Version)).Distinct().ToList();
+        var wanted = packages
+            .Where(p => Ecosystems.HasAdvisories(p.Ecosystem))
+            .Select(p => (p.Ecosystem, Name: Key(p.Ecosystem, p.Name), p.Version))
+            .Distinct()
+            .ToList();
         var names = wanted.Select(w => w.Name).Distinct().ToList();
         var cached = (await db.AdvisoryLookups.Where(l => names.Contains(l.Name)).ToListAsync(cancellationToken))
             .ToDictionary(l => (l.Ecosystem, l.Name, l.Version));

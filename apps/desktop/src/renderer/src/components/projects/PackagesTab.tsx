@@ -1,6 +1,6 @@
 import type { Project } from '@runova/core';
 import type { PackageInfo, PackageManagerSection, PackageUpdateRequest } from '@shared/apiTypes';
-import type { DependencyFinding } from '@shared/dependencyAlerts';
+import { type DependencyFinding, findingRowKey, packageRowKey } from '@shared/dependencyAlerts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -82,6 +82,7 @@ function ecosystemLabel(section: PackageManagerSection): string {
   if (section.manager === 'pip') return 'PyPI (pip)';
   if (section.manager === 'uv') return 'PyPI (uv)';
   if (section.manager === 'poetry') return 'PyPI (Poetry)';
+  if (section.manager === 'pipenv') return 'PyPI (Pipenv)';
   if (section.manager === 'cargo') return 'Cargo (Rust)';
   if (section.manager === 'gradle') return 'Gradle (Kotlin / Android)';
   if (section.manager === 'spm') return 'Swift Package Manager (iOS)';
@@ -473,7 +474,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
   const alertsByName = useMemo(() => {
     const byName = new Map<string, DependencyFinding[]>();
     for (const finding of alertEntry?.findings ?? []) {
-      const key = finding.name.toLowerCase();
+      const key = findingRowKey(finding);
       byName.set(key, [...(byName.get(key) ?? []), finding]);
     }
     return byName;
@@ -658,7 +659,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
         <CenteredEmptyState
           icon={Package}
           title="No package manifests in this folder"
-          description="Runova looks for package.json, yarn.lock, pnpm-lock.yaml, bun.lock, pubspec.yaml, .NET project files, pyproject.toml, requirements.txt, Cargo.toml, build.gradle, Package.swift, Xcode projects and Podfile."
+          description="Runova looks for package.json, yarn.lock, pnpm-lock.yaml, bun.lock, pubspec.yaml, .NET project files, pyproject.toml, requirements.txt, Pipfile, Cargo.toml, build.gradle, Package.swift, Xcode projects and Podfile."
           action={
             <Button
               variant="outline"
@@ -948,7 +949,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
                             updating={updateMutation.isPending}
                             onToggle={() => toggle(key)}
                             onUpdate={() => runUpdates(section, [pkg])}
-                            alerts={alertsByName.get(pkg.name.toLowerCase())}
+                            alerts={alertsByName.get(packageRowKey(pkg.name, section.manager))}
                           />
                         );
                       })}

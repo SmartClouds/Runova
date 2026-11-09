@@ -89,6 +89,29 @@ const RUNTIME_SOURCES: Record<
   'global-json': { ecosystem: 'dotnet', file: /^global\.json$/i, kinds: ['dotnet'] },
   'pubspec-sdk': { ecosystem: 'dart', file: /^pubspec\.yaml$/, kinds: ['dart'] },
   'pubspec-flutter': { ecosystem: 'dart', file: /^pubspec\.yaml$/, kinds: ['flutter'] },
+  'requires-python': { ecosystem: 'python', file: /^pyproject\.toml$/, kinds: ['python'] },
+  'poetry-python': { ecosystem: 'python', file: /^pyproject\.toml$/, kinds: ['python'] },
+  'pipfile-python': { ecosystem: 'python', file: /^Pipfile$/, kinds: ['python'] },
+  'python-version-file': { ecosystem: 'python', file: /^\.python-version$/, kinds: ['python'] },
+  'rust-version': { ecosystem: 'rust', file: /^Cargo\.toml$/, kinds: ['rust'] },
+  'rust-toolchain': { ecosystem: 'rust', file: /^rust-toolchain(?:\.toml)?$/, kinds: ['rust'] },
+  'gradle-wrapper': {
+    ecosystem: 'kotlin',
+    file: /^gradle-wrapper\.properties$/,
+    kinds: ['gradle'],
+  },
+  'android-compile-sdk': {
+    ecosystem: 'kotlin',
+    file: /^build\.gradle(?:\.kts)?$/,
+    kinds: ['android'],
+  },
+  'android-target-sdk': {
+    ecosystem: 'kotlin',
+    file: /^build\.gradle(?:\.kts)?$/,
+    kinds: ['android'],
+  },
+  'swift-tools': { ecosystem: 'swift', file: /^Package\.swift$/, kinds: ['swift'] },
+  'swift-language': { ecosystem: 'swift', file: /^project\.pbxproj$/, kinds: ['swift'] },
 };
 
 /** Same idea as {@link rejectUnsafeUpdate}: the request may only touch the file the list named. */

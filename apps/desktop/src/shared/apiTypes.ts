@@ -2125,6 +2125,7 @@ export type PackageManagerKind =
   | 'pip'
   | 'uv'
   | 'poetry'
+  | 'pipenv'
   | 'cargo'
   | 'gradle'
   | 'spm'
@@ -2146,7 +2147,20 @@ export interface PackageInfo {
 }
 
 /** The runtime or framework a project target names. */
-export type RuntimeKind = 'bun' | 'node' | 'pnpm' | 'npm' | 'yarn' | 'dotnet' | 'dart' | 'flutter';
+export type RuntimeKind =
+  | 'bun'
+  | 'node'
+  | 'pnpm'
+  | 'npm'
+  | 'yarn'
+  | 'dotnet'
+  | 'dart'
+  | 'flutter'
+  | 'python'
+  | 'rust'
+  | 'gradle'
+  | 'android'
+  | 'swift';
 
 /** Where in the project a runtime target is written. */
 export type RuntimeSource =
@@ -2161,7 +2175,29 @@ export type RuntimeSource =
   /** pubspec.yaml `environment.sdk`. */
   | 'pubspec-sdk'
   /** pubspec.yaml `environment.flutter`. */
-  | 'pubspec-flutter';
+  | 'pubspec-flutter'
+  /** pyproject.toml `project.requires-python`. */
+  | 'requires-python'
+  /** pyproject.toml `tool.poetry.dependencies.python`. */
+  | 'poetry-python'
+  /** Pipfile `requires.python_version`. */
+  | 'pipfile-python'
+  /** A `.python-version` file. */
+  | 'python-version-file'
+  /** Cargo.toml `rust-version`. */
+  | 'rust-version'
+  /** A pinned `rust-toolchain` or `rust-toolchain.toml`. */
+  | 'rust-toolchain'
+  /** The distribution in gradle-wrapper.properties. */
+  | 'gradle-wrapper'
+  /** `compileSdk` in a Gradle build script. */
+  | 'android-compile-sdk'
+  /** `targetSdk` in a Gradle build script. */
+  | 'android-target-sdk'
+  /** The `swift-tools-version` line of Package.swift. */
+  | 'swift-tools'
+  /** `SWIFT_VERSION` in an Xcode project. */
+  | 'swift-language';
 
 export interface RuntimeTarget {
   kind: RuntimeKind;

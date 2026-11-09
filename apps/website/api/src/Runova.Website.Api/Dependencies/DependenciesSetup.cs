@@ -21,9 +21,24 @@ internal static class DependenciesSetup
         services.AddHttpClient<NuGetRegistryClient>((provider, http) => Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.NuGet))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Brotli });
         services.AddHttpClient<OsvClient>((provider, http) => Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.Osv));
+        services.AddHttpClient<PyPiRegistryClient>((provider, http) => Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.PyPi));
+        services.AddHttpClient<CratesRegistryClient>((provider, http) => Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.Crates));
+        // Maven's client picks one of two fixed repositories per package.
+        services.AddHttpClient<MavenRegistryClient>(http => Configure(http, null));
+        services.AddHttpClient<SwiftRegistryClient>((provider, http) =>
+        {
+            Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.GitHub);
+            http.MaxResponseContentBufferSize = SwiftRegistryClient.MaxAnswerBytes;
+        });
+        services.AddHttpClient<CocoaPodsRegistryClient>((provider, http) => Configure(http, provider.GetRequiredService<IOptions<PackageRegistryOptions>>().Value.CocoaPods));
         services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<NpmRegistryClient>());
         services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<NuGetRegistryClient>());
         services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<PubRegistryClient>());
+        services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<PyPiRegistryClient>());
+        services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<CratesRegistryClient>());
+        services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<MavenRegistryClient>());
+        services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<SwiftRegistryClient>());
+        services.AddTransient<IPackageRegistry>(provider => provider.GetRequiredService<CocoaPodsRegistryClient>());
         services.AddHttpClient<TelegramBotClient>(http => http.Timeout = TimeSpan.FromSeconds(60))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
@@ -42,7 +57,7 @@ internal static class DependenciesSetup
         return services;
     }
 
-    private static void Configure(HttpClient http, Uri baseAddress)
+    private static void Configure(HttpClient http, Uri? baseAddress)
     {
         http.BaseAddress = baseAddress;
         http.Timeout = _registryTimeout;

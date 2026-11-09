@@ -6,6 +6,8 @@ import type {
   PackageManagerSection,
   PackageUpdateItemResult,
   PackageUpdateRequest,
+  RuntimeUpdateRequest,
+  RuntimeUpdateResult,
 } from '../../shared/apiTypes';
 import {
   applyEdits,
@@ -13,8 +15,8 @@ import {
   fetchText,
   findManifests,
   HostHealth,
+  inventoryOf,
   missingFromManifest,
-  noRuntimeUpdates,
   type PackageRow,
   projectLabel,
   readFileSafe,
@@ -24,6 +26,14 @@ import {
   writeManifest,
 } from './adapterKit';
 import { CliNotFoundError, runCli } from './execUtils';
+import { runtimeFeeds } from './runtimeFeeds';
+import { samePrecision } from './runtimeTargets';
+import {
+  applyRuntimeUpdate,
+  type RuntimeCandidate,
+  type RuntimeUpdateDeps,
+  runtimeCandidate,
+} from './runtimeUpdate';
 import type { PackageManagerAdapter } from './types';
 import { compareLoose, isBehind, pickLatest, withPrecisionOf } from './versionText';
 
@@ -196,6 +206,16 @@ async function latestTag(
   return pickLatest([...tags], current);
 }
 
+/** `github.com/owner/repo`, the form the advisory database names a Swift package by. */
+function repositoryAddress(url: string): string | null {
+  return (
+    httpsRepository(url)
+      ?.replace(/^https:\/\//i, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/i, '') ?? null
+  );
+}
+
 /** A lock that fell behind a newer manifest says less than the manifest does. */
 function currentOf(
   locked: string | null,
@@ -237,6 +257,13 @@ async function scanSwiftManifest(
         projectLabel: label,
         lookup: dep.movable ? () => latestTag(repository, current.version, health) : null,
         behind: (latest: string) => isBehind(locked, dep.version, latest),
+        inventory: repositoryAddress(repository)
+          ? {
+              ecosystem: 'swift' as const,
+              name: repositoryAddress(repository) as string,
+              version: current.version,
+            }
+          : undefined,
       } satisfies PackageRow,
     ];
   });
@@ -339,8 +366,81 @@ async function scanPodfile(
       projectLabel: label,
       lookup: current ? () => latestPod(pod.name, current.version, health) : null,
       behind: (latest: string) => isBehind(lockedVersion, lower, latest),
+      inventory: current
+        ? { ecosystem: 'pods' as const, name: podRoot(pod.name), version: current.version }
+        : undefined,
     };
   });
+}
+
+// --- Swift versions ----------------------------------------------------------
+
+const TOOLS_VERSION = /^\s*\/\/\s*swift-tools-version\s*:\s*(\d+(?:\.\d+){1,2})/;
+const LANGUAGE_VERSION = /\bSWIFT_VERSION = "?(\d+(?:\.\d+)?)"?;/;
+
+async function candidatesInFile(
+  path: string,
+  source: string,
+  label: string,
+): Promise<RuntimeCandidate[]> {
+  const common = {
+    kind: 'swift' as const,
+    requires: null,
+    manifestPath: path,
+    projectLabel: label,
+  };
+  if (basename(path) === 'Package.swift') {
+    const declared = TOOLS_VERSION.exec(source)?.[1];
+    if (!declared) return [];
+    return [
+      runtimeCandidate({
+        ...common,
+        source: 'swift-tools',
+        declared,
+        currentVersion: declared,
+        latestVersion: await runtimeFeeds.swift(),
+        next: (latest) => samePrecision(latest, declared),
+        rewrite: (text, value) => {
+          const match = TOOLS_VERSION.exec(text);
+          if (!match) return null;
+          const end = match[0].length;
+          return text.slice(0, end - match[1].length) + value + text.slice(end);
+        },
+      }),
+    ];
+  }
+  const declared = LANGUAGE_VERSION.exec(source)?.[1];
+  if (!declared) return [];
+  const newest = await runtimeFeeds.swift();
+  return [
+    runtimeCandidate({
+      ...common,
+      source: 'swift-language',
+      declared,
+      currentVersion: declared,
+      // A language mode is a major version: there has never been a Swift 6.2 mode.
+      latestVersion: newest ? `${newest.split('.')[0]}.0` : null,
+      next: null,
+      rewrite: () => null,
+    }),
+  ];
+}
+
+function swiftLabel(root: string, manifestPath: string): string {
+  const folder = dirname(manifestPath);
+  return basename(manifestPath) === 'Package.swift'
+    ? projectLabel(root, folder)
+    : basename(folder).replace(/\.xcodeproj$/, '');
+}
+
+async function swiftRuntimes(root: string, manifests: string[]): Promise<RuntimeCandidate[]> {
+  const found = await Promise.all(
+    manifests.map(async (path) => {
+      const source = await readFileSafe(path);
+      return source === null ? [] : candidatesInFile(path, source, swiftLabel(root, path));
+    }),
+  );
+  return found.flat();
 }
 
 // --- Listing -----------------------------------------------------------------
@@ -348,9 +448,10 @@ async function scanPodfile(
 async function section(
   manager: Extract<PackageManagerKind, 'spm' | 'cocoapods'>,
   rows: PackageRow[],
+  runtimes: RuntimeCandidate[],
   health: HostHealth,
 ): Promise<PackageManagerSection[]> {
-  if (rows.length === 0) return [];
+  if (rows.length === 0 && runtimes.length === 0) return [];
   const { packages, unresolved } = await checkPackages(rows);
   return [
     {
@@ -359,7 +460,7 @@ async function section(
       status: 'ok',
       message: unresolvedNote(unresolved, health),
       packages,
-      runtimes: [],
+      runtimes: runtimes.map((one) => one.target),
       toolchain: null,
     },
   ];
@@ -368,17 +469,21 @@ async function section(
 async function listPackages(folderPath: string): Promise<PackageManagerSection[]> {
   const manifests = await findManifests(folderPath, isManifest);
   const health = new HostHealth();
+  const swiftManifests = manifests.filter((path) => !isPodfile(path));
   const swift = await Promise.all(
-    manifests
-      .filter((path) => !isPodfile(path))
-      .map((path) => scanSwiftManifest(folderPath, path, health)),
+    swiftManifests.map((path) => scanSwiftManifest(folderPath, path, health)),
   );
   const pods = await Promise.all(
     manifests.filter(isPodfile).map((path) => scanPodfile(folderPath, path, health)),
   );
   return [
-    ...(await section('spm', swift.flat(), health)),
-    ...(await section('cocoapods', pods.flat(), health)),
+    ...(await section(
+      'spm',
+      swift.flat(),
+      await swiftRuntimes(folderPath, swiftManifests),
+      health,
+    )),
+    ...(await section('cocoapods', pods.flat(), [], health)),
   ];
 }
 
@@ -494,8 +599,18 @@ export const swiftAdapter: PackageManagerAdapter = {
   async detect(folderPath) {
     return (await findManifests(folderPath, isManifest)).length > 0;
   },
-  // Dependency alerts are checked on the server, which does not know these registries yet.
-  readInventory: async () => [],
+  async readInventory(folderPath) {
+    const manifests = await findManifests(folderPath, isManifest);
+    const health = new HostHealth();
+    const rows = await Promise.all(
+      manifests.map((path) =>
+        isPodfile(path)
+          ? scanPodfile(folderPath, path, health)
+          : scanSwiftManifest(folderPath, path, health),
+      ),
+    );
+    return inventoryOf(rows.flat());
+  },
   listPackages,
   updatePackages(_folderPath, updates, onProgress) {
     return updateByManifest(updates, onProgress, (manifestPath, group) =>
@@ -504,5 +619,17 @@ export const swiftAdapter: PackageManagerAdapter = {
         : updateSwiftManifest(manifestPath, group),
     );
   },
-  updateRuntime: noRuntimeUpdates,
+  async updateRuntime(
+    _folderPath: string,
+    request: RuntimeUpdateRequest,
+    deps: RuntimeUpdateDeps,
+  ): Promise<RuntimeUpdateResult> {
+    const source = await readFileSafe(request.manifestPath);
+    if (source === null) return { ok: false, message: `Failed to read ${request.manifestPath}.` };
+    return applyRuntimeUpdate(
+      request,
+      await candidatesInFile(request.manifestPath, source, ''),
+      deps,
+    );
+  },
 };

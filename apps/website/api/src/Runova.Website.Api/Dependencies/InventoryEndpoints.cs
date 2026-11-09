@@ -39,7 +39,7 @@ internal static partial class InventoryEndpoints
     private static partial Regex ItemId();
 
     // npm (@scope/name), NuGet (Dotted.Names) and pub (snake_case) names.
-    [GeneratedRegex("^[A-Za-z0-9@][A-Za-z0-9@/._~-]{0,213}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^[A-Za-z0-9@][A-Za-z0-9@/._~:-]{0,213}$", RegexOptions.CultureInvariant)]
     private static partial Regex PackageName();
 
     public static RouteGroupBuilder MapPackageInventories(this RouteGroupBuilder api)
@@ -99,12 +99,12 @@ internal static partial class InventoryEndpoints
             var p = packages[i];
             if (p.Ecosystem is null || !Ecosystems.All.Contains(p.Ecosystem))
             {
-                errors[$"packages[{i}].ecosystem"] = ["The ecosystem is npm, nuget or pub."];
+                errors[$"packages[{i}].ecosystem"] = [$"The ecosystem is one of {string.Join(", ", Ecosystems.All)}."];
             }
 
             if (p.Name is null || !PackageName().IsMatch(p.Name))
             {
-                errors[$"packages[{i}].name"] = ["A package name is 1 to 214 letters, digits and @ / . _ ~ -."];
+                errors[$"packages[{i}].name"] = ["A package name is 1 to 214 letters, digits and @ / . _ ~ : -."];
             }
 
             if (string.IsNullOrWhiteSpace(p.Version) || p.Version.Length > 100 || p.Version.Any(char.IsControl))

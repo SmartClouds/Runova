@@ -1,13 +1,34 @@
+using System.Text.RegularExpressions;
+
 namespace Runova.Website.Core.Dependencies;
 
 /// <summary>The package registries a project inventory can name.</summary>
-public static class Ecosystems
+public static partial class Ecosystems
 {
     public const string Npm = "npm";
     public const string NuGet = "nuget";
     public const string Pub = "pub";
+    public const string PyPi = "pypi";
+    public const string Crates = "crates";
+    public const string Maven = "maven";
+    public const string Swift = "swift";
+    public const string CocoaPods = "pods";
 
-    public static readonly IReadOnlyList<string> All = [Npm, NuGet, Pub];
+    public static readonly IReadOnlyList<string> All = [Npm, NuGet, Pub, PyPi, Crates, Maven, Swift, CocoaPods];
+
+    /// <summary>False where OSV has no advisory database to ask.</summary>
+    public static bool HasAdvisories(string ecosystem) => ecosystem != CocoaPods;
+
+    [GeneratedRegex("[-_.]+", RegexOptions.CultureInvariant)]
+    private static partial Regex PyPiSeparators();
+
+    /// <summary>The name a package is known by. NuGet ignores case and PyPI also treats <c>-_.</c> as one.</summary>
+    public static string PackageKey(string ecosystem, string name) => ecosystem switch
+    {
+        NuGet => name.ToLowerInvariant(),
+        PyPi => PyPiSeparators().Replace(name.ToLowerInvariant(), "-"),
+        _ => name,
+    };
 
     /// <summary>The name OSV gives the ecosystem.</summary>
     public static string OsvName(string ecosystem) => ecosystem switch
@@ -15,6 +36,10 @@ public static class Ecosystems
         Npm => "npm",
         NuGet => "NuGet",
         Pub => "Pub",
+        PyPi => "PyPI",
+        Crates => "crates.io",
+        Maven => "Maven",
+        Swift => "SwiftURL",
         _ => throw new ArgumentOutOfRangeException(nameof(ecosystem), ecosystem, "Not a known ecosystem."),
     };
 }

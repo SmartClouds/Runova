@@ -84,6 +84,22 @@ public sealed class InventoryTests : IDisposable
     }
 
     [Theory]
+    [InlineData("pypi", "Django")]
+    [InlineData("crates", "serde_json")]
+    [InlineData("maven", "androidx.core:core-ktx")]
+    [InlineData("swift", "github.com/Alamofire/Alamofire")]
+    [InlineData("pods", "Firebase")]
+    public async Task A_package_of_each_newer_ecosystem_is_accepted(string ecosystem, string name)
+    {
+        var (_, client) = await AccountAsync(_factory);
+        var scope = await PersonalScopeAsync(client);
+
+        var response = await UploadAsync(client, scope, "p-shop", Inventory("Shop", Package(name, "1.0.0", ecosystem)));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Theory]
     [InlineData("cargo", "serde", "1.0.0", "packages[0].ecosystem")]
     [InlineData("npm", "", "1.0.0", "packages[0].name")]
     [InlineData("npm", "lodash", "", "packages[0].version")]

@@ -3,7 +3,15 @@
  * sends back about them. Only ecosystem, name and version leave the computer, never a path.
  */
 
-export type InventoryEcosystem = 'npm' | 'nuget' | 'pub';
+export type InventoryEcosystem =
+  | 'npm'
+  | 'nuget'
+  | 'pub'
+  | 'pypi'
+  | 'crates'
+  | 'maven'
+  | 'swift'
+  | 'pods';
 
 export interface InventoryPackage {
   ecosystem: InventoryEcosystem;
@@ -48,6 +56,18 @@ export function tidyInventory(packages: InventoryPackage[]): InventoryPackage[] 
       a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }) ||
       a.ecosystem.localeCompare(b.ecosystem),
   );
+}
+
+/** What a finding is looked up by in the Packages tab. A Swift package goes up by its address. */
+export function findingRowKey(finding: Pick<DependencyFinding, 'ecosystem' | 'name'>): string {
+  const name =
+    finding.ecosystem === 'swift' ? (finding.name.split('/').at(-1) ?? '') : finding.name;
+  return name.toLowerCase();
+}
+
+/** The same key for a row of the tab. A pod's subspecs all answer to the pod they are part of. */
+export function packageRowKey(name: string, manager: string): string {
+  return (manager === 'cocoapods' ? name.split('/')[0] : name).toLowerCase();
 }
 
 export type FindingKind = 'security' | 'deprecated' | 'major' | 'minor' | 'patch';

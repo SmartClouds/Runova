@@ -66,6 +66,48 @@ describe('the update prompt for the newer ecosystems', () => {
   });
 });
 
+describe('runtime rows of the newer ecosystems', () => {
+  it.each([
+    ['python', 'requires-python', 'Python (requires-python)'],
+    ['python', 'poetry-python', 'Python (Poetry)'],
+    ['python', 'pipfile-python', 'Python (Pipfile)'],
+    ['python', 'python-version-file', 'Python (.python-version)'],
+    ['rust', 'rust-version', 'Rust (rust-version)'],
+    ['rust', 'rust-toolchain', 'Rust toolchain'],
+    ['gradle', 'gradle-wrapper', 'Gradle wrapper'],
+    ['android', 'android-compile-sdk', 'Android compileSdk'],
+    ['android', 'android-target-sdk', 'Android targetSdk'],
+    ['swift', 'swift-tools', 'Swift tools version'],
+    ['swift', 'swift-language', 'Swift language version'],
+  ] as const)('names a %s %s row', (kind, source, label) => {
+    expect(runtimeLabel(runtime({ kind, source }))).toBe(label);
+  });
+
+  it.each([
+    ['python', 'requires-python', 'lock file'],
+    ['rust', 'rust-version', 'cargo check'],
+    ['gradle', 'gradle-wrapper', 'Android Gradle Plugin'],
+    ['android', 'android-target-sdk', 'behavior changes'],
+    ['swift', 'swift-tools', 'language mode'],
+  ] as const)('warns the agent about what moving %s involves', (kind, source, hint) => {
+    const prompt = buildPackageUpdatePrompt(
+      section({ runtimes: [runtime({ kind, source })], toolchain: null }),
+      [],
+    );
+
+    expect(prompt).toContain(hint);
+  });
+
+  it('asks Pipenv for Pipfile projects', () => {
+    const prompt = buildPackageUpdatePrompt(
+      section({ ecosystem: 'python', manager: 'pipenv', runtimes: [], toolchain: null }),
+      [pkg()],
+    );
+
+    expect(prompt).toContain('pipenv install');
+  });
+});
+
 describe('runtimeLabel', () => {
   it('names each kind of runtime setting', () => {
     expect(runtimeLabel(runtime())).toBe('Dart SDK');

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { baseVersion, tidyInventory } from './dependencyAlerts';
+import {
+  baseVersion,
+  type DependencyFinding,
+  findingRowKey,
+  type InventoryEcosystem,
+  packageRowKey,
+  tidyInventory,
+} from './dependencyAlerts';
 
 describe('baseVersion', () => {
   it.each([
@@ -31,6 +38,40 @@ describe('baseVersion', () => {
     undefined,
   ])('refuses %s', (text) => {
     expect(baseVersion(text)).toBeNull();
+  });
+});
+
+describe('matching a finding to its row in the Packages tab', () => {
+  function finding(ecosystem: InventoryEcosystem, name: string): DependencyFinding {
+    return {
+      ecosystem,
+      name,
+      kind: 'major',
+      currentVersion: '1.0.0',
+      targetVersion: '2.0.0',
+      advisoryId: null,
+      severity: null,
+      summary: null,
+      firstSeenAt: '2026-11-09T00:00:00Z',
+    };
+  }
+
+  it('matches a Swift package uploaded by address to the row named after its repository', () => {
+    expect(findingRowKey(finding('swift', 'github.com/Alamofire/Alamofire'))).toBe(
+      packageRowKey('Alamofire', 'spm'),
+    );
+  });
+
+  it('matches a pod uploaded by its root to the row of any of its subspecs', () => {
+    expect(findingRowKey(finding('pods', 'Firebase'))).toBe(
+      packageRowKey('Firebase/Analytics', 'cocoapods'),
+    );
+  });
+
+  it('keeps full names everywhere else, without case', () => {
+    expect(findingRowKey(finding('nuget', 'Serilog'))).toBe(packageRowKey('serilog', 'nuget'));
+    expect(findingRowKey(finding('npm', '@scope/pkg'))).toBe(packageRowKey('@scope/pkg', 'npm'));
+    expect(findingRowKey(finding('maven', 'a.b:c'))).toBe(packageRowKey('a.b:c', 'gradle'));
   });
 });
 

@@ -1,4 +1,11 @@
-import { type DevArch, type DevOs, flutterManifestUrl, pickFlutterRelease } from '@runova/core';
+import {
+  ANDROID_REPOSITORY_MANIFEST_URL,
+  compareVersions,
+  type DevArch,
+  type DevOs,
+  flutterManifestUrl,
+  pickFlutterRelease,
+} from '@runova/core';
 
 /**
  * Where the newest version of each runtime comes from. Every feed is a small public JSON file,
@@ -16,8 +23,13 @@ const DOTNET_INDEX_URL =
   'https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json';
 const DART_STABLE_URL =
   'https://storage.googleapis.com/dart-archive/channels/stable/release/latest/VERSION';
+const PYTHON_RELEASES_URL = 'https://endoflife.date/api/python.json';
+const RUST_RELEASES_URL = 'https://endoflife.date/api/rust.json';
+const GRADLE_CURRENT_URL = 'https://services.gradle.org/versions/current';
+const SWIFT_RELEASES_URL = 'https://www.swift.org/api/v1/install/releases.json';
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
+const RELEASE = /^\d+(?:\.\d+){1,2}$/;
 
 export interface DotnetChannel {
   /** The channel as a target framework names it, e.g. `10.0`. */
@@ -74,6 +86,44 @@ export function parseDotnetIndex(data: unknown): DotnetChannel | null {
 export function parseDartVersion(data: unknown): string | null {
   if (!isRecord(data) || typeof data.version !== 'string') return null;
   return SEMVER.test(data.version) ? data.version : null;
+}
+
+function newest(versions: unknown[]): string | null {
+  const releases = versions.filter(
+    (version): version is string => typeof version === 'string' && RELEASE.test(version),
+  );
+  return releases.sort(compareVersions).at(-1) ?? null;
+}
+
+/** An endoflife.date product list: one entry per release line, each with its `latest`. */
+export function parseEndOfLife(data: unknown): string | null {
+  if (!Array.isArray(data)) return null;
+  return newest(data.map((entry) => (isRecord(entry) ? entry.latest : null)));
+}
+
+/** Gradle's `versions/current`. Only a final release counts. */
+export function parseGradleCurrent(data: unknown): string | null {
+  if (!isRecord(data) || data.snapshot === true || data.nightly === true) return null;
+  return newest([data.version]);
+}
+
+/** swift.org's release list, oldest first. */
+export function parseSwiftReleases(data: unknown): string | null {
+  if (!Array.isArray(data)) return null;
+  return newest(data.map((entry) => (isRecord(entry) ? entry.name : null)));
+}
+
+/** The newest API level with a platform on Google's stable channel. */
+export function parseAndroidApi(xml: string): string | null {
+  let best: number | null = null;
+  for (const match of xml.matchAll(
+    /<remotePackage path="platforms;android-(\d+)(?:\.\d+)?">[\s\S]*?<channelRef ref="channel-(\d+)"\/>/g,
+  )) {
+    if (match[2] !== '0') continue;
+    const level = Number(match[1]);
+    if (best === null || level > best) best = level;
+  }
+  return best === null ? null : String(best);
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -134,6 +184,21 @@ export const runtimeFeeds = {
   dotnet: () =>
     remembered('dotnet', async () => parseDotnetIndex(await fetchJson(DOTNET_INDEX_URL))),
   dart: () => remembered('dart', async () => parseDartVersion(await fetchJson(DART_STABLE_URL))),
+  python: () =>
+    remembered('python', async () => parseEndOfLife(await fetchJson(PYTHON_RELEASES_URL))),
+  rust: () => remembered('rust', async () => parseEndOfLife(await fetchJson(RUST_RELEASES_URL))),
+  gradle: () =>
+    remembered('gradle', async () => parseGradleCurrent(await fetchJson(GRADLE_CURRENT_URL))),
+  swift: () =>
+    remembered('swift', async () => parseSwiftReleases(await fetchJson(SWIFT_RELEASES_URL))),
+  androidApi: () =>
+    remembered('android', async () => {
+      const res = await fetch(ANDROID_REPOSITORY_MANIFEST_URL, {
+        signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`Android repository returned ${res.status}`);
+      return parseAndroidApi(await res.text());
+    }),
   flutter: () =>
     remembered<FlutterStable>('flutter', async () => {
       const os = currentOs();

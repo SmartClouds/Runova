@@ -199,6 +199,46 @@ describe('packages:updateRuntime', () => {
     expect(state.nodeRuntime).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['python', 'requires-python', 'python', 'pyproject.toml'],
+    ['python', 'poetry-python', 'python', 'pyproject.toml'],
+    ['python', 'pipfile-python', 'python', 'Pipfile'],
+    ['python', 'python-version-file', 'python', '.python-version'],
+    ['rust', 'rust-version', 'rust', 'Cargo.toml'],
+    ['rust', 'rust-toolchain', 'rust', 'rust-toolchain.toml'],
+    ['rust', 'rust-toolchain', 'rust', 'rust-toolchain'],
+    ['kotlin', 'gradle-wrapper', 'gradle', 'gradle-wrapper.properties'],
+    ['kotlin', 'android-compile-sdk', 'android', 'build.gradle.kts'],
+    ['kotlin', 'android-target-sdk', 'android', 'build.gradle'],
+    ['swift', 'swift-tools', 'swift', 'Package.swift'],
+  ] as const)('accepts %s %s in %s %s', async (ecosystem, source, kind, file) => {
+    const { rejectUnsafeRuntimeUpdate } = await import('./packageManagers');
+
+    expect(
+      rejectUnsafeRuntimeUpdate(
+        { ecosystem, source, kind, manifestPath: join(ROOT, file), targetVersion: '1.2.3' },
+        ROOT,
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['python', 'requires-python', 'python', 'setup.py'],
+    ['rust', 'rust-version', 'rust', 'package.json'],
+    ['kotlin', 'gradle-wrapper', 'gradle', 'build.gradle'],
+    ['kotlin', 'android-compile-sdk', 'android', 'settings.gradle'],
+    ['swift', 'swift-tools', 'swift', 'Podfile'],
+  ] as const)('refuses %s %s named on %s %s', async (ecosystem, source, kind, file) => {
+    const { rejectUnsafeRuntimeUpdate } = await import('./packageManagers');
+
+    expect(
+      rejectUnsafeRuntimeUpdate(
+        { ecosystem, source, kind, manifestPath: join(ROOT, file), targetVersion: '1.2.3' },
+        ROOT,
+      ),
+    ).toMatch(/is not where that setting is kept/);
+  });
+
   it('accepts each file a .NET target framework can live in', async () => {
     const { rejectUnsafeRuntimeUpdate } = await import('./packageManagers');
     const dotnet = (file: string, source: 'target-framework' | 'global-json') =>

@@ -73,6 +73,16 @@ export function pickLatest(versions: string[], current: string): string | null {
   return best;
 }
 
+/**
+ * The version without a flavor like `-android` or `.Final`, for places that compare one number per
+ * package. A pre-release tag is not a flavor and stays.
+ */
+export function withoutFlavor(version: string): string {
+  const parsed = parts(version);
+  if (!parsed || parsed.suffix === '' || suffixIsPrerelease(parsed.suffix)) return version;
+  return parsed.core.join('.');
+}
+
 /** `target` written with as many parts as `declared` has, so `"1"` stays a one-part requirement. */
 export function withPrecisionOf(target: string, declared: string): string {
   const parsedTarget = parts(target);

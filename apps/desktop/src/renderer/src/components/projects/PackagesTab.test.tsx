@@ -95,6 +95,7 @@ describe('PackagesTab', () => {
     ['python', 'pip', 'PyPI (pip)'],
     ['python', 'uv', 'PyPI (uv)'],
     ['python', 'poetry', 'PyPI (Poetry)'],
+    ['python', 'pipenv', 'PyPI (Pipenv)'],
     ['rust', 'cargo', 'Cargo (Rust)'],
     ['kotlin', 'gradle', 'Gradle (Kotlin / Android)'],
     ['swift', 'spm', 'Swift Package Manager (iOS)'],
@@ -121,6 +122,7 @@ describe('PackagesTab', () => {
     for (const manifest of [
       'pyproject.toml',
       'requirements.txt',
+      'Pipfile',
       'Cargo.toml',
       'build.gradle',
       'Package.swift',

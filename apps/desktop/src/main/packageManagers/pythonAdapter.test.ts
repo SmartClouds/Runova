@@ -108,7 +108,7 @@ gitpkg @ git+https://example.com/x.git
 
     const [section] = await pythonAdapter.listPackages(root);
 
-    expect(section).toMatchObject({ ecosystem: 'python', manager: 'pip', toolchain: 'python' });
+    expect(section).toMatchObject({ ecosystem: 'python', manager: 'pip', toolchain: null });
     expect(
       section.packages.map((p) => [p.name, p.currentVersion, p.latestVersion, p.isOutdated]),
     ).toEqual([
@@ -447,12 +447,5 @@ pytest = "^8.0"
       ['poetry', 'add', 'rich[jupyter]@^13.9'],
       ['poetry', 'add', '--group', 'test', 'pytest@^8.3'],
     ]);
-  });
-});
-
-describe('inventory and runtimes', () => {
-  it('sends nothing to dependency alerts yet', async () => {
-    writeTree(root, { 'requirements.txt': 'a==1.0\n' });
-    await expect(pythonAdapter.readInventory(root)).resolves.toEqual([]);
   });
 });

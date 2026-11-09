@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearRuntimeFeedCache,
   fetchLatestFromRegistry,
+  parseAndroidApi,
   parseDartVersion,
   parseDotnetIndex,
+  parseEndOfLife,
+  parseGradleCurrent,
   parseNodeIndex,
+  parseSwiftReleases,
   runtimeFeeds,
 } from './runtimeFeeds';
 
@@ -30,6 +34,51 @@ const DOTNET_INDEX = {
 };
 
 describe('parsers', () => {
+  it('takes the newest release from an endoflife.date list, whatever its order', () => {
+    expect(
+      parseEndOfLife([
+        { cycle: '3.13', latest: '3.13.18' },
+        { cycle: '3.15', latest: '3.15.2' },
+        { cycle: '3.14', latest: '3.14.10' },
+      ]),
+    ).toBe('3.15.2');
+    expect(parseEndOfLife([{ cycle: 'x', latest: 'soon' }])).toBeNull();
+    expect(parseEndOfLife({})).toBeNull();
+  });
+
+  it('takes the current Gradle unless it is a snapshot or release candidate', () => {
+    expect(parseGradleCurrent({ version: '9.9.0', snapshot: false, activeRc: false })).toBe(
+      '9.9.0',
+    );
+    expect(parseGradleCurrent({ version: '9.9.0-rc-1' })).toBeNull();
+    expect(parseGradleCurrent({ version: '9.9.0', snapshot: true })).toBeNull();
+    expect(parseGradleCurrent(null)).toBeNull();
+  });
+
+  it('takes the newest released Swift by number, not by place in the list', () => {
+    expect(
+      parseSwiftReleases([
+        { name: '5.10' },
+        { name: '6.2.1' },
+        { name: '6.2' },
+        { name: 'nightly' },
+      ]),
+    ).toBe('6.2.1');
+    expect(parseSwiftReleases('x')).toBeNull();
+  });
+
+  it('takes the newest stable Android API level and skips preview channels', () => {
+    const xml = `
+<remotePackage path="platforms;android-36"><channelRef ref="channel-0"/></remotePackage>
+<remotePackage path="platforms;android-37.2"><channelRef ref="channel-0"/></remotePackage>
+<remotePackage path="platforms;android-38"><channelRef ref="channel-2"/></remotePackage>
+<remotePackage path="platforms;android-CANARY"><channelRef ref="channel-0"/></remotePackage>
+<remotePackage path="build-tools;99.0.0"><channelRef ref="channel-0"/></remotePackage>`;
+
+    expect(parseAndroidApi(xml)).toBe('37');
+    expect(parseAndroidApi('<nothing/>')).toBeNull();
+  });
+
   it('picks the newest LTS line of Node.js, not the newest release', () => {
     expect(parseNodeIndex(NODE_INDEX)).toBe('24.11.1');
     expect(parseNodeIndex([{ version: 'v25.0.0', lts: false }])).toBeNull();

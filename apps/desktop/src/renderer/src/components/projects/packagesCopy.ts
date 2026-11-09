@@ -47,6 +47,9 @@ function installHint(section: PackageManagerSection): string {
   if (section.manager === 'poetry') {
     return 'poetry add <name>@^<version> (add --group <group> if that is where it is declared)';
   }
+  if (section.manager === 'pipenv') {
+    return 'pipenv install "<name>==<version>" (add --dev for dev packages)';
+  }
   if (section.manager === 'cargo') {
     return 'change the version in Cargo.toml (or [workspace.dependencies]), then cargo update -p <name>';
   }
@@ -74,6 +77,11 @@ const RUNTIME_NAMES: Record<RuntimeTarget['kind'], string> = {
   dotnet: '.NET',
   dart: 'Dart SDK',
   flutter: 'Flutter SDK',
+  python: 'Python',
+  rust: 'Rust',
+  gradle: 'Gradle',
+  android: 'Android SDK',
+  swift: 'Swift',
 };
 
 /** What a runtime row is called: "Dart SDK", ".NET target framework", "Bun (packageManager)". */
@@ -83,6 +91,28 @@ export function runtimeLabel(target: RuntimeTarget): string {
       return '.NET target framework';
     case 'global-json':
       return '.NET SDK (global.json)';
+    case 'requires-python':
+      return 'Python (requires-python)';
+    case 'poetry-python':
+      return 'Python (Poetry)';
+    case 'pipfile-python':
+      return 'Python (Pipfile)';
+    case 'python-version-file':
+      return 'Python (.python-version)';
+    case 'rust-version':
+      return 'Rust (rust-version)';
+    case 'rust-toolchain':
+      return 'Rust toolchain';
+    case 'gradle-wrapper':
+      return 'Gradle wrapper';
+    case 'android-compile-sdk':
+      return 'Android compileSdk';
+    case 'android-target-sdk':
+      return 'Android targetSdk';
+    case 'swift-tools':
+      return 'Swift tools version';
+    case 'swift-language':
+      return 'Swift language version';
     case 'packageManager':
       return `${RUNTIME_NAMES[target.kind]} (packageManager)`;
     case 'engines':
@@ -141,6 +171,29 @@ function runtimeStep(runtimes: RuntimeTarget[]): string {
   if (runtimes.some((t) => t.source === 'packageManager' || t.source === 'engines')) {
     notes.push(
       'for the JavaScript runtime, reinstall so the lockfile is written by the new version',
+    );
+  }
+  if (runtimes.some((t) => t.kind === 'python')) {
+    notes.push(
+      'for Python, refresh the lock file and virtual environment with the new version, and check that a library still supports the versions its users are on',
+    );
+  }
+  if (runtimes.some((t) => t.kind === 'rust')) {
+    notes.push('for Rust, run cargo check and cargo clippy, and fix what the new compiler reports');
+  }
+  if (runtimes.some((t) => t.kind === 'gradle')) {
+    notes.push(
+      'for Gradle, make sure the Android Gradle Plugin and Kotlin plugin in use support the new version, and move them first if not',
+    );
+  }
+  if (runtimes.some((t) => t.kind === 'android')) {
+    notes.push(
+      'for Android, read the behavior changes of each API level in between, and install the new platform',
+    );
+  }
+  if (runtimes.some((t) => t.kind === 'swift')) {
+    notes.push(
+      'for Swift, note that a tools version of 6 or later turns on the Swift 6 language mode, so fix the concurrency errors that brings or keep the older mode explicitly',
     );
   }
   const howTo = notes.length > 0 ? ` In particular, ${notes.join('; ')}.` : '';
