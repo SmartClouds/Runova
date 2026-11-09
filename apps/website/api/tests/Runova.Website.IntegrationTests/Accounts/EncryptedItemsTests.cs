@@ -16,7 +16,7 @@ namespace Runova.Website.IntegrationTests.Accounts;
 /// <summary>Sealing notifications and sync on paid plans, across the real tables and endpoints (E92).</summary>
 public sealed class EncryptedItemsTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private const string Encryption = "/api/v1/accounts/me/encryption";
+    private const string Encryption = "/api/v1/accounts/me/encryption-preferences";
     private const string PhoneKey = "AbCdEfGhIjKl";
 
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);

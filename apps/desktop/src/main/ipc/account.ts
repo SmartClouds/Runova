@@ -37,7 +37,7 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
 
   handle(IPC.account.status, null, () => runtime().status());
   handle(IPC.account.encryption, null, () =>
-    runtime().api<EncryptionStatus>('GET', '/accounts/me/encryption'),
+    runtime().api<EncryptionStatus>('GET', '/accounts/me/encryption-preferences'),
   );
   handle(
     IPC.account.setEncryption,
@@ -45,7 +45,7 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
     async (input: { item: EncryptionItemName; enabled: boolean }) => {
       const status = await runtime().api<EncryptionStatus>(
         'PUT',
-        `/accounts/me/encryption/${input.item}`,
+        `/accounts/me/encryption-preferences/${input.item}`,
         { enabled: input.enabled },
       );
       if (input.item === 'notifications') refreshNotificationForwarding();

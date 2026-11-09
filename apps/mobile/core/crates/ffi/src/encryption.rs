@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
-const ENCRYPTION: &str = "/api/v1/accounts/me/encryption";
+const ENCRYPTION: &str = "/api/v1/accounts/me/encryption-preferences";
 const FOOTNOTE: &str = "Your connection to the server uses TLS either way. Alerts the server writes itself, such as cloud monitors, can't be sealed.";
 
 #[derive(Deserialize)]

@@ -2482,7 +2482,7 @@
         }
       }
     },
-    "/api/v1/accounts/me/encryption": {
+    "/api/v1/accounts/me/encryption-preferences": {
       "get": {
         "tags": [
           "EncryptionEndpoints"
@@ -2501,7 +2501,7 @@
         }
       }
     },
-    "/api/v1/accounts/me/encryption/{item}": {
+    "/api/v1/accounts/me/encryption-preferences/{item}": {
       "put": {
         "tags": [
           "EncryptionEndpoints"

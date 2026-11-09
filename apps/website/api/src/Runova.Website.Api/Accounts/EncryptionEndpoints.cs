@@ -174,7 +174,7 @@ internal static class EncryptionEndpoints
 {
     public static RouteGroupBuilder MapEncryption(this RouteGroupBuilder api)
     {
-        var me = api.MapGroup("/accounts/me/encryption").RequireAuthorization(Policies.Account);
+        var me = api.MapGroup("/accounts/me/encryption-preferences").RequireAuthorization(Policies.Account);
         me.MapGet("", GetAsync);
         me.MapPut("/{item}", SetAsync);
         return api;

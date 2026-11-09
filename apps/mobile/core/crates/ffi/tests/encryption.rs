@@ -8,7 +8,7 @@ use runova_ffi::encryption::{notification_secret, open_sealed_notification};
 use runova_ffi::view::Section;
 use serde_json::{Value, json};
 
-const ENCRYPTION: &str = "/api/v1/accounts/me/encryption";
+const ENCRYPTION: &str = "/api/v1/accounts/me/encryption-preferences";
 const LIST: &str = "/api/v1/notifications?page=1&pageSize=50";
 const PREFERENCES: &str = "/api/v1/accounts/me/notification-preferences";
 
@@ -131,7 +131,7 @@ async fn a_switch_moves_at_once_and_takes_what_the_server_says() {
     let sent = world.backend.sent();
     let (method, _, body) = sent
         .iter()
-        .find(|(_, path, _)| path.ends_with("/encryption/notifications"))
+        .find(|(_, path, _)| path.ends_with("/encryption-preferences/notifications"))
         .expect("the change");
     assert_eq!(method, "PUT");
     assert_eq!(body, &json!({"enabled": true}));

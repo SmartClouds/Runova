@@ -48,7 +48,7 @@ All new JSON is camelCase, and new request records refuse unknown members like t
 
 ### Switches
 
-`GET /api/v1/accounts/me/encryption` (Policies.Account) answers:
+`GET /api/v1/accounts/me/encryption-preferences` (Policies.Account) answers:
 
 ```json
 {
@@ -68,7 +68,7 @@ All new JSON is camelCase, and new request records refuse unknown members like t
 - `lapsed` is `enabled && !entitled`, which is what the clients warn about.
 - `needsKey` is only ever true for `sync`, when the personal sync scope has no key yet.
 
-`PUT /api/v1/accounts/me/encryption/{item}` with `{ "enabled": bool }` answers with the same body.
+`PUT /api/v1/accounts/me/encryption-preferences/{item}` with `{ "enabled": bool }` answers with the same body.
 
 - Unknown item: 404.
 - Turning on without the plan: 403 problem with `extensions.code = "plan-required"` and
