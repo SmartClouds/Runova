@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
+import { commonJsShimPlugin } from './src/main/bundling/commonJsShim';
 
 // electron-vite externalizes dependencies on its own (build.externalizeDeps
 // defaults to true), but that alone has been unreliable at keeping `electron`
@@ -51,6 +52,7 @@ const checks = { pluginTimings: false };
 
 export default defineConfig({
   main: {
+    plugins: [commonJsShimPlugin()],
     resolve: {
       alias: {
         // The package's "module" field points at a file it does not ship.

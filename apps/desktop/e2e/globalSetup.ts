@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FullConfig } from '@playwright/test';
+import { buildOncePerRun, dotnetAvailable } from './devHost';
 import { startWorkerDisplays } from './displays';
 import { APP_ROOT, E2E_BUILD_ENV, E2E_OUT_DIR, MAIN_LOG_DIR } from './paths';
 
@@ -33,6 +34,9 @@ export default async function globalSetup(config: FullConfig): Promise<() => voi
   // Playwright only sweeps its own output folder, so last run's app logs are cleared here.
   rmSync(MAIN_LOG_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   process.env[E2E_BUILD_ENV] = takeBuild(runId);
+  // Built in a worker, the DevHost starves the Electron of every other worker and eats the build's
+  // own spec's hook time: on a busy CI machine it took over seven minutes and failed both.
+  if (config.workers > 1 && dotnetAvailable()) await buildOncePerRun();
   const stopDisplays = await startWorkerDisplays(config.workers);
   // The function returned is Playwright's global teardown. The build stays for the next
   // RUNOVA_E2E_SKIP_BUILD run; only the lease goes.

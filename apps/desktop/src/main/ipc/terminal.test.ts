@@ -168,6 +168,11 @@ vi.mock('../system/processSuspend', () => ({
 const toolDirs = vi.hoisted(() => ({ current: [] as string[] }));
 vi.mock('../toolPaths', () => ({ toolPathCandidates: () => toolDirs.current }));
 
+// Vitest keeps the transformed files between the hooks' imports, so loading them once here moves
+// the cold transform (slow under coverage on the Mac runner's disk) out of the first hook's time
+// limit, as in aiAccess.test.ts.
+await import('./terminal');
+
 const userData = useTempUserData();
 
 // onData and onExit are pushed from main to the renderer, so nothing registers them as handlers.

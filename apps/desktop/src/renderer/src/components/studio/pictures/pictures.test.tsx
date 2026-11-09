@@ -1,8 +1,4 @@
-import type {
-  PicturesView as PicturesViewData,
-  ScenePicture,
-  StudioDocument,
-} from '@runova/studio';
+import type { PicturesView as PicturesViewData, StudioDocument } from '@runova/studio';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
@@ -10,6 +6,7 @@ import { PictureSettingsFields } from '../settings/PictureSettingsFields';
 import { settings, withScenes } from '../testing/fixtures';
 import { PicturesView } from './PicturesView';
 import { StepBar } from './StepBar';
+import { appView, picture, picturesView as view } from './testing/pictureFixtures';
 import { usePictures } from './usePictures';
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
@@ -22,18 +19,6 @@ beforeEach(() => {
   confirm.mockResolvedValue(true);
   toast.success.mockClear();
   toast.error.mockClear();
-});
-
-const picture = (over: Partial<ScenePicture> & Pick<ScenePicture, 'id'>): ScenePicture => ({
-  purpose: 'The settings page, pointing at Save.',
-  source: 'screenshot',
-  status: 'planned',
-  shot: { target: 'route', path: '/settings', viewport: 'desktop' },
-  fileName: `scene-01-${over.id}.png`,
-  mediaHash: null,
-  genJobId: null,
-  error: null,
-  ...over,
 });
 
 function planned(): StudioDocument {
@@ -54,34 +39,12 @@ function planned(): StudioDocument {
   return doc;
 }
 
-function view(over: Partial<PicturesViewData> = {}): PicturesViewData {
-  return {
-    app: {
-      project: {
-        id: 'p1',
-        name: 'Shop',
-        runCommands: [{ id: 'dev', label: 'dev', command: 'npm run dev' }],
-      },
-      runCommandId: 'dev',
-      url: null,
-      status: 'stopped',
-      startedByStudio: false,
-      error: null,
-      output: [],
-    },
-    job: null,
-    engine: 'openai',
-    engineReady: true,
-    engineLabel: 'GPT Image',
-    folder: 'C:\\videos\\shop\\pictures',
-    ...over,
-  };
-}
-
 function Harness(props: {
   document: StudioDocument;
   onPlan?: () => Promise<boolean>;
   onOpenSettings?: (tab: 'agents' | 'ai') => void;
+  busy?: boolean;
+  planning?: boolean;
 }) {
   const pictures = usePictures('v1');
   return (
@@ -90,8 +53,8 @@ function Harness(props: {
       document={props.document}
       apply={vi.fn(async () => true)}
       pictures={pictures}
-      busy={false}
-      planning={false}
+      busy={props.busy ?? false}
+      planning={props.planning ?? false}
       run={{}}
       onRunChange={vi.fn()}
       onPlan={props.onPlan ?? vi.fn(async () => true)}
@@ -233,6 +196,194 @@ describe('PicturesView', () => {
     expect(
       screen.getByRole('button', { name: /Picture scene-01-bad.png: Capturing/ }),
     ).toBeInTheDocument();
+  });
+
+  it('cancels a capture going on', async () => {
+    const { bridge } = renderView(
+      planned(),
+      view({ job: { running: true, done: 0, total: 2, current: null, failed: 0 } }),
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('Capturing 1 of 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(bridge.$fn('studioPictures.cancelCapture')).toHaveBeenCalledWith('v1'),
+    );
+  });
+
+  it('says the app is starting before the first capture', async () => {
+    renderView(
+      planned(),
+      view({
+        job: { running: true, done: 0, total: 2, current: null, failed: 0 },
+        app: appView({ status: 'starting' }),
+      }),
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('Starting the app...');
+  });
+
+  it('says how many screenshots did not work once a capture is over', async () => {
+    renderView(
+      planned(),
+      view({ job: { running: false, done: 2, total: 2, current: null, failed: 1 } }),
+    );
+    expect(await screen.findByText(/1 of 2 screenshots did not work/)).toBeInTheDocument();
+  });
+
+  it('leaves screenshots out when the video has no project', async () => {
+    renderView(planned(), view({ app: appView({ project: null }) }));
+    expect(await screen.findByText(/This video has no project/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Capture \d/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: /for screenshots/ })).toBeNull();
+  });
+
+  it('holds the plan while a run is working, and says when it is this one', async () => {
+    const onPlan = vi.fn(async () => true);
+    renderView(planned(), view(), { onPlan, busy: true, planning: true });
+    const button = await screen.findByRole('button', { name: 'Planning...' });
+    expect(button).toBeDisabled();
+    fireEvent.submit(button.closest('form') as HTMLFormElement);
+    expect(onPlan).not.toHaveBeenCalled();
+  });
+
+  it('offers to plan again, and clears the box once a run has started', async () => {
+    const onPlan = vi.fn(async () => true);
+    renderView(planned(), view(), { onPlan });
+    const box = screen.getByLabelText('Anything particular to show (optional)');
+    fireEvent.change(box, { target: { value: 'The billing page' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plan again' }));
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('keeps what was typed when the run did not start', async () => {
+    const onPlan = vi.fn(async () => false);
+    renderView(planned(), view(), { onPlan });
+    const box = screen.getByLabelText('Anything particular to show (optional)');
+    fireEvent.change(box, { target: { value: 'The billing page' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plan again' }));
+    await waitFor(() => expect(onPlan).toHaveBeenCalled());
+    expect(box).toHaveValue('The billing page');
+  });
+
+  it('sends no instruction for a blank box', async () => {
+    const onPlan = vi.fn(async () => true);
+    renderView(withScenes('Settings'), view(), { onPlan });
+    fireEvent.click(screen.getByRole('button', { name: /Plan pictures with AI/ }));
+    await waitFor(() => expect(onPlan).toHaveBeenCalledWith(undefined));
+  });
+
+  it('links to the key when the image model has none', async () => {
+    const onOpenSettings = vi.fn();
+    const doc = planned();
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'one', source: 'generate', shot: undefined }),
+      picture({ id: 'two', source: 'generate', shot: undefined }),
+    ];
+    renderView(doc, view({ engine: 'openai', engineReady: false }), { onOpenSettings });
+    expect(await screen.findByText(/GPT Image needs its API key/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add the key' }));
+    expect(onOpenSettings).toHaveBeenCalledWith('ai');
+  });
+
+  it('counts several AI pictures left for the user, and names no model it does not have', async () => {
+    const doc = planned();
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'one', source: 'generate', shot: undefined }),
+      picture({ id: 'two', source: 'generate', shot: undefined }),
+    ];
+    renderView(doc, view({ engine: 'off', engineReady: false, engineLabel: null }));
+    expect(await screen.findByText(/2 AI pictures are left for you/)).toBeInTheDocument();
+  });
+
+  it('calls a model with no name the image model', async () => {
+    renderView(planned(), view({ engine: 'openai', engineReady: false, engineLabel: null }));
+    expect(await screen.findByText(/The image model needs its API key/)).toBeInTheDocument();
+  });
+
+  it('marks the count as done when every picture is ready, and stops offering PICTURES.md', async () => {
+    const doc = withScenes('Settings');
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'done', status: 'ready', mediaHash: 'a'.repeat(64) }),
+    ];
+    renderView(doc);
+    // Once for the whole video and once for its only scene.
+    expect(await screen.findAllByText('1 of 1 ready')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Write PICTURES.md/ })).toBeNull();
+  });
+
+  it('words a single capture as one', async () => {
+    const doc = withScenes('Settings');
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'page' }),
+      picture({
+        id: 'win',
+        shot: { target: 'window', instructions: 'Open Preferences' },
+      }),
+    ];
+    renderView(doc);
+    expect(await screen.findByRole('button', { name: /Capture 1 screenshot$/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /Capture 1 app window$/ })).toBeDefined();
+  });
+
+  it('walks through the app windows still to take', async () => {
+    const doc = withScenes('Settings');
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'one', shot: { target: 'window', instructions: 'Open Preferences' } }),
+      picture({ id: 'two', shot: { target: 'window', instructions: 'Open About' } }),
+      picture({
+        id: 'done',
+        status: 'ready',
+        mediaHash: 'a'.repeat(64),
+        shot: { target: 'window', instructions: 'Open Help' },
+      }),
+    ];
+    renderView(doc);
+    fireEvent.click(await screen.findByRole('button', { name: /Capture 2 app windows/ }));
+    expect(
+      await screen.findByRole('heading', { name: 'Capture the app window (1 of 2)' }),
+    ).toBeDefined();
+  });
+
+  it('takes one window from its own picture', async () => {
+    const doc = withScenes('Settings');
+    doc.scenario.scenes[0]!.pictures = [
+      picture({ id: 'one', shot: { target: 'window', instructions: 'Open Preferences' } }),
+    ];
+    renderView(doc);
+    await screen.findByRole('button', { name: /Capture 1 app window/ });
+    fireEvent.click(screen.getByRole('button', { name: /^Picture scene-01-one.png/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Capture the window' }));
+    expect(await screen.findByRole('heading', { name: 'Capture the app window' })).toBeDefined();
+  });
+
+  it('writes PICTURES.md, opens the folder and checks it', async () => {
+    const { bridge } = renderView(planned(), view(), {});
+    fireEvent.click(await screen.findByRole('button', { name: /Write PICTURES.md/ }));
+    await waitFor(() =>
+      expect(bridge.$fn('studioPictures.writeMarkdown')).toHaveBeenCalledWith('v1'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Pictures folder/ }));
+    await waitFor(() => expect(bridge.$fn('studioPictures.openFolder')).toHaveBeenCalledWith('v1'));
+    fireEvent.click(screen.getByRole('button', { name: /Check the folder/ }));
+    await waitFor(() =>
+      expect(bridge.$fn('studioPictures.checkFolder')).toHaveBeenCalledWith('v1'),
+    );
+  });
+
+  it('says a scene has only drawn graphics, and names an untitled one', async () => {
+    const doc = withScenes('', 'Done');
+    doc.scenario.scenes[1]!.pictures = [picture({ id: 'one' })];
+    renderView(doc);
+    expect(await screen.findByText('Untitled scene')).toBeInTheDocument();
+    expect(screen.getByText('No pictures, drawn graphics only')).toBeInTheDocument();
+  });
+
+  it('shows which AI plans the pictures', async () => {
+    renderView(planned());
+    await screen.findByRole('button', { name: /Write PICTURES.md/ });
+    const form = screen.getByLabelText('Anything particular to show (optional)').closest('form');
+    const picker = within(form as HTMLFormElement).getAllByRole('button')[0] as HTMLElement;
+    fireEvent.click(picker);
+    expect(await screen.findByText('Which AI plans the pictures')).toBeInTheDocument();
   });
 });
 
