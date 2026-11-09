@@ -37,6 +37,7 @@ internal static class ApiV1
         api.MapAnalyticsSettings();
         api.MapDeviceTokens();
         api.MapSync();
+        api.MapEncryption();
         api.MapTeams();
         api.MapNews();
         api.MapTechnologies();

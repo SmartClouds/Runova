@@ -93,6 +93,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
+    public DbSet<UserEncryptionPreference> UserEncryptionPreferences => Set<UserEncryptionPreference>();
+
     public DbSet<TelegramLink> TelegramLinks => Set<TelegramLink>();
 
     public DbSet<TelegramLinkCode> TelegramLinkCodes => Set<TelegramLinkCode>();

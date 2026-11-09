@@ -2,7 +2,7 @@
 import { Check } from 'lucide-react';
 import { buttonVariants } from '../components/ui/button';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { intervalLabel, monitorsLabel, parseAccountTypes, price, yearlySaving } from '../lib/billing';
+import { parseAccountTypes, planLines, price, yearlySaving } from '../lib/billing';
 import { apiGetter } from '../lib/websiteApi';
 
 // Rendered per request: the plans come from the API, so a price an Admin changes shows at once.
@@ -54,14 +54,12 @@ const description =
                 {saving !== null && type.yearlyPriceCents !== null && `${price(type.yearlyPriceCents, type.currency)} a year, save ${saving}%`}
               </p>
               <ul class="mt-5 grid flex-1 content-start gap-2 text-sm">
-                {(type.features.length > 0 ? type.features : [monitorsLabel(type.maxCloudMonitors), `Checks ${intervalLabel(type.minIntervalSec)}`]).map(
-                  (line) => (
-                    <li class="flex items-start gap-2">
-                      <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                      <span>{line}</span>
-                    </li>
-                  ),
-                )}
+                {planLines(type).map((line) => (
+                  <li class="flex items-start gap-2">
+                    <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span>{line}</span>
+                  </li>
+                ))}
               </ul>
               <a
                 href={type.isFree ? '/account/register' : '/account/plan'}

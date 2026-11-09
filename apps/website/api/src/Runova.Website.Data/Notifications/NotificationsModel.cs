@@ -13,6 +13,7 @@ internal static class NotificationsModel
         {
             device.Property(d => d.Platform).HasMaxLength(16);
             device.Property(d => d.PushToken).HasMaxLength(1024);
+            device.Property(d => d.SealKeyId).HasMaxLength(12);
             device.HasIndex(d => d.SessionId).IsUnique();
             device.HasIndex(d => d.PushToken).IsUnique();
             device.HasIndex(d => d.UserId);

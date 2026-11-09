@@ -24,6 +24,32 @@ public class NotificationMapperTests
     }
 
     [Fact]
+    public void A_sealed_notification_carries_its_copies()
+    {
+        var stored = SealedCopies.Write([new SealedCopyDto("AbCdEfGhIjKl", "c2VhbGVk")]);
+
+        var dto = NotificationMapper.ToDto(new UserNotification { Id = 7, UserId = 1, Kind = "deploys", Title = "t", Sealed = stored, CreatedAt = _at });
+
+        Assert.Equal([new SealedCopyDto("AbCdEfGhIjKl", "c2VhbGVk")], dto.Sealed);
+        Assert.Empty(SecretProperties.In(typeof(UserNotificationDto)));
+    }
+
+    [Fact]
+    public void An_empty_list_of_copies_is_not_the_same_as_no_list()
+    {
+        var empty = NotificationMapper.ToDto(new UserNotification { Id = 7, Kind = "deploys", Title = "t", Sealed = SealedCopies.Write([]), CreatedAt = _at });
+        var plain = NotificationMapper.ToDto(new UserNotification { Id = 8, Kind = "deploys", Title = "t", CreatedAt = _at });
+
+        Assert.NotNull(empty.Sealed);
+        Assert.Empty(empty.Sealed);
+        Assert.Null(plain.Sealed);
+    }
+
+    [Fact]
+    public void A_copy_from_the_computer_maps_to_the_copy_a_phone_reads() =>
+        Assert.Equal(new SealedCopyDto("AbCdEfGhIjKl", "c2VhbGVk"), NotificationMapper.ToDto(new SealedCopyWrite("AbCdEfGhIjKl", "c2VhbGVk")));
+
+    [Fact]
     public void A_preference_is_its_category_and_whether_it_is_on()
     {
         var dto = NotificationMapper.ToDto(NotificationCategories.All[0], enabled: false);

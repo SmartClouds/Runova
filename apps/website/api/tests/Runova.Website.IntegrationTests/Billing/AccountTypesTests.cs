@@ -42,6 +42,7 @@ public sealed class AccountTypesTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, types[3].GetProperty("maxCloudMonitors").ValueKind);
         Assert.Equal(30, types[3].GetProperty("minIntervalSec").GetInt32());
         Assert.True(types[0].GetProperty("isFree").GetBoolean());
+        Assert.Equal([false, true, true, true], types.Select(t => t.GetProperty("encryptedItems").GetBoolean()));
         Assert.False(types[0].TryGetProperty("stripeProductId", out _));
         Assert.Equal("public, max-age=60, stale-while-revalidate=300", response.Headers.NonValidated["Cache-Control"].ToString());
     }
@@ -114,12 +115,13 @@ public sealed class AccountTypesTests(PostgresFixture postgres) : IAsyncLifetime
         var admin = await AdminAsync();
         var etag = (await admin.GetAsync($"{Path}/3")).Headers.ETag!.Tag;
 
-        var response = await admin.SendAsync(HttpMethod.Patch, $"{Path}/3", new { maxCloudMonitors = 75, monthlyPriceCents = 1900 }, ifMatch: etag);
+        var response = await admin.SendAsync(HttpMethod.Patch, $"{Path}/3", new { maxCloudMonitors = 75, monthlyPriceCents = 1900, encryptedItems = false }, ifMatch: etag);
         var stale = await admin.SendAsync(HttpMethod.Patch, $"{Path}/3", new { maxCloudMonitors = 80 }, ifMatch: etag);
 
         var body = await ApiClient.ReadJsonAsync(response, HttpStatusCode.OK);
         Assert.Equal(75, body.GetProperty("maxCloudMonitors").GetInt32());
         Assert.Equal(1900, body.GetProperty("monthlyPriceCents").GetInt32());
+        Assert.False(body.GetProperty("encryptedItems").GetBoolean());
         await ProblemAssert.IsProblemAsync(stale, HttpStatusCode.PreconditionFailed, ProblemAssert.Type("precondition-failed"), $"{Path}/3");
     }
 

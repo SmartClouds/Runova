@@ -696,9 +696,11 @@ off, nothing is stored and `notificationId` is null.
 |---|---|---|---|---|
 | GET | `/api/v1/accounts/me/notification-preferences` | Account | none | 200 `{ "items": NotificationPreferenceDto[] }`, one per category in display order; 401 |
 | PUT | `/api/v1/accounts/me/notification-preferences/{category}` | Account | `{ "enabled": bool }` | 200 `NotificationPreferenceDto`; 400; 401; 404 unknown category |
-| PUT | `/api/v1/accounts/me/push-devices/current` | Account, `mobile` session | `{ "platform": "android" \| "ios", "pushToken": string }` | 200 `PushDeviceDto`; 400; 401; 403 |
+| PUT | `/api/v1/accounts/me/push-devices/current` | Account, `mobile` session | `{ "platform": "android" \| "ios", "pushToken": string, "sealKeyId": string \| null }` | 200 `PushDeviceDto`; 400; 401; 403 |
 | DELETE | `/api/v1/accounts/me/push-devices/current` | Account | none | 204; 401 |
-| GET | `/api/v1/accounts/me/notification-listeners` | Account | none | 200 `{ "count": int }` (signed-in phones; a computer forwards nothing at 0); 401 |
+| GET | `/api/v1/accounts/me/notification-listeners` | Account | none | 200 `{ "count": int, "sealing": bool }` (signed-in phones; a computer forwards nothing at 0; `sealing` is whether notifications are to be end-to-end encrypted); 401 |
+| GET | `/api/v1/accounts/me/encryption` | Account | none | 200 `EncryptionDto`; 401 |
+| PUT | `/api/v1/accounts/me/encryption/{item}` | Account | `{ "enabled": bool }` | 200 `EncryptionDto`; 400; 401; 403 (`plan-required`); 404; 409 (`needs-key`) |
 | POST | `/api/v1/notification-events` | Account, `desktop` session | `NotificationEventRequest` | 201 `{ "notificationId": number \| null }`; 400; 401; 403; 429 |
 
 `NotificationPreferenceDto`: `{ "category": string, "label": string, "enabled": bool }`.

@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".RunovaApplication"
         android:allowBackup="false"
         android:label="Runova"
         android:supportsRtl="true"
@@ -26,6 +27,13 @@
                 <data android:scheme="com.runovahq.app" android:path="/auth/callback" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

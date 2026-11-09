@@ -2,3 +2,4 @@
 
 pub mod cipher;
 pub mod handshake;
+pub mod sealed;

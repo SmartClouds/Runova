@@ -9,6 +9,7 @@ import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.DeployScreen
 import uniffi.runova_ffi.ErrorsScreen
+import uniffi.runova_ffi.EncryptionScreen
 import uniffi.runova_ffi.GitMoreScreen
 import uniffi.runova_ffi.GitScreen
 import uniffi.runova_ffi.GitToolsScreen
@@ -71,6 +72,7 @@ fun appView(
     prompts: PromptsScreen = PromptsScreen(null, false, null, null, emptyList(), emptyList(), emptyList()),
     studioTools: StudioToolsScreen = StudioToolsScreen(null, null, null, null),
     gitMore: GitMoreScreen = GitMoreScreen(null, null),
+    encryption: EncryptionScreen? = null,
 ) = AppView(
     auth,
     true,
@@ -107,4 +109,5 @@ fun appView(
     prompts,
     studioTools,
     gitMore,
+    encryption,
 )

@@ -56,6 +56,8 @@ export interface TrustedPhone {
   scopes: ManageScope[];
   approvedAt: number;
   lastSeenAt: number;
+  /** The X25519 public key this phone opens sealed notifications with. */
+  sealKey?: string;
 }
 
 function grantable(scopes: readonly ManageScope[]): ManageScope[] {
@@ -220,6 +222,15 @@ export function createAnywhereStore(io: AnywhereStoreIo) {
         file.phones = (file.phones ?? []).map((p) =>
           p.key === key ? { ...p, scopes: grantable(scopes) } : p,
         );
+      });
+    },
+
+    /** A phone says this each time it connects, so nothing is written unless it changed. */
+    async setPhoneSealKey(key: string, sealKey: string): Promise<void> {
+      const known = ((await load()).phones ?? []).find((p) => p.key === key);
+      if (!known || known.sealKey === sealKey) return;
+      await change((file) => {
+        file.phones = (file.phones ?? []).map((p) => (p.key === key ? { ...p, sealKey } : p));
       });
     },
 

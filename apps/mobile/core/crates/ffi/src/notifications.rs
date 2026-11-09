@@ -1,11 +1,13 @@
 //! The inbox and its switches, from Runova's servers, so they need no computer.
 
 use crate::backend::BackendError;
+use crate::encryption::{CopyDto, open_copy};
 use crate::engine::{Done, Engine, Runner};
 use crate::view::{
     AppView, NotificationDestination, NotificationItemView, NotificationPreferenceView,
 };
 use async_trait::async_trait;
+use runova_crypto::sealed::SealKey;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -51,6 +53,8 @@ struct ItemDto {
     kind: String,
     category: Option<String>,
     read_at: Option<String>,
+    #[serde(default)]
+    sealed: Option<Vec<CopyDto>>,
 }
 
 #[derive(Deserialize)]
@@ -74,11 +78,16 @@ struct PreferencesDto {
     items: Vec<PreferenceDto>,
 }
 
-fn item_of(dto: ItemDto) -> NotificationItemView {
+fn item_of(dto: ItemDto, key: &SealKey) -> NotificationItemView {
     let category = dto.category.unwrap_or(dto.kind);
+    // With no copy for this phone, the generic line the server stored is what there is to show.
+    let opened = dto
+        .sealed
+        .as_deref()
+        .and_then(|copies| open_copy(copies, key, &category));
     NotificationItemView {
         id: dto.id,
-        title: dto.title,
+        title: opened.unwrap_or(dto.title),
         body: dto.body,
         destination: notification_destination(category.clone()),
         category,
@@ -104,12 +113,17 @@ impl Runner {
             return;
         }
         self.view.notifications.loading = self.view.notifications.items.is_empty();
+        let key = self.seal_key();
         self.rest(
             LIST,
-            |view: &mut AppView, dto: ListDto| {
+            move |view: &mut AppView, dto: ListDto| {
                 view.notifications.loading = false;
                 view.notifications.unread = dto.unread;
-                view.notifications.items = dto.items.into_iter().map(item_of).collect();
+                view.notifications.items = dto
+                    .items
+                    .into_iter()
+                    .map(|item| item_of(item, &key))
+                    .collect();
             },
             |view| view.notifications.loading = false,
         );
@@ -136,7 +150,8 @@ impl Runner {
                 let Ok(dto) = serde_json::from_value::<ItemDto>(value) else {
                     return;
                 };
-                let item = item_of(dto);
+                let key = self.seal_key();
+                let item = item_of(dto, &key);
                 let screen = &mut self.view.notifications;
                 // A phone that is connected gets both the push and this, with the same id.
                 if screen.items.iter().any(|known| known.id == item.id) {
@@ -160,13 +175,14 @@ impl Runner {
         };
         let backend = self.deps_backend();
         let platform = self.platform_name();
+        let seal_key_id = self.seal_key().key_id();
         tokio::spawn(async move {
             // A failure is retried at the next start, and the inbox still works without it.
             let _ = backend
                 .send_json(
                     "PUT",
                     PUSH_DEVICE,
-                    json!({ "platform": platform, "pushToken": token }),
+                    json!({ "platform": platform, "pushToken": token, "sealKeyId": seal_key_id }),
                 )
                 .await;
         });

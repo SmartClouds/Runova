@@ -1,3 +1,4 @@
+using Runova.Website.Api.Accounts;
 using Runova.Website.Api.Billing;
 using Runova.Website.Api.Monitoring;
 
@@ -18,6 +19,7 @@ internal static class CloudMonitoringSetup
         services.AddScoped<IAssignmentSource>(provider => provider.GetRequiredService<MonitorAssigner>());
         services.AddScoped<INodeRebalancer>(provider => provider.GetRequiredService<MonitorAssigner>());
         services.AddScoped<IResultIngestor, CloudMonitorIngestor>();
+        services.AddScoped<EncryptionEnforcement>();
         services.AddScoped<PlanEnforcement>();
         services.AddScoped<IPlanEnforcement>(provider => provider.GetRequiredService<PlanEnforcement>());
         services.AddScoped<SampleRetentionJob>();

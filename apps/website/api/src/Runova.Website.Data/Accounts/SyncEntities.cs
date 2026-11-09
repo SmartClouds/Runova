@@ -50,6 +50,22 @@ public static class SyncScopeKinds
     public const string Team = "team";
 }
 
+/// <summary>
+/// What a person chose for one kind of item that can be end-to-end encrypted (E92). No row means
+/// off. The row outlives the plan on purpose: after a downgrade it is what says the choice lapsed.
+/// </summary>
+public class UserEncryptionPreference
+{
+    public long UserId { get; set; }
+
+    /// <summary><c>notifications</c> or <c>sync</c>.</summary>
+    public string Item { get; set; } = "";
+
+    public bool Enabled { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>One synced item: its newest content as the last computer pushed it, or a tombstone.</summary>
 public class SyncRecord
 {

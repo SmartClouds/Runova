@@ -38,6 +38,8 @@ export interface ManageMethodDeps {
   deploy: ManageDeployDeps;
   /** Takes a phone off this computer's trusted list. */
   forgetPhone(key: string): Promise<void>;
+  /** Remembers the key this phone opens sealed notifications with. */
+  setPhoneSealKey(key: string, sealKey: string): Promise<void>;
   monitoring: ManageMonitoringDeps;
   pipelines: ManagePipelineDeps;
   errorTracking: ManageErrorTrackingDeps;
@@ -69,6 +71,19 @@ function sessionIdOf(params: unknown): string {
   return sessionId;
 }
 
+const SEAL_KEY_BYTES = 32;
+
+function sealKeyOf(params: unknown): string {
+  const value = (params as { publicKey?: unknown } | null | undefined)?.publicKey;
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new ManageError('bad-params', 'That is not a key.');
+  }
+  if (Buffer.from(value, 'base64url').length !== SEAL_KEY_BYTES) {
+    throw new ManageError('bad-params', 'That is not a key.');
+  }
+  return value;
+}
+
 /** Every method a phone can reach, by the names in `MANAGE_METHODS`. */
 export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
   const downloads = studioDownloads(deps.studio);
@@ -78,6 +93,9 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       'phone.forget': async (_params, context) => {
         await deps.forgetPhone(context.phone.key);
         return { ok: true, message: 'This computer has forgotten this phone.' };
+      },
+      'phone.setSealKey': async (params, context) => {
+        await deps.setPhoneSealKey(context.phone.key, sealKeyOf(params));
       },
       'terminals.list': () => deps.listTerminals(),
       'terminals.processes': (params) => deps.terminalProcesses(sessionIdOf(params)),

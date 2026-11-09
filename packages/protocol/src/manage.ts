@@ -44,6 +44,8 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
 export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'projects.list': { scope: 'core', risk: 'read' },
   'phone.forget': { scope: 'core', risk: 'write' },
+  // A phone describing itself on every connection, so it isn't an action worth an audit row.
+  'phone.setSealKey': { scope: 'core', risk: 'read' },
   'terminals.list': { scope: 'terminal', risk: 'read' },
   'terminals.follow': { scope: 'terminal', risk: 'read', audited: true },
   'terminals.write': { scope: 'terminal', risk: 'write' },

@@ -489,6 +489,7 @@ struct RunovaProgress: View {
 struct RunovaToggle: View {
     let isOn: Bool
     let label: String
+    var enabled = true
     let onChange: (Bool) -> Void
 
     @Environment(\.palette) private var palette
@@ -507,6 +508,8 @@ struct RunovaToggle: View {
             .frame(width: 46, height: 28)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "On" : "Off")
     }

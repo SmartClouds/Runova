@@ -306,6 +306,7 @@ pub(crate) struct Runner {
     pub(crate) pending_step_up: Option<PendingStepUp>,
     pub(crate) feed_events: Option<mpsc::Receiver<FeedEvent>>,
     pub(crate) push_token: Option<String>,
+    pub(crate) seal_key: Option<Arc<runova_crypto::sealed::SealKey>>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -378,6 +379,7 @@ impl Runner {
             pending_step_up: None,
             feed_events: None,
             push_token: None,
+            seal_key: None,
         }
     }
 
@@ -698,6 +700,7 @@ impl Runner {
         self.view.monitoring = MonitoringScreen::default();
         self.view.account = Default::default();
         self.view.notifications = Default::default();
+        self.view.encryption = None;
         self.pending_step_up = None;
         self.end_connection();
         self.let_go_of_hub();
@@ -790,6 +793,7 @@ impl Runner {
         self.session = Some(session);
         self.view.projects_loading = true;
         self.start_ticking();
+        self.share_seal_key();
 
         let done = self.done_tx.clone();
         let projects = client.clone();

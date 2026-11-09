@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Runova.Website.Api.Accounts;
+using Runova.Website.Api.Billing;
 using Runova.Website.Api.Dependencies;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
@@ -20,11 +21,11 @@ public sealed record NotificationPreferencesDto(IReadOnlyList<NotificationPrefer
 
 public sealed record NotificationPreferenceWrite(bool? Enabled);
 
-public sealed record PushDeviceWrite(string? Platform, string? PushToken);
+public sealed record PushDeviceWrite(string? Platform, string? PushToken, string? SealKeyId = null);
 
 public sealed record PushDeviceDto(long Id, string Platform, DateTimeOffset UpdatedAt);
 
-public sealed record NotificationListenersDto(int Count);
+public sealed record NotificationListenersDto(int Count, bool Sealing);
 
 public sealed record NotificationEventDto(long? NotificationId);
 
@@ -95,6 +96,11 @@ internal static partial class NotificationSettingsEndpoints
             errors["pushToken"] = ["Send the token the push service gave this phone."];
         }
 
+        if (request.SealKeyId is not null && !PushContent.IsSealKeyId(request.SealKeyId))
+        {
+            errors["sealKeyId"] = ["sealKeyId is 12 letters, digits, dashes or underscores."];
+        }
+
         if (errors.Count > 0)
         {
             return ApiProblems.Invalid(errors);
@@ -106,9 +112,9 @@ internal static partial class NotificationSettingsEndpoints
         await db.PushDevices.Where(d => d.PushToken == request.PushToken && d.SessionId != sessionId).ExecuteDeleteAsync();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            INSERT INTO "PushDevices" ("UserId", "SessionId", "Platform", "PushToken", "UpdatedAt")
-            VALUES ({userId}, {sessionId}, {request.Platform}, {request.PushToken}, {now})
-            ON CONFLICT ("SessionId") DO UPDATE SET "Platform" = {request.Platform}, "PushToken" = {request.PushToken}, "UpdatedAt" = {now}
+            INSERT INTO "PushDevices" ("UserId", "SessionId", "Platform", "PushToken", "SealKeyId", "UpdatedAt")
+            VALUES ({userId}, {sessionId}, {request.Platform}, {request.PushToken}, {request.SealKeyId}, {now})
+            ON CONFLICT ("SessionId") DO UPDATE SET "Platform" = {request.Platform}, "PushToken" = {request.PushToken}, "SealKeyId" = {request.SealKeyId}, "UpdatedAt" = {now}
             """);
         var device = await db.PushDevices.AsNoTracking().SingleAsync(d => d.SessionId == sessionId);
         http.Response.Headers.CacheControl = HttpCaching.Private;
@@ -122,13 +128,13 @@ internal static partial class NotificationSettingsEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Ok<NotificationListenersDto>> ListenersAsync(HttpContext http, AppDbContext db, TimeProvider time)
+    private static async Task<Ok<NotificationListenersDto>> ListenersAsync(HttpContext http, AppDbContext db, EncryptionPreferences encryption, TimeProvider time)
     {
         var userId = CurrentAccount.Id(http);
         var now = time.GetUtcNow();
         var count = await db.AccountSessions.CountAsync(s => s.UserId == userId && s.Kind == AccountSessionKinds.Mobile && s.RevokedAt == null && (s.RefreshExpiresAt == null || s.RefreshExpiresAt > now));
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new NotificationListenersDto(count));
+        return TypedResults.Ok(new NotificationListenersDto(count, await encryption.SealingNotificationsAsync(userId, http.RequestAborted)));
     }
 
     private static async Task<Results<Created<NotificationEventDto>, ValidationProblem, ProblemHttpResult>> ForwardAsync(
@@ -138,6 +144,7 @@ internal static partial class NotificationSettingsEndpoints
         AccountSessions sessions,
         NotificationPreferenceStore preferences,
         NotificationDelivery delivery,
+        Entitlements entitlements,
         TimeProvider time)
     {
         var userId = CurrentAccount.Id(http);
@@ -150,6 +157,12 @@ internal static partial class NotificationSettingsEndpoints
         if (PushContent.Compose(request, errors) is not { } composed)
         {
             return ApiProblems.Invalid(errors);
+        }
+
+        // Before the listener check, so a plan without sealing is refused whether or not a phone is signed in.
+        if (composed.Sealed is not null && await entitlements.ForUserAsync(userId, http.RequestAborted) is { EncryptedItems: false } entitlement)
+        {
+            return EncryptionProblems.PlanRequired(entitlement);
         }
 
         var now = time.GetUtcNow();
@@ -174,6 +187,7 @@ internal static partial class NotificationSettingsEndpoints
             Body = "",
             Severity = composed.Severity,
             ItemId = composed.ItemId,
+            Sealed = composed.Sealed,
             CreatedAt = now,
         };
         db.UserNotifications.Add(notification);

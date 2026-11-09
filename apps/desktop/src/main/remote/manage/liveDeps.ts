@@ -70,7 +70,7 @@ async function relayRuns() {
 }
 
 /** The app's real services, behind the shape the methods are tested against. */
-export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
+export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone' | 'setPhoneSealKey'> = {
   listProjects: () => store.getProjects(),
   listTerminals,
   terminalShell: terminalSessionShell,

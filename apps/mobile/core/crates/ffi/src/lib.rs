@@ -9,6 +9,7 @@ pub mod agents;
 pub mod backend;
 pub mod core;
 pub mod deploy;
+pub mod encryption;
 pub mod engine;
 pub mod errors;
 pub mod frames;

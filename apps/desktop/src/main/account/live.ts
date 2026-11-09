@@ -56,6 +56,7 @@ export function getAccountRuntime(): AccountRuntime {
     signedIn: async () => (await account.status()).state === 'signed-in',
     // biome-ignore lint/suspicious/noConsole: the only record of a forward that failed
     log: (message) => console.warn(message),
+    sealKeys: () => getAnywhere(account).sealKeys(),
   });
   return runtime;
 }

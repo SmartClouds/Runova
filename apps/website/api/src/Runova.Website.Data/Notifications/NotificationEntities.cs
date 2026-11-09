@@ -19,6 +19,9 @@ public class PushDevice
     /// <summary>The token the push service knows the phone by. Never returned by the API.</summary>
     public string PushToken { get; set; } = "";
 
+    /// <summary>Which sealed copy of a notification is this phone's (E92), or null when it has not said.</summary>
+    public string? SealKeyId { get; set; }
+
     public DateTimeOffset UpdatedAt { get; set; }
 }
 

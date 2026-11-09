@@ -13,13 +13,15 @@ namespace Runova.Website.Api.CloudMonitoring;
 /// Brings online monitors within their scope's account type after it went down (E55): when a
 /// subscription ended, an Admin changed it or a type, or a team changed owners. The newest
 /// monitors over the limit are paused (marked as Runova's doing) and intervals under the new floor
-/// are lengthened; every member of the scope is told what changed.
+/// are lengthened; every member of the scope is told what changed. The same changes also decide
+/// whether a scope may keep sealing whole records (E92), which <see cref="EncryptionEnforcement"/> does.
 /// </summary>
 internal sealed class PlanEnforcement(
     AppDbContext db,
     Entitlements entitlements,
     MonitorAssigner assigner,
     CloudMonitorNotifier notifier,
+    EncryptionEnforcement encryption,
     TimeProvider time) : IPlanEnforcement
 {
     /// <summary>The scopes this account pays for: its own, and the teams it owns.</summary>
@@ -29,18 +31,21 @@ internal sealed class PlanEnforcement(
         var scopes = await db.SyncScopes.AsNoTracking()
             .Where(s => (s.Kind == SyncScopeKinds.Personal && s.UserId == userId) || (s.Kind == SyncScopeKinds.Team && s.TeamId != null && owned.Contains(s.TeamId.Value)))
             .Select(s => s.Id).ToListAsync(cancellationToken);
+        await encryption.ScopesAsync(scopes, cancellationToken);
         await ScopesAsync(scopes, cancellationToken);
     }
 
     public async Task TeamChangedAsync(long teamId, CancellationToken cancellationToken = default)
     {
         var scopes = await db.SyncScopes.AsNoTracking().Where(s => s.Kind == SyncScopeKinds.Team && s.TeamId == teamId).Select(s => s.Id).ToListAsync(cancellationToken);
+        await encryption.ScopesAsync(scopes, cancellationToken);
         await ScopesAsync(scopes, cancellationToken);
     }
 
-    /// <summary>Every scope with online monitors: after an Admin changed a type, and once a night to be sure.</summary>
+    /// <summary>Every scope with online monitors or sealing to look at: after an Admin changed a type, and once a night to be sure.</summary>
     public async Task AllAsync(CancellationToken cancellationToken = default)
     {
+        await encryption.AllAsync(cancellationToken);
         var scopes = await db.CloudMonitors.AsNoTracking().Select(m => m.ScopeId).Distinct().ToListAsync(cancellationToken);
         await ScopesAsync(scopes, cancellationToken);
     }

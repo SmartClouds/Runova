@@ -97,7 +97,7 @@ public class PushContentTests
     {
         var names = typeof(NotificationEventRequest).GetProperties().Select(p => p.Name).Order().ToArray();
 
-        Assert.Equal(["Agent", "Category", "ItemId", "Project", "Status", "Subject"], names);
+        Assert.Equal(["Agent", "Category", "ItemId", "Project", "SealedFor", "Status", "Subject"], names);
     }
 
     [Theory]

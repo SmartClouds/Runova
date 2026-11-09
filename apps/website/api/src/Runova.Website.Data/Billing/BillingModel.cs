@@ -97,21 +97,21 @@ internal static class BillingModel
             Id = 2, Key = "go", Name = "Go", SortOrder = 1,
             Description = "For a few projects that should never go quiet.",
             Features = ["10 online monitors", "Checks every 5 minutes", "30 days of detailed history", "Alerts in the app and on Telegram"],
-            MaxCloudMonitors = 10, MinIntervalSec = 300, HistoryDays = 30, MonthlyPriceCents = 500, YearlyPriceCents = 5000, CreatedAt = _seededAt,
+            MaxCloudMonitors = 10, MinIntervalSec = 300, HistoryDays = 30, EncryptedItems = true, MonthlyPriceCents = 500, YearlyPriceCents = 5000, CreatedAt = _seededAt,
         },
         new()
         {
             Id = 3, Key = "pro", Name = "Pro", SortOrder = 2, Highlight = true,
             Description = "Every project you run, checked every minute.",
             Features = ["50 online monitors", "Checks every minute", "90 days of detailed history", "Second opinion from another region"],
-            MaxCloudMonitors = 50, MinIntervalSec = 60, HistoryDays = 90, MonthlyPriceCents = 1500, YearlyPriceCents = 15000, CreatedAt = _seededAt,
+            MaxCloudMonitors = 50, MinIntervalSec = 60, HistoryDays = 90, EncryptedItems = true, MonthlyPriceCents = 1500, YearlyPriceCents = 15000, CreatedAt = _seededAt,
         },
         new()
         {
             Id = 4, Key = "ultra", Name = "Ultra", SortOrder = 3,
             Description = "No limits, and the fastest checks Runova makes.",
             Features = ["Unlimited online monitors", "Checks every 30 seconds", "A year of detailed history", "Second opinion from another region"],
-            MaxCloudMonitors = null, MinIntervalSec = 30, HistoryDays = 365, MonthlyPriceCents = 4900, YearlyPriceCents = 49000, CreatedAt = _seededAt,
+            MaxCloudMonitors = null, MinIntervalSec = 30, HistoryDays = 365, EncryptedItems = true, MonthlyPriceCents = 4900, YearlyPriceCents = 49000, CreatedAt = _seededAt,
         },
     ];
 }

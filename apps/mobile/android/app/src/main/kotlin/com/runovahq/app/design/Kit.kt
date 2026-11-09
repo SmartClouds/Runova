@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
@@ -458,14 +459,15 @@ fun RunovaProgress(percent: Double, modifier: Modifier = Modifier) {
 
 /** On or off. Drawn here so it is the same switch on both apps. */
 @Composable
-fun RunovaToggle(on: Boolean, onChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) {
+fun RunovaToggle(on: Boolean, onChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val colors = RunovaTheme.colors
     Box(
         modifier
+            .alpha(if (enabled) 1f else 0.4f)
             .size(width = 46.dp, height = 28.dp)
             .clip(CircleShape)
             .background(if (on) colors.primary else colors.foreground.copy(alpha = 0.1f))
-            .clickable(role = Role.Switch) { onChange(!on) }
+            .clickable(enabled = enabled, role = Role.Switch) { onChange(!on) }
             .semantics { contentDescription = label }
             .padding(3.dp),
         contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,

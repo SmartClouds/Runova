@@ -138,7 +138,7 @@ test('a server password leaves only sealed, and opens on the other computer afte
   await expect(second.page.getByRole('alert')).toContainText('not right');
   await second.page.getByLabel('Passphrase').fill('correct horse battery staple');
   await second.page.getByRole('button', { name: 'Unlock' }).click();
-  await expect(second.page.getByText('Encrypted end to end')).toBeVisible({ timeout: 60_000 });
+  await expect(second.page.getByText('Secrets sealed')).toBeVisible({ timeout: 60_000 });
   await syncNow(second);
 
   const servers = await second.page.evaluate(() => window.runova.ssh.listServers());

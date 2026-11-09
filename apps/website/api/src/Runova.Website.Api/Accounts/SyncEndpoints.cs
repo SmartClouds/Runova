@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Runova.Website.Api.Billing;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
@@ -151,6 +152,7 @@ internal static partial class SyncEndpoints
     {
         services.AddOptions<SyncOptions>().BindConfiguration("Sync");
         services.AddScoped<SyncAccess>();
+        services.AddScoped<EncryptionPreferences>();
         services.AddOptions<RateLimiterOptions>().Configure<Microsoft.Extensions.Options.IOptions<SyncOptions>>((options, sync) =>
             options.AddPolicy(RateLimitPolicy, http =>
                 http.User.FindFirstValue(ClaimTypes.NameIdentifier) is { } user
@@ -199,7 +201,7 @@ internal static partial class SyncEndpoints
     }
 
     private static async Task<Results<Ok<SyncScopeDto>, ValidationProblem, ProblemHttpResult>> PatchAsync(
-        long id, HttpContext http, SyncAccess access, AppDbContext db, ActivityLog activity)
+        long id, HttpContext http, SyncAccess access, AppDbContext db, ActivityLog activity, Entitlements entitlements, EncryptionPreferences preferences)
     {
         if (await access.FindAsync(UserId(http), id) is not { } found)
         {
@@ -226,6 +228,7 @@ internal static partial class SyncEndpoints
             return ApiProblems.Invalid("policy", "Send { \"policy\": { \"servers\", \"environments\", \"everything\" } }.");
         }
 
+        var wasSealing = found.Scope.EncryptEverything;
         foreach (var (name, value) in policy)
         {
             if (value is not JsonValue flag || !flag.TryGetValue<bool>(out var on))
@@ -242,8 +245,23 @@ internal static partial class SyncEndpoints
             }
         }
 
+        // Only sealing everything is a plan feature, and only the step from off to on is refused.
+        if (!wasSealing && found.Scope.EncryptEverything && await entitlements.ForScopeAsync(id, http.RequestAborted) is { EncryptedItems: false } entitlement)
+        {
+            return EncryptionProblems.PlanRequired(entitlement);
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        // A real change only: a client sending its whole policy while lapsed must not clear the choice.
+        if (wasSealing != found.Scope.EncryptEverything && found.Scope is { Kind: SyncScopeKinds.Personal, UserId: { } owner })
+        {
+            await preferences.SetAsync(owner, EncryptionItems.Sync, found.Scope.EncryptEverything, http.RequestAborted);
+        }
+
         activity.Add(UserId(http), ActivityActions.SyncPolicyChanged, new { scopeId = id, policy = new { found.Scope.EncryptServers, found.Scope.EncryptEnvironments, found.Scope.EncryptEverything } }, found.Scope.TeamId);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         return TypedResults.Ok(SyncMapper.ToDto(found));
     }
 

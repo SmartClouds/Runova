@@ -184,6 +184,7 @@ impl Runner {
     }
 
     fn load_account(&mut self) {
+        self.load_encryption();
         self.view.account.loading = self.view.account.profile.is_none();
         self.rest(
             ME,

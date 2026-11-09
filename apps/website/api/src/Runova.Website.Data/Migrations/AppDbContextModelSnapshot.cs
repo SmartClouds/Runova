@@ -1459,6 +1459,26 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("TeamMembers");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Accounts.UserEncryptionPreference", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Item")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "Item");
+
+                    b.ToTable("UserEncryptionPreferences");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Analytics.AnalyticsSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -1687,6 +1707,9 @@ namespace Runova.Website.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<bool>("EncryptedItems")
+                        .HasColumnType("boolean");
+
                     b.PrimitiveCollection<string[]>("Features")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -1773,6 +1796,7 @@ namespace Runova.Website.Data.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "usd",
                             Description = "Try online monitoring on one endpoint.",
+                            EncryptedItems = false,
                             Features = new[] { "1 online monitor", "Checks every 5 minutes", "7 days of detailed history", "Alerts in the app and on Telegram" },
                             Highlight = false,
                             HistoryDays = 7,
@@ -1791,6 +1815,7 @@ namespace Runova.Website.Data.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "usd",
                             Description = "For a few projects that should never go quiet.",
+                            EncryptedItems = true,
                             Features = new[] { "10 online monitors", "Checks every 5 minutes", "30 days of detailed history", "Alerts in the app and on Telegram" },
                             Highlight = false,
                             HistoryDays = 30,
@@ -1811,6 +1836,7 @@ namespace Runova.Website.Data.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "usd",
                             Description = "Every project you run, checked every minute.",
+                            EncryptedItems = true,
                             Features = new[] { "50 online monitors", "Checks every minute", "90 days of detailed history", "Second opinion from another region" },
                             Highlight = true,
                             HistoryDays = 90,
@@ -1831,6 +1857,7 @@ namespace Runova.Website.Data.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 6, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "usd",
                             Description = "No limits, and the fastest checks Runova makes.",
+                            EncryptedItems = true,
                             Features = new[] { "Unlimited online monitors", "Checks every 30 seconds", "A year of detailed history", "Second opinion from another region" },
                             Highlight = false,
                             HistoryDays = 365,
@@ -2523,6 +2550,9 @@ namespace Runova.Website.Data.Migrations
 
                     b.Property<long?>("ScopeId")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("Sealed")
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Severity")
                         .HasMaxLength(16)
@@ -3271,6 +3301,10 @@ namespace Runova.Website.Data.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("SealKeyId")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
                     b.Property<long>("SessionId")
                         .HasColumnType("bigint");
 
@@ -3668,6 +3702,15 @@ namespace Runova.Website.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.UserEncryptionPreference", b =>
+                {
                     b.HasOne("Runova.Website.Data.Identity.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

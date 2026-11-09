@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-const PHONE_SEED: [u8; 32] = [2; 32];
+pub const PHONE_SEED: [u8; 32] = [2; 32];
 const HOST_SEED: [u8; 32] = [1; 32];
 /// The background agent has a key of its own.
 const AGENT_SEED: [u8; 32] = [3; 32];

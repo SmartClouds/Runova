@@ -13,7 +13,10 @@ internal static class PushPlatforms
     public static bool IsKnown(string? platform) => platform is Android or Ios;
 }
 
-/// <summary>One line to one phone. It holds a push token, so it is never logged.</summary>
+/// <summary>
+/// One line to one phone. It holds a push token, so it is never logged. <c>Sealed</c> is this
+/// phone's own copy of a sealed notification; <c>Line</c> is then the generic line.
+/// </summary>
 internal sealed record PushDelivery(
     long DeviceId,
     string Platform,
@@ -21,7 +24,8 @@ internal sealed record PushDelivery(
     string Line,
     string Category,
     long NotificationId,
-    string? ItemId);
+    string? ItemId,
+    string? Sealed = null);
 
 internal enum PushSendResult
 {

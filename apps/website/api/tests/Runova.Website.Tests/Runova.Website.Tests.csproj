@@ -21,5 +21,6 @@
 
   <ItemGroup>
     <None Include="Releases\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\..\..\packages\protocol\test-vectors\push-lines-v1.json" Link="Vectors\push-lines-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

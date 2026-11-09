@@ -43,6 +43,38 @@ public class PushSenderTests
         Assert.Equal(["aps", "category", "itemId", "notificationId"], body.AsObject().Select(p => p.Key).Order().ToArray());
     }
 
+    [Fact]
+    public void A_sealed_fcm_body_is_data_only_with_the_generic_line_as_its_fallback()
+    {
+        var message = FcmPushSender.Body(_delivery with { Line = PushContent.SealedLine, Sealed = "c2VhbGVk" })["message"]!;
+
+        Assert.Equal(["android", "data", "token"], message.AsObject().Select(p => p.Key).Order().ToArray());
+        Assert.Equal("high", message["android"]!["priority"]!.GetValue<string>());
+        var data = message["data"]!.AsObject();
+        Assert.Equal(["category", "fallback", "itemId", "notificationId", "sealed"], data.Select(p => p.Key).Order().ToArray());
+        Assert.Equal("c2VhbGVk", data["sealed"]!.GetValue<string>());
+        Assert.Equal(PushContent.SealedLine, data["fallback"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_sealed_apns_body_keeps_the_generic_alert_and_asks_the_app_to_open_it()
+    {
+        var body = ApnsPushSender.Body(_delivery with { Platform = PushPlatforms.Ios, Line = PushContent.SealedLine, Sealed = "c2VhbGVk" });
+
+        Assert.Equal(PushContent.SealedLine, body["aps"]!["alert"]!["body"]!.GetValue<string>());
+        Assert.Equal(1, body["aps"]!["mutable-content"]!.GetValue<int>());
+        Assert.Equal("c2VhbGVk", body["sealed"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_generic_line_with_no_copy_goes_as_a_normal_notification()
+    {
+        var delivery = _delivery with { Line = PushContent.SealedLine };
+
+        Assert.Equal(PushContent.SealedLine, FcmPushSender.Body(delivery)["message"]!["notification"]!["body"]!.GetValue<string>());
+        Assert.Null(ApnsPushSender.Body(delivery)["aps"]!["mutable-content"]);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.OK, "Sent")]
     [InlineData(HttpStatusCode.NotFound, "Unregistered")]

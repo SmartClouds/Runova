@@ -30,7 +30,8 @@ public sealed record AccountTypeWriteRequest(
     int? HistoryDays,
     int? MonthlyPriceCents,
     int? YearlyPriceCents,
-    string? Currency);
+    string? Currency,
+    bool? EncryptedItems = null);
 
 /// <summary>
 /// Account types (E53): anyone may read the ones on offer, for the pricing page; Admins see the
@@ -332,6 +333,18 @@ internal static partial class AccountTypeEndpoints
             else
             {
                 Set("historyDays", days, type.HistoryDays, v => type.HistoryDays = v);
+            }
+        }
+
+        if (body.ContainsKey("encryptedItems"))
+        {
+            if (request.EncryptedItems is not { } encryptedItems)
+            {
+                errors["encryptedItems"] = ["Give true or false."];
+            }
+            else
+            {
+                Set("encryptedItems", encryptedItems, type.EncryptedItems, v => type.EncryptedItems = v);
             }
         }
 

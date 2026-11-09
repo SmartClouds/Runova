@@ -29,6 +29,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     vault: {} as ManageVaultDeps,
     deploy: {} as ManageDeployDeps,
     forgetPhone: async () => undefined,
+    setPhoneSealKey: async () => undefined,
     monitoring: {} as ManageMonitoringDeps,
     pipelines: {} as ManagePipelineDeps,
     errorTracking: {} as ManageErrorTrackingDeps,
@@ -45,6 +46,34 @@ describe('phone.forget', () => {
     await createManageMethods(deps({ forgetPhone })).calls['phone.forget'](undefined, context);
 
     expect(forgetPhone).toHaveBeenCalledWith('k');
+  });
+});
+
+describe('phone.setSealKey', () => {
+  const publicKey = Buffer.alloc(32, 7).toString('base64url');
+
+  it('records the key against the phone that sent it', async () => {
+    const setPhoneSealKey = vi.fn(async () => undefined);
+
+    await createManageMethods(deps({ setPhoneSealKey })).calls['phone.setSealKey'](
+      { publicKey },
+      context,
+    );
+
+    expect(setPhoneSealKey).toHaveBeenCalledWith('k', publicKey);
+  });
+
+  it.each([
+    ['nothing', undefined],
+    ['the wrong type', { publicKey: 7 }],
+    ['the wrong length', { publicKey: Buffer.alloc(16, 7).toString('base64url') }],
+    ['not base64url', { publicKey: 'a b+c/' }],
+  ])('refuses %s', async (_name, params) => {
+    const setPhoneSealKey = vi.fn(async () => undefined);
+    const call = createManageMethods(deps({ setPhoneSealKey })).calls['phone.setSealKey'];
+
+    await expect(call(params, context)).rejects.toThrow('That is not a key.');
+    expect(setPhoneSealKey).not.toHaveBeenCalled();
   });
 });
 

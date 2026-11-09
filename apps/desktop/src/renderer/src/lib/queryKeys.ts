@@ -7,6 +7,7 @@ export const queryKeys = {
   accountSessions: ['account', 'sessions'] as const,
   accountActivities: (page: number) => ['account', 'activities', page] as const,
   syncOverview: ['sync', 'overview'] as const,
+  encryption: ['account', 'encryption'] as const,
   syncConflicts: ['sync', 'conflicts'] as const,
   syncShareable: ['sync', 'shareable'] as const,
   syncUsage: (scopeId: number) => ['sync', 'usage', scopeId] as const,

@@ -189,7 +189,11 @@ function ScopeCard({ scope, needsKey }: { scope: SyncScopeView; needsKey: boolea
       extra={
         <>
           {isTeam && <Chip>Team</Chip>}
-          {state === 'open' && <Chip tone="primary">Encrypted end to end</Chip>}
+          {state === 'open' && (
+            <Chip tone="primary">
+              {scope.policy.everything ? 'Everything sealed' : 'Secrets sealed'}
+            </Chip>
+          )}
           {state === 'locked' && <Chip tone="warning">Locked on this computer</Chip>}
         </>
       }
@@ -200,7 +204,9 @@ function ScopeCard({ scope, needsKey }: { scope: SyncScopeView; needsKey: boolea
             : 'No key yet. Passwords, private keys and environment values stay on this computer until you set one.'
           : state === 'locked'
             ? `Type the ${isTeam ? 'team key' : 'passphrase'} once on this computer to read and send what is sealed.`
-            : 'Secrets are sealed with a key only your computers hold. The server can not read them.'
+            : scope.policy.everything
+              ? 'Every record is sealed with a key only your computers hold. The server can not read them.'
+              : 'Secrets are sealed with a key only your computers hold. The server can not read them. Names and other details are not sealed unless you choose below.'
       }
       actions={
         state === 'none' ? (

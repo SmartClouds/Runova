@@ -23,6 +23,7 @@ public class BillingMapperTests
         MaxCloudMonitors = 10,
         MinIntervalSec = 60,
         HistoryDays = 90,
+        EncryptedItems = true,
         MonthlyPriceCents = 900,
         YearlyPriceCents = 9000,
         Currency = "usd",
@@ -67,7 +68,7 @@ public class BillingMapperTests
         var type = BillingMapper.ToDto(_pro);
 
         Assert.Equal(
-            new AccountTypeDto(2, "pro", "Pro", "For teams.", type.Features, 1, false, true, true, 10, 60, 90, 900, 9000, "usd", "5"),
+            new AccountTypeDto(2, "pro", "Pro", "For teams.", type.Features, 1, false, true, true, 10, 60, 90, true, 900, 9000, "usd", "5"),
             type);
         Assert.Equal(["Ten monitors"], type.Features);
         Assert.Equal(

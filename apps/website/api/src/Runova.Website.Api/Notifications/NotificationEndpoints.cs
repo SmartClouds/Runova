@@ -27,7 +27,11 @@ public sealed record UserNotificationDto(
     long? InventoryId,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt,
-    string Category);
+    string Category,
+    IReadOnlyList<SealedCopyDto>? Sealed);
+
+/// <summary>One phone's sealed copy of a notification. Only that phone can open it.</summary>
+public sealed record SealedCopyDto(string KeyId, string Sealed);
 
 public sealed record NotificationPageDto(
     IReadOnlyList<UserNotificationDto> Items,

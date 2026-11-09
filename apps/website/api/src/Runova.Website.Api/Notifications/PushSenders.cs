@@ -134,7 +134,11 @@ internal sealed partial class FcmPushSender(
         }
     }
 
-    /// <summary>The whole body FCM receives: the one line and identifiers, nothing else.</summary>
+    /// <summary>
+    /// The whole body FCM receives: the one line and identifiers, nothing else. With a sealed copy
+    /// it is data only, so the app's own service runs and can open it; <c>fallback</c> is the line it
+    /// shows if it can not.
+    /// </summary>
     internal static JsonObject Body(PushDelivery delivery)
     {
         var data = new JsonObject
@@ -147,16 +151,20 @@ internal sealed partial class FcmPushSender(
             data["itemId"] = delivery.ItemId;
         }
 
-        return new JsonObject
+        var message = new JsonObject { ["token"] = delivery.Token };
+        if (delivery.Sealed is null)
         {
-            ["message"] = new JsonObject
-            {
-                ["token"] = delivery.Token,
-                ["notification"] = new JsonObject { ["title"] = PushContent.Title, ["body"] = delivery.Line },
-                ["data"] = data,
-                ["android"] = new JsonObject { ["priority"] = "high" },
-            },
-        };
+            message["notification"] = new JsonObject { ["title"] = PushContent.Title, ["body"] = delivery.Line };
+        }
+        else
+        {
+            data["sealed"] = delivery.Sealed;
+            data["fallback"] = delivery.Line;
+        }
+
+        message["data"] = data;
+        message["android"] = new JsonObject { ["priority"] = "high" };
+        return new JsonObject { ["message"] = message };
     }
 
     internal static PushSendResult ToResult(HttpStatusCode status) => status switch
@@ -306,7 +314,10 @@ internal sealed partial class ApnsPushSender(
         }
     }
 
-    /// <summary>The whole body APNs receives: the one line and identifiers, nothing else.</summary>
+    /// <summary>
+    /// The whole body APNs receives: the one line and identifiers, nothing else. A sealed copy rides
+    /// beside the generic alert, and <c>mutable-content</c> wakes the app's extension to open it.
+    /// </summary>
     internal static JsonObject Body(PushDelivery delivery)
     {
         var body = new JsonObject
@@ -323,6 +334,12 @@ internal sealed partial class ApnsPushSender(
         if (delivery.ItemId is not null)
         {
             body["itemId"] = delivery.ItemId;
+        }
+
+        if (delivery.Sealed is not null)
+        {
+            body["aps"]!["mutable-content"] = 1;
+            body["sealed"] = delivery.Sealed;
         }
 
         return body;

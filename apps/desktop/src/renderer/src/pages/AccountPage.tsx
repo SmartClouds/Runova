@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { EncryptionPanel } from '@/components/account/EncryptionPanel';
 import { SyncPanel, SyncStatusLine } from '@/components/account/SyncPanel';
 import { TeamsPanel } from '@/components/account/TeamsPanel';
 import {
@@ -77,7 +78,12 @@ export default function AccountPage(): React.JSX.Element {
         onChange={(next) => setParams(next === 'overview' ? {} : { tab: next })}
       />
       {tab === 'overview' && <OverviewTab onOpen={(next) => setParams({ tab: next })} />}
-      {tab === 'sync' && <SyncPanel />}
+      {tab === 'sync' && (
+        <>
+          <EncryptionPanel />
+          <SyncPanel />
+        </>
+      )}
       {tab === 'devices' && <DevicesTab />}
       {tab === 'activity' && <ActivityTab />}
       {tab === 'teams' && <TeamsPanel />}

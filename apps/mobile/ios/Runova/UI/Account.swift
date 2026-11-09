@@ -14,6 +14,7 @@ struct AccountIntents {
     var setMemberRole: (Int64, String) -> Void = { _, _ in }
     var acceptInvitation: (Int64) -> Void = { _ in }
     var declineInvitation: (Int64) -> Void = { _ in }
+    var setEncryption: (String, Bool) -> Void = { _, _ in }
 }
 
 private struct Heading: View {
@@ -75,7 +76,7 @@ struct AccountTab: View {
         } else {
             RunovaScreen(title: "Account") {
                 if let profile = view.account.profile {
-                    AccountList(profile: profile, account: view.account, intents: intents)
+                    AccountList(profile: profile, account: view.account, encryption: view.encryption, intents: intents)
                 } else {
                     LoadingRows()
                 }
@@ -85,9 +86,45 @@ struct AccountTab: View {
     }
 }
 
+/// Which items are sealed so only this person's devices can read them, one switch each.
+private struct EncryptionCard: View {
+    let screen: EncryptionScreen
+    let intents: AccountIntents
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaCard {
+            VStack(alignment: .leading, spacing: 12) {
+                if let warning = screen.warning {
+                    RunovaText(warning, style: RunovaType.small, color: palette.warning)
+                }
+                if let note = screen.note {
+                    RunovaText(note, style: RunovaType.small, color: palette.primary)
+                }
+                ForEach(screen.items, id: \.item) { row in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            RunovaText(row.label, style: RunovaType.label)
+                            RunovaText(row.detail, style: RunovaType.small, color: palette.mutedForeground)
+                        }
+                        Spacer(minLength: 0)
+                        RunovaToggle(isOn: row.enabled, label: row.label, enabled: row.canChange) {
+                            intents.setEncryption(row.item, $0)
+                        }
+                    }
+                }
+                RunovaText(screen.footnote, style: RunovaType.caption, color: palette.mutedForeground)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 private struct AccountList: View {
     let profile: ProfileView
     let account: AccountScreen
+    let encryption: EncryptionScreen?
     let intents: AppIntents
 
     @Environment(\.palette) private var palette
@@ -104,6 +141,10 @@ private struct AccountList: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let encryption {
+                    Heading(text: "End-to-end encryption")
+                    EncryptionCard(screen: encryption, intents: intents.account)
                 }
                 if !account.invitations.isEmpty {
                     Heading(text: "Invitations")

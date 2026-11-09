@@ -138,6 +138,9 @@ function TypeForm({
           <Switch checked={form.highlight} onChange={(on) => onChange({ highlight: on })}>
             Show as the one to pick
           </Switch>
+          <Switch checked={form.encryptedItems} onChange={(on) => onChange({ encryptedItems: on })}>
+            Encrypted notifications and sync
+          </Switch>
         </div>
       </div>
       <div className="flex gap-2">

@@ -4,6 +4,8 @@ import type {
   AccountProfile,
   AccountSession,
   AccountStatus,
+  EncryptionItemName,
+  EncryptionStatus,
   StepUp,
 } from '../shared/accountTypes';
 import { IPC } from '../shared/ipcChannels';
@@ -31,6 +33,9 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
 export function createAccount() {
   return {
     status: (): Promise<AccountStatus> => ipcRenderer.invoke(IPC.account.status),
+    encryption: (): Promise<EncryptionStatus> => ipcRenderer.invoke(IPC.account.encryption),
+    setEncryption: (item: EncryptionItemName, enabled: boolean): Promise<EncryptionStatus> =>
+      ipcRenderer.invoke(IPC.account.setEncryption, { item, enabled }),
     signIn: (): Promise<AccountStatus> => ipcRenderer.invoke(IPC.account.signIn),
     cancelSignIn: (): Promise<void> => ipcRenderer.invoke(IPC.account.cancelSignIn),
     signOut: (): Promise<void> => ipcRenderer.invoke(IPC.account.signOut),

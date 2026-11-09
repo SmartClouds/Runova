@@ -793,6 +793,10 @@ export const IPC = {
   account: {
     // () -> AccountStatus
     status: 'account:status',
+    // () -> EncryptionStatus
+    encryption: 'account:encryption',
+    // ({ item, enabled }) -> EncryptionStatus
+    setEncryption: 'account:setEncryption',
     // () -> AccountStatus, after the browser sign-in finishes (or throws when it is cancelled)
     signIn: 'account:signIn',
     // () -> void

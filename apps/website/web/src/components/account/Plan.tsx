@@ -17,11 +17,11 @@ import {
   type AccountType,
   cryptoPrice,
   intervalLabel,
-  monitorsLabel,
   PAYMENT_STATUS_LABELS,
   type Payment,
   PROVIDER_LABELS,
   planEnds,
+  planLines,
   price,
   yearlySaving,
 } from '@/lib/billing';
@@ -181,10 +181,7 @@ function Offer({
         {saving !== null && <Pill tone="success">Save {saving}%</Pill>}
       </p>
       <ul className="mt-4 grid flex-1 gap-2 text-sm">
-        {(type.features.length > 0
-          ? type.features
-          : [monitorsLabel(type.maxCloudMonitors), `Checks ${intervalLabel(type.minIntervalSec)}`]
-        ).map((line) => (
+        {planLines(type).map((line) => (
           <li key={line} className="flex items-start gap-2">
             <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
             <span>{line}</span>

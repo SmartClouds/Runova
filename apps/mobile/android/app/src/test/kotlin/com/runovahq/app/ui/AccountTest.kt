@@ -23,6 +23,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AccountScreen
+import uniffi.runova_ffi.EncryptionItemView
+import uniffi.runova_ffi.EncryptionScreen
 import uniffi.runova_ffi.ActivityView
 import uniffi.runova_ffi.MyInvitationView
 import uniffi.runova_ffi.ProfileView
@@ -77,6 +79,54 @@ class AccountTest {
 
     private fun show(screen: AccountScreen, intents: AccountIntents = AccountIntents(), app: AppIntents = AppIntents(account = intents)) {
         compose.setContent { RunovaTheme(dark = true) { AppRoot(appView(account = screen), "account", {}, app) } }
+    }
+
+    private fun showEncryption(screen: EncryptionScreen, intents: AccountIntents = AccountIntents()) {
+        compose.setContent {
+            RunovaTheme(dark = true) { AppRoot(appView(account = account(), encryption = screen), "account", {}, AppIntents(account = intents)) }
+        }
+    }
+
+    private val footnote = "Your connection to the server uses TLS either way."
+    private val notifications = EncryptionItemView("notifications", "Notifications", "Only your phone can read them.", false, true)
+    private val cloud = EncryptionItemView("sync", "Cloud sync", "Every record.", true, true)
+
+    @Test
+    fun eachItemHasItsOwnSwitch() {
+        var changed: Pair<String, Boolean>? = null
+        showEncryption(
+            EncryptionScreen(listOf(notifications, cloud), null, null, footnote),
+            AccountIntents(setEncryption = { item, on -> changed = item to on }),
+        )
+        snapshot("encryption")
+
+        compose.onNodeWithText(footnote).assertExists()
+        compose.onNode(hasContentDescription("Notifications")).performClick()
+
+        assertEquals("notifications" to true, changed)
+    }
+
+    @Test
+    fun aSwitchThePlanDoesNotCoverCanNotBeTurnedOn() {
+        var changed = false
+        val locked = notifications.copy(canChange = false)
+        showEncryption(
+            EncryptionScreen(listOf(locked), "Included with Go, Pro and Ultra. You are on Free.", null, footnote),
+            AccountIntents(setEncryption = { _, _ -> changed = true }),
+        )
+
+        compose.onNodeWithText("Included with Go, Pro and Ultra. You are on Free.").assertExists()
+        compose.onNode(hasContentDescription("Notifications")).performClick()
+
+        assertEquals(false, changed)
+    }
+
+    @Test
+    fun aDowngradeIsExplained() {
+        val warning = "Your plan no longer includes encryption, so Notifications went back to normal."
+        showEncryption(EncryptionScreen(listOf(notifications), null, warning, footnote))
+
+        compose.onNodeWithText(warning).assertExists()
     }
 
     private fun snapshot(name: String) {

@@ -13,6 +13,7 @@ export interface AccountType {
   maxCloudMonitors: number | null;
   minIntervalSec: number;
   historyDays: number;
+  encryptedItems: boolean;
   monthlyPriceCents: number | null;
   yearlyPriceCents: number | null;
   currency: string;
@@ -104,6 +105,17 @@ export function intervalLabel(seconds: number): string {
 export function monitorsLabel(max: number | null): string {
   if (max === null) return 'Unlimited online monitors';
   return max === 1 ? '1 online monitor' : `${max} online monitors`;
+}
+
+export const ENCRYPTED_ITEMS_LINE = 'Encrypted notifications and sync';
+
+/** The lines a plan card lists. The encrypted line comes from the type's flag, not from its stored features. */
+export function planLines(type: AccountType): string[] {
+  const lines =
+    type.features.length > 0
+      ? type.features
+      : [monitorsLabel(type.maxCloudMonitors), `Checks ${intervalLabel(type.minIntervalSec)}`];
+  return type.encryptedItems ? [...lines, ENCRYPTED_ITEMS_LINE] : lines;
 }
 
 /** What months of crypto cost: the yearly price for 12 when there is one, else monthly times months. */

@@ -92,6 +92,13 @@ internal static class AccountsModel
             scope.HasOne<AppUser>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<UserEncryptionPreference>(preference =>
+        {
+            preference.HasKey(p => new { p.UserId, p.Item });
+            preference.Property(p => p.Item).HasMaxLength(32);
+            preference.HasOne<AppUser>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<SyncRecord>(record =>
         {
             record.Property(r => r.Collection).HasMaxLength(40);

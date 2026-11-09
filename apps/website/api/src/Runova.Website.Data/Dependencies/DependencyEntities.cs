@@ -190,6 +190,12 @@ public class UserNotification
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? ReadAt { get; set; }
+
+    /// <summary>
+    /// For a forwarded notification the computer sealed (E92), a JSON array of <c>{ keyId, sealed }</c>,
+    /// one per phone, possibly empty. Null on everything else. The server can not open these.
+    /// </summary>
+    public string? Sealed { get; set; }
 }
 
 /// <summary>The Telegram chat an account linked to the RunovaHQ bot.</summary>

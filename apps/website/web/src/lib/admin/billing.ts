@@ -14,6 +14,7 @@ export interface AccountTypeForm {
   maxCloudMonitors: string;
   minIntervalSec: string;
   historyDays: string;
+  encryptedItems: boolean;
   /** In whole units with up to two decimals, such as 15 or 4.99; empty is no price. */
   monthlyPrice: string;
   yearlyPrice: string;
@@ -31,6 +32,7 @@ export const emptyAccountTypeForm = (): AccountTypeForm => ({
   maxCloudMonitors: '10',
   minIntervalSec: '300',
   historyDays: '30',
+  encryptedItems: false,
   monthlyPrice: '',
   yearlyPrice: '',
   currency: 'usd',
@@ -50,6 +52,7 @@ export const fromAccountType = (type: AccountType): AccountTypeForm => ({
   maxCloudMonitors: type.maxCloudMonitors === null ? '' : String(type.maxCloudMonitors),
   minIntervalSec: String(type.minIntervalSec),
   historyDays: String(type.historyDays),
+  encryptedItems: type.encryptedItems,
   monthlyPrice: units(type.monthlyPriceCents),
   yearlyPrice: units(type.yearlyPriceCents),
   currency: type.currency,
@@ -87,6 +90,7 @@ export function accountTypeBody(form: AccountTypeForm, creating: boolean, isFree
     maxCloudMonitors: max === '' ? null : whole(max),
     minIntervalSec: whole(form.minIntervalSec),
     historyDays: whole(form.historyDays),
+    encryptedItems: form.encryptedItems,
     ...(!isFree && {
       monthlyPriceCents: toCents(form.monthlyPrice),
       yearlyPriceCents: toCents(form.yearlyPrice),

@@ -26,6 +26,16 @@ public sealed class BillingRulesTests
     }
 
     [Fact]
+    public void Encrypted_items_are_on_if_any_payer_has_them_even_a_lesser_plan()
+    {
+        var best = Entitlement.Best([Type("ultra", null, 30), Type("go", 10, 300) with { EncryptedItems = true }]);
+
+        Assert.Equal("ultra", best.Key);
+        Assert.True(best.EncryptedItems);
+        Assert.False(Entitlement.Best([Type("ultra", null, 30), Type("go", 10, 300)]).EncryptedItems);
+    }
+
+    [Fact]
     public void Best_of_nothing_is_an_error()
     {
         Assert.Throws<InvalidOperationException>(() => Entitlement.Best([]));

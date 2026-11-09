@@ -40,9 +40,10 @@ public static class PaymentStatuses
 
 /// <summary>
 /// What an account type allows (E53): how many online monitors, the shortest interval in seconds,
-/// and how many days of raw results are kept. No monitor limit means unlimited.
+/// and how many days of raw results are kept. No monitor limit means unlimited. <see cref="EncryptedItems"/>
+/// is whether the type lets a person seal forwarded notifications and whole sync records (E92).
 /// </summary>
-public sealed record Entitlement(long AccountTypeId, string Key, string Name, int? MaxCloudMonitors, int MinIntervalSec, int HistoryDays, bool IsFree)
+public sealed record Entitlement(long AccountTypeId, string Key, string Name, int? MaxCloudMonitors, int MinIntervalSec, int HistoryDays, bool IsFree, bool EncryptedItems = false)
 {
     public bool AllowsMonitors(int count) => MaxCloudMonitors is null || count <= MaxCloudMonitors.Value;
 
@@ -50,14 +51,19 @@ public sealed record Entitlement(long AccountTypeId, string Key, string Name, in
 
     /// <summary>
     /// The most generous of several, for a team with more than one owner: more monitors first
-    /// (unlimited above all), then the shorter interval, then the longer history.
+    /// (unlimited above all), then the shorter interval, then the longer history. Encrypted items
+    /// are on if any of them has them, even when that one is not the most generous otherwise.
     /// </summary>
-    public static Entitlement Best(IEnumerable<Entitlement> entitlements) =>
-        entitlements
+    public static Entitlement Best(IEnumerable<Entitlement> entitlements)
+    {
+        var all = entitlements.ToList();
+        var best = all
             .OrderByDescending(e => e.MaxCloudMonitors ?? int.MaxValue)
             .ThenBy(e => e.MinIntervalSec)
             .ThenByDescending(e => e.HistoryDays)
             .FirstOrDefault() ?? throw new InvalidOperationException("There is no account type to choose from.");
+        return best with { EncryptedItems = all.Any(e => e.EncryptedItems) };
+    }
 }
 
 /// <summary>Prepaid periods, bought with crypto (or given by an Admin): no renewals, an end date.</summary>

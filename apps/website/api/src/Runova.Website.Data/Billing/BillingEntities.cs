@@ -40,6 +40,9 @@ public class AccountType
     /// <summary>How long raw results are kept. Hourly figures and incidents are kept for good.</summary>
     public int HistoryDays { get; set; }
 
+    /// <summary>Whether accounts on this type can seal forwarded notifications and whole sync records (E92).</summary>
+    public bool EncryptedItems { get; set; }
+
     public int? MonthlyPriceCents { get; set; }
 
     public int? YearlyPriceCents { get; set; }

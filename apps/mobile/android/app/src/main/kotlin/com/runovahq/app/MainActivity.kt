@@ -37,8 +37,6 @@ import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.NotificationIntents
 import com.runovahq.app.ui.tabFor
-import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import android.Manifest
 import uniffi.runova_ffi.notificationDestination
@@ -202,6 +200,7 @@ class MainActivity : FragmentActivity(), ViewListener {
                 cancelInvitation = { engine.accountCancelInvitation(it) },
                 removeMember = { engine.accountRemoveMember(it) },
                 setMemberRole = { id, role -> engine.accountSetMemberRole(id, role) },
+                setEncryption = { item, on -> engine.setEncryption(item, on) },
                 acceptInvitation = { engine.accountAcceptInvitation(it) },
                 declineInvitation = { engine.accountDeclineInvitation(it) },
             ),
@@ -333,17 +332,7 @@ class MainActivity : FragmentActivity(), ViewListener {
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
-        if (FirebaseApp.getApps(this).isEmpty()) {
-            FirebaseApp.initializeApp(
-                this,
-                FirebaseOptions.Builder()
-                    .setApiKey(BuildConfig.FIREBASE_API_KEY)
-                    .setApplicationId(BuildConfig.FIREBASE_APP_ID)
-                    .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
-                    .setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
-                    .build(),
-            )
-        }
+        ensureFirebase(this)
         FirebaseMessaging.getInstance().token.addOnSuccessListener { engine.registerPushToken(it) }
     }
 

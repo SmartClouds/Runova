@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "category": "agent-needs-input",
+      "status": null,
+      "agent": "Codex",
+      "project": "Shop",
+      "subject": null,
+      "line": "Codex needs your input in Shop"
+    },
+    {
+      "category": "agent-finished",
+      "status": null,
+      "agent": "Codex",
+      "project": "Shop",
+      "subject": null,
+      "line": "Codex finished in Shop"
+    },
+    {
+      "category": "tasks",
+      "status": "finished",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Nightly build finished in Shop"
+    },
+    {
+      "category": "tasks",
+      "status": "failed",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Nightly build failed in Shop"
+    },
+    {
+      "category": "tasks",
+      "status": "needs-input",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Nightly build needs your input in Shop"
+    },
+    {
+      "category": "tasks",
+      "status": "added",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "A task was added in Shop"
+    },
+    {
+      "category": "pipelines",
+      "status": "failed",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Nightly build failed in Shop"
+    },
+    {
+      "category": "pipelines",
+      "status": "passed",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Nightly build passed in Shop"
+    },
+    {
+      "category": "pipelines",
+      "status": "fixed",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Auto-fix got Nightly build passing in Shop"
+    },
+    {
+      "category": "pipelines",
+      "status": "attention",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "Auto-fix needs you in Shop"
+    },
+    {
+      "category": "pipelines",
+      "status": "gave-up",
+      "agent": null,
+      "project": "Shop",
+      "subject": "Nightly build",
+      "line": "Auto-fix gave up on Nightly build in Shop"
+    },
+    {
+      "category": "deploys",
+      "status": "critical",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Critical alert on Nightly build"
+    },
+    {
+      "category": "deploys",
+      "status": "warning",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Warning on Nightly build"
+    },
+    {
+      "category": "deploys",
+      "status": "info",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Notice on Nightly build"
+    },
+    {
+      "category": "deploys",
+      "status": "review",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build needs a look"
+    },
+    {
+      "category": "monitors",
+      "status": "failed",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build is down"
+    },
+    {
+      "category": "monitors",
+      "status": "recovered",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build is back up"
+    },
+    {
+      "category": "relay",
+      "status": "attention",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "A Relay task needs you in Shop"
+    },
+    {
+      "category": "relay",
+      "status": "finished",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "A relay finished in Shop"
+    },
+    {
+      "category": "relay",
+      "status": "planner-ready",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "A plan is ready to review in Shop"
+    },
+    {
+      "category": "relay",
+      "status": "planner-failed",
+      "agent": null,
+      "project": "Shop",
+      "subject": null,
+      "line": "Planning failed in Shop"
+    },
+    {
+      "category": "ai-limits",
+      "status": "threshold",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build is close to its limit"
+    },
+    {
+      "category": "ai-limits",
+      "status": "reset",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build has reset"
+    },
+    {
+      "category": "security-news",
+      "status": null,
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "A security alert affects Nightly build"
+    },
+    {
+      "category": "tool-updates",
+      "status": null,
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "An update is available for Nightly build"
+    },
+    {
+      "category": "remote",
+      "status": "connected",
+      "agent": null,
+      "project": null,
+      "subject": "Nightly build",
+      "line": "Nightly build connected to this computer"
+    },
+    {
+      "category": "remote",
+      "status": "locked",
+      "agent": null,
+      "project": null,
+      "subject": null,
+      "line": "Password access to this computer was locked"
+    },
+    {
+      "category": "tasks",
+      "status": "finished",
+      "agent": null,
+      "project": "PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
+      "subject": "SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS",
+      "line": "SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS finished in PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP..."
+    }
+  ]
+}

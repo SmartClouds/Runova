@@ -19,6 +19,7 @@ public sealed record AccountTypeDto(
     int? MaxCloudMonitors,
     int MinIntervalSec,
     int HistoryDays,
+    bool EncryptedItems,
     int? MonthlyPriceCents,
     int? YearlyPriceCents,
     string Currency,

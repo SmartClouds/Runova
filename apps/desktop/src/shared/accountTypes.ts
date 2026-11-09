@@ -76,3 +76,23 @@ export interface AccountApiProblem {
   detail: string;
   errors?: Record<string, string[]>;
 }
+
+export type EncryptionItemName = 'notifications' | 'sync';
+
+export interface EncryptionItem {
+  item: EncryptionItemName;
+  label: string;
+  /** What the person chose. */
+  enabled: boolean;
+  /** Whether it is really being sealed now. */
+  active: boolean;
+  /** Chosen, but the plan no longer covers it. */
+  lapsed: boolean;
+  needsKey: boolean;
+}
+
+export interface EncryptionStatus {
+  entitled: boolean;
+  planName: string;
+  items: EncryptionItem[];
+}

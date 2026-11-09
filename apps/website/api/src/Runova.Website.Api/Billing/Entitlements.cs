@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Runova.Website.Core.Billing;
 using Runova.Website.Data;
 using Runova.Website.Data.Accounts;
-using Runova.Website.Data.Billing;
 
 namespace Runova.Website.Api.Billing;
 
@@ -29,7 +28,7 @@ internal sealed class Entitlements(AppDbContext db, TimeProvider time)
         var free = await FreeAsync(cancellationToken);
         return userIds.Distinct().ToDictionary(
             id => id,
-            id => paid.Where(p => p.UserId == id).Select(p => ToEntitlement(p.Type)).FirstOrDefault() ?? free);
+            id => paid.Where(p => p.UserId == id).Select(p => EntitlementMapper.ToEntitlement(p.Type)).FirstOrDefault() ?? free);
     }
 
     /// <summary>The scope's type: its account's, or the best of its team's owners'. A scope nobody owns gets Free.</summary>
@@ -55,11 +54,8 @@ internal sealed class Entitlements(AppDbContext db, TimeProvider time)
     public async Task<Entitlement> FreeAsync(CancellationToken cancellationToken = default)
     {
         var free = await db.AccountTypes.AsNoTracking().SingleOrDefaultAsync(t => t.IsFree, cancellationToken);
-        return free is null ? new Entitlement(0, "free", "Free", 1, 300, 7, true) : ToEntitlement(free);
+        return free is null ? new Entitlement(0, "free", "Free", 1, 300, 7, true) : EntitlementMapper.ToEntitlement(free);
     }
-
-    public static Entitlement ToEntitlement(AccountType type) =>
-        new(type.Id, type.Key, type.Name, type.MaxCloudMonitors, type.MinIntervalSec, type.HistoryDays, type.IsFree);
 }
 
 /// <summary>

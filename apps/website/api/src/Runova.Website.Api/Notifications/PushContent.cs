@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
@@ -15,10 +16,26 @@ public sealed record NotificationEventRequest(
     string? Agent,
     string? Project,
     string? Subject,
-    string? ItemId);
+    string? ItemId,
+    IReadOnlyList<SealedCopyWrite>? SealedFor = null);
 
-/// <summary>A composed one-line notification, ready to save and push.</summary>
-internal sealed record ComposedNotification(string Category, string Line, string? Severity, string? ItemId);
+/// <summary>One phone's copy of a line the computer sealed (E92), as the computer sends it.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SealedCopyWrite(string? KeyId, string? Sealed);
+
+/// <summary>A composed one-line notification, ready to save and push. <c>Sealed</c> is the copies as stored.</summary>
+internal sealed record ComposedNotification(string Category, string Line, string? Severity, string? ItemId, string? Sealed = null);
+
+/// <summary>The sealed copies as the <c>Sealed</c> column holds them: a JSON array, which may be empty.</summary>
+internal static class SealedCopies
+{
+    private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
+
+    public static string Write(IEnumerable<SealedCopyDto> copies) => JsonSerializer.Serialize(copies, _json);
+
+    public static IReadOnlyList<SealedCopyDto>? Read(string? stored) =>
+        stored is null ? null : JsonSerializer.Deserialize<List<SealedCopyDto>>(stored, _json);
+}
 
 /// <summary>
 /// Turns a forwarded event into the one short line a phone shows (E82). The line is put together
@@ -31,6 +48,11 @@ internal static partial class PushContent
     public const int MaxLine = 140;
     public const int MaxAgent = 40;
     public const int MaxName = 80;
+    public const int MaxSealedCopies = 8;
+    public const int MaxSealedLength = 1024;
+
+    /// <summary>What the server knows of a sealed notification, and what a phone with no copy shows.</summary>
+    public const string SealedLine = "New activity on your computer";
 
     private const string Agent = "{agent}";
     private const string Project = "{project}";
@@ -105,6 +127,11 @@ internal static partial class PushContent
             return null;
         }
 
+        if (request.SealedFor is { } copies)
+        {
+            return ComposeSealed(request, copies, errors);
+        }
+
         Check("agent", request.Agent, MaxAgent, errors);
         Check("project", request.Project, MaxName, errors);
         Check("subject", request.Subject, MaxName, errors);
@@ -133,6 +160,63 @@ internal static partial class PushContent
             .Replace(Subject, request.Subject, StringComparison.Ordinal);
         return new ComposedNotification(request.Category, Clip(line), template.Severity, request.ItemId);
     }
+
+    /// <summary>
+    /// A sealed event carries its category, item id and copies and nothing else: a field the
+    /// templates would have read is refused, so plain text can not travel beside the sealed copy.
+    /// An empty list is still sealed; every phone then gets the generic line.
+    /// </summary>
+    private static ComposedNotification? ComposeSealed(NotificationEventRequest request, IReadOnlyList<SealedCopyWrite> copies, IDictionary<string, string[]> errors)
+    {
+        foreach (var (field, value) in new[] { ("status", request.Status), ("agent", request.Agent), ("project", request.Project), ("subject", request.Subject) })
+        {
+            if (value is not null)
+            {
+                errors[field] = ["A sealed event has only a category, an item id and its copies."];
+            }
+        }
+
+        if (request.ItemId is not null && !ItemId().IsMatch(request.ItemId))
+        {
+            errors["itemId"] = ["itemId is up to 64 letters, digits, dots, dashes or underscores."];
+        }
+
+        if (copies.Count > MaxSealedCopies)
+        {
+            errors["sealedFor"] = [$"Send up to {MaxSealedCopies} copies."];
+        }
+        else
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < copies.Count; i++)
+            {
+                if (copies[i]?.KeyId is not { } keyId || !SealKeyId().IsMatch(keyId))
+                {
+                    errors[$"sealedFor[{i}].keyId"] = ["keyId is 12 letters, digits, dashes or underscores."];
+                }
+                else if (!seen.Add(keyId))
+                {
+                    errors[$"sealedFor[{i}].keyId"] = ["Each keyId appears once."];
+                }
+
+                if (copies[i]?.Sealed is not { } content || !IsSealedText(content))
+                {
+                    errors[$"sealedFor[{i}].sealed"] = [$"sealed is base64url of at most {MaxSealedLength} characters."];
+                }
+            }
+        }
+
+        return errors.Count > 0
+            ? null
+            : new ComposedNotification(request.Category!, SealedLine, null, request.ItemId, SealedCopies.Write(copies.Select(NotificationMapper.ToDto)));
+    }
+
+    /// <summary>A key id a phone or a computer gives for its X25519 key.</summary>
+    public static bool IsSealKeyId(string value) => SealKeyId().IsMatch(value);
+
+    // Base64url of no bytes is nothing, and a length of 4n + 1 can not come out of the encoding.
+    private static bool IsSealedText(string value) =>
+        value.Length is > 0 and <= MaxSealedLength && value.Length % 4 != 1 && SealedText().IsMatch(value);
 
     /// <summary>The line for a message made on the server: its title's first line, plain and short.</summary>
     public static string LineFromTitle(string title)
@@ -183,4 +267,10 @@ internal static partial class PushContent
 
     [GeneratedRegex(@"\A[A-Za-z0-9_.:-]{1,64}\z", RegexOptions.CultureInvariant)]
     private static partial Regex ItemId();
+
+    [GeneratedRegex(@"\A[A-Za-z0-9_-]{12}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex SealKeyId();
+
+    [GeneratedRegex(@"\A[A-Za-z0-9_-]+\z", RegexOptions.CultureInvariant)]
+    private static partial Regex SealedText();
 }

@@ -192,7 +192,8 @@ async fn the_push_token_reaches_the_server_with_this_platform() {
         (
             "PUT".to_owned(),
             path.to_owned(),
-            json!({"platform": "android", "pushToken": "tok"})
+            json!({"platform": "android", "pushToken": "tok",
+                   "sealKeyId": runova_crypto::sealed::SealKey::from_identity_seed(&common::PHONE_SEED).key_id()})
         )
     );
 }

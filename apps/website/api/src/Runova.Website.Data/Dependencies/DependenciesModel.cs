@@ -90,6 +90,7 @@ internal static class DependenciesModel
             notification.Property(n => n.Title).HasMaxLength(300);
             notification.Property(n => n.Severity).HasMaxLength(16);
             notification.Property(n => n.ItemId).HasMaxLength(64);
+            notification.Property(n => n.Sealed).HasColumnType("jsonb");
             notification.HasIndex(n => new { n.UserId, n.CreatedAt });
             notification.HasIndex(n => new { n.UserId, n.ReadAt });
             notification.HasOne<AppUser>().WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);

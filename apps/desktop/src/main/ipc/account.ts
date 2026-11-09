@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron';
 import { z } from 'zod';
+import type { EncryptionItemName, EncryptionStatus } from '../../shared/accountTypes';
 import { IPC } from '../../shared/ipcChannels';
 import type { AccountRuntime } from '../account/runtime';
+import { refreshNotificationForwarding } from '../notifications/forward';
 
 /**
  * The account, sync and teams channels (E48). Every payload is checked here before the runtime
@@ -34,6 +36,24 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
     );
 
   handle(IPC.account.status, null, () => runtime().status());
+  handle(IPC.account.encryption, null, () =>
+    runtime().api<EncryptionStatus>('GET', '/accounts/me/encryption'),
+  );
+  handle(
+    IPC.account.setEncryption,
+    z.strictObject({ item: z.enum(['notifications', 'sync']), enabled: z.boolean() }),
+    async (input: { item: EncryptionItemName; enabled: boolean }) => {
+      const status = await runtime().api<EncryptionStatus>(
+        'PUT',
+        `/accounts/me/encryption/${input.item}`,
+        { enabled: input.enabled },
+      );
+      if (input.item === 'notifications') refreshNotificationForwarding();
+      // The policy lives on the server, so the next sync is what picks the new one up.
+      else runtime().trigger(0);
+      return status;
+    },
+  );
   handle(IPC.account.signIn, null, () => runtime().signIn());
   handle(IPC.account.cancelSignIn, null, () => runtime().cancelSignIn());
   handle(IPC.account.signOut, null, () => runtime().signOut());

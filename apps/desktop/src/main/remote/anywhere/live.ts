@@ -88,6 +88,7 @@ const manageMethods = createManageMethods({
     },
   },
   forgetPhone: async (key) => service?.forgetPhone(key),
+  setPhoneSealKey: async (key, sealKey) => service?.setPhoneSealKey(key, sealKey),
 });
 
 const AUDIT_RISK = { read: 'read', write: 'write', danger: 'sensitive' } as const;

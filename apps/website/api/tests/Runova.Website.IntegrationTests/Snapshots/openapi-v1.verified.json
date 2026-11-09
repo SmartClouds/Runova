@@ -2482,6 +2482,74 @@
         }
       }
     },
+    "/api/v1/accounts/me/encryption": {
+      "get": {
+        "tags": [
+          "EncryptionEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EncryptionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/me/encryption/{item}": {
+      "put": {
+        "tags": [
+          "EncryptionEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EncryptionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EncryptionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/teams": {
       "get": {
         "tags": [
@@ -6076,6 +6144,7 @@
           "maxCloudMonitors",
           "minIntervalSec",
           "historyDays",
+          "encryptedItems",
           "monthlyPriceCents",
           "yearlyPriceCents",
           "currency",
@@ -6147,6 +6216,9 @@
               "string"
             ],
             "format": "int32"
+          },
+          "encryptedItems": {
+            "type": "boolean"
           },
           "monthlyPriceCents": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -6290,6 +6362,12 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "encryptedItems": {
+            "type": [
+              "null",
+              "boolean"
             ]
           }
         },
@@ -8076,6 +8154,76 @@
         },
         "additionalProperties": false
       },
+      "EncryptionDto": {
+        "required": [
+          "entitled",
+          "planName",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "entitled": {
+            "type": "boolean"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EncryptionItemDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EncryptionItemDto": {
+        "required": [
+          "item",
+          "label",
+          "enabled",
+          "active",
+          "lapsed",
+          "needsKey"
+        ],
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "lapsed": {
+            "type": "boolean"
+          },
+          "needsKey": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EncryptionWrite": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EnrollmentTokenDto": {
         "required": [
           "token",
@@ -9409,13 +9557,23 @@
               "null",
               "string"
             ]
+          },
+          "sealedFor": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SealedCopyWrite"
+            }
           }
         },
         "additionalProperties": false
       },
       "NotificationListenersDto": {
         "required": [
-          "count"
+          "count",
+          "sealing"
         ],
         "type": "object",
         "properties": {
@@ -9426,6 +9584,9 @@
               "string"
             ],
             "format": "int32"
+          },
+          "sealing": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -11001,6 +11162,12 @@
               "null",
               "string"
             ]
+          },
+          "sealKeyId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -11633,6 +11800,44 @@
               "string"
             ],
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SealedCopyDto": {
+        "required": [
+          "keyId",
+          "sealed"
+        ],
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string"
+          },
+          "sealed": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SealedCopyWrite": {
+        "required": [
+          "keyId",
+          "sealed"
+        ],
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sealed": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -13255,7 +13460,8 @@
           "inventoryId",
           "createdAt",
           "readAt",
-          "category"
+          "category",
+          "sealed"
         ],
         "type": "object",
         "properties": {
@@ -13319,6 +13525,15 @@
           },
           "category": {
             "type": "string"
+          },
+          "sealed": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SealedCopyDto"
+            }
           }
         },
         "additionalProperties": false
@@ -13458,6 +13673,9 @@
     },
     {
       "name": "SyncEndpoints"
+    },
+    {
+      "name": "EncryptionEndpoints"
     },
     {
       "name": "TeamEndpoints"

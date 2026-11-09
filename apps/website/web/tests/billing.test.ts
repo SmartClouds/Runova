@@ -5,6 +5,7 @@ import {
   intervalLabel,
   monitorsLabel,
   planEnds,
+  planLines,
   price,
   yearlySaving,
 } from '../src/lib/billing';
@@ -22,6 +23,7 @@ const type = (patch: Partial<AccountType> = {}): AccountType => ({
   maxCloudMonitors: 50,
   minIntervalSec: 60,
   historyDays: 90,
+  encryptedItems: false,
   monthlyPriceCents: 1500,
   yearlyPriceCents: 15000,
   currency: 'usd',
@@ -49,6 +51,21 @@ describe('billing', () => {
     expect(monitorsLabel(1)).toBe('1 online monitor');
     expect(monitorsLabel(50)).toBe('50 online monitors');
     expect(monitorsLabel(null)).toBe('Unlimited online monitors');
+  });
+
+  it('adds the encrypted line only when the type has the flag, after the stored features', () => {
+    const features = ['50 online monitors', 'Checks every minute'];
+    expect(planLines(type({ features }))).toEqual(features);
+    expect(planLines(type({ features, encryptedItems: true }))).toEqual([
+      ...features,
+      'Encrypted notifications and sync',
+    ]);
+    expect(planLines(type({ encryptedItems: true }))).toEqual([
+      '50 online monitors',
+      'Checks every minute',
+      'Encrypted notifications and sync',
+    ]);
+    expect(features).toHaveLength(2);
   });
 
   it('prices months of crypto like the API does', () => {

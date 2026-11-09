@@ -13,6 +13,7 @@ targets:
     platform: iOS
     sources:
       - Runova
+      - Shared
       - Generated
       - path: ../design/fonts
         type: folder
@@ -24,9 +25,12 @@ targets:
       path: Runova/Runova.entitlements
       properties:
         aps-environment: production
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.runovahq.app.shared
     dependencies:
       - framework: Frameworks/RunovaCore.xcframework
         embed: false
+      - target: RunovaNotifications
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.runovahq.app
@@ -39,6 +43,7 @@ targets:
       path: Runova/Info.plist
       properties:
         NSFaceIDUsageDescription: Confirms it's you before showing a Vault secret.
+        RunovaKeychainGroup: $(AppIdentifierPrefix)com.runovahq.app.shared
         UIAppFonts:
           - fonts/Inter.ttf
           - fonts/JetBrainsMono.ttf
@@ -47,6 +52,35 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - com.runovahq.app
+  RunovaNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - RunovaNotifications
+      - Shared
+      - Generated
+    entitlements:
+      path: RunovaNotifications/RunovaNotifications.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.runovahq.app.shared
+    dependencies:
+      - framework: Frameworks/RunovaCore.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.runovahq.app.notifications
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Runova Notifications
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/Generated
+        OTHER_SWIFT_FLAGS: -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+    info:
+      path: RunovaNotifications/Info.plist
+      properties:
+        RunovaKeychainGroup: $(AppIdentifierPrefix)com.runovahq.app.shared
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
   RunovaTests:
     type: bundle.unit-test
     platform: iOS

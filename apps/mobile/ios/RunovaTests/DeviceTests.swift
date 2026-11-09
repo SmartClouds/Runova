@@ -274,7 +274,8 @@ func fixtureView(
     prompts: PromptsScreen = PromptsScreen(
         options: nil, generating: false, result: nil, error: nil, templates: [], history: [], scheduled: []),
     studioTools: StudioToolsScreen = StudioToolsScreen(voice: nil, narration: nil, timeline: nil, download: nil),
-    gitMore: GitMoreScreen = GitMoreScreen(pr: nil, version: nil)
+    gitMore: GitMoreScreen = GitMoreScreen(pr: nil, version: nil),
+    encryption: EncryptionScreen? = nil
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -283,7 +284,7 @@ func fixtureView(
         monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
-        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore)
+        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption)
 }
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.

@@ -38,12 +38,14 @@ import com.runovahq.app.design.RunovaIcons
 import com.runovahq.app.design.RunovaListRow
 import com.runovahq.app.design.RunovaText
 import com.runovahq.app.design.RunovaTextField
+import com.runovahq.app.design.RunovaToggle
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.EncryptionScreen
 import uniffi.runova_ffi.MyInvitationView
 import uniffi.runova_ffi.ProfileView
 import uniffi.runova_ffi.SessionView
@@ -64,6 +66,7 @@ data class AccountIntents(
     val setMemberRole: (Long, String) -> Unit = { _, _ -> },
     val acceptInvitation: (Long) -> Unit = {},
     val declineInvitation: (Long) -> Unit = {},
+    val setEncryption: (String, Boolean) -> Unit = { _, _ -> },
 )
 
 private fun LazyListScope.heading(text: String) {
@@ -120,15 +123,41 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         if (profile == null) {
             LoadingRows()
         } else {
-            AccountList(profile, account, intents)
+            AccountList(profile, account, view.encryption, intents)
+        }
+    }
+}
+
+/** Which items are sealed so only this person's devices can read them, one switch each. */
+@Composable
+private fun EncryptionCard(screen: EncryptionScreen, intents: AccountIntents) {
+    val colors = RunovaTheme.colors
+    RunovaCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            screen.warning?.let { RunovaText(it, style = RunovaType.small, color = colors.warning) }
+            screen.note?.let { RunovaText(it, style = RunovaType.small, color = colors.primary) }
+            screen.items.forEach { row ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        RunovaText(row.label, style = RunovaType.label)
+                        RunovaText(row.detail, style = RunovaType.small, color = colors.mutedForeground)
+                    }
+                    RunovaToggle(row.enabled, { intents.setEncryption(row.item, it) }, row.label, enabled = row.canChange)
+                }
+            }
+            RunovaText(screen.footnote, style = RunovaType.caption, color = colors.mutedForeground)
         }
     }
 }
 
 @Composable
-private fun AccountList(profile: ProfileView, account: AccountScreen, intents: AppIntents) {
+private fun AccountList(profile: ProfileView, account: AccountScreen, encryption: EncryptionScreen?, intents: AppIntents) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item(key = "profile") { ProfileCard(profile) }
+        if (encryption != null) {
+            heading("End-to-end encryption")
+            item(key = "encryption") { EncryptionCard(encryption, intents.account) }
+        }
         if (account.invitations.isNotEmpty()) {
             heading("Invitations")
             items(account.invitations, key = { "i/${it.id}" }) { InvitationRow(it, intents.account) }

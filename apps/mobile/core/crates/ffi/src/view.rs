@@ -1315,6 +1315,26 @@ pub struct GitMoreScreen {
     pub version: Option<GitVersionView>,
 }
 
+/// One thing the person can choose to have sealed.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct EncryptionItemView {
+    pub item: String,
+    pub label: String,
+    pub detail: String,
+    pub enabled: bool,
+    pub can_change: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct EncryptionScreen {
+    pub items: Vec<EncryptionItemView>,
+    /// Why the switches can't be turned on.
+    pub note: Option<String>,
+    /// What went back to normal after a downgrade.
+    pub warning: Option<String>,
+    pub footnote: String,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -1356,6 +1376,8 @@ pub struct AppView {
     pub prompts: PromptsScreen,
     pub studio_tools: StudioToolsScreen,
     pub git_more: GitMoreScreen,
+    /// None until the server has answered, and on a server too old to.
+    pub encryption: Option<EncryptionScreen>,
 }
 
 impl AppView {
@@ -1396,6 +1418,7 @@ impl AppView {
             prompts: PromptsScreen::default(),
             studio_tools: StudioToolsScreen::default(),
             git_more: GitMoreScreen::default(),
+            encryption: None,
         }
     }
 }

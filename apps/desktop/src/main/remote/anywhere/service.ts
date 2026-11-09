@@ -981,8 +981,23 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     announce();
   }
 
+  async function setPhoneSealKey(key: string, sealKey: string): Promise<void> {
+    await deps.store.setPhoneSealKey(key, sealKey);
+    phones = await deps.store.phones();
+  }
+
+  /** Who sealed notifications can be written for, the most recently seen first. */
+  async function sealKeys(): Promise<string[]> {
+    return (await deps.store.phones())
+      .filter((phone) => phone.sealKey !== undefined)
+      .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+      .map((phone) => phone.sealKey as string);
+  }
+
   return {
     forgetPhone,
+    setPhoneSealKey,
+    sealKeys,
     setPhoneScopes,
     start,
     stop,
