@@ -186,6 +186,17 @@ describe('refreshing one provider', () => {
     expect(claude.clearLiveWindowCache).toHaveBeenCalledTimes(1);
   });
 
+  it('asks for the account limits alone on a refresh, and only on a refresh', async () => {
+    const { index } = await load();
+    const accountOnly = (): unknown => scanner.scanLocalProvider.mock.lastCall?.[1];
+
+    await index.getProviderUsage('claude-code', undefined, true);
+    expect(accountOnly()).toMatchObject({ accountLimitsOnly: false });
+
+    await index.refreshProviderUsage('claude-code', undefined);
+    expect(accountOnly()).toMatchObject({ accountLimitsOnly: true });
+  });
+
   it('turns a failed refresh into an error card rather than rejecting', async () => {
     cursor.fetchCursorSessionUsage.mockRejectedValueOnce(new Error('Could not reach Cursor.'));
     const { index } = await load();

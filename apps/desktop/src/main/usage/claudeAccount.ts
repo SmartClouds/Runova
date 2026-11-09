@@ -428,7 +428,16 @@ export interface LiveWindows {
 
 type LiveFetch =
   | { ok: true; windows: SubscriptionWindow[] }
-  | { ok: false; rateLimited: boolean; retryAfterMs: number | null };
+  | { ok: false; rateLimited: boolean; retryAfterMs: number | null; problem: string };
+
+/** The words a panel shows when the account refuses to hand over its limits. */
+function refusalProblem(status: number): string {
+  if (status === 429) return 'Anthropic is limiting usage reads. Try again in a few minutes.';
+  if (status === 401 || status === 403) {
+    return 'Anthropic refused the Claude Code sign-in. Use Claude Code once to renew it.';
+  }
+  return `Anthropic returned HTTP ${status}`;
+}
 
 /** `Retry-After` in ms, from either of its two forms: seconds or an HTTP date. */
 function parseRetryAfter(raw: string | null, now: number): number | null {
@@ -465,14 +474,25 @@ async function fetchLiveWindows(
         ok: false,
         rateLimited: res.status === 429,
         retryAfterMs: parseRetryAfter(res.headers.get('retry-after'), Date.now()),
+        problem: refusalProblem(res.status),
       };
     }
     const windows = collectWindows(await res.json(), metersFableWeekly(plan));
     return windows.length > 0
       ? { ok: true, windows }
-      : { ok: false, rateLimited: false, retryAfterMs: null };
+      : {
+          ok: false,
+          rateLimited: false,
+          retryAfterMs: null,
+          problem: 'Anthropic sent no usage limits.',
+        };
   } catch {
-    return { ok: false, rateLimited: false, retryAfterMs: null };
+    return {
+      ok: false,
+      rateLimited: false,
+      retryAfterMs: null,
+      problem: 'Could not reach Anthropic.',
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -494,6 +514,8 @@ interface LiveCache {
   /** The grant the answer belongs to. A new login or a refreshed grant is read straight away. */
   accessToken: string;
   live: LiveWindows | null;
+  /** Why `live` is null, in words a panel can show. */
+  problem: string | null;
   /** How long this entry may be reused, counted from `at`. */
   ttl: number;
 }
@@ -527,10 +549,16 @@ export async function getLiveWindows(
         at,
         accessToken,
         live: { windows: result.windows, readAt: new Date(at).toISOString() },
+        problem: null,
         ttl: LIVE_TTL_OK_MS,
       }
-    : { at, accessToken, live: null, ttl: failureTtl(result) };
+    : { at, accessToken, live: null, problem: result.problem, ttl: failureTtl(result) };
   return liveCache.live;
+}
+
+/** Why the latest read of the account's limits failed, or null when it answered. */
+export function liveWindowsProblem(): string | null {
+  return liveCache?.problem ?? null;
 }
 
 /** Drop the cached quota so an explicit Refresh re-hits the account. */

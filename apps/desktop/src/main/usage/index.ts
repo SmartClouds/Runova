@@ -36,6 +36,7 @@ const limitsMemory = createLimitsMemory();
 async function computeUsage(
   providerId: string,
   config: UsageProviderConfig | undefined,
+  accountLimitsOnly: boolean,
 ): Promise<ProviderUsage> {
   const def = getUsageProvider(providerId);
   if (!def) return connectUsage(providerId);
@@ -58,6 +59,7 @@ async function computeUsage(
       }
       return scanLocalProvider(providerId as LocalLogProvider, {
         knownProjects: loadKnownProjects,
+        accountLimitsOnly,
       });
     case 'local-session':
       if (providerId !== 'cursor') return connectUsage(providerId);
@@ -72,17 +74,21 @@ async function computeUsage(
   }
 }
 
-/** Cached per-provider usage. Local-log scans and API calls are memoized ~30s. */
+/**
+ * Cached per-provider usage. Local-log scans and API calls are memoized ~30s.
+ * `accountLimitsOnly` is for a refresh the user asked for: limits come from the account or not at all.
+ */
 export function getProviderUsage(
   providerId: string,
   config: UsageProviderConfig | undefined,
   force = false,
+  accountLimitsOnly = false,
 ): Promise<ProviderUsage> {
   const cached = cache.get(providerId);
   if (!force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
     return cached.promise;
   }
-  const promise = computeUsage(providerId, config).then(
+  const promise = computeUsage(providerId, config, accountLimitsOnly).then(
     (usage) => {
       limitsMemory.observe(providerId, usage);
       // Start the TTL when the scan finishes, not when it started. Otherwise a
@@ -138,7 +144,8 @@ export async function getAllUsage(
   });
 
   const settled = await Promise.allSettled(
-    targets.map((def) => getProviderUsage(def.id, configs[def.id], force)),
+    // Only the Refresh button forces a whole list.
+    targets.map((def) => getProviderUsage(def.id, configs[def.id], force, force)),
   );
 
   return settled.map((outcome, i) => snapshotOf(targets[i].id, outcome));
@@ -166,6 +173,6 @@ export async function refreshProviderUsage(
   config: UsageProviderConfig | undefined,
 ): Promise<ProviderUsage> {
   clearProviderUsageCache(providerId);
-  const [outcome] = await Promise.allSettled([getProviderUsage(providerId, config, true)]);
+  const [outcome] = await Promise.allSettled([getProviderUsage(providerId, config, true, true)]);
   return snapshotOf(providerId, outcome);
 }

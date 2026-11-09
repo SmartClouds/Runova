@@ -68,6 +68,15 @@ export class CursorRequestError extends Error {
   }
 }
 
+/**
+ * True when Cursor sent the request off to sign in. `/api/dashboard/*` answers a session it does
+ * not accept with a 307 to WorkOS's login page instead of a 401. Followed, that POST lands on
+ * WorkOS, which answers 404, so an unaccepted session used to read as a missing endpoint.
+ */
+function isLoginRedirect(res: Response): boolean {
+  return res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
+}
+
 async function request(path: string, cookie: string, body?: unknown): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -80,6 +89,8 @@ async function request(path: string, cookie: string, body?: unknown): Promise<un
       res = await fetch(`${BASE_URL}${path}`, {
         method: body === undefined ? 'GET' : 'POST',
         signal: controller.signal,
+        // See isLoginRedirect: the only redirect these routes give is to the login page.
+        redirect: 'manual',
         headers: {
           Cookie: cookie,
           Accept: 'application/json',
@@ -97,7 +108,7 @@ async function request(path: string, cookie: string, body?: unknown): Promise<un
         ? timedOut()
         : new CursorRequestError('unreachable', 'Could not reach Cursor.');
     }
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401 || res.status === 403 || isLoginRedirect(res)) {
       throw new CursorRequestError(
         'rejected',
         'Cursor session rejected. Sign in to the Cursor app again.',

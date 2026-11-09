@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearLiveWindowCache, getLiveWindows } from './claudeAccount';
+import { clearLiveWindowCache, getLiveWindows, liveWindowsProblem } from './claudeAccount';
 
 /**
  * The account's own quota numbers are fetched at most once a minute and shared by every reader. What
@@ -42,6 +42,31 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe('why the live Claude quota is missing', () => {
+  it.each([
+    [429, 'Anthropic is limiting usage reads. Try again in a few minutes.'],
+    [401, 'Anthropic refused the Claude Code sign-in. Use Claude Code once to renew it.'],
+    [503, 'Anthropic returned HTTP 503'],
+  ])('names a %i refusal', async (status, problem) => {
+    fetchMock.mockResolvedValueOnce(refusal(status));
+
+    await expect(getLiveWindows('token-a', PLAN)).resolves.toBeNull();
+
+    expect(liveWindowsProblem()).toBe(problem);
+  });
+
+  it('names a network failure, and clears once the account answers', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    await getLiveWindows('token-a', PLAN);
+    expect(liveWindowsProblem()).toBe('Could not reach Anthropic.');
+
+    clearLiveWindowCache();
+    fetchMock.mockResolvedValueOnce(answer());
+    await getLiveWindows('token-a', PLAN);
+    expect(liveWindowsProblem()).toBeNull();
+  });
 });
 
 describe('the live Claude quota', () => {

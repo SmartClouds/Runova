@@ -20,6 +20,7 @@ const claude = vi.hoisted(() => ({
 vi.mock('./claudeAccount', () => ({
   readClaudeAccount: async () => claude.account,
   getLiveWindows: async () => claude.live,
+  liveWindowsProblem: () => 'Anthropic returned HTTP 503',
 }));
 
 const HOUR_MS = 3_600_000;
@@ -51,10 +52,10 @@ async function scanCodex() {
   return scan('codex');
 }
 
-async function scan(provider: 'codex' | 'claude-code') {
+async function scan(provider: 'codex' | 'claude-code', options?: { accountLimitsOnly: boolean }) {
   vi.resetModules();
   const { scanLocalProvider } = await import('./localScanner');
-  return scanLocalProvider(provider);
+  return scanLocalProvider(provider, options);
 }
 
 // The first import of the scanner loads the whole usage module graph cold, which can take longer
@@ -215,5 +216,34 @@ describe('scanLocalProvider for Claude Code', () => {
       source: 'estimate',
       estimateReason: 'account unreachable',
     });
+  });
+
+  it('reports why, with no estimate, when a refresh gets no answer from the account', async () => {
+    signedIn();
+
+    const usage = await scan('claude-code', { accountLimitsOnly: true });
+
+    expect(usage.subscription).toMatchObject({ source: 'account', windows: [], plan: PLAN });
+    expect(usage.limitsError).toBe('Anthropic returned HTTP 503');
+  });
+
+  it('says the sign-in expired when a refresh has no usable grant', async () => {
+    signedIn();
+    claude.account = { ...claude.account, accessToken: null, tokenExpired: true };
+
+    const usage = await scan('claude-code', { accountLimitsOnly: true });
+
+    expect(usage.subscription?.windows).toEqual([]);
+    expect(usage.limitsError).toBe('Claude Code sign-in has expired. Use Claude Code to renew it.');
+  });
+
+  it('uses the account numbers on a refresh when the account answers', async () => {
+    signedIn();
+    claude.live = { windows: [SESSION], readAt: new Date(now).toISOString() };
+
+    const usage = await scan('claude-code', { accountLimitsOnly: true });
+
+    expect(usage.subscription).toMatchObject({ source: 'account', windows: [SESSION] });
+    expect(usage.limitsError).toBeUndefined();
   });
 });

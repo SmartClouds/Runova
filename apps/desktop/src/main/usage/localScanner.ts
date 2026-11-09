@@ -2,9 +2,14 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import type { ProjectDaily, ProviderUsage, SubscriptionUsage, UsageWindow } from '@runova/core';
+import type { ProjectDaily, ProviderUsage, UsageWindow } from '@runova/core';
 import { app } from 'electron';
-import { getLiveWindows, readClaudeAccount } from './claudeAccount';
+import {
+  type ClaudeAccount,
+  getLiveWindows,
+  liveWindowsProblem,
+  readClaudeAccount,
+} from './claudeAccount';
 import { codexSubscription } from './codexLimits';
 import {
   type LocalLogProvider,
@@ -152,6 +157,11 @@ function toEntries(result: ScanResult): UsageEntry[] {
 /** What a scan may ask the app about its projects. Optional, and a failure never fails the scan. */
 export interface LocalScanOptions {
   knownProjects?: () => Promise<KnownProjects>;
+  /**
+   * Set when the user pressed Refresh. Claude's limits then come from the account or not at all:
+   * a failed read reports why, instead of quietly showing numbers worked out from local logs.
+   */
+  accountLimitsOnly?: boolean;
 }
 
 /**
@@ -178,41 +188,63 @@ async function projectDailyFor(
   }
 }
 
+/** Why the account gave no limits, for a refresh that will not fall back to an estimate. */
+function claudeLimitsProblem(account: ClaudeAccount): string {
+  if (account.tokenExpired) return 'Claude Code sign-in has expired. Use Claude Code to renew it.';
+  if (!account.accessToken) return 'No Claude Code sign-in found.';
+  return liveWindowsProblem() ?? 'Anthropic did not answer.';
+}
+
 /**
  * Plan + rolling-limit state for Claude Code. Prefers the account's own numbers
  * and falls back to reconstructing the windows from the transcripts we just
- * scanned, so a signed-in user offline still sees where they stand.
+ * scanned, so a signed-in user offline still sees where they stand. A refresh
+ * the user asked for skips that fallback and says why the account did not answer.
  */
-async function claudeSubscription(entries: UsageEntry[]): Promise<SubscriptionUsage> {
+async function claudeLimits(
+  entries: UsageEntry[],
+  accountLimitsOnly: boolean,
+): Promise<Pick<ProviderUsage, 'subscription' | 'limitsError'>> {
   const account = await readClaudeAccount();
 
   if (account.mode === 'api') {
-    return { mode: 'api', plan: null, windows: [], source: 'account' };
+    return { subscription: { mode: 'api', plan: null, windows: [], source: 'account' } };
   }
 
   if (account.accessToken) {
     const live = await getLiveWindows(account.accessToken, account.plan);
     if (live) {
       return {
-        mode: 'subscription',
-        plan: account.plan,
-        windows: live.windows,
-        source: 'account',
-        readAt: live.readAt,
+        subscription: {
+          mode: 'subscription',
+          plan: account.plan,
+          windows: live.windows,
+          source: 'account',
+          readAt: live.readAt,
+        },
       };
     }
   }
 
+  if (accountLimitsOnly) {
+    return {
+      subscription: { mode: 'subscription', plan: account.plan, windows: [], source: 'account' },
+      limitsError: claudeLimitsProblem(account),
+    };
+  }
+
   return {
-    mode: 'subscription',
-    plan: account.plan,
-    windows: estimateSubscriptionWindows(entries, account.plan, account.weeklyAnchor),
-    source: 'estimate',
-    estimateReason: account.tokenExpired
-      ? 'signed out of the CLI'
-      : account.accessToken
-        ? 'account unreachable'
-        : 'no CLI login found',
+    subscription: {
+      mode: 'subscription',
+      plan: account.plan,
+      windows: estimateSubscriptionWindows(entries, account.plan, account.weeklyAnchor),
+      source: 'estimate',
+      estimateReason: account.tokenExpired
+        ? 'signed out of the CLI'
+        : account.accessToken
+          ? 'account unreachable'
+          : 'no CLI login found',
+    },
   };
 }
 
@@ -247,7 +279,7 @@ export async function scanLocalProvider(
   const entries = toEntries(result);
   const usage = buildUsageFromEntries(provider, entries, toUsageWindow(result.window));
   if (provider === 'claude-code') {
-    usage.subscription = await claudeSubscription(entries);
+    Object.assign(usage, await claudeLimits(entries, options.accountLimitsOnly === true));
   } else if (provider === 'codex') {
     usage.subscription = codexSubscription(result.limits);
   }

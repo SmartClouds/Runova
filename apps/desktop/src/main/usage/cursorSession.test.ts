@@ -96,6 +96,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('a session Cursor does not accept', () => {
+  it('reads the login redirect as a rejected session, without following it', async () => {
+    const { fetchMock } = fakeCursor({
+      '/api/dashboard/get-filtered-usage-events': 307,
+      '/api/usage-summary': 401,
+      '/api/usage': 401,
+    });
+
+    const error = await rejectionOf(fetchCursorSessionUsage());
+
+    expect((error as Error).message).toBe(
+      'Cursor session rejected. Sign in to the Cursor app again.',
+    );
+    for (const [, init] of fetchMock.mock.calls) expect(init?.redirect).toBe('manual');
+  });
+});
+
 describe('fetchCursorSessionUsage', () => {
   it("takes a usage-based plan's limits from the usage summary", async () => {
     const cursor = fakeCursor({
