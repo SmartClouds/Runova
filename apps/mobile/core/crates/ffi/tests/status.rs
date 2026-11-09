@@ -1,7 +1,7 @@
 mod common;
 
 use common::{World, connected};
-use runova_ffi::view::{LimitState, ProviderState, Section};
+use runova_ffi::view::{ComputerItemView, LimitState, ProviderState, Section};
 use serde_json::{Value, json};
 
 fn system() -> Value {
@@ -122,6 +122,124 @@ async fn the_rest_of_the_status_bar_arrives_ready_to_read_in_its_order() {
         items[8].detail.as_deref(),
         Some("Set to Agent, awake for an agent at work, file transfers")
     );
+}
+
+async fn list_of(bar: Value) -> Vec<ComputerItemView> {
+    let world = connected().await;
+    world.computer.answer("status.bar", bar);
+    world.engine.open_section(Some(Section::Status));
+    world
+        .until(|v| !v.status.computer.is_empty(), "the list")
+        .await
+        .status
+        .computer
+}
+
+fn found<'a>(items: &'a [ComputerItemView], id: &str) -> &'a ComputerItemView {
+    items.iter().find(|i| i.id == id).expect(id)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_show_what_they_use_and_where_to_reach_them() {
+    let items = list_of(json!({"windowOpen": true, "plans": [], "runs": [
+        {"id": "s1", "title": "dev", "state": "running", "cpuPercent": 12.0, "memBytes": 1048576,
+         "urls": ["http://localhost:3000/", "http://localhost:4000/"], "device": "Pixel 8"},
+        {"id": "s2", "title": "worker", "state": "starting", "cpuPercent": null, "memBytes": null, "urls": [], "device": null},
+        {"id": "s3", "title": "", "state": "idle", "urls": []},
+        {"id": "s4", "title": "api", "state": "paused", "urls": []},
+    ]}))
+    .await;
+
+    let dev = found(&items, "run:s1");
+    assert_eq!(dev.title, "dev");
+    assert_eq!(dev.value, "Running");
+    let detail = dev.detail.as_deref().expect("detail");
+    assert!(detail.contains("CPU"), "{detail}");
+    assert!(detail.contains("localhost:3000"), "{detail}");
+    assert!(!detail.contains("http"), "{detail}");
+    assert!(detail.ends_with("Pixel 8"), "{detail}");
+    assert_eq!(found(&items, "run:s2").value, "Starting");
+    assert_eq!(found(&items, "run:s2").detail, None);
+    assert_eq!(found(&items, "run:s3").title, "Run");
+    assert_eq!(found(&items, "run:s3").value, "Finished");
+    assert_eq!(found(&items, "run:s4").value, "Paused");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn relay_plans_count_up_and_call_for_attention_when_finished() {
+    let items = list_of(json!({"windowOpen": true, "runs": [], "plans": [
+        {"key": "split:a", "kind": "split", "projectName": "Shop", "status": "running", "elapsedMs": 65000, "error": null},
+        {"key": "revise:b", "kind": "revise", "projectName": "", "status": "running", "elapsedMs": 9000, "error": null},
+        {"key": "catch-up:c", "kind": "catch-up", "projectName": "Blog", "status": "done", "elapsedMs": 1, "error": null},
+        {"key": "split:d", "kind": "split", "projectName": "Api", "status": "failed", "elapsedMs": 1, "error": "out of credit"},
+        {"key": "split:e", "kind": "split", "projectName": "Mail", "status": "failed", "elapsedMs": 1, "error": null},
+    ]}))
+    .await;
+
+    assert_eq!(found(&items, "plan:split:a").value, "Splitting 1:05");
+    assert!(!found(&items, "plan:split:a").attention);
+    assert_eq!(found(&items, "plan:revise:b").value, "Revising 0:09");
+    assert!(
+        found(&items, "plan:revise:b")
+            .detail
+            .as_deref()
+            .expect("detail")
+            .contains("a project")
+    );
+    assert_eq!(found(&items, "plan:catch-up:c").value, "Tasks ready");
+    assert!(found(&items, "plan:catch-up:c").attention);
+    let failed = found(&items, "plan:split:d");
+    assert_eq!(failed.value, "Planning failed");
+    assert!(
+        failed
+            .detail
+            .as_deref()
+            .expect("detail")
+            .ends_with("out of credit")
+    );
+    assert!(
+        found(&items, "plan:split:e")
+            .detail
+            .as_deref()
+            .expect("detail")
+            .ends_with("no answer")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plans_and_runs_sit_after_relay_like_the_desktop() {
+    let items = list_of(json!({
+        "relays": {"running": 1, "paused": 0, "scheduled": 0, "needsYou": 0},
+        "terminals": 1, "windowOpen": true,
+        "plans": [{"key": "k", "kind": "split", "projectName": "P", "status": "running", "elapsedMs": 0, "error": null}],
+        "runs": [{"id": "r", "title": "dev", "state": "running", "urls": []}],
+    }))
+    .await;
+
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    assert_eq!(ids, ["agents", "relay", "plan:k", "run:r", "terminals"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_closed_window_says_why_runs_are_missing() {
+    let items = list_of(json!({"windowOpen": false, "runs": [], "plans": []})).await;
+
+    let hint = found(&items, "window");
+    assert_eq!(hint.value, "No window open");
+    assert!(
+        hint.detail
+            .as_deref()
+            .expect("detail")
+            .contains("Open Runova")
+    );
+    assert!(!hint.attention);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computer_too_old_to_say_shows_no_hint() {
+    let items = list_of(json!({"terminals": 1})).await;
+
+    assert!(items.iter().all(|i| i.id != "window"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

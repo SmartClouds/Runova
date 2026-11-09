@@ -253,6 +253,34 @@ export interface TerminalRunStatusResult {
   sessions: TerminalRunStatus[];
 }
 
+/** A project run, as the window's status bar knows it. */
+export interface StatusBarRun {
+  id: string;
+  title: string;
+  state: 'starting' | 'running' | 'idle' | 'paused';
+  /** Null until there are two readings to compare. */
+  cpuPercent: number | null;
+  memBytes: number | null;
+  urls: string[];
+  device: string | null;
+}
+
+/** A Relay plan running in the background or waiting to be reviewed. */
+export interface StatusBarPlan {
+  key: string;
+  kind: 'split' | 'revise' | 'catch-up';
+  projectName: string;
+  status: 'running' | 'done' | 'failed';
+  startedAt: number;
+  error: string | null;
+}
+
+/** The status bar items only a window can answer for. */
+export interface StatusBarFeed {
+  runs: StatusBarRun[];
+  plans: StatusBarPlan[];
+}
+
 /** A workspace terminal tab, as the agent status tracker needs to know it. */
 export interface AgentSessionEntry {
   sessionId: string;

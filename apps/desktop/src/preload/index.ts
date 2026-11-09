@@ -330,6 +330,7 @@ import type {
   StartHostInput,
   StartRdpAgentTaskInput,
   StartSshAgentTaskInput,
+  StatusBarFeed,
   SuggestGitTextResult,
   SuggestPullRequestTextResult,
   SuggestTagResult,
@@ -843,6 +844,8 @@ const agents = {
   /** Tells main which workspace tabs exist, so it can follow their agents' status. */
   sync: (entries: AgentSessionEntry[]): Promise<void> =>
     ipcRenderer.invoke(IPC.agents.sync, entries),
+  publishStatusBar: (feed: StatusBarFeed): Promise<void> =>
+    ipcRenderer.invoke(IPC.agents.statusBarFeed, feed),
   /** The tabs on screen right now; finishing while visible and focused raises no notification. */
   setViewing: (visible: string[], focused: string | null): Promise<void> =>
     ipcRenderer.invoke(IPC.agents.setViewing, visible, focused),

@@ -94,6 +94,33 @@ class StatusTest {
     }
 
     @Test
+    fun runsAndPlansSitOnTheList() {
+        val items = listOf(
+            ComputerItemView("agents", "Agents", "2 working", null, false),
+            ComputerItemView("plan:split:a", "Relay plan", "Splitting 1:05", "Planning tasks for Shop in the background", false),
+            ComputerItemView("plan:split:b", "Relay plan", "Tasks ready", "The plan for Blog is ready to review on this computer", true),
+            ComputerItemView("run:s1", "dev", "Running", "12% CPU, 240 MB, localhost:3000", false),
+            ComputerItemView("run:s2", "worker", "Paused", null, false),
+        )
+        show(view(status(items = items)))
+        snapshot("status-runs")
+
+        compose.onNodeWithText("Splitting 1:05").assertExists()
+        compose.onNodeWithText("Tasks ready").assertExists()
+        compose.onNodeWithText("12% CPU, 240 MB, localhost:3000").assertExists()
+    }
+
+    @Test
+    fun aClosedWindowExplainsItself() {
+        val items = listOf(
+            ComputerItemView("window", "Runs and plans", "No window open", "Open Runova on this computer to see them", false),
+        )
+        show(view(status(items = items)))
+
+        compose.onNodeWithText("No window open").assertExists()
+    }
+
+    @Test
     fun nothingToListLeavesTheHeadingOut() {
         show(view(status(items = emptyList())))
 

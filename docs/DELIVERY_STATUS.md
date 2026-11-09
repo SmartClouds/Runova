@@ -122,6 +122,7 @@ Plan: docs/ROADMAP.md
 | E88 | Agent choice and the prompt library on the phone | In progress | see git log | CLI, model and effort for agents, stable, beta and preview tags, tag deletion, and Prompt Builder templates, history and scheduling. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E89 | Voice, timeline and download in Studio on the phone | In progress | see git log | Voice with a price the computer checks, captions, a timeline with named clip gestures, and fetching the finished film in pieces. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E90 | Pull requests and version updates on the phone | In progress | see git log | Pull request state, AI written text, AI review posted as a comment, and following a version update in files with undo per file. iOS screens are written but never compiled. Owed: trying it against a real computer |
+| E91 | Runs and Relay plans in the phone's status | In progress | see git log | Each run with state, CPU, memory and address, and each Relay plan with progress or result. The window publishes them to main, and the phone says when no window is open. iOS change is written but never compiled. Owed: trying it against a real computer |
 
 Status values: Not started, In progress, Blocked, Complete.
 

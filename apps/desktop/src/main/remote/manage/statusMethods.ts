@@ -5,13 +5,20 @@ import {
   type ProviderUsage,
 } from '@runova/core';
 import type {
+  ManageBarPlan,
   ManageProviderUsage,
   ManageStatusBar,
   ManageSystemStats,
   ManageUsage,
 } from '@runova/protocol';
 import type { AccountStatus } from '../../../shared/accountTypes';
-import type { GithubAccount, KeepAwakeStatus, SystemStatsSample } from '../../../shared/apiTypes';
+import type {
+  GithubAccount,
+  KeepAwakeStatus,
+  StatusBarFeed,
+  StatusBarPlan,
+  SystemStatsSample,
+} from '../../../shared/apiTypes';
 import type { SyncOverview } from '../../../shared/syncTypes';
 import type { ManageMethods } from './session';
 
@@ -39,6 +46,8 @@ export interface ManageStatusBarDeps {
   /** Null when there is no Android SDK. */
   android(): Promise<{ state: string }[] | null>;
   keepAwake(): KeepAwakeStatus;
+  /** Null while no window is open to say. */
+  feed(): StatusBarFeed | null;
 }
 
 const HISTORY_DAYS = 30;
@@ -131,6 +140,18 @@ function relaysOf(runs: { status: string; current: { phase: string } | null }[])
   return counts;
 }
 
+function planOf(plan: StatusBarPlan, now: number): ManageBarPlan {
+  return {
+    key: plan.key,
+    kind: plan.kind,
+    projectName: plan.projectName,
+    status: plan.status,
+    // The phone's clock may differ, so it gets the time gone by rather than a moment.
+    elapsedMs: Math.max(0, now - plan.startedAt),
+    error: plan.error,
+  };
+}
+
 function syncOf(state: { status: AccountStatus; overview: SyncOverview } | null) {
   if (state?.status.state !== 'signed-in') return null;
   return {
@@ -185,6 +206,7 @@ export function statusMethods(deps: ManageStatusDeps): ManageMethods['calls'] {
         orNothing(android),
       ]);
       const { mode, blocking, busy } = deps.bar.keepAwake();
+      const feed = deps.bar.feed();
       return {
         agents: agentsOf(deps.bar.agents()),
         terminals: terminals ?? 0,
@@ -201,6 +223,9 @@ export function statusMethods(deps: ManageStatusDeps): ManageMethods['calls'] {
           booting: emulators.filter((emulator) => BOOTING.has(emulator.state)).length,
         },
         keepAwake: { mode, awake: blocking, busy },
+        windowOpen: feed !== null,
+        runs: feed?.runs ?? [],
+        plans: (feed?.plans ?? []).map((plan) => planOf(plan, deps.now())),
       };
     },
     'status.system': async (): Promise<ManageSystemStats> => {

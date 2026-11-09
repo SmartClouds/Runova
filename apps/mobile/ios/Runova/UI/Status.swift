@@ -118,8 +118,11 @@ private struct ComputerCard: View {
 }
 
 private func computerIcon(_ id: String) -> String {
+    if id.hasPrefix("run:") { return RunovaIcons.playCircle }
+    if id.hasPrefix("plan:") { return RunovaIcons.sparkles }
     switch id {
     case "agents": return RunovaIcons.agent
+    case "window": return RunovaIcons.playCircle
     case "relay": return RunovaIcons.bolt
     case "transfers": return RunovaIcons.file
     case "terminals": return RunovaIcons.terminal

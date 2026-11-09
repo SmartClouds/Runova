@@ -39,6 +39,7 @@ import { liveAgents } from './liveAgents';
 import { liveDeploy } from './liveDeploy';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
+import { statusFeed } from './statusFeed';
 
 async function listTerminals(): Promise<ManageTerminal[]> {
   const { sessions } = await terminalUsage();
@@ -113,6 +114,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
       docker: async () => ((await isDockerAvailable()) ? listContainers() : null),
       android: androidEmulators,
       keepAwake: () => keepAwake.status(),
+      feed: () => statusFeed.current(),
     },
   },
   vault: {

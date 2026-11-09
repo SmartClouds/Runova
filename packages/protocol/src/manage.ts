@@ -474,7 +474,7 @@ export interface ManageErrorDetail {
   } | null;
 }
 
-/** The parts of the desktop's status bar this computer can answer with no window open. */
+/** The desktop's status bar, as far as this computer can answer. */
 export interface ManageStatusBar {
   agents: { working: number; waiting: number; finished: number; idle: number };
   terminals: number;
@@ -494,6 +494,29 @@ export interface ManageStatusBar {
   /** Null when no Android SDK is found. */
   android: { running: number; booting: number } | null;
   keepAwake: { mode: string; awake: boolean; busy: string[] };
+  /** False when no window is open, so runs and plans can't be known. */
+  windowOpen: boolean;
+  runs: ManageBarRun[];
+  plans: ManageBarPlan[];
+}
+
+export interface ManageBarRun {
+  id: string;
+  title: string;
+  state: 'starting' | 'running' | 'idle' | 'paused';
+  cpuPercent: number | null;
+  memBytes: number | null;
+  urls: string[];
+  device: string | null;
+}
+
+export interface ManageBarPlan {
+  key: string;
+  kind: 'split' | 'revise' | 'catch-up';
+  projectName: string;
+  status: 'running' | 'done' | 'failed';
+  elapsedMs: number;
+  error: string | null;
 }
 
 export type ManageErrorCode = 'unknown-method' | 'forbidden' | 'bad-params' | 'busy' | 'failed';

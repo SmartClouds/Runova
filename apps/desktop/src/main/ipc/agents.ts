@@ -15,6 +15,7 @@ import { readProjectUsage } from '../agents/projectUsage';
 import { listAgentHistory } from '../agents/sessionHistory';
 import { readSessionUsage } from '../agents/sessionUsage';
 import { agentStatus } from '../agents/statusTracker';
+import { statusFeed } from '../remote/manage/statusFeed';
 import { store } from '../store';
 import { findProjectScope } from '../worktrees/resolve';
 import { attachForTracking, autoContinue, SESSION_ID_PATTERN } from './terminal';
@@ -50,6 +51,9 @@ function isPeriod(value: unknown): value is number | null {
 }
 
 export function registerAgentHandlers(): void {
+  ipcMain.handle(IPC.agents.statusBarFeed, (event, feed: unknown): void => {
+    statusFeed.publish(event.sender, feed);
+  });
   ipcMain.handle(IPC.agents.sync, (_event, entries: unknown): void => {
     const valid = Array.isArray(entries) ? entries.filter(isEntry) : [];
     const added = agentStatus.sync(valid);

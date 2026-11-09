@@ -43,6 +43,7 @@ import { AGENT_STATUS_LABEL, AgentStatusDot } from '@/components/workspace/Agent
 import { useAutoPauseRunsSetting } from '@/hooks/useAutoPauseRunsSetting';
 import { useRefreshProviderUsage } from '@/hooks/useRefreshProviderUsage';
 import { isPausable, type RunRow, useRunRows } from '@/hooks/useRunRows';
+import { StatusFeedPublisher } from '@/hooks/useStatusFeed';
 import { useSystemStatsHistory } from '@/hooks/useSystemStatsHistory';
 import { formatBytes as formatMemory, formatPercent } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
@@ -1302,6 +1303,7 @@ export function StatusBar(): React.JSX.Element {
       aria-label="Status bar"
       className="flex h-6 shrink-0 items-center justify-between gap-2 border-t border-border/70 bg-card/40 px-1 text-[11px] text-muted-foreground glass:border-t-0 glass:bg-transparent"
     >
+      <StatusFeedPublisher />
       <div className="flex h-full min-w-0 items-center overflow-hidden">
         <AgentSegments />
       </div>

@@ -2074,6 +2074,8 @@ export const IPC = {
 
   agents: {
     sync: 'agents:sync',
+    // (StatusBarFeed) -> void
+    statusBarFeed: 'agents:statusBarFeed',
     setViewing: 'agents:setViewing',
     acknowledge: 'agents:acknowledge',
     list: 'agents:list',

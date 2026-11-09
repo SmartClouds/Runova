@@ -123,8 +123,15 @@ private fun ComputerCard(system: SystemStatsView) {
     }
 }
 
-private fun computerIcon(id: String) = when (id) {
+private fun computerIcon(id: String) = when {
+    id.startsWith("run:") -> RunovaIcons.PlayCircle
+    id.startsWith("plan:") -> RunovaIcons.Sparkles
+    else -> namedComputerIcon(id)
+}
+
+private fun namedComputerIcon(id: String) = when (id) {
     "agents" -> RunovaIcons.Agent
+    "window" -> RunovaIcons.PlayCircle
     "relay" -> RunovaIcons.Bolt
     "transfers" -> RunovaIcons.File
     "terminals" -> RunovaIcons.Terminal

@@ -76,6 +76,7 @@ function bar(change: Partial<ManageStatusBarDeps> = {}): ManageStatusBarDeps {
     docker: async () => [{ state: 'running' }, { state: 'exited' }],
     android: async () => [{ state: 'running' }, { state: 'booting' }, { state: 'stopped' }],
     keepAwake: () => ({ mode: 'agent', blocking: true, busy: ['agents'] }),
+    feed: () => null,
     ...change,
   };
 }
@@ -199,6 +200,50 @@ describe('status methods', () => {
 
     expect(result.docker).toBeNull();
     expect(result.terminals).toBe(3);
+  });
+
+  it('says when no window is open to answer for runs and plans', async () => {
+    const result = await readBar(deps());
+
+    expect(result.windowOpen).toBe(false);
+    expect(result.runs).toEqual([]);
+    expect(result.plans).toEqual([]);
+  });
+
+  it('passes on runs and how long each plan has been going', async () => {
+    const run = {
+      id: 's1',
+      title: 'dev',
+      state: 'running' as const,
+      cpuPercent: 3,
+      memBytes: 10,
+      urls: [],
+      device: null,
+    };
+    const plan = {
+      key: 'split:p1',
+      kind: 'split' as const,
+      projectName: 'Shop',
+      status: 'running' as const,
+      startedAt: NOW - 65_000,
+      error: null,
+    };
+    const result = await readBar(
+      deps({ bar: bar({ feed: () => ({ runs: [run], plans: [plan] }) }) }),
+    );
+
+    expect(result.windowOpen).toBe(true);
+    expect(result.runs).toEqual([run]);
+    expect(result.plans).toEqual([
+      {
+        key: 'split:p1',
+        kind: 'split',
+        projectName: 'Shop',
+        status: 'running',
+        elapsedMs: 65_000,
+        error: null,
+      },
+    ]);
   });
 
   it('asks gh rarely while signed in and often while signed out', async () => {

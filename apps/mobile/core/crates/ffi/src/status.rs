@@ -142,6 +142,33 @@ struct BarDto {
     docker: Option<DockerDto>,
     android: Option<AndroidDto>,
     keep_awake: Option<KeepAwakeDto>,
+    /// Missing on a computer too old to say, which must not read as a closed window.
+    window_open: Option<bool>,
+    runs: Vec<RunDto>,
+    plans: Vec<PlanDto>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct RunDto {
+    id: String,
+    title: String,
+    state: String,
+    cpu_percent: Option<f64>,
+    mem_bytes: Option<u64>,
+    urls: Vec<String>,
+    device: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+struct PlanDto {
+    key: String,
+    kind: String,
+    project_name: String,
+    status: String,
+    elapsed_ms: u64,
+    error: Option<String>,
 }
 
 fn item(
@@ -238,6 +265,97 @@ fn keep_awake_item(keep_awake: KeepAwakeDto) -> ComputerItemView {
     )
 }
 
+/// Minutes and seconds, the way the desktop's bar counts them.
+fn elapsed_label(ms: u64) -> String {
+    let seconds = ms / 1000;
+    format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+fn plan_item(plan: PlanDto) -> ComputerItemView {
+    let place = if plan.project_name.is_empty() {
+        "a project"
+    } else {
+        plan.project_name.as_str()
+    };
+    let (value, detail, attention) = match plan.status.as_str() {
+        "done" => (
+            "Tasks ready".to_owned(),
+            format!("The plan for {place} is ready to review on this computer"),
+            true,
+        ),
+        "failed" => (
+            "Planning failed".to_owned(),
+            format!(
+                "Planning for {place} stopped: {}",
+                plan.error.as_deref().unwrap_or("no answer")
+            ),
+            true,
+        ),
+        _ => {
+            let word = match plan.kind.as_str() {
+                "split" => "Splitting",
+                "revise" => "Revising",
+                _ => "Planning",
+            };
+            (
+                format!("{word} {}", elapsed_label(plan.elapsed_ms)),
+                format!("Planning tasks for {place} in the background"),
+                false,
+            )
+        }
+    };
+    item(
+        &format!("plan:{}", plan.key),
+        "Relay plan",
+        value,
+        Some(detail),
+        attention,
+    )
+}
+
+/// An address without what every local one has in common.
+fn short_url(url: &str) -> &str {
+    let bare = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    bare.strip_suffix('/').unwrap_or(bare)
+}
+
+fn run_item(run: RunDto) -> ComputerItemView {
+    let value = match run.state.as_str() {
+        "starting" => "Starting",
+        "idle" => "Finished",
+        "paused" => "Paused",
+        _ => "Running",
+    };
+    let mut parts = Vec::new();
+    if let Some(cpu) = run.cpu_percent {
+        parts.push(format!("{} CPU", percent_label(cpu)));
+    }
+    if let Some(memory) = run.mem_bytes {
+        parts.push(bytes_label(memory));
+    }
+    if let Some(url) = run.urls.first() {
+        parts.push(short_url(url).to_owned());
+    }
+    if let Some(device) = run.device {
+        parts.push(device);
+    }
+    let title = if run.title.is_empty() {
+        "Run"
+    } else {
+        run.title.as_str()
+    };
+    item(
+        &format!("run:{}", run.id),
+        title,
+        value.to_owned(),
+        (!parts.is_empty()).then(|| parts.join(", ")),
+        false,
+    )
+}
+
 /// What the desktop's bar would show, in its order, without what it would hide.
 fn items_of(bar: BarDto) -> Vec<ComputerItemView> {
     let mut items = Vec::new();
@@ -268,6 +386,17 @@ fn items_of(bar: BarDto) -> Vec<ComputerItemView> {
     ]);
     if !relay.is_empty() {
         items.push(item("relay", "Relay", relay, None, relays.needs_you > 0));
+    }
+    items.extend(bar.plans.into_iter().map(plan_item));
+    items.extend(bar.runs.into_iter().map(run_item));
+    if bar.window_open == Some(false) {
+        items.push(item(
+            "window",
+            "Runs and plans",
+            "No window open".to_owned(),
+            Some("Open Runova on this computer to see them".to_owned()),
+            false,
+        ));
     }
     if bar.transfers > 0 {
         items.push(item(
