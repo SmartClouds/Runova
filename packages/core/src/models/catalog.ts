@@ -40,7 +40,7 @@ export const CLAUDE_MODELS = {
   haiku: { label: 'Haiku 5.5', family: 'Haiku', cliArg: 'haiku', apiId: 'claude-haiku-5-5' },
   sonnet: { label: 'Sonnet 5.5', family: 'Sonnet', cliArg: 'sonnet', apiId: 'claude-sonnet-5-5' },
   opus: { label: 'Opus 5.5', family: 'Opus', cliArg: 'opus', apiId: 'claude-opus-5-5' },
-  fable: { label: 'Fable 5.1', family: 'Fable', cliArg: 'fable', apiId: 'claude-fable-5-1' },
+  fable: { label: 'Fable 5.2', family: 'Fable', cliArg: 'fable', apiId: 'claude-fable-5-2' },
 } as const satisfies Record<string, CatalogModel>;
 
 /** Claude family names, e.g. for reading "Set model to Opus 5.5" out of a transcript. */
@@ -652,11 +652,14 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   // premium (the 5-minute TTL, which is what the CLIs use). Opus dropped from $15/$75 to $5/$25
   // at 4.5, so the newer Opus ids need their own entries; longest-prefix keeps 4.0/4.1 on the
   // old rate. Opus 5.5 is cheaper again, and its cache reads are 5% of input rather than 10%.
-  // Fable 5.1 (and Mythos 5.1) keep Fable 5's rates but cut cache reads to $0.25. Sonnet dropped
-  // to $2/$10 at 5, with cache reads at $0.20. Haiku 5.5 is $0.10/$0.50 for prompts up to 100k
-  // tokens (longer ones cost $0.50/$2.50, which this flat table doesn't model).
+  // Fable 5.1 (and Mythos 5.1) keep Fable 5's rates but cut cache reads to $0.25. Fable 5.2 (and
+  // Mythos 5.2) cost less: $8/$40, with cache reads at $0.20. Sonnet dropped to $2/$10 at 5, with
+  // cache reads at $0.20, and Sonnet 5.5 halved them to $0.10. Haiku 5.5 is $0.10/$0.50 for
+  // prompts up to 100k tokens (longer ones cost $0.50/$2.50, which this flat table doesn't model).
+  'claude-fable-5-2': { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
   'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
   'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-mythos-5-2': { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
   'claude-mythos-5-1': { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
   'claude-mythos-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
@@ -667,7 +670,7 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   'claude-sonnet-4': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   'claude-haiku-4': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },

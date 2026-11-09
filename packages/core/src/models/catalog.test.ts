@@ -96,6 +96,21 @@ describe('model catalog', () => {
     expect(getModelPrice('gemini-3.1-flash-lite')?.input).toBe(0.25);
   });
 
+  // Same prefix pitfall: 'claude-fable-5' is a prefix of 'claude-fable-5-2', so without its own
+  // entry the newer, cheaper model would be billed at the older rate.
+  it('prices Fable 5.2 at its own rate, not the Fable 5 or 5.1 rate it starts with', () => {
+    expect(getModelPrice('claude-fable-5')?.input).toBe(10);
+    expect(getModelPrice('claude-fable-5-1')?.input).toBe(10);
+    expect(getModelPrice('claude-fable-5-2')).toEqual({
+      input: 8,
+      output: 40,
+      cacheRead: 0.2,
+      cacheWrite: 10,
+    });
+    expect(getModelPrice('claude-fable-5-2-20261101')?.input).toBe(8);
+    expect(getModelPrice('claude-mythos-5-2')?.input).toBe(8);
+  });
+
   it('offers Diffray the same Cursor models as the launch menu', () => {
     expect(DIFFRAY_EXECUTOR_MODELS['cursor-agent-cli']).toEqual(
       Object.values(CURSOR_MODELS).map((m) => ({ value: m.cliArg, label: m.label })),
