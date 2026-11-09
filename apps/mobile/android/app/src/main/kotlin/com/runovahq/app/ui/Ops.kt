@@ -45,6 +45,7 @@ import com.runovahq.app.design.RunovaTokens
 import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.AutoFixSessionView
 import uniffi.runova_ffi.DispatchFormView
 import uniffi.runova_ffi.ErrorDetailView
 import uniffi.runova_ffi.ErrorExceptionView
@@ -83,6 +84,13 @@ data class PipelineIntents(
     val submitDispatch: (Map<String, String>) -> Unit = {},
     val closeDispatch: () -> Unit = {},
     val cancel: (Long) -> Unit = {},
+    val fixWithAi: (Long) -> Unit = {},
+    val autoFixStart: (Long) -> Unit = {},
+    val autoFixStop: (String) -> Unit = {},
+    val autoFixRetry: (String) -> Unit = {},
+    val autoFixCommit: (String) -> Unit = {},
+    val autoFixDismiss: (String) -> Unit = {},
+    val watchAgent: (String) -> Unit = {},
 )
 
 private fun monitorBadge(state: MonitorState) = when (state) {
@@ -405,19 +413,19 @@ fun PipelinesTab(view: AppView, intents: PipelineIntents) {
             "No workflows",
             "This repository has no GitHub Actions workflows.",
         )
-        else -> WorkflowList(status, intents)
+        else -> WorkflowList(status, view.autoFix, intents)
     }
 }
 
 @Composable
-private fun WorkflowList(status: PipelinesStatusView, intents: PipelineIntents) {
+private fun WorkflowList(status: PipelinesStatusView, sessions: List<AutoFixSessionView>, intents: PipelineIntents) {
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(status.workflows, key = { it.id }) { WorkflowCard(it, intents) }
+        items(status.workflows, key = { it.id }) { WorkflowCard(it, sessions, intents) }
     }
 }
 
 @Composable
-private fun WorkflowCard(workflow: WorkflowView, intents: PipelineIntents) {
+private fun WorkflowCard(workflow: WorkflowView, sessions: List<AutoFixSessionView>, intents: PipelineIntents) {
     val colors = RunovaTheme.colors
     RunovaCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -443,6 +451,7 @@ private fun WorkflowCard(workflow: WorkflowView, intents: PipelineIntents) {
                     },
                 )
             }
+            WorkflowFixes(workflow, sessions, intents)
         }
     }
 }

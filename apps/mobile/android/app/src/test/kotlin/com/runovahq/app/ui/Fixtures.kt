@@ -3,6 +3,8 @@ package com.runovahq.app.ui
 import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
+import uniffi.runova_ffi.AutoFixSessionView
+import uniffi.runova_ffi.PromptsScreen
 import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
 import uniffi.runova_ffi.DeployScreen
@@ -63,6 +65,8 @@ fun appView(
     studio: StudioScreen = StudioScreen(false, null, emptyList(), null, null),
     busy: Boolean = false,
     gitTools: GitToolsScreen = GitToolsScreen(null, null, null),
+    autoFix: List<AutoFixSessionView> = emptyList(),
+    prompts: PromptsScreen = PromptsScreen(null, false, null, null),
 ) = AppView(
     auth,
     true,
@@ -95,4 +99,6 @@ fun appView(
     appVersion,
     studio,
     gitTools,
+    autoFix,
+    prompts,
 )

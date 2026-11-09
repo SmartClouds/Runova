@@ -82,6 +82,7 @@ val DeviceTabs = listOf(
 /** Reached from More, so the bar stays at five. */
 private val MoreSections = listOf(
     TabItem("studio", "Studio", RunovaIcons.Studio),
+    TabItem("prompts", "Prompt Builder", RunovaIcons.Sparkles),
     TabItem("vault", "Vault", RunovaIcons.Vault),
     TabItem("deploy", "Deploy", RunovaIcons.Deploy),
     TabItem("monitoring", "Monitoring", RunovaIcons.Monitoring),
@@ -134,6 +135,7 @@ fun DeviceShell(
         section == "pipelines" -> Section.PIPELINES
         section == "notifications" -> Section.NOTIFICATIONS
         section == "studio" -> Section.STUDIO
+        section == "prompts" -> Section.PROMPTS
         else -> null
     }
     DisposableEffect(onShow) {
@@ -172,6 +174,7 @@ fun DeviceShell(
                 }
                 "deploy" -> DeployTab(view, intents.deploy)
                 "studio" -> StudioTab(view, intents.studio)
+                "prompts" -> PromptsTab(view, intents.prompts)
                 "monitoring" -> MonitoringTab(view, intents.monitoring)
                 "pipelines" -> Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) { PipelinesTab(view, intents.pipelines) }

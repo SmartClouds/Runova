@@ -33,6 +33,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     pipelines: {} as ManagePipelineDeps,
     errorTracking: {} as ManageErrorTrackingDeps,
     studio: { service: vi.fn(), onEvent: () => () => undefined, now: () => 0 } as never,
+    agents: {} as never,
     ...change,
   };
 }

@@ -30,6 +30,7 @@ struct AppIntents {
     var notifications = NotificationIntents()
     var remote = RemoteIntents()
     var studio = StudioIntents()
+    var prompts = PromptIntents()
 }
 
 let appTabs = [

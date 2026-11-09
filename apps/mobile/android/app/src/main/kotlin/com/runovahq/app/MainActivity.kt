@@ -44,6 +44,7 @@ import com.runovahq.app.ui.PipelineIntents
 import com.runovahq.app.ui.RemoteFrames
 import com.runovahq.app.ui.RemoteIntents
 import com.runovahq.app.ui.StatusIntents
+import com.runovahq.app.ui.PromptIntents
 import com.runovahq.app.ui.StudioIntents
 import com.runovahq.app.ui.VaultIntents
 import com.runovahq.app.ui.StartingScreen
@@ -164,6 +165,13 @@ class MainActivity : FragmentActivity(), ViewListener {
                 submitDispatch = { engine.pipelinesSubmitDispatch(it) },
                 closeDispatch = { engine.pipelinesCloseDispatch() },
                 cancel = { engine.pipelinesCancel(it) },
+                fixWithAi = { engine.pipelinesFixWithAi(it) },
+                autoFixStart = { engine.autoFixStart(it) },
+                autoFixStop = { engine.autoFixStop(it) },
+                autoFixRetry = { engine.autoFixRetry(it) },
+                autoFixCommit = { engine.autoFixCommit(it) },
+                autoFixDismiss = { engine.autoFixDismiss(it) },
+                watchAgent = { core.openTerminal(it) },
             ),
             account = AccountIntents(
                 setName = { engine.accountSetName(it) },
@@ -190,6 +198,12 @@ class MainActivity : FragmentActivity(), ViewListener {
                 setEnabled = { category, on -> engine.notificationSetEnabled(category, on) },
             ),
             remote = remoteIntents(),
+            prompts = PromptIntents(
+                generate = { request, type, target -> engine.promptsGenerate(request, type, target) },
+                cancel = { engine.promptsCancel() },
+                taken = { engine.promptsTaken() },
+                send = { prompt, cli -> engine.promptsSend(prompt, cli) },
+            ),
             studio = StudioIntents(
                 openComposer = { engine.studioOpenComposer() },
                 closeComposer = { engine.studioCloseComposer() },

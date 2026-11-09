@@ -343,6 +343,7 @@ impl Runner {
             },
             |view| view.pipelines.loading = false,
         );
+        self.refresh_auto_fix();
         self.load_run();
     }
 

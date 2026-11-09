@@ -11,6 +11,7 @@ let deviceTabs = [
 /// Reached from More, so the bar stays at five.
 private let moreSections = [
     TabItem(id: "studio", title: "Studio", icon: RunovaIcons.studio),
+    TabItem(id: "prompts", title: "Prompt Builder", icon: RunovaIcons.sparkles),
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
     TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
     TabItem(id: "monitoring", title: "Monitoring", icon: RunovaIcons.monitoring),
@@ -63,6 +64,7 @@ struct DeviceShell: View {
         case "pipelines": return .pipelines
         case "notifications": return .notifications
         case "studio": return .studio
+        case "prompts": return .prompts
         default: return nil
         }
     }
@@ -125,6 +127,7 @@ struct DeviceShell: View {
                                 }
                             case "deploy": DeployTab(view: view, intents: intents.deploy)
                             case "studio": StudioTab(view: view, intents: intents.studio)
+                            case "prompts": PromptsTab(view: view, intents: intents.prompts)
                             case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)
                             case "pipelines":
                                 VStack(alignment: .leading, spacing: 0) {

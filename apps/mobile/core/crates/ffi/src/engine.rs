@@ -502,6 +502,7 @@ impl Runner {
             Some(Section::Account) => self.refresh_account(),
             Some(Section::Notifications) => self.refresh_notifications(),
             Some(Section::Studio) => self.refresh_studio(),
+            Some(Section::Prompts) => self.refresh_prompts(),
             None => {}
         }
     }
@@ -560,6 +561,8 @@ impl Runner {
         self.view.git = GitScreen::default();
         self.view.git_tools = Default::default();
         self.view.studio = Default::default();
+        self.view.auto_fix.clear();
+        self.view.prompts = Default::default();
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();

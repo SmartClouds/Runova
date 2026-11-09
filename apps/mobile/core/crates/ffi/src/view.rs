@@ -135,6 +135,7 @@ pub enum Section {
     Account,
     Notifications,
     Studio,
+    Prompts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -1037,6 +1038,54 @@ pub struct GitToolsScreen {
     pub resolving: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum AutoFixTone {
+    Working,
+    Attention,
+    Done,
+    Failed,
+    Stopped,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AutoFixSessionView {
+    pub id: String,
+    pub workflow_id: i64,
+    pub title: String,
+    pub phase_label: String,
+    pub tone: AutoFixTone,
+    pub message: Option<String>,
+    pub timeline: Vec<String>,
+    /// The terminal of the agent at work, to follow it.
+    pub agent_session: Option<String>,
+    pub can_stop: bool,
+    pub can_retry: bool,
+    pub can_commit: bool,
+    pub can_dismiss: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptTargetView {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PromptOptionsView {
+    pub types: Vec<String>,
+    pub targets: Vec<PromptTargetView>,
+    pub default_target: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct PromptsScreen {
+    pub options: Option<PromptOptionsView>,
+    pub generating: bool,
+    /// A freshly written prompt, until the field has taken it.
+    pub result: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct AppView {
     pub auth: AuthState,
@@ -1074,6 +1123,8 @@ pub struct AppView {
     pub app_version: String,
     pub studio: StudioScreen,
     pub git_tools: GitToolsScreen,
+    pub auto_fix: Vec<AutoFixSessionView>,
+    pub prompts: PromptsScreen,
 }
 
 impl AppView {
@@ -1110,6 +1161,8 @@ impl AppView {
             app_version: String::new(),
             studio: StudioScreen::default(),
             git_tools: GitToolsScreen::default(),
+            auto_fix: Vec::new(),
+            prompts: PromptsScreen::default(),
         }
     }
 }

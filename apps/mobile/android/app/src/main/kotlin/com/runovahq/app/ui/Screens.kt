@@ -81,6 +81,7 @@ data class AppIntents(
     val notifications: NotificationIntents = NotificationIntents(),
     val remote: RemoteIntents = RemoteIntents(),
     val studio: StudioIntents = StudioIntents(),
+    val prompts: PromptIntents = PromptIntents(),
 )
 
 val AppTabs = listOf(

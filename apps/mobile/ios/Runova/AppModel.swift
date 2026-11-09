@@ -122,7 +122,14 @@ final class AppModel: NSObject, ObservableObject {
                 dispatch: { [weak self] in self?.engine?.pipelinesDispatch(workflowId: $0) },
                 submitDispatch: { [weak self] in self?.engine?.pipelinesSubmitDispatch(values: $0) },
                 closeDispatch: { [weak self] in self?.engine?.pipelinesCloseDispatch() },
-                cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) }),
+                cancel: { [weak self] in self?.engine?.pipelinesCancel(runId: $0) },
+                fixWithAi: { [weak self] in self?.engine?.pipelinesFixWithAi(workflowId: $0) },
+                autoFixStart: { [weak self] in self?.engine?.autoFixStart(workflowId: $0) },
+                autoFixStop: { [weak self] in self?.engine?.autoFixStop(id: $0) },
+                autoFixRetry: { [weak self] in self?.engine?.autoFixRetry(id: $0) },
+                autoFixCommit: { [weak self] in self?.engine?.autoFixCommit(id: $0) },
+                autoFixDismiss: { [weak self] in self?.engine?.autoFixDismiss(id: $0) },
+                watchAgent: { [weak self] in self?.core?.openTerminal(sessionId: $0) }),
             account: AccountIntents(
                 setName: { [weak self] in self?.engine?.accountSetName(name: $0) },
                 endSession: { [weak self] in self?.engine?.accountEndSession(id: $0) },
@@ -146,7 +153,14 @@ final class AppModel: NSObject, ObservableObject {
                 closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
                 setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }),
             remote: remoteIntents,
-            studio: studioIntents)
+            studio: studioIntents,
+            prompts: PromptIntents(
+                generate: { [weak self] request, type, target in
+                    self?.engine?.promptsGenerate(rawInput: request, promptType: type, target: target)
+                },
+                cancel: { [weak self] in self?.engine?.promptsCancel() },
+                taken: { [weak self] in self?.engine?.promptsTaken() },
+                send: { [weak self] prompt, cli in self?.engine?.promptsSend(prompt: prompt, cliId: cli) }))
     }
 
     private let frames = RemoteFrames()

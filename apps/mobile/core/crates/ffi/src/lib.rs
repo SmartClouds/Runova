@@ -5,6 +5,7 @@ use runova_crypto::handshake::os_random;
 use thiserror::Error;
 
 pub mod account;
+pub mod agents;
 pub mod backend;
 pub mod core;
 pub mod deploy;

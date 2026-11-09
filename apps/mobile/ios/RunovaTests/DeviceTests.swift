@@ -269,7 +269,9 @@ func fixtureView(
     notice: String? = nil, confirm: ConfirmView? = nil, error: String? = nil,
     showIntro: Bool = false, appVersion: String = "1.0.0",
     studio: StudioScreen = StudioScreen(loading: false, note: nil, videos: [], composer: nil, video: nil),
-    gitTools: GitToolsScreen = GitToolsScreen(tags: nil, ai: nil, resolving: nil)
+    gitTools: GitToolsScreen = GitToolsScreen(tags: nil, ai: nil, resolving: nil),
+    autoFix: [AutoFixSessionView] = [],
+    prompts: PromptsScreen = PromptsScreen(options: nil, generating: false, result: nil, error: nil)
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -278,7 +280,7 @@ func fixtureView(
         monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
-        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools)
+        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts)
 }
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.

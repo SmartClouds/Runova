@@ -34,6 +34,7 @@ import { studioService } from '../../studio';
 import { onStudioEvent } from '../../studio/host';
 import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
+import { liveAgents } from './liveAgents';
 import { liveDeploy } from './liveDeploy';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
@@ -143,6 +144,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone'> = {
     afterAction: schedulePipelineCheck,
   },
   studio: { service: studioService, onEvent: onStudioEvent, now: Date.now },
+  agents: liveAgents,
   errorTracking: {
     issues: (query) => getErrorTrackingService().listIssues(query),
     linked: async () => (await readErrorTracking()).links.length > 0,

@@ -118,6 +118,7 @@ Plan: docs/ROADMAP.md
 | E84 | Hardening and release | In progress | see git log | Security review done with its medium findings fixed. CD for signed Android and TestFlight is written but has never run, and needs the secrets in `docs/mobile/release.md`. The memory soak and the Android against iOS parity sweep need real phones and a Mac, so they are still owed |
 | E85 | Studio on the phone | In progress | see git log | Library, a new video from a sentence, live AI runs, Ask AI proposals, animating and rendering, all running on the computer through a new `studio` scope. Voice, the timeline and fetching the file stay on the desktop. iOS screens are written but never compiled. Owed: trying it against a real computer |
 | E86 | Tags and AI in Git on the phone | In progress | see git log | Tag a version with next-version picks and Suggest with AI, commit message and branch name suggestions, and AI conflict fixes, all run by the CLI on the computer. iOS screens are written but never compiled. Owed: trying it against a real computer |
+| E87 | Pipeline fixes and prompts on the phone | In progress | see git log | Fix with AI and auto-fix on a failed run, and the Prompt Builder writing on the computer and sending to an agent, which also shows as a desktop tab. iOS screens are written but never compiled. Owed: trying it against a real computer |
 
 Status values: Not started, In progress, Blocked, Complete.
 

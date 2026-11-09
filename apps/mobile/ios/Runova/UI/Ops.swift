@@ -22,6 +22,13 @@ struct PipelineIntents {
     var submitDispatch: ([String: String]) -> Void = { _ in }
     var closeDispatch: () -> Void = {}
     var cancel: (Int64) -> Void = { _ in }
+    var fixWithAi: (Int64) -> Void = { _ in }
+    var autoFixStart: (Int64) -> Void = { _ in }
+    var autoFixStop: (String) -> Void = { _ in }
+    var autoFixRetry: (String) -> Void = { _ in }
+    var autoFixCommit: (String) -> Void = { _ in }
+    var autoFixDismiss: (String) -> Void = { _ in }
+    var watchAgent: (String) -> Void = { _ in }
 }
 
 private func monitorBadge(_ state: MonitorState) -> RunovaBadge {
@@ -424,7 +431,7 @@ struct PipelinesTab: View {
             } else {
                 ScrollView {
                     VStack(spacing: 12) {
-                        ForEach(status.workflows, id: \.id) { WorkflowCard(workflow: $0, intents: intents) }
+                        ForEach(status.workflows, id: \.id) { WorkflowCard(workflow: $0, sessions: view.autoFix, intents: intents) }
                     }
                     .padding(16)
                 }
@@ -437,6 +444,7 @@ struct PipelinesTab: View {
 
 private struct WorkflowCard: View {
     let workflow: WorkflowView
+    let sessions: [AutoFixSessionView]
     let intents: PipelineIntents
 
     @Environment(\.palette) private var palette
@@ -471,6 +479,7 @@ private struct WorkflowCard: View {
                 } else {
                     RunovaText("Never run", style: RunovaType.small, color: palette.mutedForeground)
                 }
+                WorkflowFixes(workflow: workflow, sessions: sessions, intents: intents)
             }
         }
     }
