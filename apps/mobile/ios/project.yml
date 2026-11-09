@@ -7,6 +7,11 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    # With GENERATE_INFOPLIST_FILE on, these fill CFBundleShortVersionString and CFBundleVersion.
+    # Without them an embedded extension has no bundle version and the simulator refuses to install it.
+    # Release builds pass the real values from the tag on the xcodebuild command line.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
 targets:
   Runova:
     type: application
