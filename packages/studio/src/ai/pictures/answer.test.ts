@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createScene } from '../../document/schema.js';
+import { createDocument, createScene, MAX_SHOT_STEPS } from '../../document/schema.js';
 import { localAppUrl, readPicturesAnswer } from './answer.js';
 import { buildPicturesRequest } from './prompt.js';
 
@@ -114,6 +114,109 @@ describe('reading the Pictures answer', () => {
     if (read.ok) return;
     expect(read.issues).toContain('There is no scene with the sceneId "nope".');
     expect(read.issues.some((i) => i.includes('there is no project'))).toBe(true);
+  });
+
+  it('says what is wrong with an answer that is not the plan', () => {
+    const prose = readPicturesAnswer('Sorry, I could not look at the project.', doc(), options);
+    expect(prose.ok).toBe(false);
+    const wrongShape = readPicturesAnswer(JSON.stringify({ scenes: 'none' }), doc(), options);
+    expect(wrongShape.ok).toBe(false);
+    if (wrongShape.ok) return;
+    expect(wrongShape.issues.length).toBeGreaterThan(0);
+  });
+
+  it('asks for a fix when a screenshot has no shot or a generated picture no prompt', () => {
+    const read = readPicturesAnswer(
+      JSON.stringify({
+        scenes: [
+          {
+            sceneId: 's1',
+            pictures: [
+              { purpose: 'The home page.', label: 'Home', source: 'screenshot' },
+              { purpose: 'A calm desk.', label: 'Desk', source: 'generate' },
+            ],
+          },
+        ],
+      }),
+      doc(),
+      options,
+    );
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.issues).toEqual([
+      'Scene "s1", picture 1 is a screenshot without a "shot" saying how to take it.',
+      'Scene "s1", picture 2 is generated but has no "prompt".',
+    ]);
+  });
+
+  it('keeps a mobile shot, a window shot, and only as many steps as a shot can hold', () => {
+    const steps = Array.from({ length: MAX_SHOT_STEPS + 3 }, () => ({
+      do: 'click',
+      selector: '#next',
+    }));
+    const read = readPicturesAnswer(
+      JSON.stringify({
+        scenes: [
+          {
+            sceneId: 's1',
+            pictures: [
+              {
+                purpose: 'The phone layout.',
+                label: 'Phone',
+                source: 'screenshot',
+                shot: { path: '/', viewport: 'mobile', steps },
+              },
+              {
+                purpose: 'The desktop app.',
+                label: 'Window',
+                source: 'screenshot',
+                shot: { target: 'window', instructions: 'Open the settings window.' },
+              },
+            ],
+          },
+        ],
+      }),
+      doc(),
+      options,
+    );
+    if (!read.ok) throw new Error(read.issues.join('; '));
+    const first = read.value.ops[0];
+    const pictures = first?.op === 'scene.update' ? (first.patch.pictures ?? []) : [];
+    expect(pictures[0]?.shot).toMatchObject({ target: 'route', viewport: 'mobile' });
+    const shot = pictures[0]?.shot;
+    expect(shot?.target === 'route' ? shot.steps : []).toHaveLength(MAX_SHOT_STEPS);
+    expect(pictures[1]?.shot).toEqual({
+      target: 'window',
+      instructions: 'Open the settings window.',
+    });
+  });
+
+  it('uses the purpose as the prompt when a file picture has none', () => {
+    const read = readPicturesAnswer(
+      JSON.stringify({
+        scenes: [
+          {
+            sceneId: 's1',
+            pictures: [{ purpose: 'Your team photo.', label: 'Team', source: 'file' }],
+          },
+        ],
+      }),
+      doc(),
+      options,
+    );
+    if (!read.ok) throw new Error(read.issues.join('; '));
+    const first = read.value.ops[0];
+    const pictures = first?.op === 'scene.update' ? (first.patch.pictures ?? []) : [];
+    expect(pictures[0]).toMatchObject({ source: 'file', prompt: 'Your team photo.' });
+  });
+
+  it('leaves a scene alone when there is nothing to change', () => {
+    const video = doc();
+    const [, result] = video.scenario.scenes;
+    if (result) result.pictures = result.pictures?.filter((p) => p.status === 'ready');
+    const read = readPicturesAnswer(JSON.stringify({ scenes: [] }), video, options);
+    if (!read.ok) throw new Error(read.issues.join('; '));
+    expect(read.value).toMatchObject({ ops: [], count: 0 });
   });
 
   it('only opens local addresses', () => {
