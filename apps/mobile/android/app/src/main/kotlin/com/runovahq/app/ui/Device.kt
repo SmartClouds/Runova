@@ -175,7 +175,7 @@ fun DeviceShell(
                 }
                 "notifications" -> InboxTab(view, intents.notifications, onTab, showTitle = false)
                 "remote" -> RemoteTab(connection, intents.remote)
-                "more" -> MoreScreen(onTab, intents.forgetThisPhone)
+                "more" -> MoreScreen(onTab, intents.forgetThisPhone, intents.openAbout)
                 else -> ProjectsScreen(view, intents, onTab)
             }
         }
@@ -186,13 +186,16 @@ fun DeviceShell(
 }
 
 @Composable
-private fun MoreScreen(onTab: (String) -> Unit, onForget: () -> Unit) {
+private fun MoreScreen(onTab: (String) -> Unit, onForget: () -> Unit, onAbout: () -> Unit) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         items(MoreSections, key = { it.id }) { item ->
             RunovaListRow(title = item.title, icon = item.icon, onClick = { onTab(item.id) })
         }
         item(key = "forget") {
             RunovaListRow(title = "Forget this phone", icon = RunovaIcons.Shield, onClick = onForget)
+        }
+        item(key = "about") {
+            RunovaListRow(title = "About Runova", icon = RunovaIcons.Info, onClick = onAbout)
         }
     }
 }

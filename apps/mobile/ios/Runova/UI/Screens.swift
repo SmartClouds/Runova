@@ -17,6 +17,8 @@ struct AppIntents {
     var confirm: () -> Void = {}
     var dismissConfirm: () -> Void = {}
     var dismissNotice: () -> Void = {}
+    var finishIntro: () -> Void = {}
+    var openAbout: () -> Void = {}
     var git = GitIntents()
     var status = StatusIntents()
     var vault = VaultIntents()
@@ -39,9 +41,22 @@ let appTabs = [
 struct AppRoot: View {
     let view: AppView
     @Binding var tab: String
-    let intents: AppIntents
+    let appIntents: AppIntents
 
+    @State private var aboutOpen = false
     @Environment(\.palette) private var palette
+
+    init(view: AppView, tab: Binding<String>, intents: AppIntents) {
+        self.view = view
+        self._tab = tab
+        self.appIntents = intents
+    }
+
+    private var intents: AppIntents {
+        var routed = appIntents
+        routed.openAbout = { aboutOpen = true }
+        return routed
+    }
 
     var body: some View {
         ZStack {
@@ -49,7 +64,12 @@ struct AppRoot: View {
             palette.card.ignoresSafeArea()
             switch view.auth {
             case .starting: StartingScreen()
-            case .signedOut: SignInScreen(error: view.error, onSignIn: intents.signIn)
+            case .signedOut:
+                if view.showIntro {
+                    IntroScreen(onDone: intents.finishIntro)
+                } else {
+                    SignInScreen(error: view.error, onSignIn: intents.signIn)
+                }
             case .signedIn: signedIn
             }
             if let banner = view.notifications.banner {
@@ -64,6 +84,9 @@ struct AppRoot: View {
             }
             if let confirm = view.confirm {
                 ConfirmOverlay(confirm: confirm, onConfirm: intents.confirm, onDismiss: intents.dismissConfirm)
+            }
+            if aboutOpen {
+                AboutSheet(version: view.appVersion) { aboutOpen = false }
             }
         }
     }
@@ -115,7 +138,7 @@ struct AppRoot: View {
 
 struct StartingScreen: View {
     var body: some View {
-        RunovaText("Runova", style: RunovaType.heading)
+        RunovaSplash()
     }
 }
 
@@ -127,8 +150,8 @@ struct SignInScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            RunovaHeroIcon(icon: RunovaIcons.systems)
-            Spacer().frame(height: 24)
+            RunovaLogo(size: 112)
+            Spacer().frame(height: 12)
             RunovaText("Runova", style: RunovaType.heading)
             Spacer().frame(height: 6)
             RunovaText(

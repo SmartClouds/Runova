@@ -252,7 +252,20 @@ impl Engine {
     pub fn dismiss_notice(&self) {
         self.run(|runner| runner.view.notice = None);
     }
+
+    /// The welcome pages are done with, for good on this install.
+    pub fn intro_done(&self) {
+        self.run(|runner| {
+            runner
+                .deps
+                .secure
+                .set(INTRO_SEEN.to_owned(), "1".to_owned());
+            runner.view.show_intro = false;
+        });
+    }
 }
+
+const INTRO_SEEN: &str = "intro-seen";
 
 pub(crate) struct Runner {
     pub(crate) deps: Dependencies,
@@ -920,6 +933,8 @@ impl Runner {
 
     async fn run(mut self, mut commands: mpsc::UnboundedReceiver<Command>) {
         let mut done = self.done_rx.take().expect("runs once");
+        self.view.show_intro = self.deps.secure.get(INTRO_SEEN.to_owned()).is_none();
+        self.view.app_version = self.deps.app_version.clone();
         if self.deps.session.is_signed_in().await {
             self.view.auth = AuthState::SignedIn;
             self.boot();

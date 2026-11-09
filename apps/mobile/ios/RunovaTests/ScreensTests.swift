@@ -37,6 +37,10 @@ final class ScreensTests: XCTestCase {
 
     func testSignIn() throws { try render(view(auth: .signedOut, systems: []), "sign-in") }
 
+    func testIntro() throws {
+        try render(fixtureView(auth: .signedOut, showIntro: true), "intro-computers")
+    }
+
     func testSystemsDark() throws { try render(view(), "systems-dark") }
 
     func testSystemsLight() throws { try render(view(), "systems-light", dark: false) }

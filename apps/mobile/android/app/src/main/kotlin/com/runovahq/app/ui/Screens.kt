@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,6 +67,8 @@ data class AppIntents(
     val confirm: () -> Unit = {},
     val dismissConfirm: () -> Unit = {},
     val dismissNotice: () -> Unit = {},
+    val finishIntro: () -> Unit = {},
+    val openAbout: () -> Unit = {},
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
     val vault: VaultIntents = VaultIntents(),
@@ -83,13 +89,16 @@ val AppTabs = listOf(
 )
 
 @Composable
-fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppIntents) {
+fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: AppIntents) {
     val colors = RunovaTheme.colors
+    var aboutOpen by remember { mutableStateOf(false) }
+    val intents = remember(appIntents) { appIntents.copy(openAbout = { aboutOpen = true }) }
     // The chrome: what the desktop's title bar and menu are drawn on.
     Box(Modifier.fillMaxSize().background(colors.card)) {
         when (view.auth) {
             AuthState.STARTING -> StartingScreen()
-            AuthState.SIGNED_OUT -> SignInScreen(view.error, intents.signIn)
+            AuthState.SIGNED_OUT ->
+                if (view.showIntro) IntroScreen(intents.finishIntro) else SignInScreen(view.error, intents.signIn)
             AuthState.SIGNED_IN -> {
                 val connection = view.connection
                 val remote = view.remote
@@ -108,6 +117,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, intents: AppInt
         }
         view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
         view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
+        if (aboutOpen) AboutSheet(view.appVersion, { aboutOpen = false })
     }
 }
 
@@ -170,9 +180,7 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
 
 @Composable
 fun StartingScreen() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        RunovaText("Runova", style = RunovaType.heading)
-    }
+    RunovaSplash()
 }
 
 @Composable
@@ -183,8 +191,8 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        RunovaHeroIcon(RunovaIcons.Systems)
-        Spacer(Modifier.height(24.dp))
+        RunovaLogo(112.dp)
+        Spacer(Modifier.height(12.dp))
         RunovaText("Runova", style = RunovaType.heading)
         Spacer(Modifier.height(6.dp))
         RunovaText(

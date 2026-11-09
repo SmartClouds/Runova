@@ -56,6 +56,8 @@ fun appView(
     confirm: ConfirmView? = null,
     error: String? = null,
     phoneFingerprint: String? = null,
+    showIntro: Boolean = false,
+    appVersion: String = "1.0.0",
 ) = AppView(
     auth,
     true,
@@ -84,4 +86,6 @@ fun appView(
     notice,
     confirm,
     error,
+    showIntro,
+    appVersion,
 )

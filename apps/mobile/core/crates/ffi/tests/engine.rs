@@ -500,3 +500,25 @@ async fn going_to_the_background_lets_go_of_the_hub_and_coming_back_reconnects()
     until(&world, |v| v.hub_connected, "reconnected").await;
     assert_eq!(world.connector.connects.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_intro_plays_once_and_stays_gone_after_a_restart() {
+    let store = Arc::new(MemoryStore::default());
+    let world = world_with(store.clone());
+
+    let first = until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    assert!(first.show_intro);
+    assert!(!first.app_version.is_empty());
+
+    world.engine.intro_done();
+    until(&world, |v| !v.show_intro, "intro finished").await;
+
+    let again = world_with(store);
+    let next = until(
+        &again,
+        |v| v.auth == AuthState::SignedOut,
+        "signed out again",
+    )
+    .await;
+    assert!(!next.show_intro);
+}

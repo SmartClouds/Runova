@@ -158,6 +158,9 @@ private fun AccountList(profile: ProfileView, account: AccountScreen, intents: A
         items(account.activity, key = { "a/${it.id}" }) { activity ->
             RunovaListRow(title = activity.action, detail = activity.detail, icon = RunovaIcons.History, iconTone = BadgeTone.Neutral)
         }
+        item(key = "about") {
+            RunovaListRow(title = "About Runova", icon = RunovaIcons.Info, onClick = intents.openAbout)
+        }
         item(key = "sign-out") {
             RunovaButton(
                 "Sign out",

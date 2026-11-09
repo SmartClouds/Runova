@@ -88,6 +88,7 @@ class MainActivity : FragmentActivity(), ViewListener {
             confirm = { engine.confirm() },
             dismissConfirm = { engine.dismissConfirm() },
             dismissNotice = { engine.dismissNotice() },
+            finishIntro = { engine.introDone() },
             git = GitIntents(
                 openDiff = { path, group -> engine.openGitDiff(path, group) },
                 closeDiff = { engine.closeGitDiff() },

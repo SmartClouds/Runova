@@ -125,7 +125,7 @@ struct DeviceShell: View {
                             case "notifications":
                                 InboxTab(view: view, intents: intents.notifications, tab: $tab, showTitle: false)
                             case "remote": RemoteTab(connection: connection, intents: intents.remote)
-                            case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone)
+                            case "more": MoreScreen(tab: $tab, onForget: intents.forgetThisPhone, onAbout: intents.openAbout)
                             default: ProjectsScreen(view: view, intents: intents, tab: $tab)
                             }
                         }
@@ -149,6 +149,7 @@ struct DeviceShell: View {
 private struct MoreScreen: View {
     @Binding var tab: String
     let onForget: () -> Void
+    let onAbout: () -> Void
 
     var body: some View {
         ScrollView {
@@ -166,6 +167,7 @@ private struct MoreScreen: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                RunovaListRow(title: "About Runova", icon: RunovaIcons.info, onTap: onAbout)
             }
             .padding(16)
         }

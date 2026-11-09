@@ -869,6 +869,9 @@ pub struct AppView {
     pub notice: Option<String>,
     pub confirm: Option<ConfirmView>,
     pub error: Option<String>,
+    /// This install has not been through the welcome pages yet.
+    pub show_intro: bool,
+    pub app_version: String,
 }
 
 impl AppView {
@@ -901,6 +904,8 @@ impl AppView {
             notice: None,
             confirm: None,
             error: None,
+            show_intro: false,
+            app_version: String::new(),
         }
     }
 }

@@ -111,8 +111,14 @@ val copyFonts by tasks.registering(Copy::class) {
     rename("FontAwesomeSolid.ttf", "fontawesome_solid.ttf")
 }
 
+/** The logos, from the one copy both apps use. */
+val copyBrand by tasks.registering(Copy::class) {
+    from(rootProject.file("../design/brand"))
+    into(generatedFonts.map { it.dir("drawable-nodpi") })
+}
+
 tasks.matching { it.name.endsWith("Resources") || it.name == "preBuild" }.configureEach {
-    if (name != copyFonts.name) dependsOn(copyFonts)
+    if (name != copyFonts.name && name != copyBrand.name) dependsOn(copyFonts, copyBrand)
 }
 
 val buildHostCore by tasks.registering(Exec::class) {

@@ -17,6 +17,9 @@ targets:
       - path: ../design/fonts
         type: folder
         buildPhase: resources
+      - path: ../design/brand
+        type: folder
+        buildPhase: resources
     entitlements:
       path: Runova/Runova.entitlements
       properties:

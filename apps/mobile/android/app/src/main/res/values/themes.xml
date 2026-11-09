@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="runova_chrome">#1C1C1C</color>
+    <style name="Theme.Runova" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/runova_chrome</item>
+    </style>
+</resources>

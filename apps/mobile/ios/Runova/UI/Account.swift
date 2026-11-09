@@ -168,6 +168,7 @@ private struct AccountList: View {
                 ForEach(account.activity, id: \.id) { activity in
                     RunovaListRow(title: activity.action, detail: activity.detail, icon: RunovaIcons.history, iconTone: .neutral)
                 }
+                RunovaListRow(title: "About Runova", icon: RunovaIcons.info, onTap: intents.openAbout)
                 RunovaButton(text: "Sign out", kind: .soft, icon: RunovaIcons.signOut, action: intents.signOut)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 16)

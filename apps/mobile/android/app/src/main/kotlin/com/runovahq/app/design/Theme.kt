@@ -36,6 +36,7 @@ object RunovaType {
     val title = base.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
     val body = base.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Normal)
     val label = base.copy(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+    val labelStrong = label.copy(fontWeight = FontWeight.SemiBold)
     val small = base.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
     val caption = base.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
     val mono = TextStyle(fontFamily = MonoFamily, fontSize = 13.sp, lineHeight = 17.5.sp)

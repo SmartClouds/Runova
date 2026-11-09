@@ -81,6 +81,7 @@ final class AppModel: NSObject, ObservableObject {
             confirm: { [weak self] in self?.engine?.confirm() },
             dismissConfirm: { [weak self] in self?.engine?.dismissConfirm() },
             dismissNotice: { [weak self] in self?.engine?.dismissNotice() },
+            finishIntro: { [weak self] in self?.engine?.introDone() },
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },
