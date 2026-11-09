@@ -451,6 +451,24 @@ export function launchSetupTab(project: Project, command: string, groupId?: stri
   );
 }
 
+/**
+ * Starts a terminal tab's shell right away. A tab's shell normally starts when a pane first shows
+ * it, which never happens for a launch from another page if the Workspace has not been opened yet.
+ */
+export function startTabNow(projectId: string, tabId: string): void {
+  const tab = useWorkspaceStore.getState().workspaces[projectId]?.tabs[tabId];
+  if (tab?.kind !== 'terminal') return;
+  terminalRuntime.start({
+    id: tab.id,
+    projectId,
+    cwd: tab.cwd,
+    shell: tab.shell,
+    cliId: tab.cliId,
+    initialInput: tab.launchInput,
+    restored: tab.restored,
+  });
+}
+
 /** Opens a plain shell tab in the project folder, or in `cwd` inside it. Returns the tab id. */
 export function launchShellTab(
   project: Project,

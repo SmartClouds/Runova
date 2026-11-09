@@ -16,6 +16,7 @@ import { ToastHistoryPanel } from '@/components/toast/ToastHistoryPanel';
 import { UpdateStatusChip } from '@/components/UpdateManager';
 import { Button } from '@/components/ui/button';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useAutoCloseFinishedShells } from '@/components/workspace/useAutoCloseFinishedShells';
 import { WorkspaceHeaderActions } from '@/components/workspace/WorkspaceHeaderActions';
 import { WorkspaceHost } from '@/components/workspace/WorkspaceHost';
 import { useStartupLoading } from '@/hooks/useAppLoadingOverlay';
@@ -233,6 +234,7 @@ export function AppShell(): React.JSX.Element {
   // Main keeps the page this window is on, so the next launch can open there.
   useRememberRoute();
   useScheduledTaskRunner();
+  useAutoCloseFinishedShells();
   // FTP and SFTP deploys run on in main (Deploy on save with nobody on the page), so their
   // progress and outcome are taken in here, whichever page is open.
   useFilesRunEvents();

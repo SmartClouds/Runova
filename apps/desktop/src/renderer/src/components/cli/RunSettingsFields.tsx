@@ -127,12 +127,15 @@ export function RunSettingsFields({
   onChange,
   defaultCliLabel = 'Default CLI',
   labels = 'quiet',
+  hideCli = false,
 }: {
   value: RunSettings;
   onChange: (next: RunSettings) => void;
   defaultCliLabel?: string;
   /** `form` labels the fields like the rest of a form around them; `quiet` keeps them small. */
   labels?: 'quiet' | 'form';
+  /** For a form that picks the CLI its own way and only needs the model and effort from here. */
+  hideCli?: boolean;
 }): React.JSX.Element {
   const form = labels === 'form';
   const choices = useAgentChoices(null);
@@ -153,20 +156,22 @@ export function RunSettingsFields({
 
   return (
     <div className={cn('grid sm:grid-cols-2', form ? 'gap-x-3 gap-y-4' : 'gap-3')}>
-      <div className="space-y-1.5">
-        <FieldLabel form={form}>CLI</FieldLabel>
-        <Combobox
-          ariaLabel="CLI"
-          value={value.cliId ?? ''}
-          onChange={(next) => onChange(fitToCli(next || undefined, value))}
-          options={cliOptions}
-          placeholder={defaultCliLabel}
-          searchPlaceholder="Search CLIs…"
-          emptyText="No matching CLI."
-          clearable
-        />
-      </div>
-      <div className="space-y-1.5">
+      {hideCli ? null : (
+        <div className="space-y-1.5">
+          <FieldLabel form={form}>CLI</FieldLabel>
+          <Combobox
+            ariaLabel="CLI"
+            value={value.cliId ?? ''}
+            onChange={(next) => onChange(fitToCli(next || undefined, value))}
+            options={cliOptions}
+            placeholder={defaultCliLabel}
+            searchPlaceholder="Search CLIs…"
+            emptyText="No matching CLI."
+            clearable
+          />
+        </div>
+      )}
+      <div className={cn('space-y-1.5', hideCli && 'sm:col-span-2')}>
         <FieldLabel form={form}>Model</FieldLabel>
         <Combobox
           ariaLabel="Model"

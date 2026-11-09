@@ -10,17 +10,22 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 const addTerminal = vi.fn(
   (_projectId: string, _tab: { launchInput?: string; runLabel?: string }) => 'tab-1',
 );
+const terminalStart = vi.fn((_spec: unknown) => undefined);
+const workspaces: Record<string, { tabs: Record<string, unknown> }> = {};
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/terminal/terminalRuntime', () => ({
-  terminalRuntime: { deliverPrompt: vi.fn(() => Promise.resolve(true)) },
+  terminalRuntime: {
+    deliverPrompt: vi.fn(() => Promise.resolve(true)),
+    start: (spec: unknown) => terminalStart(spec),
+  },
 }));
 vi.mock('@/stores/terminalStore', () => ({
   defaultNewSession: () => ({ title: 'Terminal', shell: 'powershell.exe' }),
   useTerminalStore: { getState: () => ({ openSession: vi.fn() }) },
 }));
 vi.mock('@/stores/workspaceStore', () => ({
-  useWorkspaceStore: { getState: () => ({ openProject: vi.fn(), addTerminal }) },
+  useWorkspaceStore: { getState: () => ({ openProject: vi.fn(), addTerminal, workspaces }) },
 }));
 
 const settingsUpdate = vi.fn((_patch: unknown) => Promise.resolve({}));
@@ -372,6 +377,42 @@ describe('background task arguments never reach a terminal', () => {
     useCliStore.setState({ cliLaunchDefaults: { 'claude-code': { model: 'opus' } } });
     launchAgentTab(project, 'claude-code');
     expect(typed()).toBe('claude --model opus\r');
+  });
+});
+
+describe('startTabNow', () => {
+  it('starts the shell with the launch settings the tab was opened with', async () => {
+    terminalStart.mockClear();
+    workspaces.p1 = {
+      tabs: {
+        t1: { id: 't1', kind: 'terminal', cwd: 'E:\\proj', shell: 'pwsh', launchInput: 'npm ci\r' },
+      },
+    };
+    const { startTabNow } = await load();
+
+    startTabNow('p1', 't1');
+
+    expect(terminalStart).toHaveBeenCalledWith({
+      id: 't1',
+      projectId: 'p1',
+      cwd: 'E:\\proj',
+      shell: 'pwsh',
+      cliId: undefined,
+      initialInput: 'npm ci\r',
+      restored: undefined,
+    });
+  });
+
+  it('leaves a tab that is gone, or is not a terminal, alone', async () => {
+    terminalStart.mockClear();
+    workspaces.p1 = { tabs: { f1: { id: 'f1', kind: 'file' } } };
+    const { startTabNow } = await load();
+
+    startTabNow('p1', 'f1');
+    startTabNow('p1', 'missing');
+    startTabNow('nope', 't1');
+
+    expect(terminalStart).not.toHaveBeenCalled();
   });
 });
 

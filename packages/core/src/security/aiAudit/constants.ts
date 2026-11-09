@@ -62,14 +62,15 @@ const AGENT_ID = /^[a-z0-9][a-z0-9.-]*$/;
 
 /**
  * The install command skills.sh documents, scoped to the project (no --global) and to the agents
- * picked. -y skips the CLI's prompts, since the agents are already chosen in the wizard.
+ * picked. The first -y answers npx's own "Ok to proceed?" when the skills package is not cached
+ * yet, and the last one skips the CLI's prompts, since the agents are already chosen in the wizard.
  */
 export function buildSecurityAuditInstallCommand(agents: readonly string[]): string {
   const unique = [...new Set(agents)];
   if (unique.length === 0) throw new Error('Pick at least one agent to install the skill for.');
   const bad = unique.find((agent) => !AGENT_ID.test(agent));
   if (bad) throw new Error(`Not an agent id: ${bad}`);
-  return `npx skills add ${SECURITY_AUDIT_REPO_URL} --skill ${SECURITY_AUDIT_SKILL_NAME} --agent ${unique.join(' ')} -y`;
+  return `npx -y skills add ${SECURITY_AUDIT_REPO_URL} --skill ${SECURITY_AUDIT_SKILL_NAME} --agent ${unique.join(' ')} -y`;
 }
 
 export function nodeMeetsAuditMinimum(version: string | null): boolean {

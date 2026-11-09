@@ -18,6 +18,7 @@ vi.mock('react-router-dom', async (original) => ({
 const launch = vi.hoisted(() => ({
   launchPromptTab: vi.fn((..._args: unknown[]) => 'tab-1' as string | null),
   launchSetupTab: vi.fn((..._args: unknown[]) => 'setup-1'),
+  startTabNow: vi.fn(),
   projectCliId: vi.fn(() => 'claude-code'),
 }));
 vi.mock('@/lib/workspace/launch', () => launch);

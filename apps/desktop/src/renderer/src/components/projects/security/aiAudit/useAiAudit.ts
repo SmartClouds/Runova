@@ -10,7 +10,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useProjectUiState } from '@/hooks/useProjectUiState';
 import { queryKeys } from '@/lib/queryKeys';
-import { launchPromptTab, launchSetupTab } from '@/lib/workspace/launch';
+import { useTerminalSessionStore } from '@/lib/terminal/terminalRuntime';
+import { launchPromptTab, launchSetupTab, startTabNow } from '@/lib/workspace/launch';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 
 /**
  * The AI security audit's data layer. The agent does the audit in a workspace tab and writes a
@@ -49,12 +51,18 @@ export interface StartAuditInput {
   cliId: string;
   profile: AiAuditProfile;
   scopePaths: string[];
+  /** Model and effort flags for the agent. Left out, it runs on its own defaults. */
+  runArgs?: string[];
+  /** Shown on the agent's tab, e.g. "Opus 5.5 · High". */
+  runLabel?: string;
 }
 
 export function useAiAudit(project: Project) {
   const projectId = project.id;
   const queryClient = useQueryClient();
-  const [installing, setInstalling] = useState(false);
+  // The Setup tab running the install, for as long as the wizard is waiting on it.
+  const [installTabId, setInstallTabId] = useState<string | null>(null);
+  const installing = installTabId !== null;
   const [pickedRun, setPickedRun] = useProjectUiState<string | null>('security.audit.run', null);
   const [dismissed, setDismissed] = useProjectUiState<string[]>('security.audit.dismissed', []);
 
@@ -118,16 +126,44 @@ export function useAiAudit(project: Project) {
   // The install tab writes the skill's folder; once it is there, the wizard can move on.
   useEffect(() => {
     if (installing && statusQuery.data?.installed) {
-      setInstalling(false);
+      setInstallTabId(null);
       toast.success('The security audit skill is installed in this project.');
     }
   }, [installing, statusQuery.data?.installed]);
 
+  // A tab that closed or a shell that ended will never finish the install, so stop waiting on it.
+  // A failed command leaves its shell open at the prompt, which is what Cancel is for.
+  const installTabGone = useWorkspaceStore(
+    (s) => installTabId !== null && !s.workspaces[projectId]?.tabs[installTabId],
+  );
+  const installShellEnded = useTerminalSessionStore(
+    (s) => installTabId !== null && installTabId in s.ended,
+  );
+  const installOver = installTabGone || installShellEnded;
+  const { refetch: refetchStatus } = statusQuery;
+  useEffect(() => {
+    if (!installTabId || !installOver) return;
+    let superseded = false;
+    void refetchStatus().then(({ data }) => {
+      // A skill that landed is reported by the effect above.
+      if (superseded || data?.installed) return;
+      setInstallTabId(null);
+      toast.error('The install ended before the skill was in place', {
+        description: 'Run it again and open the terminal output to see what happens.',
+      });
+    });
+    return () => {
+      superseded = true;
+    };
+  }, [installTabId, installOver, refetchStatus]);
+
   const installSkill = useCallback(
     (agents: string[]) => {
       const command = buildSecurityAuditInstallCommand(agents);
-      launchSetupTab(project, command);
-      setInstalling(true);
+      const tabId = launchSetupTab(project, command);
+      // The wizard sits on another page, so no pane may be there to show the tab and start it.
+      startTabNow(project.id, tabId);
+      setInstallTabId(tabId);
       // Recorded like any skills.sh install, so the Skills page lists it for this project.
       void window.runova.skills
         .recordSkillsShInstall({
@@ -147,6 +183,11 @@ export function useAiAudit(project: Project) {
     [project, projectId, queryClient],
   );
 
+  const cancelInstall = useCallback(() => {
+    setInstallTabId(null);
+    if (installTabId) useWorkspaceStore.getState().closeTab(projectId, installTabId);
+  }, [installTabId, projectId]);
+
   const startAudit = useCallback(
     async (input: StartAuditInput): Promise<boolean> => {
       let prepared: { runName: string; outputDir: string };
@@ -163,8 +204,15 @@ export function useAiAudit(project: Project) {
         profile: input.profile,
         scopePaths: input.scopePaths,
       });
-      const tabId = launchPromptTab(project, { cliId: input.cliId, prompt, submit: true });
+      const tabId = launchPromptTab(project, {
+        cliId: input.cliId,
+        prompt,
+        submit: true,
+        runArgs: input.runArgs,
+        runLabel: input.runLabel,
+      });
       if (!tabId) return false;
+      startTabNow(project.id, tabId);
       setPickedRun(prepared.runName);
       setDismissed((current) => current.filter((name) => name !== prepared.runName));
       void queryClient.invalidateQueries({ queryKey: queryKeys.aiAuditRuns(projectId) });
@@ -210,7 +258,9 @@ export function useAiAudit(project: Project) {
     isDismissed: (runName: string) => dismissed.includes(runName),
     stopTracking,
     installing,
+    installTabId,
     installSkill,
+    cancelInstall,
     startAudit,
     refresh,
   };

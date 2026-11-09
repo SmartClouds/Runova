@@ -14,7 +14,6 @@ import { useWorkspaceProject } from '@/hooks/useWorktrees';
 import { startBrowserSync } from '@/lib/browser/browserSync';
 import { startDevServerFeed } from '@/lib/browser/devServerFeed';
 import { queryKeys } from '@/lib/queryKeys';
-import { useTerminalSessionStore } from '@/lib/terminal/terminalRuntime';
 import { cn } from '@/lib/utils';
 import { usePromptDialogStore } from '@/lib/workspace/commands';
 import { useWorkspaceSearchStore } from '@/stores/workspaceSearchStore';
@@ -108,25 +107,6 @@ function WorkspaceWelcome({
 }
 
 /**
- * Shells that exit cleanly close their tab, like closing a terminal window. Agents and
- * failed commands keep theirs, so the last output stays readable until the user moves on.
- */
-function useAutoCloseFinishedShells(): void {
-  useEffect(() => {
-    return useTerminalSessionStore.subscribe((state, previous) => {
-      for (const [id, code] of Object.entries(state.ended)) {
-        if (id in previous.ended || code !== 0) continue;
-        const { workspaces, closeTab } = useWorkspaceStore.getState();
-        for (const [projectId, ws] of Object.entries(workspaces)) {
-          const tab = ws.tabs[id];
-          if (tab?.kind === 'terminal' && !tab.cliId) closeTab(projectId, id);
-        }
-      }
-    });
-  }, []);
-}
-
-/**
  * Tells main which tabs are on screen, so an agent finishing in front of the user does not
  * also raise a notification, and looking at a finished tab counts as having seen it.
  */
@@ -183,7 +163,6 @@ export function WorkspaceHost({ visible }: { visible: boolean }): React.JSX.Elem
   const worktreePending = Boolean(activeProjectId && isWorktreeScope(activeProjectId) && !project);
   const missing = project?.worktree?.missing === true;
 
-  useAutoCloseFinishedShells();
   useRelayLegTabs();
   useAutoFixTabs();
   useReportViewing(visible);

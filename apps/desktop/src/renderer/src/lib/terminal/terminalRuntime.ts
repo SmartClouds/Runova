@@ -80,6 +80,8 @@ interface Entry {
   /** A prompt is already waiting for this session's CLI to start. */
   handingOff: boolean;
   mounted: boolean;
+  /** Every slot currently showing this session, the one holding the terminal last. */
+  slots: HTMLElement[];
   lastVisibleAt: number;
   cleanups: (() => void)[];
 }
@@ -299,6 +301,7 @@ function createEntry(spec: RuntimeSessionSpec): Entry {
     pasteModeOnAt: 0,
     handingOff: false,
     mounted: false,
+    slots: [],
     lastVisibleAt: Date.now(),
     cleanups: [],
   };
@@ -384,6 +387,41 @@ function start(entry: Entry): void {
     });
 }
 
+/** Opening measures the character cell, so it waits for the terminal font (instant once loaded). */
+function openEntry(entry: Entry): void {
+  const { spec } = entry;
+  // Measuring a fallback font would size the grid wider than what gets drawn.
+  void whenTerminalFontReady().then(() => {
+    if (entries.get(spec.id) !== entry || entry.opened) return;
+    entry.term.open(entry.surface);
+    entry.opened = true;
+    entry.cleanups.push(
+      attachTerminalContextMenu(
+        entry.host,
+        entry.term,
+        () => spec.id,
+        () => spec.shell,
+        entry.chipMode,
+      ),
+      // Screenshots and copied files paste as chips when the shell is ready for them, or as
+      // their real quoted paths otherwise, so agent CLIs can pick them up either way.
+      attachTerminalPaste(entry.host, {
+        chipMode: entry.chipMode,
+        paste: (text) => entry.term.paste(text),
+        shell: () => spec.shell,
+      }),
+      attachFocusOnClick(entry.host, entry.term),
+      attachRtlRendering(entry.term),
+    );
+    if (entry.focusWhenOpen) {
+      entry.focusWhenOpen = false;
+      entry.term.focus();
+    }
+    if (!entry.started) start(entry);
+    else entry.resize.flush();
+  });
+}
+
 function disposeEntry(entry: Entry): void {
   releaseTerminalFocus(entry.host);
   for (const cleanup of entry.cleanups) cleanup();
@@ -411,49 +449,43 @@ export const terminalRuntime = {
     const entry = entries.get(spec.id) ?? createEntry(spec);
     entry.mounted = true;
     entry.lastVisibleAt = Date.now();
+    entry.slots = [...entry.slots.filter((other) => other !== slot), slot];
     if (entry.host.parentElement !== slot) slot.appendChild(entry.host);
     if (entry.opened) {
       entry.resize.flush();
       return;
     }
-    // Opening measures the character cell, so it waits for the terminal font (instant once
-    // loaded). Measuring a fallback font would size the grid wider than what gets drawn.
-    void whenTerminalFontReady().then(() => {
-      if (entries.get(spec.id) !== entry || entry.opened) return;
-      entry.term.open(entry.surface);
-      entry.opened = true;
-      entry.cleanups.push(
-        attachTerminalContextMenu(
-          entry.host,
-          entry.term,
-          () => spec.id,
-          () => spec.shell,
-          entry.chipMode,
-        ),
-        // Screenshots and copied files paste as chips when the shell is ready for them, or as
-        // their real quoted paths otherwise, so agent CLIs can pick them up either way.
-        attachTerminalPaste(entry.host, {
-          chipMode: entry.chipMode,
-          paste: (text) => entry.term.paste(text),
-          shell: () => spec.shell,
-        }),
-        attachFocusOnClick(entry.host, entry.term),
-        attachRtlRendering(entry.term),
-      );
-      if (entry.focusWhenOpen) {
-        entry.focusWhenOpen = false;
-        entry.term.focus();
-      }
-      if (!entry.started) start(entry);
-      else entry.resize.flush();
-    });
+    openEntry(entry);
   },
 
-  /** Takes the terminal off screen. It keeps running and receiving output. */
+  /**
+   * Starts a session's shell with no pane showing it, for a command that has to run even if the
+   * Workspace page is never opened. A pane that shows the session later gets this same terminal.
+   */
+  start(spec: RuntimeSessionSpec): void {
+    ensureSubscribed();
+    if (entries.has(spec.id)) return;
+    const entry = createEntry(spec);
+    parkingLot().appendChild(entry.host);
+    openEntry(entry);
+  },
+
+  /**
+   * Takes the terminal out of `slot`. It keeps running and receiving output, and goes back to
+   * the slot that had it before, if one is still showing it, or else off screen.
+   */
   unmount(id: string, slot: HTMLElement): void {
     const entry = entries.get(id);
+    if (!entry) return;
+    entry.slots = entry.slots.filter((other) => other !== slot);
     // Another pane may already have claimed it (a tab moved between groups).
-    if (!entry || entry.host.parentElement !== slot) return;
+    if (entry.host.parentElement !== slot) return;
+    const previous = entry.slots.at(-1);
+    if (previous) {
+      previous.appendChild(entry.host);
+      entry.resize.schedule();
+      return;
+    }
     entry.mounted = false;
     entry.lastVisibleAt = Date.now();
     parkingLot().appendChild(entry.host);

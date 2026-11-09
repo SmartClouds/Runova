@@ -11,10 +11,22 @@ vi.mock('sonner', () => ({ toast }));
 const launch = vi.hoisted(() => ({
   launchPromptTab: vi.fn((..._args: unknown[]) => 'tab-1' as string | null),
   launchSetupTab: vi.fn((..._args: unknown[]) => 'setup-1'),
+  startTabNow: vi.fn(),
 }));
 vi.mock('@/lib/workspace/launch', () => launch);
 
 const { useAiAudit } = await import('./useAiAudit');
+const { useWorkspaceStore } = await import('@/stores/workspaceStore');
+const { useTerminalSessionStore } = await import('@/lib/terminal/terminalRuntime');
+
+/** A Setup tab that really exists, the way launchSetupTab leaves one in the store. */
+function openSetupTab(): string {
+  const store = useWorkspaceStore.getState();
+  store.openProject('p1');
+  const tabId = store.addTerminal('p1', { title: 'Setup', cwd: '/work/shop' });
+  launch.launchSetupTab.mockReturnValue(tabId);
+  return tabId;
+}
 
 /**
  * The AI audit's data layer. The agent writes the run folder; this hook finds the run, keeps it
@@ -66,11 +78,15 @@ function setup(bridge: Record<string, unknown> = {}) {
 beforeEach(() => {
   launch.launchPromptTab.mockClear();
   launch.launchSetupTab.mockClear();
+  launch.startTabNow.mockClear();
   toast.success.mockClear();
+  toast.error.mockClear();
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  useWorkspaceStore.getState().closeProject('p1');
+  useTerminalSessionStore.setState({ ended: {} });
 });
 
 describe('useAiAudit', () => {
@@ -183,13 +199,17 @@ describe('useAiAudit', () => {
     };
     const { result, bridge } = setup({ 'securityAudit.status': notInstalled });
     await waitFor(() => expect(result.current.status?.installed).toBe(false));
+    const tabId = openSetupTab();
 
     act(() => result.current.installSkill(['claude-code', 'codex']));
 
     expect(launch.launchSetupTab).toHaveBeenCalledWith(
       project,
-      'npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code codex -y',
+      'npx -y skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code codex -y',
     );
+    // The Workspace page may never have been opened, so the shell cannot wait for a pane.
+    expect(launch.startTabNow).toHaveBeenCalledWith('p1', tabId);
+    expect(result.current.installTabId).toBe(tabId);
     await waitFor(() =>
       expect(bridge.$fn('skills.recordSkillsShInstall')).toHaveBeenCalledWith({
         projectId: 'p1',
@@ -210,5 +230,79 @@ describe('useAiAudit', () => {
 
     await waitFor(() => expect(result.current.installing).toBe(false));
     expect(result.current.status?.installed).toBe(true);
+  });
+
+  describe('when the install does not land', () => {
+    const notInstalled = {
+      installed: false,
+      locations: [],
+      node: { found: true, version: 'v22.20.0', meetsMinimum: true },
+      runsRoot: '/x',
+    };
+
+    async function installing() {
+      const view = setup({ 'securityAudit.status': notInstalled });
+      await waitFor(() => expect(view.result.current.status?.installed).toBe(false));
+      const tabId = openSetupTab();
+      act(() => view.result.current.installSkill(['claude-code']));
+      expect(view.result.current.installing).toBe(true);
+      return { ...view, tabId };
+    }
+
+    it('stops waiting when the Setup tab is closed', async () => {
+      const { result, tabId } = await installing();
+
+      act(() => useWorkspaceStore.getState().closeTab('p1', tabId));
+
+      await waitFor(() => expect(result.current.installing).toBe(false));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops waiting when the shell ends without the skill', async () => {
+      const { result, tabId } = await installing();
+
+      act(() => useTerminalSessionStore.setState({ ended: { [tabId]: 1 } }));
+
+      await waitFor(() => expect(result.current.installing).toBe(false));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts it as installed when the skill is there as the shell ends', async () => {
+      const { result, tabId, bridge } = await installing();
+      bridge.$set('securityAudit.status', {
+        ...notInstalled,
+        installed: true,
+        locations: [{ path: '.agents/skills/security-audit', scope: 'project' }],
+      });
+
+      act(() => useTerminalSessionStore.setState({ ended: { [tabId]: 0 } }));
+
+      await waitFor(() => expect(result.current.installing).toBe(false));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the tab quietly when the user cancels', async () => {
+      const { result, tabId } = await installing();
+
+      act(() => result.current.cancelInstall());
+
+      await waitFor(() => expect(result.current.installing).toBe(false));
+      expect(useWorkspaceStore.getState().workspaces.p1?.tabs[tabId]).toBeUndefined();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  it('starts the audit agent without waiting for a pane to show it', async () => {
+    const { result } = setup({
+      'securityAudit.prepareRun': { runName: 'run-1', outputDir: '/x/run-1' },
+    });
+    await waitFor(() => expect(result.current.status).not.toBeNull());
+
+    await act(() =>
+      result.current.startAudit({ cliId: 'claude-code', profile: 'standard', scopePaths: [] }),
+    );
+
+    expect(launch.startTabNow).toHaveBeenCalledWith('p1', 'tab-1');
   });
 });

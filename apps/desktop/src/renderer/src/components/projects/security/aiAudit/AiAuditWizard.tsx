@@ -1,23 +1,28 @@
-import type { AiAuditProfile, Project } from '@runova/core';
+import type { AiAuditProfile, EffortLevel, Project } from '@runova/core';
 import {
   AI_AUDIT_AGENTS,
   AI_AUDIT_PROFILES,
   aiAuditAgentForCli,
   buildSecurityAuditInstallCommand,
   buildSecurityAuditPrompt,
+  cliLaunchOptions,
+  EFFORT_LABELS,
   getCliDefinition,
+  launchDefaultParts,
   nextAuditRunName,
   SECURITY_AUDIT_MIN_NODE,
   SECURITY_AUDIT_REPO_URL,
 } from '@runova/core';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { RunSettingsFields } from '@/components/cli/RunSettingsFields';
 import { CliLogo } from '@/components/cliLogos';
 import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronDown,
   CircleCheck,
   Copy,
   ExternalLink,
@@ -41,9 +46,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { TerminalSlot } from '@/components/workspace/TerminalSlot';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { projectCliId } from '@/lib/workspace/launch';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import type { AiAuditState } from './useAiAudit';
 
 /**
@@ -128,6 +135,45 @@ function ChoiceCard({
   );
 }
 
+/** The install's own terminal, folded away until someone wants to see what it is doing. */
+function InstallTerminal({
+  projectId,
+  tabId,
+}: {
+  projectId: string;
+  tabId: string;
+}): React.JSX.Element | null {
+  const [expanded, setExpanded] = useState(false);
+  const well = useRef<HTMLDivElement>(null);
+  const tab = useWorkspaceStore((s) => s.workspaces[projectId]?.tabs[tabId]);
+  // It opens at the bottom of a scrolling step, where most of it would be out of sight.
+  useEffect(() => {
+    if (expanded) well.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [expanded]);
+  if (tab?.kind !== 'terminal') return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <TerminalSquare className="h-3.5 w-3.5 shrink-0" />
+        Terminal output
+        <ChevronDown
+          className={cn('ml-auto h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')}
+        />
+      </button>
+      {expanded && (
+        <div ref={well} className="relative h-56 border-t border-border">
+          <TerminalSlot projectId={projectId} tab={tab} focused={false} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AiAuditWizard({
   open,
   onOpenChange,
@@ -147,6 +193,8 @@ export function AiAuditWizard({
   const [neededInstall, setNeededInstall] = useState(false);
   const [installAgents, setInstallAgents] = useState<string[] | null>(null);
   const [cliId, setCliId] = useState<string | null>(null);
+  const [model, setModel] = useState<string | undefined>(undefined);
+  const [effort, setEffort] = useState<EffortLevel | undefined>(undefined);
   const [profile, setProfile] = useState<AiAuditProfile>('standard');
   const [scopeMode, setScopeMode] = useState<'all' | 'some'>('all');
   const [scopePaths, setScopePaths] = useState<string[]>([]);
@@ -172,6 +220,8 @@ export function AiAuditWizard({
     setStep(initialStep);
     setInstallAgents(null);
     setCliId(null);
+    setModel(undefined);
+    setEffort(undefined);
     setProfile('standard');
     setScopeMode('all');
     setScopePaths([]);
@@ -225,6 +275,25 @@ export function AiAuditWizard({
     scopePaths: effectiveScope,
   });
   const chosenCli = chosenCliId ? getCliDefinition(chosenCliId) : undefined;
+  const launchOptions = chosenCliId ? cliLaunchOptions(chosenCliId) : null;
+  // What really goes on the command line: an effort the model cannot take is left off here.
+  const launchParts = chosenCliId ? launchDefaultParts(chosenCliId, { model, effort }) : [];
+  const runArgs = launchParts.flatMap((part) => part.args);
+  const modelLabel = launchParts.some((part) => part.kind === 'model')
+    ? (launchOptions?.models.find((option) => option.value === model)?.label ?? model)
+    : undefined;
+  const effortLabel =
+    effort && launchParts.some((part) => part.kind === 'effort')
+      ? EFFORT_LABELS[effort]
+      : undefined;
+
+  function pickCli(next: string): void {
+    if (next === chosenCliId) return;
+    setCliId(next);
+    // Models and efforts belong to one CLI, so a choice for the last one does not carry over.
+    setModel(undefined);
+    setEffort(undefined);
+  }
 
   function addScopePath(): void {
     const path = normalizeScopePath(pathDraft);
@@ -252,6 +321,8 @@ export function AiAuditWizard({
       cliId: chosenCliId,
       profile,
       scopePaths: effectiveScope,
+      runArgs: runArgs.length > 0 ? runArgs : undefined,
+      runLabel: [modelLabel, effortLabel].filter(Boolean).join(' · ') || undefined,
     });
     setStarting(false);
     if (!started) return;
@@ -472,14 +543,24 @@ export function AiAuditWizard({
               )}
 
               {installing ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
-                  <p className="flex items-center gap-2 text-sm text-foreground">
-                    <Spinner className="h-3.5 w-3.5 animate-spin" />
-                    Waiting for the install to finish in the Setup tab...
-                  </p>
-                  <Button variant="ghost" size="sm" onClick={() => void audit.refresh()}>
-                    <RefreshCw className="h-3.5 w-3.5" /> Check again
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
+                    <p className="flex items-center gap-2 text-sm text-foreground">
+                      <Spinner className="h-3.5 w-3.5 animate-spin" />
+                      Waiting for the install to finish in the Setup tab...
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => void audit.refresh()}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Check again
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={audit.cancelInstall}>
+                        <X className="h-3.5 w-3.5" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                  {audit.installTabId && (
+                    <InstallTerminal projectId={project.id} tabId={audit.installTabId} />
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
@@ -516,7 +597,7 @@ export function AiAuditWizard({
                         key={agent.cliId}
                         checked={chosenCliId === agent.cliId}
                         disabled={!ready}
-                        onSelect={() => setCliId(agent.cliId)}
+                        onSelect={() => pickCli(agent.cliId)}
                       >
                         <CliLogo cliId={agent.cliId} className="mt-0.5 h-4 w-4 shrink-0" />
                         <span className="flex min-w-0 flex-col">
@@ -536,6 +617,19 @@ export function AiAuditWizard({
                     None of these agents is installed. Install one from the AI CLIs tab in Dev
                     Tools.
                   </p>
+                )}
+                {chosenCliId && launchOptions && (
+                  <div className="pt-2">
+                    <RunSettingsFields
+                      hideCli
+                      labels="form"
+                      value={{ cliId: chosenCliId, model, effort }}
+                      onChange={(next) => {
+                        setModel(next.model);
+                        setEffort(next.effort);
+                      }}
+                    />
+                  </div>
                 )}
               </fieldset>
 
@@ -639,6 +733,8 @@ export function AiAuditWizard({
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {chosenCliId && <CliLogo cliId={chosenCliId} className="h-4 w-4" />}
                 <span className="font-medium text-foreground">{chosenCli?.label}</span>
+                {modelLabel && <Badge variant="secondary">{modelLabel}</Badge>}
+                {effortLabel && <Badge variant="secondary">{effortLabel} effort</Badge>}
                 <Badge variant="secondary" className="capitalize">
                   {profile}
                 </Badge>

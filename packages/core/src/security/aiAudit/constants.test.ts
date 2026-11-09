@@ -9,13 +9,13 @@ import {
 describe('buildSecurityAuditInstallCommand', () => {
   it('is the documented skills.sh command for one agent', () => {
     expect(buildSecurityAuditInstallCommand(['claude-code'])).toBe(
-      'npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code -y',
+      'npx -y skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code -y',
     );
   });
 
   it('names every agent picked, once each', () => {
     expect(buildSecurityAuditInstallCommand(['claude-code', 'codex', 'claude-code'])).toBe(
-      'npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code codex -y',
+      'npx -y skills add https://github.com/cloudflare/security-audit-skill --skill security-audit --agent claude-code codex -y',
     );
   });
 
