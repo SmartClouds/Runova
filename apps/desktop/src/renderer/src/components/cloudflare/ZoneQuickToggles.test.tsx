@@ -105,6 +105,7 @@ describe('ZoneQuickToggles', () => {
     let current: CloudflareBotSettings = { ...BOTS, aiBots: 'only_on_ad_pages' };
     const { user, bridge } = renderWithProviders(<ZoneQuickToggles zone={zone} />, {
       bridge: {
+        'cloudflare.zoneSettings': async () => SETTINGS,
         'cloudflare.botSettings': async () => current,
         'cloudflare.changeBotSetting': async (
           _zone: string,
@@ -144,6 +145,7 @@ describe('ZoneQuickToggles', () => {
     const zone = { ...OTHER_ZONE, id: 'c1b2c3d4e5f60718293a4b5c6d7e8f90' };
     const { user, bridge } = renderWithProviders(<ZoneQuickToggles zone={zone} />, {
       bridge: {
+        'cloudflare.zoneSettings': async () => SETTINGS,
         'cloudflare.botSettings': async () => BOTS,
         'cloudflare.changeBotSetting': async () => ({ ...BOTS, aiBots: 'block' }),
       },

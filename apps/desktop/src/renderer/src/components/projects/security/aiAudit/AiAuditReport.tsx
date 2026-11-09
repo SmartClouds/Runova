@@ -219,7 +219,7 @@ export function AiAuditReport({
         <TabsList>
           {VERDICT_TABS.map((entry) => (
             <TabsTrigger key={entry.value} value={entry.value} className="gap-1.5">
-              {entry.label}
+              {entry.label}{' '}
               <Badge variant="outline" className="tabular-nums">
                 {counts.byVerdict[entry.value]}
               </Badge>

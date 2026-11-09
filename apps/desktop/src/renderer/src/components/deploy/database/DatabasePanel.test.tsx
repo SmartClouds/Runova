@@ -133,6 +133,14 @@ function bridge(overrides: Record<string, unknown> = {}) {
     'database.connectCandidate': session,
     'database.listObjects': async (input: { parentKind: string | null }) =>
       input.parentKind === null ? databases : input.parentKind === 'database' ? schemas : tables,
+    'database.describe': {
+      ref: tables[0].ref,
+      kind: 'table',
+      columns: [],
+      indexes: [],
+      rowEstimate: 2,
+      definition: null,
+    },
     'database.readRows': page,
     'database.query': {
       status: 'done',

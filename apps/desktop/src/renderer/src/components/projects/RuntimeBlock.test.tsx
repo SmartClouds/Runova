@@ -279,7 +279,13 @@ describe('a runtime target row', () => {
     renderBlock(
       section({
         toolchain: null,
-        runtimes: [target(), target({ projectLabel: 'flutter_vless_android' })],
+        runtimes: [
+          target(),
+          target({
+            projectLabel: 'flutter_vless_android',
+            manifestPath: 'C:\\work\\flutter_vless_android\\pubspec.yaml',
+          }),
+        ],
       }),
     );
 
