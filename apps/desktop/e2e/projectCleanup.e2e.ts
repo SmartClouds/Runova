@@ -134,7 +134,8 @@ test('the Projects page shows each size once the projects are checked, and the c
   await expect
     .poll(() => page.evaluate(() => window.location.hash))
     .toBe(`#/projects/${id}?tab=cleanup`);
-  await expect(page.getByText('Can be freed')).toBeVisible();
+  // The Check sizes toast ("... can be freed.") can still be up, so match the heading exactly.
+  await expect(page.getByText('Can be freed', { exact: true })).toBeVisible();
 });
 
 test('the main process refuses requests for anything it would not have offered', async () => {

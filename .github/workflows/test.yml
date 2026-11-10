@@ -691,10 +691,15 @@ jobs:
         with:
           targets: aarch64-linux-android, x86_64-linux-android
 
-      - name: Install cargo-ndk
+      - name: Install cargo-binstall
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-ndk
+          tool: cargo-binstall
+
+      # The gnu build of cargo-ndk needs glibc 2.39, newer than the self-hosted runner has, so take
+      # the static musl build. --force replaces a gnu copy an earlier job left in ~/.cargo/bin.
+      - name: Install cargo-ndk
+        run: cargo binstall --no-confirm --force --targets x86_64-unknown-linux-musl cargo-ndk
 
       - name: Tests and a debug build
         working-directory: apps/mobile/android

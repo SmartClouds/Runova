@@ -47,12 +47,21 @@ const MAIN_ALLOWED =
 const UI_ALLOWED =
   /^(@runova\/studio|@runova\/core|react|react-dom|react-router-dom|@tanstack\/react-query|zustand|framer-motion|zod)$/;
 
+/** Test helpers in testing/ folders may also import the test runner. */
+const testHelperImport = (file: string, spec: string) =>
+  spec === 'vitest' && /(^|\/)testing\//.test(file);
+
 export function mainViolations(files: SourceFile[]): string[] {
   return files.flatMap((file) =>
     file.path === 'host.ts'
       ? []
       : importsOf(file.text)
-          .filter((spec) => !MAIN_ALLOWED.test(spec) && !staysInside(file.path, spec))
+          .filter(
+            (spec) =>
+              !MAIN_ALLOWED.test(spec) &&
+              !staysInside(file.path, spec) &&
+              !testHelperImport(file.path, spec),
+          )
           .map((spec) => `main/studio/${file.path} imports ${spec}`),
   );
 }
@@ -61,7 +70,12 @@ export function uiViolations(files: SourceFile[]): string[] {
   return files.flatMap((file) => {
     if (file.path === 'kit.ts') return [];
     const found = importsOf(file.text)
-      .filter((spec) => !UI_ALLOWED.test(spec) && !staysInside(file.path, spec))
+      .filter(
+        (spec) =>
+          !UI_ALLOWED.test(spec) &&
+          !staysInside(file.path, spec) &&
+          !testHelperImport(file.path, spec),
+      )
       .map((spec) => `components/studio/${file.path} imports ${spec}`);
     if (file.path !== 'client.ts' && /window\.runova\b/.test(file.text)) {
       found.push(`components/studio/${file.path} uses window.runova (go through client.ts)`);
@@ -98,10 +112,18 @@ describe('Studio module boundary', () => {
         },
         { path: 'editor/Panel.tsx', text: 'const v = window.runova.studio.list();' },
         { path: 'client.ts', text: 'export const studio = () => window.runova.studio;' },
+        { path: 'pictures/testing/fixtures.ts', text: "import { vi } from 'vitest';" },
+        { path: 'pictures/Grid.tsx', text: "import { vi } from 'vitest';" },
+        {
+          path: 'testing/fixtures.ts',
+          text: "import { Button } from '@/components/ui/button';",
+        },
       ]),
     ).toEqual([
       'components/studio/home/Home.tsx imports @/components/ui/button',
       'components/studio/editor/Panel.tsx uses window.runova (go through client.ts)',
+      'components/studio/pictures/Grid.tsx imports vitest',
+      'components/studio/testing/fixtures.ts imports @/components/ui/button',
     ]);
   });
 });

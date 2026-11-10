@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
@@ -20,6 +22,30 @@ const noCacheForGlobs: Plugin = {
     );
   },
 };
+
+/**
+ * The Cloudflare SDK is about 3,700 files, and the parts main/deploy/cloudflare imports pull in
+ * over 1,100 of them, each read on its own by Node in every test file that reaches client.ts. On
+ * the Mac CI runner's hard disk, several of those files loading at once stalled shard 1 for up to
+ * a minute, long enough for Vitest to give up starting new workers (their test files then never
+ * ran and the merged coverage fell short). For tests these imports are bundled once into a few
+ * files instead. The list comes from the folder's own imports, so a new one is bundled too, and all
+ * of them go into one bundle so errors.ts checks errors against the same classes the client throws.
+ */
+const CLOUDFLARE_DIR = path('./src/main/deploy/cloudflare');
+const cloudflareSdkImports = [
+  ...new Set(
+    readdirSync(CLOUDFLARE_DIR)
+      .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+      .flatMap((name) =>
+        [
+          ...readFileSync(join(CLOUDFLARE_DIR, name), 'utf8').matchAll(
+            /^import (?!type )[^;]*?from '(cloudflare\/[^']+)'/gms,
+          ),
+        ].map((match) => match[1] as string),
+      ),
+  ),
+];
 
 // CI splits this suite across jobs with --shard and merges their blob reports afterwards. One
 // shard covers only part of the code, so the thresholds are left to the merge run.
@@ -69,6 +95,7 @@ export default defineConfig({
             'src/preload/**/*.test.ts',
           ],
           setupFiles: ['src/test/main/setup.ts'],
+          deps: { optimizer: { ssr: { enabled: true, include: cloudflareSdkImports } } },
           // Some of these start real servers, spawn git or open a pty.
           testTimeout: 20_000,
           hookTimeout: 20_000,
