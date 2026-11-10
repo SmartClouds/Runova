@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Runova.Monitoring.Tests" />
+    <!-- It compiles the gateway harness from Runova.Monitoring.Tests too. -->
+    <InternalsVisibleTo Include="Runova.Website.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>
