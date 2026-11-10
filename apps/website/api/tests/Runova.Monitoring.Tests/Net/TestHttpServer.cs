@@ -69,6 +69,10 @@ public sealed class TestHttpServer : IAsyncDisposable
         catch (Exception error) when (error is OperationCanceledException or SocketException or ObjectDisposedException)
         {
         }
+        catch (InvalidOperationException) when (_stop.IsCancellationRequested)
+        {
+            // Stopped between two accepts: the next accept finds the listener already stopped.
+        }
     }
 
     private async Task ServeAsync(TcpClient client)
