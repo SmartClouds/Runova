@@ -140,14 +140,24 @@ jobs:
   # The website API (apps/website/api). Its global.json pins the SDK feature band and the
   # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. The
   # integration tests start PostgreSQL with Testcontainers, so this needs the Linux runner's Docker.
+  #
+  # Every integration test starts its own host, and on a busy runner the whole suite no longer fit
+  # in one job, so it runs as two. Shard 1 takes the integration namespaces in SHARD_1_NAMESPACES.
+  # Shard 2 checks the format and runs everything else: the other test projects and the rest of
+  # the integration tests, so a new namespace or test project lands there without a change here.
   website-api:
-    name: Website API
+    name: Website API (${{ matrix.shard }}/2)
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SHARD_1_NAMESPACES: Accounts Monitoring Posts Identity Billing Media Releases Reports Jobs
     defaults:
       run:
         working-directory: apps/website/api
@@ -172,13 +182,27 @@ jobs:
         run: dotnet restore Runova.Website.slnx --locked-mode
 
       - name: Format
+        if: ${{ matrix.shard == 2 }}
         run: dotnet format Runova.Website.slnx --verify-no-changes --no-restore
 
       - name: Build
         run: dotnet build Runova.Website.slnx --no-restore --configuration Release
 
       - name: Unit and integration tests
-        run: dotnet test --solution Runova.Website.slnx --no-build --configuration Release --output Detailed
+        run: |
+          filters=()
+          for ns in $SHARD_1_NAMESPACES; do
+            if [ "${{ matrix.shard }}" = 1 ]; then
+              filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*")
+            else
+              filters+=(--filter-not-namespace "Runova.Website.IntegrationTests.$ns*")
+            fi
+          done
+          if [ "${{ matrix.shard }}" = 1 ]; then
+            dotnet test --project tests/Runova.Website.IntegrationTests --no-build --configuration Release --output Detailed "${filters[@]}"
+          else
+            dotnet test --solution Runova.Website.slnx --no-build --configuration Release --output Detailed "${filters[@]}"
+          fi
 
   # The website (apps/website/web): lint, types, unit tests and the build, the e2e suite (a fake
   # API, plus the real API and PostgreSQL for the admin pages), then the compose stack the way
