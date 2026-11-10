@@ -8,6 +8,7 @@ import type {
   DeployBackupInput,
   DeployBackupResult,
 } from '../../shared/deployHardeningTypes';
+import { closeFileStream } from './closeFileStream';
 import type { CoreHttpClient } from './connection/coreHttp';
 
 /** What backups are saved as. */
@@ -85,16 +86,13 @@ export class DeployBackups {
       hub.createBackup({ passphrase: input.passphrase }),
     );
     const partial = `${path}.partial`;
+    const out = createWriteStream(partial, { mode: 0o600 });
     try {
       await this.deps.withCoreHttp(input.serverId, (client, token) =>
-        client.download(
-          `/api/v1/backups/${backup.id}`,
-          createWriteStream(partial, { mode: 0o600 }),
-          {
-            token,
-            timeoutMs: DOWNLOAD_TIMEOUT_MS,
-          },
-        ),
+        client.download(`/api/v1/backups/${backup.id}`, out, {
+          token,
+          timeoutMs: DOWNLOAD_TIMEOUT_MS,
+        }),
       );
       const written = await sha256Of(partial);
       if (written !== backup.sha256) {
@@ -102,6 +100,7 @@ export class DeployBackups {
       }
       await rename(partial, path);
     } catch (error) {
+      await closeFileStream(out);
       await rm(partial, { force: true });
       throw error;
     } finally {

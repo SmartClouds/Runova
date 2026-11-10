@@ -112,7 +112,12 @@ public sealed class GatewayHarness : IAsyncDisposable
         var harness = new GatewayHarness(app, link, new Uri($"https://localhost:{node.Port}"), new Uri($"http://localhost:{health.Port}"));
         if (waitForTrust)
         {
-            await Eventually.TrueAsync(() => harness.Trust.Ready);
+            // On a real broker the first ask can go unanswered while the routes settle. The loader
+            // gives that ask its whole timeout and then asks again, so wait for the second ask too.
+            var within = rabbitMq is null
+                ? (TimeSpan?)null
+                : TrustLoader.AskTimeout + (TrustLoader.FirstRetry * 2) + TimeSpan.FromSeconds(10);
+            await Eventually.TrueAsync(() => harness.Trust.Ready, within);
         }
 
         return harness;

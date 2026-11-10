@@ -72,17 +72,23 @@ internal sealed partial class TrustLoader(
     IApiLink api, GatewayTrust trust, GatewayIdentity identity, Microsoft.Extensions.Options.IOptions<GatewayOptions> options,
     IHostApplicationLifetime lifetime, TimeProvider time, ILogger<TrustLoader> logger) : BackgroundService
 {
+    /// <summary>How long one ask waits for the API's answer before it counts as failed.</summary>
+    internal static readonly TimeSpan AskTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>The pause before asking again, doubled after each failure while there is no list yet.</summary>
+    internal static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(1);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Wolverine starts as a hosted service too; asking before it is up leaves it with a broken
         // route it keeps, so the first ask waits for the whole host.
         await Task.Delay(Timeout.Infinite, lifetime.ApplicationStarted).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-        var delay = TimeSpan.FromSeconds(1);
+        var delay = FirstRetry;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                trust.Load(await api.InvokeAsync<NodeTrust>(new GetNodeTrust(identity.Id), TimeSpan.FromSeconds(15), stoppingToken));
+                trust.Load(await api.InvokeAsync<NodeTrust>(new GetNodeTrust(identity.Id), AskTimeout, stoppingToken));
                 delay = options.Value.TrustRefresh;
             }
             catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)

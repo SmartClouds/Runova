@@ -37,6 +37,7 @@ import type {
   DeployTelegramStartInput,
 } from '../../../shared/deployServerBackupsTypes';
 import { BACKUP_EXTENSION } from '../backups';
+import { closeFileStream } from '../closeFileStream';
 import type { CoreHttpClient } from '../connection/coreHttp';
 import { type CoreCallDeps, callCore } from '../coreCalls';
 import { RUNOVA_CORE } from '../coreLayout';
@@ -524,22 +525,20 @@ export class ServerBackups {
     signal?: AbortSignal,
   ): Promise<number> {
     const partial = `${path}.partial`;
+    const out = createWriteStream(partial, { mode: 0o600 });
     try {
       const bytes = await this.deps.withCoreHttp(serverId, (client, token) =>
-        client.download(
-          `/api/v1/backups/${encodeURIComponent(backupId)}`,
-          createWriteStream(partial, { mode: 0o600 }),
-          {
-            token,
-            stallTimeoutMs: STALL_MS,
-            ...(onBytes ? { onProgress: onBytes } : {}),
-            ...(signal ? { signal } : {}),
-          },
-        ),
+        client.download(`/api/v1/backups/${encodeURIComponent(backupId)}`, out, {
+          token,
+          stallTimeoutMs: STALL_MS,
+          ...(onBytes ? { onProgress: onBytes } : {}),
+          ...(signal ? { signal } : {}),
+        }),
       );
       await rename(partial, path);
       return bytes;
     } catch (error) {
+      await closeFileStream(out);
       await rm(partial, { force: true });
       throw error;
     }

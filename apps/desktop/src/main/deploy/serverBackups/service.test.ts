@@ -212,6 +212,19 @@ describe('ServerBackups runs', () => {
     expect(existsSync(`${path}.partial`)).toBe(false);
     expect(existsSync(path)).toBe(false);
   });
+
+  it('leaves no partial file when the download fails before a byte arrives', async () => {
+    const dir = folder();
+    const path = join(dir, 'early.rnbackup');
+    const { backups, client } = setup({}, { pickSavePath: vi.fn(async () => path) });
+    vi.mocked(client.download).mockRejectedValueOnce(new Error('refused'));
+    await expect(backups.downloadRun({ serverId: 's1', runId: 'run-1' })).rejects.toThrow(
+      /refused/,
+    );
+    // The file's open was still to come when the download failed. Give it time to land.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(existsSync(`${path}.partial`)).toBe(false);
+  });
 });
 
 describe('ServerBackups stored backups', () => {
