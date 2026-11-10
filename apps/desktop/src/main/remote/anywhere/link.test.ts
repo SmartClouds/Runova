@@ -1,7 +1,24 @@
 import { b64u, derivePasswordSecret, identityFromSeed } from '@runova/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SOCKET_OPEN } from '../peerSocket';
 import { type LinkTransport, SecureLink } from './link';
+
+// The real password secret is a 32 MiB scrypt, about 100 ms here and many seconds on a loaded
+// runner. These tests are about the link, not the derivation, which @runova/protocol tests at
+// its real cost against fixed vectors, so the secret here comes from the same inputs cheaply.
+vi.mock('@runova/protocol', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@runova/protocol')>();
+  const { createHash } = await import('node:crypto');
+  return {
+    ...actual,
+    derivePasswordSecret: async (password: string, hostIdentityKey: string) =>
+      new Uint8Array(
+        createHash('sha256')
+          .update(`${password.normalize('NFKC')}|${hostIdentityKey}`)
+          .digest(),
+      ),
+  };
+});
 
 const host = identityFromSeed(new Uint8Array(32).fill(1));
 const controller = identityFromSeed(new Uint8Array(32).fill(2));

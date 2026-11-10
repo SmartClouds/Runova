@@ -16,6 +16,24 @@ import {
 } from './service';
 import { type AnywhereStoreIo, createAnywhereStore } from './settings';
 
+// The real password secret is a 32 MiB scrypt, about 100 ms here and many seconds on a loaded
+// runner, and these tests make it several times each. They test what the service does with the
+// secret, not the derivation, which @runova/protocol tests at its real cost against fixed
+// vectors. So here the secret comes from the same inputs, the password and the host key, cheaply.
+vi.mock('@runova/protocol', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@runova/protocol')>();
+  const { createHash } = await import('node:crypto');
+  return {
+    ...actual,
+    derivePasswordSecret: async (password: string, hostIdentityKey: string) =>
+      new Uint8Array(
+        createHash('sha256')
+          .update(`${password.normalize('NFKC')}|${hostIdentityKey}`)
+          .digest(),
+      ),
+  };
+});
+
 // --- A pretend website: devices, teams, presence and the hub's routing ---------------
 
 interface ServerDevice {
