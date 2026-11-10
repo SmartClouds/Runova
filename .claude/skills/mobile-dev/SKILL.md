@@ -40,4 +40,6 @@ Only builds on a Mac. From Windows, push and read the `Mobile iOS` CI job, using
 
 1. `sh apps/mobile/ios/scripts/build-core.sh`
 2. `cd apps/mobile/ios && xcodegen generate`, since the Xcode project is generated and never edited
-3. `xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=<simulator>" CODE_SIGNING_ALLOWED=NO`
+3. `xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=<simulator>" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`.
+   Keep the ad hoc signature: with `CODE_SIGNING_ALLOWED=NO` the app has no entitlements and the
+   keychain refuses it.

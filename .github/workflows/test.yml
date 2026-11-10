@@ -751,8 +751,11 @@ jobs:
         working-directory: apps/mobile/ios
         run: |
           device=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          # Signed ad hoc, which needs no team or profile on the simulator. An unsigned app has no
+          # entitlements, so the keychain refuses it (errSecMissingEntitlement) and the Keychain test fails.
           SNAPSHOT_OUTPUT="$RUNNER_TEMP/ios-snapshots" \
-            xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" CODE_SIGNING_ALLOWED=NO
+            xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" \
+              CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 
       - name: Upload the iOS screenshots
         if: ${{ !cancelled() && steps.xcode.outputs.available == 'true' }}
