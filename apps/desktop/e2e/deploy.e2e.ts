@@ -134,6 +134,11 @@ test("shows the DevHost's Overview live, lists its updates, and comes back after
   await expect(updates.getByRole('listitem')).toHaveCount(7, { timeout: 30_000 });
   await expect(updates.getByText('Security', { exact: true })).toHaveCount(4);
   await expect(updates.getByRole('listitem', { name: 'openssl' })).toBeVisible();
+  // The list can show before the check's job has finished, and the core refuses a reboot while a
+  // package job runs ("Another job is already working on packages"), so wait for the check.
+  await expect(page.getByRole('button', { name: 'Check for updates' })).toBeEnabled({
+    timeout: 30_000,
+  });
 
   // A reboot, typed out: the connection drops and comes back by itself.
   await page.getByRole('button', { name: 'Reboot', exact: true }).click();
