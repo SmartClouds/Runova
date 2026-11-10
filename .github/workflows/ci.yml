@@ -142,22 +142,24 @@ jobs:
   # integration tests start PostgreSQL with Testcontainers, so this needs the Linux runner's Docker.
   #
   # Every integration test starts its own host, and on a busy runner the whole suite no longer fit
-  # in one job, so it runs as two. Shard 1 takes the integration namespaces in SHARD_1_NAMESPACES.
-  # Shard 2 checks the format and runs everything else: the other test projects and the rest of
-  # the integration tests, so a new namespace or test project lands there without a change here.
+  # in one job, so it runs as three. Shards 1 and 2 take the integration namespaces listed for
+  # them. Shard 3 checks the format and runs everything else: the other test projects and the
+  # rest of the integration tests, so a new namespace or test project lands there without a
+  # change here.
   website-api:
-    name: Website API (${{ matrix.shard }}/2)
+    name: Website API (${{ matrix.shard }}/3)
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      SHARD_1_NAMESPACES: Accounts Monitoring Posts Identity Billing Media Releases Reports Jobs
+      SHARD_1_NAMESPACES: Accounts Monitoring Posts Media Reports Jobs
+      SHARD_2_NAMESPACES: News Remote Users Identity Releases
     defaults:
       run:
         working-directory: apps/website/api
@@ -182,7 +184,7 @@ jobs:
         run: dotnet restore Runova.Website.slnx --locked-mode
 
       - name: Format
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 3 }}
         run: dotnet format Runova.Website.slnx --verify-no-changes --no-restore
 
       - name: Build
@@ -191,17 +193,15 @@ jobs:
       - name: Unit and integration tests
         run: |
           filters=()
-          for ns in $SHARD_1_NAMESPACES; do
-            if [ "${{ matrix.shard }}" = 1 ]; then
-              filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*")
-            else
-              filters+=(--filter-not-namespace "Runova.Website.IntegrationTests.$ns*")
-            fi
-          done
-          if [ "${{ matrix.shard }}" = 1 ]; then
-            dotnet test --project tests/Runova.Website.IntegrationTests --no-build --configuration Release --output Detailed "${filters[@]}"
-          else
+          case "${{ matrix.shard }}" in
+            1) for ns in $SHARD_1_NAMESPACES; do filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+            2) for ns in $SHARD_2_NAMESPACES; do filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+            *) for ns in $SHARD_1_NAMESPACES $SHARD_2_NAMESPACES; do filters+=(--filter-not-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+          esac
+          if [ "${{ matrix.shard }}" = 3 ]; then
             dotnet test --solution Runova.Website.slnx --no-build --configuration Release --output Detailed "${filters[@]}"
+          else
+            dotnet test --project tests/Runova.Website.IntegrationTests --no-build --configuration Release --output Detailed "${filters[@]}"
           fi
 
   # The website (apps/website/web): lint, types, unit tests and the build, the e2e suite (a fake
