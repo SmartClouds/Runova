@@ -7,7 +7,7 @@ import type {
 } from '@shared/sftpTypes';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { editorDraftKey, useSftpEditorDraftStore } from '@/stores/sftpEditorDraftStore';
 import { resetSftpStore, useSftpStore } from '@/stores/sftpStore';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
@@ -92,6 +92,12 @@ function Harness(): React.JSX.Element {
     </>
   );
 }
+
+// The view loads the editor lazily. Loaded here first, the test waits only on the view, not on
+// the module being transformed, which on a slow runner took longer than a find waits.
+beforeAll(async () => {
+  await import('./RemoteEditorDialog');
+});
 
 beforeEach(() => {
   resetSftpStore();
