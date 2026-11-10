@@ -372,13 +372,24 @@ jobs:
   # The .NET server core (apps/server-core). Its global.json pins the SDK feature band and the
   # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. System tests
   # (real Docker, test servers) are not part of this job; they run in the [e2e] job instead.
+  #
+  # On a busy runner the whole suite no longer fit in one job, so it runs as three. Shards 1 and 2
+  # take the test namespaces listed for them. Shard 3 takes everything else (the classes at the top
+  # of the project and any namespace added later), so no test is left out by a list going stale.
+  # Shard 1 also checks the format and the contracts. The lists split the test time about evenly.
   server-core:
-    name: Server core
+    name: Server core (${{ matrix.shard }}/3)
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SHARD_1_NAMESPACES: Stacks Nginx Registries Docker
+      SHARD_2_NAMESPACES: CoreDomainTests Backups Cloudflare Hardening Certificates ErrorReporting Assistant Notifications Files Web CoreUpdates Mapping
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -413,6 +424,7 @@ jobs:
         run: dotnet restore Runova.ServerCore.slnx --locked-mode
 
       - name: Format
+        if: ${{ matrix.shard == 1 }}
         working-directory: apps/server-core
         run: dotnet format Runova.ServerCore.slnx --verify-no-changes --no-restore
 
@@ -424,11 +436,19 @@ jobs:
         working-directory: apps/server-core
         # A line per finished test: the runner is otherwise silent until the end, and a job cancelled
         # at its time limit could not tell a stuck test from a busy machine.
-        run: dotnet test --project tests/Runova.ServerCore.Tests --no-build --configuration Release --output Detailed
+        run: |
+          filters=()
+          case "${{ matrix.shard }}" in
+            1) for ns in $SHARD_1_NAMESPACES; do filters+=(--filter-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+            2) for ns in $SHARD_2_NAMESPACES; do filters+=(--filter-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+            *) for ns in $SHARD_1_NAMESPACES $SHARD_2_NAMESPACES; do filters+=(--filter-not-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+          esac
+          dotnet test --project tests/Runova.ServerCore.Tests --no-build --configuration Release --output Detailed "${filters[@]}"
 
       # The desktop's TypeScript contracts are generated from the C# ones. Regenerating must not
       # change anything, or someone changed a contract without committing the new TypeScript.
       - name: Contracts drift
+        if: ${{ matrix.shard == 1 }}
         run: |
           node scripts/server-core.mjs contracts
           drift="$(git status --porcelain -- apps/desktop/src/shared/deploy/protocol/generated)"
