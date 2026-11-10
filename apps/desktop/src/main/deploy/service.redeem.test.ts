@@ -180,7 +180,6 @@ describe('DeployService redeeming an enrollment code', () => {
       version: '1.53.0',
       release: INSTALLED.release,
       transport: 'streamlocal',
-      layout: 'runova',
       installedAt: 1_000,
       os: 'Ubuntu 24.04.1 LTS',
       architecture: 'x86_64',

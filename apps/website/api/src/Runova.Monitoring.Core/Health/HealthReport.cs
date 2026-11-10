@@ -13,12 +13,6 @@ public static class HealthProtocol
 
     /// <summary>The key a check carries its error details under.</summary>
     public const string CheckKey = "runova";
-
-    /// <summary>
-    /// The key endpoints built before the app was renamed put the details under.
-    /// Still read, so those endpoints keep working.
-    /// </summary>
-    public const string LegacyCheckKey = "agentmate"; // legacy-name
 }
 
 /// <summary>A failing service's error, as the endpoint described it (already redacted).</summary>

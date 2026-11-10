@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { LEGACY_CORE_PATHS } from '../deployLegacyNames.js';
 import { type ComposeLintOptions, lintComposeProject, unacknowledgedRisks } from './lint.js';
 import { parseComposeFile } from './parse.js';
 
@@ -73,8 +72,8 @@ describe('lintComposeProject', () => {
         '    target: /cache',
       ),
     );
-    expect(ids(lint(service('volumes:', `  - ${LEGACY_CORE_PATHS[0]}:/core`)))).toEqual([
-      `core-data:app:${LEGACY_CORE_PATHS[0]}`,
+    expect(ids(lint(service('volumes:', '  - /opt/runova-core:/core')))).toEqual([
+      'core-data:app:/opt/runova-core',
     ]);
     expect(risks.map((risk) => [risk.id, risk.severity])).toEqual([
       ['docker-socket:app:/var/run/docker.sock', 'critical'],

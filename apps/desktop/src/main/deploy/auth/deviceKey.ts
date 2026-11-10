@@ -34,7 +34,6 @@ export function signMessage(privateKeyPem: string, message: string): string {
 /**
  * The exact text the core verifies (its AuthMessage): every field that decides what a signature
  * is good for, so a signature for one purpose, challenge, device or session is useless for another.
- * `prefix` is the layout's: a core from before the rename only takes the old one.
  */
 export function authMessage(
   purpose: AuthPurpose,
@@ -42,7 +41,8 @@ export function authMessage(
   nonce: string,
   deviceId: string,
   sessionId: string | null,
-  prefix: string = RUNOVA_CORE.authPrefix,
 ): string {
-  return [prefix, purpose, challengeId, nonce, deviceId, sessionId ?? '-'].join('\n');
+  return [RUNOVA_CORE.authPrefix, purpose, challengeId, nonce, deviceId, sessionId ?? '-'].join(
+    '\n',
+  );
 }

@@ -6,7 +6,6 @@ import type {
   SignedInUser,
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import { CoreHttpError } from '../connection/coreHttp';
-import { coreNames, layoutOf } from '../coreLayout';
 import type { DeployState, DeviceCredentials } from '../state';
 import { authMessage, signMessage } from './deviceKey';
 
@@ -94,11 +93,6 @@ export class CoreSessions {
     return this.signedIn.get(serverId)?.user ?? null;
   }
 
-  /** The old prefix until the server is known to run the Runova layout; every newer core takes both. */
-  private async authPrefix(serverId: string): Promise<string> {
-    return coreNames(layoutOf(await this.deps.state.get(serverId))).authPrefix;
-  }
-
   async signIn(serverId: string, input: SignInInput): Promise<SignedInUser> {
     const device = await this.enrolled(serverId);
     const privateKey = await this.deps.unseal(device.privateKey);
@@ -115,7 +109,6 @@ export class CoreSessions {
         challenge.nonce,
         device.deviceId,
         null,
-        await this.authPrefix(serverId),
       );
       return coded(
         core.post<SignedInResponse>('/api/v1/auth/login', {
@@ -167,7 +160,6 @@ export class CoreSessions {
           challenge.nonce,
           device.deviceId,
           sessionId,
-          await this.authPrefix(serverId),
         );
         return coded(
           core.post<SignedInResponse>('/api/v1/auth/renew', {

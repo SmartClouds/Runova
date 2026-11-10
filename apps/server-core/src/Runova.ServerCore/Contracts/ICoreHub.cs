@@ -588,17 +588,6 @@ public interface ICoreHub
     /// app can upload the release instead (PUT /api/v1/core/update).
     /// </summary>
     Task<CoreUpdateResult> UpdateCore(CoreUpdateRequest request);
-
-    /// <summary>
-    /// Moves a server from the layout before the rename to the Runova one, a few seconds from now
-    /// and from a unit of its own: the core stops, its folders move (links stay at the old
-    /// paths) and it starts again under its new name. Anything that fails is put back, and the
-    /// health endpoint then says why. Owner, with a step-up.
-    /// </summary>
-    Task<LayoutMigrationResult> MigrateLayout();
-
-    /// <summary>The layout the core runs in, and how the last migration went. Viewer.</summary>
-    Task<LayoutMigrationStatus> MigrationStatus();
 }
 
 /// <summary>Everything the core can push to the app without being asked.</summary>

@@ -8,7 +8,6 @@ import {
   findWpCaseCollisions,
   type IgnoreLayer,
   type IgnoreRules,
-  LEGACY_IGNORE_FILE,
   type LocalFileMap,
   syncPathFolder,
   validateSyncPath,
@@ -105,20 +104,16 @@ async function isFolder(path: string): Promise<boolean> {
   return info?.isDirectory() ?? false;
 }
 
-/**
- * The folder's own ignore file. One written before the app was renamed has the old name and still
- * counts; when both are there, `.runovaignore` is the one read.
- */
+const IGNORE_FILE = '.runovaignore';
+
+/** The folder's own ignore file, or null when it has none. */
 async function readOwnIgnoreFile(root: string): Promise<{ name: string; text: string } | null> {
-  for (const name of ['.runovaignore', LEGACY_IGNORE_FILE]) {
-    const path = join(root, name);
-    const info = await lstat(path).catch(() => null);
-    if (!info) continue;
-    // A linked or oversized ignore file is not read: rules come only from files in the folder.
-    if (!info.isFile() || info.size > MAX_IGNORE_FILE_BYTES) return null;
-    return { name, text: await readFile(path, 'utf-8') };
-  }
-  return null;
+  const path = join(root, IGNORE_FILE);
+  const info = await lstat(path).catch(() => null);
+  if (!info) return null;
+  // A linked or oversized ignore file is not read: rules come only from files in the folder.
+  if (!info.isFile() || info.size > MAX_IGNORE_FILE_BYTES) return null;
+  return { name: IGNORE_FILE, text: await readFile(path, 'utf-8') };
 }
 
 /** The site's ignore layers, in order: the folder's .runovaignore, then the site's patterns. */

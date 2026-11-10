@@ -2,7 +2,7 @@ import { Duplex } from 'node:stream';
 import type { SshEndpoint } from '../../../ssh/connectConfig';
 import type { ExecOptions, ExecResult, UploadOptions } from '../../../ssh/connection';
 import { TunnelRefusedError } from '../../../ssh/connection';
-import { LEGACY_CORE, RUNOVA_CORE } from '../../coreLayout';
+import { RUNOVA_CORE } from '../../coreLayout';
 
 /**
  * A server as a script: it answers the preflight's probes and the installer's root commands the
@@ -123,13 +123,7 @@ export class ScriptedConnection {
     if (command === 'sudo -k -n true') return done('', m.sudo === 'passwordless' ? 0 : 1);
     const link = /^readlink -f (\S+)\/current/.exec(command);
     if (link) {
-      // The release answers through the current link of the layout it is in (the new one for a
-      // link that points anywhere else).
-      const release = m.installed?.release ?? '';
-      const layout = [RUNOVA_CORE, LEGACY_CORE].find((names) =>
-        release.startsWith(`${names.root}/`),
-      );
-      return m.installed && link[1] === (layout ?? RUNOVA_CORE).root
+      return m.installed && link[1] === RUNOVA_CORE.root
         ? done(`${m.installed.release}\n`)
         : done('', 1);
     }

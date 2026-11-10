@@ -436,11 +436,7 @@ internal sealed partial class ContainerFilesService : IHostedService, IDisposabl
     /// <summary>Removes helpers (found by their label) that this core is not using: what a previous run left.</summary>
     public async Task SweepLeftoversAsync(CancellationToken cancellationToken)
     {
-        var labelled = new List<string>();
-        foreach (var label in VolumeHelpers.Labels)
-        {
-            labelled.AddRange(await _engine.ListLabelledContainersAsync(label, cancellationToken));
-        }
+        var labelled = await _engine.ListLabelledContainersAsync(VolumeHelpers.Label, cancellationToken);
 
         HashSet<string> inUse;
         lock (_gate)

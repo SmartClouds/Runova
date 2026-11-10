@@ -23,8 +23,8 @@ import { createFetchTransport } from './transport';
 
 const enabled = systemTestsEnabled();
 const PORT = 18_997;
-const THEME: WpItemRef = { kind: 'theme', slug: 'am-int' };
-const THEME_DIR = '/var/www/html/wp-content/themes/am-int';
+const THEME: WpItemRef = { kind: 'theme', slug: 'runova-int' };
+const THEME_DIR = '/var/www/html/wp-content/themes/runova-int';
 
 interface Fixture {
   url: string;
@@ -72,7 +72,7 @@ describe.skipIf(!enabled)('WordPress projects against the real connector', () =>
   const onSite = (path: string): string =>
     site.exec(`cat ${THEME_DIR}/${path} 2>/dev/null || echo __missing__`).trim();
   const local = (path: string): string | null => {
-    const full = join(project.folderPath, 'wp-content', 'themes', 'am-int', ...path.split('/'));
+    const full = join(project.folderPath, 'wp-content', 'themes', 'runova-int', ...path.split('/'));
     return existsSync(full) ? readFileSync(full, 'utf-8') : null;
   };
   const write = (path: string, content: string): void => {
@@ -80,7 +80,7 @@ describe.skipIf(!enabled)('WordPress projects against the real connector', () =>
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, content);
   };
-  const themeFile = (path: string) => `wp-content/themes/am-int/${path}`;
+  const themeFile = (path: string) => `wp-content/themes/runova-int/${path}`;
 
   async function plannedDeploy(force = false) {
     const plan = await service.planDeploy({ projectId: project.id });
@@ -106,7 +106,7 @@ describe.skipIf(!enabled)('WordPress projects against the real connector', () =>
         `chown -R www-data:www-data ${THEME_DIR}`,
       ].join(' && '),
     );
-    site.wp(['theme', 'activate', 'am-int']);
+    site.wp(['theme', 'activate', 'runova-int']);
 
     dir = mkdtempSync(join(tmpdir(), 'runova-wp-int-'));
     service = new WordPressProjectService({
@@ -140,10 +140,10 @@ describe.skipIf(!enabled)('WordPress projects against the real connector', () =>
     expect(connected).toMatchObject({ scope: 'write', transport: 'local-http' });
 
     const info = await service.siteInfo(siteId);
-    expect(info.activeTheme.stylesheet).toBe('am-int');
+    expect(info.activeTheme.stylesheet).toBe('runova-int');
     expect(info.guard.installed).toBe(true);
     const items = await service.listItems(siteId);
-    expect(items.find((item) => item.kind === 'theme' && item.slug === 'am-int')).toMatchObject({
+    expect(items.find((item) => item.kind === 'theme' && item.slug === THEME.slug)).toMatchObject({
       active: true,
     });
     // The connector itself is never something to sync.
@@ -202,7 +202,7 @@ describe.skipIf(!enabled)('WordPress projects against the real connector', () =>
       (caught: unknown) => caught,
     );
     expect(wordPressErrorCode(error)).toBe('syntaxError');
-    expect(String(error)).toContain('wp-content/themes/am-int/inc/setup.php:1:');
+    expect(String(error)).toContain('wp-content/themes/runova-int/inc/setup.php:1:');
     expect(onSite('inc/setup.php')).toBe('<?php // setup v2');
   }, 240_000);
 

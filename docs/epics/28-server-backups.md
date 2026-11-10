@@ -39,7 +39,7 @@ own records of the server.
 - **Volumes are copied live.** Nothing is stopped while a backup runs. A database that is busy at
   that moment may restore inconsistent, and the screens say so.
 - **Destinations** implement one contract (test, upload, list, open, delete). A backup lands as
-  `runova-<server>-<yyyyMMdd-HHmmss>-<id>.ambackup` (or numbered `.partNNN` parts) with a
+  `runova-<server>-<yyyyMMdd-HHmmss>-<id>.rnbackup` (or numbered `.partNNN` parts) with a
   plaintext manifest beside it that holds no secret. Telegram takes parts of 2000 MiB, or 4000 MiB
   on a Premium account. Retention only ever deletes backups whose manifest names the plan, and only
   after an upload succeeded.

@@ -57,7 +57,7 @@ const INPUT = {
 function setup(more: Partial<Record<keyof ServerBackups, unknown>> = {}) {
   const events: DeployServerRestoreEvent[] = [];
   const backups = {
-    resolve: vi.fn(() => 'C:/backups/web.ambackup'),
+    resolve: vi.fn(() => 'C:/backups/web.rnbackup'),
     fetchToServer: vi.fn(async (_s, _d, backupId, onProgress) => {
       onProgress?.({ id: 'f1', backupId, state: 'running', sizeBytes: 100, bytesDone: 50 });
       return {
@@ -66,7 +66,7 @@ function setup(more: Partial<Record<keyof ServerBackups, unknown>> = {}) {
         state: 'succeeded',
         sizeBytes: 100,
         bytesDone: 100,
-        path: '/var/lib/runova-core/backups/f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1.ambackup',
+        path: '/var/lib/runova-core/backups/f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1.rnbackup',
       };
     }),
     stream: vi.fn(async (_s, _b, _path, onBytes) => {
@@ -115,7 +115,7 @@ describe('ServerRestores.restore', () => {
     expect(restoreCore).toHaveBeenCalledWith(
       expect.objectContaining({
         serverId: 'srv-1',
-        file: 'C:/backups/web.ambackup',
+        file: 'C:/backups/web.rnbackup',
         passphrase: INPUT.secret,
         userName: 'maria',
       }),
@@ -134,7 +134,7 @@ describe('ServerRestores.restore', () => {
     expect(backups.stream).not.toHaveBeenCalled();
     expect(restoreCore).toHaveBeenCalledWith(
       expect.objectContaining({
-        file: '/var/lib/runova-core/backups/f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1.ambackup',
+        file: '/var/lib/runova-core/backups/f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1.rnbackup',
         fileOnServer: true,
         passphrase: INPUT.secret,
       }),
@@ -173,7 +173,7 @@ describe('ServerRestores.restore', () => {
         state: 'succeeded',
         sizeBytes: 1,
         bytesDone: 1,
-        path: '/root/elsewhere.ambackup',
+        path: '/root/elsewhere.rnbackup',
       })),
     });
     await expect(

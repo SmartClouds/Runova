@@ -96,7 +96,7 @@ describe('vault file format', () => {
   it('creates a file that opens with the same password', async () => {
     const { file, dataKey } = await createVaultFile(PASSWORD, payload(), FAST);
     expect(file).toMatchObject({
-      format: 'agentmate-vault' as const /* legacy-name */,
+      format: 'runova-vault' as const,
       version: 1,
       kdf: { name: 'scrypt', ...FAST },
     });

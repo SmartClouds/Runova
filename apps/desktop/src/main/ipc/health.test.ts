@@ -278,9 +278,9 @@ describe('create and rotate, the only two that reveal a secret', () => {
     const key = await deriveKey('a passkey nobody typed', salt);
     userData.writeData('ssh-vault.json', {
       salt,
-      verifier: Buffer.from(
-        JSON.stringify(encryptWithKey('agentmate-ssh-vault', key) /* legacy-name */),
-      ).toString('base64'),
+      verifier: Buffer.from(JSON.stringify(encryptWithKey('runova-ssh-vault', key))).toString(
+        'base64',
+      ),
     });
     await expect(create()).rejects.toThrow('The vault is locked.');
   });

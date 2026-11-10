@@ -8,7 +8,7 @@ namespace Runova.ServerCore.Contracts;
 /// that downloads its release trusts it no more than one the app uploads.
 /// </summary>
 /// <param name="Version">The release's version, such as 1.63.0.</param>
-/// <param name="File">The tarball's name: runova-core-&lt;version&gt;-&lt;rid&gt;.tar.gz for this server's processor (a server not yet moved to the Runova layout also takes the name from before the rename).</param>
+/// <param name="File">The tarball's name: runova-core-&lt;version&gt;-&lt;rid&gt;.tar.gz for this server's processor.</param>
 /// <param name="Sha256">The tarball's SHA-256, lowercase hex.</param>
 /// <param name="Size">The tarball's size in bytes.</param>
 /// <param name="DownloadUrl">The GitHub release asset to fetch it from. Left out when the app uploads it.</param>

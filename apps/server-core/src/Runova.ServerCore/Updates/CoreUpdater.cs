@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Hosting;
 
@@ -47,16 +46,8 @@ internal static partial class CoreUpdateRules
     public const long MaxSize = 256L * 1024 * 1024;
 
     /// <summary>
-    /// The first release that runs in the Runova layout. A server on that layout never takes an
-    /// older one, which only knows the old paths (an app from before the rename would offer it).
-    /// </summary>
-    public const string FirstRunovaRelease = "1.64.0";
-
-    /// <summary>
     /// The request's problem, or null when it names a release for <paramref name="rid"/> that can
-    /// run in <paramref name="layout"/>. The old layout takes a tarball under either name, since
-    /// every release is published under both while old apps are about; the new one only takes
-    /// the new name.
+    /// run in <paramref name="layout"/>.
     /// </summary>
     public static string? Problem(CoreUpdateRequest? request, string rid, CoreLayout layout)
     {
@@ -71,17 +62,9 @@ internal static partial class CoreUpdateRules
             return "That is not a release version.";
         }
 
-        string[] names = layout.Kind == CoreLayoutKind.Runova
-            ? [layout.TarballName(request.Version, rid)]
-            : [CoreLayout.Runova.TarballName(request.Version, rid), CoreLayout.Legacy.TarballName(request.Version, rid)];
-        if (!names.Contains(request.File, StringComparer.Ordinal))
+        if (request.File != layout.TarballName(request.Version, rid))
         {
             return $"This server needs the {rid} build of core {request.Version}.";
-        }
-
-        if (layout.Kind == CoreLayoutKind.Runova && IsOlder(request.Version, FirstRunovaRelease))
-        {
-            return $"This server has moved to the Runova layout, which needs core {FirstRunovaRelease} or later.";
         }
 
         if (request.Sha256 is null || !Sha256().IsMatch(request.Sha256))
@@ -106,47 +89,6 @@ internal static partial class CoreUpdateRules
         return null;
     }
 
-    /// <summary>
-    /// Whether <paramref name="version"/> comes before <paramref name="floor"/>, comparing the
-    /// numbers before any "-" suffix. A version that does not read as numbers counts as older.
-    /// </summary>
-    public static bool IsOlder(string version, string floor)
-    {
-        static int[]? Parts(string text)
-        {
-            var plain = text.Split('-', 2)[0].Split('.');
-            var numbers = new int[3];
-            for (var i = 0; i < numbers.Length; i++)
-            {
-                if (i < plain.Length && !int.TryParse(plain[i], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out numbers[i]))
-                {
-                    return null;
-                }
-            }
-
-            return numbers;
-        }
-
-        ArgumentNullException.ThrowIfNull(version);
-        ArgumentNullException.ThrowIfNull(floor);
-        var parts = Parts(version);
-        var minimum = Parts(floor) ?? throw new ArgumentException("The floor is not a version.", nameof(floor));
-        if (parts is null)
-        {
-            return true;
-        }
-
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (parts[i] != minimum[i])
-            {
-                return parts[i] < minimum[i];
-            }
-        }
-
-        return false;
-    }
-
     [GeneratedRegex("^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex Version();
 
@@ -154,8 +96,7 @@ internal static partial class CoreUpdateRules
     private static partial Regex Sha256();
 
     // The same shape the app's installer lets a server download over SSH (serverDownload.ts).
-    // Either tarball name: which one this layout takes is checked against File above.
-    [GeneratedRegex(@"^https://github\.com/[0-9A-Za-z_.-]+/[0-9A-Za-z_.-]+/releases/download/v[0-9A-Za-z][0-9A-Za-z.+-]{0,63}/((?:runova-core-|" + LegacyNames.TarballPrefix + @")[0-9A-Za-z.+-]+-linux-(?:x64|arm64)\.tar\.gz)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^https://github\.com/[0-9A-Za-z_.-]+/[0-9A-Za-z_.-]+/releases/download/v[0-9A-Za-z][0-9A-Za-z.+-]{0,63}/(runova-core-[0-9A-Za-z.+-]+-linux-(?:x64|arm64)\.tar\.gz)$", RegexOptions.CultureInvariant)]
     private static partial Regex ReleaseUrl();
 }
 
@@ -286,21 +227,6 @@ internal sealed class CoreUpdater(ICoreInstallation installation, IHttpClientFac
         {
             throw new CoreUpdateException(CoreUpdateError.Invalid, $"This server already runs core {request.Version}.");
         }
-    }
-
-    /// <summary>
-    /// Runs <paramref name="schedule"/> (a layout migration's start) under the update's gate, and
-    /// keeps new updates off afterwards the way a scheduled switch does: the core is about to stop.
-    /// </summary>
-    /// <exception cref="CoreUpdateException">An update is under way or switching.</exception>
-    public Task ScheduleExclusiveAsync(Func<Task> schedule)
-    {
-        ArgumentNullException.ThrowIfNull(schedule);
-        return ExclusiveAsync(async () =>
-        {
-            await schedule();
-            return new CoreUpdateResult(CoreUpdateOutcome.Switching, CoreVersion.Current);
-        });
     }
 
     private async Task<CoreUpdateResult> ExclusiveAsync(Func<Task<CoreUpdateResult>> work)

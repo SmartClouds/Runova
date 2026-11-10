@@ -39,7 +39,7 @@ internal sealed class EngineSocket : IAsyncDisposable
             return new EngineSocket(new Uri("unix://" + LinuxSocket), null, null);
         }
 
-        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"am-docker-{Guid.NewGuid():N}"[..20] + ".sock");
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"runova-docker-{Guid.NewGuid():N}"[..24] + ".sock");
         var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(path));
         listener.Listen(64);

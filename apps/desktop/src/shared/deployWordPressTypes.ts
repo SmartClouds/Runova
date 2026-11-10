@@ -52,7 +52,7 @@ export interface DeployWordPressHttpAuth {
 }
 
 export interface DeployWordPressConnectInput {
-  /** In only: the `amwp1.` key from wp-admin. Good once, for 15 minutes. */
+  /** In only: the `rnwp1.` key from wp-admin. Good once, for 15 minutes. */
   connectionKey: string;
   label?: string;
   /** Needed when the key's URLs are plain HTTP to another computer. */

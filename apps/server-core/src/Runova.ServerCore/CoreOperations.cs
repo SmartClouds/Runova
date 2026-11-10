@@ -28,8 +28,7 @@ internal sealed record ServerServices(
     ISystemInfoSource Info,
     IServiceManager Services,
     StreamLimits Streams,
-    CoreUpdater CoreUpdater,
-    LayoutMigrator LayoutMigrator);
+    CoreUpdater CoreUpdater);
 
 /// <summary>
 /// Running the server: programs and transient units, the platform layer (Linux here; the DevHost
@@ -95,10 +94,6 @@ internal static class CoreOperations
         services.AddSingleton(CoreLayout.Current);
         services.AddSingleton<ICoreInstallation, SystemdCoreInstallation>();
         services.AddSingleton<CoreUpdater>();
-        // Moving a server off the layout from before the rename, which the app asks for after an update.
-        services.AddSingleton(provider => new LayoutMigrationJournalFile(
-            provider.GetRequiredService<IConfiguration>()["Core:MigrationJournal"] is { Length: > 0 } journal ? journal : LayoutMigrationPlan.JournalPath));
-        services.AddSingleton<LayoutMigrator>();
         services.AddHttpClient(CoreUpdater.HttpClientName, client =>
         {
             client.Timeout = Timeout.InfiniteTimeSpan;

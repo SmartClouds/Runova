@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.Features;
 using Runova.ServerCore.Audit;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Security;
 using Runova.ServerCore.Updates;
@@ -25,10 +24,6 @@ internal static class CoreUpdateEndpoints
 
     public const string Sha256Header = "X-Runova-Core-Sha256";
 
-    /// <summary>The header under its new name, or the name an app from before the rename sends.</summary>
-    private static string Header(IHeaderDictionary headers, string name, string legacyName) =>
-        headers.TryGetValue(name, out var value) ? value.ToString() : headers[legacyName].ToString();
-
     public static IEndpointRouteBuilder MapCoreUpdateEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPut(Path, UploadAsync).RequireAuthorization(CorePolicies.Owner, CorePolicies.StepUp);
@@ -45,9 +40,9 @@ internal static class CoreUpdateEndpoints
 
         var headers = context.Request.Headers;
         var request = new CoreUpdateRequest(
-            Header(headers, VersionHeader, LegacyNames.CoreVersionHeader),
-            Header(headers, FileHeader, LegacyNames.CoreFileHeader),
-            Header(headers, Sha256Header, LegacyNames.CoreSha256Header),
+            headers[VersionHeader].ToString(),
+            headers[FileHeader].ToString(),
+            headers[Sha256Header].ToString(),
             context.Request.ContentLength ?? 0);
         var parameters = new Dictionary<string, string?>
         {

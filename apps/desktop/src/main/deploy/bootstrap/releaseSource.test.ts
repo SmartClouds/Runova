@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { tempDir } from '../../../test/main/fixtures';
-import { LEGACY_CORE } from '../coreLayout';
 import {
   githubReleaseSource,
   localArtifactSource,
@@ -73,41 +72,6 @@ describe('parseReleaseManifest', () => {
     ['not an object', 'manifest'],
   ])('refuses %s', (_case, value) => {
     expect(() => parseReleaseManifest(value)).toThrow(/release manifest/);
-  });
-});
-
-describe('the tarball under its old name', () => {
-  const legacyFile = `${LEGACY_CORE.tarballPrefix}1.64.0-linux-x64.tar.gz`;
-  const manifest = {
-    version: '1.64.0',
-    assets: [
-      {
-        rid: 'linux-x64',
-        file: 'runova-core-1.64.0-linux-x64.tar.gz',
-        legacyFile,
-        sha256: 'c'.repeat(64),
-        size: 9,
-      },
-    ],
-  };
-
-  it('is read from the manifest and offered at its own address', () => {
-    expect(parseReleaseManifest(manifest).assets[0]?.legacyFile).toBe(legacyFile);
-    const remote = githubReleaseSource(manifest, '/nowhere', async () => undefined).remote?.(
-      'linux-x64',
-    );
-    expect(remote?.legacy).toEqual({
-      file: legacyFile,
-      url: `https://github.com/SmartClouds/Runova/releases/download/v1.64.0/${legacyFile}`,
-    });
-  });
-
-  it('has to be the same release', () => {
-    const wrong = {
-      ...manifest,
-      assets: [{ ...manifest.assets[0], legacyFile: 'something-else.tar.gz' }],
-    };
-    expect(() => parseReleaseManifest(wrong)).toThrow(/old name/);
   });
 });
 

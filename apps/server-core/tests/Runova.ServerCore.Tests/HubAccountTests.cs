@@ -387,9 +387,7 @@ public sealed class HubAccountTests
         string[] directTls = ["GetDirectTls"];
         // The core domain (E44): its status, never the key.
         string[] coreDomain = ["GetCoreDomain"];
-        // The layout migration's status: the health route says as much to anyone.
-        string[] layout = ["MigrationStatus"];
-        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. coreDomain, .. layout];
+        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. coreDomain];
         Assert.Equal(account.Concat(reads).Concat(firewallReads).Order(StringComparer.Ordinal), open.Order(StringComparer.Ordinal));
     }
 

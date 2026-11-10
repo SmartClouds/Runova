@@ -155,9 +155,9 @@ describe('readConnectionKey', () => {
       'pairing-0001',
     );
     const cases: [string, string][] = [
-      ['amwp1.!!!', 'keyInvalid'],
+      ['rnwp1.!!!', 'keyInvalid'],
       ['nothing', 'keyInvalid'],
-      [formatWpConnectionKey(key).replace('amwp1.', 'amwp2.'), 'keyInvalid'],
+      [formatWpConnectionKey(key).replace('rnwp1.', 'rnwp2.'), 'keyInvalid'],
       [formatWpConnectionKey({ ...key, restUrl: 'ftp://x' }), 'keyInvalid'],
     ];
     for (const [text, code] of cases) {
@@ -172,7 +172,7 @@ describe('readConnectionKey', () => {
     }
     let version: unknown;
     try {
-      readConnectionKey(formatWpConnectionKey(key).replace('amwp1.', 'amwp2.'), 1);
+      readConnectionKey(formatWpConnectionKey(key).replace('rnwp1.', 'rnwp2.'), 1);
     } catch (caught) {
       version = caught;
     }

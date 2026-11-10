@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 
 namespace Runova.ServerCore.Stacks;
@@ -17,16 +16,8 @@ internal static class LoopbackOverride
 {
     public const string FileName = "runova.override.yaml";
 
-    /// <summary>
-    /// The override in a revision folder: the new name, or the one revisions saved before the
-    /// rename have (they are still started, rolled back to and restored from backups).
-    /// </summary>
-    public static string PathIn(string folder)
-    {
-        var path = Path.Combine(folder, FileName);
-        var legacy = Path.Combine(folder, LegacyNames.LoopbackOverrideFile);
-        return !File.Exists(path) && File.Exists(legacy) ? legacy : path;
-    }
+    /// <summary>The override in a revision folder.</summary>
+    public static string PathIn(string folder) => Path.Combine(folder, FileName);
 
     public const string LoopbackAddress = "127.0.0.1";
 

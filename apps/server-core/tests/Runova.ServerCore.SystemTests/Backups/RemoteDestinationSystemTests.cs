@@ -104,7 +104,7 @@ public sealed class RemoteDestinationPinningTests(BackupTargets targets)
         targets.RequireAvailable();
         await using var destination = new SftpDestination(targets.Sftp("/home/keeper/missing"), _secret);
         var manifest = new Runova.ServerCore.Backups.BackupManifestFile(
-            1, Guid.NewGuid(), null, "x", 0, 1, new string('a', 64), "1", "k", [new(1, "runova-x.ambackup", 1, new string('a', 64))]);
+            1, Guid.NewGuid(), null, "x", 0, 1, new string('a', 64), "1", "k", [new(1, "runova-x.rnbackup", 1, new string('a', 64))]);
 
         var error = await Assert.ThrowsAsync<BackupDestinationException>(() =>
             destination.OpenPartAsync(manifest, manifest.Parts[0], Cancel));

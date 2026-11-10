@@ -133,7 +133,7 @@ final class AdminViewsTest extends TestCase
             AdminViews::audit($entries, null, null);
         }));
         $this->assertInert($this->render(function () {
-            AdminViews::keys(array('key' => 'amwp1.abc', 'expiresAt' => 1790000900, 'scope' => 'write'), '"><script>alert(1)</script>', true);
+            AdminViews::keys(array('key' => 'rnwp1.abc', 'expiresAt' => 1790000900, 'scope' => 'write'), '"><script>alert(1)</script>', true);
         }));
     }
 

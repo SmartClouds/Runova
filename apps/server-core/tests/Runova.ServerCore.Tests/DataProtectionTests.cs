@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Hosting;
 
 namespace Runova.ServerCore.Tests;
@@ -43,6 +44,27 @@ public sealed class DataProtectionTests : IDisposable
             .Build();
 
         Assert.Equal("/srv/core", CorePaths.DataDirectory(configuration, isLinux: true));
+    }
+
+    /// <summary>
+    /// The strings that feed encryption keys are pinned exactly: changing one would leave every
+    /// secret in core.db and every backup made so far unreadable.
+    /// </summary>
+    [Fact]
+    public void The_encryption_inputs_never_change()
+    {
+        Assert.Equal("runova-core", FrozenIdentifiers.DataProtectionApplicationName);
+        Assert.Equal("Runova.Cloudflare.DnsToken.v1", FrozenIdentifiers.CloudflareDnsTokenPurpose);
+        Assert.Equal("Runova.Backups.Destination.v1", FrozenIdentifiers.BackupDestinationPurpose);
+        Assert.Equal("Runova.Certificates.PrivateKey.v1", FrozenIdentifiers.CertificatePrivateKeyPurpose);
+        Assert.Equal("Runova.Acme.AccountKey.v1", FrozenIdentifiers.AcmeAccountKeyPurpose);
+        Assert.Equal("Runova.Registries.Credential.v1", FrozenIdentifiers.RegistryCredentialPurpose);
+        Assert.Equal("Runova.Notifications.Telegram.Token.v1", FrozenIdentifiers.TelegramTokenPurpose);
+        Assert.Equal("Runova.ErrorReporting.Dsn.v1", FrozenIdentifiers.ErrorReportingDsnPurpose);
+        Assert.Equal("runova-core.identity.second-factor", FrozenIdentifiers.SecondFactorPurpose);
+        Assert.Equal("runova-core.access-token.v1", FrozenIdentifiers.AccessTokenPurpose);
+        Assert.Equal("Runova backup content key v2", FrozenIdentifiers.BackupContentKeyLabel);
+        Assert.Equal("RNBACKUP", FrozenIdentifiers.BackupMagic);
     }
 
     public void Dispose()

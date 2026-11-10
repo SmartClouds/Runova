@@ -171,7 +171,7 @@ const key = {
 const keyText = core.formatWpConnectionKey(key);
 const labelled = { ...key, scope: 'read', label: 'Staging' };
 const labelledText = core.formatWpConnectionKey(labelled);
-const encodeKey = (json) => `amwp1.${b64url(Buffer.from(JSON.stringify(json), 'utf8'))}`;
+const encodeKey = (json) => `rnwp1.${b64url(Buffer.from(JSON.stringify(json), 'utf8'))}`;
 const keyJson = {
   v: 1,
   u: key.siteUrl,
@@ -192,9 +192,9 @@ const connectionKey = {
   ],
   invalid: [
     { text: 'hello', error: 'format' },
-    { text: `amwp2.${keyText.slice(6)}`, error: 'version' },
-    { text: `amwp1.${b64url(Buffer.from('not json'))}`, error: 'format' },
-    { text: `amwp1.${keyText.slice(6)}=`, error: 'format' },
+    { text: `rnwp2.${keyText.slice(6)}`, error: 'version' },
+    { text: `rnwp1.${b64url(Buffer.from('not json'))}`, error: 'format' },
+    { text: `rnwp1.${keyText.slice(6)}=`, error: 'format' },
     { text: encodeKey({ ...keyJson, v: 2 }), error: 'version' },
     { text: encodeKey({ ...keyJson, s: b64url(Buffer.alloc(31)) }), error: 'fields' },
     { text: encodeKey({ ...keyJson, c: 'admin' }), error: 'fields' },
@@ -337,10 +337,10 @@ const withHeader = (json) => {
   const header = Buffer.from(json, 'utf8');
   const length = Buffer.alloc(4);
   length.writeUInt32BE(header.length);
-  return Buffer.concat([Buffer.from('AMWB1\n'), length, header]);
+  return Buffer.concat([Buffer.from('RNWB1\n'), length, header]);
 };
 const invalidFrames = [
-  { why: 'wrong magic', hex: hex(Buffer.concat([Buffer.from('AMWB2\n'), goodFrame.subarray(6)])) },
+  { why: 'wrong magic', hex: hex(Buffer.concat([Buffer.from('RNWB2\n'), goodFrame.subarray(6)])) },
   { why: 'truncated length', hex: hex(goodFrame.subarray(0, 8)) },
   {
     why: 'header longer than the frame',

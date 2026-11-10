@@ -12,7 +12,7 @@ final class IncomingRequest
     /** @var string The route the URL asked for (REST path or the ajax `route` parameter). */
     public $route;
 
-    /** @var string|null The am_auth field, unslashed. */
+    /** @var string|null The rn_auth field, unslashed. */
     public $auth;
 
     /** @var Bundle|null */

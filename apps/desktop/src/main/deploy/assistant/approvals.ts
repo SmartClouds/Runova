@@ -3,7 +3,7 @@ import { encodeCoreError } from '../../../shared/coreErrors';
 import type { ExecApproval } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import { signMessage } from '../auth/deviceKey';
-import { coreNames, layoutOf, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import type { DeployState } from '../state';
 
 /**
@@ -14,19 +14,15 @@ import type { DeployState } from '../state';
  * after they did, cannot run.
  */
 
-/**
- * The text the core verifies (its ExecApprovals.Message), field for field. `prefix` is the
- * layout's: a core from before the rename only takes the old one.
- */
+/** The text the core verifies (its ExecApprovals.Message), field for field. */
 export function execApprovalMessage(
   nonceId: string,
   nonce: string,
   deviceId: string,
   sessionId: string,
   command: string,
-  prefix: string = RUNOVA_CORE.execPrefix,
 ): string {
-  return [prefix, nonceId, nonce, deviceId, sessionId, command].join('\n');
+  return [RUNOVA_CORE.execPrefix, nonceId, nonce, deviceId, sessionId, command].join('\n');
 }
 
 export interface ApprovalSignerDeps {
@@ -50,7 +46,6 @@ export function approvalSigner(
       device.deviceId,
       device.sessionId,
       command,
-      coreNames(layoutOf(await deps.state.get(serverId))).execPrefix,
     );
     return { nonceId: nonce.nonceId, signature: signMessage(privateKey, message) };
   };

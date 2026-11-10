@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Net.Http.Headers;
 using Runova.ServerCore.Audit;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Files;
 using Runova.ServerCore.Security;
 
@@ -61,8 +60,6 @@ internal static class FileEndpoints
             context.Response.ContentType = "application/octet-stream";
             context.Response.ContentLength = length;
             context.Response.Headers[MtimeHeader] = download.MtimeUnixMs.ToString(CultureInfo.InvariantCulture);
-            // An app from before the rename reads the old name.
-            context.Response.Headers[LegacyNames.MtimeHeader] = download.MtimeUnixMs.ToString(CultureInfo.InvariantCulture);
             context.Response.Headers.AcceptRanges = "bytes";
             await CopyAsync(download.Body, context.Response.Body, start, length, context.RequestAborted);
             return Results.Empty;

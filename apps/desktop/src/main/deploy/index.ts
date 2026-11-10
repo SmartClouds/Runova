@@ -45,7 +45,7 @@ import { CatalogReleaseSource } from './appStore/releases';
 import { DeployAppStore } from './appStore/service';
 import { approvalSigner } from './assistant/approvals';
 import { DeployAssistant } from './assistant/service';
-import { BACKUP_EXTENSION, BACKUP_EXTENSIONS, DeployBackups } from './backups';
+import { BACKUP_EXTENSION, DeployBackups } from './backups';
 import {
   githubReleaseSource,
   localArtifactSource,
@@ -476,7 +476,7 @@ function registerDeployHardeningIpc(
       const options = {
         title: 'Restore a server backup',
         properties: ['openFile' as const],
-        filters: [{ name: 'Runova server backup', extensions: BACKUP_EXTENSIONS }],
+        filters: [{ name: 'Runova server backup', extensions: [BACKUP_EXTENSION] }],
       };
       const win = dialogOwner();
       const result = win
@@ -537,7 +537,7 @@ function registerDeployServerBackupsIpc(
       const options = {
         title: 'Restore a server backup',
         properties: ['openFile' as const],
-        filters: [{ name: 'Runova server backup', extensions: BACKUP_EXTENSIONS }],
+        filters: [{ name: 'Runova server backup', extensions: [BACKUP_EXTENSION] }],
       };
       const win = getMainWindow();
       const result = win

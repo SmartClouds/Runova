@@ -8,14 +8,13 @@ import type {
 import { sshErrorMessage } from '../../../shared/sshErrors';
 import type { ExecResult } from '../../ssh/connection';
 import { openRootShell, type RootShell } from '../../ssh/sudo';
-import { coreNames, LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import { type Enrollment, enrollOverSsh } from './enrollment';
 import type { InstallerConnection } from './installer';
 import {
-  LAYOUT_PROBE,
+  PREVIOUS,
   type RestoreStep,
   restoreCleanupStep,
-  restorePaths,
   restoreRollbackStep,
   stageStep,
   swapSteps,
@@ -37,15 +36,10 @@ import {
  */
 
 const STEP_TIMEOUT_MS = 10 * 60_000;
-/** Where the core keeps a backup it fetched from a destination (E28), in either layout, under either extension. */
+/** Where the core keeps a backup it fetched from a destination (E28). */
 function isFetched(path: string): boolean {
-  return [RUNOVA_CORE, LEGACY_CORE].some((names) => {
-    const folder = `${names.dataDirectory}/backups/`;
-    return (
-      path.startsWith(folder) &&
-      /^[0-9a-f]{32}\.(?:rnbackup|ambackup)$/.test(path.slice(folder.length))
-    );
-  });
+  const folder = `${RUNOVA_CORE.dataDirectory}/backups/`;
+  return path.startsWith(folder) && /^[0-9a-f]{32}\.rnbackup$/.test(path.slice(folder.length));
 }
 const OUTPUT_BYTES = 256 * 1024;
 const FAILURE_CHARS = 1_500;
@@ -164,10 +158,6 @@ export async function restoreCore(
   try {
     const password = request.sudoPassword ?? lease.connection.endpoint.password ?? null;
     const shell = await openRootShell(lease.connection, password);
-    // A server set up before the rename keeps the old names until its core migrates it.
-    const probe = await shell.run(LAYOUT_PROBE, { timeoutMs: 30_000, maxOutputBytes: 1_024 });
-    const names = coreNames(probe.stdout.trim() === 'legacy' ? 'legacy' : 'runova');
-
     const uploaded = request.fileOnServer
       ? request.file
       : await phase('upload', TITLES.upload, async () => {
@@ -188,7 +178,7 @@ export async function restoreCore(
         });
 
     const staged = parseStaged(
-      (await run(shell, stageStep(uploaded, names), `${request.passphrase}\n`)).stdout,
+      (await run(shell, stageStep(uploaded), `${request.passphrase}\n`)).stdout,
     );
     const owner = staged.owners.find(
       (name) => name.toLowerCase() === request.userName.toLowerCase(),
@@ -201,12 +191,12 @@ export async function restoreCore(
     }
 
     try {
-      for (const step of swapSteps(names)) await run(shell, step);
+      for (const step of swapSteps()) await run(shell, step);
       await phase('health', TITLES.health, () => deps.health(lease.connection));
     } catch (error) {
       const reason = sshErrorMessage(error);
       try {
-        await run(shell, restoreRollbackStep(names));
+        await run(shell, restoreRollbackStep());
       } catch (rollbackError) {
         throw new Error(
           `${reason} Going back to the state from before failed too: ${sshErrorMessage(rollbackError)}`,
@@ -226,8 +216,8 @@ export async function restoreCore(
           ...(event.detail ? { detail: event.detail } : {}),
         }),
     );
-    await run(shell, restoreCleanupStep(names)).catch(() => undefined);
-    return { backup: staged, enrollment, previousStateFolder: restorePaths(names).previous };
+    await run(shell, restoreCleanupStep()).catch(() => undefined);
+    return { backup: staged, enrollment, previousStateFolder: PREVIOUS };
   } finally {
     if (staging) {
       await lease.connection

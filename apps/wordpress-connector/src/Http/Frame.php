@@ -1,7 +1,7 @@
 <?php
 /**
  * The binary frame, mirrored from bundle.ts:
- *   "AMWB1\n" | header length (uint32, big-endian) | header JSON {r, b, l} | blobs
+ *   "RNWB1\n" | header length (uint32, big-endian) | header JSON {r, b, l} | blobs
  * Nothing may follow the last blob. Blobs are kept as offsets into the raw bytes, so a big upload
  * is not copied until a handler asks for a blob.
  *
@@ -15,7 +15,7 @@ use Runova\Connector\Protocol;
 
 final class Frame
 {
-    const MAGIC = "AMWB1\n";
+    const MAGIC = "RNWB1\n";
 
     /** @var string */
     public $route;

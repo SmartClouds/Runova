@@ -1,5 +1,4 @@
 using System.Globalization;
-using Runova.ServerCore.Compatibility;
 
 namespace Runova.ServerCore.Nginx;
 
@@ -19,27 +18,8 @@ internal sealed record NginxLayout
 
     public static NginxLayout Rhel { get; } = new() { TrustedCertificates = RhelTrustedCertificates };
 
-    /// <summary>
-    /// Whether nginx on this server still has the names from before the rename: its folder under
-    /// the old name is there and the new one is not. Asked again each time, since the core moves
-    /// such a server to the new names while it runs (Updates/LegacyNamesMove.cs); until then it
-    /// keeps every name it has (folders, logs, zones), and a new setup uses the new names.
-    /// </summary>
-    public static bool LegacyNamesHere =>
-        OperatingSystem.IsLinux() && Directory.Exists(LegacyNames.NginxConfigRoot) && !Directory.Exists(Debian.ConfigRoot);
-
     /// <summary>The prefix of what nginx itself names: log files, cache folders, zones and the upgrade map.</summary>
     public string NamePrefix { get; init; } = "runova";
-
-    /// <summary>This layout with the folders and names of an nginx set up before the rename.</summary>
-    public NginxLayout WithLegacyNames() => this with
-    {
-        ConfigRoot = LegacyNames.NginxConfigRoot,
-        WebRoot = LegacyNames.NginxWebRoot,
-        AcmeWebroot = LegacyNames.NginxWebRoot + "/acme",
-        SitesRoot = LegacyNames.NginxWebRoot + "/sites",
-        NamePrefix = LegacyNames.NginxNamePrefix,
-    };
 
     public string ConfigRoot { get; init; } = "/etc/nginx/runova";
 

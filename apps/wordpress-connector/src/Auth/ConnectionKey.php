@@ -1,6 +1,6 @@
 <?php
 /**
- * The connection key an admin copies out of wp-admin or WP-CLI: `amwp1.` then base64url of a JSON
+ * The connection key an admin copies out of wp-admin or WP-CLI: `rnwp1.` then base64url of a JSON
  * object with the keys v, u, r, a, i, s, k, c, x and l, in that order. Mirrors connectionKey.ts.
  *
  * The plugin only ever writes keys. parse() exists so the shared vectors can prove both sides read
@@ -17,7 +17,7 @@ use Runova\Connector\Support\Text;
 
 final class ConnectionKey
 {
-    const PREFIX = 'amwp1.';
+    const PREFIX = 'rnwp1.';
     const PAIRING_ID = '/^[A-Za-z0-9][A-Za-z0-9-]{7,63}$/D';
     const MAX_SAFE_INTEGER = 9007199254740991;
 
@@ -56,7 +56,7 @@ final class ConnectionKey
         if ($compact === null) {
             return self::fail('format');
         }
-        if (strncmp($compact, 'amwp', 4) !== 0 || Text::utf16Length($compact) > 4096) {
+        if (strncmp($compact, 'rnwp', 4) !== 0 || Text::utf16Length($compact) > 4096) {
             return self::fail('format');
         }
         if (strncmp($compact, self::PREFIX, strlen(self::PREFIX)) !== 0) {

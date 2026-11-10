@@ -369,7 +369,7 @@ try {
       label: 'From wp-admin',
       expires: '7',
     });
-    const adminKey = created.text.match(/amwp1\.[A-Za-z0-9_-]+/)?.[0];
+    const adminKey = created.text.match(/rnwp1\.[A-Za-z0-9_-]+/)?.[0];
     check(created.status === 200 && adminKey !== undefined, 'the Keys tab makes a key');
     const viaAdmin = new SiteClient(adminKey);
     await viaAdmin.pair('Admin key');
@@ -669,7 +669,7 @@ try {
       'deactivation removes the guard',
     );
     site.wp(['plugin', 'uninstall', 'runova-connector']);
-    // The tables kept the names the plugin gave them before the rename.
+    // Every table the plugin makes has runova in its name.
     const showTables = "SHOW TABLES LIKE '%runova%'";
     const tables = site.wp(['db', 'query', showTables, '--skip-column-names']);
     check(tables === '', 'its tables are dropped', tables);

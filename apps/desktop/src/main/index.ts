@@ -1,7 +1,7 @@
 // First, before anything can read userData: it may point this run at another profile.
 import './testMode';
-// Then the move to the renamed profile folder, or the one-off helper that reads old secrets.
-import './rebrand/startup';
+// Then the profile folder named after the app.
+import './appData';
 import { join } from 'node:path';
 import { BLUEPRINT_FILE_SCHEME } from '@runova/core';
 import { app, BrowserWindow, desktopCapturer, protocol, session, shell } from 'electron';
@@ -12,6 +12,7 @@ import { flushSshTaskHistory, stopAllSshTasks } from './agents/sshTaskRunner';
 import { startAiAccess, stopAiAccess } from './aiAccess/service';
 import { stopEmulatorsOnQuit } from './android/runtime';
 import { appCsp, keepsOwnCsp } from './appCsp';
+import { APP_NAME, DEV_APP_NAME } from './appData';
 import { appIcon, appUserModelId, removeDevShortcuts, showAppIconInDev } from './appIcon';
 import { registerBlueprintFileProtocol } from './blueprintFileStore';
 import { configureBrowserSession, setupBrowserGuests } from './browser/guestSession';
@@ -120,9 +121,6 @@ import { startCiAutoFix, stopCiAutoFix } from './pipelines/autoFix/wiring';
 import { startPipelineWatcher, stopPipelineWatcher } from './pipelines/watcher';
 import { promptBuildWidgetManager } from './promptBuild/widgetWindows';
 import { allowQuit, guardQuit, registerQuitGuardHandlers } from './quitGuard';
-import { finishRebrand } from './rebrand/afterStart';
-import { APP_NAME, DEV_APP_NAME } from './rebrand/dataFolder';
-import { isLegacyDecryptHelper } from './rebrand/startup';
 import { pruneOrphanRelays } from './relay/store';
 import { startRelayService } from './relay/wiring';
 import { remoteManager } from './remote/manager';
@@ -203,16 +201,14 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 // (same name -> same lock -> dev process loses the race and quits, while the
 // already-running release instance gets focused, looking like "dev opened
 // release").
-if (!isLegacyDecryptHelper) app.setName(app.isPackaged ? APP_NAME : DEV_APP_NAME);
+app.setName(app.isPackaged ? APP_NAME : DEV_APP_NAME);
 // Windows groups notifications/taskbar entries by this id rather than the exe
 // name, so without it toasts show up as "Electron" with the Electron icon.
 // The packaged build uses electron-builder.yml's `appId`, which its installer's
 // shortcut registers. Dev runs use their own (see DEV_APP_ID).
-if (process.platform === 'win32' && !isLegacyDecryptHelper) app.setAppUserModelId(appUserModelId());
-if (!isLegacyDecryptHelper) {
-  showAppIconInDev();
-  void app.whenReady().then(removeDevShortcuts);
-}
+if (process.platform === 'win32') app.setAppUserModelId(appUserModelId());
+showAppIconInDev();
+void app.whenReady().then(removeDevShortcuts);
 
 // Both are safe before the app is ready and before the settings file has been
 // read: the fetch shim passes everything through to Node until a proxy is
@@ -245,9 +241,8 @@ function acquireSingleInstanceLock(): boolean {
   return false;
 }
 
-// The helper has a throwaway profile of its own and exits as soon as the app is ready.
-const isSingleInstance = !isLegacyDecryptHelper && acquireSingleInstanceLock();
-if (!isSingleInstance && !isLegacyDecryptHelper) {
+const isSingleInstance = acquireSingleInstanceLock();
+if (!isSingleInstance) {
   app.quit();
 }
 
@@ -478,7 +473,6 @@ function registerAllIpcHandlers(): void {
 }
 
 app.whenReady().then(async () => {
-  if (isLegacyDecryptHelper) return;
   // The splash goes up first so a click on the app shows something right away. It needs the
   // theme, and the settings file is small, so that one read comes before it.
   const { theme } = await store.getSettings();
@@ -557,7 +551,6 @@ app.whenReady().then(async () => {
   startTerminalBackend();
   void seedExampleRepositoryIfEmpty();
   void migrateInlineProjectIcons();
-  void finishRebrand();
   void pruneOrphanBlueprints();
   void pruneOrphanEnvironments();
   void pruneOrphanHealthTargets();

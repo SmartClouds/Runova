@@ -22,8 +22,8 @@ export interface PreparedMacUpdate {
   target: string;
   /** The new bundle, unpacked and ready to move into place. */
   stagedApp: string;
-  /** Where the new bundle goes: `target`, or beside it under the new bundle's own name when the
-   *  app was renamed (an install from before the rename is replaced by Runova.app). */
+  /** Where the new bundle goes: `target`, or beside it under the new bundle's own name when
+   *  that name differs from the running one. */
   destination: string;
   /** Hidden folder beside `target` holding `stagedApp`; the script removes it when done. */
   stagingDir: string;
@@ -128,10 +128,10 @@ export async function prepareMacUpdate(options: {
     throw new DownloadFatalError('The update archive did not contain an app.');
   }
   const stagedApp = join(stagingDir, appName);
-  // A bundle from before the rename is replaced by one under the new name, unless something
-  // already sits at that name.
-  const renamed = join(parent, appName);
-  const destination = renamed !== target && !existsSync(renamed) ? renamed : target;
+  // A new bundle with a different name goes in under that name, unless something already sits
+  // there.
+  const named = join(parent, appName);
+  const destination = named !== target && !existsSync(named) ? named : target;
   // The app downloads the zip itself, so it normally carries no quarantine flag, but a copy
   // that does would be blocked by Gatekeeper on first launch.
   await execFileAsync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', stagedApp]).catch(

@@ -112,12 +112,12 @@ beforeEach(() => {
 describe('parseRemoteProbe', () => {
   it('reads the home folder, the agent folders and which CLIs are there', () => {
     const stdout = [
-      '__AM_HOME=/home/me',
-      '__AM_CLAUDE_CONFIG_DIR=/home/me/.claude-work',
-      '__AM_CODEX_HOME=/opt/codex',
-      '__AM_CLAUDE=1',
-      '__AM_CODEX=1',
-      '__AM_END',
+      '__RN_HOME=/home/me',
+      '__RN_CLAUDE_CONFIG_DIR=/home/me/.claude-work',
+      '__RN_CODEX_HOME=/opt/codex',
+      '__RN_CLAUDE=1',
+      '__RN_CODEX=1',
+      '__RN_END',
     ].join('\n');
 
     expect(parseRemoteProbe(stdout)).toEqual({
@@ -140,7 +140,7 @@ describe('parseRemoteProbe', () => {
   });
 
   it('treats unset variables and missing CLIs as absent', () => {
-    const stdout = '__AM_HOME=/root\n__AM_CLAUDE_CONFIG_DIR=\n__AM_CODEX_HOME=\n__AM_END\n';
+    const stdout = '__RN_HOME=/root\n__RN_CLAUDE_CONFIG_DIR=\n__RN_CODEX_HOME=\n__RN_END\n';
 
     expect(parseRemoteProbe(stdout)).toEqual({
       home: '/root',
@@ -163,16 +163,16 @@ describe('parseRemoteProbe', () => {
 
   it('reads every probed CLI flag', () => {
     const stdout = [
-      '__AM_HOME=/home/me',
-      '__AM_GEMINI=1',
-      '__AM_CURSOR=1',
-      '__AM_CONTINUE=1',
-      '__AM_GROK=1',
-      '__AM_CLINE=1',
-      '__AM_OPENCODE=1',
-      '__AM_QWEN=1',
-      '__AM_FREEBUFF=1',
-      '__AM_END',
+      '__RN_HOME=/home/me',
+      '__RN_GEMINI=1',
+      '__RN_CURSOR=1',
+      '__RN_CONTINUE=1',
+      '__RN_GROK=1',
+      '__RN_CLINE=1',
+      '__RN_OPENCODE=1',
+      '__RN_QWEN=1',
+      '__RN_FREEBUFF=1',
+      '__RN_END',
     ].join('\n');
     const probe = parseRemoteProbe(stdout);
     expect(probe.clis).toMatchObject({
@@ -193,12 +193,12 @@ describe('parseRemoteProbe', () => {
     const stdout = [
       'Welcome to Ubuntu 24.04 LTS',
       ' * Documentation:  https://help.ubuntu.com',
-      'nvm: using node v22__AM_HOME=/home/me',
-      '__AM_CLAUDE_CONFIG_DIR=',
-      '__AM_CODEX_HOME=',
+      'nvm: using node v22__RN_HOME=/home/me',
+      '__RN_CLAUDE_CONFIG_DIR=',
+      '__RN_CODEX_HOME=',
       'HOME=/elsewhere',
-      '__AM_CODEX=1',
-      '__AM_END',
+      '__RN_CODEX=1',
+      '__RN_END',
       'Last login: yesterday',
     ].join('\n');
 
@@ -222,7 +222,7 @@ describe('parseRemoteProbe', () => {
   });
 
   it('copes with CRLF line endings', () => {
-    const stdout = '__AM_HOME=/home/me\r\n__AM_CODEX_HOME=/x\r\n__AM_CLAUDE=1\r\n__AM_END\r\n';
+    const stdout = '__RN_HOME=/home/me\r\n__RN_CODEX_HOME=/x\r\n__RN_CLAUDE=1\r\n__RN_END\r\n';
 
     expect(parseRemoteProbe(stdout)).toEqual({
       home: '/home/me',
@@ -357,7 +357,7 @@ describe('listRemoteAgentHistory', () => {
       mtimeMs: 2000,
     },
   };
-  const probeOutput = '__AM_HOME=/home/me\n__AM_CLAUDE=1\n__AM_END\n';
+  const probeOutput = '__RN_HOME=/home/me\n__RN_CLAUDE=1\n__RN_END\n';
 
   function fakePool(connection: HistoryConnection) {
     const release = vi.fn();
@@ -398,7 +398,7 @@ describe('listRemoteAgentHistory', () => {
           mtimeMs: 20,
         },
       },
-      '__AM_HOME=/home/me\n__AM_CLAUDE_CONFIG_DIR=/cfg/claude\n__AM_CODEX_HOME=/cfg/codex\n',
+      '__RN_HOME=/home/me\n__RN_CLAUDE_CONFIG_DIR=/cfg/claude\n__RN_CODEX_HOME=/cfg/codex\n',
     );
 
     const result = await listRemoteAgentHistory('srv-1', fakePool(connection));

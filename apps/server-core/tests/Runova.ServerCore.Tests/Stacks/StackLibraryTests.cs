@@ -16,6 +16,23 @@ public sealed class StackLibraryTests
 
     private static ComposeConfig Parity() => ComposeConfig.Parse(Fixtures.Read("stacks/lint-parity.config.json"));
 
+    private static ComposeConfig BindMount(string source) =>
+        ComposeConfig.Parse("""{"services":{"web":{"image":"nginx","volumes":[{"type":"bind","source":""" + JsonSerializer.Serialize(source) + ""","target":"/data"}]}}}""");
+
+    /// <summary>A pretend file system where each link replaces its own path at the front.</summary>
+    private static Func<string, string> Links(params (string Link, string Target)[] links) => path =>
+    {
+        foreach (var (link, target) in links)
+        {
+            if (path == link || path.StartsWith(link + "/", StringComparison.Ordinal))
+            {
+                return target + path[link.Length..];
+            }
+        }
+
+        return path;
+    };
+
     [Fact]
     public void The_core_finds_the_same_ids_as_the_app_for_everything_that_needs_an_acknowledgment()
     {
@@ -50,6 +67,56 @@ public sealed class StackLibraryTests
         var risks = ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData);
 
         Assert.Contains(risks, risk => risk.Id == "public-port:proxied:*:3000:3000/tcp");
+    }
+
+    [Fact]
+    public void A_bind_mount_that_links_into_the_core_data_is_refused()
+    {
+        using var config = BindMount("/srv/shared/core.db");
+
+        var error = Assert.Throws<ComposeConfigException>(
+            () => ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, Links(("/srv/shared", CoreData))));
+
+        Assert.Contains("(a link to /var/lib/runova-core/core.db)", error.Message, StringComparison.Ordinal);
+        Assert.Empty(ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, path => path));
+    }
+
+    [Fact]
+    public void A_link_in_the_apps_files_is_judged_by_where_it_leads()
+    {
+        using var config = BindMount("/srv/app/files/conf");
+
+        var risk = Assert.Single(ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, Links(("/srv/app/files/conf", "/home"))));
+
+        Assert.Equal("sensitive-mount:web:/srv/app/files/conf", risk.Id);
+        Assert.Equal(StackRiskSeverity.Critical, risk.Severity);
+        Assert.Contains("(a link to /home)", risk.Message, StringComparison.Ordinal);
+        var program = Assert.Single(ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, Links(("/srv/app/files/conf", "/opt/runova-core"))));
+        Assert.Equal("core-data", program.Rule);
+    }
+
+    [Fact]
+    public void Links_on_the_server_are_followed_one_part_at_a_time()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symbolic links");
+        var folder = TestFolders.Create("links");
+        Directory.CreateDirectory(Path.Combine(folder, "real", "inner"));
+        try
+        {
+            var root = ComposeConfigLint.ResolveLinks(folder);
+            Directory.CreateSymbolicLink(Path.Combine(root, "hop"), Path.Combine(root, "real"));
+            Directory.CreateSymbolicLink(Path.Combine(root, "relative"), "real/inner");
+            File.CreateSymbolicLink(Path.Combine(root, "loop"), Path.Combine(root, "loop"));
+
+            Assert.Equal(root + "/real/inner/missing", ComposeConfigLint.ResolveLinks(root + "/hop/inner/missing"));
+            Assert.Equal(root + "/real/inner", ComposeConfigLint.ResolveLinks(root + "/relative"));
+            Assert.Equal(root + "/real", ComposeConfigLint.ResolveLinks(root + "/relative/.."));
+            Assert.Equal(root + "/loop", ComposeConfigLint.ResolveLinks(root + "/loop"));
+        }
+        finally
+        {
+            TestFolders.Delete(folder);
+        }
     }
 
     [Fact]

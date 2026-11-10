@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { parseComposeFile } from '../compose/parse.js';
-import { LEGACY_CATALOG_EXTENSION_KEY } from '../deployLegacyNames.js';
 import { findCatalogTemplate } from './index.js';
 import {
   catalogAcknowledged,
@@ -95,22 +94,6 @@ describe('readCatalogInstall', () => {
       status: 'current',
       changes: [],
     });
-  });
-
-  it('reads an app installed before the rename, whose block has the old key', () => {
-    const { render } = install('wordpress', {
-      params: { port: 18081 },
-      domain: 'blog.example.com',
-    });
-    const old = render.compose.replace(
-      `${CATALOG_EXTENSION_KEY}:`,
-      `${LEGACY_CATALOG_EXTENSION_KEY}:`,
-    );
-    expect(old).not.toBe(render.compose);
-    const read = readCatalogInstall(old);
-    if (!read.ok) throw new Error(read.reason);
-    expect(read.install.template.id).toBe('wordpress');
-    expect(read.install.domain).toBe('blog.example.com');
   });
 
   it('says plainly when a compose file is not from the App Store', () => {

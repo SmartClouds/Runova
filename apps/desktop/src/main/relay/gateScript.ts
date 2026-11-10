@@ -32,8 +32,7 @@ setTimeout(() => process.exit(0), 5000).unref();
 const PORT_FILE = ${JSON.stringify(portFile)};
 const ARMED_DIR = ${JSON.stringify(armedDir)};
 const PLAN_LIMIT = ${GATE_PLAN_LIMIT};
-// A terminal started before the app was renamed carries the old variable.
-const sessionId = process.env.RUNOVA_SESSION_ID || process.env.AGENTMATE_SESSION_ID;
+const sessionId = process.env.RUNOVA_SESSION_ID;
 if (!sessionId || !/^[A-Za-z0-9_-]{1,128}$/.test(sessionId)) process.exit(0);
 
 function done(out) {

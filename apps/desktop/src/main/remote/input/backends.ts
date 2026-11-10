@@ -177,7 +177,7 @@ $ErrorActionPreference = 'Stop'
 $src = @"
 using System;
 using System.Runtime.InteropServices;
-public class AmInput {
+public class RemoteInput {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint data, IntPtr extra);
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, IntPtr extra);
@@ -196,16 +196,16 @@ public class AmInput {
 }
 "@
 Add-Type -TypeDefinition $src
-[AmInput]::SetProcessDPIAware() | Out-Null
+[RemoteInput]::SetProcessDPIAware() | Out-Null
 while (($line = [Console]::In.ReadLine()) -ne $null) {
   if ($line.Length -eq 0) { continue }
   $p = $line.Split(' ')
   try {
     switch ($p[0]) {
-      'M' { [AmInput]::SetCursorPos([int]$p[1], [int]$p[2]) | Out-Null }
-      'E' { [AmInput]::mouse_event([uint32]$p[1], 0, 0, [uint32]$p[2], [IntPtr]::Zero) }
-      'K' { [AmInput]::keybd_event([byte][int]$p[1], 0, [uint32]$p[2], [IntPtr]::Zero) }
-      'T' { [AmInput]::TypeChar([uint16][int]$p[1]) }
+      'M' { [RemoteInput]::SetCursorPos([int]$p[1], [int]$p[2]) | Out-Null }
+      'E' { [RemoteInput]::mouse_event([uint32]$p[1], 0, 0, [uint32]$p[2], [IntPtr]::Zero) }
+      'K' { [RemoteInput]::keybd_event([byte][int]$p[1], 0, [uint32]$p[2], [IntPtr]::Zero) }
+      'T' { [RemoteInput]::TypeChar([uint16][int]$p[1]) }
       'Q' { break }
     }
   } catch {

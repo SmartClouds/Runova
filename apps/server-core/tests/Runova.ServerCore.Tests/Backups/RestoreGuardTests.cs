@@ -29,7 +29,7 @@ public sealed class RestoreGuardTests : IDisposable
     private async Task<(int Code, string Error, string Into)> RestoreAsync()
     {
         Directory.CreateDirectory(_server);
-        var file = Path.Combine(_server, "upload.ambackup");
+        var file = Path.Combine(_server, "upload.rnbackup");
         await File.WriteAllTextAsync(file, "hello", Cancel);
         var into = Path.Combine(_server, "stage");
         using var input = new StringReader("orange tractor bicycle lamp\n");

@@ -50,7 +50,7 @@ public sealed class BackupFetcherTests : IAsyncLifetime
             null,
             Cancel);
         var bytes = RandomNumberGenerator.GetBytes(size);
-        var file = Path.Combine(_database.Directory, "source.ambackup");
+        var file = Path.Combine(_database.Directory, "source.rnbackup");
         await File.WriteAllBytesAsync(file, bytes, Cancel);
         var id = Guid.NewGuid();
         var parts = await BackupParts.DescribeAsync(file, partBytes, BackupNaming.BaseName("web-1", 1, id), Cancel);

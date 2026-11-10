@@ -750,7 +750,7 @@ describe('when secure storage cannot be used', () => {
     const salt = randomBytes(16).toString('base64');
     const key = await deriveKey('a passkey nobody typed', salt);
     const verifier = Buffer.from(
-      JSON.stringify(encryptWithKey('agentmate-ssh-vault', key) /* legacy-name */),
+      JSON.stringify(encryptWithKey('runova-ssh-vault', key)),
       'utf-8',
     ).toString('base64');
     await store.setSshVault({ salt, verifier });

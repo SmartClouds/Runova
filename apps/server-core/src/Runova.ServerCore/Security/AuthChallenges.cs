@@ -2,7 +2,6 @@ using System.Buffers.Text;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 
 namespace Runova.ServerCore.Security;
@@ -16,25 +15,22 @@ internal static class AuthMessage
 {
     public const string Prefix = "runova-core/auth/v1";
 
-    /// <summary>What a signature may start with: an app from before the rename signs with the old prefix, for good.</summary>
-    public static readonly IReadOnlyList<string> Prefixes = [Prefix, LegacyNames.AuthPrefix];
-
-    public static string For(AuthPurpose purpose, Guid challengeId, string nonce, Guid deviceId, Guid? sessionId, string prefix = Prefix) =>
+    public static string For(AuthPurpose purpose, Guid challengeId, string nonce, Guid deviceId, Guid? sessionId) =>
         string.Join(
             '\n',
-            prefix,
+            Prefix,
             purpose == AuthPurpose.Login ? "login" : "renew",
             challengeId.ToString("D"),
             nonce,
             deviceId.ToString("D"),
             sessionId?.ToString("D") ?? "-");
 
-    /// <summary>Whether <paramref name="signature"/> signs this challenge under either prefix.</summary>
+    /// <summary>Whether <paramref name="signature"/> signs this challenge.</summary>
     public static bool Verify(byte[] publicKey, byte[] signature, AuthPurpose purpose, Guid challengeId, string nonce, Guid deviceId, Guid? sessionId) =>
-        Prefixes.Any(prefix => DeviceKeys.Verify(
+        DeviceKeys.Verify(
             publicKey,
-            Encoding.UTF8.GetBytes(For(purpose, challengeId, nonce, deviceId, sessionId, prefix)),
-            signature));
+            Encoding.UTF8.GetBytes(For(purpose, challengeId, nonce, deviceId, sessionId)),
+            signature);
 }
 
 internal sealed record IssuedChallenge(

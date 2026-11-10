@@ -16,7 +16,7 @@ namespace Runova.ServerCore.Tests.Backups;
 /// </summary>
 public sealed class FullBackupComposerTests : IAsyncLifetime
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("am-full-").FullName;
+    private readonly string _root = Directory.CreateTempSubdirectory("runova-full-").FullName;
     private readonly FakeBackupDocker _docker = new();
     private readonly FakeServerState _state = new();
     private string Data => Path.Combine(_root, "data");

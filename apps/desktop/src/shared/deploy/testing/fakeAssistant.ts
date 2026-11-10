@@ -1,4 +1,3 @@
-import { LEGACY_CORE_NAMES } from '../coreLegacyNames';
 import type {
   AssistantModeInfo,
   ExecApprovalNonce,
@@ -42,13 +41,9 @@ export function fakeExecMessage(
   deviceId: string,
   sessionId: string,
   command: string,
-  prefix = 'runova-core/exec/v1',
 ): string {
-  return [prefix, nonceId, nonce, deviceId, sessionId, command].join('\n');
+  return ['runova-core/exec/v1', nonceId, nonce, deviceId, sessionId, command].join('\n');
 }
-
-/** Like the core, either prefix: an app signs with the old one until it knows the core is new. */
-const EXEC_PREFIXES = ['runova-core/exec/v1', LEGACY_CORE_NAMES.execPrefix];
 
 export class FakeAssistant {
   autoRun = false;
@@ -91,18 +86,15 @@ export class FakeAssistant {
         issued !== undefined &&
         issued.expiresAt > this.now() &&
         this.device !== null &&
-        EXEC_PREFIXES.some((prefix) =>
-          this.device?.verify(
-            fakeExecMessage(
-              approval.nonceId,
-              issued.nonce,
-              this.device.deviceId,
-              this.device.sessionId,
-              command,
-              prefix,
-            ),
-            approval.signature,
+        this.device.verify(
+          fakeExecMessage(
+            approval.nonceId,
+            issued.nonce,
+            this.device.deviceId,
+            this.device.sessionId,
+            command,
           ),
+          approval.signature,
         );
       if (!valid) return this.refuse(command, FAKE_EXEC_APPROVAL_INVALID);
       this.ran.push({ command, fromAssistant: request.fromAssistant, how: 'signed' });

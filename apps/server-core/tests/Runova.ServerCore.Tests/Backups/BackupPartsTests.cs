@@ -14,7 +14,7 @@ public sealed class BackupPartsTests : IDisposable
     private static readonly Guid _id = Guid.Parse("6f1c2a9e-0b7d-4e55-9a31-2c4b8d7e9f10");
     private static readonly Guid _plan = Guid.Parse("11111111-2222-3333-4444-555555555555");
 
-    private readonly string _root = Directory.CreateTempSubdirectory("am-parts-").FullName;
+    private readonly string _root = Directory.CreateTempSubdirectory("runova-parts-").FullName;
 
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
@@ -22,7 +22,7 @@ public sealed class BackupPartsTests : IDisposable
 
     private string Write(byte[] bytes)
     {
-        var path = Path.Combine(_root, "backup.ambackup");
+        var path = Path.Combine(_root, "backup.rnbackup");
         File.WriteAllBytes(path, bytes);
         return path;
     }
@@ -133,7 +133,7 @@ public sealed class BackupPartsTests : IDisposable
     [Theory]
     [InlineData("../evil", 10)]
     [InlineData("sub/part", 10)]
-    [InlineData("base.ambackup", 9)]
+    [InlineData("base.rnbackup", 9)]
     public void A_manifest_with_unsafe_names_or_sizes_that_do_not_add_up_is_refused(string name, long partSize)
     {
         var manifest = Manifest([new BackupPartInfo(1, name, partSize, new string('a', 64))], 10, new string('a', 64));

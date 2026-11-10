@@ -16,7 +16,7 @@ internal sealed class FakeCoreInstallation : ICoreInstallation, IDisposable
 
     private readonly List<(string Release, string Version, byte[] Content)> _switches = [];
 
-    public CoreLayout Layout { get; set; } = CoreLayout.Runova;
+    public CoreLayout Layout { get; set; } = CoreLayout.Current;
 
     public string? CurrentRelease { get; set; } = Running;
 

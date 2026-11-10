@@ -119,9 +119,6 @@ internal static partial class SiteMapping
     [MapProperty(nameof(StreamProxy.UpdatedAt), nameof(StreamProxyInfo.UpdatedAtUnixMs))]
     public static partial StreamProxyInfo ToInfo(StreamProxy row);
 
-    /// <summary>The snippets of every site, read in the query itself.</summary>
-    public static partial IQueryable<SiteSnippetRow> ToSnippetRows(IQueryable<Site> sites);
-
     /// <summary>
     /// The wire settings as the model. Enums map by name: values outside their range are refused
     /// as wire problems before a model is ever built.
@@ -162,9 +159,6 @@ internal static partial class SiteMapping
 
     [MapProperty(nameof(NginxProblem.Field), nameof(NginxProblemInfo.SiteId), Use = nameof(SiteIdOf))]
     private static partial NginxProblemInfo ToProblemInfo(NginxProblem problem);
-
-    [MapProperty(nameof(Site.Id), nameof(SiteSnippetRow.SiteId))]
-    private static partial SiteSnippetRow ToSnippetRow(Site site);
 
     /// <summary>Each user with the hash stored for them; a user with none gets an empty one, which the validator refuses.</summary>
     private static NginxBasicAuth? BasicAuthOf(SiteBasicAuth? auth, IReadOnlyDictionary<string, string> hashes) =>

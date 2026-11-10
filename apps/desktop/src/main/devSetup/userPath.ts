@@ -1,4 +1,4 @@
-import { type DevOs, LEGACY_DEV_SETUP_END, LEGACY_DEV_SETUP_MARKER } from '@runova/core';
+import type { DevOs } from '@runova/core';
 
 /**
  * Putting a folder on the user's PATH, so a tool Runova installs (Flutter) also works in a
@@ -83,23 +83,6 @@ async function addOnWindows(dir: string, deps: UserPathDeps): Promise<UserPathRe
 
 const END_MARKER = '# <<< Runova Dev Setup <<<';
 
-/**
- * A block written before the app was renamed carries the old name. It is renamed where it stands
- * instead of getting a second block beside it. Null when there is none for `dir`.
- */
-function renameLegacyBlock(text: string, dir: string, marker: string): string | null {
-  const legacyMarker = `${LEGACY_DEV_SETUP_MARKER}: ${dir} >>>`;
-  const start = text.indexOf(legacyMarker);
-  if (start === -1) return null;
-  const end = text.indexOf(LEGACY_DEV_SETUP_END, start);
-  const block =
-    end === -1
-      ? text.slice(start, start + legacyMarker.length)
-      : text.slice(start, end + LEGACY_DEV_SETUP_END.length);
-  const next = block.replace(legacyMarker, marker).replace(LEGACY_DEV_SETUP_END, END_MARKER);
-  return text.slice(0, start) + next + text.slice(start + block.length);
-}
-
 function startupFile(deps: UserPathDeps): string {
   const shell = (deps.shell ?? '').split('/').pop() ?? '';
   if (shell === 'zsh') return `${deps.home}/.zshrc`;
@@ -114,11 +97,6 @@ async function addOnPosix(dir: string, deps: UserPathDeps): Promise<UserPathResu
 
   deps.addToProcessPath(dir);
   if (existing.includes(marker)) return { changed: false, where: file };
-  const renamed = renameLegacyBlock(existing, dir, marker);
-  if (renamed !== null) {
-    await deps.writeFile(file, renamed);
-    return { changed: false, where: file };
-  }
 
   // Written with $HOME where it applies, so the line still works if the home folder is moved.
   const inHome = dir.startsWith(`${deps.home}/`) ? `$HOME/${dir.slice(deps.home.length + 1)}` : dir;

@@ -91,7 +91,7 @@ const PROBLEMS: Record<WordPressErrorCode, string> = {
   timeout: 'The site took too long to answer. Try again in a moment.',
   cancelled: 'Cancelled.',
   keyInvalid:
-    "This isn't a connection key Runova can read. Copy the whole key again from Tools > Runova Connector; it starts with amwp1.",
+    "This isn't a connection key Runova can read. Copy the whole key again from Tools > Runova Connector; it starts with rnwp1.",
   keyExpired:
     'This key has expired. Keys work once, for 15 minutes. Make a new one in Tools > Runova Connector.',
   connectorOutdated:

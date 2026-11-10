@@ -16,7 +16,7 @@ import type {
 } from '../../../shared/deployServerBackupsTypes';
 import { BACKUP_EXTENSION } from '../backups';
 import { type AddressRecordPorts, addressMap, moveAddressRecords } from './addressMoves';
-import { FETCH_FOLDERS, type ServerBackups } from './service';
+import { FETCH_FOLDER, type ServerBackups } from './service';
 
 /**
  * A restore from the Backups section (E28), in two halves the wizard runs one after the other.
@@ -126,7 +126,7 @@ export class ServerRestores {
 
     if (source.serverId === target) {
       const path = fetched.path ?? '';
-      if (!FETCH_FOLDERS.some((folder) => path.startsWith(folder)) || path.includes('..')) {
+      if (!path.startsWith(FETCH_FOLDER) || path.includes('..')) {
         throw new Error('The fetched backup is not where the core keeps fetched backups.');
       }
       return this.deps.restoreCore({ ...base, file: path, fileOnServer: true }, onCoreProgress);

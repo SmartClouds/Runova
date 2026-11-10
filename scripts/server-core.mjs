@@ -15,18 +15,12 @@
  * it and the systemd unit, as `artifacts/release/runova-core-<version>-<rid>.tar.gz`, with its
  * SHA-256 in a `.sha256` file and in `server-core-manifest.json`, which the desktop embeds to
  * verify what it installs. The version comes from SERVER_CORE_VERSION (0.0.0-dev otherwise).
- *
- * Servers set up before the rename (release 1.63 and older) update themselves by the old names,
- * so the tarball also holds the program under its old name (a hard link) and the old unit file,
- * and the same bytes are published a second time under the old tarball name. The manifest lists
- * that name as each asset's `legacyFile`.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
-  linkSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -64,11 +58,6 @@ const dotnet = (args) => run('dotnet', args);
 
 const RIDS = new Set(['linux-x64', 'linux-arm64']);
 
-// The names a server from before the rename knows. Published until 1.63 servers are gone.
-const LEGACY_BINARY = 'agentmate-core'; // legacy-name
-const LEGACY_UNIT = 'agentmate-core.service'; // legacy-name
-const LEGACY_TARBALL_PREFIX = 'agentmate-core-'; // legacy-name
-
 function publish(rid) {
   if (!RIDS.has(rid)) {
     console.error(`Usage: node scripts/server-core.mjs publish <${[...RIDS].join(' | ')}>`);
@@ -95,34 +84,25 @@ function publish(rid) {
     join(coreRoot, 'packaging', 'runova-core.service'),
     join(publishDir, 'runova-core.service'),
   );
-  copyFileSync(join(coreRoot, 'packaging', 'legacy', LEGACY_UNIT), join(publishDir, LEGACY_UNIT));
-  // One program, two names: the old core's updater looks for the old one.
-  linkSync(join(publishDir, 'runova-core'), join(publishDir, LEGACY_BINARY));
 
   const file = `runova-core-${version}-${rid}.tar.gz`;
-  const legacyFile = `${LEGACY_TARBALL_PREFIX}${version}-${rid}.tar.gz`;
   const tarball = join(releaseDir, file);
-  const legacyTarball = join(releaseDir, legacyFile);
   rmSync(tarball, { force: true });
-  rmSync(legacyTarball, { force: true });
   // Relative paths only: GNU tar on Windows takes "C:" in an archive name for a remote host.
   run('tar', ['-czf', join('..', '..', 'release', file), '.'], publishDir);
-  copyFileSync(tarball, legacyTarball);
 
   const sha256 = createHash('sha256').update(readFileSync(tarball)).digest('hex');
   writeFileSync(`${tarball}.sha256`, `${sha256}  ${file}\n`);
-  writeFileSync(`${legacyTarball}.sha256`, `${sha256}  ${legacyFile}\n`);
 
   const manifestPath = join(releaseDir, 'server-core-manifest.json');
   const previous = existsSync(manifestPath)
     ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
     : null;
   const assets = previous?.version === version ? previous.assets.filter((a) => a.rid !== rid) : [];
-  assets.push({ rid, file, legacyFile, sha256, size: statSync(tarball).size });
+  assets.push({ rid, file, sha256, size: statSync(tarball).size });
   assets.sort((a, b) => a.rid.localeCompare(b.rid));
   writeFileSync(manifestPath, `${JSON.stringify({ version, assets }, null, 2)}\n`);
   console.log(`${file} ${sha256}`);
-  console.log(`${legacyFile} ${sha256}`);
 }
 
 const commands = {

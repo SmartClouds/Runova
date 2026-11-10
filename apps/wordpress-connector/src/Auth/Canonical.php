@@ -1,6 +1,6 @@
 <?php
 /**
- * The exact text each side signs or proves, and the am_auth field. Mirrors
+ * The exact text each side signs or proves, and the rn_auth field. Mirrors
  * packages/core/src/deploy/wordpress/canonical.ts line for line. Lines are joined with "\n" and
  * there is no trailing newline.
  *
@@ -86,7 +86,7 @@ final class Canonical
     public static function formatAuth(?string $connectionId, int $timestamp, string $nonce, ?string $signature): string
     {
         if ($connectionId !== null && !self::isConnectionId($connectionId)) {
-            throw new \InvalidArgumentException('That connection id cannot go in am_auth.');
+            throw new \InvalidArgumentException('That connection id cannot go in rn_auth.');
         }
         if (!self::isNonce($nonce)) {
             throw new \InvalidArgumentException('A nonce is 16 bytes, base64url.');

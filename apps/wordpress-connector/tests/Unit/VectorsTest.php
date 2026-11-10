@@ -239,10 +239,10 @@ final class VectorsTest extends TestCase
         }
         // `b` may be null; only a missing `b` is invalid.
         $json = '{"r":"/hello","b":null,"l":[]}';
-        $this->assertNotNull(Frame::decode("AMWB1\n" . pack('N', strlen($json)) . $json));
+        $this->assertNotNull(Frame::decode("RNWB1\n" . pack('N', strlen($json)) . $json));
         // An integral float is a whole length, a fractional one is not.
         $json = '{"r":"/hello","b":{},"l":[2.0]}';
-        $frame = Frame::decode("AMWB1\n" . pack('N', strlen($json)) . $json . 'ab');
+        $frame = Frame::decode("RNWB1\n" . pack('N', strlen($json)) . $json . 'ab');
         $this->assertNotNull($frame);
         $this->assertSame('ab', $frame->blob(0));
     }
@@ -261,7 +261,7 @@ final class VectorsTest extends TestCase
     {
         $sample = self::vectors()['multipart'];
         $body = (string) hex2bin($sample['bodyHex']);
-        $this->assertStringContainsString("name=\"am_auth\"\r\n\r\n" . $sample['auth'] . "\r\n", $body);
+        $this->assertStringContainsString("name=\"rn_auth\"\r\n\r\n" . $sample['auth'] . "\r\n", $body);
         $this->assertStringContainsString((string) hex2bin($sample['gzipHex']), $body);
         $this->assertNotNull(Canonical::parseAuth($sample['auth']));
     }

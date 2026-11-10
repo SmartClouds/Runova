@@ -21,34 +21,18 @@ export interface PtyHostPaths {
   logFile: string;
 }
 
-/** Names the endpoint is built from. Hosts started before the rename used the old ones. */
-export interface PtyEndpointNames {
-  pipePrefix: string;
-  socketPrefix: string;
-}
-
-export const PTY_ENDPOINT_NAMES: PtyEndpointNames = {
-  pipePrefix: 'runova-pty-host-',
-  socketPrefix: 'runova-pty-',
-};
-
-export function ptyHostPaths(
-  userDataDir: string,
-  names: PtyEndpointNames = PTY_ENDPOINT_NAMES,
-): PtyHostPaths {
+export function ptyHostPaths(userDataDir: string): PtyHostPaths {
   const runtimeDir = join(userDataDir, 'pty-host');
   const suffix = createHash('sha256').update(userDataDir).digest('hex').slice(0, 12);
   let endpoint: string;
   if (process.platform === 'win32') {
-    endpoint = `\\\\.\\pipe\\${names.pipePrefix}${suffix}`;
+    endpoint = `\\\\.\\pipe\\runova-pty-host-${suffix}`;
   } else {
     // Unix socket paths are capped at 104 bytes on macOS (108 on Linux), which a long
     // user name inside "Application Support" can blow past.
     const preferred = join(runtimeDir, 'host.sock');
     endpoint =
-      Buffer.byteLength(preferred) < 100
-        ? preferred
-        : join(tmpdir(), `${names.socketPrefix}${suffix}.sock`);
+      Buffer.byteLength(preferred) < 100 ? preferred : join(tmpdir(), `runova-pty-${suffix}.sock`);
   }
   return {
     runtimeDir,

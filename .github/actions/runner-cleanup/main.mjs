@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import {
   cleanWorkspace,
   keepsDependencies,
-  LEGACY_TEMP_PREFIX,
   removeTree,
   skipReason,
   TEMP_PREFIX,
@@ -61,7 +60,7 @@ try {
     // A job whose runner died never ran its post step. No job runs this long, so a folder this
     // old cannot belong to a job that is still running on another runner of the same machine.
     for (const name of readdirSync(root)) {
-      if (!name.startsWith(TEMP_PREFIX) && !name.startsWith(LEGACY_TEMP_PREFIX)) continue;
+      if (!name.startsWith(TEMP_PREFIX)) continue;
       const path = join(root, name);
       try {
         const stats = statSync(path);

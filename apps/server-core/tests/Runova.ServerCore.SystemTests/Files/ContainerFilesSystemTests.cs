@@ -20,7 +20,7 @@ public sealed class FilesDocker : IAsyncLifetime
     public const string Distroless = "gcr.io/distroless/python3-debian12";
 
     private readonly Lock _lock = new();
-    private readonly string _prefix = $"am-files-{Guid.NewGuid():N}"[..17];
+    private readonly string _prefix = $"runova-files-{Guid.NewGuid():N}"[..21];
     private Task<Started>? _start;
 
     public string AlpineName => _prefix + "-alpine";

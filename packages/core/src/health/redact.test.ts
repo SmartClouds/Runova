@@ -30,7 +30,7 @@ describe('redactHealthText', () => {
   });
 
   it('masks bearer and basic credentials in quoted headers', () => {
-    expect(redactHealthText('Authorization: Bearer amh_abcdefghijklmnop')).toBe(
+    expect(redactHealthText('Authorization: Bearer rnh_abcdefghijklmnop')).toBe(
       'Authorization: Bearer [redacted]',
     );
     expect(redactHealthText('authorization: Basic dXNlcjpwYXNz')).toBe(
@@ -38,11 +38,9 @@ describe('redactHealthText', () => {
     );
   });
 
-  it('masks a Runova health key wherever it appears, including ones made before the rename', () => {
-    for (const prefix of ['rnh_', 'amh_']) {
-      const key = `${prefix}${'Q'.repeat(43)}`;
-      expect(redactHealthText(`echoed ${key} back`)).not.toContain(key);
-    }
+  it('masks a Runova health key wherever it appears', () => {
+    const key = `rnh_${'Q'.repeat(43)}`;
+    expect(redactHealthText(`echoed ${key} back`)).not.toContain(key);
   });
 
   it('masks the known token shapes and private keys', () => {

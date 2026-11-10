@@ -27,8 +27,8 @@ function setup(
   onServer?: string,
 ) {
   const server = new ScriptedConnection(scriptedMachine(machine));
-  const file = onServer ?? join(tempDir(), 'web.ambackup');
-  if (!onServer) writeFileSync(file, 'AMBACKUP ciphertext');
+  const file = onServer ?? join(tempDir(), 'web.rnbackup');
+  if (!onServer) writeFileSync(file, 'RNBACKUP ciphertext');
   const progress: DeployRestoreProgress[] = [];
   const run = (userName = 'maria') =>
     restoreCore(
@@ -108,7 +108,7 @@ describe('restoreCore', () => {
   });
 
   it('stages a backup the core already fetched onto the server, without an upload (E28)', async () => {
-    const fetched = '/var/lib/runova-core/backups/0f8b0f8b0f8b0f8b0f8b0f8b0f8b0f8b.ambackup';
+    const fetched = '/var/lib/runova-core/backups/0f8b0f8b0f8b0f8b0f8b0f8b0f8b0f8b.rnbackup';
     const { server, run, phases } = setup(
       { coreUsers: [{ userName: 'maria', roles: ['owner'] }] },
       undefined,

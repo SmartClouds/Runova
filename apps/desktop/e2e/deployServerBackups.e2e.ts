@@ -66,7 +66,7 @@ test('sets up backups, keeps 2 of 3 on each destination, and downloads one encry
     env: { RUNOVA_DEPLOY_DEV_CORE: String(devHost.port) },
   });
   const { page, app, root } = launched;
-  const download = join(root, 'devhost.ambackup');
+  const download = join(root, 'devhost.rnbackup');
   await app.evaluate(({ dialog }, path) => {
     dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
   }, download);

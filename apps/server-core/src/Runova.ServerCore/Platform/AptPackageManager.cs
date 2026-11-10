@@ -1,4 +1,3 @@
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Execution;
 using Runova.ServerCore.Hosting;
@@ -29,11 +28,10 @@ internal sealed class AptPackageManager(IProcessRunner runner, SystemdRunner uni
     /// needrestart runs at the end of an apt run and, in automatic mode, restarts every service still
     /// using an old library. The core must not be one of them: it is the one running the upgrade.
     /// </summary>
-    /// <remarks>Both unit names, so the rule holds on either layout and through a migration.</remarks>
     public static readonly string NeedrestartOverride = $$"""
         # Written by Runova. needrestart may restart services after an upgrade, but never the
         # Runova core, which runs the upgrade and records how it went.
-        $nrconf{override_rc}{qr(^(?:{{CoreLayout.Runova.Unit}}|{{LegacyNames.Unit}})\.service$)} = 0;
+        $nrconf{override_rc}{qr(^{{CoreLayout.Current.Unit}}\.service$)} = 0;
 
         """;
 

@@ -149,7 +149,7 @@ describe('WordPress protocol vectors', () => {
     }
   });
 
-  it('formats and parses am_auth', () => {
+  it('formats and parses rn_auth', () => {
     for (const vector of vectors.authField.valid) {
       expect(formatWpAuthField(vector.parsed)).toBe(vector.value);
       expect(parseWpAuthField(vector.value)).toEqual(vector.parsed);

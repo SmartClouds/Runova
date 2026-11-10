@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { LEGACY_HEALTH_CHECK_KEY } from '../legacyNames.js';
 import { redactHealthText } from './redact.js';
 import type {
   HealthCheckStatus,
@@ -65,8 +64,6 @@ const checkEntrySchema = z.object({
   observedUnit: text,
   output: text,
   runova: extraSchema,
-  // Endpoints built before the app was renamed put the details under the old name.
-  [LEGACY_HEALTH_CHECK_KEY]: extraSchema,
 });
 
 export interface HealthResponseInput {
@@ -241,7 +238,7 @@ function readServices(
     for (const { entry, status } of valid) {
       if (services.length >= MAX_SERVICES) return services;
       const suffix = valid.length > 1 && entry.componentId ? `#${entry.componentId}` : '';
-      const extra = entry.runova ?? entry[LEGACY_HEALTH_CHECK_KEY] ?? {};
+      const extra = entry.runova ?? {};
       const error: HealthServiceError | null =
         RANK[status] === 0
           ? null

@@ -2,9 +2,9 @@ namespace Runova.ServerCore.Hosting;
 
 /// <summary>
 /// An exclusive lock on a file in the state folder, held for as long as the core serves. Two cores
-/// on the same state (an old unit started next to a migrated one, where the old state folder is
-/// a link to the new) would each think the database and the firewall changes are theirs; the
-/// second one stops before it binds anything instead.
+/// on the same state (a copy started by hand next to the service, say) would each think the
+/// database and the firewall changes are theirs; the second one stops before it binds anything
+/// instead.
 /// </summary>
 /// <remarks>
 /// .NET takes FileShare.None on Unix as an advisory flock, so the lock goes with the process:

@@ -30,9 +30,9 @@ test.skip(!systemTestsEnabled(), 'needs RUNOVA_SYSTEM_TESTS=1 and Docker for Lin
 
 const PORT = 18_996;
 const SITE_LABEL = 'WP projects site';
-const ALPHA = 'am-alpha';
+const ALPHA = 'runova-alpha';
 const ALPHA_NAME = 'Runova Alpha';
-const BETA = 'am-beta';
+const BETA = 'runova-beta';
 const BETA_NAME = 'Runova Beta';
 /** A new project from the site is named after it. */
 const PROJECT_A = SITE_LABEL;

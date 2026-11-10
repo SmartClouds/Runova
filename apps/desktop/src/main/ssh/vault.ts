@@ -13,9 +13,8 @@ import { store } from '../store';
 import { VaultLockedError } from './vaultErrors';
 
 /** Encrypted under a just-derived key and stashed alongside the salt, so a wrong passkey is
- *  rejected right away instead of producing garbage the first time a server tries to connect.
- *  Saved verifiers hold this exact text, so it keeps the name from before the Runova rename. */
-const VERIFIER_PLAINTEXT = 'agentmate-ssh-vault'; // legacy-name
+ *  rejected right away instead of producing garbage the first time a server tries to connect. */
+const VERIFIER_PLAINTEXT = 'runova-ssh-vault';
 
 /** Cached for the running app session only; cleared on `before-quit`. Never persisted. */
 let unlockedKey: Buffer | null = null;
@@ -185,61 +184,6 @@ async function prepareRewrite(
     await store.setProjectEnvironments(environments);
     for (const commitOne of commitSealed) await commitOne();
   };
-}
-
-/**
- * On macOS and Linux the safeStorage key is kept in the OS keyring under the app's name, so the
- * secrets saved before the rename from the old name are sealed under a key the renamed app can't
- * reach. This opens those with `decryptLegacy` (a helper that runs under the old name) and seals
- * them again under the current key. Secrets that open already, and passkey ones, are left as they
- * are. Returns how many moved and how many neither key could open.
- */
-export async function migrateLegacySafeStorage(
-  decryptLegacy: (ciphertexts: string[]) => Promise<(string | null)[]>,
-): Promise<{ moved: number; unreadable: number }> {
-  if (!safeStorage.isEncryptionAvailable()) return { moved: 0, unreadable: 0 };
-  const opensNow = (envelope: SecretEnvelope): boolean => {
-    try {
-      safeStorage.decryptString(Buffer.from(envelope.ciphertext, 'base64'));
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // First pass only looks: which safeStorage secrets does the current key fail on?
-  const stale = new Set<string>();
-  await prepareRewrite(async (envelope) => {
-    if (envelope.mode === 'safeStorage' && !opensNow(envelope)) stale.add(envelope.ciphertext);
-    return envelope;
-  });
-  if (stale.size === 0) return { moved: 0, unreadable: 0 };
-
-  const ciphertexts = [...stale];
-  const plaintexts = await decryptWithLegacy(ciphertexts, decryptLegacy);
-  let moved = 0;
-  const commit = await prepareRewrite(async (envelope) => {
-    if (envelope.mode !== 'safeStorage') return envelope;
-    const plaintext = plaintexts.get(envelope.ciphertext);
-    if (plaintext == null) return envelope;
-    moved += 1;
-    return encryptWithSafeStorage(plaintext);
-  });
-  await commit();
-  return { moved, unreadable: ciphertexts.length - plaintexts.size };
-}
-
-async function decryptWithLegacy(
-  ciphertexts: string[],
-  decryptLegacy: (ciphertexts: string[]) => Promise<(string | null)[]>,
-): Promise<Map<string, string>> {
-  const opened = await decryptLegacy(ciphertexts);
-  const plaintexts = new Map<string, string>();
-  ciphertexts.forEach((ciphertext, index) => {
-    const plaintext = opened[index];
-    if (plaintext != null) plaintexts.set(ciphertext, plaintext);
-  });
-  return plaintexts;
 }
 
 function encryptWithSafeStorage(plaintext: string): SecretEnvelope {

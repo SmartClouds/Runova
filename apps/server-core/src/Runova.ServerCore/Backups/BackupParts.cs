@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Runova.ServerCore.Compatibility;
 
 namespace Runova.ServerCore.Backups;
 
@@ -88,13 +87,7 @@ internal static partial class BackupNaming
     public const string Extension = ".rnbackup";
     public const string ManifestExtension = ".manifest.json";
 
-    /// <summary>The prefixes listings look for: backups made before the rename stay restorable.</summary>
-    public static readonly string[] Prefixes = [Prefix, LegacyNames.BackupFilePrefix];
-
-    /// <summary>The extensions part names may carry, the new one first.</summary>
-    public static readonly string[] Extensions = [Extension, LegacyNames.BackupExtension];
-
-    public static bool HasPrefix(string name) => Prefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal));
+    public static bool HasPrefix(string name) => name.StartsWith(Prefix, StringComparison.Ordinal);
 
     public static string BaseName(string serverName, long createdAtUnixMs, Guid backupId) =>
         string.Create(

@@ -291,7 +291,7 @@ public sealed class HubServerBackupTests
             using var response = await harness.Client.SendAsync(request, Cancel);
             var bytes = await response.Content.ReadAsByteArrayAsync(Cancel);
             Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-            Assert.True(bytes.AsSpan(0, 8).SequenceEqual("AMBACKUP"u8));
+            Assert.True(bytes.AsSpan(0, 8).SequenceEqual("RNBACKUP"u8));
             Assert.Equal(run.SizeBytes, bytes.Length);
 
             Assert.True(await CallAsync<bool>(hub, nameof(ICoreHub.DeleteStoredBackup), folder.Id, run.Id));

@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
 import {
   CHECKSUM_MISMATCH_EXIT,
   CORE_ROOT,
   type InstallPlanInput,
   installSteps,
-  migrateStep,
   releaseDirectory,
   rollbackSteps,
   uninstallSteps,
@@ -141,53 +139,6 @@ describe('installSteps', () => {
       // A capitalized phrase, not a sentence: no trailing period.
       expect(step.title).toMatch(/^[A-Z].*[^.]$/);
     }
-  });
-});
-
-describe('installSteps on the layout from before the rename', () => {
-  const legacy = installSteps(input({ layout: 'legacy' }));
-
-  it('upgrades in place under the old names, which every tarball carries', () => {
-    const all = commands(legacy);
-    expect(all).toContain(`install -d -m 0755 ${LEGACY_CORE.releases}`);
-    expect(all).toContain(
-      `test -f ${LEGACY_CORE.releases}/1.53.0-${SHA.slice(0, 12)}.new/${LEGACY_CORE.binary}`,
-    );
-    expect(all).toContain(`${LEGACY_CORE.unitFile} ${LEGACY_CORE.unitPath}`);
-    expect(all).toContain(`systemctl restart ${LEGACY_CORE.unit}`);
-    expect(all).toContain(`usermod -aG ${LEGACY_CORE.group} deployer`);
-    expect(all).not.toContain(RUNOVA_CORE.root);
-  });
-
-  it('then has the new core move the server', () => {
-    expect(migrateStep().command).toBe(
-      `${LEGACY_CORE.current}/${RUNOVA_CORE.binary} migrate-layout`,
-    );
-  });
-
-  it('rolls back within the layout the previous release is in', () => {
-    const previous = `${LEGACY_CORE.releases}/1.52.0-cdcdcdcdcdcd`;
-    const [step] = rollbackSteps(previous);
-    expect(step?.command).toContain(`systemctl restart ${LEGACY_CORE.unit}`);
-    expect(step?.command).toContain(
-      `mv -Tf ${LEGACY_CORE.root}/current.new ${LEGACY_CORE.current}`,
-    );
-  });
-
-  it('names releases in the layout they belong to', () => {
-    expect(releaseDirectory('1.53.0', SHA, 'legacy')).toBe(
-      `${LEGACY_CORE.releases}/1.53.0-${SHA.slice(0, 12)}`,
-    );
-  });
-
-  it('removes the links a migration left behind with a migrated core', () => {
-    const [, remove] = uninstallSteps({ keepData: false, layout: 'runova' });
-    expect(remove?.command).toContain(`rm -rf ${LEGACY_CORE.root}`);
-    expect(remove?.command).toContain(
-      `{ ! test -L ${LEGACY_CORE.dataDirectory} || rm -f ${LEGACY_CORE.dataDirectory}; }`,
-    );
-    const [stop] = uninstallSteps({ keepData: true, layout: 'legacy' });
-    expect(stop?.command).toContain(`systemctl disable --now ${LEGACY_CORE.unit}`);
   });
 });
 

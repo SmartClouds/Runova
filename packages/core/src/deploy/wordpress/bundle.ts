@@ -13,18 +13,18 @@ import {
  * outside, on each side's own crypto, so this file stays pure.
  *
  * Frame (requests and responses alike), before gzip:
- *   "AMWB1\n" (6 bytes) | header length (uint32, big-endian) | header JSON (UTF-8) | blobs
+ *   "RNWB1\n" (6 bytes) | header length (uint32, big-endian) | header JSON (UTF-8) | blobs
  * where the header is `{"r": route, "b": body, "l": [length of each blob]}` and the blobs follow
  * back to back. Nothing may come after the last blob.
  *
  * Response envelope, as sent (not compressed):
- *   "AMWR1\n" (6 bytes) | meta length (uint32, big-endian) | meta JSON | gzip(frame)
+ *   "RNWR1\n" (6 bytes) | meta length (uint32, big-endian) | meta JSON | gzip(frame)
  * where meta is `{"ts": unix seconds, "status": HTTP status, "sig": base64url Ed25519}`, signed
  * over wpCanonicalResponse with the hash of the gzip bytes that follow.
  */
 
-export const WP_FRAME_MAGIC = 'AMWB1\n';
-export const WP_RESPONSE_MAGIC = 'AMWR1\n';
+export const WP_FRAME_MAGIC = 'RNWB1\n';
+export const WP_RESPONSE_MAGIC = 'RNWR1\n';
 
 export interface WpFrame<T = unknown> {
   route: WpRoute;
@@ -174,7 +174,7 @@ export function decodeWpResponse(
 const BOUNDARY = /^[A-Za-z0-9_-]{16,70}$/;
 
 /**
- * The multipart/form-data request body: the `am_auth` field, then the `bundle` file part. The
+ * The multipart/form-data request body: the `rn_auth` field, then the `bundle` file part. The
  * boundary must be random (24 bytes of base64url is plenty), which is what keeps it out of the
  * gzip bytes.
  */
@@ -185,7 +185,7 @@ export function encodeWpMultipart(
 ): { contentType: string; body: Uint8Array } {
   if (!BOUNDARY.test(boundary))
     throw new Error('A multipart boundary is 16 to 70 safe characters.');
-  if (/[\r\n"]/.test(auth)) throw new Error('am_auth cannot hold quotes or line breaks.');
+  if (/[\r\n"]/.test(auth)) throw new Error('rn_auth cannot hold quotes or line breaks.');
   const head =
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="${WP_AUTH_FIELD}"\r\n\r\n` +

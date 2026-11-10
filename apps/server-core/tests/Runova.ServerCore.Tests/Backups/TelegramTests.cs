@@ -161,8 +161,8 @@ public sealed class TelegramDestinationTests : BackupDestinationContract
     public async Task Sending_a_name_again_leaves_one_message_of_that_name()
     {
         var files = new TelegramFiles(_account);
-        await files.PutAsync("runova-x.ambackup", new MemoryStream([1]), 1, null, Cancel);
-        await files.PutAsync("runova-x.ambackup", new MemoryStream([2]), 1, null, Cancel);
+        await files.PutAsync("runova-x.rnbackup", new MemoryStream([1]), 1, null, Cancel);
+        await files.PutAsync("runova-x.rnbackup", new MemoryStream([2]), 1, null, Cancel);
 
         var file = Assert.Single(await files.ListAsync(Cancel));
         await using var stream = await files.OpenAsync(file, Cancel);

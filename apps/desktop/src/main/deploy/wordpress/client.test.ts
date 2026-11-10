@@ -280,7 +280,7 @@ describe('WpClient with a stub transport', () => {
   function client(reply: (url: string, auth: string) => WpHttpResponse): WpClient {
     const transport: WpTransport = async (request) => {
       const text = Buffer.from(request.body ?? []).toString('latin1');
-      const auth = /name="am_auth"\r\n\r\n([^\r]+)/.exec(text)?.[1] ?? '';
+      const auth = /name="rn_auth"\r\n\r\n([^\r]+)/.exec(text)?.[1] ?? '';
       return reply(request.url, auth);
     };
     return new WpClient({
@@ -432,7 +432,7 @@ describe('WpClient with a stub transport', () => {
     const transport: WpTransport = async (request) => {
       calls += 1;
       const text = Buffer.from(request.body ?? []).toString('latin1');
-      const auth = /name="am_auth"\r\n\r\n([^\r]+)/.exec(text)?.[1] ?? '';
+      const auth = /name="rn_auth"\r\n\r\n([^\r]+)/.exec(text)?.[1] ?? '';
       return calls === 1
         ? signedReply(
             auth,

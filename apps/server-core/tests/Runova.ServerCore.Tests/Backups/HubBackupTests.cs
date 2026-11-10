@@ -105,7 +105,7 @@ public sealed class HubBackupTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal(backup.SizeBytes, bytes.Length);
         Assert.Equal(backup.Sha256, Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)));
-        Assert.True(bytes.AsSpan(0, 8).SequenceEqual("AMBACKUP"u8));
+        Assert.True(bytes.AsSpan(0, 8).SequenceEqual("RNBACKUP"u8));
         Assert.Equal(1, backup.Contents.Users);
         Assert.Equal(1, backup.Contents.Devices);
         Assert.EndsWith(".rnbackup", backup.FileName, StringComparison.Ordinal);
@@ -122,7 +122,7 @@ public sealed class HubBackupTests : IDisposable
 
         // The new server: the file goes there, and only its passphrase opens it.
         Directory.CreateDirectory(_newServer);
-        var file = Path.Combine(_newServer, "upload.ambackup");
+        var file = Path.Combine(_newServer, "upload.rnbackup");
         await File.WriteAllBytesAsync(file, bytes, Cancel);
         var into = Path.Combine(_newServer, "stage");
 
@@ -161,8 +161,8 @@ public sealed class HubBackupTests : IDisposable
         var exists = Path.Combine(_newServer, "exists");
         Directory.CreateDirectory(exists);
 
-        var relative = await RestoreAsync("backup.ambackup", Path.Combine(_newServer, "stage"), Passphrase);
-        var taken = await RestoreAsync(Path.Combine(_newServer, "backup.ambackup"), exists, Passphrase);
+        var relative = await RestoreAsync("backup.rnbackup", Path.Combine(_newServer, "stage"), Passphrase);
+        var taken = await RestoreAsync(Path.Combine(_newServer, "backup.rnbackup"), exists, Passphrase);
 
         Assert.Equal(2, relative.Code);
         Assert.Equal(1, taken.Code);

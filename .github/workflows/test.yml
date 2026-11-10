@@ -598,19 +598,6 @@ jobs:
           src/main/deploy/directTls.int.test.ts
           src/main/deploy/deployExec.int.test.ts
 
-      # A server set up by the released 1.63 core, from before the rename to Runova, upgraded over
-      # SSH and moved to the Runova layout on Ubuntu and Rocky, a forced failed cutover rolled back
-      # first. The core under test has to count as newer than 1.63, so it is published again.
-      - name: Publish the linux-x64 release as 1.64.0
-        env:
-          SERVER_CORE_VERSION: "1.64.0"
-        run: node scripts/server-core.mjs publish linux-x64
-
-      - name: Move a server from before the rename
-        env:
-          RUNOVA_SYSTEM_TESTS: "1"
-        run: pnpm --filter @runova/desktop exec vitest run src/main/deploy/layoutMigration.int.test.ts
-
   mobile-core:
     name: Mobile core
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}

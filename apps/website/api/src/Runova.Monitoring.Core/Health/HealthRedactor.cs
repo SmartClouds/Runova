@@ -170,8 +170,8 @@ public static partial class HealthRedactor
     [GeneratedRegex("[" + SpaceChars + "_.-]+")]
     private static partial Regex NameSeparator();
 
-    /// <summary>The keys Runova generates: rnh_ now, amh_ for keys made before the app was renamed.</summary>
-    [GeneratedRegex(B + "(?:rnh|amh)_[A-Za-z0-9_-]{16,}")]
+    /// <summary>The keys Runova generates.</summary>
+    [GeneratedRegex(B + "rnh_[A-Za-z0-9_-]{16,}")]
     private static partial Regex HealthKey();
 
     [GeneratedRegex(B + "(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}")]

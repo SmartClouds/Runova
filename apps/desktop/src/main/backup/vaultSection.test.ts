@@ -35,7 +35,7 @@ describe('vault backup section', () => {
   it('skips a damaged vault file instead of exporting it', async () => {
     const files = new MemoryVaultFiles();
     files.current = {
-      format: 'agentmate-vault' as const /* legacy-name */,
+      format: 'runova-vault' as const,
       version: 1,
       kdf: { N: 2 ** 30 },
     };

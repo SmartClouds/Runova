@@ -459,19 +459,6 @@ export class FakeCoreConnection implements ICoreHub {
     return this.answer(this.core.answerCoreUpdate(request));
   };
 
-  migrateLayout = async () => {
-    this.assertOpen();
-    this.assertRole('MigrateLayout', OWNERS);
-    if (this.core.stepUpUntil <= this.core.now()) throw unauthorizedError('MigrateLayout');
-    this.core.layoutMigrations += 1;
-    return this.answer(this.core.answerLayoutMigration());
-  };
-
-  migrationStatus = async () => {
-    this.assertOpen();
-    return this.answer(this.core.migrationStatus);
-  };
-
   // Websites and certificates: Viewers read, Admins change, Owners write snippets, and taking a
   // certificate off needs a step-up as well.
 

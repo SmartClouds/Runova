@@ -3,12 +3,12 @@ title: Getting started
 category: Getting started
 order: 10
 summary: What Runova is, how the app is laid out, and the first steps to take after installing it, from picking a projects folder to opening your first Workspace.
-keywords: getting started, first steps, runova name, formerly agentmate, rename, runway, nova, setup, install, overview, tour, projects folder, startup page, splash, ai provider, ai cli, claude code, codex, welcome, beginner, sidebar, menu, quick start
+keywords: getting started, first steps, runova name, runway, nova, setup, install, overview, tour, projects folder, startup page, splash, ai provider, ai cli, claude code, codex, welcome, beginner, sidebar, menu, quick start
 ---
 
 Runova is a desktop app for working with AI coding agents. It keeps your projects, agent terminals, prompts, git, deployments and servers in one window, so you can start an agent such as Claude Code or Codex in a project, watch what it does, review its changes and ship the result without leaving the app.
 
-The name joins a runway, where launches happen, and a nova, a new star: you bring an idea, the agents build it with you, and it takes off from here. Runova used to be called AgentMate. Updating from it moves your settings, projects, saved secrets and servers over on its own, and see [Troubleshooting](troubleshooting.md) if something from before seems to be missing.
+The name joins a runway, where launches happen, and a nova, a new star: you bring an idea, the agents build it with you, and it takes off from here.
 
 This article walks through what is in the app and the handful of things worth doing the first time you open it. Every other area has its own article, linked along the way.
 

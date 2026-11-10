@@ -71,7 +71,7 @@ describe('canonical strings', () => {
   });
 });
 
-describe('am_auth', () => {
+describe('rn_auth', () => {
   it('round-trips', () => {
     const auth = { connectionId: 'abc-123', timestamp: 1_790_000_000, nonce, signature };
     expect(parseWpAuthField(formatWpAuthField(auth))).toEqual(auth);

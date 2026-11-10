@@ -135,7 +135,7 @@ public sealed class BackupRunnerTests : IAsyncLifetime
     {
         var destination = await DestinationAsync("offsite");
         var plan = await PlanAsync(2, destination.Id);
-        var manual = new BackupManifestFile(BackupManifestFile.SchemaVersion, Guid.NewGuid(), null, "web-1", 1, 1, new string('a', 64), "1", "k", [new(1, "runova-web-1-manual.ambackup", 1, new string('a', 64))]);
+        var manual = new BackupManifestFile(BackupManifestFile.SchemaVersion, Guid.NewGuid(), null, "web-1", 1, 1, new string('a', 64), "1", "k", [new(1, "runova-web-1-manual.rnbackup", 1, new string('a', 64))]);
         _destinations[destination.Id].Put("runova-web-1-manual.manifest.json", System.Text.Encoding.UTF8.GetBytes(manual.ToJson()));
 
         await RunPlanAsync(plan);

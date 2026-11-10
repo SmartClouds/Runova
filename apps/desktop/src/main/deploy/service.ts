@@ -61,7 +61,6 @@ import {
   streamLocalTransport,
 } from './connection/transport';
 import { cloudflareCoreDomainTransport, coreDomainTransport } from './coreDomain/transport';
-import { coreNames, LEGACY_CORE, RUNOVA_CORE } from './coreLayout';
 import { updateCoreLive } from './coreUpdate';
 import { clientCertificate } from './directTls/clientCertificate';
 import { directTlsTransport, PinMismatchError, type TlsConnect } from './directTls/transport';
@@ -292,7 +291,6 @@ export class DeployService {
         version: installed.version,
         release: installed.release,
         transport: installed.transport,
-        layout: installed.layout ?? 'runova',
         installedAt: this.now(),
         os: installed.os,
         architecture: installed.architecture,
@@ -315,8 +313,6 @@ export class DeployService {
         release: installed.release,
         transport: installed.transport,
         previousVersion: installed.previousVersion,
-        layout: installed.layout ?? 'runova',
-        ...(installed.migrationError ? { migrationError: installed.migrationError } : {}),
         ...(enrollmentError === undefined ? {} : { enrollmentError }),
       };
     });
@@ -712,28 +708,12 @@ export class DeployService {
         }
       });
     }
-    // Moved by another computer, or over SSH: the record follows what the core says.
-    const layout = answer.layout ?? 'legacy';
-    const saved = await this.deps.state.get(serverId);
-    if (saved && (saved.layout ?? 'legacy') !== layout) {
-      await this.deps.state.set(serverId, {
-        ...saved,
-        layout,
-        release:
-          layout === 'runova'
-            ? saved.release.replace(LEGACY_CORE.root, RUNOVA_CORE.root)
-            : saved.release,
-      });
-    }
     return {
       version: answer.version,
       apiVersion: answer.apiVersion,
       startedAtUnixMs: answer.startedAtUnixMs,
       checkedAt: this.now(),
       transport,
-      layout,
-      ...(answer.migrationError ? { migrationError: answer.migrationError } : {}),
-      ...(answer.nginxMoveError ? { nginxMoveError: answer.nginxMoveError } : {}),
     };
   }
 
@@ -837,8 +817,7 @@ export class DeployService {
     if (!installed) throw new Error('The server core is not installed on this server yet.');
     if (report.sudo !== 'root') {
       const access = await this.withLease(serverId, (lease) => coreGroupAccess(lease.connection));
-      if (access === 'missing')
-        throw new Error(coreGroupProblem(report.loginUser, coreNames(installed.layout).group));
+      if (access === 'missing') throw new Error(coreGroupProblem(report.loginUser));
       // In the group since this login started: a fresh login picks it up.
       if (access === 'new-login') this.deps.pool.reset(serverId);
     }
@@ -860,7 +839,6 @@ export class DeployService {
       version: reached.health.version,
       release: installed.release,
       transport: reached.transport,
-      layout: reached.health.layout ?? installed.layout,
       installedAt: this.now(),
       os: report.os.name,
       architecture: report.architecture.machine,

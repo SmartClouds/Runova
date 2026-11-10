@@ -1,7 +1,7 @@
 <?php
 /**
  * The response envelope, mirrored from bundle.ts:
- *   "AMWR1\n" | meta length (uint32, big-endian) | meta JSON {ts, status, sig} | gzip(frame)
+ *   "RNWR1\n" | meta length (uint32, big-endian) | meta JSON {ts, status, sig} | gzip(frame)
  *
  * @package Runova\Connector
  */
@@ -12,7 +12,7 @@ use Runova\Connector\Protocol;
 
 final class Envelope
 {
-    const MAGIC = "AMWR1\n";
+    const MAGIC = "RNWR1\n";
 
     public static function encode(int $timestamp, int $status, string $signature, string $gzippedFrame): string
     {

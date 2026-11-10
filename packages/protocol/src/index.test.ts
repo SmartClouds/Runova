@@ -462,12 +462,6 @@ describe('pairing codes', () => {
     expect(decodePairingCode(body)).toEqual(payload);
   });
 
-  it('reads a code from a desktop that still has the name from before the rename', () => {
-    const code = encodePairingCode(payload);
-    const legacy = `AGENTMATE1:${code.slice('RUNOVA1:'.length)}`; // legacy-name
-    expect(decodePairingCode(legacy)).toEqual(payload);
-  });
-
   it('defaults a missing version to 1', () => {
     // Codes minted before `v` existed have to stay pairable.
     const legacy = `RUNOVA1:${bytesToBase64(

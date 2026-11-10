@@ -66,7 +66,7 @@ export function wpCanonicalRequest(parts: {
 
 /**
  * What the plugin signs with the site key for every reply, errors included. `connectionId` is the
- * one the REQUEST's am_auth carried (null for `-`), so `/hello` and `/pair` replies are signed with
+ * one the REQUEST's rn_auth carried (null for `-`), so `/hello` and `/pair` replies are signed with
  * `-` even though `/pair` creates a connection, and an error for an unknown or revoked connection
  * is signed with the id the request named.
  */
@@ -96,7 +96,7 @@ export function wpCanonicalResponse(parts: {
 
 /**
  * What the pair proof is an HMAC of, keyed with the pairing secret. The timestamp and nonce are
- * the ones in the request's `am_auth`, so a proof cannot be lifted into another request.
+ * the ones in the request's `rn_auth`, so a proof cannot be lifted into another request.
  */
 export function wpCanonicalPair(parts: {
   pairingId: string;
@@ -123,7 +123,7 @@ export function isValidWpDeviceName(value: string): boolean {
 }
 
 /**
- * The `am_auth` field: `v1.<connectionId>.<timestamp>.<nonce>.<signature>`, with `-` for a
+ * The `rn_auth` field: `v1.<connectionId>.<timestamp>.<nonce>.<signature>`, with `-` for a
  * missing connection (`/hello`, `/pair`) or signature (`/hello`). Dots separate the fields
  * because none of them can hold one, and the value has no quotes for magic quotes to slash.
  */
@@ -136,7 +136,7 @@ export interface WpRequestAuth {
 
 export function formatWpAuthField(auth: WpRequestAuth): string {
   if (auth.connectionId !== null && !CONNECTION_ID.test(auth.connectionId)) {
-    throw new Error('That connection id cannot go in am_auth.');
+    throw new Error('That connection id cannot go in rn_auth.');
   }
   if (!NONCE.test(auth.nonce)) throw new Error('A nonce is 16 bytes, base64url.');
   if (auth.signature !== null && !SIGNATURE.test(auth.signature)) {

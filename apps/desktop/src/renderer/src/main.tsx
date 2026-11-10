@@ -1,5 +1,3 @@
-// First, before any store reads its saved state: keys saved under the old app name move over.
-import './lib/legacyStorage';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

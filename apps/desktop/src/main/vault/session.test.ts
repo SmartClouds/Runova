@@ -97,7 +97,7 @@ describe('VaultSession lifecycle', () => {
 
   it('reports a damaged file as corrupt instead of a wrong password', async () => {
     const files = new MemoryVaultFiles();
-    files.current = { format: 'agentmate-vault' as const /* legacy-name */, version: 1 };
+    files.current = { format: 'runova-vault' as const, version: 1 };
     const { session } = makeSession(files);
     expect(await session.state()).toBe('locked');
     await expectCode(session.unlock(PASSWORD), 'corrupt');

@@ -49,7 +49,7 @@ internal sealed class FolderDestination(string root) : IBackupDestination
         }
 
         var manifests = new List<BackupManifestFile>();
-        foreach (var path in BackupNaming.Prefixes.SelectMany(prefix => Directory.EnumerateFiles(root, prefix + "*" + BackupNaming.ManifestExtension)))
+        foreach (var path in Directory.EnumerateFiles(root, BackupNaming.Prefix + "*" + BackupNaming.ManifestExtension))
         {
             if (new FileInfo(path).Length > BackupManifestFile.MaxBytes)
             {
@@ -94,7 +94,7 @@ internal sealed class FolderDestination(string root) : IBackupDestination
     internal static string ManifestNameOf(BackupManifestFile manifest)
     {
         var first = manifest.Parts[0].Name;
-        var at = BackupNaming.Extensions.Select(extension => first.IndexOf(extension, StringComparison.Ordinal)).FirstOrDefault(index => index > 0, -1);
+        var at = first.IndexOf(BackupNaming.Extension, StringComparison.Ordinal);
         return BackupNaming.ManifestName(at > 0 ? first[..at] : first);
     }
 

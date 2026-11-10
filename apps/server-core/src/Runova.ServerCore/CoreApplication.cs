@@ -32,11 +32,10 @@ internal static class CoreApplication
     public static string ConfigFile => CoreLayout.Current.ConfigFile;
 
     /// <summary>
-    /// The only Host headers the core answers to. The app sends "runova-core", or the old name
-    /// until it knows the core is new enough (both are accepted for good); the loopback names
+    /// The only Host headers the core answers to. The app sends "runova-core"; the loopback names
     /// cover development. Anything else is a rebinding attempt or a mistake.
     /// </summary>
-    public static readonly string[] AllowedHosts = [.. CoreLayout.HostNames, "localhost", "127.0.0.1", "[::1]"];
+    public static readonly string[] AllowedHosts = [CoreLayout.HostName, "localhost", "127.0.0.1", "[::1]"];
 
     private const int MaxMessageBytes = 64 * 1024;
 

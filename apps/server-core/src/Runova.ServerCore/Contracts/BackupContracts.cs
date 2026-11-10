@@ -251,7 +251,7 @@ public sealed record TelegramLoginState(string LoginId, TelegramLoginStep Step, 
 
 /// <summary>
 /// A backup on a destination being fetched to this server for a restore or a download: joined,
-/// checked and kept root-only at Path (/var/lib/runova-core/backups/&lt;id&gt;.rnbackup, .ambackup before the rename) for an hour,
+/// checked and kept root-only at Path (/var/lib/runova-core/backups/&lt;id&gt;.rnbackup) for an hour,
 /// where `admin restore-stage` reads it and GET /api/v1/backups/{BackupId} serves it.
 /// </summary>
 [TranspilationSource]

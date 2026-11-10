@@ -6,7 +6,7 @@ import type { ProjectWordPressItem } from '../../types/index.js';
  * read the same definitions. The PHP plugin mirrors every constant and shape here, and the shared
  * vectors in `vectors/protocol-v1.json` keep the two sides byte for byte in step.
  *
- * Every call is a `POST multipart/form-data` with two parts: the text field `am_auth` (see
+ * Every call is a `POST multipart/form-data` with two parts: the text field `rn_auth` (see
  * canonical.ts) and the file part `bundle`, which holds gzip of a request frame (see bundle.ts).
  * Every reply is `application/octet-stream`: a response envelope whose meta carries the site's
  * Ed25519 signature, wrapped around gzip of a response frame. Keeping the auth in a form field
@@ -24,7 +24,7 @@ export const WP_CONNECTOR_VERSION = '3.3.0';
 export type WpUnixSeconds = number;
 /** First line of every canonical string. */
 export const WP_PROTOCOL_PREFIX = 'runova-wp/v1';
-export const WP_AUTH_FIELD = 'am_auth';
+export const WP_AUTH_FIELD = 'rn_auth';
 export const WP_BUNDLE_FIELD = 'bundle';
 export const WP_BUNDLE_FILENAME = 'bundle.bin';
 export const WP_REST_NAMESPACE = 'runova/v1';

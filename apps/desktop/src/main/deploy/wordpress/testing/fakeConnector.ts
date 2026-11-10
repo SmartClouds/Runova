@@ -534,7 +534,7 @@ export class FakeConnector {
     }
 
     const parts = parseMultipart(body, request.headers['content-type'] ?? '');
-    const authText = parts.get('am_auth')?.toString('utf-8') ?? '';
+    const authText = parts.get('rn_auth')?.toString('utf-8') ?? '';
     const bundle = parts.get('bundle') ?? Buffer.alloc(0);
     const auth = parseWpAuthField(authText);
     const nonce = auth?.nonce ?? '-';
@@ -545,7 +545,7 @@ export class FakeConnector {
     let reply: { ok: true; data: unknown } | { ok: false; error: unknown };
     let blobs: Uint8Array[] = [];
     try {
-      if (!auth) throw new FakeError('badRequest', 'The am_auth field is missing or malformed.');
+      if (!auth) throw new FakeError('badRequest', 'The rn_auth field is missing or malformed.');
       let plain: Buffer;
       try {
         plain = gunzipSync(bundle, { maxOutputLength: 80 * 1024 * 1024 });
@@ -1266,7 +1266,7 @@ export class FakeConnector {
 /** Decodes a key's pairing secret, for tests that check it never leaks. */
 export function pairingSecretOf(key: string): string {
   const json = JSON.parse(
-    new TextDecoder().decode(wpBase64UrlDecode(key.slice('amwp1.'.length)) ?? new Uint8Array()),
+    new TextDecoder().decode(wpBase64UrlDecode(key.slice('rnwp1.'.length)) ?? new Uint8Array()),
   ) as { s: string };
   return json.s;
 }

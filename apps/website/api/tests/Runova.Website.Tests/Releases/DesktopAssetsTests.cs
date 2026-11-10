@@ -32,14 +32,8 @@ public class DesktopAssetsTests
         ["runova-core-2.2.0-linux-x64.tar.gz.sha256"] = null,
         ["runova-core-2.2.0-linux-arm64.tar.gz"] = null,
         ["runova-core-2.2.0-linux-arm64.tar.gz.sha256"] = null,
-        // Installs from before the rename still download the core and connector by their old names.
-        ["agentmate-core-2.2.0-linux-x64.tar.gz"] = null, // legacy-name
-        ["agentmate-core-2.2.0-linux-x64.tar.gz.sha256"] = null, // legacy-name
-        ["agentmate-core-2.2.0-linux-arm64.tar.gz"] = null, // legacy-name
-        ["agentmate-core-2.2.0-linux-arm64.tar.gz.sha256"] = null, // legacy-name
         ["server-core-manifest.json"] = null,
         ["runova-connector.zip"] = null,
-        ["agentmate-connector.zip"] = null, // legacy-name
         // The Android app.
         ["Runova-2.2.0.apk"] = null,
         ["Runova-2.2.0-arm64-v8a.apk"] = null,

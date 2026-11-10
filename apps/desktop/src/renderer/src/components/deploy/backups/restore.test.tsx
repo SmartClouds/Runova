@@ -140,13 +140,13 @@ describe('RestoreTab', () => {
   it('restores a file from this computer onto this server', async () => {
     const file = {
       token: '00000000-0000-4000-9000-000000000009',
-      name: 'web.ambackup',
+      name: 'web.rnbackup',
       sizeBytes: 10,
     };
     const { user, bridge } = renderWizard({ 'deployServerBackups.pickFile': async () => file });
     await user.click(await screen.findByRole('radio', { name: 'A file on this computer' }));
     await user.click(screen.getByRole('button', { name: 'Pick the backup file' }));
-    expect(await screen.findByText(/web\.ambackup/)).toBeTruthy();
+    expect(await screen.findByText(/web\.rnbackup/)).toBeTruthy();
     await fillDetails(user);
     await user.click(screen.getByRole('button', { name: 'Restore onto Production' }));
     await waitFor(() =>

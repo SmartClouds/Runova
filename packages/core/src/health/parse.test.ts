@@ -107,27 +107,6 @@ describe('parseHealthResponse', () => {
     });
   });
 
-  it('reads the error details from an endpoint built before the app was renamed', () => {
-    const report = respond(503, {
-      status: 'fail',
-      agentmate: { protocol: 'agentmate-health/1' }, // legacy-name
-      checks: {
-        queue: [
-          {
-            status: 'fail',
-            output: 'broker down',
-            agentmate: { errorCode: 'E_BROKER', hint: 'Start RabbitMQ' }, // legacy-name
-          },
-        ],
-      },
-    });
-    expect(report.services[0].error).toMatchObject({
-      message: 'broker down',
-      code: 'E_BROKER',
-      hint: 'Start RabbitMQ',
-    });
-  });
-
   it('gives a failing service with no output a message anyway', () => {
     const report = respond(503, { status: 'fail', checks: { queue: [{ status: 'fail' }] } });
     expect(report.services[0].error?.message).toMatch(/no error message/i);

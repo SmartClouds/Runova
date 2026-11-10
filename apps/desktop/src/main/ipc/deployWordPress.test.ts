@@ -15,7 +15,7 @@ type Listener = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 const SITE = '6f1c2a9e-3b7d-4c51-9e0a-2d8f4b6c1a03';
 const PROJECT = '0b8e5d2c-7a14-4f3e-b6c9-91d2e3f4a5b6';
 const OPERATION = 'op-12345678';
-const KEY = `amwp1.${'eyJ2IjoxLCJ1IjoiaHR0cHM6Ly9leGFtcGxlLnRlc3QiLCJyIjoiaHR0cHM6'.repeat(3)}`;
+const KEY = `rnwp1.${'eyJ2IjoxLCJ1IjoiaHR0cHM6Ly9leGFtcGxlLnRlc3QiLCJyIjoiaHR0cHM6'.repeat(3)}`;
 const PASSWORD = 'staging-secret-pass';
 const THEME = { kind: 'theme', slug: 'twentytwentyfive' };
 const FOLDER = process.platform === 'win32' ? 'C:\\Sites\\shop' : '/home/me/sites/shop';
@@ -141,10 +141,10 @@ describe('registerDeployWordPressHandlers', () => {
     const bad = [
       undefined,
       42,
-      'amwp1.short',
-      `amwp2.${'A'.repeat(40)}`,
+      'rnwp1.short',
+      `rnwp2.${'A'.repeat(40)}`,
       `xyz.${'A'.repeat(40)}`,
-      `amwp1.${'A'.repeat(4100)}`,
+      `rnwp1.${'A'.repeat(4100)}`,
       'x'.repeat(20_000),
     ];
     for (const connectionKey of bad) {

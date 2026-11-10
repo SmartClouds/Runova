@@ -1,6 +1,5 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Docker;
 
 namespace Runova.ServerCore.Backups;
@@ -128,7 +127,7 @@ internal sealed class DockerBackupEngine(Uri endpoint) : IBackupDocker, IDisposa
     {
         var listed = await Client.Containers.ListContainersAsync(new ContainersListParameters { All = true }, cancellationToken);
         var containers = new List<BackupContainer>();
-        foreach (var summary in listed.Where(c => c.Labels is null || !(c.Labels.ContainsKey(HelperLabel) || c.Labels.ContainsKey(LegacyNames.BackupHelperLabel))))
+        foreach (var summary in listed.Where(c => c.Labels is null || !c.Labels.ContainsKey(HelperLabel)))
         {
             ContainerInspectResponse inspected;
             try

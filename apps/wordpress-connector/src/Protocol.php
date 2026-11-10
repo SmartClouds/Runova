@@ -12,7 +12,7 @@ final class Protocol
 {
     const VERSION = 1;
     const PREFIX = 'runova-wp/v1';
-    const AUTH_FIELD = 'am_auth';
+    const AUTH_FIELD = 'rn_auth';
     const BUNDLE_FIELD = 'bundle';
     const REST_NAMESPACE = 'runova/v1';
     const AJAX_ACTION = 'runova_connector';

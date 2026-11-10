@@ -18,7 +18,6 @@ import {
   getToolInstallCommandForCurrentOS,
   getToolUninstallCommandForCurrentOS,
   getToolUpdateCommandForCurrentOS,
-  LEGACY_DOCKER_PREFIX,
 } from '@runova/core';
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
@@ -61,68 +60,8 @@ async function runProbe(command: string, args: string[]): Promise<string | null>
   }
 }
 
-const DOCKER_PREFIX = 'runova-';
-
-/** The name a container or volume of this catalog had before the app was renamed. */
-function legacyDockerName(name: string): string | null {
-  return name.startsWith(DOCKER_PREFIX)
-    ? LEGACY_DOCKER_PREFIX + name.slice(DOCKER_PREFIX.length)
-    : null;
-}
-
-async function dockerObjectExists(kind: 'container' | 'volume', name: string): Promise<boolean> {
-  try {
-    await execFileAsync('docker', [kind, 'inspect', name], {
-      timeout: DETECT_TIMEOUT_MS,
-      windowsHide: true,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * A container made before the rename still has the old name. It is renamed the first time it is
- * looked for, so start, stop and reset keep working on it. Returns whether one was renamed.
- */
-async function renameLegacyContainer(name: string): Promise<boolean> {
-  const legacy = legacyDockerName(name);
-  if (!legacy || !(await dockerObjectExists('container', legacy))) return false;
-  try {
-    await execFileAsync('docker', ['rename', legacy, name], {
-      timeout: DETECT_TIMEOUT_MS,
-      windowsHide: true,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Volumes can't be renamed, and they hold the tool's data (SonarQube's projects and settings).
- * When a volume from before the rename is there and the new one isn't, the run command keeps
- * using the old one.
- */
-async function withLegacyVolumes(tool: AgentToolDefinition): Promise<AgentToolDefinition> {
-  if (!tool.docker) return tool;
-  const runArgs = await Promise.all(
-    tool.docker.runArgs.map(async (arg) => {
-      const [volume, ...rest] = arg.split(':');
-      const legacy = rest.length > 0 ? legacyDockerName(volume) : null;
-      if (!legacy) return arg;
-      if (await dockerObjectExists('volume', volume)) return arg;
-      if (!(await dockerObjectExists('volume', legacy))) return arg;
-      return [legacy, ...rest].join(':');
-    }),
-  );
-  return { ...tool, docker: { ...tool.docker, runArgs } };
-}
-
 async function detectDockerStatus(
   tool: AgentToolDefinition,
-  renamed = false,
 ): Promise<InstalledAgentTool['dockerStatus']> {
   if (!tool.docker) return 'unavailable';
   try {
@@ -138,9 +77,6 @@ async function detectDockerStatus(
     // e.g. `docker inspect`'s "no such container").
     if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT')
       return 'unavailable';
-    if (!renamed && (await renameLegacyContainer(tool.docker.containerName))) {
-      return detectDockerStatus(tool, true);
-    }
     return 'not-created';
   }
 }
@@ -268,11 +204,11 @@ export function registerToolHandlers(): void {
     ): Promise<string | null> => {
       const tool = getAgentToolDefinition(toolId);
       if (!tool) return null;
-      if (action === 'run') return getDockerRunCommand(await withLegacyVolumes(tool));
+      if (action === 'run') return getDockerRunCommand(tool);
       if (action === 'start') return getDockerStartCommand(tool);
       if (action === 'stop') return getDockerStopCommand(tool);
       if (action === 'remove') return getDockerRemoveCommand(tool);
-      return getDockerResetCommand(await withLegacyVolumes(tool), process.platform as SupportedOS);
+      return getDockerResetCommand(tool, process.platform as SupportedOS);
     },
   );
 }

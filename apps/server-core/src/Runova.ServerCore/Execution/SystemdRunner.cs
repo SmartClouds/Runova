@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Hosting;
 
 namespace Runova.ServerCore.Execution;
@@ -332,8 +331,8 @@ internal sealed partial class SystemdRunner(IProcessRunner runner, TimeProvider 
     [GeneratedRegex("^[a-z]{2,16}$", RegexOptions.CultureInvariant)]
     private static partial Regex Purpose();
 
-    /// <summary>Units this core names, and the ones a core from before the rename did (a revert timer may still wait).</summary>
-    [GeneratedRegex("^(?:" + CoreLayout.TransientUnitPrefix + "|" + LegacyNames.TransientUnitPrefix + ")[a-z]{2,16}-[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
+    /// <summary>Units this core names.</summary>
+    [GeneratedRegex("^" + CoreLayout.TransientUnitPrefix + "[a-z]{2,16}-[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
     private static partial Regex UnitNamePattern();
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stopping transient unit {Unit}.")]

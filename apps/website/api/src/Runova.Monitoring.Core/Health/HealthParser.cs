@@ -191,7 +191,7 @@ public static class HealthParser
                 }
 
                 var suffix = valid.Count > 1 && !string.IsNullOrEmpty(entry.ComponentId) ? "#" + entry.ComponentId : "";
-                var extra = entry.Extra ?? entry.LegacyExtra ?? Extra.Empty;
+                var extra = entry.Extra ?? Extra.Empty;
                 var error = entry.Status == HealthCheckStatus.Pass
                     ? null
                     : new HealthServiceError
@@ -351,8 +351,7 @@ public static class HealthParser
         string? Output,
         HealthCheckStatus Status,
         JsonElement? ObservedValue,
-        Extra? Extra,
-        Extra? LegacyExtra)
+        Extra? Extra)
     {
         public static bool TryRead(JsonElement item, out CheckEntry entry)
         {
@@ -408,8 +407,7 @@ public static class HealthParser
                 fields[4],
                 status,
                 observed,
-                Extra.Read(item, HealthProtocol.CheckKey),
-                Extra.Read(item, HealthProtocol.LegacyCheckKey));
+                Extra.Read(item, HealthProtocol.CheckKey));
             return true;
         }
     }

@@ -115,7 +115,7 @@ try {
     'a Network Admin form without its nonce: 403',
   );
   const made = await superAdmin.post(networkPath, { ...createForm, scope: 'write', expires: '0' });
-  const networkKey = made.text.match(/amwp1\.[A-Za-z0-9_-]+/)?.[0];
+  const networkKey = made.text.match(/rnwp1\.[A-Za-z0-9_-]+/)?.[0];
   check(made.status === 200 && networkKey !== undefined, 'a write key from the Network Admin page');
   const fromNetworkAdmin = new SiteClient(networkKey);
   check(
@@ -273,7 +273,7 @@ try {
     // `wp plugin delete` only removes files (WP-CLI never runs uninstall.php for it); `uninstall`
     // is what wp-admin's Delete does: uninstall.php, then the files.
     site.wp(['plugin', 'uninstall', 'runova-connector']);
-    // The tables kept the names the plugin gave them before the rename.
+    // Every table the plugin makes has runova in its name.
     const showTables = "SHOW TABLES LIKE '%runova%'";
     const tables = site.wp(['db', 'query', showTables, '--skip-column-names']);
     check(tables === '', 'all seven tables are dropped', tables);

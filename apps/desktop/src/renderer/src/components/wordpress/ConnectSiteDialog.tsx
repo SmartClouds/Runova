@@ -45,7 +45,7 @@ export interface ConnectSiteDialogProps {
 
 const KEY_HINTS: Record<WpConnectionKeyError, string> = {
   format:
-    "This doesn't look like a connection key. Copy the whole key from Tools > Runova Connector in the site's admin; it starts with amwp1.",
+    "This doesn't look like a connection key. Copy the whole key from Tools > Runova Connector in the site's admin; it starts with rnwp1.",
   version:
     'This key is for a different version of the connector. Update the plugin on the site (or update Runova), then make a new key.',
   fields: "This key is incomplete or damaged. Copy it again from the site's admin.",
@@ -196,7 +196,7 @@ export function ConnectSiteDialog({
                 setKey(event.target.value);
                 setProblem(null);
               }}
-              placeholder="amwp1..."
+              placeholder="rnwp1..."
               rows={4}
               spellCheck={false}
               autoComplete="off"

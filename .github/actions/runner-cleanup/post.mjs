@@ -55,12 +55,9 @@ const workspace = process.env.GITHUB_WORKSPACE;
 const toolCache = process.env.RUNNER_TOOL_CACHE;
 
 // Container, network and volume names the tests give the Docker objects they make on the host.
-// Runs from before the app was renamed to Runova left some under the old prefix.
-const TEST_NAMES =
-  /^((runova|agentmate)-(test|e2e|pebble|challtestsrv|wpc|acme|nginx)-|am-files-|e28-)/; // legacy-name
+const TEST_NAMES = /^(runova-(test|e2e|pebble|challtestsrv|wpc|acme|nginx|files)-|e28-)/;
 // Images the tests build. A container of one of these is a test's, whatever its name.
-const TEST_IMAGES =
-  /^(runova|agentmate)-(test-server|backup-targets|nginx-harness|nginx-upstream)(:|$)/; // legacy-name
+const TEST_IMAGES = /^runova-(test-server|backup-targets|nginx-harness|nginx-upstream)(:|$)/;
 // Kept on purpose: Composer's download cache for the WordPress connector jobs.
 const KEEP_VOLUMES = new Set(['runova-wpc-composer-cache']);
 

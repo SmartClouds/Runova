@@ -63,19 +63,11 @@ internal sealed partial class NginxControl(INginxMachine machine, TimeProvider t
 
     public INginxMachine Machine => machine;
 
-    /// <summary>
-    /// The layout for this server: the OS family's paths, the names an nginx set up before the
-    /// rename already uses, and IPv6 only where the host has it.
-    /// </summary>
-    public static NginxLayout LayoutFor(OsFamily family, NginxInspection inspection, bool? legacyNames = null)
+    /// <summary>The layout for this server: the OS family's paths, and IPv6 only where the host has it.</summary>
+    public static NginxLayout LayoutFor(OsFamily family, NginxInspection inspection)
     {
         ArgumentNullException.ThrowIfNull(inspection);
         var layout = family == OsFamily.Rhel ? NginxLayout.Rhel : NginxLayout.Debian;
-        if (legacyNames ?? NginxLayout.LegacyNamesHere)
-        {
-            layout = layout.WithLegacyNames();
-        }
-
         return layout with { ListenIPv6 = inspection.IPv6 };
     }
 

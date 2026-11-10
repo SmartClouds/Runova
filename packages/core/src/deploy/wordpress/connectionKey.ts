@@ -2,7 +2,7 @@ import { WP_PROTOCOL_VERSION, type WpScope } from './protocol.js';
 
 /**
  * The connection key a WordPress admin copies out of wp-admin (or `wp runova key create`)
- * and pastes into Runova: `amwp1.` then base64url of a JSON object. It carries everything the
+ * and pastes into Runova: `rnwp1.` then base64url of a JSON object. It carries everything the
  * first contact needs, including the site's whole Ed25519 public key, so even the first reply is
  * checked against a key the admin handed over rather than one the network offered.
  *
@@ -10,7 +10,7 @@ import { WP_PROTOCOL_VERSION, type WpScope } from './protocol.js';
  * echoed back in an error.
  */
 
-export const WP_KEY_PREFIX = 'amwp1.';
+export const WP_KEY_PREFIX = 'rnwp1.';
 
 export interface WpConnectionKey {
   /** home_url(): the site people visit. */
@@ -160,7 +160,7 @@ export function parseWpConnectionKey(
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): { ok: true; key: WpConnectionKey } | { ok: false; error: WpConnectionKeyError } {
   const compact = text.replace(/\s+/g, '');
-  if (!compact.startsWith('amwp') || compact.length > 4096) return { ok: false, error: 'format' };
+  if (!compact.startsWith('rnwp') || compact.length > 4096) return { ok: false, error: 'format' };
   if (!compact.startsWith(WP_KEY_PREFIX)) return { ok: false, error: 'version' };
   const bytes = wpBase64UrlDecode(compact.slice(WP_KEY_PREFIX.length));
   if (!bytes) return { ok: false, error: 'format' };

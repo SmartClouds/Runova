@@ -147,13 +147,7 @@ Runova keeps its data in your user data folder, which is named Runova. It is typ
 - macOS: `~/Library/Application Support/Runova`
 - Linux: `~/.config/Runova`
 
-A copy running from source, a development build, is named Runova Dev and has its own folder. Setting the `RUNOVA_USER_DATA_DIR` environment variable before starting the app points it at a different folder, which gives you a separate profile. The name it had before the rename, `AGENTMATE_USER_DATA_DIR`, still works in Runova.
-
-### Moving to Runova from AgentMate
-
-Runova used to be called AgentMate, and its folder had that name. The first time Runova starts it renames the old folder to the new one, so everything in it comes along. If a terminal opened by the old app is still running, the folder is in use: Runova then works from the old folder for that start and moves it the next time, once those terminals have closed.
-
-On macOS and Linux, the key that protects saved passwords and server secrets is kept in the system keychain under the app's name. Runova asks the keychain once for the key saved under the name from before the rename (macOS may ask you to allow it) and seals your secrets again under its own. If you deny that, Runova asks again on the next two starts and then stops; the secrets it could not open have to be entered again.
+A copy running from source, a development build, is named Runova Dev and has its own folder. Setting the `RUNOVA_USER_DATA_DIR` environment variable before starting the app points it at a different folder, which gives you a separate profile.
 
 Inside the folder:
 

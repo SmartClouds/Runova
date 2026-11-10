@@ -75,12 +75,6 @@ Apart from the AI Pet card, every screenshot uses demo data (a made-up shop call
 
 The name joins two words. A **runway** is where launches happen, and a **nova** is a new star lighting up. That is the job of the app: you bring an idea, agents build it with you, and it leaves from here as something shipped. The logo says the same thing, an R drawn as a runway with a star taking off from its corner.
 
-Runova used to be called AgentMate. If you used it under that name, updating moves everything over on its own: your settings, projects, saved secrets and terminal sessions, each project's `.agentmate` folder (now `.runova`), and the servers you manage. A few things need a step from you:
-
-- **Servers.** The first time you update a server's core from Runova, the core moves to its new name (`runova-core`) as well. Your sites and containers keep running while it does; only the core restarts, and if anything goes wrong the server is put back as it was.
-- **WordPress sites.** Install Runova Connector on each site in place of the old AgentMate Connector, then pair the site again from Runova. The new connector keeps its own tables and keys, so earlier connections do not carry over.
-- **Your own scripts.** `.agentmateignore`, `AGENTMATE_USER_DATA_DIR` and health endpoints built for the AgentMate Health Protocol keep working in Runova, so there is nothing to rename unless you want to. WordPress projects are the exception: they read only `.runovaignore`, so rename the file there.
-
 ## Why "ADE"
 
 An IDE is built around a person typing code. An ADE is built around agents writing it and a person steering. That changes what the app has to do:

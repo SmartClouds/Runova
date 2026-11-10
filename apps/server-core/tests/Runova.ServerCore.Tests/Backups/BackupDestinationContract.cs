@@ -11,7 +11,7 @@ namespace Runova.ServerCore.Tests.Backups;
 /// </summary>
 public abstract class BackupDestinationContract : IAsyncLifetime
 {
-    private readonly string _scratch = Directory.CreateTempSubdirectory("am-dest-").FullName;
+    private readonly string _scratch = Directory.CreateTempSubdirectory("runova-dest-").FullName;
     private readonly string _server = "contract-" + Guid.NewGuid().ToString("N")[..8];
     private IBackupDestination? _destination;
 

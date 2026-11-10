@@ -135,19 +135,4 @@ public sealed class SiteMappingTests
         row.AppliedFingerprint = null;
         Assert.False(SiteMapping.ToInfo(row).Applied);
     }
-
-    [Fact]
-    public async Task Site_snippets_are_read_in_the_query()
-    {
-        await using var database = await TestDatabase.CreateAsync();
-        await using var db = await database.Contexts.CreateDbContextAsync(TestContext.Current.CancellationToken);
-
-        var sql = SiteMapping.ToSnippetRows(db.Sites).ToQueryString();
-        Assert.Contains("\"ServerSnippet\"", sql, StringComparison.Ordinal);
-        Assert.Contains("\"LocationSnippet\"", sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Settings\"", sql, StringComparison.Ordinal);
-
-        Site[] sites = [new() { Id = "shop", Settings = "{}", ServerSnippet = "s;", LocationSnippet = null }];
-        Assert.Equal([new SiteSnippetRow("shop", "s;", null)], SiteMapping.ToSnippetRows(sites.AsQueryable()));
-    }
 }

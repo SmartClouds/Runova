@@ -71,7 +71,7 @@ internal sealed partial class DockerEngine(Uri endpoint, ILogger<DockerEngine> l
                 var containers = await client.Containers.ListContainersAsync(new ContainersListParameters { All = true }, cancellationToken);
 
                 // The helpers volumes are browsed through are the core's own, not the user's.
-                return [.. containers.Select(DockerMapping.Container).Where(c => !VolumeHelpers.Labels.Any(c.Labels.ContainsKey))];
+                return [.. containers.Select(DockerMapping.Container).Where(c => !c.Labels.ContainsKey(VolumeHelpers.Label))];
             },
             cancellationToken);
 

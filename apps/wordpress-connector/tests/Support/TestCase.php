@@ -166,7 +166,7 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
 
     /**
      * Builds and sends a signed request. Options: connectionId, timestamp, nonce, secretKey,
-     * bundle (raw gzip bytes), auth (a ready am_auth), ip, unsigned.
+     * bundle (raw gzip bytes), auth (a ready rn_auth), ip, unsigned.
      *
      * @param mixed $body
      * @param array<string, mixed> $options

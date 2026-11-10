@@ -1,4 +1,3 @@
-import { LEGACY_CORE_PATHS } from '../deployLegacyNames.js';
 import { dockerCleanPath } from '../dockerignore.js';
 import type { ComposeProject } from './parse.js';
 import { analyzeComposePorts, type ComposeServicePorts } from './ports.js';
@@ -174,16 +173,12 @@ const SOCKET_PATHS = [
   '/var/run/crio',
 ];
 
-/**
- * Where the Runova core keeps its binary, settings, data and socket, and where a core from
- * before the rename kept them (links to the new ones once a server has migrated).
- */
+/** Where the Runova core keeps its binary, settings, data and socket. */
 const CORE_PATHS = [
   '/var/lib/runova-core',
   '/etc/runova-core',
   '/opt/runova-core',
   '/run/runova-core',
-  ...LEGACY_CORE_PATHS,
 ];
 
 /** System folders. A writable mount lets a container change the server; read-only, read secrets. */

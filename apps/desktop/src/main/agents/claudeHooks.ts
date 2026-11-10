@@ -36,8 +36,7 @@ const fs = require('node:fs');
 process.on('uncaughtException', () => process.exit(0));
 process.on('unhandledRejection', () => process.exit(0));
 
-// A terminal started before the app was renamed carries the old variable.
-const sessionId = process.env.RUNOVA_SESSION_ID || process.env.AGENTMATE_SESSION_ID;
+const sessionId = process.env.RUNOVA_SESSION_ID;
 if (!sessionId) process.exit(0);
 setTimeout(() => process.exit(0), 4000).unref();
 

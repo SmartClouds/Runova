@@ -100,10 +100,6 @@ nsis:
   # to dashes instead - the two disagree and auto-update downloads 404. Keep
   # this dash-only, matching the other platforms' artifact names.
   artifactName: ${productName}-Setup-${version}.${ext}
-  # The app was called AgentMate before, and electron-builder derives this id from the appId it  # legacy-name
-  # had then (com.agentmate.app). Keeping it makes the Runova installer an upgrade of that install  # legacy-name
-  # (same uninstall entry, the old shortcuts removed) instead of a second app beside it.
-  guid: 76b8d710-e984-550c-8238-6729e4607618
 
 mac:
   icon: resources/icon-mac.png
@@ -142,9 +138,6 @@ linux:
 # `apps/desktop/release/*.deb` upload glob can't see. Use productName instead.
 deb:
   artifactName: ${productName}-${version}-${arch}.${ext}
-  # The package was named agentmate before the rename. Taking its place lets dpkg upgrade it  # legacy-name
-  # instead of installing Runova beside it.
-  fpm: ['--replaces=agentmate', '--conflicts=agentmate']  # legacy-name
 
 # electron-updater reads this to know where to look for new releases. The CD
 # workflow builds with `--publish never` and uploads artifacts to the GitHub

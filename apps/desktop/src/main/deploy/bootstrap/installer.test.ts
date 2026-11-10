@@ -6,7 +6,6 @@ import { sshErrorCode } from '../../../shared/sshErrors';
 import { tempDir } from '../../../test/main/fixtures';
 import { TunnelRefusedError } from '../../ssh/connection';
 import type { CoreTransportKind } from '../connection/transport';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
 import { type InstallerDeps, type InstallProgress, installCore, uninstallCore } from './installer';
 import { CHECKSUM_MISMATCH_EXIT, releaseDirectory } from './installPlan';
 import type { CoreRelease, ReleaseSource } from './releaseSource';
@@ -83,16 +82,11 @@ function setup(machine: Partial<ScriptedMachine> = {}, options: SetupOptions = {
       if (options.reachableBy && !options.reachableBy.includes(_transport)) {
         throw new TunnelRefusedError('Could not open a tunnel: open failed', 2);
       }
-      const migrated = server.rootCommands.some((command) => command.endsWith(' migrate-layout'));
       return {
         status: 'ok',
         version: options.healthVersion ?? '1.53.0',
         apiVersion: 1,
         startedAtUnixMs: 1,
-        layout:
-          (server.machine.installed?.release.startsWith(LEGACY_CORE.root) ?? false) && !migrated
-            ? 'legacy'
-            : 'runova',
       };
     },
   );
@@ -117,49 +111,6 @@ function setup(machine: Partial<ScriptedMachine> = {}, options: SetupOptions = {
 const ran = (server: ScriptedConnection, fragment: string): boolean =>
   server.rootCommands.some((command) => command.includes(fragment));
 
-describe('installCore on a server from before the rename', () => {
-  const OLD = `${LEGACY_CORE.releases}/1.52.0-cdcdcdcdcdcd`;
-
-  it('upgrades the core in its old layout, then has it move to the new one', async () => {
-    const { server, install } = setup({ installed: { release: OLD, version: '1.52.0' } });
-
-    const result = await install('deployer-pw');
-
-    expect(result.layout).toBe('runova');
-    expect(result.migrationError).toBeUndefined();
-    expect(result.release).toBe(releaseDirectory('1.53.0', SHA, 'runova'));
-    expect(ran(server, `${LEGACY_CORE.releases}/1.53.0-`)).toBe(true);
-    expect(
-      ran(
-        server,
-        `install -m 0644 -o root -g root ${LEGACY_CORE.releases}/1.53.0-${SHA.slice(0, 12)}/${LEGACY_CORE.unitFile} ${LEGACY_CORE.unitPath}`,
-      ),
-    ).toBe(true);
-    expect(ran(server, `systemctl restart ${LEGACY_CORE.unit}`)).toBe(true);
-    expect(server.rootCommands.at(-1)).toBe(
-      `${LEGACY_CORE.current}/${RUNOVA_CORE.binary} migrate-layout`,
-    );
-  });
-
-  it('keeps a working install when the move is put back', async () => {
-    const { install, progress } = setup({
-      installed: { release: OLD, version: '1.52.0' },
-      failures: [
-        { match: 'migrate-layout', stderr: 'Moving the state folder failed: busy', exitCode: 1 },
-      ],
-    });
-
-    const result = await install('deployer-pw');
-
-    expect(result.layout).toBe('legacy');
-    expect(result.release).toBe(releaseDirectory('1.53.0', SHA, 'legacy'));
-    expect(result.migrationError).toContain('busy');
-    expect(
-      progress.find((event) => event.phase === 'migrate' && event.status === 'done')?.detail,
-    ).toContain('old layout');
-  });
-});
-
 describe('installCore', () => {
   it('installs on a non-root login and proves the core answers', async () => {
     const { server, connect, health, install } = setup();
@@ -171,7 +122,6 @@ describe('installCore', () => {
       release: releaseDirectory('1.53.0', SHA),
       transport: 'streamlocal',
       previousVersion: null,
-      layout: 'runova',
       os: 'Ubuntu 24.04.1 LTS',
       architecture: 'x86_64',
     });

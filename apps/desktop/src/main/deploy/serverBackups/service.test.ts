@@ -47,7 +47,7 @@ function setup(
   hubParts: Partial<Record<keyof ICoreHub, unknown>> = {},
   more: Partial<ServerBackupsDeps> = {},
 ) {
-  const body = Buffer.from('AMBACKUP encrypted bytes');
+  const body = Buffer.from('RNBACKUP encrypted bytes');
   const hub = hubParts as unknown as ICoreHub;
   const downloads: string[] = [];
   const client = {
@@ -313,7 +313,7 @@ describe('ServerBackups picked files', () => {
   it('names a picked file by token only', async () => {
     const dir = folder();
     const path = join(dir, 'pick.rnbackup');
-    writeFileSync(path, 'AMBACKUP');
+    writeFileSync(path, 'RNBACKUP');
     const { backups } = setup({}, { pickOpenPath: vi.fn(async () => path) });
     const picked = await backups.pick();
     expect(picked?.name).toBe('pick.rnbackup');

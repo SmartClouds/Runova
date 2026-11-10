@@ -58,7 +58,7 @@ internal sealed partial class BackupHeaderJson : JsonSerializerContext;
 /// 7-byte prefix, the chunk's number and a last-chunk flag, and every chunk authenticates the header
 /// too. A changed byte, a chunk moved, dropped or added, a file cut short or a changed header all
 /// fail the tag. A wrong passphrase fails on the first chunk.
-/// Layout: "AMBACKUP", a version byte, the header's length (4 bytes, big-endian) and the header as
+/// Layout: "RNBACKUP", a version byte, the header's length (4 bytes, big-endian) and the header as
 /// JSON, then chunks, each its plaintext length (4 bytes), ciphertext and 16-byte tag.
 /// </summary>
 internal static class BackupCrypto

@@ -12,7 +12,7 @@ namespace Runova.ServerCore.Tests.Backups;
 /// </summary>
 public sealed class BackupPlanSchedulerTests : IDisposable
 {
-    private readonly string _root = Directory.CreateTempSubdirectory("am-hangfire-").FullName;
+    private readonly string _root = Directory.CreateTempSubdirectory("runova-hangfire-").FullName;
     private readonly SQLiteStorage _storage;
     private readonly BackupPlanScheduler _scheduler;
 

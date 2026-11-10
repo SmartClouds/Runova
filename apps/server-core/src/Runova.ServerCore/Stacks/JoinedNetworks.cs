@@ -19,7 +19,7 @@ internal static class JoinedNetworks
     public const string KeyPrefix = "runova-joined-";
 
     /// <summary>Docker's own networks: a Compose service cannot join them next to its others.</summary>
-    private static readonly HashSet<string> BuiltIn = new(StringComparer.Ordinal) { "bridge", "host", "none" };
+    private static readonly HashSet<string> _builtIn = new(StringComparer.Ordinal) { "bridge", "host", "none" };
 
     public static string KeyOf(string network) => KeyPrefix + network;
 
@@ -61,7 +61,7 @@ internal static class JoinedNetworks
                     return "A network name can have letters, digits, dots, dashes and underscores only.";
                 }
 
-                if (BuiltIn.Contains(network))
+                if (_builtIn.Contains(network))
                 {
                     return $"{network} is one of Docker's own networks, which an app's service cannot join next to its own.";
                 }

@@ -33,16 +33,14 @@ public sealed class HealthRedactorTests
     [Fact]
     public void Masks_bearer_and_basic_credentials_in_quoted_headers()
     {
-        Assert.Equal("Authorization: Bearer [redacted]", HealthRedactor.Redact("Authorization: Bearer amh_abcdefghijklmnop"));
+        Assert.Equal("Authorization: Bearer [redacted]", HealthRedactor.Redact("Authorization: Bearer rnh_abcdefghijklmnop"));
         Assert.Equal("authorization: Basic [redacted]", HealthRedactor.Redact("authorization: Basic dXNlcjpwYXNz"));
     }
 
-    [Theory]
-    [InlineData("rnh_")]
-    [InlineData("amh_")]
-    public void Masks_a_Runova_health_key_wherever_it_appears(string prefix)
+    [Fact]
+    public void Masks_a_Runova_health_key_wherever_it_appears()
     {
-        var key = prefix + new string('Q', 43);
+        var key = "rnh_" + new string('Q', 43);
         Assert.DoesNotContain(key, HealthRedactor.Redact($"echoed {key} back"), StringComparison.Ordinal);
     }
 

@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { app, safeStorage } from 'electron';
-import { LEGACY_USER_DATA_ENV } from '../shared/legacyNames';
 
 /**
  * Set by the end-to-end suite. Turns off the startup work that reaches outside the app's own
@@ -11,10 +10,8 @@ export const isE2E = process.env.RUNOVA_E2E === '1';
 
 // A profile of its own for tests, or for a throwaway second instance. This has to happen before
 // anything reads userData: the single-instance lock, the terminal host's pipe name (hashed from
-// this path) and every data file hang off it. The variable's name from before the rename still
-// works.
-export const userDataOverride =
-  process.env.RUNOVA_USER_DATA_DIR?.trim() || process.env[LEGACY_USER_DATA_ENV]?.trim();
+// this path) and every data file hang off it.
+export const userDataOverride = process.env.RUNOVA_USER_DATA_DIR?.trim();
 if (userDataOverride) {
   app.setPath('userData', resolve(userDataOverride));
 }

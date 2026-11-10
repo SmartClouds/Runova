@@ -1,5 +1,4 @@
 using System.Text;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 
 namespace Runova.ServerCore.Hardening;
@@ -19,15 +18,8 @@ internal sealed record ManagedSshSettings(bool DisablePasswordLogin, bool Restri
 /// </summary>
 internal static class SshdPolicy
 {
-    public const string RunovaDropInPath = "/etc/ssh/sshd_config.d/00-runova.conf";
-
-    /// <summary>
-    /// The one file the core owns: the drop-in a server got before the rename keeps its name (and
-    /// so its place in sshd's reading order), a new one gets the new name.
-    /// </summary>
-    public static string DropInPath => File.Exists(LegacyNames.SshdDropInPath) && !File.Exists(RunovaDropInPath)
-        ? LegacyNames.SshdDropInPath
-        : RunovaDropInPath;
+    /// <summary>The one file the core owns.</summary>
+    public const string DropInPath = "/etc/ssh/sshd_config.d/00-runova.conf";
 
     private const string Header =
         "# Written by Runova's security checklist. Delete this file and reload sshd to undo it.\n";

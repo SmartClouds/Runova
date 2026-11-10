@@ -124,8 +124,8 @@ function setup(machine: Partial<ScriptedMachine> = {}, deps: Partial<DeployServi
     ...deps,
   });
   const reset = vi.spyOn(service.links, 'reset');
-  const file = join(tempDir(), 'web.ambackup');
-  writeFileSync(file, 'AMBACKUP ciphertext');
+  const file = join(tempDir(), 'web.rnbackup');
+  writeFileSync(file, 'RNBACKUP ciphertext');
   return { service, server, state, reset, file };
 }
 

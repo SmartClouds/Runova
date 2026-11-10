@@ -1,5 +1,5 @@
 import { quoteForShell } from '@runova/core';
-import { type CoreNames, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 
 /**
  * The root commands that put a backup in place of a core's state, as data (E15). The restorer
@@ -11,26 +11,23 @@ import { type CoreNames, RUNOVA_CORE } from '../coreLayout';
  *   the state folder the swap replaces) stops there, and nothing has changed.
  * - Only then is the core stopped and the state folder swapped for the staged one with two renames
  *   on the same filesystem. The old state is kept, root only, so going back is two renames too.
- *
- * Every step takes the names of the layout the server's core is installed in (`names`).
  */
 
-/** The folders a restore works in, beside the layout's state folder. */
-export function restorePaths(names: CoreNames = RUNOVA_CORE) {
-  const root = `${names.dataDirectory}-restore`;
-  return {
-    data: names.dataDirectory,
-    root,
-    stage: `${root}/stage`,
-    backup: `${root}/backup.rnbackup`,
-    previous: `${root}/previous`,
-    failed: `${root}/failed`,
-  };
-}
-
 export const DATA_DIRECTORY = RUNOVA_CORE.dataDirectory;
-export const RESTORE_ROOT = restorePaths().root;
-export const PREVIOUS = restorePaths().previous;
+export const RESTORE_ROOT = `${DATA_DIRECTORY}-restore`;
+export const PREVIOUS = `${RESTORE_ROOT}/previous`;
+
+/** The folders a restore works in, beside the core's state folder. */
+const paths = {
+  data: DATA_DIRECTORY,
+  root: RESTORE_ROOT,
+  stage: `${RESTORE_ROOT}/stage`,
+  backup: `${RESTORE_ROOT}/backup.rnbackup`,
+  previous: PREVIOUS,
+  failed: `${RESTORE_ROOT}/failed`,
+};
+
+const { binaryPath, unit } = RUNOVA_CORE;
 
 /** The stage command's exit code when the backup was refused (wrong passphrase, damaged, newer). */
 export const STAGE_REFUSED_EXIT = 1;
@@ -49,11 +46,10 @@ const q = (value: string): string => quoteForShell(value, 'posix');
 const STAGING_FILE = /^\/[A-Za-z0-9._/-]+\/[A-Za-z0-9._-]+$/;
 
 /** Copies the upload where only root can reach it, then decrypts and checks it. The passphrase goes on stdin. */
-export function stageStep(stagingFile: string, names: CoreNames = RUNOVA_CORE): RestoreStep {
+export function stageStep(stagingFile: string): RestoreStep {
   if (!STAGING_FILE.test(stagingFile) || stagingFile.split('/').includes('..')) {
     throw new Error('The uploaded backup is not where the restore put it.');
   }
-  const paths = restorePaths(names);
   return {
     id: 'stage',
     title: 'Decrypt and check the backup',
@@ -61,19 +57,18 @@ export function stageStep(stagingFile: string, names: CoreNames = RUNOVA_CORE): 
       `install -d -m 0700 -o root -g root ${paths.root}`,
       `rm -rf ${paths.stage} ${paths.stage}.payload ${paths.backup}`,
       `install -m 0600 -o root -g root -- ${q(stagingFile)} ${paths.backup}`,
-      `${names.binaryPath} admin restore-stage --file ${paths.backup} --into ${paths.stage} --passphrase-stdin`,
+      `${binaryPath} admin restore-stage --file ${paths.backup} --into ${paths.stage} --passphrase-stdin`,
     ].join(' && '),
   };
 }
 
 /** Stop, swap the folders, start: once these begin, the core may no longer run its old state. */
-export function swapSteps(names: CoreNames = RUNOVA_CORE): RestoreStep[] {
-  const paths = restorePaths(names);
+export function swapSteps(): RestoreStep[] {
   return [
     {
       id: 'stop',
       title: 'Stop the server core',
-      command: `systemctl stop ${names.unit}`,
+      command: `systemctl stop ${unit}`,
     },
     {
       id: 'swap',
@@ -89,36 +84,31 @@ export function swapSteps(names: CoreNames = RUNOVA_CORE): RestoreStep[] {
       id: 'start',
       title: 'Start the server core on the restored state',
       // Type=notify: start only returns once the core listens, and fails for one that cannot.
-      command: `systemctl start ${names.unit}`,
+      command: `systemctl start ${unit}`,
     },
   ];
 }
 
 /** Back to the state from before the restore, keeping the restored one aside for a look. */
-export function restoreRollbackStep(names: CoreNames = RUNOVA_CORE): RestoreStep {
-  const paths = restorePaths(names);
+export function restoreRollbackStep(): RestoreStep {
   return {
     id: 'rollback',
     title: 'Go back to the state from before',
     command: [
-      `systemctl stop ${names.unit}`,
+      `systemctl stop ${unit}`,
       `test -d ${paths.previous}`,
       `rm -rf ${paths.failed}`,
       `{ ! test -e ${paths.data} || mv -T ${paths.data} ${paths.failed}; }`,
       `mv -T ${paths.previous} ${paths.data}`,
-      `systemctl start ${names.unit}`,
+      `systemctl start ${unit}`,
     ].join(' && '),
   };
 }
 
-export function restoreCleanupStep(names: CoreNames = RUNOVA_CORE): RestoreStep {
-  const paths = restorePaths(names);
+export function restoreCleanupStep(): RestoreStep {
   return {
     id: 'cleanup',
     title: 'Remove the uploaded backup',
     command: `rm -rf ${paths.backup} ${paths.stage} ${paths.stage}.payload`,
   };
 }
-
-/** Prints the layout the server's core is installed in: the new one once its folder is there. */
-export const LAYOUT_PROBE = `if [ -e ${RUNOVA_CORE.current} ]; then echo runova; else echo legacy; fi`;

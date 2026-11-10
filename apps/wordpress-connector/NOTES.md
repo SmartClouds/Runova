@@ -53,7 +53,7 @@ runs every shared vector.
 - HTTP status per error code: `Protocol::STATUS`. 413 only for a request body that is too big.
   A file over 64 MiB on read is `pathRejected` with `details.reason = tooLarge`, not `tooLarge`.
 - Replies are signed over route (or `-` when the URL named no known route), the request nonce
-  (`-` when am_auth did not parse) and the connection id the request named.
+  (`-` when rn_auth did not parse) and the connection id the request named.
 - `/hello`: no timestamp check, no nonce stored, body not read. Capabilities: pair, read, audit,
   revoke, deploy, rescue. `rescueUrl` is `plugins_url('rescue.php')` only when it is on the site's
   own origin, else null.

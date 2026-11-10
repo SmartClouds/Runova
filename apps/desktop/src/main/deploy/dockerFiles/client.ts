@@ -2,7 +2,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { type FileHandle, lstat, open, rename, rm, stat, utimes } from 'node:fs/promises';
 import { pipeline, Readable, Transform, Writable } from 'node:stream';
-import { LEGACY_CORE_NAMES } from '../../../shared/deploy/coreLegacyNames';
 import type {
   FileEntry,
   FileSessionInfo,
@@ -501,10 +500,7 @@ export class DockerFileClient implements SftpFileClient {
             onResponse: (_status, headers) => {
               const length = Number(headers['content-length']);
               if (Number.isFinite(length) && length >= 0) total = length;
-              // A core from before the rename sends the old header name.
-              const mtime = Number(
-                headers['x-runova-mtime-ms'] ?? headers[LEGACY_CORE_NAMES.mtimeHeader],
-              );
+              const mtime = Number(headers['x-runova-mtime-ms']);
               if (Number.isFinite(mtime) && mtime > 0) mtimeMs = wholeSeconds(mtime);
             },
           }),

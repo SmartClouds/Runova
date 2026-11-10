@@ -31,7 +31,7 @@ function folder(): string {
 function setup(
   options: { body?: Buffer; sha?: string; save?: string | null; open?: string | null } = {},
 ) {
-  const body = options.body ?? Buffer.from('AMBACKUP encrypted bytes');
+  const body = options.body ?? Buffer.from('RNBACKUP encrypted bytes');
   const info: BackupInfo = {
     id: 'b1',
     fileName: 'runova-backup.rnbackup',
@@ -132,7 +132,7 @@ describe('DeployBackups', () => {
 
   it('names a picked file by a token only', async () => {
     const path = join(folder(), 'old.rnbackup');
-    writeFileSync(path, 'AMBACKUP');
+    writeFileSync(path, 'RNBACKUP');
     const { backups } = setup({ open: path });
 
     const picked = await backups.pick();

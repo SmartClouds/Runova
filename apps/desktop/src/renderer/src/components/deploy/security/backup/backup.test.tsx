@@ -22,7 +22,7 @@ const { passphraseIssue } = await import('./CreateBackupDialog');
 const PASSPHRASE = 'orange tractor bicycle lamp';
 const FILE = {
   token: '00000000-0000-4000-9000-000000000009',
-  name: 'web.ambackup',
+  name: 'web.rnbackup',
   sizeBytes: 2_400_000,
 };
 
@@ -35,7 +35,7 @@ function renderCard(bridge: Record<string, unknown> = {}, server = SERVER) {
       }),
       'deployHardening.createBackup': async () => ({
         saved: true,
-        path: 'C:/Backups/web.ambackup',
+        path: 'C:/Backups/web.rnbackup',
         sizeBytes: 10,
       }),
       'deployHardening.pickBackup': async () => FILE,
@@ -83,7 +83,7 @@ describe('BackupCard', () => {
       serverId: 'srv-1',
       passphrase: PASSPHRASE,
     });
-    expect(toast.success).toHaveBeenCalledWith('Backup saved to C:/Backups/web.ambackup');
+    expect(toast.success).toHaveBeenCalledWith('Backup saved to C:/Backups/web.rnbackup');
   });
 
   it('stays open and says nothing when the save dialog is cancelled', async () => {
@@ -108,7 +108,7 @@ describe('BackupCard', () => {
     const restore = within(dialog).getByRole('button', { name: 'Restore' });
     expect(restore.hasAttribute('disabled')).toBe(true);
     await user.click(within(dialog).getByRole('button', { name: 'Pick the backup file' }));
-    expect(within(dialog).getByText('web.ambackup (2.3 MB)')).toBeTruthy();
+    expect(within(dialog).getByText('web.rnbackup (2.3 MB)')).toBeTruthy();
     await user.type(within(dialog).getByLabelText('Backup passphrase'), PASSPHRASE);
     await user.type(
       within(dialog).getByLabelText('Their password'),

@@ -11,7 +11,9 @@ namespace Runova.ServerCore.Stacks;
 /// (packages/core/src/deploy/compose/lint.ts: rule:service[:subject]), so what was acknowledged
 /// in the app counts here. Where Compose's reading differs from the file as written (a `~` mount
 /// becomes /root/...), the id differs too and the app shows the core's finding to acknowledge.
-/// A mount of the core's own files is not a risk to acknowledge: it is refused.
+/// A mount of the core's own files is not a risk to acknowledge: it is refused. Docker follows
+/// symbolic links in a bind mount's source, so every check also looks at where the source really
+/// leads on this server.
 /// </summary>
 internal static class ComposeConfigLint
 {
@@ -32,11 +34,13 @@ internal static class ComposeConfigLint
         "/run/containerd", "/var/run/containerd", "/run/podman", "/var/run/podman", "/run/crio", "/var/run/crio",
     ];
 
-    /// <summary>Both layouts' folders: after a migration the old paths are links to the new ones.</summary>
     private static readonly string[] _corePaths =
     [
-        .. new[] { CoreLayout.Runova, CoreLayout.Legacy }.SelectMany(layout => new[] { layout.DataDirectory, layout.ConfigDirectory, layout.Root, layout.RuntimeDirectory }),
+        CoreLayout.Current.DataDirectory, CoreLayout.Current.ConfigDirectory, CoreLayout.Current.Root, CoreLayout.Current.RuntimeDirectory,
     ];
+
+    /// <summary>The longest chain of symbolic links followed before a path counts as unresolvable.</summary>
+    private const int MaxLinkHops = 40;
 
     private static readonly string[] _sensitivePaths =
     [
@@ -77,12 +81,24 @@ internal static class ComposeConfigLint
 
     /// <param name="projectDirectory">The revision's files/ folder: bind mounts inside it are the app's own.</param>
     /// <param name="coreData">The core's data folder: a mount inside it (outside the project) is refused.</param>
-    public static List<StackRisk> Lint(ComposeConfig config, IReadOnlyCollection<string> proxiedServices, string projectDirectory, string coreData)
+    /// <param name="resolveLinks">
+    /// Where an absolute path really leads, every symbolic link in it followed. Defaults to this
+    /// server's file system (<see cref="ResolveLinks"/>); tests pass a map.
+    /// </param>
+    public static List<StackRisk> Lint(
+        ComposeConfig config,
+        IReadOnlyCollection<string> proxiedServices,
+        string projectDirectory,
+        string coreData,
+        Func<string, string>? resolveLinks = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(proxiedServices);
+        resolveLinks ??= ResolveLinks;
         var project = Clean(projectDirectory);
         var core = Clean(coreData);
+        var realProject = Clean(resolveLinks(project));
+        var realCore = Clean(resolveLinks(core));
         var risks = new List<StackRisk>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         void Add(string rule, StackRiskSeverity severity, string service, string? subject, string message)
@@ -115,28 +131,33 @@ internal static class ComposeConfigLint
 
             foreach (var mount in Mounts(definition, config.Root))
             {
+                // The ids keep the path as written, so they match the app's; the checks also take
+                // where it leads, since that is what Docker mounts.
                 var path = Clean(mount.Source);
-                if (StackRules.Within(path, project))
+                var real = path.StartsWith('/') ? Clean(resolveLinks(path)) : path;
+                var writtenInProject = StackRules.Within(path, project);
+                if (writtenInProject && StackRules.Within(real, realProject))
                 {
                     continue;
                 }
 
-                if (StackRules.Within(path, core))
+                var leads = real == path ? string.Empty : $" (a link to {real})";
+                if (StackRules.Within(real, realCore) || StackRules.Within(real, core) || (!writtenInProject && StackRules.Within(path, core)))
                 {
                     throw new ComposeConfigException(
-                        $"{service.Name} mounts {mount.Source}, which is inside the core's own data. Keep bind mounts inside the app's files.");
+                        $"{service.Name} mounts {mount.Source}{leads}, which is inside the core's own data. Keep bind mounts inside the app's files.");
                 }
 
-                var found = Classify(path, mount.ReadOnly);
+                var found = (writtenInProject ? null : Classify(path, mount.ReadOnly)) ?? (real == path ? null : Classify(real, mount.ReadOnly));
                 if (found is { } risk)
                 {
                     var through = mount.Volume is null ? string.Empty : $" through the volume {mount.Volume}";
                     Add(risk.Rule, risk.Severity, service.Name, path, risk.Rule switch
                     {
-                        "docker-socket" => $"{service.Name} mounts {path}{through}, which reaches the Docker socket.",
-                        "host-root" => $"{service.Name} mounts the server's whole filesystem (/){through}.",
-                        "core-data" => $"{service.Name} mounts {path}{through}, which holds Runova's own server files.",
-                        _ => $"{service.Name} mounts the server folder {path}{(mount.ReadOnly ? " read-only" : string.Empty)}{through}.",
+                        "docker-socket" => $"{service.Name} mounts {path}{leads}{through}, which reaches the Docker socket.",
+                        "host-root" => $"{service.Name} mounts the server's whole filesystem (/){leads}{through}.",
+                        "core-data" => $"{service.Name} mounts {path}{leads}{through}, which holds Runova's own server files.",
+                        _ => $"{service.Name} mounts the server folder {path}{leads}{(mount.ReadOnly ? " read-only" : string.Empty)}{through}.",
                     });
                 }
             }
@@ -203,6 +224,73 @@ internal static class ComposeConfigLint
 
     private static string Clean(string path) =>
         StackRules.CleanPath(OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path);
+
+    /// <summary>
+    /// <paramref name="path"/> with every symbolic link in it followed, one component at a time,
+    /// as the kernel does when Docker mounts it. Parts that do not exist stay as they are. A chain
+    /// longer than <see cref="MaxLinkHops"/> (a loop) leaves the rest of the path unresolved,
+    /// which Docker would refuse to mount anyway. On Windows there is nothing to follow.
+    /// </summary>
+    internal static string ResolveLinks(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (OperatingSystem.IsWindows() || !path.StartsWith('/'))
+        {
+            return path;
+        }
+
+        var resolved = new List<string>();
+        var pending = new LinkedList<string>(path.Split('/'));
+        var hops = 0;
+        while (pending.First is { } next)
+        {
+            pending.RemoveFirst();
+            var part = next.Value;
+            if (part is "" or ".")
+            {
+                continue;
+            }
+
+            if (part == "..")
+            {
+                if (resolved.Count > 0)
+                {
+                    resolved.RemoveAt(resolved.Count - 1);
+                }
+
+                continue;
+            }
+
+            var candidate = "/" + string.Join('/', resolved.Append(part));
+            string? target;
+            try
+            {
+                target = new FileInfo(candidate).LinkTarget;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                target = null;
+            }
+
+            if (target is null || ++hops > MaxLinkHops)
+            {
+                resolved.Add(part);
+                continue;
+            }
+
+            if (target.StartsWith('/'))
+            {
+                resolved.Clear();
+            }
+
+            foreach (var linked in target.Split('/').Reverse())
+            {
+                pending.AddFirst(linked);
+            }
+        }
+
+        return "/" + string.Join('/', resolved);
+    }
 
     private static (string Rule, StackRiskSeverity Severity)? Classify(string path, bool readOnly)
     {

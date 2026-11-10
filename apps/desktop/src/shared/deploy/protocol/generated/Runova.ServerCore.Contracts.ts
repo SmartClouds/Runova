@@ -2159,12 +2159,6 @@ export type HealthResponse = {
     apiVersion: number;
     /** Transpiled from long */
     startedAtUnixMs: number;
-    /** Transpiled from Runova.ServerCore.Contracts.CoreLayoutName */
-    layout?: CoreLayoutName;
-    /** Transpiled from string? */
-    migrationError?: string;
-    /** Transpiled from string? */
-    nginxMoveError?: string;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.PingResponse */
@@ -2246,54 +2240,6 @@ export type JobPage = {
     jobs: JobInfo[];
     /** Transpiled from long */
     nextBeforeCreatedAtUnixMs?: number;
-}
-
-/** Transpiled from Runova.ServerCore.Contracts.CoreLayoutName */
-export type CoreLayoutName = "legacy" | "runova";
-
-/** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationPhase */
-export type LayoutMigrationPhase = "none" | "running" | "done" | "rolledBack" | "failed";
-
-/** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationStatus */
-export type LayoutMigrationStatus = {
-    /** Transpiled from Runova.ServerCore.Contracts.CoreLayoutName */
-    layout: CoreLayoutName;
-    /** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationPhase */
-    phase: LayoutMigrationPhase;
-    /** Transpiled from string? */
-    step?: string;
-    /** Transpiled from string? */
-    error?: string;
-    /** Transpiled from long */
-    startedAtUnixMs?: number;
-    /** Transpiled from long */
-    finishedAtUnixMs?: number;
-    /** Transpiled from Runova.ServerCore.Contracts.NameMoveStatus? */
-    nginx?: NameMoveStatus;
-    /** Transpiled from Runova.ServerCore.Contracts.NameMoveStatus? */
-    sshd?: NameMoveStatus;
-}
-
-/** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationOutcome */
-export type LayoutMigrationOutcome = "started" | "alreadyMigrated" | "refused";
-
-/** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationResult */
-export type LayoutMigrationResult = {
-    /** Transpiled from Runova.ServerCore.Contracts.LayoutMigrationOutcome */
-    outcome: LayoutMigrationOutcome;
-    /** Transpiled from string? */
-    problem?: string;
-}
-
-/** Transpiled from Runova.ServerCore.Contracts.NameMovePhase */
-export type NameMovePhase = "notNeeded" | "waiting" | "done" | "failed" | "kept";
-
-/** Transpiled from Runova.ServerCore.Contracts.NameMoveStatus */
-export type NameMoveStatus = {
-    /** Transpiled from Runova.ServerCore.Contracts.NameMovePhase */
-    phase: NameMovePhase;
-    /** Transpiled from string? */
-    detail?: string;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.TelegramNotificationsStatus */

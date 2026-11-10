@@ -268,7 +268,7 @@ describe.skipIf(!enabled)('the Security center on real servers', () => {
         const backup = await first.service.withHub('srv', (hub) =>
           hub.createBackup({ passphrase: PASSPHRASE }),
         );
-        const file = join(tempDir(), 'first.ambackup');
+        const file = join(tempDir(), 'first.rnbackup');
         await first.service.withCoreHttp('srv', (client, token) =>
           client.download(`/api/v1/backups/${backup.id}`, createWriteStream(file), {
             token,

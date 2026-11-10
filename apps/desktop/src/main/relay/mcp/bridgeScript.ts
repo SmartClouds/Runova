@@ -29,8 +29,7 @@ const http = require('node:http');
 const readline = require('node:readline');
 
 const PORT_FILE = ${JSON.stringify(portFile)};
-// A terminal started before the app was renamed carries the old variable.
-const SESSION_ID = process.env.RUNOVA_SESSION_ID || process.env.AGENTMATE_SESSION_ID || '';
+const SESSION_ID = process.env.RUNOVA_SESSION_ID || '';
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
 const empty = { type: 'object', properties: {}, additionalProperties: false };
 

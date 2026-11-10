@@ -7,7 +7,7 @@ import {
 } from 'node:http';
 import type { Duplex, Readable, Writable } from 'node:stream';
 import type { HealthResponse } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import type { CoreTransport } from './transport';
 
 /**
@@ -16,12 +16,12 @@ import type { CoreTransport } from './transport';
  * channel never outlives the request it carried.
  */
 
-/** The Host header a new core answers to (it takes the old name too); it never answers to anything else. */
+/** The Host header the core answers to. */
 export const CORE_HOST = RUNOVA_CORE.host;
 
-/** What to send as Host through `transport`: the old name until the transport knows the core is new. */
+/** What to send as Host through `transport`. */
 export function coreHostFor(transport: CoreTransport): string {
-  return transport.host?.() ?? LEGACY_CORE.host;
+  return transport.host?.() ?? CORE_HOST;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;

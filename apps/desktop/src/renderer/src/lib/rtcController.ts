@@ -3,8 +3,6 @@ import {
   DC_CURSOR,
   DC_INPUT,
   decodeCursorState,
-  LEGACY_DC_CURSOR,
-  LEGACY_DC_INPUT,
   type RemoteCursorState,
   type RemoteInputEvent,
   type RemoteRtcMessage,
@@ -188,10 +186,9 @@ async function acceptOffer(sdp: string): Promise<void> {
     if (pc !== connection) return;
     const channel = event.channel;
     channel.binaryType = 'arraybuffer';
-    // A host from before the app was renamed opens them under the old labels.
-    if (channel.label === DC_INPUT || channel.label === LEGACY_DC_INPUT) {
+    if (channel.label === DC_INPUT) {
       inputChannel = channel;
-    } else if (channel.label === DC_CURSOR || channel.label === LEGACY_DC_CURSOR) {
+    } else if (channel.label === DC_CURSOR) {
       channel.onmessage = (message) => {
         if (pc !== connection) return;
         const data = message.data;

@@ -1,4 +1,3 @@
-import { LEGACY_IGNORE_FILE, LEGACY_PROJECT_DIR } from '../../legacyNames.js';
 import { createIgnoreRules, type IgnoreLayer, type IgnoreRulesResult } from '../ignoreRules.js';
 import {
   validateWpItemPath,
@@ -40,14 +39,7 @@ export const FILE_SITE_HARD_DENY_FILES: readonly string[] = WP_HARD_DENY_FILES.f
 const DENY_NAMES: ReadonlySet<string> = new Set([
   ...WP_HARD_DENY_DIRS,
   ...FILE_SITE_HARD_DENY_FILES,
-  // The project folder and ignore file from before the rename, which a file site's folder may
-  // still hold. WordPress projects no longer have them.
-  LEGACY_PROJECT_DIR,
-  LEGACY_IGNORE_FILE,
 ]);
-
-/** The WordPress agent prefixes, plus the project folder from before the rename. */
-const AGENT_PREFIXES: readonly string[] = [...WP_AGENT_PREFIXES, LEGACY_PROJECT_DIR];
 
 /**
  * Agent settings, skills and Runova's own files among the deny list, so a walker can tell the
@@ -56,7 +48,6 @@ const AGENT_PREFIXES: readonly string[] = [...WP_AGENT_PREFIXES, LEGACY_PROJECT_
  */
 export const FILE_SITE_AGENT_DIRS: readonly string[] = [
   '.runova',
-  LEGACY_PROJECT_DIR,
   '.claude',
   '.agents',
   '.codex',
@@ -84,7 +75,6 @@ export const FILE_SITE_AGENT_FILES: readonly string[] = [
   '.windsurfrules',
   '.roomodes',
   '.runovaignore',
-  LEGACY_IGNORE_FILE,
 ];
 
 const AGENT_NAMES: ReadonlySet<string> = new Set([
@@ -101,7 +91,6 @@ function segmentDenied(segment: string): boolean {
   const name = fold(segment);
   if (DENY_NAMES.has(name)) return true;
   if (WP_HARD_DENY_PREFIXES.some((prefix) => name.startsWith(prefix))) return true;
-  if (name.startsWith(LEGACY_PROJECT_DIR)) return true;
   return WP_HARD_DENY_SUFFIXES.some((suffix) => name.endsWith(suffix));
 }
 
@@ -132,7 +121,7 @@ export function deniedReasonForSync(path: string): 'agentFiles' | 'hardDenied' {
   for (const segment of path.split('/')) {
     if (!segmentDenied(segment)) continue;
     const name = fold(segment);
-    return AGENT_NAMES.has(name) || AGENT_PREFIXES.some((prefix) => name.startsWith(prefix))
+    return AGENT_NAMES.has(name) || WP_AGENT_PREFIXES.some((prefix) => name.startsWith(prefix))
       ? 'agentFiles'
       : 'hardDenied';
   }

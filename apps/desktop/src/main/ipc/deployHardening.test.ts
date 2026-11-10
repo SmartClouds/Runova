@@ -31,7 +31,7 @@ function harness(trusted = true) {
     pick: vi.fn(async () => null),
     resolve: vi.fn((token: string) => {
       if (token !== ID) throw new Error('Pick the backup file again.');
-      return '/home/me/web.ambackup';
+      return '/home/me/web.rnbackup';
     }),
   };
   const service = {
@@ -128,7 +128,7 @@ describe('registerDeployHardeningHandlers', () => {
         sudoPassword: null,
         userName: 'maria',
         password: 'correct horse battery staple',
-        file: '/home/me/web.ambackup',
+        file: '/home/me/web.rnbackup',
       },
       expect.any(Function),
     );

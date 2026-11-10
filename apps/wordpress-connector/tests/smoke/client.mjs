@@ -21,7 +21,7 @@ const PREFIX = 'runova-wp/v1';
 
 export function parseKey(text) {
   const compact = text.replace(/\s+/g, '');
-  if (!compact.startsWith('amwp1.')) throw new Error('Not a connection key.');
+  if (!compact.startsWith('rnwp1.')) throw new Error('Not a connection key.');
   const raw = JSON.parse(Buffer.from(compact.slice(6), 'base64url').toString('utf8'));
   return {
     siteUrl: raw.u,
@@ -42,7 +42,7 @@ function encodeFrame(route, body, blobs) {
   const length = Buffer.alloc(4);
   length.writeUInt32BE(header.length);
   return Buffer.concat([
-    Buffer.from('AMWB1\n'),
+    Buffer.from('RNWB1\n'),
     length,
     header,
     ...blobs.map((blob) => Buffer.from(blob)),
@@ -50,7 +50,7 @@ function encodeFrame(route, body, blobs) {
 }
 
 function decodeFrame(bytes) {
-  if (bytes.subarray(0, 6).toString() !== 'AMWB1\n') throw new Error('Not a frame.');
+  if (bytes.subarray(0, 6).toString() !== 'RNWB1\n') throw new Error('Not a frame.');
   const length = bytes.readUInt32BE(6);
   const header = JSON.parse(bytes.subarray(10, 10 + length).toString('utf8'));
   const blobs = [];
@@ -66,7 +66,7 @@ function decodeFrame(bytes) {
 function multipart(auth, gzipped) {
   const boundary = b64(randomBytes(24));
   const head =
-    `--${boundary}\r\nContent-Disposition: form-data; name="am_auth"\r\n\r\n${auth}\r\n` +
+    `--${boundary}\r\nContent-Disposition: form-data; name="rn_auth"\r\n\r\n${auth}\r\n` +
     `--${boundary}\r\nContent-Disposition: form-data; name="bundle"; filename="bundle.bin"\r\n` +
     'Content-Type: application/octet-stream\r\n\r\n';
   return {
@@ -122,7 +122,7 @@ export class SiteClient {
       redirect: 'manual',
     });
     const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.subarray(0, 6).toString() !== 'AMWR1\n') {
+    if (bytes.subarray(0, 6).toString() !== 'RNWR1\n') {
       return { foreign: true, status: response.status, text: bytes.toString('utf8').slice(0, 400) };
     }
     const metaLength = bytes.readUInt32BE(6);

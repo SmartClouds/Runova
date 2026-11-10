@@ -210,7 +210,7 @@ describe('deployServerBackups handlers', () => {
     });
     expect(restoreCalls.restore).toHaveBeenCalledTimes(2);
     await expect(
-      call(C.restore, { ...base, source: { kind: 'file', path: 'C:/x.ambackup' } }),
+      call(C.restore, { ...base, source: { kind: 'file', path: 'C:/x.rnbackup' } }),
     ).rejects.toThrow(/again/);
     await expect(
       call(C.restore, { ...base, userName: 'a b', source: { kind: 'file', fileToken: ID } }),

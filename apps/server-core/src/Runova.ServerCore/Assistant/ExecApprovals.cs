@@ -2,7 +2,6 @@ using System.Buffers.Text;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Security;
 
 namespace Runova.ServerCore.Assistant;
@@ -22,9 +21,6 @@ internal sealed class ExecApprovals(TimeProvider time)
 {
     public const string Prefix = "runova-core/exec/v1";
 
-    /// <summary>An app from before the rename signs with the old prefix; both are accepted for good.</summary>
-    public static readonly IReadOnlyList<string> Prefixes = [Prefix, LegacyNames.ExecPrefix];
-
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(2);
 
     private const int MaxOutstanding = 1_000;
@@ -34,8 +30,8 @@ internal sealed class ExecApprovals(TimeProvider time)
     private readonly ConcurrentDictionary<Guid, IssuedExecNonce> _issued = new();
 
     /// <summary>The text a device signs to approve <paramref name="command"/>.</summary>
-    public static string Message(Guid nonceId, string nonce, Guid deviceId, Guid sessionId, string command, string prefix = Prefix) =>
-        string.Join('\n', prefix, nonceId.ToString("D"), nonce, deviceId.ToString("D"), sessionId.ToString("D"), command);
+    public static string Message(Guid nonceId, string nonce, Guid deviceId, Guid sessionId, string command) =>
+        string.Join('\n', Prefix, nonceId.ToString("D"), nonce, deviceId.ToString("D"), sessionId.ToString("D"), command);
 
     /// <summary>A new nonce, or null when too many are outstanding (in all or for this session).</summary>
     public IssuedExecNonce? Issue(Guid sessionId, Guid deviceId)
@@ -98,10 +94,10 @@ internal sealed class ExecApprovals(TimeProvider time)
             return false;
         }
 
-        return Prefixes.Any(prefix => DeviceKeys.Verify(
+        return DeviceKeys.Verify(
             publicKey,
-            Encoding.UTF8.GetBytes(Message(issued.Id, issued.Nonce, deviceId, sessionId, command, prefix)),
-            bytes));
+            Encoding.UTF8.GetBytes(Message(issued.Id, issued.Nonce, deviceId, sessionId, command)),
+            bytes);
     }
 }
 

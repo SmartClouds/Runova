@@ -142,43 +142,6 @@
     }
   },
   {
-    "name": "reads the error details an endpoint built before the rename sends (legacy-name)",
-    "input": {
-      "httpStatus": 503,
-      "body": "{\"status\":\"fail\",\"checks\":{\"queue\":[{\"status\":\"fail\",\"output\":\"broker down\",\"agentmate\":{\"errorCode\":\"E_BROKER\",\"hint\":\"Start RabbitMQ\"}}]},\"note\":\"legacy-name\"}"
-    },
-    "expect": {
-      "state": "fail",
-      "services": [
-        {
-          "key": "queue",
-          "error": {
-            "message": "broker down",
-            "code": "E_BROKER",
-            "detail": null,
-            "hint": "Start RabbitMQ"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "falls back to the old details when the runova ones are malformed (legacy-name)",
-    "input": {
-      "httpStatus": 503,
-      "body": "{\"status\":\"fail\",\"checks\":{\"queue\":[{\"status\":\"fail\",\"runova\":{\"detail\":5},\"agentmate\":{\"hint\":\"old\"}}]},\"note\":\"legacy-name\"}"
-    },
-    "expect": {
-      "state": "fail",
-      "services": [
-        {
-          "key": "queue",
-          "error": { "message": "Reported as failing with no error message.", "hint": "old" }
-        }
-      ]
-    }
-  },
-  {
     "name": "drops runova details that are not an object",
     "input": {
       "httpStatus": 503,

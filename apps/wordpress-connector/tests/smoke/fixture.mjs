@@ -13,7 +13,7 @@
  *   site.stop();
  *
  * `slug` and `cli` name the plugin folder and the WP-CLI command when the zip is not the current
- * plugin (an older release under its old names, say).
+ * plugin (a build that uses another folder name, say).
  *
  * MariaDB, WordPress (Apache on the same port as the host mapping, so loopback works) and one-off
  * WP-CLI containers share a network. WP_DEBUG logs to wp-content/debug.log, never to the page. The

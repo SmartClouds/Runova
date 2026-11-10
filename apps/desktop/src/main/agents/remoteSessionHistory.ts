@@ -76,31 +76,31 @@ const CLI_FOLDERS = [
  * because the user's own login shell (bash, zsh, fish, even csh) passes it to sh first.
  */
 export const PROBE_COMMAND = `sh -lc '${[
-  'printf "__AM_HOME=%s\\n" "$HOME"',
-  'printf "__AM_CLAUDE_CONFIG_DIR=%s\\n" "${CLAUDE_CONFIG_DIR:-}"',
-  'printf "__AM_CODEX_HOME=%s\\n" "${CODEX_HOME:-}"',
-  `am_has() { command -v "$1" >/dev/null 2>&1 && return 0; for d in ${CLI_FOLDERS}; do [ -x "$d/$1" ] && return 0; done; return 1; }`,
-  'am_has claude && echo __AM_CLAUDE=1',
-  'am_has codex && echo __AM_CODEX=1',
-  'am_has gemini && echo __AM_GEMINI=1',
-  'am_has cursor-agent && echo __AM_CURSOR=1',
-  'am_has cn && echo __AM_CONTINUE=1',
-  'am_has grok && echo __AM_GROK=1',
-  'am_has cline && echo __AM_CLINE=1',
-  'am_has opencode && echo __AM_OPENCODE=1',
-  'am_has qwen && echo __AM_QWEN=1',
-  'am_has openclaude && echo __AM_OPENCLAUDE=1',
-  'am_has freebuff && echo __AM_FREEBUFF=1',
-  'echo __AM_END',
+  'printf "__RN_HOME=%s\\n" "$HOME"',
+  'printf "__RN_CLAUDE_CONFIG_DIR=%s\\n" "${CLAUDE_CONFIG_DIR:-}"',
+  'printf "__RN_CODEX_HOME=%s\\n" "${CODEX_HOME:-}"',
+  `rn_has() { command -v "$1" >/dev/null 2>&1 && return 0; for d in ${CLI_FOLDERS}; do [ -x "$d/$1" ] && return 0; done; return 1; }`,
+  'rn_has claude && echo __RN_CLAUDE=1',
+  'rn_has codex && echo __RN_CODEX=1',
+  'rn_has gemini && echo __RN_GEMINI=1',
+  'rn_has cursor-agent && echo __RN_CURSOR=1',
+  'rn_has cn && echo __RN_CONTINUE=1',
+  'rn_has grok && echo __RN_GROK=1',
+  'rn_has cline && echo __RN_CLINE=1',
+  'rn_has opencode && echo __RN_OPENCODE=1',
+  'rn_has qwen && echo __RN_QWEN=1',
+  'rn_has openclaude && echo __RN_OPENCLAUDE=1',
+  'rn_has freebuff && echo __RN_FREEBUFF=1',
+  'echo __RN_END',
 ].join('; ')}'`;
 
-const MARKER = /__AM_([A-Z_]+)(?:=(.*))?$/;
+const MARKER = /__RN_([A-Z_]+)(?:=(.*))?$/;
 
 /** Reads the probe's marked lines out of everything the command printed. */
 export function parseRemoteProbe(stdout: string): RemoteProbe {
   const values = new Map<string, string>();
   for (const line of stdout.split('\n')) {
-    const start = line.indexOf('__AM_');
+    const start = line.indexOf('__RN_');
     if (start < 0) continue;
     const match = line.slice(start).replace(/\r$/, '').match(MARKER);
     if (match && !values.has(match[1])) values.set(match[1], match[2] ?? '');

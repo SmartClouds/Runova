@@ -55,9 +55,6 @@ function talk(messages: unknown[], sessionId = 'tab-1'): Promise<Record<string, 
       RUNOVA_SESSION_ID: sessionId,
     };
     if (!sessionId) delete env.RUNOVA_SESSION_ID;
-    // The script also reads the name from before the rename to Runova; a test run inside such a
-    // terminal must not hand it a real session.
-    delete env.AGENTMATE_SESSION_ID; // legacy-name
     const child = spawn(process.execPath, [script], { env });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {

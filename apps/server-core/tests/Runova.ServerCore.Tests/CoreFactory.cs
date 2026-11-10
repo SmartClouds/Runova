@@ -126,9 +126,6 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             // Crash loops (E30): tests stop and kill containers all the time, so nothing watches for them.
             services.AddSingleton(new ContainerWatchOptions(RunInBackground: false));
 
-            // The move to the Runova names: it would look at this machine's sshd drop-in.
-            services.AddSingleton(new LegacyNamesMoveOptions(RunInBackground: false));
-
             // Hangfire's workers (E28): only the tests that run a backup start them (HubServerBackupTests).
             services.AddSingleton(new BackupJobServerOptions(RunInBackground: false));
 

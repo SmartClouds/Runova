@@ -1,4 +1,3 @@
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Docker;
 
 namespace Runova.ServerCore.Files;
@@ -14,9 +13,6 @@ internal static class VolumeHelpers
     public const string Label = "runova.files";
 
     public const string VolumeLabel = "runova.files.volume";
-
-    /// <summary>The labels that mark a helper, the one a core from before the rename put on too.</summary>
-    public static readonly string[] Labels = [Label, LegacyNames.FilesHelperLabel];
 
     public const string Digest = "sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e";
 

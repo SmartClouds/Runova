@@ -12,7 +12,6 @@ import {
   scriptedMachine,
 } from './bootstrap/testing/scriptedServer';
 import type { CoreTransport } from './connection/transport';
-import { LEGACY_CORE } from './coreLayout';
 import { DEV_SERVER_ID, DeployService, type DeployServiceDeps } from './service';
 import { DeployState } from './state';
 
@@ -271,7 +270,6 @@ describe('DeployService.install', () => {
       version: '1.53.0',
       release: '/opt/runova-core/releases/1.53.0-abababababab',
       transport: 'streamlocal',
-      layout: 'runova',
       installedAt: 1_000,
       os: 'Ubuntu 24.04.1 LTS',
       architecture: 'x86_64',
@@ -337,8 +335,6 @@ describe('DeployService.health', () => {
       startedAtUnixMs: 99,
       checkedAt: 1_000,
       transport: 'bridge',
-      // The fake core does not say, as a core from before the rename would not.
-      layout: 'legacy',
     });
     expect(transports.map((transport) => transport.kind)).toEqual(['bridge']);
     expect(released).toHaveBeenCalled();
@@ -362,31 +358,6 @@ describe('DeployService.health', () => {
     expect((await service.health('srv-1')).version).toBe('1.53.0');
     expect(transports.map((transport) => transport.kind)).toEqual(['streamlocal', 'bridge']);
     expect((await state.get('srv-1'))?.transport).toBe('bridge');
-  });
-
-  it('follows a core that another computer moved to the Runova names', async () => {
-    const { service, state } = setup(
-      {},
-      {
-        healthOf: async () => ({
-          status: 'ok',
-          version: '1.64.0',
-          apiVersion: 1,
-          startedAtUnixMs: 99,
-          layout: 'runova',
-        }),
-      },
-    );
-    await state.set('srv-1', {
-      ...RECORD,
-      release: `${LEGACY_CORE.root}/releases/1.52.0-cdcdcdcdcdcd`,
-    });
-
-    expect((await service.health('srv-1')).layout).toBe('runova');
-    expect(await state.get('srv-1')).toMatchObject({
-      layout: 'runova',
-      release: '/opt/runova-core/releases/1.52.0-cdcdcdcdcdcd',
-    });
   });
 
   it('says so for a server without a core', async () => {

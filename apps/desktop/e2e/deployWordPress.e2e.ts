@@ -34,7 +34,7 @@ test.skip(!systemTestsEnabled(), 'needs RUNOVA_SYSTEM_TESTS=1 and Docker for Lin
 
 const PORT = 18_998;
 const SITE_LABEL = 'WP e2e site';
-const THEME = 'am-int';
+const THEME = 'runova-int';
 const THEME_NAME = 'Runova Int';
 const SITE_ROOT = '/var/www/html';
 const SITE_SETUP = `${SITE_ROOT}/wp-content/themes/${THEME}/inc/setup.php`;

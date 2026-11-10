@@ -5,7 +5,7 @@ namespace Runova.ServerCore.Tests.Backups;
 /// <summary>A folder on the server passes the destination contract, and is made when missing.</summary>
 public sealed class FolderDestinationTests : BackupDestinationContract
 {
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), $"am-folder-{Guid.NewGuid():N}", "nested");
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), $"runova-folder-{Guid.NewGuid():N}", "nested");
 
     private protected override Task<IBackupDestination> CreateAsync() => Task.FromResult<IBackupDestination>(new FolderDestination(_folder));
 

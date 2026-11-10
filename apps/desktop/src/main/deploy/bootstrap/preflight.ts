@@ -1,4 +1,3 @@
-import type { DeployCoreLayout } from '../../../shared/deployTypes';
 import {
   CommandTimeoutError,
   requireAnswer,
@@ -6,7 +5,7 @@ import {
   TunnelRefusedError,
 } from '../../ssh/connection';
 import { detectSudoMode, type SudoMode } from '../../ssh/sudo';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import {
   type OsSupport,
   osSupport,
@@ -42,8 +41,8 @@ export interface PreflightReport {
    * nothing said no; the installer settles it by trying the real socket.
    */
   streamLocal: 'allowed' | 'prohibited';
-  /** The core that runs there, and the layout it is installed in. */
-  installed: { version: string; release: string; layout: DeployCoreLayout } | null;
+  /** The core that runs there, if any. */
+  installed: { version: string; release: string } | null;
   selinux: 'enforcing' | 'permissive' | 'disabled' | 'absent';
   /**
    * The tool the server can download the core with, when it reached the release itself. Null when
@@ -131,29 +130,22 @@ export async function runPreflight(
     problems.push((error as Error).message);
   }
 
-  // The new layout first: a migrated server keeps the old program folder as a link to it.
   let installed: PreflightReport['installed'] = null;
-  for (const names of [RUNOVA_CORE, LEGACY_CORE]) {
-    const current = await run(`readlink -f ${names.current} 2>/dev/null`);
-    if (current.exitCode !== 0 || !current.stdout.trim()) continue;
+  const current = await run(`readlink -f ${RUNOVA_CORE.current} 2>/dev/null`);
+  if (current.exitCode === 0 && current.stdout.trim()) {
     // Not `run`: a core that hangs here is as broken as one that prints nothing, and the install
     // is what replaces it, so this probe may not fail the check.
-    const version = await connection.exec(`${names.binaryPath} admin version 2>/dev/null`, {
+    const version = await connection.exec(`${RUNOVA_CORE.binaryPath} admin version 2>/dev/null`, {
       timeoutMs,
     });
     try {
       const parsed = JSON.parse(version.stdout) as { version?: unknown };
       if (typeof parsed.version === 'string') {
-        installed = {
-          version: parsed.version,
-          release: current.stdout.trim(),
-          layout: names.layout,
-        };
+        installed = { version: parsed.version, release: current.stdout.trim() };
       }
     } catch {
       // A broken install: treat it as not installed, and let the install replace it.
     }
-    break;
   }
 
   const enforce = (

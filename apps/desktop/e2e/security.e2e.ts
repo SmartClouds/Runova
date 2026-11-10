@@ -117,7 +117,7 @@ test('scores the server, previews the SSH fix and keeps it over a new connection
 test('saves an encrypted backup where the dialog says', async () => {
   test.setTimeout(180_000);
   folder = mkdtempSync(join(tmpdir(), 'runova-e2e-backup-'));
-  const path = join(folder, 'devhost.ambackup');
+  const path = join(folder, 'devhost.rnbackup');
   const { page, app } = await openSecurity();
   await app.evaluate(({ dialog }, target) => {
     dialog.showSaveDialog = async () => ({ canceled: false, filePath: target });
@@ -143,7 +143,7 @@ test('saves an encrypted backup where the dialog says', async () => {
   await expect(saved).toBeVisible({ timeout: 60_000 });
   expect(existsSync(path)).toBe(true);
   const bytes = readFileSync(path);
-  expect(bytes.subarray(0, 8).toString('latin1')).toBe('AMBACKUP');
+  expect(bytes.subarray(0, 8).toString('latin1')).toBe('RNBACKUP');
   expect(bytes.includes(Buffer.from('runova-local-password'))).toBe(false);
   expect(existsSync(`${path}.partial`)).toBe(false);
 });

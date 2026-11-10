@@ -5,7 +5,7 @@
  *
  * Authentication order for connection routes:
  *  1. rate limiter (a locked-out IP gets an unsigned 429 and nothing else);
- *  2. am_auth parses;
+ *  2. rn_auth parses;
  *  3. the connection exists and is not revoked or expired;
  *  4. the timestamp is within 300 seconds (staleTimestamp carries serverTime);
  *  5. the bundle is within the size cap;

@@ -39,7 +39,7 @@ import type {
 import { BACKUP_EXTENSION } from '../backups';
 import type { CoreHttpClient } from '../connection/coreHttp';
 import { type CoreCallDeps, callCore } from '../coreCalls';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import { type LoopbackSignInRequest, signInWithLoopback } from './oauth';
 
 /**
@@ -64,9 +64,6 @@ const MIN_SECRET = 12;
 const MAX_SECRET = 1024;
 /** Where the core keeps a fetched backup for `admin restore-stage`, root only. */
 export const FETCH_FOLDER = `${RUNOVA_CORE.dataDirectory}/backups/`;
-
-/** The same folder on a server still on the layout from before the rename. */
-export const FETCH_FOLDERS = [FETCH_FOLDER, `${LEGACY_CORE.dataDirectory}/backups/`];
 
 export interface ServerBackupsDeps extends CoreCallDeps {
   /** A REST call with this computer's session (DeployService.withCoreHttp). */

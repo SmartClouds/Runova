@@ -7,8 +7,6 @@ import { basename, dirname, join } from 'node:path';
 
 /** Every job's temp folder is <TEMP_ROOT>/runova-ci-XXXXXX. */
 export const TEMP_PREFIX = 'runova-ci-';
-/** Folders left by jobs from before the rename to Runova. */
-export const LEGACY_TEMP_PREFIX = 'agentmate-ci-'; // legacy-name
 
 /**
  * Directly under /tmp rather than in the runner's own temp folder: macOS caps Unix socket paths at

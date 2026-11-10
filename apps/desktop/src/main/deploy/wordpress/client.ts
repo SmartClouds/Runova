@@ -37,7 +37,7 @@ import type { WpHttpResponse, WpTransport } from './transport';
 
 /**
  * The signed client for one Runova Connector site (E19). Every call is a multipart POST with
- * `am_auth` and a gzip bundle, signed with this computer's key for the site (or unsigned for
+ * `rn_auth` and a gzip bundle, signed with this computer's key for the site (or unsigned for
  * `/hello`). Every reply must be an envelope signed by the site key pinned at pairing, over the
  * route, this request's nonce, the status and the payload hash, so a cached, replayed or
  * substituted reply is refused. Anything that is not an envelope (a CDN challenge, a host's error

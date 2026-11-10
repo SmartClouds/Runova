@@ -4,21 +4,14 @@ namespace Runova.ServerCore.Contracts;
 
 /// <summary>
 /// Answer of the anonymous health endpoint: which core and API version is running, and since when
-/// (the app shows the uptime from it). Cores from before the rename send neither Layout nor
-/// MigrationError; the app reads that as the legacy layout.
+/// (the app shows the uptime from it).
 /// </summary>
-/// <param name="Layout">The layout the core runs in.</param>
-/// <param name="MigrationError">Why the last layout migration was put back, while the core still runs in the legacy layout.</param>
-/// <param name="NginxMoveError">Why moving nginx to the new names was put back; nginx keeps its old names and works as before.</param>
 [TranspilationSource]
 public sealed record HealthResponse(
     string Status,
     string Version,
     int ApiVersion,
-    long StartedAtUnixMs,
-    CoreLayoutName? Layout = null,
-    string? MigrationError = null,
-    string? NginxMoveError = null);
+    long StartedAtUnixMs);
 
 /// <summary>Answer of the hub's ping, used for latency and to spot clock skew on the server.</summary>
 [TranspilationSource]

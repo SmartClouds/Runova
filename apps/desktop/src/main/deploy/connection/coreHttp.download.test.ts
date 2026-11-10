@@ -51,7 +51,7 @@ function sink(): { stream: Writable; received: Buffer[] } {
 
 describe('CoreHttpClient.download', () => {
   it('streams the body into the destination with a bearer token and reports progress', async () => {
-    const client = await serve(200, [Buffer.from('AMBACKUP'), Buffer.alloc(70_000, 7)], 5);
+    const client = await serve(200, [Buffer.from('RNBACKUP'), Buffer.alloc(70_000, 7)], 5);
     const { stream, received } = sink();
     const progress: number[] = [];
 
@@ -61,7 +61,7 @@ describe('CoreHttpClient.download', () => {
     });
 
     expect(bytes).toBe(70_008);
-    expect(Buffer.concat(received).subarray(0, 8).toString()).toBe('AMBACKUP');
+    expect(Buffer.concat(received).subarray(0, 8).toString()).toBe('RNBACKUP');
     expect(progress.at(-1)).toBe(70_008);
     expect(seen[0].headers.authorization).toBe('Bearer tok');
     expect(seen[0].headers.host).toBe('runova-core');

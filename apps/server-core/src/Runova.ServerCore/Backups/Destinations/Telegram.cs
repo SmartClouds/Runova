@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 
 namespace Runova.ServerCore.Backups.Destinations;
@@ -52,8 +51,7 @@ internal sealed class TelegramFiles(ITelegramAccount account) : ICloudFiles
     public async Task<IReadOnlyList<CloudFile>> ListAsync(CancellationToken cancellationToken) =>
         [.. (await account.ListAsync(cancellationToken))
             .Where(document => BackupNaming.HasPrefix(document.FileName)
-                || document.FileName.StartsWith(".runova", StringComparison.Ordinal)
-                || document.FileName.StartsWith(LegacyNames.BackupProbePrefix, StringComparison.Ordinal))
+                || document.FileName.StartsWith(".runova", StringComparison.Ordinal))
             .Select(DestinationMapper.ToCloudFile)];
 
     public async Task PutAsync(string name, Stream content, long length, IProgress<long>? progress, CancellationToken cancellationToken)

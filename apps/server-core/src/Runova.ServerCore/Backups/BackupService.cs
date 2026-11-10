@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using Runova.ServerCore.Compatibility;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Hosting;
 
@@ -146,13 +145,7 @@ internal sealed partial class BackupService(CoreDirectories directories, TimePro
     /// <summary>Where a backup waits; restore-stage reads it from here as root.</summary>
     public string PathFor(Guid id) => PathOf(id);
 
-    /// <summary>A backup made before the rename waits under the old extension until it is fetched.</summary>
-    private string PathOf(Guid id)
-    {
-        var path = Path.Combine(Root, id.ToString("N") + Extension);
-        var legacy = Path.Combine(Root, id.ToString("N") + LegacyNames.BackupExtension);
-        return !File.Exists(path) && File.Exists(legacy) ? legacy : path;
-    }
+    private string PathOf(Guid id) => Path.Combine(Root, id.ToString("N") + Extension);
 
     private static FileStream Create(string path)
     {

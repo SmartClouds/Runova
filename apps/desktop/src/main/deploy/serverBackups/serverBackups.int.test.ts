@@ -322,7 +322,7 @@ describe.skipIf(!enabled)('server backups on real servers', () => {
         expect(first.server.run(`ls ${FOLDER} | grep -c 'manifest.json$'`)).toBe('2');
         // Encrypted on disk: neither the volume's text nor the stack file shows.
         expect(
-          first.server.run(`cat ${FOLDER}/*.ambackup* | grep -c 'from the first server' || true`),
+          first.server.run(`cat ${FOLDER}/*.rnbackup* | grep -c 'from the first server' || true`),
         ).toBe('0');
 
         // The newest comes back from the folder through the core and down to this computer.
@@ -337,8 +337,8 @@ describe.skipIf(!enabled)('server backups on real servers', () => {
           (fetch) => fetch.state !== 'running',
         );
         expect(fetched.state, fetched.error).toBe('succeeded');
-        expect(fetched.path).toMatch(/^\/var\/lib\/runova-core\/backups\/[0-9a-f]{32}\.ambackup$/);
-        const file = join(tempDir(), 'server.ambackup');
+        expect(fetched.path).toMatch(/^\/var\/lib\/runova-core\/backups\/[0-9a-f]{32}\.rnbackup$/);
+        const file = join(tempDir(), 'server.rnbackup');
         await first.service.withCoreHttp('srv', (client, token) =>
           client.download(`/api/v1/backups/${fetched.backupId}`, createWriteStream(file), {
             token,

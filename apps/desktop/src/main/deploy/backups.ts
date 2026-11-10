@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { rename, rm, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { LEGACY_CORE_NAMES } from '../../shared/deploy/coreLegacyNames';
 import type { ICoreHub } from '../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import type {
   DeployBackupFile,
@@ -11,9 +10,8 @@ import type {
 } from '../../shared/deployHardeningTypes';
 import type { CoreHttpClient } from './connection/coreHttp';
 
-/** What backups are saved as. Files saved before the rename end in the old extension and still open. */
+/** What backups are saved as. */
 export const BACKUP_EXTENSION = 'rnbackup';
-export const BACKUP_EXTENSIONS = [BACKUP_EXTENSION, LEGACY_CORE_NAMES.backupExtension];
 
 /**
  * Backups of a server's core (E15). The core encrypts its state with the user's passphrase

@@ -16,13 +16,12 @@ internal sealed partial class WebSites(
     IDbContextFactory<CoreDbContext> contexts,
     NginxControl control,
     NginxApplier applier,
-    NginxSeLinux seLinux,
     UpstreamPolicy upstreams,
     CertificateKeys keys,
     CoreDomain.CoreDomainStore coreDomain,
     OsInfo os,
     TimeProvider time,
-    ILogger<WebSites> logger) : INginxMoveData
+    ILogger<WebSites> logger)
 {
     /// <summary>How long one apply may take in all; undoing a failed one has its own budget.</summary>
     public static readonly TimeSpan ApplyTimeout = TimeSpan.FromMinutes(3);
@@ -328,46 +327,6 @@ internal sealed partial class WebSites(
         }
 
         return new NginxApplyResult(outcome.Applied, [.. outcome.Problems.Select(SiteMapping.ToInfo)], [.. outcome.Warnings], outcome.Release, outcome.Error);
-    }
-
-    /// <summary>
-    /// Moves nginx set up before the rename to the new names (NginxNameMove), under the apply lock
-    /// so no apply runs meanwhile.
-    /// </summary>
-    public async Task<NameMoveStatus> MoveToNewNamesAsync(string journalPath, ILogger<NginxNameMove> moveLogger, CancellationToken cancellationToken)
-    {
-        using var lease = await applier.LockAsync(cancellationToken);
-        var move = new NginxNameMove(control, applier, seLinux, this, os.Family, journalPath, moveLogger);
-        return await move.RunAsync(cancellationToken);
-    }
-
-    async Task<IReadOnlyList<SiteSnippetRow>> INginxMoveData.SnippetsAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        return await SiteMapping.ToSnippetRows(db.Sites.AsNoTracking()).ToListAsync(cancellationToken);
-    }
-
-    async Task INginxMoveData.SetSnippetsAsync(IReadOnlyList<SiteSnippetRow> snippets, CancellationToken cancellationToken)
-    {
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        foreach (var row in snippets)
-        {
-            await db.Sites.Where(site => site.Id == row.SiteId).ExecuteUpdateAsync(
-                update => update.SetProperty(site => site.ServerSnippet, row.ServerSnippet).SetProperty(site => site.LocationSnippet, row.LocationSnippet),
-                cancellationToken);
-        }
-    }
-
-    async Task<(NginxApplyPlan Plan, NginxAppliedState State)> INginxMoveData.PlanAsync(NginxLayout layout, CancellationToken cancellationToken)
-    {
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        return await BuildAsync(db, layout, withKeys: true, cancellationToken);
-    }
-
-    async Task INginxMoveData.RecordAsync(int release, NginxAppliedState state, CancellationToken cancellationToken)
-    {
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        await RecordAsync(db, release, state, who: null, cancellationToken);
     }
 
     /// <summary>On start: finishes or undoes an apply a previous core left halfway.</summary>

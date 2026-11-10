@@ -59,7 +59,7 @@ public sealed class BackupCryptoTests
         var file = await EncryptAsync(plaintext);
 
         Assert.Equal(plaintext, await DecryptAsync(file));
-        Assert.True(file.AsSpan(0, 8).SequenceEqual("AMBACKUP"u8));
+        Assert.True(file.AsSpan(0, 8).SequenceEqual("RNBACKUP"u8));
         Assert.Equal(Math.Max(1, (size + Chunk - 1) / Chunk), Chunks(file).Count);
     }
 

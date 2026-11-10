@@ -69,7 +69,7 @@ describe('response envelopes', () => {
     const envelope = (meta: string) => {
       const json = enc.encode(meta);
       const out = new Uint8Array(10 + json.length);
-      out.set(enc.encode('AMWR1\n'));
+      out.set(enc.encode('RNWR1\n'));
       new DataView(out.buffer).setUint32(6, json.length);
       out.set(json, 10);
       return out;

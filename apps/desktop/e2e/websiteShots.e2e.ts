@@ -1494,7 +1494,7 @@ test('remote-desktop', async () => {
 });
 
 // The Help home lists every article's summary, and the Remote one speaks of pairing a phone, so
-// the shot is an article with the topics beside it. Getting started gives the app's old name.
+// the shot is an article with the topics beside it.
 test('help', async () => {
   const p = page();
   const route = '/help/workspace';

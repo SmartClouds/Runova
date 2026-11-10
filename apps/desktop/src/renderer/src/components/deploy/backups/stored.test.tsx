@@ -75,7 +75,7 @@ describe('StoredTab', () => {
   });
 
   it('hands a backup to the restore wizard and downloads one here', async () => {
-    const download = vi.fn(async () => ({ saved: true, path: 'C:/b.ambackup', sizeBytes: 1 }));
+    const download = vi.fn(async () => ({ saved: true, path: 'C:/b.rnbackup', sizeBytes: 1 }));
     const { user, onRestore } = renderTab({ 'deployServerBackups.downloadStored': download });
     const table = await screen.findByRole('table');
     await user.click(within(table).getByRole('button', { name: /Restore the backup from/ }));

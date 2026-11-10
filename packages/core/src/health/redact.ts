@@ -55,8 +55,8 @@ function isSecretName(name: string): boolean {
   );
 }
 
-/** The keys Runova generates: rnh_ now, amh_ for keys made before the app was renamed. */
-const HEALTH_KEY = /\b(?:rnh|amh)_[A-Za-z0-9_-]{16,}/g;
+/** The health keys Runova generates. */
+const HEALTH_KEY = /\brnh_[A-Za-z0-9_-]{16,}/g;
 
 export function redactHealthText(text: string, knownSecrets: readonly string[] = []): string {
   let output = maskKnownSecrets(text, [...knownSecrets]);

@@ -82,11 +82,11 @@ describe('connection keys', () => {
   });
 
   it('refuse keys that are too long, not objects, or have an over-long label', () => {
-    expect(parseWpConnectionKey(`amwp1.${'A'.repeat(5000)}`, 1)).toEqual({
+    expect(parseWpConnectionKey(`rnwp1.${'A'.repeat(5000)}`, 1)).toEqual({
       ok: false,
       error: 'format',
     });
-    const array = `amwp1.${wpBase64UrlEncode(new TextEncoder().encode('[1]'))}`;
+    const array = `rnwp1.${wpBase64UrlEncode(new TextEncoder().encode('[1]'))}`;
     expect(parseWpConnectionKey(array, 1)).toEqual({ ok: false, error: 'format' });
     const labelled = formatWpConnectionKey({ ...key, label: 'x'.repeat(101) });
     expect(parseWpConnectionKey(labelled, 1)).toEqual({ ok: false, error: 'fields' });

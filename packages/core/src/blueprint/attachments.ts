@@ -1,5 +1,3 @@
-import { LEGACY_BLUEPRINT_FILE_SCHEME } from '../legacyNames.js';
-
 /**
  * Blueprint files are referenced from inside a step's markdown rather than
  * hanging off the step as a list, so a screenshot can sit between the sentence
@@ -12,16 +10,6 @@ import { LEGACY_BLUEPRINT_FILE_SCHEME } from '../legacyNames.js';
  */
 export const BLUEPRINT_FILE_SCHEME = 'runova-file';
 export const BLUEPRINT_FILE_HOST = 'blueprint';
-
-/**
- * Links saved before the app was renamed use the old scheme. Rewritten when a blueprint is read,
- * so they keep pointing at their files.
- */
-export function relinkLegacyAttachments(text: string): string {
-  return text.includes(`${LEGACY_BLUEPRINT_FILE_SCHEME}://`)
-    ? text.replaceAll(`${LEGACY_BLUEPRINT_FILE_SCHEME}://`, `${BLUEPRINT_FILE_SCHEME}://`)
-    : text;
-}
 
 export function blueprintFileUrl(fileName: string): string {
   return `${BLUEPRINT_FILE_SCHEME}://${BLUEPRINT_FILE_HOST}/${encodeURIComponent(fileName)}`;

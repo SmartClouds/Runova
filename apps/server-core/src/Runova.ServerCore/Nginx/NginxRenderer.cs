@@ -370,7 +370,7 @@ internal static class NginxRenderer
     }
 
     /// <summary>The Host the core answers to; the core domain itself is nginx's business.</summary>
-    private static string CoreHostName => Hosting.CoreLayout.HostNames[0];
+    private static string CoreHostName => Hosting.CoreLayout.HostName;
 
     /// <summary>
     /// Let's Encrypt's HTTP-01 challenge files, served from the shared webroot. IP rules and basic

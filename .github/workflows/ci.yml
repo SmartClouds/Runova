@@ -106,12 +106,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm check:deprecated-code --reporter=github
 
-      # The app's name from before the rename to Runova, outside the places that read installs
-      # from before it (scripts/check-legacy-names.mjs says which those are).
-      - name: No stray old app name
-        if: ${{ !cancelled() }}
-        run: pnpm check:legacy-names
-
       # Direct dependencies the npm registry reports as deprecated. Known
       # exceptions live in .github/deprecated-deps-allowlist.json.
       - name: No deprecated dependencies

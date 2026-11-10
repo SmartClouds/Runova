@@ -15,13 +15,12 @@ import {
 } from '../../ssh/connection';
 import { openRootShell, type RootShell } from '../../ssh/sudo';
 import type { CoreTransportKind } from '../connection/transport';
-import { LEGACY_CORE, RUNOVA_CORE } from '../coreLayout';
+import { RUNOVA_CORE } from '../coreLayout';
 import {
   CHECKSUM_MISMATCH_EXIT,
   type InstallStepId,
   installSteps,
   isReleasePath,
-  migrateStep,
   type PlanStep,
   releaseDirectory,
   rollbackSteps,
@@ -29,7 +28,6 @@ import {
 } from './installPlan';
 import { type PreflightConnection, runPreflight } from './preflight';
 import type { CoreRelease, ReleaseSource, RemoteRelease } from './releaseSource';
-import { LAYOUT_PROBE } from './restorePlan';
 import { DOWNLOAD_TIMEOUT_MS, type DownloadTool, downloadCommand } from './serverDownload';
 
 /**
@@ -44,9 +42,6 @@ import { DOWNLOAD_TIMEOUT_MS, type DownloadTool, downloadCommand } from './serve
  *    only root can write to, before anything is unpacked.
  * 4. A new login when the login is not root, since the runova group only applies to new
  *    logins, and a health check through the same tunnel the app uses from then on.
- * 5. A server set up before the rename is upgraded in its own layout and then moved to the
- *    Runova one by the new core (`migrate-layout`). A move that fails is put back by the core and
- *    leaves a working server on the old layout, so it is reported, not treated as a failed install.
  *
  * Once the server has started switching to the new release, a failure to start or to answer
  * switches it back to the release it ran before, when there was one.
@@ -94,9 +89,7 @@ export interface UninstallRequest extends InstallRequest {
 
 const STEP_TIMEOUT_MS = 180_000;
 const STEP_OPTIONS: ExecOptions = { timeoutMs: STEP_TIMEOUT_MS, maxOutputBytes: 64 * 1024 };
-const JOURNAL_COMMAND = `journalctl -u ${RUNOVA_CORE.unit} -u ${LEGACY_CORE.unit} -n 30 --no-pager -o cat`;
-/** The migration stops the core, moves its folders and waits for the new one to hold. */
-const MIGRATE_OPTIONS: ExecOptions = { timeoutMs: 15 * 60_000, maxOutputBytes: 64 * 1024 };
+const JOURNAL_COMMAND = `journalctl -u ${RUNOVA_CORE.unit} -n 30 --no-pager -o cat`;
 const FAILURE_DETAIL_CHARS = 1_500;
 const DOWNLOAD_DETAIL_CHARS = 300;
 const DOWNLOAD_OPTIONS: ExecOptions = { timeoutMs: DOWNLOAD_TIMEOUT_MS, maxOutputBytes: 8 * 1024 };
@@ -202,9 +195,7 @@ export async function installCore(
     };
     const release: Pick<CoreRelease, 'version' | 'file' | 'sha256'> = remote ?? (await getLocal());
     const installed = report.installed;
-    // An existing core is upgraded where it is; a server on the old layout moves afterwards.
-    const layout = installed?.layout ?? 'runova';
-    const target = releaseDirectory(release.version, release.sha256, layout);
+    const target = releaseDirectory(release.version, release.sha256);
     // Only a release folder the installer made, and not the one being reinstalled.
     const previous =
       installed && isReleasePath(installed.release) && installed.release !== target
@@ -323,7 +314,6 @@ export async function installCore(
         rootLogin: shell.mode === 'root',
         selinux: report.selinux === 'enforcing' || report.selinux === 'permissive',
         previousRelease: previous?.release ?? null,
-        layout,
       });
 
       for (const step of steps) {
@@ -385,64 +375,16 @@ export async function installCore(
       throw await recover(sshErrorMessage(error));
     }
 
-    const moved =
-      layout === 'legacy'
-        ? await migrate(
-            phase,
-            rootShell,
-            () => deps.health(lease.connection, transport),
-            release.version,
-          )
-        : null;
-
     return {
       version: release.version,
-      release:
-        moved?.layout === 'runova'
-          ? releaseDirectory(release.version, release.sha256, 'runova')
-          : target,
+      release: target,
       transport,
       previousVersion: installed?.version ?? null,
-      layout: moved?.layout ?? layout,
-      ...(moved?.error ? { migrationError: moved.error } : {}),
       os: report.os.name,
       architecture: report.architecture.machine,
     };
   } finally {
     lease.release();
-  }
-}
-
-/**
- * Moves a freshly upgraded server off the legacy layout. The core puts everything back when a
- * step fails, so a failure here leaves the server running as it was: it is noted on the step and
- * the install still counts.
- */
-async function migrate(
-  phase: Phase,
-  rootShell: () => Promise<RootShell>,
-  health: () => Promise<HealthResponse>,
-  version: string,
-): Promise<{ layout: 'legacy' | 'runova'; error?: string }> {
-  const step = migrateStep();
-  try {
-    return await phase(step.id, step.title, async (note) => {
-      const result = await (await rootShell()).run(step.command, MIGRATE_OPTIONS);
-      if (!succeeded(result)) {
-        const why = commandFailure(result);
-        note(`The server stays on its old layout for now: ${why}`);
-        return { layout: 'legacy' as const, error: why };
-      }
-      const answer = await health();
-      if (answer.version !== version || answer.layout !== 'runova') {
-        throw new Error(
-          `The core answers as ${answer.version} on the ${answer.layout ?? 'legacy'} layout.`,
-        );
-      }
-      return { layout: 'runova' as const };
-    });
-  } catch (error) {
-    return { layout: 'legacy', error: sshErrorMessage(error) };
   }
 }
 
@@ -456,9 +398,7 @@ export async function uninstallCore(
   try {
     const password = request.sudoPassword ?? lease.connection.endpoint.password ?? null;
     const shell = await openRootShell(lease.connection, password);
-    const probe = await shell.run(LAYOUT_PROBE, { timeoutMs: 30_000, maxOutputBytes: 1_024 });
-    const layout = probe.stdout.trim() === 'legacy' ? 'legacy' : 'runova';
-    for (const step of uninstallSteps({ keepData: request.keepData, layout })) {
+    for (const step of uninstallSteps({ keepData: request.keepData })) {
       await phase(step.id, step.title, async () => {
         const result = await shell.run(step.command, STEP_OPTIONS);
         if (!succeeded(result)) throw new Error(`${step.title} failed: ${commandFailure(result)}`);
