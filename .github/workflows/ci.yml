@@ -157,11 +157,14 @@ jobs:
   # them. Shard 3 checks the format and runs everything else: the other test projects and the
   # rest of the integration tests, so a new namespace or test project lands there without a
   # change here.
+  #
+  # 45 minutes: on smartvpn the Release build alone takes 10 minutes and a shard's tests up to 17
+  # more, 28 of the 30 it had.
   website-api:
     name: Website API (${{ matrix.shard }}/3)
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

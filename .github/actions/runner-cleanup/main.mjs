@@ -3,8 +3,10 @@
 // leaves its folders behind. On the Mac this also keeps them out of its user's own temp folder.
 
 import { appendFileSync, mkdtempSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { availableParallelism, loadavg } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  busiestProcessesIn,
   cleanWorkspace,
   keepsDependencies,
   removeTree,
@@ -51,6 +53,22 @@ if (!skip) {
     }
   } catch (error) {
     warn(`Could not look for processes left behind by an earlier job: ${error.message}`);
+  }
+}
+
+// How busy the machine is as the job starts, for when a job runs slow. The Linux runner took 30
+// minutes for builds the Mac does in two, and nothing in the job logs said why.
+if (!skip) {
+  try {
+    const load = loadavg()
+      .map((n) => n.toFixed(1))
+      .join(' ');
+    console.log(`Load ${load} on ${availableParallelism()} CPUs. Busiest processes:`);
+    const ps = run('ps', ['-A', '-o', 'pid=,pcpu=,etime=,command='], { timeout: 30_000 });
+    if (ps.status !== 0) throw new Error(ps.stderr.trim() || `ps exited with ${ps.status}`);
+    for (const line of busiestProcessesIn(ps.stdout)) console.log(`  ${line}`);
+  } catch (error) {
+    warn(`Could not tell how busy the machine is: ${error.message}`);
   }
 }
 

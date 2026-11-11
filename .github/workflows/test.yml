@@ -380,10 +380,13 @@ jobs:
   # take the test namespaces listed for them. Shard 3 takes everything else (the classes at the top
   # of the project and any namespace added later), so no test is left out by a list going stale.
   # Shard 1 also checks the format and the contracts. The lists split the test time about evenly.
+  #
+  # 45 minutes: on smartvpn the Release build alone takes 10 to 11 minutes and a shard's tests 11
+  # to 12 more, and two shards ran out of 30 with their tests already passed.
   server-core:
     name: Server core (${{ matrix.shard }}/3)
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -642,11 +645,13 @@ jobs:
           src/main/deploy/deployExec.int.test.ts
 
   # Lint and tests are two jobs: each compiles the whole workspace (clippy for checking, the tests
-  # with coverage instrumentation), about 20 minutes apiece on the Linux runner, which together
-  # never fit in one job's time.
+  # with coverage instrumentation). Both run on the Mac, which builds the workspace from scratch in
+  # a minute or two, and keeps each job's build output between runs like Mobile iOS does. On the
+  # Linux runner, which also runs two jobs at once, the same builds took over 30 minutes apiece
+  # and both jobs ran out of time.
   mobile-core:
     name: Mobile core
-    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64"]') }}
     timeout-minutes: 30
     defaults:
       run:
@@ -654,6 +659,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          clean: ${{ runner.os != 'macOS' }}
 
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
@@ -686,12 +693,16 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
+      # Outside the checkout, which the runner cleanup empties before every job. post.mjs deletes
+      # it when the disk runs short (rustBuildOutput).
       - name: Clippy
+        env:
+          CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-core
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   mobile-core-tests:
     name: Mobile core tests
-    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64"]') }}
     timeout-minutes: 40
     defaults:
       run:
@@ -699,6 +710,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          clean: ${{ runner.os != 'macOS' }}
 
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
@@ -713,7 +726,10 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      # Kept apart from Mobile core's: coverage builds every crate with other flags.
       - name: Tests with a coverage floor
+        env:
+          CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-core-tests
         run: cargo llvm-cov --workspace --locked --fail-under-lines 85
 
   mobile-android:

@@ -1,7 +1,7 @@
 // Run with: node --test .github/actions/runner-cleanup/shared.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { etimeSeconds, strayProcessesIn } from './shared.mjs';
+import { busiestProcessesIn, etimeSeconds, strayProcessesIn } from './shared.mjs';
 
 const work = '/Volumes/SmartAgent-Mac-01/actions-runner/_work';
 
@@ -38,4 +38,17 @@ test('picks only an old orphan of this user from this runner', () => {
     [69554],
   );
   assert.equal(strays[0].age, 131_821);
+});
+
+test('busiestProcessesIn lists the busiest first and skips what it can not read', () => {
+  const ps = [
+    '  101   0.0       00:05 /bin/sleep 100',
+    '  202 786.7 01-14:05:45 /work/_tool/setup-pnpm/node_modules/pnpm/pnpm self-update 12.18.0',
+    'garbage',
+    '  303  12.5    10:00 cargo clippy',
+  ].join('\n');
+  const lines = busiestProcessesIn(ps, 2);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^\s+787%\s+202\s+01-14:05:45\s+.*self-update/);
+  assert.match(lines[1], /^\s+13%\s+303\s+10:00\s+cargo clippy$/);
 });

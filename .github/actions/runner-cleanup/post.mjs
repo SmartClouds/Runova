@@ -1,8 +1,9 @@
 // Runs after every other step of the job, passed, failed or cancelled, and removes what the job
 // left on a self-hosted runner's disk.
 //
-// Every job: the test containers, networks and volumes a failed or cancelled test never removed,
-// the workspace, node_modules and build output included, and the job's temp folder (main.mjs).
+// Every job: the .NET build servers its builds left running, the test containers, networks and
+// volumes a failed or cancelled test never removed, the workspace, node_modules and build output
+// included, and the job's temp folder (main.mjs).
 // The next job's checkout would wipe the workspace anyway, so deleting it now costs nothing. The
 // Mac is the exception: it keeps node_modules, and main.mjs clears the rest of the workspace at
 // the start of the next job (keepsDependencies in shared.mjs says why). Rust build output that a
@@ -124,6 +125,32 @@ function dockerImages() {
   // Build cache the test server builds have not used for a week.
   const cache = run('docker', ['builder', 'prune', '--force', '--filter', 'until=168h']);
   console.log(cache.stdout.trim().split('\n').at(-1) ?? '');
+}
+
+/**
+ * Stops the MSBuild nodes and the C# compiler server that `dotnet build` leaves running. When the
+ * job ends, the runner kills every process the job left behind, and on smartvpn killing these
+ * took over ten minutes once: Server core's tests had passed, and the job still ran out of time
+ * and was cancelled. Only this runner's own .NET (setup-dotnet installs it into the tool cache),
+ * and these servers only answer a client of the same install, so another runner's build on the
+ * same machine is left alone.
+ */
+function dotnetBuildServers() {
+  if (!toolCache) return;
+  const home = join(toolCache, 'dotnet');
+  const dotnet = join(home, process.platform === 'win32' ? 'dotnet.exe' : 'dotnet');
+  const ps = run('ps', ['-A', '-o', 'command='], { timeout: 30_000 });
+  const running =
+    ps.status === 0 && ps.stdout.split('\n').some((line) => line.startsWith(`${home}/`));
+  if (!existsSync(dotnet) || !running) {
+    console.log("No .NET build server of this runner's is running.");
+    return;
+  }
+  const result = run(dotnet, ['build-server', 'shutdown'], { timeout: 120_000 });
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || result.stdout.trim() || `exited with ${result.status}`);
+  }
+  console.log(result.stdout.trim());
 }
 
 function jobTemp() {
@@ -372,6 +399,7 @@ if (skip) {
     step('Replaced .NET and Node versions', toolCacheVersions);
     if (dockerWorks()) step('Dangling Docker images and old build cache', dockerImages);
   }
+  step('.NET build servers', dotnetBuildServers);
   step('Rust build output', rustBuildOutput);
   if (keepsDependencies()) {
     console.log(

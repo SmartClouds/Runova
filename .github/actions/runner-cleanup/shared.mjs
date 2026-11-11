@@ -135,6 +135,26 @@ export function strayProcessesIn(psOutput, { uid, workRoot, minAgeSeconds = STRA
   return strays;
 }
 
+/**
+ * The `count` processes using the most CPU in `ps -A -o pid=,pcpu=,etime=,command=`, busiest
+ * first, each as one line for the log.
+ */
+export function busiestProcessesIn(psOutput, count = 8) {
+  const rows = [];
+  for (const line of psOutput.split('\n')) {
+    const match = /^\s*(\d+)\s+([\d.]+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (match)
+      rows.push({ pid: match[1], cpu: Number(match[2]), etime: match[3], command: match[4] });
+  }
+  rows.sort((a, b) => b.cpu - a.cpu);
+  return rows
+    .slice(0, count)
+    .map(
+      (r) =>
+        `${r.cpu.toFixed(0).padStart(5)}%  ${r.pid.padStart(7)}  ${r.etime.padStart(11)}  ${r.command.slice(0, 160)}`,
+    );
+}
+
 /** The jobs other runners are running on this machine, or null when `ps` could not tell. */
 export function otherJobs() {
   const result = run('ps', ['-A', '-o', 'pid=,ppid=,command='], { timeout: 30_000 });
