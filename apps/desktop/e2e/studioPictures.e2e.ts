@@ -74,8 +74,12 @@ test('plans a screenshot, starts the project, captures the page and animates the
   await expect(page.getByRole('navigation', { name: 'Steps of the video' })).toBeVisible({
     timeout: 30_000,
   });
-  // The brief card starts again from the saved brief once the AI runs have loaded, so the CLI
-  // is picked first and the brief typed last.
+  // The brief card starts again from the saved brief once the AI runs have loaded, so wait for
+  // them first. On a busy Mac they loaded while the model list was open, which took the option
+  // away mid-click and dropped the CLI picked before it. The brief is typed last.
+  const history = page.getByRole('complementary', { name: 'History' });
+  await history.getByRole('tab', { name: 'AI runs' }).click();
+  await expect(history.getByText('No AI runs yet')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('combobox', { name: 'CLI' }).first().click();
   await page
     .getByRole('option', { name: /Claude Code/ })
