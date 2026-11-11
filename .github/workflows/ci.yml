@@ -46,9 +46,14 @@ permissions:
 env:
   ONNXRUNTIME_NODE_INSTALL: skip
 
+# A push to master does not cancel the run in progress. A whole run takes over two hours on our
+# runners and master gets a push about every half hour, so with cancelling no run finished: 59 of
+# the 60 runs from 2026-11-09 to 11-11 were cancelled. Now the run in progress finishes, the
+# newest push waits, and a push that is still waiting is replaced by the next one. Other branches
+# and pull requests still cancel, since only their newest commit matters.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   check:
