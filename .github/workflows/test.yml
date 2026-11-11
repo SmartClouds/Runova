@@ -108,10 +108,13 @@ jobs:
       - name: Build workspace packages
         run: pnpm build:packages
 
+      # One package at a time. pnpm would run the three at once, each vitest with a worker per core,
+      # while studio renders video: the handshake tests' scrypt (about 100 ms on a laptop) then took
+      # 12 to 29 seconds each on the Mac and ran out of vitest's 5.
       - name: Core, protocol and studio
         env:
           HOME: ${{ runner.temp }}/home
-        run: pnpm --filter @runova/core --filter @runova/protocol --filter @runova/studio test:coverage
+        run: pnpm --workspace-concurrency=1 --filter @runova/core --filter @runova/protocol --filter @runova/studio test:coverage
 
       - name: Coverage summary
         if: ${{ !cancelled() }}
@@ -638,6 +641,9 @@ jobs:
           src/main/deploy/directTls.int.test.ts
           src/main/deploy/deployExec.int.test.ts
 
+  # Lint and tests are two jobs: each compiles the whole workspace (clippy for checking, the tests
+  # with coverage instrumentation), about 20 minutes apiece on the Linux runner, which together
+  # never fit in one job's time.
   mobile-core:
     name: Mobile core
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
@@ -655,12 +661,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, llvm-tools-preview
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
+          components: rustfmt, clippy
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -687,6 +688,30 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  mobile-core-tests:
+    name: Mobile core tests
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: apps/mobile/core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: Tests with a coverage floor
         run: cargo llvm-cov --workspace --locked --fail-under-lines 85
@@ -716,7 +741,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android, x86_64-linux-android
+          targets: x86_64-linux-android
 
       - name: Install cargo-binstall
         uses: taiki-e/install-action@v2
@@ -728,11 +753,13 @@ jobs:
       - name: Install cargo-ndk
         run: cargo binstall --no-confirm --force --targets x86_64-unknown-linux-musl cargo-ndk
 
+      # The debug build carries the core for the emulator only, in the ci profile (see coreAbis in
+      # app/build.gradle.kts): two ABIs with the release profile's LTO pass did not fit in the job.
       - name: Tests and a debug build
         working-directory: apps/mobile/android
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug -PcoreAbis=x86_64 -PcoreProfile=ci --console=plain --no-daemon
 
   mobile-ios:
     name: Mobile iOS
@@ -763,7 +790,7 @@ jobs:
         if: steps.xcode.outputs.available == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+          targets: aarch64-apple-ios-sim
 
       - name: Install XcodeGen
         if: steps.xcode.outputs.available == 'true'
@@ -772,12 +799,14 @@ jobs:
       # Cargo builds outside the checkout, which the runner cleanup empties before every job. From
       # scratch, the three targets are about 1,100 crates, which no longer fit in the job's time on
       # the Mac's hard disk; with the folder kept, a run builds what changed. The runner cleanup
-      # deletes it when the disk runs short (rustBuildOutput in post.mjs).
+      # deletes it when the disk runs short (rustBuildOutput in post.mjs). The tests need only the
+      # Apple silicon simulator, and that in the ci profile: the release profile's LTO pass alone
+      # took over 20 minutes per target here, so three targets never fit even with the folder kept.
       - name: Build the core and its Swift bindings
         if: steps.xcode.outputs.available == 'true'
         env:
           CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-ios
-        run: sh apps/mobile/ios/scripts/build-core.sh
+        run: sh apps/mobile/ios/scripts/build-core.sh --simulator
 
       - name: Generate the Xcode project
         if: steps.xcode.outputs.available == 'true'

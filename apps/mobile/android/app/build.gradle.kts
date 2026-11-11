@@ -134,7 +134,7 @@ val generateBindings by tasks.registering(Exec::class) {
     dependsOn(buildHostCore)
     workingDir = coreDir
     commandLine(
-        "cargo", "run", "--jobs", "2", "-p", "runova-ffi", "--bin", "uniffi-bindgen", "--",
+        "cargo", "run", "--jobs", "2", "-p", "runova-bindgen", "--",
         "generate", "--library", "target/debug/$hostLibraryFile",
         "--language", "kotlin", "--no-format",
         "--out-dir", generatedBindings.get().asFile.path,
@@ -146,13 +146,22 @@ tasks.matching { it.name.startsWith("compile") || it.name == "preBuild" }.config
     if (name != generateBindings.name) dependsOn(generateBindings)
 }
 
-/** The core for the phone: arm64 for devices, x86_64 for the emulator. */
+/**
+ * The core for the phone: arm64 for devices, x86_64 for the emulator. CI builds the app only to
+ * test it, so it passes -PcoreAbis=x86_64 -PcoreProfile=ci: one ABI, without the release profile's
+ * LTO pass. Two ABIs with that pass, on top of the host build, did not fit in the job's 40 minutes.
+ */
+val coreAbis = ((findProperty("coreAbis") as String?) ?: "arm64-v8a,x86_64").split(",").map { it.trim() }
+val coreProfile = (findProperty("coreProfile") as String?) ?: "release"
+
 val buildAndroidCore by tasks.registering(Exec::class) {
     workingDir = coreDir
     commandLine(
-        "cargo", "ndk", "-t", "arm64-v8a", "-t", "x86_64", "-P", "26",
-        "-o", project.file("src/main/jniLibs").path,
-        "build", "--release", "--jobs", "2", "-p", "runova-ffi",
+        listOf("cargo", "ndk") + coreAbis.flatMap { listOf("-t", it) } + listOf(
+            "-P", "26",
+            "-o", project.file("src/main/jniLibs").path,
+            "build", "--profile", coreProfile, "--jobs", "2", "-p", "runova-ffi",
+        ),
     )
 }
 

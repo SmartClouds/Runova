@@ -39,3 +39,11 @@ opt-level = "s"
 lto = true
 codegen-units = 1
 strip = true
+
+# For the apps that CI builds only to test them: as optimized, but without the whole-program LTO
+# pass and with parallel codegen. That pass is most of a release build of runova-ffi (over 20
+# minutes per target on the CI Mac), and a test build does not need the smallest binary.
+[profile.ci]
+inherits = "release"
+lto = false
+codegen-units = 16

@@ -8,10 +8,6 @@ publish.workspace = true
 name = "runova_ffi"
 crate-type = ["lib", "cdylib", "staticlib"]
 
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
-
 [dependencies]
 async-trait = "0.1"
 base64.workspace = true
@@ -28,7 +24,7 @@ serde_json.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 runova-crypto.workspace = true
 thiserror.workspace = true
-uniffi = { version = "0.29", features = ["cli"] }
+uniffi = "0.29"
 sha2.workspace = true
 zeroize.workspace = true
 

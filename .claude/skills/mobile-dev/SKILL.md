@@ -33,12 +33,15 @@ used), `local.properties` with `sdk.dir`, and `ANDROID_NDK_HOME` for the phone b
 |---|---|
 | JVM tests against the real core | `.\gradlew.bat :app:testDebugUnitTest --console=plain --no-daemon` |
 | Debug build | `.\gradlew.bat :app:assembleDebug --console=plain --no-daemon` |
+| Faster debug build, as CI does | add `-PcoreAbis=x86_64 -PcoreProfile=ci` (one ABI, no LTO pass) |
 
 ## iOS (`apps/mobile/ios`)
 
 Only builds on a Mac. From Windows, push and read the `Mobile iOS` CI job, using `gh --jq`.
 
-1. `sh apps/mobile/ios/scripts/build-core.sh`
+1. `sh apps/mobile/ios/scripts/build-core.sh --simulator` for the tests (the Apple silicon
+   simulator only, in the `ci` profile, as CI does). Without the flag it builds the device and both
+   simulators in the release profile, for shipping, which takes far longer.
 2. `cd apps/mobile/ios && xcodegen generate`, since the Xcode project is generated and never edited
 3. `xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=<simulator>" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`.
    Keep the ad hoc signature: with `CODE_SIGNING_ALLOWED=NO` the app has no entitlements and the
