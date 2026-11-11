@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using Google.Protobuf;
@@ -13,7 +14,12 @@ namespace Runova.Monitoring.Tests.Link;
 public sealed class GatewayTests : IAsyncLifetime
 {
     private readonly TestPki _pki = new();
-    private readonly List<string> _revoked = [];
+
+    // What the fake API answers when the gateway asks for its trust list, which it does every
+    // second here, from its own thread. A test that revokes adds the serial to this too, as the
+    // real API would: a revoke made only on the gateway is gone at the next refresh, and on a slow
+    // runner that refresh came before the node tried again, so the revoked node got in.
+    private readonly ConcurrentQueue<string> _revoked = new();
     private GatewayHarness _gateway = null!;
 
     // A test here takes a second or two on a busy runner (the first one about 15). Without a
@@ -116,6 +122,7 @@ public sealed class GatewayTests : IAsyncLifetime
     public async Task A_revoked_certificate_is_refused()
     {
         using var certificate = _pki.Node(7);
+        _revoked.Enqueue(certificate.SerialNumber);
         _gateway.Trust.Revoke([certificate.SerialNumber]);
 
         await RefusedAsync(certificate, TestContext.Current.CancellationToken);
@@ -218,6 +225,7 @@ public sealed class GatewayTests : IAsyncLifetime
         await Eventually.TrueAsync(() => _gateway.Sessions.TryGet(42, out _));
 
         var watch = Stopwatch.StartNew();
+        _revoked.Enqueue(certificate.SerialNumber);
         GatewayInboundHandler.Handle(new NodeRevoked(42, [certificate.SerialNumber]), _gateway.Sessions, _gateway.Trust);
         var ended = await Record.ExceptionAsync(async () =>
         {

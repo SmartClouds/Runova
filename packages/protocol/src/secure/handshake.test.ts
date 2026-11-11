@@ -88,7 +88,10 @@ function reasonOf(fn: () => unknown): string {
   throw new Error('expected the handshake to fail');
 }
 
-describe('anywhere handshake', () => {
+// The password tests run the real scrypt (32 MiB, PASSWORD_SCRYPT) in plain JavaScript, twice per
+// handshake, and coverage slows it further. That took 12 to 30 s on a busy CI Mac, past the 5 s
+// default.
+describe('anywhere handshake', { timeout: 60_000 }, () => {
   it('agrees on a key in each direction and on the safety code', () => {
     const { controllerKeys, hostKeys } = run();
 

@@ -134,11 +134,6 @@ test("shows the DevHost's Overview live, lists its updates, and comes back after
   await expect(updates.getByRole('listitem')).toHaveCount(7, { timeout: 30_000 });
   await expect(updates.getByText('Security', { exact: true })).toHaveCount(4);
   await expect(updates.getByRole('listitem', { name: 'openssl' })).toBeVisible();
-  // The list can show before the check's job has finished, and the core refuses a reboot while a
-  // package job runs ("Another job is already working on packages"), so wait for the check.
-  await expect(page.getByRole('button', { name: 'Check for updates' })).toBeEnabled({
-    timeout: 30_000,
-  });
 
   // A reboot, typed out: the connection drops and comes back by itself.
   await page.getByRole('button', { name: 'Reboot', exact: true }).click();
@@ -150,7 +145,14 @@ test("shows the DevHost's Overview live, lists its updates, and comes back after
   await expect(proof.or(banner)).toBeVisible({ timeout: 30_000 });
   if (await proof.isVisible()) {
     await proof.getByLabel('Password', { exact: true }).fill(DEV_PASSWORD);
-    await proof.getByRole('button', { name: 'Confirm' }).click();
+    // The list above can show before the core has finished the check's package job, and the core
+    // refuses a reboot while one runs ("Another job is already working on packages"). The page
+    // can not tell: its Check for updates button is enabled again before that job ends. The
+    // refusal leaves this dialog open, so confirm again until the core takes the reboot.
+    await expect(async () => {
+      await proof.getByRole('button', { name: 'Confirm' }).click({ timeout: 10_000 });
+      await expect(proof).toBeHidden({ timeout: 5_000 });
+    }).toPass({ intervals: [1_000, 2_000, 5_000], timeout: 90_000 });
   }
   await expect(page.getByRole('status', { name: 'Live connection: Reconnecting' })).toBeVisible({
     timeout: 60_000,

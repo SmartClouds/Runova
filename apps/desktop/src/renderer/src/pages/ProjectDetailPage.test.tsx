@@ -354,7 +354,9 @@ describe('ProjectDetailPage sections', () => {
       // The header belongs to the page, not to a section, so it proves the page is still up.
       expect(screen.getByRole('heading', { name: 'Apollo' })).toBeTruthy();
     }
-  });
+    // Twenty sections, each mounted in turn: on a busy runner under coverage that ran past the
+    // 15 seconds a single render gets.
+  }, 60_000);
 
   it('opens the section named in the query string, and ignores one it does not know', async () => {
     const { unmount } = renderWithProviders(<ProjectDetailPage />, {

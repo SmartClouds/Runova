@@ -41,11 +41,13 @@ describe('generateCatalogSecret', () => {
     expect(checkCatalogSecret(KEY, value)).toBeNull();
   });
 
+  // A repeat would show up in a few hundred values. 4,000 drew one random number per character
+  // and took over 5 s on a busy CI Mac.
   it('never repeats a value', () => {
     const seen = new Set<string>();
-    for (let i = 0; i < 2000; i++) seen.add(generateCatalogSecret(PASSWORD));
-    for (let i = 0; i < 2000; i++) seen.add(generateCatalogSecret(KEY));
-    expect(seen.size).toBe(4000);
+    for (let i = 0; i < 500; i++) seen.add(generateCatalogSecret(PASSWORD));
+    for (let i = 0; i < 500; i++) seen.add(generateCatalogSecret(KEY));
+    expect(seen.size).toBe(1000);
   });
 
   it('draws from the random source it is given', () => {

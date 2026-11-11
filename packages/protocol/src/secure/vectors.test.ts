@@ -130,7 +130,10 @@ function cipherVector() {
   return { key: key.toString('hex'), frames, sealed };
 }
 
-describe('Anywhere test vectors for the native agent', () => {
+// The password tests run the real scrypt (32 MiB, PASSWORD_SCRYPT) in plain JavaScript, twice per
+// handshake, and coverage slows it further. That took 12 to 30 s on a busy CI Mac, past the 5 s
+// default.
+describe('Anywhere test vectors for the native agent', { timeout: 60_000 }, () => {
   it('match the committed file', async () => {
     const vectors = {
       version: 1,

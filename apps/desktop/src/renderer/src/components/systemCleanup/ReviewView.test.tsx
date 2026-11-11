@@ -289,7 +289,9 @@ describe('ReviewView, search and showing more', () => {
     await user.click(screen.getByRole('button', { name: /show 20 more/i }));
     expect(count()).toBe(120);
     expect(screen.queryByRole('button', { name: /show .* more/i })).not.toBeInTheDocument();
-  });
+    // Each count names every checkbox among up to 120 rows, which is slow in jsdom under coverage
+    // on a busy runner: it ran past the 15 seconds there.
+  }, 60_000);
 });
 
 describe('ReviewView, while and after deleting', () => {
