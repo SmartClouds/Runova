@@ -3,12 +3,14 @@
 // leaves its folders behind. On the Mac this also keeps them out of its user's own temp folder.
 
 import { appendFileSync, mkdtempSync, readdirSync, realpathSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   cleanWorkspace,
   keepsDependencies,
   removeTree,
+  run,
   skipReason,
+  strayProcessesIn,
   TEMP_PREFIX,
   TEMP_ROOT,
   warn,
@@ -17,6 +19,40 @@ import {
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 const skip = skipReason();
+
+/** Sends a signal, and is fine when the process has already gone. */
+function signal(pid, name) {
+  try {
+    process.kill(pid, name);
+  } catch (error) {
+    if (error.code !== 'ESRCH') warn(`Could not send ${name} to ${pid}: ${error.message}`);
+  }
+}
+
+// A process an earlier job left behind. One `pnpm self-update` from Setup pnpm kept nine of the
+// Mac's ten cores busy for a day and a half (from 2026-11-09), and every job on the Mac ran out of
+// time or had its tests time out until it was found.
+if (!skip) {
+  try {
+    const ps = run('ps', ['-A', '-o', 'pid=,ppid=,uid=,etime=,command='], { timeout: 30_000 });
+    if (ps.status !== 0) throw new Error(ps.stderr.trim() || `ps exited with ${ps.status}`);
+    const workRoot = dirname(process.env.RUNNER_TOOL_CACHE);
+    const strays = strayProcessesIn(ps.stdout, { uid: process.getuid(), workRoot });
+    for (const { pid, age, command } of strays) {
+      const hours = Math.round(age / 3600);
+      warn(`Stopping ${pid}, which an earlier job started ${hours} hours ago: ${command}`);
+      signal(pid, 'SIGTERM');
+    }
+    if (strays.length > 0) {
+      run('sleep', ['5']);
+      for (const { pid } of strays) signal(pid, 'SIGKILL');
+    } else {
+      console.log('No process left behind by an earlier job.');
+    }
+  } catch (error) {
+    warn(`Could not look for processes left behind by an earlier job: ${error.message}`);
+  }
+}
 
 // pnpm's store has to live somewhere that survives the job. pnpm/action-setup sets PNPM_HOME to
 // <dest>/node_modules/.bin, which puts pnpm's default store inside <dest>, and it deletes <dest>

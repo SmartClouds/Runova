@@ -103,6 +103,38 @@ export function otherJobsIn(psOutput, self) {
   return others;
 }
 
+/** Seconds in a `ps -o etime` value, which reads [[days-]hours:]minutes:seconds. */
+export function etimeSeconds(etime) {
+  const match = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(etime.trim());
+  if (!match) return null;
+  const [, days = '0', hours = '0', minutes, seconds] = match;
+  return ((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds);
+}
+
+/** No job here runs anywhere near this long, so a process this old outlived its job. */
+export const STRAY_AFTER_SECONDS = 12 * 60 * 60;
+
+/**
+ * The processes in `ps -A -o pid=,ppid=,uid=,etime=,command=` that an earlier job left running:
+ * this user's, started from this runner's work folder, adopted by launchd or init (parent 1) once
+ * their job's processes were gone, and older than STRAY_AFTER_SECONDS. The runner kills a job's
+ * orphans when the job ends, but not one that slipped out of its process tree.
+ */
+export function strayProcessesIn(psOutput, { uid, workRoot, minAgeSeconds = STRAY_AFTER_SECONDS }) {
+  const prefix = workRoot.endsWith('/') ? workRoot : `${workRoot}/`;
+  const strays = [];
+  for (const line of psOutput.split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (!match) continue;
+    const [, pid, ppid, owner, etime, command] = match;
+    if (Number(ppid) !== 1 || Number(owner) !== uid || !command.startsWith(prefix)) continue;
+    const age = etimeSeconds(etime);
+    if (age === null || age < minAgeSeconds) continue;
+    strays.push({ pid: Number(pid), age, command });
+  }
+  return strays;
+}
+
 /** The jobs other runners are running on this machine, or null when `ps` could not tell. */
 export function otherJobs() {
   const result = run('ps', ['-A', '-o', 'pid=,ppid=,command='], { timeout: 30_000 });
