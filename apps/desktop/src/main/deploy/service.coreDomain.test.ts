@@ -328,6 +328,57 @@ describe('DeployService with the core domain', () => {
     expect(seen).toBe('core-domain');
   });
 
+  it('sends an upload over the domain the link is on, even when a health check there just failed', async () => {
+    // A server whose SSH port is closed to this computer: a Cloudflare domain and no direct TLS.
+    const { service, pool, restOver } = await setup({
+      domainMode: 'cloudflare',
+      direct: false,
+      health: { 'core-domain': domainDown() },
+    });
+    await service.links.call('srv-1', (hub) => hub.ping());
+    expect(service.connection('srv-1')).toMatchObject({
+      state: 'online',
+      transport: 'core-domain',
+    });
+    // Past the 30 seconds the link's start counts as a health answer, so the upload has to ask.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(service.connection('srv-1').state).toBe('online');
+    restOver.length = 0;
+    pool.acquire.mockClear();
+
+    const seen = await service.withCoreHttp('srv-1', async (client) => client.transport.kind);
+
+    expect(seen).toBe('core-domain');
+    expect(restOver).not.toContain('streamlocal');
+    expect(pool.acquire).not.toHaveBeenCalled();
+  });
+
+  it('keeps uploads on the linked domain after the 30 second health poll marked it down', async () => {
+    const { service, pool } = await setup({
+      domainMode: 'cloudflare',
+      direct: false,
+      health: { 'core-domain': domainDown() },
+    });
+    await service.links.call('srv-1', (hub) => hub.ping());
+    // The health poll misses the domain once and asks SSH, which this computer cannot reach.
+    pool.acquire.mockRejectedValueOnce(new Error('Connection to prod.example:22 timed out.'));
+    await expect(service.health('srv-1')).rejects.toThrow(/timed out/);
+    pool.acquire.mockClear();
+
+    const seen = await service.withCoreHttp('srv-1', async (client) => client.transport.kind);
+
+    expect(seen).toBe('core-domain');
+    expect(pool.acquire).not.toHaveBeenCalled();
+  });
+
+  it('still sends an upload over SSH when the link is not on the domain and the domain does not answer', async () => {
+    const { service } = await setup({ direct: false, health: { 'core-domain': domainDown() } });
+
+    const seen = await service.withCoreHttp('srv-1', async (client) => client.transport.kind);
+
+    expect(seen).toBe('streamlocal');
+  });
+
   it('reads the direct TLS pin over SSH even while the link rides the domain', async () => {
     const { service, shortOver } = await setup();
     await service.links.call('srv-1', (hub) => hub.ping());

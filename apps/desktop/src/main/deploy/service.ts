@@ -1176,17 +1176,33 @@ export class DeployService {
   }
 
   /**
+   * The way in without SSH the server's lasting link is online over right now, or null. While it
+   * is, that way in works, whatever a health check said a moment ago.
+   */
+  private linkedRoute(serverId: string): OffSshKind | null {
+    if (!this.links.isOnline(serverId)) return null;
+    const kind = this.links.info(serverId).transport;
+    return kind === 'core-domain' || kind === 'direct-tls' ? kind : null;
+  }
+
+  /**
    * The first way in without SSH that answers, or null when SSH is the way: none is on for this
-   * computer, each failed lately, or (with `probe`) none answers its health now. A pin mismatch is
-   * thrown, never turned into a quiet fallback.
+   * computer, each failed lately, or (with `probe`) none answers its health now. The one the link
+   * is online over is used without asking, so a missed health check never sends an upload to SSH
+   * while the link works without it. A pin mismatch is thrown, never turned into a quiet fallback.
    */
   private async directRoute(
     serverId: string,
     options: { probe: boolean; except?: OffSshKind },
   ): Promise<CoreTransport | null> {
+    const linked = this.linkedRoute(serverId);
     for (const route of await this.offSshRoutes(serverId)) {
       if (route.kind === options.except) continue;
-      if (!options.probe || (this.directUp.get(routeKey(serverId, route.kind)) ?? 0) > this.now()) {
+      if (
+        !options.probe ||
+        route.kind === linked ||
+        (this.directUp.get(routeKey(serverId, route.kind)) ?? 0) > this.now()
+      ) {
         return route.transport;
       }
       try {
@@ -1204,14 +1220,17 @@ export class DeployService {
 
   /**
    * The ways in without SSH this computer may try for a server, in order: the core domain (E44)
-   * when it is on here, then direct TLS (E16). One that failed lately is left out; both need this
-   * computer's device key, which is their client certificate.
+   * when it is on here, then direct TLS (E16). One that failed lately is left out, unless the link
+   * is online over it right now; both need this computer's device key, which is their client
+   * certificate.
    */
   private async offSshRoutes(serverId: string): Promise<OffSshRoute[]> {
     const device = await this.deps.state.device(serverId);
     if (!device) return [];
     const now = this.now();
-    const down = (kind: OffSshKind) => (this.directDown.get(routeKey(serverId, kind)) ?? 0) > now;
+    const linked = this.linkedRoute(serverId);
+    const down = (kind: OffSshKind) =>
+      kind !== linked && (this.directDown.get(routeKey(serverId, kind)) ?? 0) > now;
     const credentials = async () => clientCertificate(await this.deps.unseal(device.privateKey));
     const routes: OffSshRoute[] = [];
     // The DevHost has no nginx in front of it.
