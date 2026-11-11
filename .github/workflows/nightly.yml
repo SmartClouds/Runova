@@ -83,8 +83,8 @@ jobs:
       # The same AppArmor profile as in test.yml: it confines the Rocky servers' unix_chkpwd too.
       - name: Let the Rocky test servers check passwords
         run: |
-          if sudo grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
-            echo -n unix-chkpwd | sudo tee /sys/kernel/security/apparmor/.remove > /dev/null
+          if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+            echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
             echo "Unloaded the runner's unix-chkpwd AppArmor profile."
           fi
 
@@ -163,8 +163,8 @@ jobs:
               echo "::error::Missing system packages:$missing. This runner has no passwordless sudo, so install them on the runner host: sudo apt-get install -y$missing"
               exit 1
             fi
-            sudo apt-get update
-            sudo apt-get install -y $missing
+            sudo -n apt-get update
+            sudo -n apt-get install -y $missing
           fi
           sudo -n sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
@@ -234,8 +234,8 @@ jobs:
 
       - name: Let the Rocky test servers check passwords
         run: |
-          if sudo grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
-            echo -n unix-chkpwd | sudo tee /sys/kernel/security/apparmor/.remove > /dev/null
+          if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+            echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
             echo "Unloaded the runner's unix-chkpwd AppArmor profile."
           fi
 
@@ -306,8 +306,8 @@ jobs:
               echo "::error::Missing system packages:$missing. This runner has no passwordless sudo, so install them on the runner host: sudo apt-get install -y$missing"
               exit 1
             fi
-            sudo apt-get update
-            sudo apt-get install -y $missing
+            sudo -n apt-get update
+            sudo -n apt-get install -y $missing
           fi
           sudo -n sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 

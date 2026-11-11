@@ -38,7 +38,9 @@ public class AgentHostTests
     [Fact]
     public void The_config_is_sealed_on_disk_and_reads_back_whole()
     {
-        var file = Path.Combine(Path.GetTempPath(), $"runova-agent-{Guid.NewGuid():N}.bin");
+        // A folder of its own: on Unix the store locks its folder down to the owner, which it may
+        // not do to a shared /tmp.
+        var file = Path.Combine(Path.GetTempPath(), $"runova-agent-{Guid.NewGuid():N}", "agent.bin");
         var config = new AgentConfig
         {
             SiteUrl = "https://runovahq.com",
@@ -69,7 +71,7 @@ public class AgentHostTests
         }
         finally
         {
-            File.Delete(file);
+            Directory.Delete(Path.GetDirectoryName(file)!, recursive: true);
         }
     }
 

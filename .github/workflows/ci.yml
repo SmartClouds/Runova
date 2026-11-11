@@ -112,6 +112,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm check:deprecated-deps
 
+      # The self-hosted runners have no passwordless sudo, so a bare sudo there fails on a
+      # password prompt without saying what was missing (scripts/workflow-sudo.mjs).
+      - name: No workflow waits for a sudo password
+        if: ${{ !cancelled() }}
+        run: node --test scripts/workflow-sudo.test.mjs
+
       # The desktop type-checks against @runova/core and
       # @runova/protocol declaration output, so those have to be built first.
       - name: Build workspace packages

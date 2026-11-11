@@ -205,7 +205,8 @@ public class UnixAgentTests
     [Fact]
     public void A_real_x_server_shows_its_screen_and_takes_input()
     {
-        // CI and the Docker check run this under Xvfb with a solid colored root window.
+        // CI and the Docker check run this under Xvfb (1024x768x24, -noreset). The test paints
+        // the root red itself, so nothing besides Xvfb has to be installed.
         var display = Environment.GetEnvironmentVariable("RUNOVA_TEST_X_DISPLAY");
         if (OperatingSystem.IsLinux() && !string.IsNullOrEmpty(display))
         {
@@ -220,6 +221,7 @@ public class UnixAgentTests
     [SupportedOSPlatform("linux")]
     private static void CheckLiveDisplay(string display)
     {
+        XRootWindow.Paint(display, 0xff0000);
         using var x = X11Display.Open(display, authFile: null);
         Assert.NotNull(x);
 
@@ -229,7 +231,8 @@ public class UnixAgentTests
         Assert.Equal(768, frame.Height);
         Assert.Equal(frame.Stride * frame.Height, frame.Pixels.Length);
         var center = (frame.Stride * 384) + (512 * 4);
-        Assert.Equal(0xff, frame.Pixels[center + 2]); // xsetroot -solid red, BGRA
+        // Red, in BGRA. Xvfb's own root is a black and white weave, so this also proves the paint.
+        Assert.Equal([0x00, 0x00, 0xff], frame.Pixels.AsSpan(center, 3).ToArray());
 
         x.Apply(Event("""{"k":"move","x":0.25,"y":0.5}"""));
         Assert.Equal((256, 384), x.Pointer());

@@ -186,7 +186,12 @@ jobs:
 
       - name: Install libfuse2 (required to build AppImage)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libfuse2
+        run: |
+          if ! sudo -n true 2> /dev/null; then
+            echo "::error::libfuse2 is needed to build the AppImage. This runner has no passwordless sudo, so install it on the runner host: sudo apt-get install -y libfuse2"
+            exit 1
+          fi
+          sudo -n apt-get update && sudo -n apt-get install -y libfuse2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -271,7 +276,7 @@ jobs:
       # Nothing on a throwaway runner needs the index.
       - name: Turn off Spotlight indexing
         if: startsWith(matrix.os, 'macos')
-        run: sudo mdutil -a -i off || true
+        run: sudo -n mdutil -a -i off || true
 
       # The dmg unmount above is racy even with indexing off, and a failed
       # unmount fails the whole build, so give it a couple of retries before

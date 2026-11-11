@@ -502,14 +502,34 @@ jobs:
 
       - name: X server for the Linux screen and input test
         run: |
-          # The self-hosted runner keeps what it installed, so only reach for apt when needed.
-          command -v Xvfb > /dev/null && command -v xsetroot > /dev/null || {
-            sudo apt-get update
-            sudo apt-get install -y xvfb x11-xserver-utils libx11-6 libxext6 libxtst6
-          }
-          Xvfb :97 -screen 0 1024x768x24 -ac -noreset &
-          sleep 2
-          DISPLAY=:97 xsetroot -solid red
+          # The self-hosted runners keep what they installed and have no passwordless sudo, so
+          # only reach for apt when a package is missing, and name it when it cannot be installed.
+          # The test paints the root window itself, so Xvfb and the client libraries are enough.
+          installed() { dpkg-query -W -f='${Status}' "$1" 2> /dev/null | grep -q "install ok installed"; }
+          missing=""
+          for p in xvfb libx11-6 libxext6 libxtst6; do
+            installed "$p" || missing="$missing $p"
+          done
+          if [ -n "$missing" ]; then
+            if ! sudo -n true 2> /dev/null; then
+              echo "::error::Missing system packages:$missing. This runner has no passwordless sudo, so install them on the runner host: sudo apt-get install -y$missing"
+              exit 1
+            fi
+            sudo -n apt-get update
+            sudo -n apt-get install -y $missing
+          fi
+          # Xvfb writes its display number to -displayfd once it accepts clients.
+          ready="$RUNNER_TEMP/xvfb-97-ready"
+          : > "$ready"
+          Xvfb :97 -screen 0 1024x768x24 -ac -noreset -displayfd 3 3> "$ready" &
+          xvfb=$!
+          for _ in $(seq 50); do
+            kill -0 "$xvfb" 2> /dev/null || break
+            [ -s "$ready" ] && exit 0
+            sleep 0.2
+          done
+          echo "::error::Xvfb did not start on :97."
+          exit 1
 
       # Includes the protocol vectors from packages/protocol, so the agent and the app can not drift.
       - name: Tests
@@ -581,8 +601,8 @@ jobs:
       # /etc/shadow and every password login fails. A real Rocky server has no such profile.
       - name: Let the Rocky test server check passwords
         run: |
-          if sudo grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
-            echo -n unix-chkpwd | sudo tee /sys/kernel/security/apparmor/.remove > /dev/null
+          if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+            echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
             echo "Unloaded the runner's unix-chkpwd AppArmor profile."
           fi
 
@@ -833,8 +853,8 @@ jobs:
               echo "::error::Missing system packages:$missing. This runner has no passwordless sudo, so install them on the runner host: sudo apt-get install -y$missing"
               exit 1
             fi
-            sudo apt-get update
-            sudo apt-get install -y $missing
+            sudo -n apt-get update
+            sudo -n apt-get install -y $missing
           fi
           # Ubuntu blocks the unprivileged user namespaces Chromium's sandbox needs, which makes
           # Electron refuse to start. The fixture can fall back to --no-sandbox if this fails.
@@ -851,7 +871,7 @@ jobs:
             exit 0
           fi
           if [ "$RUNNER_OS" = "Linux" ] && sudo -n true 2> /dev/null; then
-            sudo apt-get update && sudo apt-get install -y ffmpeg && exit 0
+            sudo -n apt-get update && sudo -n apt-get install -y ffmpeg && exit 0
           elif [ "$RUNNER_OS" = "macOS" ] && command -v brew > /dev/null; then
             brew install ffmpeg && exit 0
           elif [ "$RUNNER_OS" = "Windows" ] && command -v choco > /dev/null; then
