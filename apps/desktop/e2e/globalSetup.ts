@@ -35,8 +35,10 @@ export default async function globalSetup(config: FullConfig): Promise<() => voi
   rmSync(MAIN_LOG_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   process.env[E2E_BUILD_ENV] = takeBuild(runId);
   // Built in a worker, the DevHost starves the Electron of every other worker and eats the build's
-  // own spec's hook time: on a busy CI machine it took over seven minutes and failed both.
-  if (config.workers > 1 && dotnetAvailable()) await buildOncePerRun();
+  // own spec's hook time: on a busy CI machine it took over seven minutes and failed both. That
+  // holds for one worker too, where the first DevHost spec (cloudflareServer) paid for the whole
+  // build inside its beforeAll and timed out on a busy machine, so every run builds it here.
+  if (dotnetAvailable()) await buildOncePerRun();
   const stopDisplays = await startWorkerDisplays(config.workers);
   // The function returned is Playwright's global teardown. The build stays for the next
   // RUNOVA_E2E_SKIP_BUILD run; only the lease goes.

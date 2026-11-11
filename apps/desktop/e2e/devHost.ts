@@ -71,8 +71,8 @@ function healthy(port: number): Promise<boolean> {
 /**
  * Builds the DevHost the first time a run asks for it. Workers run side by side, and two
  * `dotnet build`s of one project at once fight over its obj and bin folders, so the build is
- * taken under a lock folder and a marker records the run (see globalSetup) that built it. A run
- * with more than one worker has global setup call this first, so workers just find it built.
+ * taken under a lock folder and a marker records the run (see globalSetup) that built it. Global
+ * setup calls this first, so workers just find it built.
  */
 export async function buildOncePerRun(): Promise<void> {
   const runId = process.env.RUNOVA_E2E_RUN_ID ?? '';

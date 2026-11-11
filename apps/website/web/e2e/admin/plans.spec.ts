@@ -5,6 +5,11 @@ import { request } from '@playwright/test';
 import { antiforgeryToken, expect, SIGNED_OUT, test } from './fixtures';
 import { ADMIN_BASE_URL, FAKE_STRIPE } from './stackConfig';
 
+// The payment settings are one row for the whole stack. Run side by side, buying Pro saved them
+// between the crypto test's load and its save, so that save got the 412 conflict dialog instead of
+// the error it checks. These tests run one after another.
+test.describe.configure({ mode: 'default' });
+
 test.describe('as an Admin', () => {
   test.use({ storageState: async ({ adminSession }, use) => use(adminSession) });
 

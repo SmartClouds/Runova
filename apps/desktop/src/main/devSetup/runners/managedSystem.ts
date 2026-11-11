@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { access, mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { access, mkdir, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { renameWithRetry } from '../../fs/renameWithRetry';
 import type { SpawnStreamingOptions, SpawnStreamingResult } from '../../process/spawnStreaming';
 import type { ResumableDownloadOptions } from '../../updater/resumableDownload';
 import type { ManagedEnvironment, ManagedKit } from './managed';
@@ -19,10 +20,6 @@ const ALLOWED_HOSTS = new Set(['storage.googleapis.com', 'dl.google.com']);
 const REFUSED = 'Refusing to download from that address.';
 /** Unpacking prints nothing while it works; a gigabyte can take a while. */
 const EXTRACT_IDLE_MS = 20 * 60_000;
-/** What Windows says about a folder a virus scanner or indexer has open for a moment. */
-const BUSY_CODES = new Set(['EPERM', 'EBUSY']);
-const RENAME_RETRIES = 4;
-const RENAME_RETRY_DELAY_MS = 250;
 
 /**
  * Where Studio's local voices come from (E37): Python builds (GitHub releases), wheels (PyPI,
@@ -63,33 +60,6 @@ export interface ManagedSystemDeps {
   spawn: (options: SpawnStreamingOptions) => Promise<SpawnStreamingResult>;
   /** The hosts this kit may download from; Flutter and Android's by default. */
   allowedHosts?: ReadonlySet<string>;
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Moves a file or folder, trying again a few times when it is busy. Node's `rm` has a retry option
- * for this and `rename` does not, and a freshly unpacked folder is exactly what scanners open.
- * The wait grows with each try, like `rm`'s does, and anything but a busy error is thrown at once.
- */
-export async function renameWithRetry(
-  from: string,
-  to: string,
-  {
-    rename: move = rename,
-    wait = sleep,
-  }: { rename?: (from: string, to: string) => Promise<void>; wait?: typeof sleep } = {},
-): Promise<void> {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await move(from, to);
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (attempt > RENAME_RETRIES || code === undefined || !BUSY_CODES.has(code)) throw error;
-      await wait(RENAME_RETRY_DELAY_MS * attempt);
-    }
-  }
 }
 
 function hashFile(path: string, algorithm: 'sha1' | 'sha256'): Promise<string> {

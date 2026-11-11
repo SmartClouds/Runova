@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { open, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type {
@@ -984,6 +984,21 @@ describe('the atomic write', () => {
     // A write that truncated in place would leave a tail of the old document behind.
     expect(await readFile(userData.dataFile('activity-log.json'), 'utf-8')).toBe('[]');
     expect(await store.getActivity()).toEqual([]);
+  });
+
+  it('saves even while another reader has the file open', async () => {
+    const { store } = await loadStore();
+    await store.setProjects([project({ name: 'Before' })]);
+
+    // On Windows a rename onto a file that any handle has open is refused with EPERM, and the
+    // app reads projects.json from many places. Creating a project failed that way in e2e.
+    const reader = await open(userData.dataFile('projects.json'), 'r');
+    const released = new Promise((resolve) => setTimeout(resolve, 150)).then(() => reader.close());
+    const saved = store.setProjects([project({ name: 'After' })]);
+    await released;
+    await saved;
+
+    expect((await store.getProjects()).map((one) => one.name)).toEqual(['After']);
   });
 
   it('keeps concurrent writes to different stores apart', async () => {

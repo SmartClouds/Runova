@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
   ActivityEvent,
@@ -76,6 +76,7 @@ import { newsSettingsOf } from '../shared/newsSettings';
 import { referencedAttachmentFiles, removeOrphanAttachments } from './blueprintFileStore';
 import { blueprintRevisionDb } from './blueprintRevisionDb';
 import { envFileHistoryDb } from './envFileHistoryDb';
+import { renameWithRetry } from './fs/renameWithRetry';
 import {
   DEFAULT_PING_TARGETS_IPV6,
   isPingIpVersion,
@@ -103,12 +104,17 @@ async function readJsonFile<T>(fileName: string, fallback: T): Promise<T> {
   }
 }
 
+/**
+ * Writes a temp file and renames it over the old one, so a reader never sees half a document. On
+ * Windows that rename fails while anything else has the old file open, which happens whenever
+ * another part of the app reads the same store at that moment, so a busy rename is tried again.
+ */
 async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
   await mkdir(dataDir(), { recursive: true });
   const filePath = join(dataDir(), fileName);
   const tmpPath = `${filePath}.${randomUUID()}.tmp`;
   await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-  await rename(tmpPath, filePath);
+  await renameWithRetry(tmpPath, filePath);
 }
 
 async function readSettings(): Promise<AppSettings> {
