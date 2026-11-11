@@ -769,8 +769,14 @@ jobs:
         if: steps.xcode.outputs.available == 'true'
         run: command -v xcodegen > /dev/null || brew install xcodegen
 
+      # Cargo builds outside the checkout, which the runner cleanup empties before every job. From
+      # scratch, the three targets are about 1,100 crates, which no longer fit in the job's time on
+      # the Mac's hard disk; with the folder kept, a run builds what changed. The runner cleanup
+      # deletes it when the disk runs short (rustBuildOutput in post.mjs).
       - name: Build the core and its Swift bindings
         if: steps.xcode.outputs.available == 'true'
+        env:
+          CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-ios
         run: sh apps/mobile/ios/scripts/build-core.sh
 
       - name: Generate the Xcode project

@@ -14,20 +14,24 @@ generated="$ios/Generated"
 # fails on ___chkstk_darwin.
 export IPHONEOS_DEPLOYMENT_TARGET=16.0
 
+# Cargo's output folder. CI points CARGO_TARGET_DIR outside the checkout, so the next run on the
+# Mac builds only what changed instead of all three targets from scratch.
+out=${CARGO_TARGET_DIR:-$core/target}
+
 cd "$core"
 for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
   cargo build --release --target "$target" -p runova-ffi
 done
 
 cargo run -p runova-ffi --bin uniffi-bindgen -- generate \
-  --library target/aarch64-apple-ios/release/librunova_ffi.a \
+  --library "$out/aarch64-apple-ios/release/librunova_ffi.a" \
   --language swift --out-dir "$generated"
 
-simulator="$core/target/universal-sim/release"
+simulator="$out/universal-sim/release"
 mkdir -p "$simulator"
 lipo -create \
-  target/aarch64-apple-ios-sim/release/librunova_ffi.a \
-  target/x86_64-apple-ios/release/librunova_ffi.a \
+  "$out/aarch64-apple-ios-sim/release/librunova_ffi.a" \
+  "$out/x86_64-apple-ios/release/librunova_ffi.a" \
   -output "$simulator/librunova_ffi.a"
 
 headers=$(mktemp -d)
@@ -37,7 +41,7 @@ cp "$generated/runova_ffiFFI.modulemap" "$headers/module.modulemap"
 rm -rf "$frameworks/RunovaCore.xcframework"
 mkdir -p "$frameworks"
 xcodebuild -create-xcframework \
-  -library target/aarch64-apple-ios/release/librunova_ffi.a -headers "$headers" \
+  -library "$out/aarch64-apple-ios/release/librunova_ffi.a" -headers "$headers" \
   -library "$simulator/librunova_ffi.a" -headers "$headers" \
   -output "$frameworks/RunovaCore.xcframework"
 rm -rf "$headers"

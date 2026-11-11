@@ -5,7 +5,8 @@
 // the workspace, node_modules and build output included, and the job's temp folder (main.mjs).
 // The next job's checkout would wipe the workspace anyway, so deleting it now costs nothing. The
 // Mac is the exception: it keeps node_modules, and main.mjs clears the rest of the workspace at
-// the start of the next job (keepsDependencies in shared.mjs says why).
+// the start of the next job (keepsDependencies in shared.mjs says why). Rust build output that a
+// job keeps in the tool cache stays too, until the disk runs short.
 //
 // Once a day, since these take longer and only grow slowly: packages nothing uses any more in
 // the pnpm store, NuGet's packages folder and the native-module header caches, the .NET and Node
@@ -307,6 +308,29 @@ function toolCacheVersions() {
   }
 }
 
+/** Free space below which the kept Rust build output goes. */
+const RUST_OUTPUT_MIN_FREE = 50 * 1024 ** 3;
+
+/**
+ * Cargo's output that jobs keep between runs in <tool cache>/cargo-target (the Mobile iOS job sets
+ * CARGO_TARGET_DIR there). Cargo never deletes old artifacts, so it only grows; once the disk is
+ * short it goes, and the next run builds from scratch.
+ */
+function rustBuildOutput() {
+  if (!toolCache) return;
+  const dir = join(toolCache, 'cargo-target');
+  if (!existsSync(dir)) {
+    console.log('No Rust build output kept here.');
+    return;
+  }
+  const free = freeBytes();
+  if (free === null || free >= RUST_OUTPUT_MIN_FREE) {
+    console.log(`Kept ${dir}${free === null ? '' : `, ${gigabytes(free)} free`}.`);
+    return;
+  }
+  if (removeTree(dir)) console.log(`Deleted ${dir}: only ${gigabytes(free)} free.`);
+}
+
 /** True once a day per machine, for the slower steps. */
 function dailyDue() {
   if (!toolCache) return false;
@@ -348,6 +372,7 @@ if (skip) {
     step('Replaced .NET and Node versions', toolCacheVersions);
     if (dockerWorks()) step('Dangling Docker images and old build cache', dockerImages);
   }
+  step('Rust build output', rustBuildOutput);
   if (keepsDependencies()) {
     console.log(
       "The workspace stays: this runner keeps node_modules, and the next job's start clears the rest.",
