@@ -4,7 +4,7 @@ import mdx from '@astrojs/mdx';
 import node from '@astrojs/node';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
-import sentry from '@sentry/astro';
+import sentry from '@sentry/astro/integration';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { contentSecurityPolicy, isDevServer } from './src/lib/security';
@@ -40,6 +40,9 @@ export default defineConfig({
   adapter: node({ mode: 'standalone', staticHeaders: true }),
   // Left out under `astro dev`, which would block the islands' inline scripts (see isDevServer).
   security: isDevServer(process.argv) ? {} : { csp: contentSecurityPolicy({ site, sentryDsn }) },
+  // Shiki colors code with inline styles, which a CSP does not get along with. The only code
+  // blocks on the site are plain text in the help articles, and Prose.astro already styles them.
+  markdown: { syntaxHighlight: false },
   integrations: [
     react(),
     mdx(),

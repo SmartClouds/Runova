@@ -106,7 +106,7 @@ describe('NewsEditor, a new item', () => {
     expect(summary).toHaveTextContent('One or more fields are not valid.');
     expect(summary).toHaveTextContent('Send the X-XSRF-TOKEN header.');
     expect(summary).toHaveTextContent('A scheduled item needs a publishedAt in the future.');
-    expect(summary).toHaveFocus();
+    await waitFor(() => expect(summary).toHaveFocus());
   });
 
   it('limits the severity to what the category allows and suggests one from the CVSS score', async () => {

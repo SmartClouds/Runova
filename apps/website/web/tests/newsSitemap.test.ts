@@ -1,5 +1,6 @@
 import type { APIContext } from 'astro';
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import { SyntaxValidator } from 'fast-xml-validator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newsSitemap } from '../src/lib/news/sitemap';
 import { GET } from '../src/pages/news-sitemap.xml';
@@ -62,7 +63,7 @@ describe('/news-sitemap.xml', () => {
     expect(response.headers.get('cache-control')).toBe('public, max-age=300');
     const xml = await response.text();
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
     const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@' }).parse(xml);
     expect(parsed.urlset['@xmlns']).toBe(SITEMAP_NS);
     expect(parsed.urlset['@xmlns:news']).toBe(NEWS_NS);
@@ -110,7 +111,7 @@ describe('newsSitemap', () => {
 
   it('is an empty urlset when nothing is that new', () => {
     const xml = newsSitemap(SITE, FIXTURE_NEWS.slice(6), now);
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
     expect(entries(xml)).toEqual([]);
   });
 
@@ -121,7 +122,7 @@ describe('newsSitemap', () => {
       publishedAt: hoursAgo(1),
     };
     const xml = newsSitemap(SITE, [item], now);
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
     expect(entries(xml)[0]['news:news']['news:title']).toBe('Fixes for <sshd> & "scp"');
     expect(xml).toContain('<news:title>Fixes for &lt;sshd&gt; &amp; &quot;scp&quot;</news:title>');
   });

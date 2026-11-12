@@ -2,7 +2,8 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { APIContext } from 'astro';
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import { SyntaxValidator } from 'fast-xml-validator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PAGE_SIZE as BLOG_PAGE_SIZE } from '../src/lib/blog/page';
 import { PAGE_SIZE as NEWS_PAGE_SIZE } from '../src/lib/news/page';
@@ -87,7 +88,7 @@ describe('/sitemap-dynamic.xml', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
     expect(response.headers.get('cache-control')).toBe('public, max-age=600');
-    expect(XMLValidator.validate(await response.text())).toBe(true);
+    expect(SyntaxValidator.validate(await response.text())).toBe(true);
   });
 
   it('lists every post with its last change', async () => {

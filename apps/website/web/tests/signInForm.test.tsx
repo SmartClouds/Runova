@@ -32,7 +32,7 @@ describe('SignInForm', () => {
 
     await signIn(user);
     const code = await screen.findByLabelText('Authentication code');
-    expect(code).toHaveFocus();
+    await waitFor(() => expect(code).toHaveFocus());
     expect(code).toHaveAttribute('autocomplete', 'one-time-code');
     await user.type(code, '123456');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -113,7 +113,7 @@ describe('SignInForm', () => {
     await signIn(user);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('The email or password is not right.');
-    expect(alert).toHaveFocus();
+    await waitFor(() => expect(alert).toHaveFocus());
 
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin'));

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import './setup/dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import ReportsView, { actionLabel, actorLabel } from '../src/components/admin/ReportsView';
@@ -364,7 +364,8 @@ describe('ReportsView', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('This needs the Admin role.');
-    expect(alert).toHaveFocus();
+    // The alert renders first and an effect focuses it after, so wait for the focus too.
+    await waitFor(() => expect(alert).toHaveFocus());
     expect(screen.queryByRole('heading', { level: 2, name: 'Users' })).toBeNull();
   });
 });

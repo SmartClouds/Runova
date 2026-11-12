@@ -1,5 +1,6 @@
 import type { APIContext } from 'astro';
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import { SyntaxValidator } from 'fast-xml-validator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET } from '../src/pages/news/rss.xml';
 import { BY_SEVERITY, FIXTURE_NEWS } from './fixtures/news/items';
@@ -49,7 +50,7 @@ describe('/news/rss.xml', () => {
       'public, max-age=300, stale-while-revalidate=600',
     );
     const xml = await response.text();
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
     const { title, link, language, lastBuildDate } = channel(xml);
     expect(title).toBe('Runova news');
     expect(link).toBe(`${SITE}/news`);

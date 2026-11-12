@@ -1,5 +1,6 @@
 import type { APIContext } from 'astro';
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import { SyntaxValidator } from 'fast-xml-validator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET } from '../src/pages/blog/rss.xml';
 import { FIXTURE_POSTS } from './fixtures/blog/posts';
@@ -59,7 +60,7 @@ describe('/blog/rss.xml', () => {
     expect(response.headers.get('content-type')).toBe('application/rss+xml; charset=utf-8');
     const xml = await response.text();
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
 
     const { rss } = parse(xml);
     expect(rss['@version']).toBe('2.0');
@@ -99,7 +100,7 @@ describe('/blog/rss.xml', () => {
 
   it('escapes titles and excerpts so the feed stays valid', async () => {
     const xml = await (await feed(awkward.url)).text();
-    expect(XMLValidator.validate(xml)).toBe(true);
+    expect(SyntaxValidator.validate(xml)).toBe(true);
     const item = parse(xml).rss.channel.item as Item;
     expect(item.title).toBe('Tips & tricks for <agents> that "write" code');
     expect(item.description).toBe(
