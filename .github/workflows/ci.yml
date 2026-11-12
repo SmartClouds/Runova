@@ -8,10 +8,11 @@ name: CI
 # It runs on our two self-hosted runners (CD never uses them). Everything that
 # does not care about the OS (lint, types, the build and the unit suites)
 # runs on the Mac mini, which is much faster. The Linux runner keeps
-# what needs Linux: Docker, the server core, the website (its API, its site and
-# the compose stack they run in) and the Linux end-to-end shards. The macOS
-# end-to-end shards run on the Mac too. GitHub's hosted runners are
-# for CD, which packages the installers.
+# what needs Linux: Docker, the server core, the website's API and the Linux
+# end-to-end shards. The website's site and the compose stack also need Linux
+# and Docker, and they run on the Mac in a Linux VM made for each run (see the
+# website-web job). The macOS end-to-end shards run on the Mac too. GitHub's
+# hosted runners are for CD, which packages the installers.
 #
 # The self-hosted runners keep their disks between jobs, so every job that runs on one starts with
 # the Runner cleanup step (.github/actions/runner-cleanup). It gives the job a temp folder of its
@@ -221,26 +222,25 @@ jobs:
   # The website (apps/website/web): lint, types, unit tests and the build, the e2e suite (a fake
   # API, plus the real API and PostgreSQL for the admin pages), then the compose stack the way
   # production runs it, with the full-stack specs and Lighthouse against it. The e2e admin stack
-  # needs Node (Testcontainers), the .NET SDK and Docker, so this runs on Linux too.
+  # needs Node (Testcontainers), the .NET SDK and Docker. It runs on the Mac mini, inside a Linux VM
+  # that Tart (https://tart.run) creates for each run and deletes at the end, Docker images and
+  # all, so nothing piles up on the Mac's disk. The Linux runner ran out of the job's 45 minutes
+  # when it was busy (CI run #441). The steps
+  # run in the VM over SSH (.github/website-vm/vm.sh). The VM is arm64, so the images build for
+  # arm64 here, while CD builds the deployed ones for x64.
   website-web:
     name: Website
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 45
-    # One compose stack per machine at a time: they would fight over its ports.
+    # One VM at a time: the Mac has room for one alongside its other jobs.
     concurrency: website-stack
     env:
-      DOTNET_NOLOGO: "1"
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      # The runova-e2e- prefix lets Runner cleanup remove the stack if a cancelled run leaves it.
       COMPOSE_PROJECT_NAME: runova-e2e-website
       HTTP_PORT: "18080"
       HTTPS_PORT: "18443"
       STACK_URL: https://localhost:18443
       STACK_HTTP_URL: http://localhost:18080
-    defaults:
-      run:
-        working-directory: apps/website/web
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -248,59 +248,39 @@ jobs:
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
-        with:
-          dotnet-version: 10.0.4xx
+      - name: Start the Linux VM
+        run: bash .github/website-vm/start.sh
 
-      # Node before pnpm, as in the check job. The astro CLI runs on Node and asks for a newer 22
-      # than one runner had in its tool cache, so take the latest 22 rather than a cached one.
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "26"
-          check-latest: true
+      - name: Copy the commit into the VM
+        run: bash .github/website-vm/vm.sh source
 
-      # The unit tests ask pnpm whether the site stays outside the repository's workspace. Set up
-      # the way the check job does it (see the comments there).
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        env:
-          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
-        with:
-          dest: ${{ runner.tool_cache }}/setup-pnpm
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
+      - name: Install the toolchain in the VM
+        run: bash .github/website-vm/vm.sh provision
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bash .github/website-vm/vm.sh run 'bun install --frozen-lockfile'
 
       - name: Lint
         if: ${{ !cancelled() }}
-        run: bunx biome ci --reporter=github .
+        run: bash .github/website-vm/vm.sh run 'bunx biome ci --reporter=github .'
 
       - name: Astro check
         if: ${{ !cancelled() }}
-        run: bun run check
+        run: bash .github/website-vm/vm.sh run 'bun run check'
 
       - name: Unit tests
         if: ${{ !cancelled() }}
-        run: bun run test
+        run: bash .github/website-vm/vm.sh run 'bun run test'
 
       # Astro encodes every screenshot to AVIF and WebP at several widths (over 200 files), which
-      # took 4 to 9 minutes of the 45 when it started cold each run. Each cached file is named by
-      # a hash of its source and transform, so an old entry is never served for a changed image.
-      # The image build of the compose stack reuses the same cache (see compose.test.yaml).
+      # took 4 to 9 minutes when it started cold each run. Each cached file is named by a hash of
+      # its source and transform, so an old entry is never served for a changed image. The image
+      # build of the compose stack reuses the same cache (see compose.test.yaml).
       - name: Restore the optimized image cache
         id: astro-assets
         uses: actions/cache/restore@v6
         with:
-          path: apps/website/web/node_modules/.astro/assets
+          path: .cache/astro-assets
           key: astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-${{ hashFiles('apps/website/web/src/assets/**') }}
           restore-keys: |
             astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-
@@ -308,22 +288,29 @@ jobs:
       - name: Build
         id: build
         if: ${{ !cancelled() }}
-        run: bun run build
+        run: |
+          bash .github/website-vm/vm.sh cache-in .cache/astro-assets
+          bash .github/website-vm/vm.sh run 'bun run build'
 
       # Saved right after the build, not at the end of the job, so a later failure or a timeout
       # still leaves the next run a warm cache.
       - name: Save the optimized image cache
         if: ${{ steps.build.outcome == 'success' && steps.astro-assets.outputs.cache-hit != 'true' }}
+        run: bash .github/website-vm/vm.sh cache-out .cache/astro-assets
+
+      - name: Upload the optimized image cache
+        if: ${{ steps.build.outcome == 'success' && steps.astro-assets.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
-          path: apps/website/web/node_modules/.astro/assets
+          path: .cache/astro-assets
           key: ${{ steps.astro-assets.outputs.cache-primary-key }}
 
+      # With the system libraries Chromium needs, which the VM's image does not have.
       - name: Playwright browser
-        run: bunx playwright install chromium
+        run: bash .github/website-vm/vm.sh run 'bunx playwright install --with-deps chromium'
 
       - name: End-to-end tests
-        run: bun run e2e
+        run: bash .github/website-vm/vm.sh run 'bun run e2e'
 
       # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and the
       # CSP that allows their runovahq.com images) expect. compose.test.yaml adds the telemetry
@@ -332,23 +319,23 @@ jobs:
         id: stack
         env:
           SITE_URL: https://localhost:18443
-        run: docker compose -f ../compose.yaml -f ../compose.test.yaml up --detach --build --wait
+        run: bash .github/website-vm/vm.sh run 'docker compose -f ../compose.yaml -f ../compose.test.yaml up --detach --build --wait'
 
       - name: Full-stack tests
-        run: bun run e2e:stack
+        run: bash .github/website-vm/vm.sh run 'bun run e2e:stack'
 
       # Even when a full-stack spec fails, but only on a stack that came up.
       - name: Lighthouse against the stack
         if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
-        run: bun run lighthouse:stack
+        run: bash .github/website-vm/vm.sh run 'bun run lighthouse:stack'
 
       - name: Stack logs
-        if: ${{ failure() }}
-        run: docker compose -f ../compose.yaml -f ../compose.test.yaml logs --no-color --tail 300
+        if: ${{ failure() && steps.stack.outcome != 'skipped' }}
+        run: bash .github/website-vm/vm.sh run 'docker compose -f ../compose.yaml -f ../compose.test.yaml logs --no-color --tail 300'
 
-      - name: Stop the compose stack
-        if: ${{ always() }}
-        run: docker compose -f ../compose.yaml -f ../compose.test.yaml down --volumes --remove-orphans
+      - name: Copy the reports out of the VM
+        if: ${{ failure() }}
+        run: bash .github/website-vm/vm.sh reports apps/website/web
 
       - name: Upload reports
         if: ${{ failure() }}
@@ -362,6 +349,11 @@ jobs:
           # reports.
           include-hidden-files: true
           if-no-files-found: ignore
+
+      # Stopping the VM stops the compose stack in it. Deleting it gives the disk back.
+      - name: Delete the VM
+        if: ${{ always() }}
+        run: bash .github/website-vm/stop.sh
 
   # One status to require in branch protection: the matrix job names change whenever the OS list
   # does, and a skipped job would otherwise count as success. Left out for a fork pull request,
