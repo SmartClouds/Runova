@@ -18,8 +18,12 @@ df -h /
 echo "$(nproc) cores, $(free -m | awk '/^Mem:/ { print $2 }') MB memory"
 
 sudo apt-get update -q
+# libatomic1: Node's Linux build links against it, and the image leaves it out.
 sudo apt-get install -y -q --no-install-recommends \
-  ca-certificates curl git unzip xz-utils docker.io docker-compose-v2 docker-buildx
+  ca-certificates curl git unzip xz-utils libatomic1 docker.io docker-compose-v2 docker-buildx
+# ICU for the .NET SDK, whose package name carries the Ubuntu release's version (libicu74 on 24.04).
+icu=$(apt-cache search --names-only '^libicu[0-9]+$' | awk '{ print $1 }' | sort -V | tail -1)
+sudo apt-get install -y -q --no-install-recommends "$icu"
 sudo usermod -aG docker admin
 sudo systemctl enable --now docker
 docker_version=$(sudo docker version --format '{{.Server.Version}}')
