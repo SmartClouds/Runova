@@ -1,0 +1,645 @@
+---
+import {
+  Activity,
+  Bell,
+  Bug,
+  Camera,
+  ChevronDown,
+  Cloud,
+  CreditCard,
+  Download,
+  Fingerprint,
+  Globe,
+  Laptop,
+  Mail,
+  Monitor,
+  Server,
+  ShieldCheck,
+  Smartphone,
+  UserRound,
+  Users,
+  Wallet,
+  Wifi,
+} from 'lucide-react';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import HelpToc from '../components/help/HelpToc.astro';
+import DataLedger from '../components/privacy/DataLedger.astro';
+import FactList from '../components/privacy/FactList.astro';
+import PolicySection from '../components/privacy/PolicySection.astro';
+import { buttonVariants } from '../components/ui/button';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  type Fact,
+  PRIVACY_EFFECTIVE,
+  PRIVACY_EMAIL,
+  PRIVACY_PATH,
+  PRIVACY_SECTIONS,
+  privacyDate,
+} from '../lib/privacy';
+import { breadcrumbList, type Crumb } from '../lib/seo';
+
+// Built once per deploy (docs/epics/40-website.md, Routes). The stores link to this address.
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const crumbs: Crumb[] = [
+  { name: 'Home', path: '/' },
+  { name: 'Privacy policy', path: PRIVACY_PATH },
+];
+const description =
+  'What Runova collects on its website, desktop app and apps for Android and iOS, who receives it, how long it is kept and how to delete your account.';
+
+const link = 'link';
+const mail = `mailto:${PRIVACY_EMAIL}`;
+
+const collected: Fact[] = [
+  {
+    icon: UserRound,
+    title: 'Your account',
+    text: `Your email address, display name and a hash of your password, never the password itself. If you turn on two-factor sign-in we also keep what it needs to work. If you sign in with Google, we keep the identifier Google gives us. We use this to run your account and to reach you about it.`,
+    note: { label: 'Kept', value: 'Until you delete your account' },
+  },
+  {
+    icon: Laptop,
+    title: 'Devices and sign-ins',
+    text: `Each browser, computer or phone signed in to your account: its name, system, app version, browser details and the IP address it signed in from and last used. Sign-ins, new devices and password changes are logged with an IP address too. You can read the log and end any session from your account, and we use it to spot misuse.`,
+    note: { label: 'Kept', value: 'Until you delete your account' },
+  },
+  {
+    icon: Cloud,
+    title: 'Synced items',
+    text: `If you turn on sync, the items you keep alike across computers: projects (not the files in them), environments, servers and remote computers, Vault entries, monitors, API collections, database connections and settings. Secrets such as Vault entries and server passwords sync only after you set an encryption key that we do not hold, and we store them encrypted. You can choose to encrypt more.`,
+    note: {
+      label: 'Kept',
+      value: 'Until you delete the item or your account. A deleted item leaves a marker for 90 days.',
+    },
+  },
+  {
+    icon: Users,
+    title: 'Teams',
+    text: `If you create or join a team: its name, its members with their roles, the email addresses of people you invite, and the items you share with it. The other members of a team can see the items shared with it.`,
+    note: { label: 'Kept', value: 'Until you or an Owner removes it' },
+  },
+  {
+    icon: Activity,
+    title: 'Online monitors',
+    text: `If you add online monitors: the web addresses you ask our servers to check, how often, any sign-in details for them (stored sealed), and each result with its status, response time and time.`,
+    note: {
+      label: 'Kept',
+      value: 'Results for as many days as your plan keeps. Hourly figures and incidents are kept longer.',
+    },
+  },
+  {
+    icon: Monitor,
+    title: 'Remote access',
+    text: `If you use Runova Anywhere to reach a computer by its Runova ID: the ID, the computer's name and system, its public key, and a record of each connection (who connected, when and how). Screen, keyboard, clipboard and file data goes straight between the two computers, or through a relay that only passes on encrypted data.`,
+    note: { label: 'Kept', value: 'Connection records for 30 days' },
+  },
+  {
+    icon: Bell,
+    title: 'Notifications',
+    text: `If you use the phone apps: the push token Google or Apple gives your phone, which system it runs, and your notification choices. A notification is one short line, such as "Deploy failed on prod". It never carries terminal output or secrets.`,
+    note: {
+      label: 'Kept',
+      value: 'The token until that phone signs out. Lines forwarded from your computers for 30 days.',
+    },
+  },
+  {
+    icon: CreditCard,
+    title: 'Plan and payments',
+    text: `Your plan, its dates and status, and the status and amount of each payment. Card payments are handled by Stripe, so we never see your card number. Crypto payments are handled by NOWPayments.`,
+    note: {
+      label: 'Kept',
+      value: 'Until you delete your account. Stripe and NOWPayments keep their own records.',
+    },
+  },
+  {
+    icon: Mail,
+    title: 'Email we send you',
+    text: `Only what the account needs: confirming your address, resetting a password, alerts about new sign-ins, team invitations and a reminder before a paid plan ends. We send no newsletters and no marketing email.`,
+    note: { label: 'Kept', value: 'The text of each email is cleared once it is sent' },
+  },
+  {
+    icon: Globe,
+    title: 'Visits to the website',
+    text: `Like any website, ours sees your IP address, your browser and the pages you ask for. Reading the public pages needs no account. <a href="#cookies" class="${link}">Cookies and analytics</a> lists the tags that may load.`,
+  },
+];
+
+const permissions: Fact[] = [
+  {
+    icon: Camera,
+    title: 'Camera',
+    text: `Used only to scan the QR code that signs the app in. The picture is read on the phone and is never saved or uploaded. Only the code inside the QR is sent, to finish signing in.`,
+    note: { label: 'If you say no', value: 'Sign in through the browser instead' },
+  },
+  {
+    icon: Bell,
+    title: 'Notifications',
+    text: `Lets Runova show alerts such as a failed deploy or a monitor that went down. You can turn each category off in the app or in your account.`,
+    note: { label: 'If you say no', value: 'The app works, with no alerts' },
+  },
+  {
+    icon: Fingerprint,
+    title: 'Face ID, fingerprint or screen lock',
+    text: `Confirms it is you before a Vault secret is shown. Your phone does the check and Runova never receives your biometric data.`,
+    note: { label: 'Stays', value: 'On the phone' },
+  },
+  {
+    icon: Wifi,
+    title: 'Network',
+    text: `Connects the app to our servers and, through them, to your computers. Everything is encrypted, and the apps refuse plain HTTP.`,
+    note: { label: 'Used for', value: 'Sign-in, notifications and reaching your computers' },
+  },
+];
+
+const providers: Fact[] = [
+  {
+    icon: Mail,
+    title: 'Twilio SendGrid',
+    text: `Sends our emails, so it receives your address and the text of each message.`,
+  },
+  {
+    icon: CreditCard,
+    title: 'Stripe',
+    text: `Takes card payments and manages card subscriptions. It receives your email, your plan and the payment details you enter on its page.`,
+  },
+  {
+    icon: Wallet,
+    title: 'NOWPayments',
+    text: `Takes crypto payments. It receives the invoice amount and the plan it is for.`,
+  },
+  {
+    icon: Smartphone,
+    title: 'Google Firebase Cloud Messaging and Apple Push Notification service',
+    text: `Deliver notifications to Android and iOS phones. They receive the phone's push token and the short line we send.`,
+  },
+  {
+    icon: UserRound,
+    title: 'Google sign-in',
+    text: `Only if you choose Continue with Google. Google tells us who you are, and sees that you signed in to Runova.`,
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Cloudflare Turnstile',
+    text: `May check sign-up and sign-in forms for bots. It receives a token from the form and your IP address.`,
+  },
+  {
+    icon: Bug,
+    title: 'Sentry',
+    text: `Receives error reports from the website and our servers. Personal data is switched off in them.`,
+  },
+  {
+    icon: Globe,
+    title: 'Google and Microsoft analytics tags',
+    text: `Only if they are on and, where the cookie banner is shown, only after you allow them. See <a href="#cookies" class="${link}">Cookies and analytics</a>.`,
+  },
+  {
+    icon: Download,
+    title: 'GitHub',
+    text: `Hosts the installers and the update files. It sees your IP address when you download or update, as for any download.`,
+  },
+  {
+    icon: Server,
+    title: 'Hosting and infrastructure',
+    text: `The providers that run our servers and store the data described on this page for us. They may not use it for their own purposes.`,
+  },
+];
+
+const kept: { what: string; how: string }[] = [
+  { what: 'Your account and everything stored with it', how: 'Until you delete the account' },
+  { what: 'Accounts whose email address was never confirmed', how: '7 days' },
+  { what: 'A synced item you deleted (only a marker is left)', how: '90 days' },
+  { what: 'Records of remote access connections', how: '30 days' },
+  { what: 'Notifications forwarded from your computers', how: '30 days' },
+  { what: 'Raw results of online monitors', how: 'As many days as your plan keeps' },
+  { what: "A phone's push token", how: 'Until that phone signs out' },
+  { what: 'The text of an email after it is sent', how: 'Cleared at once' },
+];
+
+const protections = [
+  `Everything travels over encrypted connections (TLS). The phone apps refuse unencrypted ones.`,
+  `Passwords are stored as hashes. You can add two-factor sign-in with recovery codes, and we email you when a new device signs in.`,
+  `Access tokens last 15 minutes. Refresh tokens change every time they are used, and one used twice ends the session.`,
+  `Synced secrets are encrypted before they leave your computer, with a key we do not hold. The sign-in details of online monitors are stored sealed.`,
+  `Remote sessions agree on keys using each computer's own identity key, so neither our servers nor the relay can read what passes through.`,
+  `The phone apps keep their keys in the Android Keystore or the iOS Keychain.`,
+  `Runova is open source under the MIT license, so you can read how it handles data on <a href="https://github.com/SmartClouds/Runova" rel="noopener" class="${link}">GitHub</a>.`,
+  `No system is perfectly safe. If a breach puts your data at risk, we will tell you as the law requires.`,
+];
+
+const controls = [
+  { text: 'See and change your details', href: '/account/profile', label: 'Profile' },
+  { text: 'Review where you are signed in and end a session', href: '/account/sessions', label: 'Sessions' },
+  { text: 'Read your sign-in and account log', href: '/account/activity', label: 'Activity' },
+  { text: 'Choose which notifications you get', href: '/account/notifications', label: 'Notifications' },
+  { text: 'Change your password, set up two-factor sign-in or delete the account', href: '/account/security', label: 'Security' },
+];
+
+const jsonLd = [breadcrumbList(site, crumbs)];
+---
+
+<BaseLayout title="Privacy policy" description={description} jsonLd={jsonLd}>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <header class="privacy-hero relative isolate pt-8 pb-10 md:pt-12 md:pb-14 lg:grid lg:grid-cols-[minmax(0,1fr)_18.5rem] lg:items-end lg:gap-x-14">
+    <div>
+      <p
+        class="rise inline-flex items-center gap-2 rounded-full border bg-card/60 py-1 pr-3 pl-1.5 font-mono text-muted-foreground text-xs uppercase tracking-[0.14em] backdrop-blur"
+        style="--order: 0"
+      >
+        <span class="inline-flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <ShieldCheck className="size-3.5" aria-hidden="true" />
+        </span>
+        Privacy policy
+      </p>
+      <h1
+        class="rise mt-6 max-w-[15ch] text-balance font-extrabold text-[clamp(2.5rem,7.5vw,5.25rem)] leading-[1] tracking-[-0.035em]"
+        style="--order: 1"
+      >
+        Your work stays on your computer.
+      </h1>
+      <p class="rise mt-6 max-w-[42rem] text-lg text-muted-foreground md:text-xl" style="--order: 2">
+        Runova runs on your own machine, so your code, terminals and files never need to reach us.
+        This page covers the little that does: your account, the website, and the apps for Windows,
+        macOS, Linux, Android and iOS.
+      </p>
+    </div>
+    <dl
+      class="rise mt-8 divide-y rounded-box border bg-card/60 font-mono text-xs backdrop-blur lg:mt-0"
+      style="--order: 3"
+    >
+      <div class="px-5 py-4">
+        <dt class="text-muted-foreground uppercase tracking-[0.12em]">Effective</dt>
+        <dd class="mt-1.5 text-foreground">
+          <time datetime={PRIVACY_EFFECTIVE}>{privacyDate()}</time>
+        </dd>
+      </div>
+      <div class="px-5 py-4">
+        <dt class="text-muted-foreground uppercase tracking-[0.12em]">Covers</dt>
+        <dd class="mt-1.5 text-balance text-foreground leading-[1.55]">
+          runovahq.com, the desktop app and the apps for Android and iOS
+        </dd>
+      </div>
+      <div class="px-5 py-4">
+        <dt class="text-muted-foreground uppercase tracking-[0.12em]">Questions</dt>
+        <dd class="mt-1.5">
+          <a href={mail} class={link}>{PRIVACY_EMAIL}</a>
+        </dd>
+      </div>
+    </dl>
+  </header>
+
+  <div class="rise" style="--order: 4">
+    <DataLedger />
+  </div>
+
+  <div class="pt-14 pb-16 md:pt-20 md:pb-24 lg:grid lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-12">
+    <article class="min-w-0 max-w-[800px]">
+      <details class="jump mb-10 rounded-box border bg-card/60 lg:hidden">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5 font-semibold text-sm">
+          Jump to a section
+          <ChevronDown className="jump-chevron size-4 text-muted-foreground" aria-hidden="true" />
+        </summary>
+        <ul class="grid gap-0.5 border-t p-2 text-sm">
+          {
+            PRIVACY_SECTIONS.map((section) => (
+              <li>
+                <a
+                  href={`#${section.id}`}
+                  class="block rounded-inner px-3 py-2 text-muted-foreground transition-colors duration-[120ms] hover:bg-accent hover:text-foreground"
+                >
+                  {section.heading}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </details>
+
+      <PolicySection id="who-we-are" title="Who we are">
+        <p class="lead">
+          Runova is made by <a href="https://smartclouds.co" rel="noopener" class={link}>SmartClouds</a>.
+          When this page says we, us or Runova, it means SmartClouds, the company behind runovahq.com,
+          the Runova desktop app for Windows, macOS and Linux, and the Runova apps for Android and iOS.
+        </p>
+        <p>
+          We decide why and how the personal data on this page is used, which makes us its controller.
+          Write to <a href={mail} class={link}>{PRIVACY_EMAIL}</a> with any question about it.
+        </p>
+      </PolicySection>
+
+      <PolicySection id="what-we-collect" title="What we collect">
+        <p class="lead">
+          Runova works without an account. If you make one, or just visit the website, this is what we
+          hold and why.
+        </p>
+        <FactList items={collected} />
+      </PolicySection>
+
+      <PolicySection id="desktop-app" title="The desktop app">
+        <p class="lead">
+          The desktop app works fully signed out. Your projects, terminals, files, Vault and settings
+          live in the app's data folder on your computer, and we never receive them.
+        </p>
+        <p>On its own, the app does only these things:</p>
+        <ul class="dots">
+          <li>
+            <strong>Checks for updates.</strong> It asks GitHub Releases for the newest version and
+            downloads it from there.
+          </li>
+          <li>
+            <strong>Reads the news.</strong> The dashboard fetches technology and security news from
+            runovahq.com. The request carries the app version and your system in its user agent, and
+            nothing else about you: no cookies and no account.
+          </li>
+          <li>
+            <strong>Syncs, if you sign in.</strong> Then it sends what
+            <a href="#what-we-collect" class={link}>What we collect</a> describes.
+          </li>
+        </ul>
+        <p>
+          Anything beyond that happens because you set it up. When you connect an AI provider or
+          coding CLI, Telegram notifications, error reporting, a Cloudflare account, a server or a
+          database, Runova talks to that service from your computer with the credentials you entered.
+          We never see that traffic, and the service's own policy covers what it receives. The writing
+          check can send the text you check to LanguageTool's public service, unless you install
+          LanguageTool in Runova so that it runs on your computer.
+        </p>
+      </PolicySection>
+
+      <PolicySection id="phone-apps" title="The apps for Android and iOS">
+        <p class="lead">
+          The phone apps manage your computers from your phone. You sign in by scanning a QR code that
+          Runova shows on your computer or in your browser. Work on a computer goes through that
+          computer, and the account side goes to our servers.
+        </p>
+        <FactList items={permissions} />
+        <ul class="dots">
+          <li>
+            The key that links your phone to your computers is sealed by the Android Keystore or the iOS
+            Keychain. Android backups of the app are switched off.
+          </li>
+          <li>Vault screens block screenshots and are hidden in the app switcher.</li>
+          <li>
+            The apps contain no ads, no analytics and no crash reporting. The only outside services
+            they use are Firebase Cloud Messaging on Android and the Apple Push Notification service on
+            iOS, to deliver notifications.
+          </li>
+          <li>We do not track you across other companies' apps or websites.</li>
+        </ul>
+      </PolicySection>
+
+      <PolicySection id="cookies" title="Cookies and analytics">
+        <p class="lead">
+          Unless you allow analytics, reading the public pages sets no cookies. These are the
+          exceptions and the tags that may load.
+        </p>
+        <ul class="dots">
+          <li>
+            <strong>Signing in.</strong> One session cookie and one security cookie, both from
+            runovahq.com and both needed for your account to work.
+          </li>
+          <li>
+            <strong>Your choice.</strong> Where we show the cookie banner, your answer is saved in your
+            browser.
+          </li>
+          <li>
+            <strong>Analytics and ad measurement.</strong> We may load Google Analytics, Google Ads,
+            Google Tag Manager, Microsoft Clarity and Microsoft Advertising on the public pages.
+            Clarity records how visitors move through a page. Where the banner is shown, none of them
+            loads until you click Allow. Cookie settings in the footer lets you change your mind, and
+            saying no clears their cookies. They never load in your account, the admin pages or the
+            apps.
+          </li>
+          <li>
+            <strong>Bot checks.</strong> Sign-up and sign-in forms may use Cloudflare Turnstile.
+          </li>
+          <li>
+            <strong>Error reports.</strong> If the website or our servers hit an error, a report goes
+            to Sentry. We keep personal data out of those reports.
+          </li>
+        </ul>
+      </PolicySection>
+
+      <PolicySection id="who-receives-it" title="Who receives your data">
+        <p class="lead">
+          We do not sell your personal data, and Runova shows no ads. These services receive some of it,
+          only so that Runova works.
+        </p>
+        <FactList items={providers} />
+        <ul class="dots">
+          <li>
+            <strong>People you choose.</strong> The other members of a team can see the items shared
+            with the team.
+          </li>
+          <li>
+            <strong>The law and safety.</strong> We share data when the law requires it, or to protect
+            you, other people or Runova from fraud and abuse. If Runova is sold or merged, your data
+            moves with it and this policy keeps applying until you are told of a change.
+          </li>
+          <li>
+            <strong>Other countries.</strong> Some of these services process data in the United States
+            and in other countries outside yours.
+          </li>
+          <li>
+            <strong>Our grounds.</strong> Where the law asks for one: we use your data to give you the
+            service you asked for, to keep it secure and prevent abuse, and to meet legal duties. We use
+            analytics cookies only with your consent, and send push notifications only if you allow
+            them.
+          </li>
+        </ul>
+      </PolicySection>
+
+      <PolicySection id="how-long" title="How long we keep it">
+        <p class="lead">We keep data only as long as it is needed for the reason we collected it.</p>
+        <dl class="mt-6 overflow-hidden rounded-box border bg-card/60 divide-y">
+          {
+            kept.map((row) => (
+              <div class="grid gap-1 px-5 py-4 md:grid-cols-[minmax(0,1fr)_15rem] md:items-baseline md:gap-8 md:px-6">
+                <dt class="text-foreground">{row.what}</dt>
+                <dd class="font-mono text-primary text-sm">{row.how}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </PolicySection>
+
+      <PolicySection id="how-we-protect-it" title="How we protect it">
+        <ul class="dots">
+          {protections.map((line) => <li set:html={line} />)}
+        </ul>
+      </PolicySection>
+
+      <PolicySection id="your-rights" title="Your choices and rights">
+        <p class="lead">
+          Most of this you can do yourself. Each link needs you to be signed in.
+        </p>
+        <ul class="mt-6 overflow-hidden rounded-box border bg-card/60 divide-y">
+          {
+            controls.map((row) => (
+              <li class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-5 py-3.5 md:px-6">
+                <span class="text-foreground">{row.text}</span>
+                <a href={row.href} class={`${link} font-mono text-sm`}>{row.label}</a>
+              </li>
+            ))
+          }
+          <li class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-5 py-3.5 md:px-6">
+            <span class="text-foreground">Change your cookie choice</span>
+            <span class="font-mono text-muted-foreground text-sm">Cookie settings, in the footer</span>
+          </li>
+        </ul>
+        <p>
+          Depending on where you live (the EU, the UK and California, for example), you can also ask us
+          for a copy of your data, to correct it, to delete it, to limit or object to how we use it, or
+          to move it elsewhere. You can withdraw consent at any time. We do not sell personal data.
+          Email <a href={mail} class={link}>{PRIVACY_EMAIL}</a> and we will answer within 30 days. If you
+          are not happy with the answer, you can complain to your data protection authority.
+        </p>
+      </PolicySection>
+
+      <PolicySection id="delete-account" title="Delete your account">
+        <p class="lead">You can delete your account yourself, whenever you like.</p>
+        <ol class="steps">
+          <li>
+            <span>Sign in at runovahq.com and open <a href="/account/security" class={link}>Security</a>.</span>
+          </li>
+          <li><span>Choose <strong>Delete account</strong>.</span></li>
+          <li><span>Confirm with your password, and your two-factor code if you use one.</span></li>
+        </ol>
+        <p>
+          The account is deleted at once, and every computer and phone signed in to it is signed out.
+        </p>
+        <p>
+          <strong>What is deleted:</strong> your profile, sessions, synced items, team memberships, push
+          tokens, online monitors and their results, and our records of your plan and payments. A team
+          you were the only member of is deleted too. If you are the only Owner of a team that has other
+          members, make someone else an Owner or delete the team first.
+        </p>
+        <p>
+          <strong>What stays:</strong> the data on your own computers and phones, which you remove by
+          uninstalling the app. Stripe and NOWPayments keep their own payment records under their
+          policies.
+        </p>
+        <p>
+          Cannot sign in? Email <a href={mail} class={link}>{PRIVACY_EMAIL}</a> from the address on the
+          account and we will delete it for you.
+        </p>
+      </PolicySection>
+
+      <PolicySection id="children-and-changes" title="Children and changes">
+        <p>
+          Runova is a tool for developers and is not meant for children under 16. We do not knowingly
+          collect personal data from children. If you think a child has given us some, email us and we
+          will delete it.
+        </p>
+        <p>
+          When we change this policy we update the date at the top of the page. If a change affects how
+          we handle your data, we will tell account holders by email.
+        </p>
+      </PolicySection>
+
+      <PolicySection id="contact" title="Contact">
+        <p class="lead">
+          Questions, requests about your data and complaints all go to one address. Please write from
+          the email address on your account so we can find it.
+        </p>
+        <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-4 rounded-box border bg-card/60 p-5 md:p-6">
+          <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-inner border bg-background text-primary">
+            <Mail className="size-5" aria-hidden="true" />
+          </span>
+          <div class="min-w-[13rem] flex-1">
+            <p class="font-semibold">SmartClouds</p>
+            <p class="break-all font-mono text-muted-foreground text-sm">{PRIVACY_EMAIL}</p>
+          </div>
+          <a href={mail} class:list={[buttonVariants({ size: 'lg' }), 'max-sm:w-full']}>Email us</a>
+        </div>
+      </PolicySection>
+    </article>
+
+    <aside class="hidden lg:block">
+      <HelpToc toc={PRIVACY_SECTIONS} />
+    </aside>
+  </div>
+</BaseLayout>
+
+<style>
+  /* The soft light behind the title, the same green the app's active pill glows with. */
+  .privacy-hero::before {
+    content: '';
+    position: absolute;
+    inset: -3rem 0 0;
+    z-index: -1;
+    background:
+      radial-gradient(34rem 18rem at 12% 8%, hsl(var(--glow) / 0.2), transparent 70%),
+      radial-gradient(28rem 16rem at 90% 30%, hsl(var(--severity-info) / 0.09), transparent 70%);
+    /* Fades out toward every edge, so the light has no visible box. */
+    -webkit-mask-image:
+      linear-gradient(to right, transparent, #000 16%, #000 84%, transparent),
+      linear-gradient(to bottom, transparent, #000 20%, #000 65%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to right, transparent, #000 16%, #000 84%, transparent),
+      linear-gradient(to bottom, transparent, #000 20%, #000 65%, transparent);
+    mask-composite: intersect;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .rise {
+      animation: privacy-rise 700ms var(--ease-enter) both;
+      animation-delay: calc(var(--order, 0) * 80ms);
+    }
+  }
+
+  @keyframes privacy-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.9rem);
+    }
+  }
+
+  .jump[open] :global(.jump-chevron) {
+    transform: rotate(180deg);
+  }
+
+  .jump summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* A real sequence, so these are numbered. */
+  .steps {
+    counter-reset: step;
+    margin-top: 1.5rem;
+    display: grid;
+    max-width: 70ch;
+    gap: 0.75rem;
+  }
+
+  .steps > li {
+    counter-increment: step;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-inner);
+    background: hsl(var(--card) / 0.6);
+    padding: 0.8rem 1rem;
+    color: hsl(var(--foreground));
+  }
+
+  .steps > li::before {
+    content: counter(step);
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.14);
+    color: hsl(var(--primary));
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+</style>

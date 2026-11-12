@@ -1,0 +1,43 @@
+---
+import type { Fact } from '../../lib/privacy';
+
+/**
+ * A card of rows for the privacy policy. Each row names one thing (a kind of data, a permission, a
+ * provider), says what it is and why, and can carry a small mono note on the right, such as how
+ * long it is kept. Rows are plain text on purpose: the policy is read in store listings and
+ * in-app browsers, so nothing here needs a script.
+ */
+
+interface Props {
+  items: Fact[];
+}
+
+const { items } = Astro.props;
+---
+
+<ul class="mt-6 overflow-hidden rounded-box border bg-card/60 divide-y">
+  {
+    items.map(({ icon: Icon, title, text, note }) => (
+      <li
+        class:list={[
+          'grid gap-x-8 gap-y-4 p-5 md:p-6',
+          note && 'md:grid-cols-[minmax(0,1fr)_13rem]',
+        ]}
+      >
+        <div class="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 md:items-start md:gap-y-1.5">
+          <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-inner border bg-background text-primary md:row-span-2">
+            <Icon className="size-5" aria-hidden="true" />
+          </span>
+          <h3 class="font-semibold text-base text-foreground leading-snug md:pt-2.5">{title}</h3>
+          <p class="col-span-2 max-w-[62ch] text-[0.9375rem] text-muted-foreground leading-[1.65] md:col-span-1 md:col-start-2" set:html={text} />
+        </div>
+        {note && (
+          <div class="font-mono text-xs md:border-l md:pl-6">
+            <p class="text-muted-foreground uppercase tracking-[0.12em]">{note.label}</p>
+            <p class="mt-1.5 text-foreground leading-[1.55]">{note.value}</p>
+          </div>
+        )}
+      </li>
+    ))
+  }
+</ul>

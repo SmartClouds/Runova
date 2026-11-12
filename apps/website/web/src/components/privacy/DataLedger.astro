@@ -1,0 +1,98 @@
+---
+import { Ban, Cloud, Laptop, X } from 'lucide-react';
+
+/**
+ * The privacy policy's short version: three lanes that say where data lives. The first is what stays
+ * on your own devices, the second is what Runova's servers hold and only once you have an account,
+ * and the third is what Runova never collects. The lanes are headed in words, so no meaning rests on
+ * color or on the icons alone.
+ */
+
+const lanes = [
+  {
+    key: 'devices',
+    icon: Laptop,
+    label: 'Stays with you',
+    title: 'On your own devices',
+    note: 'The default. Runova works fully signed out.',
+    marker: 'dot',
+    items: [
+      'Your source code, files and terminals',
+      'Projects, history and settings',
+      'Vault entries and server passwords, sealed on the machine',
+      'The keys you give to AI providers and other services',
+    ],
+  },
+  {
+    key: 'servers',
+    icon: Cloud,
+    label: 'Only with an account',
+    title: 'On Runova servers',
+    note: 'What an account, sync and online monitoring need.',
+    marker: 'dot',
+    items: [
+      'Email address, display name and a hashed password',
+      'Which devices are signed in, with their IP addresses',
+      'Synced items, encrypted when you set a key we do not hold',
+      'Push tokens, your plan and the monitors you add',
+    ],
+  },
+  {
+    key: 'never',
+    icon: Ban,
+    label: 'Not collected',
+    title: 'Never collected',
+    note: 'True with or without an account.',
+    marker: 'x',
+    items: [
+      'Your password in readable form',
+      'Terminal output, files and screen contents, which go between your devices or through an encrypted relay',
+      'Location, contacts, photos or microphone',
+      'Ads, advertising IDs or analytics inside the apps',
+    ],
+  },
+] as const;
+---
+
+<section aria-labelledby="glance-title" class="ledger rounded-box border bg-card/60 backdrop-blur">
+  <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b px-5 py-3 font-mono text-muted-foreground text-xs md:px-6">
+    <h2 id="glance-title" class="uppercase tracking-[0.14em]">At a glance</h2>
+    <p>Where your data lives</p>
+  </div>
+  <ul class="grid lg:grid-cols-3">
+    {
+      lanes.map(({ key, icon: Icon, label, title, note, marker, items }) => (
+        <li
+          class:list={[
+            'lane flex flex-col gap-5 p-5 md:p-6',
+            'border-b last:border-b-0 lg:border-b-0 lg:border-l lg:first:border-l-0',
+            key === 'servers' && 'bg-primary/[0.035]',
+          ]}
+        >
+          <div class="flex items-center gap-3">
+            <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-inner border bg-background text-primary">
+              <Icon className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p class="font-mono text-muted-foreground text-xs uppercase tracking-[0.12em]">{label}</p>
+              <h3 class="font-semibold text-lg leading-tight">{title}</h3>
+            </div>
+          </div>
+          <p class="text-muted-foreground text-sm">{note}</p>
+          <ul class="grid gap-2.5 text-sm">
+            {items.map((item) => (
+              <li class="flex items-start gap-2.5 leading-[1.5]">
+                {marker === 'x' ? (
+                  <X className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <span class="mt-[0.45rem] size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                )}
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ul>
+</section>

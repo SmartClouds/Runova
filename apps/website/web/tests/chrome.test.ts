@@ -54,6 +54,11 @@ describe('Footer', () => {
     );
   });
 
+  it('links the privacy policy from the status bar, since the app stores point to it', () => {
+    const bar = html.slice(html.indexOf('Open source, MIT'));
+    expect(bar).toMatch(/<a href="\/privacy"[^>]*>\s*Privacy policy\s*<\/a>/);
+  });
+
   it('opens external links with rel="noopener"', () => {
     for (const link of html.match(/<a [^>]*href="https:[^>]*>/g) ?? []) {
       expect(link).toContain('rel="noopener"');

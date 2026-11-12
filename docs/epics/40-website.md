@@ -71,7 +71,8 @@ adapter and cached by the `Cache-Control` they send (the proxy and browsers hono
 | `/news/rss.xml` | on demand | `public, max-age=300, stale-while-revalidate=600` | T019 |
 | `/news-sitemap.xml` | on demand | `public, max-age=300` | T019 |
 | `/admin`, `/admin/**` | on demand | `private, no-store` | T020, T021 |
-| `/privacy`, `/terms` | static | `public, max-age=600` | T022 |
+| `/privacy` | static | `public, max-age=600` | T022 (page added later, see "Privacy policy" below) |
+| `/terms` | static | `public, max-age=600` | T022, not built yet |
 | `/sitemap-index.xml`, `/sitemap-*.xml` | static part from `@astrojs/sitemap`, plus an on-demand `/sitemap-dynamic.xml` for blog and news | `public, max-age=600` | T022 |
 | `/robots.txt`, `/llms.txt` | static | `public, max-age=3600` | T022 |
 | `/404`, `/500` | static | `no-store` with the real status code | T022 |
@@ -242,6 +243,24 @@ No rules at the moment: E66 took the mobile section out of the remote article it
 
 The filter is written as data the loader applies (match a heading or an exact phrase, then drop or
 replace), so a new article with a mobile mention fails the scan instead of slipping through.
+
+## Privacy policy
+
+`/privacy` is the one page that may say the phone apps exist. The App Store and Google Play both ask
+for a public privacy policy address, and a policy that left the phone apps out would not be true, so
+the page covers the website, the desktop app and the apps for Android and iOS (permissions,
+notifications, what they never collect). It still stays off the forbidden list above: it says "the
+apps for Android and iOS" and "the phone apps", never "iOS app", "iPhone", "Google Play" or the other
+phrases, so the scan needs no exception. The rest of the site stays silent about the phone apps.
+
+- Text and sections: `src/pages/privacy.astro`, with the section list, the effective date and the
+  contact address in `src/lib/privacy.ts`. Change `PRIVACY_EFFECTIVE` whenever the text changes.
+- The retention periods on the page (7, 30 and 90 days) are checked against the constants in the API
+  by `tests/privacyPage.test.ts`, so changing one without the other fails the build.
+- A new thing that collects data (a provider, a tag, a permission, a stored field) needs its row on
+  the page in the same change.
+- The footer's status bar links to it, and the store listings use `https://runovahq.com/privacy`
+  (account deletion steps are at `https://runovahq.com/privacy#delete-account`).
 
 ## Working rules
 

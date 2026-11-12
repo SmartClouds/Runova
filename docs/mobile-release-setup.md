@@ -178,3 +178,28 @@ You should see these 12 names: `APPLE_TEAM_ID`, `APP_STORE_CONNECT_KEY_ID`,
 6. The iOS build arrives in TestFlight. In App Store Connect, answer the export compliance question
    for the build. The app does use encryption, so answer it for what the app really does.
 7. Try a real push on a real phone on each OS. Nothing has sent one yet.
+
+## 12. Store listings: the privacy address
+
+Both stores ask for a public privacy policy address. Use the same one in each:
+
+```
+https://runovahq.com/privacy
+```
+
+The page ships with the website, so redeploy the website (step 11.3) first and open the address in a
+browser before you submit. Google also asks for a web page that explains how to delete an account:
+use `https://runovahq.com/privacy#delete-account`.
+
+- App Store Connect: App Information, Privacy Policy URL. Under App Privacy the app collects contact
+  info (email address, name) and identifiers (the push token) for app functionality, linked to the
+  user, and nothing is used for tracking.
+- Play Console: App content, Privacy policy, then the Data safety form. Personal info (email address,
+  name) and device IDs (the push token) are collected for app functionality, encrypted in transit and
+  can be deleted on request. Nothing is shared with a third party for its own use, and push goes
+  through Google's own service.
+
+These answers match the policy page and what the apps do today (no analytics, ads or crash SDKs,
+camera only for the sign-in QR code). Check them against each store's current form before you submit.
+When an app starts collecting something new, change the page (`apps/website/web/src/pages/privacy.astro`)
+and these answers in the same commit.

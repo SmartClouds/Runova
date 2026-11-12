@@ -1,0 +1,78 @@
+---
+/**
+ * One section of the privacy policy: a heading that the "On this page" list links to, then the
+ * section's text. The heading carries the id, which is what the list's script looks up.
+ */
+interface Props {
+  id: string;
+  title: string;
+}
+
+const { id, title } = Astro.props;
+---
+
+<section aria-labelledby={id} class="policy-section border-t pt-12 pb-4 first-of-type:border-t-0 first-of-type:pt-0">
+  <h2 id={id} class="scroll-mt-24 text-balance font-semibold text-[clamp(1.6rem,3.4vw,2.1rem)] leading-[1.15]">
+    {title}
+  </h2>
+  <div class="policy-body">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .policy-body > :global(p) {
+    margin-top: 1rem;
+    max-width: 70ch;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.7;
+  }
+
+  .policy-body > :global(p.lead) {
+    font-size: 1.0625rem;
+  }
+
+  /* A card or a list gets a little more room before the text that follows it. */
+  .policy-body > :global(:is(ul, ol, dl):not(:last-child)) {
+    margin-bottom: 1.5rem;
+  }
+
+  .policy-body :global(strong) {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  .policy-body :global(code) {
+    border-radius: calc(var(--radius) - 4px);
+    background: hsl(var(--secondary));
+    padding: 0.1rem 0.35rem;
+    color: hsl(var(--secondary-foreground));
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+
+  .policy-body > :global(ul.dots) {
+    margin-top: 1rem;
+    display: grid;
+    max-width: 70ch;
+    gap: 0.6rem;
+  }
+
+  .policy-body > :global(ul.dots > li) {
+    position: relative;
+    padding-left: 1.25rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.65;
+  }
+
+  .policy-body > :global(ul.dots > li::before) {
+    content: '';
+    position: absolute;
+    top: 0.72em;
+    left: 0.1rem;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 999px;
+    background: hsl(var(--primary) / 0.7);
+  }
+</style>
