@@ -21,6 +21,13 @@ services:
       telemetry-sink:
         condition: service_healthy
 
+  # The image build reuses the optimized images that `bun run build` left in web/node_modules, so
+  # run that build first (CI does). See the astro-assets stage in web/Dockerfile.
+  web:
+    build:
+      additional_contexts:
+        astro-assets: ./web/node_modules/.astro/assets
+
   telemetry-sink:
     image: oven/bun:1.4.4-slim
     volumes:

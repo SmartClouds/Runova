@@ -292,9 +292,32 @@ jobs:
         if: ${{ !cancelled() }}
         run: bun run test
 
+      # Astro encodes every screenshot to AVIF and WebP at several widths (over 200 files), which
+      # took 4 to 9 minutes of the 45 when it started cold each run. Each cached file is named by
+      # a hash of its source and transform, so an old entry is never served for a changed image.
+      # The image build of the compose stack reuses the same cache (see compose.test.yaml).
+      - name: Restore the optimized image cache
+        id: astro-assets
+        uses: actions/cache/restore@v6
+        with:
+          path: apps/website/web/node_modules/.astro/assets
+          key: astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-${{ hashFiles('apps/website/web/src/assets/**') }}
+          restore-keys: |
+            astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-
+
       - name: Build
+        id: build
         if: ${{ !cancelled() }}
         run: bun run build
+
+      # Saved right after the build, not at the end of the job, so a later failure or a timeout
+      # still leaves the next run a warm cache.
+      - name: Save the optimized image cache
+        if: ${{ steps.build.outcome == 'success' && steps.astro-assets.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: apps/website/web/node_modules/.astro/assets
+          key: ${{ steps.astro-assets.outputs.cache-primary-key }}
 
       - name: Playwright browser
         run: bunx playwright install chromium

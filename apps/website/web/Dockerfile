@@ -4,6 +4,12 @@
 # Dockerfile.dockerignore next to this file:
 #   docker build -f apps/website/web/Dockerfile -t runova-website-web .
 
+# Astro's cache of optimized images, empty unless the build is given an astro-assets context
+# (--build-context astro-assets=<dir>, or additional_contexts in compose). compose.test.yaml passes
+# the cache the CI build step just filled, so the image build reuses it instead of encoding every
+# screenshot again.
+FROM scratch AS astro-assets
+
 FROM oven/bun:1.4.4 AS build
 # The repository layout is kept, because the build finds the help articles relative to the site.
 WORKDIR /repo/apps/website/web
@@ -24,7 +30,11 @@ COPY apps/desktop/src/shared/help /repo/apps/desktop/src/shared/help
 # The monitoring nodes page shows the node's compose file as it is (E54).
 COPY apps/website/monitoring-node/compose.yaml /repo/apps/website/monitoring-node/compose.yaml
 COPY apps/website/web ./
-RUN bun run build
+# Encoding the screenshots took most of the image build (nearly 10 minutes in CI). Each cached file
+# is named by a hash of its source and transform, so a stale one is never reused. The mount is
+# writable, but what the build adds to it stays out of the image and out of the given folder.
+RUN --mount=type=bind,from=astro-assets,target=/repo/apps/website/web/node_modules/.astro/assets,rw \
+    bun run build
 
 # Only what the server needs at run time: no dev tools, no build caches.
 FROM oven/bun:1.4.4 AS deps
