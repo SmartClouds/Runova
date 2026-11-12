@@ -289,6 +289,9 @@ jobs:
     name: WordPress connector
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -305,6 +308,13 @@ jobs:
         with:
           node-version: "26"
 
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
       - name: Unit tests
         run: node scripts/wordpress-connector.mjs test
 
@@ -320,6 +330,11 @@ jobs:
       - name: Smoke test on real WordPress
         run: node scripts/wordpress-connector.mjs smoke
 
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
   # The desktop's WordPress sync engine against the real plugin on WordPress in Docker (E19 T10):
   # pairing, a new project, a deploy with agent files left in the theme (none may reach the site),
   # a refused syntax error, a fatal error rolled back by the site's guard, a manual rollback and a
@@ -330,6 +345,9 @@ jobs:
     needs: wordpress-connector
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -361,6 +379,13 @@ jobs:
           dest: ${{ runner.tool_cache }}/setup-pnpm
           cache: ${{ inputs.github-hosted }}
 
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -371,6 +396,11 @@ jobs:
         env:
           RUNOVA_SYSTEM_TESTS: "1"
         run: pnpm --filter @runova/desktop exec vitest run src/main/deploy/wordpress/wordpress.int.test.ts
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   # The .NET server core (apps/server-core). Its global.json pins the SDK feature band and the
   # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. System tests
@@ -396,6 +426,9 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       SHARD_1_NAMESPACES: Stacks Nginx Registries Docker
       SHARD_2_NAMESPACES: CoreDomainTests Backups Cloudflare Hardening Certificates ErrorReporting Assistant Notifications Files Web CoreUpdates Mapping
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -422,6 +455,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "26"
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
 
       # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
       # this step through NuGet audit.
@@ -465,6 +505,11 @@ jobs:
             exit 1
           fi
 
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
   # The server core installed on real Linux machines: systemd test servers in Docker (Ubuntu
   # 24.04 and Rocky 9), logged in as root and as a user whose sudo asks for a password, driven by
   # the desktop's own installer, pool and REST client. Also a tampered download, a release that
@@ -476,6 +521,9 @@ jobs:
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -493,6 +541,13 @@ jobs:
           dotnet-version: 10.0.4xx
           cache: ${{ inputs.github-hosted }}
           cache-dependency-path: apps/remote-agent/**/packages.lock.json
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
 
       - name: Restore
         working-directory: apps/remote-agent
@@ -527,7 +582,7 @@ jobs:
           # Xvfb writes its display number to -displayfd once it accepts clients.
           ready="$RUNNER_TEMP/xvfb-97-ready"
           : > "$ready"
-          Xvfb :97 -screen 0 1024x768x24 -ac -noreset -displayfd 3 3> "$ready" &
+          Xvfb :97 -screen 0 1024x768x24 -ac -noreset -displayfd 3 3> "$ready" > "$RUNNER_TEMP/xvfb-97.log" 2>&1 &
           xvfb=$!
           for _ in $(seq 50); do
             kill -0 "$xvfb" 2> /dev/null || break
@@ -544,6 +599,11 @@ jobs:
           RUNOVA_TEST_X_DISPLAY: ":97"
         run: dotnet test --project tests/Runova.RemoteAgent.Tests --no-build --configuration Release --output Detailed
 
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
   server-core-system:
     name: Server core on test servers
     if: ${{ inputs.e2e }}
@@ -552,6 +612,9 @@ jobs:
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -593,6 +656,13 @@ jobs:
           dest: ${{ runner.tool_cache }}/setup-pnpm
           cache: ${{ inputs.github-hosted }}
 
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -606,6 +676,7 @@ jobs:
       # server's own included, since containers share the host's profiles. Confined, it cannot read
       # /etc/shadow and every password login fails. A real Rocky server has no such profile.
       - name: Let the Rocky test server check passwords
+        shell: bash
         run: |
           if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
             echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
@@ -643,6 +714,11 @@ jobs:
           src/main/deploy/registries.int.test.ts
           src/main/deploy/directTls.int.test.ts
           src/main/deploy/deployExec.int.test.ts
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   # Lint and tests are two jobs: each compiles the whole workspace (clippy for checking, the tests
   # with coverage instrumentation). Both run on the Mac, which builds the workspace from scratch in
@@ -736,6 +812,9 @@ jobs:
     name: Mobile Android
     runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -764,6 +843,13 @@ jobs:
         with:
           tool: cargo-binstall
 
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
       # The gnu build of cargo-ndk needs glibc 2.39, newer than the self-hosted runner has, so take
       # the static musl build. --force replaces a gnu copy an earlier job left in ~/.cargo/bin.
       - name: Install cargo-ndk
@@ -776,6 +862,11 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug -PcoreAbis=x86_64 -PcoreProfile=ci --console=plain --no-daemon
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   mobile-ios:
     name: Mobile iOS
@@ -868,6 +959,9 @@ jobs:
     env:
       # One cache location on every OS, so the Electron zip can be restored between runs.
       electron_config_cache: ${{ github.workspace }}/.cache/electron
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.target.name, 'windows') && 'pwsh' || format('bash {0}/.github/ci-container/shell.sh {{0}}', github.workspace) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -879,8 +973,9 @@ jobs:
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
 
+      # Only on a GitHub-hosted runner: the self-hosted job container has them (.github/ci-container).
       - name: Display and Electron libraries (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && runner.environment != 'self-hosted'
         run: |
           # The self-hosted runner keeps what it installed, so only reach for apt when needed.
           # Everything Electron links against. GitHub's hosted images ship most of these already,
@@ -915,6 +1010,7 @@ jobs:
       # self-hosted runners keep what they installed, so this only reaches for a package manager
       # when ffmpeg is missing, and warns instead of failing where it cannot install.
       - name: ffmpeg for the Studio render spec
+        if: runner.os != 'Linux' || runner.environment != 'self-hosted'
         shell: bash
         run: |
           if command -v ffmpeg > /dev/null && command -v ffprobe > /dev/null; then
@@ -957,6 +1053,13 @@ jobs:
           key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-${{ runner.os }}-${{ runner.arch }}-
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -1027,3 +1130,8 @@ jobs:
           path: |
             apps/desktop/playwright-report
             apps/desktop/test-results
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"

@@ -22,6 +22,11 @@ name: CI
 # The Mac mini runs on a hard disk, so it keeps node_modules too and only clears the rest of the
 # workspace, at the start of each job.
 #
+# On the Linux runner, a job's run steps run in a container that the job starts after its setup
+# actions and removes at the end, with every process left in it (.github/ci-container). It shares
+# the host's paths, network and Docker, so the steps are the same as on the host. The system
+# packages the steps need (Electron's libraries, Xvfb, ffmpeg) live in its image, not on the host.
+#
 # The jobs do not wait for each other, and the desktop unit and end-to-end
 # suites are split into shards, so a run is only as fast as the number of
 # runners online allows. With one runner every job queues behind the last.
@@ -177,6 +182,7 @@ jobs:
       SHARD_2_NAMESPACES: News Remote Users Identity Releases
     defaults:
       run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
         working-directory: apps/website/api
     steps:
       - name: Checkout
@@ -192,6 +198,13 @@ jobs:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
           dotnet-version: 10.0.4xx
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
 
       # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
       # this step through NuGet audit.
@@ -218,6 +231,11 @@ jobs:
           else
             dotnet test --project tests/Runova.Website.IntegrationTests --no-build --configuration Release --output Detailed "${filters[@]}"
           fi
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   # The website (apps/website/web): lint, types, unit tests and the build, the e2e suite (a fake
   # API, plus the real API and PostgreSQL for the admin pages), then the compose stack the way
