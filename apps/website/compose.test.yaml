@@ -6,6 +6,10 @@
 # cookie or signature ends up in them.
 services:
   api:
+    build:
+      args:
+        # Set in the Website CI job's arm64 VM, see SYSTEM_PROTOC in api/Dockerfile.
+        SYSTEM_PROTOC: ${SYSTEM_PROTOC:-}
     environment:
       Sentry__Dsn: http://stack@telemetry-sink:4318/1
       # Every Information log becomes a Sentry event with its request attached, so the scrubbing is

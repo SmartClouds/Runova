@@ -18,8 +18,19 @@ COPY src/Runova.Website.Data/Runova.Website.Data.csproj src/Runova.Website.Data/
 COPY src/Runova.Website.Api/Runova.Website.Api.csproj src/Runova.Website.Api/packages.lock.json src/Runova.Website.Api/
 RUN dotnet restore src/Runova.Website.Api/Runova.Website.Api.csproj --locked-mode
 
+# SYSTEM_PROTOC=1 compiles the gRPC contracts with the distribution's protoc instead of the one
+# Grpc.Tools bundles, whose linux_arm64 build crashed (exit code 139) in the arm64 VM the Website
+# CI job runs in (compose.test.yaml sets it there). The distribution has no C# gRPC plugin, so
+# Grpc.Tools' own stays. Empty, as in CD, changes nothing.
+ARG SYSTEM_PROTOC=
+RUN if [ -n "$SYSTEM_PROTOC" ]; then \
+      apt-get update -q && apt-get install -y -q --no-install-recommends protobuf-compiler \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY src/ src/
-RUN dotnet publish src/Runova.Website.Api/Runova.Website.Api.csproj --no-restore --configuration Release \
+RUN if [ -n "$SYSTEM_PROTOC" ]; then export PROTOBUF_PROTOC=/usr/bin/protoc; fi \
+    && dotnet publish src/Runova.Website.Api/Runova.Website.Api.csproj --no-restore --configuration Release \
     --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
 
 # The media folder, owned by the runtime image's app user (APP_UID, 1654), so a new volume mounted

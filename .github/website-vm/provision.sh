@@ -24,6 +24,11 @@ sudo apt-get install -y -q --no-install-recommends \
 # ICU for the .NET SDK, whose package name carries the Ubuntu release's version (libicu74 on 24.04).
 icu=$(apt-cache search --names-only '^libicu[0-9]+$' | awk '{ print $1 }' | sort -V | tail -1)
 sudo apt-get install -y -q --no-install-recommends "$icu"
+# The protoc that Grpc.Tools bundles for linux_arm64 crashed here (exit code 139) when the API
+# built, so the builds use Ubuntu's (PROTOBUF_PROTOC below, SYSTEM_PROTOC for the API image).
+# Ubuntu has no C# gRPC plugin, so Grpc.Tools' own plugin stays.
+sudo apt-get install -y -q --no-install-recommends protobuf-compiler
+echo "$(protoc --version), page size $(getconf PAGESIZE)"
 sudo usermod -aG docker admin
 sudo systemctl enable --now docker
 docker_version=$(sudo docker version --format '{{.Server.Version}}')
@@ -62,5 +67,7 @@ export DOTNET_ROOT="\$HOME/.dotnet"
 export DOTNET_NOLOGO=1
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export ONNXRUNTIME_NODE_INSTALL=skip
+export PROTOBUF_PROTOC=/usr/bin/protoc
+export SYSTEM_PROTOC=1
 EOF
 test -d "$web"
