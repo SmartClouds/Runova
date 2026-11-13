@@ -1,6 +1,29 @@
+# One document per suite, run with circleci testsuite run "<name>" from the folder the commands
+# are written for: apps/website/web for the first, apps/website/api for the three after it.
 ---
 name: website web unit tests
 discover: npx vitest list --filesOnly 2>/dev/null | grep -E '\.test\.tsx?$'
 run: npx vitest run --reporter=default --reporter=junit --outputFile.junit="<< outputs.junit >>" << test.atoms >>
 outputs:
   junit: test-reports/website-web.xml
+---
+# The API suites take a test class as their atom. dotnet-suite.sh turns the classes that come in on
+# stdin (the run commands have no << test.atoms >>) into repeated --filter-class options.
+name: website api unit tests
+discover: bash ../../../.circleci/dotnet-suite.sh discover tests/Runova.Website.Tests
+run: bash ../../../.circleci/dotnet-suite.sh run tests/Runova.Website.Tests "<< outputs.junit >>"
+outputs:
+  junit: test-reports/website-api-unit.xml
+---
+name: website api monitoring tests
+discover: bash ../../../.circleci/dotnet-suite.sh discover tests/Runova.Monitoring.Tests
+run: bash ../../../.circleci/dotnet-suite.sh run tests/Runova.Monitoring.Tests "<< outputs.junit >>"
+outputs:
+  junit: test-reports/website-api-monitoring.xml
+---
+# Needs Docker: every test host starts PostgreSQL (and some RabbitMQ) with Testcontainers.
+name: website api integration tests
+discover: bash ../../../.circleci/dotnet-suite.sh discover tests/Runova.Website.IntegrationTests
+run: bash ../../../.circleci/dotnet-suite.sh run tests/Runova.Website.IntegrationTests "<< outputs.junit >>"
+outputs:
+  junit: test-reports/website-api-integration.xml

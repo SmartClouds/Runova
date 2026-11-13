@@ -9,12 +9,20 @@ version: 2.1
 #
 # The test commands are circleci testsuite run (see test-suites.yml). It runs the same tests as
 # before, with free static splitting across a job's parallelism and a rerun of only the failed
-# tests when a workflow is rerun from failed.
+# tests when a workflow is rerun from failed. The API suites take a test class as their atom
+# (dotnet-suite.sh).
 
 executors:
   node:
     docker:
       - image: cimg/node:26.13
+    resource_class: large
+  # The API's integration tests start PostgreSQL and RabbitMQ with Testcontainers, so they need a
+  # Docker daemon they can reach, which only the machine executor gives. There is no cimg image
+  # with the .NET SDK either, so the job installs the SDK itself.
+  linux-machine:
+    machine:
+      image: ubuntu-2404:current
     resource_class: large
 
 jobs:
@@ -79,7 +87,90 @@ jobs:
           paths:
             - apps/website/web/node_modules/.astro/assets
 
+  # The API in apps/website/api. Three parallel nodes, as the GitHub job's three shards were: each
+  # builds, then circleci testsuite run takes its third of every suite's test classes. The format
+  # check runs on the first node only.
+  website-api:
+    executor: linux-machine
+    parallelism: 3
+    environment:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - checkout
+
+      # The 10.0.4xx band that global.json names (its rollForward is latestPatch), the latest
+      # release in it, which is what the GitHub job's setup-dotnet takes too. A fresh machine
+      # fetches from the internet, so the download and the installer retry.
+      - run:
+          name: Install the .NET SDK
+          command: |
+            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+              https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+            for attempt in 1 2 3; do
+              bash /tmp/dotnet-install.sh --channel 10.0.4xx --install-dir "$HOME/.dotnet" && break
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep $((attempt * 5))
+            done
+            echo 'export DOTNET_ROOT="$HOME/.dotnet"' >> "$BASH_ENV"
+            echo 'export PATH="$HOME/.dotnet:$PATH"' >> "$BASH_ENV"
+            "$HOME/.dotnet/dotnet" --version
+
+      - run:
+          name: Hash the lock files
+          command: find apps/website/api -name packages.lock.json | sort | xargs sha256sum > /tmp/nuget-locks.sha
+      - restore_cache:
+          keys:
+            - nuget-v1-{{ arch }}-{{ checksum "/tmp/nuget-locks.sha" }}
+            - nuget-v1-{{ arch }}-
+      # Locked: the lock files are what was reviewed. A known high or critical vulnerability fails
+      # this step through NuGet audit.
+      - run:
+          name: Restore
+          working_directory: apps/website/api
+          command: dotnet restore Runova.Website.slnx --locked-mode
+      - save_cache:
+          key: nuget-v1-{{ arch }}-{{ checksum "/tmp/nuget-locks.sha" }}
+          paths:
+            - ~/.nuget/packages
+      - run:
+          name: Build
+          working_directory: apps/website/api
+          command: dotnet build Runova.Website.slnx --no-restore --configuration Release
+
+      # Each suite is split over the three nodes on its own, so a node gets a third of the unit
+      # tests, of the monitoring tests and of the integration tests. They all run, so one failing
+      # suite does not hide the others.
+      - run:
+          name: Unit tests
+          working_directory: apps/website/api
+          command: circleci testsuite run "website api unit tests"
+      - run:
+          name: Monitoring tests
+          when: always
+          working_directory: apps/website/api
+          command: circleci testsuite run "website api monitoring tests"
+      # Every test host starts its own PostgreSQL with Testcontainers, so this takes the longest.
+      - run:
+          name: Integration tests
+          when: always
+          no_output_timeout: 30m
+          working_directory: apps/website/api
+          command: circleci testsuite run "website api integration tests"
+      - store_test_results:
+          path: apps/website/api/test-reports
+
+      - run:
+          name: Format
+          when: always
+          working_directory: apps/website/api
+          command: |
+            if [ "$CIRCLE_NODE_INDEX" = 0 ]; then
+              dotnet format Runova.Website.slnx --verify-no-changes --no-restore
+            fi
+
 workflows:
   website:
     jobs:
       - website-web
+      - website-api
