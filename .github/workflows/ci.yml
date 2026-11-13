@@ -165,16 +165,11 @@ jobs:
   # A job that is still running is waited for. One that fails ends its copy at once. One that never
   # reports (CircleCI is not triggered, or its config is broken) fails it after 15 minutes. Rerun a
   # copy after rerunning its failed CircleCI job: it reads the latest status.
-  #
-  # desktop-e2e-linux has not passed on CircleCI yet, so its copy shows a failure without failing
-  # the run, as the server core's jobs did before they were gated. Drop continue-on-error once it
-  # is green.
   circleci:
     name: CircleCI (${{ matrix.job }})
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    continue-on-error: ${{ matrix.job == 'desktop-e2e-linux' }}
     strategy:
       fail-fast: false
       matrix:

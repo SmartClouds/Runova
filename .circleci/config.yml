@@ -349,6 +349,11 @@ jobs:
       PLAYWRIGHT_HTML_OPEN: never
     steps:
       - checkout
+      # First, so the NuGet cache saved with when: always below has its key even when a later step
+      # fails.
+      - run:
+          name: Hash the server core's lock files
+          command: find apps/server-core -name packages.lock.json | sort | xargs sha256sum > /tmp/core-locks.sha
 
       - run:
           name: Install the system packages
@@ -356,8 +361,12 @@ jobs:
             echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries > /dev/null
             sudo apt-get update -q
             # Electron's libraries, Xvfb, ffmpeg (the Studio render spec skips itself without it)
-            # and the build tools electron-rebuild needs.
-            sudo apt-get install -y -q --no-install-recommends \
+            # and the build tools electron-rebuild needs. Never interactive, and keeping the image's
+            # own config files: openssh-client pulls in a newer openssh-server, whose sshd_config the
+            # image has changed, and dpkg's question about it hung the step until the 10 minute
+            # no-output limit killed the job.
+            sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -q --no-install-recommends \
+              -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
               build-essential pkg-config python3 git openssh-client \
               xvfb xauth x11-utils ffmpeg fonts-liberation fonts-dejavu-core \
               libnss3 libnspr4 libgbm1 libdrm2 libxss1 libxtst6 libx11-6 libxcb1 libxext6 libxfixes3 \
@@ -379,9 +388,6 @@ jobs:
             echo "pnpm $(pnpm --version)"
       - install-dotnet
 
-      - run:
-          name: Hash the server core's lock files
-          command: find apps/server-core -name packages.lock.json | sort | xargs sha256sum > /tmp/core-locks.sha
       - restore_cache:
           keys:
             - pnpm-v1-{{ arch }}-{{ checksum "pnpm-lock.yaml" }}
