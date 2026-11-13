@@ -59,6 +59,10 @@ echo "Bun $("$HOME/.bun/bin/bun" --version)"
 curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
 bash /tmp/dotnet-install.sh --jsonfile "$repo/apps/website/api/global.json" --install-dir "$HOME/.dotnet" > /dev/null
 echo ".NET SDK $("$HOME/.dotnet/dotnet" --version)"
+# The SDK's first-run setup (its lock folder in /tmp, NuGet's migrations), done once here. Two
+# dotnet commands that both met it at once (the e2e admin stack's build and dev-certs) failed
+# with EEXIST on /tmp/.dotnet/lockfiles, as in about one of fifteen fresh tries.
+DOTNET_CLI_TELEMETRY_OPTOUT=1 "$HOME/.dotnet/dotnet" nuget locals all --list > /dev/null
 
 # Read by run in vm.sh before every step.
 cat > "$HOME/.runova-ci-env" << EOF
