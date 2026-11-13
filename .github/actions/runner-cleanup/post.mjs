@@ -339,9 +339,9 @@ function toolCacheVersions() {
 const RUST_OUTPUT_MIN_FREE = 50 * 1024 ** 3;
 
 /**
- * Cargo's output that jobs keep between runs in <tool cache>/cargo-target (the Mobile iOS job sets
- * CARGO_TARGET_DIR there). Cargo never deletes old artifacts, so it only grows; once the disk is
- * short it goes, and the next run builds from scratch.
+ * Cargo's output that jobs keep between runs in <tool cache>/cargo-target (the Mobile iOS and
+ * Mobile Android jobs set CARGO_TARGET_DIR there). Cargo never deletes old artifacts, so it only
+ * grows; once the disk is short it goes, and the next run builds from scratch.
  */
 function rustBuildOutput() {
   if (!toolCache) return;

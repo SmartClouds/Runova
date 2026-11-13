@@ -813,16 +813,20 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-core-tests
         run: cargo llvm-cov --workspace --locked --fail-under-lines 85
 
+  # On the Mac like the other mobile jobs. Gradle, the NDK and cargo-ndk run natively there, so the
+  # job needs no container and no Docker. On the Linux runner the host core alone took 31 of its 40
+  # minutes from scratch, and the Mac builds the same Rust workspace in a minute or two.
   mobile-android:
     name: Mobile Android
-    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","macOS","ARM64"]') }}
     timeout-minutes: 40
-    defaults:
-      run:
-        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest (see
+          # keepsDependencies in .github/actions/runner-cleanup/shared.mjs).
+          clean: ${{ runner.os != 'macOS' }}
 
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
@@ -843,22 +847,20 @@ jobs:
         with:
           targets: x86_64-linux-android
 
-      - name: Install cargo-binstall
+      - name: Install cargo-ndk
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-binstall
+          tool: cargo-ndk
 
-      # The run steps from here on run in a container that is removed when the job ends (see
-      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
-      - name: Start the job container
-        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
-
-      # The gnu build of cargo-ndk needs glibc 2.39, newer than the self-hosted runner has, so take
-      # the static musl build. --force replaces a gnu copy an earlier job left in ~/.cargo/bin.
-      - name: Install cargo-ndk
-        run: cargo binstall --no-confirm --force --targets x86_64-unknown-linux-musl cargo-ndk
+      # The NDK's macOS toolchain may be Intel-only, and then it needs Rosetta on an Apple silicon
+      # Mac. Run its compiler once here, so a Mac without Rosetta fails with that said, not with a
+      # "Bad CPU type in executable" from deep inside cargo-ndk.
+      - name: Check that the NDK's compiler runs
+        run: |
+          if ! "$ANDROID_HOME"/ndk/28.2.13676358/toolchains/llvm/prebuilt/*/bin/clang --version; then
+            echo "::error::The NDK's compiler does not run on this machine. On an Apple silicon Mac it needs Rosetta: softwareupdate --install-rosetta --agree-to-license"
+            exit 1
+          fi
 
       # The debug build carries the core for the emulator only, in the ci profile (see coreAbis in
       # app/build.gradle.kts): two ABIs with the release profile's LTO pass did not fit in the job.
@@ -867,14 +869,10 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
           # Kept between runs, like the other mobile jobs' (Runner cleanup drops it when the disk
-          # runs short). Built from scratch, the host core alone took 31 of the job's 40 minutes.
+          # runs short). Built from scratch, the host core alone took 31 of the job's 40 minutes
+          # on the Linux runner.
           CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-android
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug -PcoreAbis=x86_64 -PcoreProfile=ci --console=plain --no-daemon
-
-      - name: Remove the job container
-        if: ${{ always() && env.CI_CONTAINER != '' }}
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   mobile-ios:
     name: Mobile iOS
