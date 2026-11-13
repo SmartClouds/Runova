@@ -29,6 +29,20 @@ export interface LocalVoicesDeps {
 /** How long a take for a voice profile may be; OmniVoice clones best from 3 to 10 seconds. */
 export const TAKE_SECONDS = { min: 3, max: 60 } as const;
 
+/**
+ * What a take goes through: the silence at either end trimmed, then the level evened out.
+ *
+ * Between the two, the take is made 48 kHz and padded with silence to a whole tenth of a second.
+ * loudnorm in ffmpeg 6.1 (the one Ubuntu 24.04 ships) never finishes when its input ends one
+ * sample past a tenth of a second: ffmpeg idles at no CPU and the take never comes back. Where
+ * the trim ends depends on the recording, so without the padding that hit one take in a few
+ * hundred. Newer ffmpeg does not have the bug, and the padding adds under 0.1 s of silence.
+ */
+export const TAKE_FILTER =
+  'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse,' +
+  'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse,' +
+  'aresample=48000,asetnsamples=n=4800:p=1,loudnorm=I=-20:TP=-2';
+
 export function createLocalVoices(deps: LocalVoicesDeps) {
   let piper: { key: string; speak: NonNullable<LocalSpeakers['piper']> } | null = null;
   let omnivoice: {
@@ -95,9 +109,6 @@ export function createLocalVoices(deps: LocalVoicesDeps) {
     const input = join(dir, `${id}.${mimeType.includes('wav') ? 'wav' : 'webm'}`);
     const wav = join(dir, `${id}-take.wav`);
     await writeFile(input, bytes);
-    const trim =
-      'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse,' +
-      'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse';
     try {
       await runTool(tools.ffmpeg, [
         '-hide_banner',
@@ -107,7 +118,7 @@ export function createLocalVoices(deps: LocalVoicesDeps) {
         '-i',
         input,
         '-af',
-        `${trim},loudnorm=I=-20:TP=-2`,
+        TAKE_FILTER,
         '-ac',
         '1',
         '-ar',
