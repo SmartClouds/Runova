@@ -183,6 +183,7 @@
       "includes": [
         "scripts/**",
         ".github/actions/**",
+        "apps/mobile/core/interop/**",
         "docs/tasks/handoffs/**",
         "docs/website/examples/**"
       ],
