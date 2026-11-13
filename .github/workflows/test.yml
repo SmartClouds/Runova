@@ -792,9 +792,14 @@ jobs:
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
 
+      # 1.99.1, not stable: Cargo 1.100 moved the test binaries out of target/debug/deps, and
+      # cargo-llvm-cov 0.9.1 does not find them there, so the report lost or zeroed most of the
+      # workspace (lines 87% on 1.99.1, 82% on 1.100.0, for the same tests). Back to stable once
+      # cargo-llvm-cov reads the new layout.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99.1
           components: llvm-tools-preview
 
       - name: Install cargo-llvm-cov
@@ -861,6 +866,9 @@ jobs:
         working-directory: apps/mobile/android
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+          # Kept between runs, like the other mobile jobs' (Runner cleanup drops it when the disk
+          # runs short). Built from scratch, the host core alone took 31 of the job's 40 minutes.
+          CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-android
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug -PcoreAbis=x86_64 -PcoreProfile=ci --console=plain --no-daemon
 
       - name: Remove the job container

@@ -5,7 +5,11 @@ plugins {
 
 val coreDir = rootProject.file("../core")
 val generatedBindings = layout.buildDirectory.dir("generated/uniffi")
-val hostLibrary = coreDir.resolve("target/debug")
+// Cargo's output folder. CI points CARGO_TARGET_DIR at the runner's tool cache, so the core and
+// its dependencies are not built from scratch every run.
+val coreTarget = System.getenv("CARGO_TARGET_DIR")?.takeIf { it.isNotBlank() }?.let { file(it) }
+    ?: coreDir.resolve("target")
+val hostLibrary = coreTarget.resolve("debug")
 val generatedFonts = layout.buildDirectory.dir("generated/fonts/res")
 
 android {
@@ -135,7 +139,7 @@ val generateBindings by tasks.registering(Exec::class) {
     workingDir = coreDir
     commandLine(
         "cargo", "run", "--jobs", "2", "-p", "runova-bindgen", "--",
-        "generate", "--library", "target/debug/$hostLibraryFile",
+        "generate", "--library", hostLibrary.resolve(hostLibraryFile).path,
         "--language", "kotlin", "--no-format",
         "--out-dir", generatedBindings.get().asFile.path,
     )
