@@ -3,14 +3,35 @@ version: 2.1
 # CI for the website: the site in apps/website/web and its API in apps/website/api. The rest of
 # the repo (desktop, mobile, server core) still runs on GitHub Actions, in .github/workflows/ci.yml.
 #
-# Left out for now: the Playwright e2e specs and the compose stack with Lighthouse (they need the
-# real API, PostgreSQL and Docker next to the site), path filtering (every push runs both jobs),
-# matrices, other operating systems and deploys.
+# Left out for now: path filtering (every push runs all three jobs), matrices, other operating
+# systems and deploys.
 #
-# The test commands are circleci testsuite run (see test-suites.yml). It runs the same tests as
-# before, with free static splitting across a job's parallelism and a rerun of only the failed
-# tests when a workflow is rerun from failed. The API suites take a test class as their atom
-# (dotnet-suite.sh).
+# The unit, monitoring and integration tests are circleci testsuite run (see test-suites.yml). It
+# runs the same tests as before, with free static splitting across a job's parallelism and a rerun
+# of only the failed tests when a workflow is rerun from failed. The API suites take a test class
+# as their atom (dotnet-suite.sh). The Playwright specs are plain steps instead: they share one
+# slow start (the site build and the admin stack) and admin-captcha runs after admin, so splitting
+# them over nodes would cost more than it saves.
+
+commands:
+  # The 10.0.4xx band that apps/website/api/global.json names (its rollForward is latestPatch), the
+  # latest release in it, which is what the GitHub job's setup-dotnet takes too. A fresh machine
+  # fetches from the internet, so the download and the installer retry.
+  install-dotnet:
+    steps:
+      - run:
+          name: Install the .NET SDK
+          command: |
+            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+              https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+            for attempt in 1 2 3; do
+              bash /tmp/dotnet-install.sh --channel 10.0.4xx --install-dir "$HOME/.dotnet" && break
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep $((attempt * 5))
+            done
+            echo 'export DOTNET_ROOT="$HOME/.dotnet"' >> "$BASH_ENV"
+            echo 'export PATH="$HOME/.dotnet:$PATH"' >> "$BASH_ENV"
+            "$HOME/.dotnet/dotnet" --version
 
 executors:
   node:
@@ -99,22 +120,7 @@ jobs:
     steps:
       - checkout
 
-      # The 10.0.4xx band that global.json names (its rollForward is latestPatch), the latest
-      # release in it, which is what the GitHub job's setup-dotnet takes too. A fresh machine
-      # fetches from the internet, so the download and the installer retry.
-      - run:
-          name: Install the .NET SDK
-          command: |
-            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
-              https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
-            for attempt in 1 2 3; do
-              bash /tmp/dotnet-install.sh --channel 10.0.4xx --install-dir "$HOME/.dotnet" && break
-              if [ "$attempt" = 3 ]; then exit 1; fi
-              sleep $((attempt * 5))
-            done
-            echo 'export DOTNET_ROOT="$HOME/.dotnet"' >> "$BASH_ENV"
-            echo 'export PATH="$HOME/.dotnet:$PATH"' >> "$BASH_ENV"
-            "$HOME/.dotnet/dotnet" --version
+      - install-dotnet
 
       - run:
           name: Hash the lock files
@@ -169,8 +175,154 @@ jobs:
               dotnet format Runova.Website.slnx --verify-no-changes --no-restore
             fi
 
+  # The Playwright specs against the real thing: the site with a fake API, the site with the real
+  # API and PostgreSQL (the admin project), then the compose stack the way production runs it,
+  # with the full-stack specs and Lighthouse against it. The machine executor is a plain Ubuntu VM
+  # with Docker, which is what the Mac mini's Tart VM was, so this follows
+  # .github/website-vm/provision.sh and the website-web job in ci.yml.
+  website-e2e:
+    executor: linux-machine
+    environment:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      COMPOSE_PROJECT_NAME: runova-e2e-website
+      HTTP_PORT: "18080"
+      HTTPS_PORT: "18443"
+      STACK_URL: https://localhost:18443
+      STACK_HTTP_URL: http://localhost:18080
+    steps:
+      - checkout
+
+      # Node 26, the latest release, as the GitHub job's setup-node had (check-latest). It goes
+      # under the home folder and first on the PATH, since the image has its own Node. Bun is the
+      # one the site's Dockerfile builds with, and it comes from npm as in website-web.
+      - run:
+          name: Install Node and Bun
+          command: |
+            fetch() {
+              curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 "$@"
+            }
+            dist=https://nodejs.org/dist/latest-v26.x
+            fetch "$dist/SHASUMS256.txt" -o /tmp/node-shasums.txt
+            file=$(awk '$2 ~ /linux-x64\.tar\.xz$/ { print $2 }' /tmp/node-shasums.txt)
+            fetch "$dist/$file" -o "/tmp/$file"
+            (cd /tmp && grep " $file\$" node-shasums.txt | sha256sum -c -)
+            mkdir -p "$HOME/node"
+            tar -xJf "/tmp/$file" -C "$HOME/node" --strip-components=1
+            echo "export PATH=\"$HOME/node/bin:\$PATH\"" >> "$BASH_ENV"
+            export PATH="$HOME/node/bin:$PATH"
+            npm install --global --silent --fetch-retries=5 bun@1.4.4
+            echo "Node $(node --version), Bun $(bun --version)"
+      - install-dotnet
+
+      - run:
+          name: Hash the lock files and images
+          command: |
+            find apps/website/api -name packages.lock.json | sort | xargs sha256sum > /tmp/nuget-locks.sha
+            find apps/website/web/src/assets -type f | sort | xargs sha256sum > /tmp/site-assets.sha
+      # Restored only: website-web and website-api save these, with the same keys.
+      - restore_cache:
+          keys:
+            - bun-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}
+            - bun-v1-{{ arch }}-
+      - restore_cache:
+          keys:
+            - nuget-v1-{{ arch }}-{{ checksum "/tmp/nuget-locks.sha" }}
+            - nuget-v1-{{ arch }}-
+      - restore_cache:
+          keys:
+            - astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-{{ checksum "/tmp/site-assets.sha" }}
+            - astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-
+
+      - run:
+          name: Install dependencies
+          working_directory: apps/website/web
+          command: bun install --frozen-lockfile
+
+      # Built first, so the optimized images are in the cache folder when Playwright's web server
+      # builds again (it gives that build 4 minutes) and when the compose image build reuses them.
+      - run:
+          name: Build
+          working_directory: apps/website/web
+          command: bun run build
+      - save_cache:
+          key: astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-{{ checksum "/tmp/site-assets.sha" }}
+          paths:
+            - apps/website/web/node_modules/.astro/assets
+
+      # With the system libraries Chromium needs, which the image does not have.
+      - run:
+          name: Playwright browser
+          working_directory: apps/website/web
+          command: bunx playwright install --with-deps chromium
+
+      - run:
+          name: End-to-end tests
+          no_output_timeout: 30m
+          working_directory: apps/website/web
+          environment:
+            PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-reports/website-e2e.xml
+          command: bun run e2e --reporter=list,junit
+
+      # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and
+      # the CSP that allows their runovahq.com images) expect. compose.test.yaml adds the
+      # telemetry sink that the secrets spec reads.
+      - run:
+          name: Start the compose stack
+          when: always
+          no_output_timeout: 30m
+          working_directory: apps/website/web
+          environment:
+            SITE_URL: https://localhost:18443
+          command: |
+            docker compose -f ../compose.yaml -f ../compose.test.yaml up --detach --build --wait
+            touch /tmp/stack-is-up
+      - run:
+          name: Full-stack tests
+          when: always
+          working_directory: apps/website/web
+          environment:
+            PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-reports/website-stack.xml
+          command: |
+            if [ ! -e /tmp/stack-is-up ]; then
+              echo "The stack did not come up, so its specs cannot run."
+              exit 1
+            fi
+            bun run e2e:stack --reporter=list,junit
+      # Even when a full-stack spec fails, but only on a stack that came up.
+      - run:
+          name: Lighthouse against the stack
+          when: always
+          working_directory: apps/website/web
+          command: |
+            if [ ! -e /tmp/stack-is-up ]; then
+              echo "The stack did not come up, so there is nothing to audit."
+              exit 0
+            fi
+            bun run lighthouse:stack
+      - run:
+          name: Stack logs
+          when: on_fail
+          working_directory: apps/website/web
+          command: docker compose -f ../compose.yaml -f ../compose.test.yaml logs --no-color --tail 300 || true
+
+      # The store steps below fail on a folder that was never made, as on a run that stopped early.
+      - run:
+          name: Make the report folders
+          when: always
+          working_directory: apps/website/web
+          command: mkdir -p test-reports test-results .lighthouseci
+      - store_test_results:
+          path: apps/website/web/test-reports
+      # Traces and screenshots of failed specs, and the Lighthouse reports.
+      - store_artifacts:
+          path: apps/website/web/test-results
+      - store_artifacts:
+          path: apps/website/web/.lighthouseci
+
 workflows:
   website:
     jobs:
       - website-web
       - website-api
+      - website-e2e
