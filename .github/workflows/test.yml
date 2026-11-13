@@ -888,11 +888,18 @@ jobs:
         uses: ./.github/actions/runner-cleanup
 
       # The Mac is shared, so a missing Xcode is reported here instead of failing everyone's CI.
+      # An Xcode that is installed but was updated without its first-launch step is an error, though:
+      # its CoreSimulator is then too old, simctl tries to install the new one and fails without an
+      # admin password, and xcodebuild later finds no simulator to test on.
       - name: Check for Xcode
         id: xcode
         run: |
           if xcodebuild -version > /dev/null 2>&1; then
             xcodebuild -version
+            if ! xcodebuild -checkFirstLaunchStatus; then
+              echo "::error::Xcode on this runner needs its first-launch step (CoreSimulator is out of date). On the Mac, as an admin: sudo xcodebuild -runFirstLaunch"
+              exit 1
+            fi
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Xcode is not installed on this runner, so the iOS app was not built or tested."
@@ -931,6 +938,10 @@ jobs:
         working-directory: apps/mobile/ios
         run: |
           device=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          if [ -z "$device" ]; then
+            echo "::error::No iPhone simulator is available on this runner. On the Mac: xcodebuild -downloadPlatform iOS"
+            exit 1
+          fi
           # Signed ad hoc, which needs no team or profile on the simulator. An unsigned app has no
           # entitlements, so the keychain refuses it (errSecMissingEntitlement) and the Keychain test fails.
           xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" \
