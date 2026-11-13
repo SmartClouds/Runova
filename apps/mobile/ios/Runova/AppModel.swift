@@ -388,7 +388,9 @@ extension AppModel: ASWebAuthenticationPresentationContextProviding {
 
 /// Called on the core's own threads.
 private final class Listener: ViewListener {
-    weak var model: AppModel?
+    // A let, since it is set once: a mutable stored property breaks the Sendable conformance
+    // ViewListener asks for (a warning now, an error in the Swift 6 language mode).
+    weak let model: AppModel?
 
     init(model: AppModel) { self.model = model }
 

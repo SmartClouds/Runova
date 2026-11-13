@@ -60,8 +60,9 @@ intents back, so behavior is the same on both OS and almost all of it is tested 
 - Inter and JetBrains Mono are bundled on both, and the FontAwesome solid icons come from one
   generated set.
 - Navigation chrome comes from the kit, so it is the same on both.
-- The same fixture states render to screenshots on each OS, and CI compares Android with iOS within
-  a tolerance.
+- The same fixture states render to screenshots on each OS. CI runs these tests but keeps no
+  pictures: to compare Android with iOS, run them on your machine and look at both. The iOS tests
+  write theirs to `SNAPSHOT_OUTPUT` (the temp folder when unset).
 - Things the OS owns still differ: status bar, keyboard, system back gesture and how system
   notifications look.
 
@@ -99,7 +100,7 @@ Work is test-first: every epic starts with failing tests.
 | Desktop | Vitest, `ipcContract`, Playwright | Bridge, scopes, audit, approval dialog |
 | Android | JUnit, Compose tests, Roborazzi | Screens against fixtures |
 | iOS | XCTest, swift-snapshot-testing | The same fixtures |
-| Parity | Android and iOS screenshots compared | Same UI on both |
+| Parity | Android and iOS screenshots, compared by hand on a developer's machine | Same UI on both |
 | End to end | One Maestro flow set on both OS against a fake host, plus real desktop interop | Same behavior, real connectivity |
 | Memory | Soak tests with budgets on each OS | Budgets hold over time |
 

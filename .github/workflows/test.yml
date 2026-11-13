@@ -935,18 +935,8 @@ jobs:
           device=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           # Signed ad hoc, which needs no team or profile on the simulator. An unsigned app has no
           # entitlements, so the keychain refuses it (errSecMissingEntitlement) and the Keychain test fails.
-          SNAPSHOT_OUTPUT="$RUNNER_TEMP/ios-snapshots" \
-            xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" \
-              CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
-
-      - name: Upload the iOS screenshots
-        if: ${{ !cancelled() && steps.xcode.outputs.available == 'true' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-snapshots
-          retention-days: 14
-          if-no-files-found: warn
-          path: ${{ runner.temp }}/ios-snapshots
+          xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 
   # On our own runners this is Linux and macOS (the self-hosted Mac mini, Apple Silicon). With one
   # Mac the three macOS shards take turns on it, along with the unit suites above. Windows runs

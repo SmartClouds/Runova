@@ -110,6 +110,9 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         OTHER_SWIFT_FLAGS: -Xcc -fmodule-map-file=$(SRCROOT)/Generated/runova_ffiFFI.modulemap
+        # XCTest in current Xcode is built for iOS 17, so a test bundle for 16.0 linked with a
+        # warning. The tests only run on current simulators; the app itself still supports 16.0.
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
 schemes:
   Runova:
     build:
