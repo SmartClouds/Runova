@@ -22,6 +22,7 @@ import type {
 } from '../../shared/healthTypes';
 import { IPC } from '../../shared/ipcChannels';
 import type { CloudDefinitionPatch, CloudMonitors } from '../health/cloud';
+import { getCloudMonitors } from '../health/cloudLive';
 import { healthDiagnoser } from '../health/diagnose';
 import { getHealthScheduler } from '../health/scheduler';
 import {
@@ -112,16 +113,13 @@ function inputOf(target: StoredHealthTarget): HealthTargetInput {
   };
 }
 
-let cloudLive: Promise<typeof import('../health/cloudLive')> | null = null;
-
 /**
- * The online monitors (E56). They bring the whole account runtime with them, so they load only
- * once a cloud channel is used or a target runs online; a computer with local checks alone never
- * pays for them.
+ * The online monitors (E56). They are made, with their refresh timer, only once a cloud channel is
+ * used or a target runs online; a computer with local checks alone never pays for them. The module
+ * is imported normally: the app loads it at start anyway, through the account runtime.
  */
 async function cloudMonitors(): Promise<CloudMonitors> {
-  cloudLive ??= import('../health/cloudLive');
-  return (await cloudLive).getCloudMonitors();
+  return getCloudMonitors();
 }
 
 /** The online monitors for a target that runs on Runova Cloud; a local one has nothing there. */
