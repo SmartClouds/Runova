@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { ADMIN_BASE_URL } from './e2e/admin/stackConfig';
+import { ADMIN_SPECS, CAPTCHA_SPECS, CHROMIUM_IGNORE } from './e2e/specFolders';
 
 const port = Number(process.env.E2E_PORT || 4329);
 const apiPort = Number(process.env.E2E_API_PORT || 4339);
@@ -21,18 +22,18 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: ['admin/**', 'captcha/**', 'stack/**'],
+      testIgnore: CHROMIUM_IGNORE,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'admin',
-      testMatch: 'admin/**/*.spec.ts',
+      testMatch: ADMIN_SPECS,
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true },
     },
     {
       // Turns the sign-in captcha on for the whole stack, so it runs once every admin spec is done.
       name: 'admin-captcha',
-      testMatch: 'captcha/**/*.spec.ts',
+      testMatch: CAPTCHA_SPECS,
       dependencies: ['admin'],
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_BASE_URL, ignoreHTTPSErrors: true },
     },
