@@ -6,7 +6,6 @@ publish.workspace = true
 
 [dependencies]
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
-serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { version = "1", features = ["macros", "rt", "sync", "time", "net"] }
