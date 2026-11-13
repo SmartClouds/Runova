@@ -174,7 +174,39 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
     await dialog.getByRole('button', { name: 'Record', exact: true }).click();
     await page.waitForTimeout(5_000);
     await dialog.getByRole('button', { name: 'Stop' }).click();
-    await expect(dialog.getByLabel('What the take says')).toHaveValue(SAID, { timeout: 30_000 });
+    // Diagnostics for CircleCI's Linux machine, where the take never came back from main: what
+    // the machine is running while the test waits for it. Attached to the report either way.
+    const snapshots: string[] = [];
+    const watch =
+      process.platform === 'linux'
+        ? setInterval(() => {
+            const ps = spawnSync(
+              'sh',
+              [
+                '-c',
+                'cat /proc/loadavg; ps -eo pid,ppid,ni,stat,etime,pcpu,args --sort=-pcpu | head -n 15; ps -eo pid,ni,stat,etime,pcpu,args | grep -E "ffmpeg|ffprobe|-version|auth status" | grep -v grep',
+              ],
+              { encoding: 'utf8' },
+            );
+            snapshots.push(`--- ${new Date().toISOString()}\n${ps.stdout}${ps.stderr}`);
+          }, 3_000)
+        : undefined;
+    try {
+      await expect(dialog.getByLabel('What the take says')).toHaveValue(SAID, {
+        timeout: 30_000,
+      });
+    } catch (error) {
+      process.stdout.write(`${snapshots.join('\n')}\n`);
+      throw error;
+    } finally {
+      if (watch) clearInterval(watch);
+      if (snapshots.length > 0) {
+        await test.info().attach('machine while the take was prepared', {
+          body: snapshots.join('\n'),
+          contentType: 'text/plain',
+        });
+      }
+    }
     const save = dialog.getByRole('button', { name: 'Save voice' });
     await expect(save).toBeDisabled();
     await dialog.getByRole('checkbox').check();
