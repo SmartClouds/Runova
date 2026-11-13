@@ -174,9 +174,15 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
     await dialog.getByRole('button', { name: 'Record', exact: true }).click();
     await page.waitForTimeout(5_000);
     await dialog.getByRole('button', { name: 'Stop' }).click();
-    // Diagnostics for CircleCI's Linux machine, where the take never came back from main: what
-    // the machine is running while the test waits for it. Attached to the report either way.
+    // Diagnostics for CircleCI's Linux machine, where the take never came back from main: the
+    // ffmpeg that trims it sits asleep at no CPU until the test gives up, while the same ffmpeg
+    // build trims a take recorded the same way in well under a second elsewhere. So while the
+    // test waits, it notes what each ffmpeg thread waits on (and its kernel stack where sudo
+    // allows), how far it read its files, and keeps a copy of the take. Attached either way.
     const snapshots: string[] = [];
+    const takes = join(app.userDataDir, 'studio-cache', 'voice', 'takes');
+    const takeCopy = test.info().outputPath('take.webm');
+    let tookCopy = false;
     const watch =
       process.platform === 'linux'
         ? setInterval(() => {
@@ -184,11 +190,29 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
               'sh',
               [
                 '-c',
-                'cat /proc/loadavg; ps -eo pid,ppid,ni,stat,etime,pcpu,args --sort=-pcpu | head -n 15; ps -eo pid,ni,stat,etime,pcpu,args | grep -E "ffmpeg|ffprobe|-version|auth status" | grep -v grep',
+                `cat /proc/loadavg; ps -eo pid,ppid,ni,stat,etime,pcpu,args --sort=-pcpu | head -n 15
+ls -l "${takes}" 2>&1
+for p in $(pgrep -x ffmpeg); do
+  echo "ffmpeg $p: $(tr '\\0' ' ' < /proc/$p/cmdline | cut -c1-300)"
+  for t in /proc/$p/task/*; do
+    echo "  thread $(basename $t) state $(cut -d' ' -f3 $t/stat) wchan $(cat $t/wchan 2>/dev/null)"
+    sudo -n cat $t/stack 2>/dev/null | head -n 8 | sed 's/^/    /'
+  done
+  for f in /proc/$p/fd/*; do
+    echo "  fd $(basename $f) -> $(readlink $f) $(grep -h '^pos' /proc/$p/fdinfo/$(basename $f) 2>/dev/null)"
+  done
+done`,
               ],
               { encoding: 'utf8' },
             );
             snapshots.push(`--- ${new Date().toISOString()}\n${ps.stdout}${ps.stderr}`);
+            if (!tookCopy) {
+              const copy = spawnSync('sh', [
+                '-c',
+                `f=$(ls "${takes}"/*.webm 2>/dev/null | head -n 1); [ -n "$f" ] && cp "$f" "${takeCopy}"`,
+              ]);
+              tookCopy = copy.status === 0;
+            }
           }, 3_000)
         : undefined;
     try {
@@ -196,7 +220,45 @@ test('points to Dev Setup for local voices, and makes a voice profile with conse
         timeout: 30_000,
       });
     } catch (error) {
-      process.stdout.write(`${snapshots.join('\n')}\n`);
+      if (tookCopy) {
+        // The same command on the same take, run from here rather than from the app: does the
+        // take stall ffmpeg, or only an ffmpeg the app starts?
+        const trim =
+          'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse,' +
+          'silenceremove=start_periods=1:start_silence=0.1:start_threshold=-45dB,areverse';
+        const started = Date.now();
+        const again = spawnSync(
+          'ffmpeg',
+          [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-y',
+            '-i',
+            takeCopy,
+            '-af',
+            `${trim},loudnorm=I=-20:TP=-2`,
+            '-ac',
+            '1',
+            '-ar',
+            '24000',
+            '-c:a',
+            'pcm_s16le',
+            test.info().outputPath('take-again.wav'),
+          ],
+          { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        const probe = spawnSync(
+          'ffprobe',
+          ['-v', 'error', '-show_format', '-show_streams', takeCopy],
+          { encoding: 'utf8' },
+        );
+        snapshots.push(
+          `--- the take again, outside the app: status ${again.status}, signal ${again.signal}, ${Date.now() - started} ms\n${again.stderr}\n${probe.stdout}${probe.stderr}`,
+        );
+        await test.info().attach('take', { path: takeCopy, contentType: 'video/webm' });
+      }
+      process.stdout.write(`${snapshots.slice(-4).join('\n')}\n`);
       throw error;
     } finally {
       if (watch) clearInterval(watch);
