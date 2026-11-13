@@ -1,6 +1,5 @@
 # One document per suite, run with circleci testsuite run "<name>" from the folder the commands
-# are written for: apps/website/web for the first, apps/website/api for the three after it and
-# apps/server-core for the last.
+# are written for: apps/website/web for the first, apps/website/api for the three after it.
 ---
 name: website web unit tests
 discover: npx vitest list --filesOnly 2>/dev/null | grep -E '\.test\.tsx?$'
@@ -28,11 +27,3 @@ discover: bash ../../../.circleci/dotnet-suite.sh discover tests/Runova.Website.
 run: bash ../../../.circleci/dotnet-suite.sh run tests/Runova.Website.IntegrationTests "<< outputs.junit >>"
 outputs:
   junit: test-reports/website-api-integration.xml
----
-# The server core's tests take a test class as their atom too. They use fakes for Docker, systemd
-# and the firewall, so they need no containers; the system tests are the server-core-system job.
-name: server core tests
-discover: bash ../../.circleci/dotnet-suite.sh discover tests/Runova.ServerCore.Tests
-run: bash ../../.circleci/dotnet-suite.sh run tests/Runova.ServerCore.Tests "<< outputs.junit >>"
-outputs:
-  junit: test-reports/server-core.xml

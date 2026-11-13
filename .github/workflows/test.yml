@@ -5,12 +5,13 @@ name: Tests
 #
 # CI runs the suites that do not care about the OS (core, protocol and desktop unit) on
 # our self-hosted Mac mini, which runs them several times faster than the Linux runner. The Linux
-# runner keeps everything that needs Linux or Docker: the WordPress jobs and the Linux end-to-end
-# shards. The server core (its tests and the system tests on test servers) runs on CircleCI, in
-# .circleci/config.yml, which ci.yml's circleci job waits for. The end-to-end tests run on both
-# Linux and macOS. Running this by hand with github-hosted ticked runs it on GitHub's hosted
-# runners instead, which is the one place the end-to-end tests run on Windows, since we have no
-# self-hosted Windows runner.
+# runner keeps everything that needs Linux or Docker: the WordPress jobs, the Anywhere agent, the
+# server core (a Linux product, its tests assume Linux wherever they are not on Windows) and the
+# system tests on test servers. The desktop app's Linux end-to-end shards run on CircleCI
+# (desktop-e2e-linux in .circleci/config.yml, which ci.yml's circleci jobs wait for), so the
+# end-to-end job here runs the macOS shards only. Running this by hand with github-hosted ticked
+# runs it on GitHub's hosted runners instead, the end-to-end tests on Linux, Windows and macOS,
+# since we have no self-hosted Windows runner.
 #
 # The Mac is a machine people also use, so the jobs there keep git's identity in a global config
 # of the job's own (GIT_CONFIG_GLOBAL) and run the tests with HOME in the job's temp folder, so a
@@ -403,6 +404,114 @@ jobs:
         shell: bash
         run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
+  # The .NET server core (apps/server-core). Its global.json pins the SDK feature band and the
+  # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. System tests
+  # (real Docker, test servers) are not part of this job; they run in the [e2e] job instead.
+  #
+  # On a busy runner the whole suite no longer fit in one job, so it runs as three. Shards 1 and 2
+  # take the test namespaces listed for them. Shard 3 takes everything else (the classes at the top
+  # of the project and any namespace added later), so no test is left out by a list going stale.
+  # Shard 1 also checks the format and the contracts. The lists split the test time about evenly.
+  #
+  # 45 minutes: on smartvpn the Release build alone takes 10 to 11 minutes and a shard's tests 11
+  # to 12 more, and two shards ran out of 30 with their tests already passed.
+  server-core:
+    name: Server core (${{ matrix.shard }}/3)
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SHARD_1_NAMESPACES: Stacks Nginx Registries Docker
+      SHARD_2_NAMESPACES: CoreDomainTests Backups Cloudflare Hardening Certificates ErrorReporting Assistant Notifications Files Web CoreUpdates Mapping
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest (see
+          # keepsDependencies in .github/actions/runner-cleanup/shared.mjs).
+          clean: ${{ runner.os != 'macOS' }}
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      # The feature band, not an exact patch, so release builds pick up the newest runtime fixes.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        # The default, /usr/share/dotnet, needs root, which a self-hosted runner may not have.
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.4xx
+          cache: ${{ inputs.github-hosted }}
+          cache-dependency-path: apps/server-core/**/packages.lock.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
+      # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
+      # this step through NuGet audit.
+      - name: Restore
+        working-directory: apps/server-core
+        run: dotnet restore Runova.ServerCore.slnx --locked-mode
+
+      - name: Format
+        if: ${{ matrix.shard == 1 }}
+        working-directory: apps/server-core
+        run: dotnet format Runova.ServerCore.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        working-directory: apps/server-core
+        run: dotnet build Runova.ServerCore.slnx --no-restore --configuration Release
+
+      - name: Unit and integration tests
+        working-directory: apps/server-core
+        # A line per finished test: the runner is otherwise silent until the end, and a job cancelled
+        # at its time limit could not tell a stuck test from a busy machine.
+        run: |
+          filters=()
+          case "${{ matrix.shard }}" in
+            1) for ns in $SHARD_1_NAMESPACES; do filters+=(--filter-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+            2) for ns in $SHARD_2_NAMESPACES; do filters+=(--filter-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+            *) for ns in $SHARD_1_NAMESPACES $SHARD_2_NAMESPACES; do filters+=(--filter-not-namespace "Runova.ServerCore.Tests.$ns*"); done ;;
+          esac
+          dotnet test --project tests/Runova.ServerCore.Tests --no-build --configuration Release --output Detailed "${filters[@]}"
+
+      # The desktop's TypeScript contracts are generated from the C# ones. Regenerating must not
+      # change anything, or someone changed a contract without committing the new TypeScript.
+      - name: Contracts drift
+        if: ${{ matrix.shard == 1 }}
+        run: |
+          node scripts/server-core.mjs contracts
+          drift="$(git status --porcelain -- apps/desktop/src/shared/deploy/protocol/generated)"
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            git --no-pager diff -- apps/desktop/src/shared/deploy/protocol/generated
+            echo "::error title=Contracts drift::Run 'pnpm server-core:contracts' and commit the result."
+            exit 1
+          fi
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
   # The server core installed on real Linux machines: systemd test servers in Docker (Ubuntu
   # 24.04 and Rocky 9), logged in as root and as a user whose sudo asks for a password, driven by
   # the desktop's own installer, pool and REST client. Also a tampered download, a release that
@@ -491,6 +600,122 @@ jobs:
         env:
           RUNOVA_TEST_X_DISPLAY: ":97"
         run: dotnet test --project tests/Runova.RemoteAgent.Tests --no-build --configuration Release --output Detailed
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
+  server-core-system:
+    name: Server core on test servers
+    if: ${{ inputs.e2e }}
+    runs-on: ${{ inputs.github-hosted && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest (see
+          # keepsDependencies in .github/actions/runner-cleanup/shared.mjs).
+          clean: ${{ runner.os != 'macOS' }}
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        # The default, /usr/share/dotnet, needs root, which a self-hosted runner may not have.
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.4xx
+          cache: ${{ inputs.github-hosted }}
+          cache-dependency-path: apps/server-core/**/packages.lock.json
+
+      # Node first: pnpm's installer runs npm from PATH, and without one it falls back to the
+      # runner's own npm, which a runner self-update leaves broken (actions/runner#2094).
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        # pnpm installs itself into its store's links folder and reuses an entry there without
+        # checking it is whole, so its own install gets a store inside dest, which setup wipes
+        # every time. The workspace's packages go in the store Runner cleanup sets.
+        env:
+          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
+        with:
+          # One pnpm per runner: two runners share this machine, and a shared ~/setup-pnpm let
+          # one job's setup delete files the other was using.
+          dest: ${{ runner.tool_cache }}/setup-pnpm
+          cache: ${{ inputs.github-hosted }}
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm build:packages
+
+      - name: Publish the linux-x64 release
+        run: node scripts/server-core.mjs publish linux-x64
+
+      # Ubuntu's AppArmor has a profile that confines any unix_chkpwd by its path, the Rocky test
+      # server's own included, since containers share the host's profiles. Confined, it cannot read
+      # /etc/shadow and every password login fails. A real Rocky server has no such profile.
+      - name: Let the Rocky test server check passwords
+        shell: bash
+        run: |
+          if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+            echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
+            echo "Unloaded the runner's unix-chkpwd AppArmor profile."
+          fi
+
+      # Built up front, so the image builds do not count against each test's time limit.
+      - name: Build the test servers
+        run: |
+          for image in ubuntu-24.04 rocky-9 ubuntu-24.04-ufw rocky-9-firewalld; do
+            docker build -q -t "runova-test-server:$image" "apps/server-core/test-servers/$image"
+          done
+
+      # One vitest run, two files at a time. Every test server is its own container with a unique
+      # name and a random SSH port, so the files cannot see each other. The install file alone takes
+      # about as long as the other four together, so two workers is about half the time of running
+      # them one by one, without loading the runner with five sets of containers at once.
+      #
+      # deploy: the install itself, on Ubuntu and Rocky, as root and as a sudo user.
+      # firewall: ufw and firewalld, live IPv4 and IPv6 rulesets, the SSH lockout guard, confirming
+      #   over a new SSH connection, and a rollback by the systemd timer with the core killed.
+      # registries: a private registry:2 with htpasswd; a deploy pulls with a per-deploy token, and
+      #   after a success and a failure the whole filesystem holds no trace of it (E08).
+      # directTls: direct TLS (E16) behind ufw, mutual TLS with the device key, strangers, a wrong
+      #   pin and a revoked device refused, and the port and rule gone when it is off.
+      # deployExec: the Deploy AI's shell (E09), an allowlisted check in a real transient unit, an
+      #   unapproved command refused, a signed one run once and its replay refused, the journal.
+      - name: System tests on test servers
+        env:
+          RUNOVA_SYSTEM_TESTS: "1"
+        run: >-
+          pnpm --filter @runova/desktop exec vitest run --maxWorkers=2
+          src/main/deploy/deploy.int.test.ts
+          src/main/deploy/firewall.int.test.ts
+          src/main/deploy/registries.int.test.ts
+          src/main/deploy/directTls.int.test.ts
+          src/main/deploy/deployExec.int.test.ts
 
       - name: Remove the job container
         if: ${{ always() && env.CI_CONTAINER != '' }}
@@ -724,9 +949,10 @@ jobs:
           xcodebuild test -project Runova.xcodeproj -scheme Runova -destination "id=$device" \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
 
-  # On our own runners this is Linux and macOS (the self-hosted Mac mini, Apple Silicon). With one
-  # Mac the three macOS shards take turns on it, along with the unit suites above. Windows runs
-  # only on a manual run with github-hosted ticked.
+  # On our own runners this is macOS only (the self-hosted Mac mini, Apple Silicon). With one Mac
+  # the three shards take turns on it, along with the unit suites above. The Linux shards run on
+  # CircleCI (desktop-e2e-linux in .circleci/config.yml). Linux and Windows run here only on a
+  # manual run with github-hosted ticked.
   #
   # The specs run one Electron at a time (see e2e/playwright.config.ts), so the suite is split into
   # shards by spec file instead, each on its own runner.
@@ -738,14 +964,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(inputs.github-hosted && '[{"name":"ubuntu-latest","runner":"ubuntu-latest"},{"name":"windows-latest","runner":"windows-latest"},{"name":"macos-latest","runner":"macos-latest"}]' || '[{"name":"linux","runner":["self-hosted","Linux","X64"]},{"name":"macos","runner":["self-hosted","macOS","ARM64"]}]') }}
+        target: ${{ fromJSON(inputs.github-hosted && '[{"name":"ubuntu-latest","runner":"ubuntu-latest"},{"name":"windows-latest","runner":"windows-latest"},{"name":"macos-latest","runner":"macos-latest"}]' || '[{"name":"macos","runner":["self-hosted","macOS","ARM64"]}]') }}
         shard: [1, 2, 3]
     env:
       # One cache location on every OS, so the Electron zip can be restored between runs.
       electron_config_cache: ${{ github.workspace }}/.cache/electron
     defaults:
       run:
-        shell: ${{ startsWith(matrix.target.name, 'windows') && 'pwsh' || format('bash {0}/.github/ci-container/shell.sh {{0}}', github.workspace) }}
+        shell: ${{ startsWith(matrix.target.name, 'windows') && 'pwsh' || 'bash' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -757,11 +983,11 @@ jobs:
       - name: Runner cleanup
         uses: ./.github/actions/runner-cleanup
 
-      # Only on a GitHub-hosted runner: the self-hosted job container has them (.github/ci-container).
+      # Linux runs here only on a manual run with github-hosted ticked.
       - name: Display and Electron libraries (Linux)
-        if: runner.os == 'Linux' && runner.environment != 'self-hosted'
+        if: runner.os == 'Linux'
         run: |
-          # The self-hosted runner keeps what it installed, so only reach for apt when needed.
+          # Only reach for apt when something is missing.
           # Everything Electron links against. GitHub's hosted images ship most of these already,
           # a plain Ubuntu server does not (GTK and ATK above all).
           installed() { dpkg-query -W -f='${Status}' "$1" 2> /dev/null | grep -q "install ok installed"; }
@@ -791,10 +1017,9 @@ jobs:
           sudo -n sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       # Studio's render spec renders real videos with ffmpeg and skips itself without it. The
-      # self-hosted runners keep what they installed, so this only reaches for a package manager
-      # when ffmpeg is missing, and warns instead of failing where it cannot install.
+      # self-hosted Mac keeps what it installed, so this only reaches for a package manager when
+      # ffmpeg is missing, and warns instead of failing where it cannot install.
       - name: ffmpeg for the Studio render spec
-        if: runner.os != 'Linux' || runner.environment != 'self-hosted'
         shell: bash
         run: |
           if command -v ffmpeg > /dev/null && command -v ffprobe > /dev/null; then
@@ -837,13 +1062,6 @@ jobs:
           key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-${{ runner.os }}-${{ runner.arch }}-
-
-      # The run steps from here on run in a container that is removed when the job ends (see
-      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
-      - name: Start the job container
-        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -914,8 +1132,3 @@ jobs:
           path: |
             apps/desktop/playwright-report
             apps/desktop/test-results
-
-      - name: Remove the job container
-        if: ${{ always() && env.CI_CONTAINER != '' }}
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"

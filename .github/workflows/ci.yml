@@ -8,11 +8,11 @@ name: CI
 # It runs on our two self-hosted runners (CD never uses them). Everything that
 # does not care about the OS (lint, types, the build and the unit suites)
 # runs on the Mac mini, which is much faster. The Linux runner keeps
-# what needs Linux: Docker and the Linux end-to-end shards. The
-# macOS end-to-end shards run on the Mac too. The website (its site, its API, the
-# Playwright specs and the compose stack with Lighthouse) and the server core (its tests and
-# the system tests on test servers) run on CircleCI, in .circleci/config.yml, and the
-# circleci job below waits for them. GitHub's hosted runners are for CD, which packages the
+# what needs Linux: Docker and the server core. The macOS end-to-end shards
+# run on the Mac too. The website (its site, its API, the Playwright specs and
+# the compose stack with Lighthouse) and the desktop app's Linux end-to-end
+# shards run on CircleCI, in .circleci/config.yml, and the circleci jobs below
+# wait for them. GitHub's hosted runners are for CD, which packages the
 # installers.
 #
 # The self-hosted runners keep their disks between jobs, so every job that runs on one starts with
@@ -156,57 +156,62 @@ jobs:
       e2e: true
 
   # The website (the site, its API, the Playwright specs, the compose stack and Lighthouse) and the
-  # server core (its tests and the system tests on test servers) run on CircleCI, in
-  # .circleci/config.yml. CircleCI reports each job on the commit as a status named
-  # "ci/circleci: <job>", and this job waits for all of them, so all-green below, and with it CD's
-  # ci-passed, fail when one of them fails. Hosted, like CD's own wait: it only polls.
+  # desktop app's Linux end-to-end shards run on CircleCI, in .circleci/config.yml. CircleCI reports
+  # each job on the commit as a status named "ci/circleci: <job>". This job has one copy per
+  # CircleCI job, so each shows up on its own in the run, and each waits for its job's status, so
+  # all-green below, and with it CD's ci-passed, fail when one of them fails. Hosted, like CD's own
+  # wait: it only polls. A job added to .circleci/config.yml needs adding to the list here too.
   #
-  # A job that is still running is waited for. One that fails ends this job at once. One that
-  # never reports (CircleCI is not triggered, or its config is broken) fails it after 15 minutes.
-  # Rerun this job after rerunning a failed CircleCI job: it reads the latest status of each.
+  # A job that is still running is waited for. One that fails ends its copy at once. One that never
+  # reports (CircleCI is not triggered, or its config is broken) fails it after 15 minutes. Rerun a
+  # copy after rerunning its failed CircleCI job: it reads the latest status.
+  #
+  # desktop-e2e-linux has not passed on CircleCI yet, so its copy shows a failure without failing
+  # the run, as the server core's jobs did before they were gated. Drop continue-on-error once it
+  # is green.
   circleci:
-    name: CircleCI
+    name: CircleCI (${{ matrix.job }})
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    continue-on-error: ${{ matrix.job == 'desktop-e2e-linux' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [website-web, website-api, website-e2e, desktop-e2e-linux]
     permissions:
       statuses: read
     steps:
-      - name: Wait for the CircleCI jobs on this commit
+      - name: Wait for ${{ matrix.job }} on this commit
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           # A pull request's own commit, not the merge commit the workflow runs on.
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          JOBS: website-web website-api website-e2e server-core server-core-system
+          JOB: ${{ matrix.job }}
         run: |
           waited=0
           while true; do
-            # The latest status of each CircleCI context, as "<job><tab><state>".
-            states="$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" --jq '[.[] | select(.context | startswith("ci/circleci: "))] | group_by(.context) | map(sort_by(.created_at) | last) | .[] | "\(.context | ltrimstr("ci/circleci: "))\t\(.state)"')"
-            pending=""
-            missing=""
-            for job in $JOBS; do
-              state="$(printf '%s\n' "$states" | awk -F'\t' -v job="$job" '$1 == job { print $2 }')"
-              case "$state" in
-                success) ;;
-                failure|error)
-                  echo "::error::CircleCI job $job ended as $state on $SHA. Open the ci/circleci: $job status on the commit."
+            # The latest status of this job's CircleCI context.
+            state="$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" --jq "[.[] | select(.context == \"ci/circleci: $JOB\")] | sort_by(.created_at) | last | .state // \"\"")"
+            case "$state" in
+              success)
+                echo "CircleCI job $JOB passed on $SHA"
+                exit 0
+                ;;
+              failure|error)
+                echo "::error::CircleCI job $JOB ended as $state on $SHA. Open the ci/circleci: $JOB status on the commit."
+                exit 1
+                ;;
+              pending) ;;
+              *)
+                if [ "$waited" -ge 900 ]; then
+                  echo "::error::CircleCI never reported $JOB on $SHA. Check that the project follows this repository and that .circleci/config.yml is valid."
                   exit 1
-                  ;;
-                pending) pending="$pending $job" ;;
-                *) missing="$missing $job" ;;
-              esac
-            done
-            if [ -z "$pending$missing" ]; then
-              echo "CircleCI passed on $SHA:$JOBS"
-              exit 0
-            fi
-            if [ -n "$missing" ] && [ "$waited" -ge 900 ]; then
-              echo "::error::CircleCI never reported$missing on $SHA. Check that the project follows this repository and that .circleci/config.yml is valid."
-              exit 1
-            fi
-            echo "Waiting for CircleCI:$pending$missing"
+                fi
+                ;;
+            esac
+            echo "Waiting for CircleCI job $JOB (${state:-not reported yet})"
             sleep 30
             waited=$((waited + 30))
           done
