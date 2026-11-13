@@ -840,7 +840,7 @@ jobs:
           java-version: "21"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platforms;android-37.0 build-tools;36.0.0 ndk;28.2.13676358
 
