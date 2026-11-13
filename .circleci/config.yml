@@ -178,8 +178,8 @@ jobs:
   # The Playwright specs against the real thing: the site with a fake API, the site with the real
   # API and PostgreSQL (the admin project), then the compose stack the way production runs it,
   # with the full-stack specs and Lighthouse against it. The machine executor is a plain Ubuntu VM
-  # with Docker, which is what the Mac mini's Tart VM was, so this follows
-  # .github/website-vm/provision.sh and the website-web job in ci.yml.
+  # with Docker, which is what the Mac mini's Tart VM was when this ran on GitHub Actions, so it
+  # installs the same toolchain that VM had: Node, Bun and the .NET SDK.
   website-e2e:
     executor: linux-machine
     environment:

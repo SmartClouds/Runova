@@ -54,7 +54,7 @@ docker compose -f apps/website/compose.yaml -f apps/website/compose.test.yaml up
 ```
 
 It makes the owner account with `admin create-owner` the first time. CI runs the same, then
-Lighthouse, in the `website-web` job.
+Lighthouse, in the `website-e2e` CircleCI job.
 
 ## Environment
 
