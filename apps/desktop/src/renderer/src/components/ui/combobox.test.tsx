@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Combobox } from './combobox';
@@ -61,5 +61,38 @@ describe('Combobox', () => {
     await user.type(screen.getByPlaceholderText('Search…'), '10.9');
     expect(screen.getByRole('option', { name: /tools_net/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /shop_default/ })).toBeNull();
+  });
+
+  it('leaves focus where a choice moved it, even when it moved before the list closed', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <Combobox
+          ariaLabel="Policy"
+          options={POLICIES}
+          value="deny"
+          // A timer queued before the list closes, as a frame callback is on a busy machine
+          // (NewVideoDialog's custom style box, CI run #444).
+          onChange={() => setTimeout(() => screen.getByLabelText('Reason').focus(), 0)}
+        />
+        <input aria-label="Reason" />
+      </>,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Policy' }));
+    await user.click(await screen.findByRole('option', { name: 'Reject' }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.getByLabelText('Reason')).toHaveFocus();
+  });
+
+  it('gives focus back to the field after a choice that moves it nowhere', async () => {
+    const user = userEvent.setup();
+    render(<Combobox ariaLabel="Policy" options={POLICIES} value="deny" onChange={vi.fn()} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Policy' }));
+    await user.click(await screen.findByRole('option', { name: 'Reject' }));
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Policy' })).toHaveFocus());
   });
 });

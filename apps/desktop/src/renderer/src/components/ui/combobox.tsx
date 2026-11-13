@@ -144,6 +144,13 @@ export function Combobox({
                   listRef.current?.focus();
                 }
           }
+          // Radix gives focus back to the trigger once the list has closed. A choice that moved
+          // focus on (NewVideoDialog's style box, revealed by "Custom style") keeps it: on a busy
+          // machine its frame callback ran first, and the trigger took focus back from it.
+          onCloseAutoFocus={(event) => {
+            const active = document.activeElement;
+            if (active && active !== document.body) event.preventDefault();
+          }}
           className={cn(
             OVERLAY_SURFACE,
             OVERLAY_MOTION,
