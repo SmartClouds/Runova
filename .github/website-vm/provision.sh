@@ -12,11 +12,29 @@ echo admin | sudo -S -p '' sh -c \
 repo="$HOME/Runova"
 web="$repo/apps/website/web"
 
+# A fresh VM fetches about ten things from the internet, and one dropped connection (curl 56,
+# "Send failure: Broken pipe", on the .NET installer download) failed a whole run. Downloads go
+# through download, which retries on any error, and installers that fetch for themselves go
+# through retry.
+download() {
+  curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 "$@"
+}
+retry() {
+  local attempt
+  for attempt in 1 2 3; do
+    "$@" && return 0
+    echo "Attempt $attempt of: $*" >&2
+    sleep $((attempt * 5))
+  done
+  return 1
+}
+
 # The cloud image grows its root file system to the disk size at boot. Shown so a full disk is
 # easy to tell apart from a test failure.
 df -h /
 echo "$(nproc) cores, $(free -m | awk '/^Mem:/ { print $2 }') MB memory"
 
+echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-runova-retries > /dev/null
 sudo apt-get update -q
 # libatomic1: Node's Linux build links against it, and the image leaves it out.
 sudo apt-get install -y -q --no-install-recommends \
@@ -42,22 +60,25 @@ esac
 
 # Node 26, the latest release, as the Linux job's setup-node had (check-latest).
 node_dist=https://nodejs.org/dist/latest-v26.x
-node_file=$(curl -fsSL "$node_dist/SHASUMS256.txt" | awk -v arch="linux-$node_arch.tar.xz" '$2 ~ arch"$" { print $2 }')
-curl -fsSL "$node_dist/$node_file" | sudo tar -xJ -C /usr/local --strip-components=1
+download "$node_dist/SHASUMS256.txt" -o /tmp/node-shasums.txt
+node_file=$(awk -v arch="linux-$node_arch.tar.xz" '$2 ~ arch"$" { print $2 }' /tmp/node-shasums.txt)
+download "$node_dist/$node_file" -o /tmp/node.tar.xz
+sudo tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
 echo "Node $(node --version)"
 
 # pnpm at the version the root package.json pins (the unit tests ask it about the workspace).
 pnpm_version=$(sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' "$repo/package.json")
-sudo npm install -g --silent "pnpm@$pnpm_version"
+sudo npm install -g --silent --fetch-retries=5 "pnpm@$pnpm_version"
 echo "pnpm $(pnpm --version)"
 
 # BUN_VERSION comes from vm.sh (common.sh), the same Bun the site's Dockerfile builds with.
-curl -fsSL https://bun.sh/install | bash -s "bun-v$BUN_VERSION" > /dev/null
+download https://bun.sh/install -o /tmp/bun-install.sh
+retry bash /tmp/bun-install.sh "bun-v$BUN_VERSION" > /dev/null
 echo "Bun $("$HOME/.bun/bin/bun" --version)"
 
 # The SDK that the API's global.json names.
-curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
-bash /tmp/dotnet-install.sh --jsonfile "$repo/apps/website/api/global.json" --install-dir "$HOME/.dotnet" > /dev/null
+download https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+retry bash /tmp/dotnet-install.sh --jsonfile "$repo/apps/website/api/global.json" --install-dir "$HOME/.dotnet" > /dev/null
 echo ".NET SDK $("$HOME/.dotnet/dotnet" --version)"
 # The SDK's first-run setup (its lock folder in /tmp, NuGet's migrations), done once here. Two
 # dotnet commands that both met it at once (the e2e admin stack's build and dev-certs) failed

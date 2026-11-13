@@ -1,0 +1,85 @@
+version: 2.1
+
+# CI for the website: the site in apps/website/web and its API in apps/website/api. The rest of
+# the repo (desktop, mobile, server core) still runs on GitHub Actions, in .github/workflows/ci.yml.
+#
+# Left out for now: the Playwright e2e specs and the compose stack with Lighthouse (they need the
+# real API, PostgreSQL and Docker next to the site), path filtering (every push runs both jobs),
+# matrices, other operating systems and deploys.
+#
+# The test commands are circleci testsuite run (see test-suites.yml). It runs the same tests as
+# before, with free static splitting across a job's parallelism and a rerun of only the failed
+# tests when a workflow is rerun from failed.
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:26.13
+    resource_class: large
+
+jobs:
+  website-web:
+    executor: node
+    steps:
+      - checkout
+
+      # The Bun the site's Dockerfile builds with, which the build script and seoCheck run under.
+      - run:
+          name: Install Bun
+          command: npm install --global bun@1.4.4
+
+      - restore_cache:
+          keys:
+            - bun-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}
+            - bun-v1-{{ arch }}-
+      - run:
+          name: Install dependencies
+          working_directory: apps/website/web
+          command: bun install --frozen-lockfile
+      - save_cache:
+          key: bun-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}
+          paths:
+            - ~/.bun/install/cache
+
+      # Astro's cache of optimized images. Each cached file is named by a hash of its source and
+      # transform, so a changed screenshot is never served from an old one. Without it the build
+      # spends about 8 minutes encoding them. Restored after the install, which owns node_modules.
+      - run:
+          name: Hash the site's images
+          command: find apps/website/web/src/assets -type f | sort | xargs sha256sum > /tmp/site-assets.sha
+      - restore_cache:
+          keys:
+            - astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-{{ checksum "/tmp/site-assets.sha" }}
+            - astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-
+
+      # Lint, types, tests and the build all run, so one failure does not hide the others.
+      - run:
+          name: Lint
+          working_directory: apps/website/web
+          command: bunx biome ci .
+      - run:
+          name: Astro check
+          when: always
+          working_directory: apps/website/web
+          command: bun run check
+      - run:
+          name: Unit tests
+          when: always
+          working_directory: apps/website/web
+          command: circleci testsuite run "website web unit tests"
+      - store_test_results:
+          path: apps/website/web/test-reports
+      - run:
+          name: Build
+          when: always
+          working_directory: apps/website/web
+          command: bun run build
+      - save_cache:
+          key: astro-assets-v1-{{ arch }}-{{ checksum "apps/website/web/bun.lock" }}-{{ checksum "/tmp/site-assets.sha" }}
+          paths:
+            - apps/website/web/node_modules/.astro/assets
+
+workflows:
+  website:
+    jobs:
+      - website-web

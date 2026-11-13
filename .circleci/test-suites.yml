@@ -1,0 +1,6 @@
+---
+name: website web unit tests
+discover: npx vitest list --filesOnly 2>/dev/null | grep -E '\.test\.tsx?$'
+run: npx vitest run --reporter=default --reporter=junit --outputFile.junit="<< outputs.junit >>" << test.atoms >>
+outputs:
+  junit: test-reports/website-web.xml
