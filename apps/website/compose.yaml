@@ -35,8 +35,8 @@ services:
     build:
       context: api
       args:
-        VERSION: ${VERSION:-3.3.0}
-    image: runova-website-api:${VERSION:-3.3.0}
+        VERSION: ${VERSION:-4.0.0}
+    image: runova-website-api:${VERSION:-4.0.0}
     environment:
       ConnectionStrings__Default: Host=db;Database=runova_website;Username=runova;Password=${POSTGRES_PASSWORD:-runova}
       Database__MigrateOnStart: "true"
@@ -95,8 +95,8 @@ services:
       context: api
       dockerfile: Dockerfile.gateway
       args:
-        VERSION: ${VERSION:-3.3.0}
-    image: runova-website-monitoring-gateway:${VERSION:-3.3.0}
+        VERSION: ${VERSION:-4.0.0}
+    image: runova-website-monitoring-gateway:${VERSION:-4.0.0}
     environment:
       RabbitMq__Uri: amqp://runova:${RABBITMQ_PASSWORD:-runova}@rabbitmq:5672
       Gateway__ServerCertificatePath: /tls/fullchain.pem
@@ -124,7 +124,7 @@ services:
       args:
         SITE_URL: ${SITE_URL:-https://localhost:8443}
         PUBLIC_SENTRY_DSN: ${PUBLIC_SENTRY_DSN:-}
-    image: runova-website-web:${VERSION:-3.3.0}
+    image: runova-website-web:${VERSION:-4.0.0}
     environment:
       WEBSITE_API_INTERNAL_URL: http://api:8080
       SITE_URL: ${SITE_URL:-https://localhost:8443}

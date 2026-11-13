@@ -6,7 +6,7 @@
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-ARG VERSION=3.3.0
+ARG VERSION=4.0.0
 ARG SOURCE_REVISION=
 
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
@@ -20,7 +20,7 @@ RUN dotnet publish src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.cspro
     --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
-ARG VERSION=3.3.0
+ARG VERSION=4.0.0
 WORKDIR /app
 COPY --from=build /app ./
 ENV Gateway__NodePort=8043 \
