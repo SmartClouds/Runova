@@ -240,7 +240,7 @@ for (const image of IMAGES) {
       test.setTimeout(15 * MINUTE);
       const app = page();
       const launchedApp = launched as LaunchedApp;
-      loadImage(server().server.name, 'busybox:1.37');
+      await loadImage(server().server.name, 'busybox:1.37');
       writeFileSync(join(launchedApp.projectDir, 'compose.yaml'), COMPOSE_WEB);
       const projectId = await createProject(launchedApp);
       // What the project's Environments tab saves, through the same bridge it uses.
@@ -297,7 +297,7 @@ for (const image of IMAGES) {
       test.setTimeout(15 * MINUTE);
       const app = page();
       const launchedApp = launched as LaunchedApp;
-      startPrivateRegistry(server().server.name, 'busybox:1.37', PRIVATE_IMAGE);
+      await startPrivateRegistry(server().server.name, 'busybox:1.37', PRIVATE_IMAGE);
       expect(server().sh(`docker pull ${PRIVATE_IMAGE} 2>&1 || true`)).toMatch(
         /unauthorized|no basic auth/,
       );

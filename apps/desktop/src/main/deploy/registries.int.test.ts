@@ -22,7 +22,7 @@ import { DeployStacks } from './stacks/service';
 import { DeployState } from './state';
 import {
   loadImage,
-  onServer as onContainer,
+  onServerAsync as onContainer,
   REGISTRY_PULLER as PULLER,
   REGISTRY_HOST as REGISTRY,
   startPrivateRegistry,
@@ -80,8 +80,11 @@ afterEach((context) => {
   for (const server of servers.splice(0)) server.stop();
 });
 
-/** A command on the test server; its input (if any) goes through stdin, never argv. */
-function onServer(server: TestServer, command: string, input?: string): string {
+/**
+ * A command on the test server; its input (if any) goes through stdin, never argv. Async, since
+ * the hub connection is open the whole time and a blocked event loop lets SignalR drop it.
+ */
+function onServer(server: TestServer, command: string, input?: string): Promise<string> {
   return onContainer(server.name, command, input);
 }
 
@@ -197,15 +200,15 @@ async function installAndConnect(server: TestServer) {
 }
 
 /** Every file on the server holding the token or its base64 form, and journal lines with it. */
-function tokenTraces(server: TestServer): string {
+async function tokenTraces(server: TestServer): Promise<string> {
   const base64 = Buffer.from(`${PULLER}:${TOKEN}`).toString('base64');
   // The patterns come in on stdin, so the search itself never has them on a command line.
-  const files = onServer(
+  const files = await onServer(
     server,
     'grep -rlF -f /dev/stdin / --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev 2>/dev/null || true',
     `${TOKEN}\n${base64}\n`,
   );
-  const journal = onServer(
+  const journal = await onServer(
     server,
     'journalctl -u runova-core --no-pager -o cat | grep -cF -f /dev/stdin || true',
     `${TOKEN}\n${base64}\n`,
@@ -238,21 +241,21 @@ describe.skipIf(!enabled)('Private registries through the server core on a real 
         }
         expect(docker.final?.state, docker.log.slice(-40).join('\n')).toBe('succeeded');
         // The sign-in folder lives in the core's runtime directory, which must be a tmpfs.
-        expect(onServer(server, 'findmnt -T /run/runova-core -no FSTYPE')).toBe('tmpfs');
+        expect(await onServer(server, 'findmnt -T /run/runova-core -no FSTYPE')).toBe('tmpfs');
 
         // A registry:2 with htpasswd, and the image pushed by the other user from a throwaway config.
-        loadImage(server.name, 'busybox:1.37');
-        startPrivateRegistry(server.name, 'busybox:1.37', IMAGE);
+        await loadImage(server.name, 'busybox:1.37');
+        await startPrivateRegistry(server.name, 'busybox:1.37', IMAGE);
         // Without a sign-in the registry refuses the pull.
-        expect(onServer(server, `docker pull ${IMAGE} 2>&1 || true`)).toMatch(
+        expect(await onServer(server, `docker pull ${IMAGE} 2>&1 || true`)).toMatch(
           /unauthorized|no basic auth/,
         );
 
         // The search finds a planted copy, so an empty answer later means there is none.
-        onServer(server, 'cat > /var/tmp/token-canary', TOKEN);
-        expect(tokenTraces(server)).toContain('/var/tmp/token-canary');
-        onServer(server, 'rm -f /var/tmp/token-canary');
-        expect(tokenTraces(server)).toBe('');
+        await onServer(server, 'cat > /var/tmp/token-canary', TOKEN);
+        expect(await tokenTraces(server)).toContain('/var/tmp/token-canary');
+        await onServer(server, 'rm -f /var/tmp/token-canary');
+        expect(await tokenTraces(server)).toBe('');
 
         const folder = tempDir('runova-registry-system-');
         const write = (text: string) => {
@@ -295,11 +298,13 @@ describe.skipIf(!enabled)('Private registries through the server core on a real 
         expect(sent).toEqual([[REGISTRY]]);
         expect(deployed.log.join('\n')).toContain(`Signing in to ${REGISTRY} as ${PULLER}`);
         expect(deployed.log.join('\n')).not.toContain(TOKEN);
-        expect(onServer(server, `docker image inspect -f '{{.Id}}' ${IMAGE}`)).toMatch(/^sha256:/);
-        expect(onServer(server, 'ls -A /run/runova-core/registry-auth 2>/dev/null || true')).toBe(
-          '',
+        expect(await onServer(server, `docker image inspect -f '{{.Id}}' ${IMAGE}`)).toMatch(
+          /^sha256:/,
         );
-        expect(tokenTraces(server)).toBe('');
+        expect(
+          await onServer(server, 'ls -A /run/runova-core/registry-auth 2>/dev/null || true'),
+        ).toBe('');
+        expect(await tokenTraces(server)).toBe('');
 
         // A deploy that fails after signing in (the tag does not exist) leaves nothing either.
         write(compose(`${REGISTRY}/private/web:missing`));
@@ -318,10 +323,10 @@ describe.skipIf(!enabled)('Private registries through the server core on a real 
         expect(failed.final?.state, failed.log.slice(-60).join('\n')).toBe('failed');
         expect(failed.log.join('\n')).toContain(`Signing in to ${REGISTRY}`);
         expect(failed.log.join('\n')).not.toContain(TOKEN);
-        expect(onServer(server, 'ls -A /run/runova-core/registry-auth 2>/dev/null || true')).toBe(
-          '',
-        );
-        expect(tokenTraces(server)).toBe('');
+        expect(
+          await onServer(server, 'ls -A /run/runova-core/registry-auth 2>/dev/null || true'),
+        ).toBe('');
+        expect(await tokenTraces(server)).toBe('');
       },
       TEST_TIMEOUT_MS,
     );
