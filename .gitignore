@@ -30,6 +30,7 @@ apps/desktop/playwright-report/
 apps/server-core/**/bin/
 apps/server-core/**/obj/
 apps/server-core/artifacts/
+apps/server-core/test-reports/
 
 # Website API (.NET) build output and Verify snapshots that did not match
 apps/website/api/**/bin/

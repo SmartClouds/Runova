@@ -36,8 +36,9 @@ commands:
             echo "export PATH=\"$HOME/node/bin:\$PATH\"" >> "$BASH_ENV"
             "$HOME/node/bin/node" --version
 
-  # The 10.0.4xx band that apps/website/api/global.json names (its rollForward is latestPatch), the
-  # latest release in it, which is what the GitHub job's setup-dotnet takes too. A fresh machine
+  # The 10.0.4xx band that apps/website/api/global.json and apps/server-core/global.json name (their
+  # rollForward is latestPatch), the latest release in it, which is what the GitHub jobs'
+  # setup-dotnet takes too. A fresh machine
   # fetches from the internet, so the download and the installer retry.
   install-dotnet:
     steps:
@@ -196,6 +197,193 @@ jobs:
             if [ "$CIRCLE_NODE_INDEX" = 0 ]; then
               dotnet format Runova.Website.slnx --verify-no-changes --no-restore
             fi
+
+  # The server core in apps/server-core: what test.yml's server-core job runs in three shards, on
+  # three parallel nodes here. Each builds, then circleci testsuite run takes its third of the test
+  # classes (the "server core tests" suite). The format check and the contracts drift check run on
+  # the first node only. The tests use fakes for Docker, systemd and the firewall, so they need
+  # nothing from the machine; the real thing is the server-core-system job below.
+  server-core:
+    executor: linux-machine
+    parallelism: 3
+    environment:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - checkout
+
+      # The contracts check runs scripts/server-core.mjs, which needs nothing but Node itself.
+      - install-node
+      - install-dotnet
+
+      - run:
+          name: Hash the lock files
+          command: find apps/server-core -name packages.lock.json | sort | xargs sha256sum > /tmp/core-locks.sha
+      - restore_cache:
+          keys:
+            - nuget-server-core-v1-{{ arch }}-{{ checksum "/tmp/core-locks.sha" }}
+            - nuget-server-core-v1-{{ arch }}-
+      # Locked: the lock files are what was reviewed. A known high or critical vulnerability fails
+      # this step through NuGet audit.
+      - run:
+          name: Restore
+          working_directory: apps/server-core
+          command: dotnet restore Runova.ServerCore.slnx --locked-mode
+      - save_cache:
+          key: nuget-server-core-v1-{{ arch }}-{{ checksum "/tmp/core-locks.sha" }}
+          paths:
+            - ~/.nuget/packages
+      - run:
+          name: Build
+          working_directory: apps/server-core
+          command: dotnet build Runova.ServerCore.slnx --no-restore --configuration Release
+
+      - run:
+          name: Unit and integration tests
+          working_directory: apps/server-core
+          command: circleci testsuite run "server core tests"
+      - store_test_results:
+          path: apps/server-core/test-reports
+
+      - run:
+          name: Format
+          when: always
+          working_directory: apps/server-core
+          command: |
+            if [ "$CIRCLE_NODE_INDEX" = 0 ]; then
+              dotnet format Runova.ServerCore.slnx --verify-no-changes --no-restore
+            fi
+      # The desktop's TypeScript contracts are generated from the C# ones. Regenerating must not
+      # change anything, or someone changed a contract without committing the new TypeScript.
+      - run:
+          name: Contracts drift
+          when: always
+          command: |
+            if [ "$CIRCLE_NODE_INDEX" = 0 ]; then
+              node scripts/server-core.mjs contracts
+              drift="$(git status --porcelain -- apps/desktop/src/shared/deploy/protocol/generated)"
+              if [ -n "$drift" ]; then
+                echo "$drift"
+                git --no-pager diff -- apps/desktop/src/shared/deploy/protocol/generated
+                echo "The generated contracts are out of date. Run 'pnpm server-core:contracts' and commit the result."
+                exit 1
+              fi
+            fi
+
+  # The server core installed on real Linux machines: systemd test servers in Docker (Ubuntu 24.04
+  # and Rocky 9, with ufw and firewalld), driven by the desktop's own installer, pool and REST
+  # client. It publishes the linux-x64 release, builds the four test server images and runs the
+  # Deploy system tests, two files at a time (see test.yml's server-core-system job, which this
+  # one is the copy of). The machine executor has Docker with root, which the systemd containers
+  # need, and passwordless sudo, which the AppArmor step below needs.
+  server-core-system:
+    executor: linux-machine
+    environment:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      # onnxruntime-node would download its CUDA and TensorRT libraries (about 200 MB) from
+      # nuget.org. The app transcribes on the CPU and never loads them.
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - checkout
+
+      - install-node
+      # The pnpm the root package.json pins, with its store in the home folder that the cache keeps.
+      - run:
+          name: Install pnpm
+          command: |
+            version=$(sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' package.json)
+            npm install --global --silent --fetch-retries=5 "pnpm@$version"
+            echo 'export pnpm_config_store_dir="$HOME/.pnpm-store"' >> "$BASH_ENV"
+            echo "pnpm $(pnpm --version)"
+      - install-dotnet
+
+      - run:
+          name: Hash the lock files
+          command: find apps/server-core -name packages.lock.json | sort | xargs sha256sum > /tmp/core-locks.sha
+      - restore_cache:
+          keys:
+            - pnpm-v1-{{ arch }}-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-v1-{{ arch }}-
+      # The publish needs the runtime and ReadyToRun packs, which the unit test job never restores,
+      # so this job keeps a cache of its own.
+      - restore_cache:
+          keys:
+            - nuget-server-core-system-v1-{{ arch }}-{{ checksum "/tmp/core-locks.sha" }}
+            - nuget-server-core-system-v1-{{ arch }}-
+
+      - run:
+          name: Install dependencies
+          command: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-v1-{{ arch }}-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.pnpm-store
+      - run:
+          name: Build the workspace packages
+          command: pnpm build:packages
+      - run:
+          name: Publish the linux-x64 release
+          command: node scripts/server-core.mjs publish linux-x64
+      - save_cache:
+          key: nuget-server-core-system-v1-{{ arch }}-{{ checksum "/tmp/core-locks.sha" }}
+          paths:
+            - ~/.nuget/packages
+
+      # Ubuntu's AppArmor has a profile that confines any unix_chkpwd by its path, the Rocky test
+      # server's own included, since containers share the host's profiles. Confined, it cannot read
+      # /etc/shadow and every password login fails. A real Rocky server has no such profile.
+      - run:
+          name: Let the Rocky test server check passwords
+          command: |
+            if sudo -n grep -q '^unix-chkpwd ' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+              echo -n unix-chkpwd | sudo -n tee /sys/kernel/security/apparmor/.remove > /dev/null
+              echo "Unloaded the machine's unix-chkpwd AppArmor profile."
+            fi
+
+      # Built up front, so the image builds do not count against each test's time limit.
+      - run:
+          name: Build the test servers
+          command: |
+            for image in ubuntu-24.04 rocky-9 ubuntu-24.04-ufw rocky-9-firewalld; do
+              docker build -q -t "runova-test-server:$image" "apps/server-core/test-servers/$image"
+            done
+
+      # One vitest run, two files at a time. Every test server is its own container with a unique
+      # name and a random SSH port, so the files cannot see each other. The install file alone takes
+      # about as long as the other four together, so two workers is about half the time of running
+      # them one by one. With CI set, the desktop's vitest config writes the JUnit report that
+      # store_test_results reads.
+      #
+      # deploy: the install itself, on Ubuntu and Rocky, as root and as a sudo user.
+      # firewall: ufw and firewalld, live IPv4 and IPv6 rulesets, the SSH lockout guard, confirming
+      #   over a new SSH connection, and a rollback by the systemd timer with the core killed.
+      # registries: a private registry:2 with htpasswd; a deploy pulls with a per-deploy token, and
+      #   after a success and a failure the whole filesystem holds no trace of it (E08).
+      # directTls: direct TLS (E16) behind ufw, mutual TLS with the device key, strangers, a wrong
+      #   pin and a revoked device refused, and the port and rule gone when it is off.
+      # deployExec: the Deploy AI's shell (E09), an allowlisted check in a real transient unit, an
+      #   unapproved command refused, a signed one run once and its replay refused, the journal.
+      - run:
+          name: System tests on test servers
+          no_output_timeout: 30m
+          environment:
+            RUNOVA_SYSTEM_TESTS: "1"
+          command: >-
+            pnpm --filter @runova/desktop exec vitest run --maxWorkers=2
+            src/main/deploy/deploy.int.test.ts
+            src/main/deploy/firewall.int.test.ts
+            src/main/deploy/registries.int.test.ts
+            src/main/deploy/directTls.int.test.ts
+            src/main/deploy/deployExec.int.test.ts
+
+      # The store step fails on a folder that was never made, as on a run that stopped early.
+      - run:
+          name: Make the report folder
+          when: always
+          command: mkdir -p apps/desktop/test-results
+      - store_test_results:
+          path: apps/desktop/test-results
 
   # The Playwright specs against the real thing: the site with a fake API, the site with the real
   # API and PostgreSQL (the admin project), then the compose stack the way production runs it,
@@ -460,6 +648,10 @@ jobs:
           path: apps/desktop/test-results
 
 workflows:
+  server-core:
+    jobs:
+      - server-core
+      - server-core-system
   website:
     jobs:
       - website-web

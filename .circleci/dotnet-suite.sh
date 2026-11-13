@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The two halves of a website API test suite for CircleCI Smarter Testing (test-suites.yml). Both
-# run from apps/website/api, on a solution that is already built in Release.
+# The two halves of a .NET test suite for CircleCI Smarter Testing (test-suites.yml): the website
+# API's and the server core's. Both run from the solution's folder (apps/website/api or
+# apps/server-core), on a solution that is already built in Release.
 #
 #   dotnet-suite.sh discover <test project>
 #   dotnet-suite.sh run <test project> <junit file>      (test classes on stdin, one per line)
