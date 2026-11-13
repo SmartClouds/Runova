@@ -60,7 +60,10 @@ On a Mac, use `base64 -i AuthKey_<key id>.p8` instead of `base64 -w0`.
 
 ## 5. The Mac runner
 
-Xcode 27.0 is already on `SmartAgent-Mac-01`, so there is nothing to install. Automatic signing stores
+Xcode 27.2 is already on `SmartAgent-Mac-01`, so there is nothing to install. After every Xcode update,
+an admin on the Mac has to run `sudo xcodebuild -runFirstLaunch` once, or the iOS job in CI stops at
+Check for Xcode (its CoreSimulator is still the old one, so there is no simulator to test on).
+Automatic signing stores
 a certificate in the keychain of the user the runner runs as, so that keychain has to be unlocked.
 Sign in on the Mac as that user, keep the session open, and run:
 
