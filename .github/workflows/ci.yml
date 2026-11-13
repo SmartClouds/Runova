@@ -8,11 +8,12 @@ name: CI
 # It runs on our two self-hosted runners (CD never uses them). Everything that
 # does not care about the OS (lint, types, the build and the unit suites)
 # runs on the Mac mini, which is much faster. The Linux runner keeps
-# what needs Linux: Docker, the server core and the Linux end-to-end shards. The
+# what needs Linux: Docker and the Linux end-to-end shards. The
 # macOS end-to-end shards run on the Mac too. The website (its site, its API, the
-# Playwright specs and the compose stack with Lighthouse) runs on CircleCI, in
-# .circleci/config.yml, and the circleci job below waits for it. GitHub's
-# hosted runners are for CD, which packages the installers.
+# Playwright specs and the compose stack with Lighthouse) and the server core (its tests and
+# the system tests on test servers) run on CircleCI, in .circleci/config.yml, and the
+# circleci job below waits for them. GitHub's hosted runners are for CD, which packages the
+# installers.
 #
 # The self-hosted runners keep their disks between jobs, so every job that runs on one starts with
 # the Runner cleanup step (.github/actions/runner-cleanup). It gives the job a temp folder of its
@@ -154,16 +155,17 @@ jobs:
     with:
       e2e: true
 
-  # The website (the site, its API, the Playwright specs, the compose stack and Lighthouse) runs
-  # on CircleCI, in .circleci/config.yml. CircleCI reports each job on the commit as a status named
+  # The website (the site, its API, the Playwright specs, the compose stack and Lighthouse) and the
+  # server core (its tests and the system tests on test servers) run on CircleCI, in
+  # .circleci/config.yml. CircleCI reports each job on the commit as a status named
   # "ci/circleci: <job>", and this job waits for all of them, so all-green below, and with it CD's
-  # ci-passed, fail when the website fails. Hosted, like CD's own wait: it only polls.
+  # ci-passed, fail when one of them fails. Hosted, like CD's own wait: it only polls.
   #
   # A job that is still running is waited for. One that fails ends this job at once. One that
   # never reports (CircleCI is not triggered, or its config is broken) fails it after 15 minutes.
   # Rerun this job after rerunning a failed CircleCI job: it reads the latest status of each.
   circleci:
-    name: CircleCI (website)
+    name: CircleCI
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -176,7 +178,7 @@ jobs:
           REPO: ${{ github.repository }}
           # A pull request's own commit, not the merge commit the workflow runs on.
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          JOBS: website-web website-api website-e2e
+          JOBS: website-web website-api website-e2e server-core server-core-system
         run: |
           waited=0
           while true; do

@@ -4,7 +4,7 @@ name: Nightly
 # backends, one test server per job, the full-stack e2e run on Ubuntu and Rocky (E17 AC1), and the
 # server core's own nginx and Pebble system tests.
 # Each `[e2e]` push runs a smaller set (Ubuntu and Rocky installs, ufw and firewalld, Ubuntu for the
-# rest; see the server-core-system job in test.yml).
+# rest; see the server-core-system job in .circleci/config.yml).
 # This one runs every night and by hand, never on a push, on the self-hosted Linux runner like
 # the rest of CI. The jobs queue one after another on it. Each starts with the Runner cleanup step,
 # which clears what the job leaves on the runner's disk once it is over (see ci.yml).

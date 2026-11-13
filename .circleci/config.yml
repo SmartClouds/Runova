@@ -1,9 +1,10 @@
 version: 2.1
 
-# CI for the website: the site in apps/website/web and its API in apps/website/api, plus the
-# desktop app's Linux end-to-end shards. The rest of the repo (the desktop's unit tests and its
-# macOS end-to-end shards, mobile, server core) still runs on GitHub Actions, in
-# .github/workflows/ci.yml, whose circleci job waits for the jobs here.
+# CI for the website: the site in apps/website/web and its API in apps/website/api, the server core
+# in apps/server-core (its tests and the system tests on test servers), plus the desktop app's
+# Linux end-to-end shards. The rest of the repo (the desktop's unit tests and its macOS
+# end-to-end shards, mobile) still runs on GitHub Actions, in .github/workflows/ci.yml, whose
+# circleci job waits for the jobs here.
 #
 # Left out for now: path filtering (every push runs every job), matrices, other operating systems
 # and deploys.
@@ -198,11 +199,11 @@ jobs:
               dotnet format Runova.Website.slnx --verify-no-changes --no-restore
             fi
 
-  # The server core in apps/server-core: what test.yml's server-core job runs in three shards, on
-  # three parallel nodes here. Each builds, then circleci testsuite run takes its third of the test
-  # classes (the "server core tests" suite). The format check and the contracts drift check run on
-  # the first node only. The tests use fakes for Docker, systemd and the firewall, so they need
-  # nothing from the machine; the real thing is the server-core-system job below.
+  # The server core in apps/server-core, on three parallel nodes, as the GitHub job's three shards
+  # were. Each builds, then circleci testsuite run takes its third of the test classes (the
+  # "server core tests" suite). The format check and the contracts drift check run on the first
+  # node only. The tests use fakes for Docker, systemd and the firewall, so they need nothing from
+  # the machine; the real thing is the server-core-system job below.
   server-core:
     executor: linux-machine
     parallelism: 3
@@ -273,9 +274,9 @@ jobs:
   # The server core installed on real Linux machines: systemd test servers in Docker (Ubuntu 24.04
   # and Rocky 9, with ufw and firewalld), driven by the desktop's own installer, pool and REST
   # client. It publishes the linux-x64 release, builds the four test server images and runs the
-  # Deploy system tests, two files at a time (see test.yml's server-core-system job, which this
-  # one is the copy of). The machine executor has Docker with root, which the systemd containers
-  # need, and passwordless sudo, which the AppArmor step below needs.
+  # Deploy system tests, two files at a time. The machine executor has Docker with root, which the
+  # systemd containers need, and passwordless sudo, which the AppArmor step below needs. The
+  # nightly workflow's heavier matrix (nightly.yml) still runs on GitHub.
   server-core-system:
     executor: linux-machine
     environment:
