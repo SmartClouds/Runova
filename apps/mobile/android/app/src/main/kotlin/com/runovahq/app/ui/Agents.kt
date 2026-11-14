@@ -1,5 +1,6 @@
 package com.runovahq.app.ui
 
+import android.content.ClipData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,13 +22,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.unit.dp
 import com.runovahq.app.design.BadgeTone
 import com.runovahq.app.design.ButtonKind
@@ -45,6 +47,7 @@ import com.runovahq.app.design.RunovaTextArea
 import com.runovahq.app.design.RunovaTextField
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.design.RunovaType
+import kotlinx.coroutines.launch
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AutoFixSessionView
 import uniffi.runova_ffi.AutoFixTone
@@ -262,7 +265,8 @@ fun PromptsTab(view: AppView, intents: PromptIntents) {
         LoadingRows()
         return
     }
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var library by remember { mutableStateOf<String?>(null) }
     var request by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(options.types.firstOrNull { it == "Bug Fix" } ?: options.types.first()) }
@@ -334,7 +338,10 @@ fun PromptsTab(view: AppView, intents: PromptIntents) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RunovaButton(
                     "Copy",
-                    onClick = { clipboard.setText(AnnotatedString(prompt)) },
+                    onClick = {
+                        val entry = ClipData.newPlainText("Prompt", prompt).toClipEntry()
+                        scope.launch { clipboard.setClipEntry(entry) }
+                    },
                     Modifier.weight(1f),
                     kind = ButtonKind.Soft,
                     icon = RunovaIcons.Copy,

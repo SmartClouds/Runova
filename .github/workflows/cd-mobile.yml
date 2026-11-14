@@ -134,7 +134,9 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         working-directory: apps/mobile/android
         env:
+          # The runner presets ANDROID_NDK_ROOT to an older NDK, and cargo-ndk warns when the two differ.
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.2.13676358
         run: |
           # In two lines because eval would hide a tag the script refuses, such as v1.2.3-beta.1.
           version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
