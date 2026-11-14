@@ -74,6 +74,7 @@ beforeEach(() => {
     runs: {},
     ai: SETTINGS_AI,
     projects: {},
+    requestedModes: {},
   });
 });
 
@@ -462,6 +463,42 @@ describe('AssistantDrawer', () => {
       'aria-checked',
       'true',
     );
+  });
+
+  it('applies a command mode picked before it opened, once', async () => {
+    const { bridge: fake } = renderWithProviders(<Page />, {
+      bridge: bridge({
+        'deployAssistant.setMode': async () => ({ mode: 'autoRunDiagnostics', allowlist: [] }),
+      }),
+    });
+    act(() => {
+      useDeployAssistantStore.getState().requestMode(SERVER.id, 'autoRunDiagnostics');
+      useDeployAssistantStore.getState().open(SERVER.id);
+    });
+
+    const auto = await screen.findByRole('radio', { name: /Auto-run diagnostics/ });
+    await waitFor(() => expect(auto).toHaveAttribute('aria-checked', 'true'));
+    expect(fake.$fn('deployAssistant.setMode')).toHaveBeenCalledTimes(1);
+    expect(fake.$fn('deployAssistant.setMode')).toHaveBeenCalledWith({
+      serverId: SERVER.id,
+      mode: 'autoRunDiagnostics',
+    });
+    expect(useDeployAssistantStore.getState().requestedModes[SERVER.id]).toBeUndefined();
+  });
+
+  it('leaves the mode alone when the one asked for is already on', async () => {
+    const setMode = vi.fn(async () => ({ mode: 'approveEveryCommand', allowlist: [] }));
+    renderWithProviders(<Page />, { bridge: bridge({ 'deployAssistant.setMode': setMode }) });
+    act(() => {
+      useDeployAssistantStore.getState().requestMode(SERVER.id, 'approveEveryCommand');
+      useDeployAssistantStore.getState().open(SERVER.id);
+    });
+
+    await screen.findByRole('radio', { name: /Approve every command/ });
+    await waitFor(() =>
+      expect(useDeployAssistantStore.getState().requestedModes[SERVER.id]).toBeUndefined(),
+    );
+    expect(setMode).not.toHaveBeenCalled();
   });
 
   it('explains the role when the core refuses the AI', async () => {

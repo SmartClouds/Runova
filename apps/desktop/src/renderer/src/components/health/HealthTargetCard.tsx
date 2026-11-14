@@ -1,10 +1,12 @@
 import type { HealthServiceResult } from '@runova/core';
 import type { HealthTargetSummary } from '@shared/healthTypes';
 import { useId, useState } from 'react';
-import { ChevronDown, Cloud, Server, TriangleAlert } from '@/components/icons';
+import { ChevronDown, Cloud, Server, TriangleAlert, Wand2 } from '@/components/icons';
 import { Chip, GLASS_CARD, SECTION_HEADING } from '@/components/pageKit';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { canAutoFix } from './autoFix/autoFixView';
 import { HealthStatusChip } from './HealthStatusChip';
 import {
   formatAgo,
@@ -103,11 +105,14 @@ export function HealthTargetCard({
   target,
   now,
   onOpen,
+  onAutoFix,
   selected = false,
 }: {
   target: HealthTargetSummary;
   now: number;
   onOpen: (targetId: string) => void;
+  /** Offered on a monitor that is down or degraded, to hand the failure to an AI agent. */
+  onAutoFix?: (target: HealthTargetSummary) => void;
   selected?: boolean;
 }): React.JSX.Element {
   const titleId = useId();
@@ -218,6 +223,21 @@ export function HealthTargetCard({
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 break-words">{target.headline}</span>
         </p>
+      )}
+
+      {onAutoFix && canAutoFix(target) && (
+        // Above the card's open-the-detail overlay, so the click lands here.
+        <div className="relative z-10 flex justify-end">
+          <Button
+            size="xs"
+            variant="tint"
+            aria-label={`Auto fix ${target.name}`}
+            onClick={() => onAutoFix(target)}
+          >
+            <Wand2 />
+            Auto fix
+          </Button>
+        </div>
       )}
 
       {target.servicesTotal > 0 && (

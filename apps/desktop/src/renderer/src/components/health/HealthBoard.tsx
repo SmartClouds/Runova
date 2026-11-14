@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { HealthAutoFixDialog } from './autoFix/HealthAutoFixDialog';
 import { HealthAvailabilityChart } from './HealthAvailabilityChart';
 import { HealthBuildDialog } from './HealthBuildDialog';
 import { HealthPulseHeader } from './HealthPulseHeader';
@@ -127,11 +128,13 @@ function EnvironmentGroup({
   now,
   selectedId,
   onOpen,
+  onAutoFix,
 }: {
   group: HealthEnvironmentGroup;
   now: number;
   selectedId: string | null;
   onOpen: (targetId: string) => void;
+  onAutoFix: (target: HealthTargetSummary) => void;
 }): React.JSX.Element {
   const headingId = useId();
   const down = group.targets.filter((one) => healthBucket(one.state) === 'down').length;
@@ -158,6 +161,7 @@ function EnvironmentGroup({
               target={one}
               now={now}
               onOpen={onOpen}
+              onAutoFix={onAutoFix}
               selected={one.id === selectedId}
             />
           ))}
@@ -198,6 +202,8 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
   /** The project a target is added for when Build with AI hands over to the add dialog. */
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  /** The monitor whose Auto fix dialog is open, from its card. */
+  const [fixing, setFixing] = useState<HealthTargetSummary | null>(null);
   const [editing, setEditing] = useState<HealthTargetSummary | null>(null);
   /** Fields another page asked the add dialog to start with (an app on Deploy). */
   const [addSeed, setAddSeed] = useState<Partial<HealthDraft> | null>(null);
@@ -446,6 +452,7 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
                 now={now}
                 selectedId={selectedId}
                 onOpen={openTarget}
+                onAutoFix={setFixing}
               />
             ));
             return scoped ? (
@@ -470,6 +477,15 @@ export function HealthBoard({ projectId }: { projectId?: string }): React.JSX.El
         environmentName={selected ? envName(selected) : null}
         now={now}
       />
+
+      {fixing && (
+        <HealthAutoFixDialog
+          target={fixing}
+          projects={projects}
+          open
+          onOpenChange={(open) => !open && setFixing(null)}
+        />
+      )}
 
       <HealthTargetDialog
         open={adding || editing !== null}

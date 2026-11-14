@@ -1,4 +1,4 @@
-import type { AppNotification } from '@runova/core';
+import { type AppNotification, isPipelineNotification } from '@runova/core';
 import type { GithubActionsActivity, GithubActionsHistoryItem } from '@shared/apiTypes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
@@ -44,7 +44,6 @@ import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { RefreshFailureBell, refreshTooltip } from '@/components/ui/refresh-failure-bell';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
-import { appRoute } from '@/hooks/useAppNotificationMessages';
 import { useLastGoodData } from '@/hooks/useLastGoodData';
 import { queryKeys } from '@/lib/queryKeys';
 import { timeAgo } from '@/lib/time';
@@ -565,7 +564,12 @@ export default function PipelinesPage(): React.JSX.Element {
 
   const activity = lastGood.data;
   const runs = useMemo(() => activity?.runs ?? [], [activity]);
-  const notifications: AppNotification[] = notificationsQuery.data ?? [];
+  // Only CI results belong here. Server alerts and monitors going down have their own pages and
+  // show up in Recent messages, so they are neither listed nor counted on this page.
+  const notifications: AppNotification[] = useMemo(
+    () => (notificationsQuery.data ?? []).filter(isPipelineNotification),
+    [notificationsQuery.data],
+  );
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   /** Failure notices the watcher raised, keyed by run URL so a row can show its unread state. */
@@ -576,19 +580,6 @@ export default function PipelinesPage(): React.JSX.Element {
     }
     return map;
   }, [notifications]);
-
-  /**
-   * Unread notices that belong to a page elsewhere in the app (a Deploy server's alert, say).
-   * They have no run row to mark, so they get rows of their own that open their page.
-   */
-  const elsewhere = useMemo(
-    () =>
-      notifications.flatMap((item) => {
-        const route = !item.read && !item.htmlUrl ? appRoute(item) : null;
-        return route ? [{ item, route }] : [];
-      }),
-    [notifications],
-  );
 
   const counts = useMemo(() => {
     const tally: Record<FilterKey, number> = {
@@ -779,41 +770,6 @@ export default function PipelinesPage(): React.JSX.Element {
     </div>
   );
 
-  const notices =
-    elsewhere.length > 0 ? (
-      <div className="space-y-1.5 px-2 pb-1 pt-2">
-        <h3 className={cn(SECTION_HEADING, 'px-2')}>Needs attention</h3>
-        <ul aria-label="Other notices" className="space-y-1">
-          {elsewhere.map(({ item, route }) => (
-            <li
-              key={item.id}
-              className="rounded-lg bg-destructive/[0.05] ring-1 ring-inset ring-destructive/25"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  markRead.mutate(item.id);
-                  navigate(route);
-                }}
-                className="flex w-full cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-destructive/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[13px] font-medium leading-snug">{item.title}</span>
-                    <Chip tone="destructive">New</Chip>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{item.body}</span>
-                </span>
-                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                  {timeAgo(item.createdAt)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : null;
-
   const runsBody = loading ? (
     <ListSkeleton />
   ) : !ready ? (
@@ -864,10 +820,7 @@ export default function PipelinesPage(): React.JSX.Element {
   const runsCard = (
     <section aria-label="Runs" className={cn(PANEL, 'min-w-0 flex-1')}>
       {runsHeader}
-      <div className="rail-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {notices}
-        {runsBody}
-      </div>
+      <div className="rail-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">{runsBody}</div>
     </section>
   );
 

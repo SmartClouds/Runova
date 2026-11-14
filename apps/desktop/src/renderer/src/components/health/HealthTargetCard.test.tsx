@@ -110,4 +110,34 @@ describe('HealthTargetCard', () => {
     expect(within(list).getByText('Pass')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('t1');
   });
+  it('offers Auto fix on a monitor that is down, without opening the detail panel', async () => {
+    const onOpen = vi.fn();
+    const onAutoFix = vi.fn();
+    const down = target({ state: 'fail', headline: 'postgres: connection refused' });
+    const { user } = renderWithProviders(
+      <HealthTargetCard target={down} now={NOW} onOpen={onOpen} onAutoFix={onAutoFix} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Auto fix API' }));
+
+    expect(onAutoFix).toHaveBeenCalledWith(down);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('offers no Auto fix while the monitor is healthy or paused', () => {
+    const { unmount } = renderWithProviders(
+      <HealthTargetCard target={target()} now={NOW} onOpen={vi.fn()} onAutoFix={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Auto fix API' })).toBeNull();
+    unmount();
+    renderWithProviders(
+      <HealthTargetCard
+        target={target({ state: 'paused', paused: true })}
+        now={NOW}
+        onOpen={vi.fn()}
+        onAutoFix={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Auto fix API' })).toBeNull();
+  });
 });

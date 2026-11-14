@@ -27,9 +27,14 @@ async function register(): Promise<void> {
   );
 }
 
-function notification(id: string, read = false): AppNotification {
+function notification(
+  id: string,
+  read = false,
+  kind: AppNotification['kind'] = 'pipeline-failure',
+): AppNotification {
   return {
     id,
+    kind,
     title: `Run ${id}`,
     body: 'A workflow finished.',
     createdAt: '2026-09-18T10:00:00.000Z',
@@ -56,6 +61,26 @@ describe('the notification inbox', () => {
     await seed(notification('a'), notification('b', true), notification('c'));
 
     await expect(invoke(IPC.appNotifications.unreadCount)).resolves.toBe(2);
+  });
+
+  it('leaves monitoring and server alerts out of the Pipelines badge', async () => {
+    await seed(
+      notification('run', false, 'pipeline-failure'),
+      notification('fixed', false, 'pipeline-autofix-fixed'),
+      notification('down', false, 'health-failure'),
+      notification('server', false, 'deploy-critical'),
+    );
+
+    await expect(invoke(IPC.appNotifications.unreadCount)).resolves.toBe(2);
+  });
+
+  it('marks only pipeline notices read when marking all read', async () => {
+    await seed(notification('run'), notification('down', false, 'health-failure'));
+
+    const next = await invoke<AppNotification[]>(IPC.appNotifications.markAllRead);
+
+    expect(next.find((one) => one.id === 'run')?.read).toBe(true);
+    expect(next.find((one) => one.id === 'down')?.read).toBe(false);
   });
 
   it('marks one as read and hands back the whole list', async () => {

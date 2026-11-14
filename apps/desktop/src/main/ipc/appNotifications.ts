@@ -1,4 +1,4 @@
-import type { AppNotification } from '@runova/core';
+import { type AppNotification, isPipelineNotification } from '@runova/core';
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
 import { store } from '../store';
@@ -13,9 +13,11 @@ export function registerAppNotificationHandlers(): void {
     return store.getAppNotifications();
   });
 
+  // The badge on Pipelines counts CI results only. Other notices reach the user as a toast and a
+  // row in Recent messages, and their own page (Monitoring, Deploy) has its own badge.
   ipcMain.handle(IPC.appNotifications.unreadCount, async (): Promise<number> => {
     const items = await store.getAppNotifications();
-    return items.filter((item) => !item.read).length;
+    return items.filter((item) => !item.read && isPipelineNotification(item)).length;
   });
 
   ipcMain.handle(
@@ -27,9 +29,12 @@ export function registerAppNotificationHandlers(): void {
     },
   );
 
+  // Mark all read is the Pipelines page's button, so it leaves other kinds of notices alone.
   ipcMain.handle(IPC.appNotifications.markAllRead, async (): Promise<AppNotification[]> => {
     return store.updateAppNotifications((items) =>
-      items.map((item) => (item.read ? item : { ...item, read: true })),
+      items.map((item) =>
+        item.read || !isPipelineNotification(item) ? item : { ...item, read: true },
+      ),
     );
   });
 

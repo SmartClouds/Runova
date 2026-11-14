@@ -30,6 +30,7 @@ beforeEach(() => {
     pageApp: null,
     dismissedApps: {},
     continueFrom: {},
+    requestedModes: {},
   });
 });
 
@@ -52,6 +53,21 @@ describe('deployAssistantStore', () => {
     store.open(S, { prompt: 'x', context: { title: 't' } });
     store.clearDraft();
     expect(useDeployAssistantStore.getState().draft).toBeNull();
+  });
+
+  it('keeps a requested command mode per server until it is cleared', () => {
+    const store = useDeployAssistantStore.getState();
+    store.requestMode(S, 'autoRunDiagnostics');
+    store.requestMode('srv-2', 'approveEveryCommand');
+    expect(useDeployAssistantStore.getState().requestedModes).toEqual({
+      [S]: 'autoRunDiagnostics',
+      'srv-2': 'approveEveryCommand',
+    });
+
+    store.requestMode(S, null);
+    expect(useDeployAssistantStore.getState().requestedModes).toEqual({
+      'srv-2': 'approveEveryCommand',
+    });
   });
 
   it('builds steps from proposals, runs and their ends', () => {

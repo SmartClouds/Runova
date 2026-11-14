@@ -73,7 +73,12 @@ A single failed check does not count as an outage. Runova checks again within ab
 
 When an incident opens, Runova runs a read-only analysis with your project's AI CLI in the background: it reads the error and the project's code and writes down the likely cause, where it is, and what it would change. It never edits anything. The analysis appears in the target's details. You can run it again with **Run diagnosis**, or turn **Diagnose with AI** off in a target's settings.
 
-To fix the problem, click **Fix with AI**. It opens the fix prompt (the failing services, their errors and the analysis) so you can edit it, then starts an agent tab for the project with it. **Copy for AI** puts the same prompt on the clipboard for any other tool.
+To fix the problem, click **Auto fix**. It is on every card that is down or degraded, and in the target's details. The dialog shows the fix prompt (the failing services, their errors and the analysis), which you can edit. The target's project is picked, and you can choose another one under **Project**. Then pick where it runs:
+
+- **Workspace terminal** opens an agent tab in the project's Workspace. Pick the **CLI**, the **Model**, the **Effort** and the **Permissions** (the CLI's permission mode, such as **Accept edits** or **Plan**). Left on **Default**, the mode set in Settings is used. A mode that asks for nothing, such as **Bypass permissions**, shows a warning first. **Run in Workspace** types the prompt and runs it. **Open in Workspace** types it and leaves `Enter` to you.
+- **Deploy AI** is there for a target you added from a deployed app. **Open in Deploy AI** opens that app on the Deploy page with the Deploy AI drawer, the prompt in its task box and a new chat. Pick the **AI** (the provider from Settings or an installed CLI), its **Model** and **Effort**, **Commands on the server** (keep the current mode, **Approve every command** or **Auto-run diagnostics**, which may ask for your password) and, with a CLI, **Project code** (**Read only** or **Read and edit**). Press **Start** in the drawer to run it. If the Deploy AI is still busy on that server, stop its run first.
+
+**Copy prompt** in the dialog, or **Copy for AI** in the target's details, puts the same prompt on the clipboard for any other tool.
 
 ## Security
 

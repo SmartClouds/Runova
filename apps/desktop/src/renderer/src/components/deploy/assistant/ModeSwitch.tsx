@@ -2,13 +2,14 @@ import { coreErrorMessage } from '@shared/coreErrors';
 import type { AssistantMode } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployServer } from '@shared/deployTypes';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Shield } from '@/components/icons';
 import { segmentClass } from '@/components/pageKit';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { useDeployAssistantStore } from '@/stores/deployAssistantStore';
 import { useProofStepUp } from '../overview/useProofStepUp';
 
 /**
@@ -42,6 +43,17 @@ export function ModeSwitch({
   const queryClient = useQueryClient();
   const stepUp = useProofStepUp(server);
   const [busy, setBusy] = useState(false);
+  const requested = useDeployAssistantStore((state) => state.requestedModes[server.id]);
+  const requestMode = useDeployAssistantStore((state) => state.requestMode);
+
+  // A mode picked before the drawer opened (Monitoring's Auto fix) is applied once, here, where
+  // the password can be asked for. Whether it takes or not, the request is spent.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a request arrives
+  useEffect(() => {
+    if (!requested || disabled) return;
+    requestMode(server.id, null);
+    if (requested !== mode) void choose(requested);
+  }, [requested, disabled]);
 
   async function choose(next: AssistantMode): Promise<void> {
     if (next === mode || busy) return;

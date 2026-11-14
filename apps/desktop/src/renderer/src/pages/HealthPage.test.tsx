@@ -185,6 +185,22 @@ describe('HealthPage', () => {
     expect(await screen.findByRole('dialog', { name: 'API' })).toBeInTheDocument();
   });
 
+  it('offers Auto fix on a failing card and opens it with the fix prompt', async () => {
+    const { user, bridge } = renderPage('/monitoring', {
+      'health.fixPrompt': async () => 'Fix the checkout database.',
+    });
+    await screen.findByRole('article', { name: 'Checkout' });
+    expect(screen.queryByRole('button', { name: 'Auto fix API' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Auto fix Checkout' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Auto fix Checkout' });
+    expect(await within(dialog).findByDisplayValue('Fix the checkout database.')).toBeVisible();
+    expect(bridge.$fn('health.fixPrompt')).toHaveBeenCalledWith('t2');
+    // The card's button opens only the fix, not the detail panel too.
+    expect(screen.queryByRole('dialog', { name: 'Checkout' })).toBeNull();
+  });
+
   it('narrows the list by status, project, environment and search', async () => {
     const { user } = renderPage();
     await screen.findByRole('article', { name: 'API' });

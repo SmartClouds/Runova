@@ -235,12 +235,12 @@ describe('HealthTargetDetail', () => {
     expect(bridge.$fn('health.setPaused')).toHaveBeenCalledWith('t1', true);
   });
 
-  it('hands the fix prompt to Fix with AI', async () => {
+  it('hands the fix prompt to Auto fix', async () => {
     const { user, bridge } = renderPanel({
       'health.fixPrompt': async () => 'Fix the failing postgres connection.',
     });
     const view = await panel();
-    await user.click(within(view).getByRole('button', { name: 'Fix with AI' }));
+    await user.click(within(view).getByRole('button', { name: 'Auto fix' }));
     const prompt = (await screen.findByLabelText('Fix prompt')) as HTMLTextAreaElement;
     expect(prompt.value).toBe('Fix the failing postgres connection.');
     expect(bridge.$fn('health.fixPrompt')).toHaveBeenCalledWith('t1');

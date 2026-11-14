@@ -154,7 +154,7 @@ You can change all of this under Settings, **Notifications**, **Pipeline failure
 - **Show failed pipelines on my AI Pet** turns the pet's failure bubble on or off.
 - **When I click a failure** decides where a failure alert (the toast's **Open** button, its row in Recent messages or the pet's bubble) takes you: this page on the run, the **Pipelines** section in the project's Workspace Git panel (see [Workspace: Git](workspace-git.md#pipelines)), or nowhere.
 
-Other notices land in the same inbox: updates for CLI tools and alerts from Deploy servers. Notices that have no run to attach to appear above the run list, each with a **New** badge. Click one to mark it read and open the page it belongs to.
+This page and its badge only cover pipeline results. Other notices, such as alerts from Deploy servers, a monitor going down, or updates for CLI tools, show up as a toast and in **Recent messages**, and on their own page (Monitoring has its own badge for open incidents). **Mark all read** here only marks pipeline notices.
 
 > [!TIP]
 > To stop getting notices for one workflow, open the project's Git tab and use **Stop watching this pipeline** on that workflow. **Watch this pipeline again** turns it back on and only reports runs from that moment on. See [Workspace: Git](workspace-git.md).

@@ -1,6 +1,9 @@
 import type { EffortLevel } from '@runova/core';
 import type { SshAgentProgress } from '@shared/apiTypes';
-import type { ExecLine } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type {
+  AssistantMode,
+  ExecLine,
+} from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type {
   DeployAssistantAppRef,
   DeployAssistantContextInput,
@@ -145,6 +148,12 @@ interface DeployAssistantStoreState {
   /** Per server, since each one runs its own app's code. */
   projects: Record<string, AssistantProjectChoice>;
   setProject: (serverId: string, project: AssistantProjectChoice | null) => void;
+  /**
+   * Per server, how commands should run, as picked somewhere else (Monitoring's Auto fix). The
+   * drawer's mode switch applies it once it can, since a change may ask for the password.
+   */
+  requestedModes: Record<string, AssistantMode>;
+  requestMode: (serverId: string, mode: AssistantMode | null) => void;
   open: (
     serverId: string,
     draft?: { context: DeployAssistantContextInput; prompt: string },
@@ -230,6 +239,12 @@ export const useDeployAssistantStore = create<DeployAssistantStoreState>((set) =
     set((state) => {
       const { [serverId]: _old, ...others } = state.projects;
       return { projects: project ? { ...others, [serverId]: project } : others };
+    }),
+  requestedModes: {},
+  requestMode: (serverId, mode) =>
+    set((state) => {
+      const { [serverId]: _old, ...others } = state.requestedModes;
+      return { requestedModes: mode ? { ...others, [serverId]: mode } : others };
     }),
   open: (serverId, draft) =>
     set((state) => ({

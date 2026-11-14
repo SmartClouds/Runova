@@ -375,7 +375,7 @@ describe('PipelinesPage run list', () => {
 describe('PipelinesPage failure notices', () => {
   const notification = {
     id: 'n1',
-    kind: 'pipeline-failed',
+    kind: 'pipeline-failure',
     title: 'CI failed',
     body: 'acme/borealis #42',
     projectId: 'p2',
@@ -409,7 +409,7 @@ describe('PipelinesPage failure notices', () => {
     await waitFor(() => expect(bridge.$fn('appNotifications.markRead')).toHaveBeenCalledWith('n1'));
   });
 
-  it('lists unread notices that open a page in the app, and follows their route', async () => {
+  it('leaves server and monitoring alerts to Recent messages', async () => {
     const alert = {
       ...notification,
       id: 'd1',
@@ -421,21 +421,24 @@ describe('PipelinesPage failure notices', () => {
       htmlUrl: null,
       route: '/deploy?server=srv-1',
     };
-    const { bridge, user } = renderPage({
+    const down = {
+      ...alert,
+      id: 'h1',
+      kind: 'health-failure',
+      title: 'API is down',
+      route: '/monitoring',
+    };
+    renderPage({
       'pipelines.dashboardActivity': async () => activity(),
-      'appNotifications.list': [
-        notification,
-        alert,
-        { ...alert, id: 'd2', route: '//evil.example' },
-      ],
+      'appNotifications.list': [alert, down],
     });
-    const list = await screen.findByRole('list', { name: 'Other notices' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
 
-    await user.click(within(list).getByRole('button', { name: /Production: disk filling up/ }));
-
-    await waitFor(() => expect(bridge.$fn('appNotifications.markRead')).toHaveBeenCalledWith('d1'));
-    expect(currentLocation()).toBe('/deploy?server=srv-1');
+    await screen.findByText('Break the build');
+    expect(screen.queryByText('Needs attention')).toBeNull();
+    expect(screen.queryByText('Production: disk filling up')).toBeNull();
+    expect(screen.queryByText('API is down')).toBeNull();
+    // Unread, but not a pipeline notice, so there is nothing here to mark read.
+    expect(screen.queryByRole('button', { name: /Mark all read/ })).toBeNull();
   });
 
   it('marks every notice read at once', async () => {

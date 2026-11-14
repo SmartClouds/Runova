@@ -365,6 +365,22 @@ export type AppNotificationKind =
   /** The server's daily check found package updates in a project (E51). */
   | 'dependency-updates';
 
+/**
+ * The notices about CI runs. Only these belong to the Pipelines page and its badge; a server
+ * alert or a monitor going down has its own page and shows up in Recent messages.
+ */
+export const PIPELINE_NOTIFICATION_KINDS: ReadonlySet<AppNotificationKind> = new Set([
+  'pipeline-failure',
+  'pipeline-success',
+  'pipeline-autofix-fixed',
+  'pipeline-autofix-attention',
+  'pipeline-autofix-gave-up',
+]);
+
+export function isPipelineNotification(item: { kind: AppNotificationKind }): boolean {
+  return PIPELINE_NOTIFICATION_KINDS.has(item.kind);
+}
+
 /** Item ids (as strings) mapped to when it happened, an ISO time. */
 export interface NewsLocalState {
   read: Record<string, string>;

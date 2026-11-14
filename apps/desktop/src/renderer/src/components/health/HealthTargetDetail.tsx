@@ -50,10 +50,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
-import { HealthFixDialog, healthFixPromptKey } from './HealthFixDialog';
+import { HealthAutoFixDialog } from './autoFix/HealthAutoFixDialog';
 import { HealthLatencyChart } from './HealthLatencyChart';
 import { HealthSecretDialog } from './HealthSecretStep';
 import { HealthStatusChip } from './HealthStatusChip';
+import { healthFixPromptKey } from './healthFixPrompt';
 import {
   formatAgo,
   formatClock,
@@ -584,18 +585,19 @@ export function HealthTargetDetail({
                     {/* Runova Cloud checks an online monitor on its own; this reads what it found. */}
                     {target.runMode === 'cloud' ? 'Refresh' : 'Check now'}
                   </Button>
+                  {/* The dialog lets the user pick another project, so only having none blocks it. */}
                   <SimpleTooltip
-                    label={project ? undefined : 'The project for this target is missing.'}
+                    label={projects.length > 0 ? undefined : 'Add a project to fix it in first.'}
                     wrapTrigger
                   >
                     <Button
                       size="sm"
                       variant="tint"
-                      disabled={!project}
+                      disabled={projects.length === 0}
                       onClick={() => setFixOpen(true)}
                     >
                       <Wand2 />
-                      Fix with AI
+                      Auto fix
                     </Button>
                   </SimpleTooltip>
                   <Button
@@ -786,10 +788,10 @@ export function HealthTargetDetail({
         </DialogContent>
       </Dialog>
 
-      {target && project && (
-        <HealthFixDialog
-          project={project}
+      {target && (
+        <HealthAutoFixDialog
           target={target}
+          projects={projects}
           open={fixOpen}
           onOpenChange={setFixOpen}
         />
