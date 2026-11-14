@@ -1936,7 +1936,7 @@ dependencies = [
 
 [[package]]
 name = "runova-api"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1953,14 +1953,14 @@ dependencies = [
 
 [[package]]
 name = "runova-bindgen"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "runova-crypto"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "base64 0.22.1",
@@ -1983,7 +1983,7 @@ dependencies = [
 
 [[package]]
 name = "runova-ffi"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2007,7 +2007,7 @@ dependencies = [
 
 [[package]]
 name = "runova-link"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "runova-crypto",
@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "runova-protocol"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "hex",
  "serde",
@@ -2031,7 +2031,7 @@ dependencies = [
 
 [[package]]
 name = "runova-relay"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2044,7 +2044,7 @@ dependencies = [
 
 [[package]]
 name = "runova-rpc"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "runova-crypto",
  "runova-link",
@@ -2056,7 +2056,7 @@ dependencies = [
 
 [[package]]
 name = "runova-rtc"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "hex",
@@ -2072,7 +2072,7 @@ dependencies = [
 
 [[package]]
 name = "runova-session"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "runova-signalr"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "futures-util",
  "rustls",
@@ -2106,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "runova-term"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "vt100",
 ]
