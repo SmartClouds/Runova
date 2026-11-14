@@ -45,6 +45,42 @@ export function detectLocalUrl(line: string): string | null {
   return found ? found[0].replace(/[.,;]+$/, '') : null;
 }
 
+/**
+ * The arguments that run a project's command on Windows the way the workspace's Run button does:
+ * typed into Windows PowerShell 5.1, which is also the shell the run setup agent writes commands
+ * for (`Push-Location <folder>; <command>; Pop-Location`, `.\dev.bat`, `;` between steps). cmd.exe
+ * knows none of that, so a command that runs in the workspace failed here before it started.
+ *
+ * The command travels base64 encoded, so no quote, `$` or backslash in it is reread on the way.
+ * -EncodedCommand would do that too, but PowerShell then writes its own errors to a piped stderr
+ * as CLIXML, so -Command decodes it instead. The exit code is passed on, since a script block
+ * would otherwise end with 0 whatever its last command did.
+ */
+export function windowsShellArgs(command: string): string[] {
+  const script = [
+    "$ProgressPreference = 'SilentlyContinue'",
+    'try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}',
+    command,
+    '$ok = $?',
+    'if ($LASTEXITCODE) { exit $LASTEXITCODE }',
+    'if (-not $ok) { exit 1 }',
+  ].join('\n');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    `& ([scriptblock]::Create([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encoded}'))))`,
+  ];
+}
+
+/** The lines PowerShell adds under an error to point at it, which say nothing about the app. */
+const POWERSHELL_ERROR_TRIM =
+  /^(?:At line:\d+ char:\d+|\+ .*|\s+\+ (?:CategoryInfo|FullyQualifiedErrorId)\b.*)$/;
+
 const prepared = new WeakSet<Session>();
 
 function captureSession(partition: string): Session {
@@ -186,16 +222,14 @@ export function createProjectCapture(deps: ProjectCaptureDeps): StudioCaptureHos
       const old = running.get(key);
       if (old && old.exitCode === null) deps.killTree(old);
       const env = { ...(await deps.env()), FORCE_COLOR: '0', BROWSER: 'none' };
-      const child =
-        process.platform === 'win32'
-          ? // /s takes the outer quotes off and runs the rest as typed, as a terminal would.
-            spawn('cmd.exe', ['/d', '/s', '/c', `"${command}"`], {
-              cwd: folder,
-              env,
-              windowsHide: true,
-              windowsVerbatimArguments: true,
-            })
-          : spawn(command, { cwd: folder, env, shell: true, detached: true });
+      const windows = process.platform === 'win32';
+      const child = windows
+        ? spawn('powershell.exe', windowsShellArgs(command), {
+            cwd: folder,
+            env,
+            windowsHide: true,
+          })
+        : spawn(command, { cwd: folder, env, shell: true, detached: true });
       running.set(key, child);
       return new Promise<{ url: string | null }>((resolve, reject) => {
         let settled = false;
@@ -212,8 +246,10 @@ export function createProjectCapture(deps: ProjectCaptureDeps): StudioCaptureHos
             const line = raw.replace(ANSI, '').trimEnd();
             if (!line) continue;
             onLine(line);
-            tail.push(line);
-            if (tail.length > 5) tail.shift();
+            if (!(windows && POWERSHELL_ERROR_TRIM.test(line))) {
+              tail.push(line);
+              if (tail.length > 5) tail.shift();
+            }
             const url = detectLocalUrl(line);
             if (url) finish(() => resolve({ url }));
           }

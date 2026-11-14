@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { CaptureRouteInput } from '@runova/studio/node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withPlatform } from '../../../test/main/fixtures';
-import { createProjectCapture } from './projectCapture';
+import { createProjectCapture, windowsShellArgs } from './projectCapture';
 
 /**
  * The Pictures step against stand-ins for Electron and the project's process: the test plays the
@@ -390,17 +390,38 @@ describe('startApp', () => {
     return { started, lines, child: children[before] as FakeChild };
   }
 
-  it('runs the command through cmd on Windows, with color and browsers off', async () => {
+  it('runs the command through PowerShell on Windows, like the workspace terminal', async () => {
     await withPlatform('win32', async () => {
       const { child, started } = await start();
       child.say('Local: http://localhost:3000/\n');
       await started;
     });
-    expect(proc.spawn).toHaveBeenCalledWith('cmd.exe', ['/d', '/s', '/c', '"npm run dev"'], {
+    expect(proc.spawn).toHaveBeenCalledWith('powershell.exe', windowsShellArgs('npm run dev'), {
       cwd: '/projects/shop',
       env: { PATH: '/tools', FORCE_COLOR: '0', BROWSER: 'none' },
       windowsHide: true,
-      windowsVerbatimArguments: true,
+    });
+    expect(proc.spawn).not.toHaveBeenCalledWith('cmd.exe', expect.anything(), expect.anything());
+  });
+
+  it('leaves the lines PowerShell adds under an error out of what the app said', async () => {
+    await withPlatform('win32', async () => {
+      const { child, started } = await start();
+      child.say(
+        [
+          "Push-Location : Cannot find path 'E:\\gone' because it does not exist.",
+          'At line:3 char:1',
+          '+ Push-Location E:\\gone; flutter run -d windows; Pop-Location',
+          '+ ~~~~~~~~~~~~~~~~~~~~~~',
+          '    + CategoryInfo          : ObjectNotFound: (E:\\gone:String) [Push-Location]',
+          '    + FullyQualifiedErrorId : PathNotFound',
+          '',
+        ].join('\r\n'),
+      );
+      child.emit('exit', 1);
+      await expect(started).rejects.toThrow(
+        /It said: Push-Location : Cannot find path 'E:\\gone' because it does not exist\.$/,
+      );
     });
   });
 
