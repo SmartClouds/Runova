@@ -15,6 +15,10 @@ on:
       tag:
         description: "Release tag to build (e.g. v0.1.0). Required for manual runs."
         required: true
+      ios_only:
+        description: "Build only iOS (do not replace Android release assets)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -62,6 +66,7 @@ jobs:
 
   android:
     name: Android
+    if: ${{ !inputs.ios_only }}
     needs: ci-passed
     runs-on: ubuntu-latest
     # The build, then up to an hour waiting for the desktop workflow's release (the last step).
@@ -241,10 +246,11 @@ jobs:
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
           # Automatic signing, so Xcode makes a profile for each target (the app and its
           # notification extension) with the API key. The settings here apply to both targets.
-          # XcodeGen only sets an identity on the app, hence CODE_SIGN_IDENTITY.
+          # Use the distribution identity for both targets. A development identity requires
+          # registered devices and cannot create an App Store Connect archive without them.
           xcodebuild archive -project Runova.xcodeproj -scheme Runova \
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}"
           # The version comes from the tag, so Xcode must not renumber the build on its way up.
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
