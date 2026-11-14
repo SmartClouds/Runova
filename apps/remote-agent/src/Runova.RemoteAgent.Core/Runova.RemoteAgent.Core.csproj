@@ -2,6 +2,9 @@
   <PropertyGroup>
     <!-- LibraryImport generates the libsodium marshalling as unsafe code; none is written by hand. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The agent's publish restores this project for its runtime too, so the lock file lists
+         the same runtimes as Runova.RemoteAgent. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>

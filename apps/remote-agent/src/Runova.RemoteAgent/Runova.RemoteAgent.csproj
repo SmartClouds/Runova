@@ -4,11 +4,25 @@
     <AssemblyName>RunovaAgent</AssemblyName>
     <RootNamespace>Runova.RemoteAgent</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- Shipped next to the desktop app as one self-contained file per OS (see the publish script). -->
+    <!-- Every runtime CD publishes for (see the publish script). A locked restore fails when the
+         publish runtime is missing from the lock file, so they are all listed here, which also
+         keeps the lock file the same on Windows, macOS and Linux. Follows apps/server-core. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <!-- Shipped next to the desktop app as one self-contained file per OS. PublishSingleFile is
+         set for every restore, not just publishes: it adds an implicit package reference (ILLink
+         tasks) that the lock file has to know about, or a locked-mode publish fails. -->
     <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
-    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <!-- The SDK picks the ILLink tasks version from its own runtime patch, so a new SDK patch on a
+       runner would change the lock file and fail every locked restore. Pinned here, it moves only
+       with the other 10.0.x packages. -->
+  <ItemGroup>
+    <KnownILLinkPack Remove="Microsoft.NET.ILLink.Tasks" />
+    <KnownILLinkPack Include="Microsoft.NET.ILLink.Tasks" TargetFramework="net10.0" ILLinkPackVersion="10.0.14" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />

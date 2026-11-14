@@ -483,7 +483,7 @@
           "Microsoft.AspNetCore.SignalR.Client": "[10.0.14, )",
           "Microsoft.Extensions.Hosting": "[10.0.14, )",
           "Microsoft.Extensions.Hosting.WindowsServices": "[10.0.14, )",
-          "Runova.RemoteAgent.Core": "[3.3.0, )",
+          "Runova.RemoteAgent.Core": "[4.0.0, )",
           "SkiaSharp": "[3.119.1, )",
           "SkiaSharp.NativeAssets.Linux.NoDependencies": "[3.119.1, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.14, )"
