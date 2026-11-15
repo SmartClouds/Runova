@@ -2,8 +2,8 @@
 title: Cloudflare
 category: Deploy
 order: 90
-summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates, the Cloudflare-only origin lock and the Cloudflare Tunnel.
-keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key, cloudflare tunnel, cloudflared, closed ports, ssh through cloudflare, cloudflare access, cloudflare mesh, warp, break-glass
+summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, ask for an email code before a name opens, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates, the Cloudflare-only origin lock and the Cloudflare Tunnel.
+keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key, cloudflare tunnel, cloudflared, closed ports, ssh through cloudflare, cloudflare access, cloudflare mesh, warp, break-glass, email code, one-time pin, otp, zero trust, access application, protect a url, login page, service token
 route: /deploy?cloudflare=1
 ---
 
@@ -186,6 +186,44 @@ The dialog shows the **Description** (editable) and the exact expression and act
 ### IP access rules
 
 Block, challenge or allow an address, a range, a country or a network (ASN) for the whole zone. Type the value (for example `203.0.113.0/24`, `DE` or `AS13335`). The form says how it reads it (IP address, IPv6 address, IP range, Country or Network). Choose the **Action** (Block, Interactive challenge, JavaScript challenge, Managed challenge or Allow), add **Notes** if you like, and click **Add access rule**. Existing rules are listed with a trash button.
+
+## Access tab
+
+The **Access** tab puts an email code in front of any name in the zone, the way Cloudflare Access does. Someone who opens the name types their email address, Cloudflare mails them a short code, and only the people you listed get in. Each name has its own switch, its own list of people and its own time before they have to type a code again.
+
+The tab lists every name in the zone (its A, AAAA and CNAME records, wildcards left out) and says what each one is to your servers: **Core server** for a server core's domain, **Site** with the site's name, **SSH** for the name SSH goes through on a Cloudflare Tunnel. Names come first in that order, then the rest. With nine names or more, a search box finds one.
+
+### Turn on email codes once
+
+The first time, a box at the top asks to **Turn on email codes for this Cloudflare account**. Email codes come from Cloudflare Zero Trust:
+
+- If the account has never used Zero Trust, pick a **Team name**. People see it in the address of the sign-in page (for example `acme.cloudflareaccess.com`). Use lower case letters, digits and dashes.
+- Click **Turn on email codes**. Runova sets Zero Trust up when it has to and turns on its **One-time PIN** login. Nothing changes for any name until you turn its switch on.
+
+### Ask for a code on a name
+
+1. Turn on the switch next to the name.
+2. In **Who can get a code**, type an email address and press Enter (or a comma or space). Type `@company.com` (or just `company.com`) to let in everyone with an address there. You can paste a whole list, even one copied from a mail app as `Name <address>`; anything that is not an address or a domain is listed under the field with the reason. A new gate starts from the last list you used.
+3. Pick how long people **Stay in for** after the code: 30 minutes, 6 hours, 24 hours (the default), 7 days or 30 days.
+4. Read the sentence under the field, which says who can open the name and for how long, then click **Turn on email code**.
+
+Try it in a private window: open the name, type your address and enter the code Cloudflare mails you. The pencil button changes the list or the time; **Turn off** in that dialog, or the switch, takes the gate off after asking. The open button next to it opens the name in your browser.
+
+A gate only works on names that go through Cloudflare's proxy (the orange cloud). A name with the proxy off shows **Turn on proxy**, which turns it on for that name's records. A name that already has an Access application made somewhere else shows its name and **Open in Cloudflare**; Runova leaves it alone.
+
+Runova also leaves the certificate challenge path (`/.well-known/acme-challenge/`) open on every gated name, so Let's Encrypt can still renew its certificate.
+
+### The core server's domain
+
+When the core domain goes **Through Cloudflare**, you can put the gate on it too. The app itself does not type codes: when the gate goes on, this computer gets its own pass (a Cloudflare Access service token, kept encrypted on this computer) and sends it with every request to the core domain.
+
+Another computer of yours has no pass yet, so its app takes another way in (direct TLS or SSH). To let it through, connect the same Cloudflare account on that computer, open the Access tab or the core domain card there and click **Let this computer through**. The core domain card's check also says when the gate stopped this computer. Turning the gate off removes every computer's pass at Cloudflare.
+
+### Shortcuts
+
+The **Core domain** card (Through Cloudflare) and the **Domains** tab of a saved site show an **Email code on** or **Email code off** pill next to each name a connected zone holds. Click it to change the gate without leaving the page. If email codes are not turned on for the account yet, it opens this tab.
+
+This needs **Account > Access: Apps and Policies > Edit**, **Account > Access: Service Tokens > Edit** and **Account > Access: Organizations, Identity Providers, and Groups > Edit** on the token. Without one of them, the tab names it and offers **Open Cloudflare's token page**.
 
 ## Servers tab
 

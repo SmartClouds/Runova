@@ -3,6 +3,11 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
+import {
+  ZONE as CLOUDFLARE_ZONE,
+  EMAIL_GATE_PLAN,
+  SITE_HOST,
+} from '../../cloudflare/testing/fixtures';
 import { SERVER, SHOP, site, sitesBridge } from './testing/fixtures';
 
 /**
@@ -55,6 +60,24 @@ function renderEditor(
 }
 
 describe('SiteEditor domains and proxy', () => {
+  it('shows the email code gate beside each saved domain a Cloudflare zone holds (E96)', async () => {
+    const find = vi.fn(async (hostname: string) =>
+      hostname === 'shop.example.com'
+        ? {
+            zone: CLOUDFLARE_ZONE,
+            readiness: EMAIL_GATE_PLAN.readiness,
+            host: { ...SITE_HOST, hostname: 'shop.example.com' },
+          }
+        : null,
+    );
+    const { user } = renderEditor({ site: SHOP, bridge: { 'cloudflareEmailGate.find': find } });
+
+    expect(await screen.findByRole('button', { name: /Email code off/ })).toBeTruthy();
+    await user.type(screen.getByLabelText('Domain 1'), 'x');
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Email code off/ })).toBeNull();
+  });
+
   it('suggests an id from the first domain and checks domains and the port here first', async () => {
     const { user, bridge } = renderEditor();
     await user.type(screen.getByRole('textbox', { name: 'Domain 1' }), 'shop.example.com');

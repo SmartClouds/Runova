@@ -55,7 +55,7 @@ import {
   type ReleaseSource,
   repoReleaseDirectory,
 } from './bootstrap/releaseSource';
-import { registerCloudflareIpc } from './cloudflare';
+import { accessPassFor, registerCloudflareIpc } from './cloudflare';
 import { DeployCoreDomain } from './coreDomain/service';
 import { DeployDirectTls } from './directTls/service';
 import { DeployDocker } from './docker';
@@ -196,6 +196,7 @@ export function registerDeployIpc(): void {
     availableVersion: source.availableVersion,
     unavailableReason: source.unavailableReason,
     devCorePort: devCorePort(),
+    accessPass: accessPassFor,
     progress: (event) => sendToWindow(getMainWindow(), IPC.deploy.onSetupProgress, event),
     connectionChanged: (connection) =>
       sendToWindow(getMainWindow(), IPC.deploy.onConnection, connection),
@@ -379,6 +380,21 @@ export function registerDeployIpc(): void {
     onLinkConnection: (serverId, work) => service.onLinkConnection(serverId, work),
     serverName: async (serverId) =>
       (await service.listServers()).find((server) => server.id === serverId)?.nickname ?? serverId,
+    // Only cores whose link is up are asked: opening the Access tab never logs in to a server.
+    servers: async () =>
+      Promise.all(
+        (await service.listServers())
+          .filter((server) => server.core)
+          .map(async (server) => {
+            const domain = await state.coreDomain(server.id);
+            return {
+              id: server.id,
+              name: server.nickname,
+              online: service.connection(server.id).state === 'online',
+              coreDomain: domain?.enabled ? domain.domain : null,
+            };
+          }),
+      ),
     probeSsh: async (serverId, route) => {
       const connection = await SshConnection.open(await routedServerEndpoint(serverId, route));
       try {

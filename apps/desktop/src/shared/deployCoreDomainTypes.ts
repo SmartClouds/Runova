@@ -27,6 +27,7 @@ export interface DeployCoreDomainRoute {
  * - `cloudflare-origin`: Cloudflare answered but could not reach the server or trust its certificate.
  * - `device-proof`: through Cloudflare, the core turned this computer's signed request down.
  * - `clock`: through Cloudflare, this computer's clock is too far off the server's.
+ * - `access-gate`: through Cloudflare, the email code gate (E96) stopped this computer.
  * - `certificate`: the domain's own certificate is not trusted here (expired, self-signed, wrong name).
  * - `unreachable`: no answer at all (DNS, firewall, nginx down).
  */
@@ -37,6 +38,7 @@ export type DeployCoreDomainProblem =
   | 'cloudflare-origin'
   | 'device-proof'
   | 'clock'
+  | 'access-gate'
   | 'certificate'
   | 'unreachable';
 

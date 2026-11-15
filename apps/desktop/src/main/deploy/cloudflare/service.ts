@@ -334,7 +334,7 @@ function botBody(change: CloudflareBotChange): ApiBotConfig {
  * Every page of a v4 list, stopping at the last page Cloudflare reports. The SDK's own iterator
  * always asks for one more page than there is, and its types leave `total_pages` out.
  */
-async function allPages<T>(
+export async function allPages<T>(
   fetchPage: (page: number) => PromiseLike<{ result: T[]; result_info?: unknown }>,
 ): Promise<T[]> {
   const items: T[] = [];

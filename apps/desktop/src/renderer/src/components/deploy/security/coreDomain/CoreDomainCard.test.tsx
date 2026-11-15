@@ -7,6 +7,7 @@ import type { DeployCoreDomainInfo } from '@shared/deployCoreDomainTypes';
 import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../../test/renderer/renderWithProviders';
+import { ZONE as CLOUDFLARE_ZONE, CORE_HOST } from '../../../cloudflare/testing/fixtures';
 import { SERVER, signedIn } from '../testing/fixtures';
 
 /**
@@ -247,6 +248,33 @@ describe('CoreDomainCard', () => {
 
     const details = await screen.findByLabelText('Core domain details');
     expect(within(details).getByText(/turn the proxy on for this record/)).toBeTruthy();
+  });
+
+  it('shows the email code gate on a domain through Cloudflare, and none straight to the server (E96)', async () => {
+    const find = vi.fn(async () => ({
+      zone: CLOUDFLARE_ZONE,
+      readiness: { organization: true, teamDomain: 'acme.cloudflareaccess.com', oneTimePin: true },
+      host: { ...CORE_HOST, hostname: 'core.example.com' },
+    }));
+    renderCard({
+      'deployCoreDomain.status': async () =>
+        info({ ...ON, mode: 'cloudflare', ready: true, certificate: CERTIFICATE }),
+      'cloudflareEmailGate.find': find,
+    });
+
+    expect(await screen.findByRole('button', { name: /Email code on/ })).toBeTruthy();
+    expect(find).toHaveBeenCalledWith('core.example.com');
+  });
+
+  it('asks nothing about an email code for a domain straight to the server', async () => {
+    const find = vi.fn(async () => null);
+    renderCard({
+      'deployCoreDomain.status': async () => info({ ...ON, ready: true, certificate: CERTIFICATE }),
+      'cloudflareEmailGate.find': find,
+    });
+
+    await screen.findByLabelText('Core domain details');
+    expect(find).not.toHaveBeenCalled();
   });
 
   it('shows a Viewer how it stands and nothing to change', async () => {

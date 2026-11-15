@@ -40,6 +40,7 @@ export function makeService(
     tokens?: Record<string, FakeToken>;
     zones?: FakeZoneSeed[];
     widgets?: Parameters<typeof createFakeCloudflare>[0]['widgets'];
+    zeroTrust?: Parameters<typeof createFakeCloudflare>[0]['zeroTrust'];
     locked?: boolean;
     unseal?: (envelope: SecretEnvelope) => Promise<string>;
   } = {},
@@ -48,6 +49,7 @@ export function makeService(
     tokens: options.tokens ?? { [TOKEN]: options.token ?? { grants: ALL_GRANTS } },
     zones: options.zones,
     widgets: options.widgets,
+    zeroTrust: options.zeroTrust,
   });
   const port = memoryPort();
   const state = new CloudflareState(port);

@@ -8,6 +8,7 @@ import {
   CloudflareState,
   type CloudflareStatePort,
   cloudflareFilePort,
+  type StoredAccessPass,
   type StoredCloudflareAccount,
 } from './state';
 
@@ -236,6 +237,61 @@ describe('CloudflareState', () => {
     const empty = new CloudflareState(memoryPort());
     await (await empty.sealedKeys.prepare(async () => moved))();
     expect(await empty.accounts()).toEqual([]);
+  });
+});
+
+describe('CloudflareState passes through an email code gate (E96)', () => {
+  const PASS: StoredAccessPass = {
+    hostname: 'core.example.com',
+    cloudflareAccountId: 'cf-1',
+    appId: 'app-1',
+    policyId: 'policy-1',
+    serviceTokenId: 'token-1',
+    clientId: 'id.access',
+    clientSecret: SEALED,
+  };
+
+  it('keeps one pass per hostname beside the accounts, and forgets it', async () => {
+    const port = memoryPort();
+    const state = new CloudflareState(port);
+    await state.save(account('work'));
+    await state.savePass(PASS);
+    await state.savePass({ ...PASS, serviceTokenId: 'token-2' });
+
+    expect(await state.pass('CORE.example.com')).toEqual({ ...PASS, serviceTokenId: 'token-2' });
+    expect(await state.passes()).toHaveLength(1);
+    expect(await state.accounts()).toHaveLength(1);
+
+    await state.removePass('core.example.com');
+    expect(await state.pass('core.example.com')).toBeNull();
+    expect(await state.accounts()).toHaveLength(1);
+  });
+
+  it('reads a file without passes, and drops a pass it cannot read', async () => {
+    const state = new CloudflareState(
+      memoryPort({
+        version: 2,
+        accounts: [account('work')],
+        passes: [PASS, { ...PASS, hostname: 'x.example.com', clientSecret: 'plain' }, 7],
+      }),
+    );
+    expect(await state.passes()).toEqual([PASS]);
+    expect(await new CloudflareState(memoryPort({ version: 2, accounts: [] })).passes()).toEqual(
+      [],
+    );
+  });
+
+  it('moves the pass secrets to a new passkey with the tokens', async () => {
+    const state = new CloudflareState(memoryPort());
+    await state.savePass(PASS);
+    const moved: SecretEnvelope = {
+      mode: 'passphrase',
+      ciphertext: 'bmV3',
+      iv: 'aXY=',
+      authTag: 'dA==',
+    };
+    await (await state.sealedKeys.prepare(async () => moved))();
+    expect((await state.pass('core.example.com'))?.clientSecret).toEqual(moved);
   });
 });
 

@@ -430,6 +430,8 @@ export const queryKeys = {
     ['deploy', 'cloudflare', serverId, 'origin-lock'] as const,
   /** The Cloudflare Tunnel on a server (E95). */
   cloudflareTunnel: (serverId: string) => ['deploy', 'cloudflare', serverId, 'tunnel'] as const,
+  /** The email code gate on each name of a zone (E96). */
+  cloudflareEmailGate: (zoneId: string) => ['cloudflare', 'emailGate', zoneId] as const,
   /** The zones a server holds a DNS token for (never the tokens). */
   cloudflareDnsTokens: (serverId: string) =>
     ['deploy', 'cloudflare', serverId, 'dns-tokens'] as const,

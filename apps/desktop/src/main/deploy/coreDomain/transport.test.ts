@@ -171,4 +171,52 @@ describe('cloudflareCoreDomainTransport', () => {
       '1767225600000',
     ]);
   });
+
+  it("carries this computer's pass through an email code gate on the domain (E96)", async () => {
+    const nginx = await startServer();
+    servers.push(nginx.server);
+    const received: string[] = [];
+    nginx.server.on('secureConnection', (socket: TLSSocket) =>
+      socket.on('data', (chunk: Buffer) => received.push(chunk.toString('latin1'))),
+    );
+    const device = createDeviceKey();
+    const pass = vi.fn(async () => ({ clientId: 'abc123.access', clientSecret: 'f00d' }));
+    const transport = cloudflareCoreDomainTransport(
+      'core.example.com',
+      async () => ({
+        deviceId: '0F8FAD5B-D9CB-469F-A165-70867728950E',
+        privateKeyPem: device.privateKeyPem,
+      }),
+      (options) =>
+        tlsConnect({ ...options, host: '127.0.0.1', port: nginx.port, rejectUnauthorized: false }),
+      undefined,
+      () => 1_767_225_600_000,
+      pass,
+    );
+
+    const stream = await transport.openStream();
+    stream.write('GET /api/v1/health HTTP/1.1\r\nHost: core.example.com\r\n\r\n');
+    await vi.waitFor(() => expect(received.join('')).toContain('\r\n\r\n'));
+    stream.destroy();
+
+    const head = received.join('');
+    expect(pass).toHaveBeenCalledWith('core.example.com');
+    expect(head).toContain('\r\nCF-Access-Client-Id: abc123.access\r\n');
+    expect(head).toContain('\r\nCF-Access-Client-Secret: f00d\r\n');
+    expect(head).toMatch(new RegExp(`${PROOF_HEADER}: \\S+\r\n\r\n$`));
+  });
+
+  it('refuses a pass that would break the request head', async () => {
+    const transport = cloudflareCoreDomainTransport(
+      'core.example.com',
+      async () => ({ deviceId: 'x', privateKeyPem: createDeviceKey().privateKeyPem }),
+      () => {
+        throw new Error('no connection should be opened');
+      },
+      undefined,
+      undefined,
+      async () => ({ clientId: 'id\r\nX-Evil: 1', clientSecret: 's' }),
+    );
+    await expect(transport.openStream()).rejects.toThrow(/pass/i);
+  });
 });

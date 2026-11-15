@@ -237,6 +237,7 @@ export function bridgeDefaults(): Record<string, unknown> {
       staleRules: [],
       warnings: [],
     },
+    'cloudflareEmailGate.find': async () => null,
     'cloudflareTunnel.status': {
       enabled: false,
       state: 'off',

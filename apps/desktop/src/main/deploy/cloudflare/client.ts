@@ -13,6 +13,8 @@ import { BaseTokens } from 'cloudflare/resources/user/tokens/tokens';
 import { BaseApplications } from 'cloudflare/resources/zero-trust/access/applications/applications';
 import { BasePolicies as BaseAccessPolicies } from 'cloudflare/resources/zero-trust/access/applications/policies';
 import { BaseServiceTokens } from 'cloudflare/resources/zero-trust/access/service-tokens';
+import { BaseIdentityProviders } from 'cloudflare/resources/zero-trust/identity-providers/identity-providers';
+import { BaseOrganizations } from 'cloudflare/resources/zero-trust/organizations/organizations';
 import { BaseCloudflared } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/cloudflared';
 import { BaseConfigurations as BaseTunnelConfigurations } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/configurations';
 import { BaseConnections as BaseTunnelConnections } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/connections';
@@ -85,6 +87,9 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
       BaseApplications,
       BaseAccessPolicies,
       BaseServiceTokens,
+      // The email code gate (E96): Zero Trust's team domain and its One-time PIN login.
+      BaseOrganizations,
+      BaseIdentityProviders,
     ],
     apiToken: token,
     apiKey: null,

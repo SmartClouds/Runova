@@ -5,6 +5,8 @@ import type {
   CloudflareStatus,
   CloudflareZone,
   CloudflareZoneSettings,
+  EmailGateHost,
+  EmailGatePlan,
   TurnstileWidget,
 } from '@shared/cloudflareTypes';
 
@@ -109,6 +111,62 @@ export const CONNECTED: CloudflareStatus = {
   configured: true,
   locked: false,
   accounts: [ACCOUNT],
+};
+
+/** The Access tab of ZONE (E96): the core domain gated, a site open, a name without the proxy. */
+export const CORE_HOST: EmailGateHost = {
+  hostname: 'core.example.com',
+  proxied: true,
+  recordId: 'c'.repeat(32),
+  role: 'core',
+  serverId: 'srv-1',
+  serverName: 'prod',
+  siteName: null,
+  gate: {
+    kind: 'on',
+    appId: '5d1a0000-0000-4000-8000-000000000001',
+    emails: ['ana@example.com', 'bo@example.com'],
+    emailDomains: ['company.com'],
+    session: '24h',
+  },
+  thisComputerPass: true,
+};
+
+export const SITE_HOST: EmailGateHost = {
+  hostname: 'blog.example.com',
+  proxied: true,
+  recordId: 'a'.repeat(32),
+  role: 'site',
+  serverId: 'srv-1',
+  serverName: 'prod',
+  siteName: 'blog',
+  gate: { kind: 'off' },
+  thisComputerPass: false,
+};
+
+export const PLAIN_HOST: EmailGateHost = {
+  hostname: 'shop.example.com',
+  proxied: false,
+  recordId: 'd'.repeat(32),
+  role: 'other',
+  serverId: null,
+  serverName: null,
+  siteName: null,
+  gate: { kind: 'off' },
+  thisComputerPass: false,
+};
+
+export const ELSEWHERE_HOST: EmailGateHost = {
+  ...PLAIN_HOST,
+  hostname: 'wiki.example.com',
+  proxied: true,
+  gate: { kind: 'elsewhere', appId: '7e1a0000-0000-4000-8000-000000000002', name: 'Team wiki' },
+};
+
+export const EMAIL_GATE_PLAN: EmailGatePlan = {
+  cloudflareAccountId: ZONE.cloudflareAccountId,
+  readiness: { organization: true, teamDomain: 'acme.cloudflareaccess.com', oneTimePin: true },
+  hosts: [CORE_HOST, SITE_HOST, PLAIN_HOST, ELSEWHERE_HOST],
 };
 
 /** What a failed IPC call looks like in the renderer. */

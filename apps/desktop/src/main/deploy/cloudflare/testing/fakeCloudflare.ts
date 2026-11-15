@@ -87,6 +87,9 @@ export interface FakeCloudflare {
   serviceTokens: Map<string, Json>;
   /** Mesh nodes (WARP connectors), by id. */
   meshNodes: Map<string, Json>;
+  /** Zero Trust organizations (team domains) and login methods, by Cloudflare account id (E96). */
+  organizations: Map<string, Json>;
+  identityProviders: Map<string, Json[]>;
 }
 
 export interface FakeTunnel {
@@ -116,6 +119,10 @@ const PERMISSION_NAMES: Record<CloudflareAnyPermissionId, Record<Access, string>
   tunnel: { read: 'Cloudflare Tunnel Read', edit: 'Cloudflare Tunnel Write' },
   access: { read: 'Access: Apps and Policies Read', edit: 'Access: Apps and Policies Write' },
   mesh: { read: 'Cloudflare One Connectors Read', edit: 'Cloudflare One Connectors Write' },
+  accessLogin: {
+    read: 'Access: Organizations, Identity Providers, and Groups Read',
+    edit: 'Access: Organizations, Identity Providers, and Groups Write',
+  },
 };
 /** The two name servers Cloudflare hands every zone the fake makes. */
 export const NEW_ZONE_NAME_SERVERS = ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'];
@@ -184,6 +191,8 @@ export function createFakeCloudflare(options: {
   widgets?: Record<string, Json[]>;
   /** What GET /accounts lists; the recorded zone's account when left out. */
   accounts?: Json[];
+  /** Zero Trust already set up in these Cloudflare accounts, with these login methods (E96). */
+  zeroTrust?: Record<string, { teamDomain: string; identityProviders?: Json[] }>;
 }): FakeCloudflare {
   let counter = 0;
   const nextId = () => {
@@ -461,6 +470,12 @@ export function createFakeCloudflare(options: {
   const accessApps = new Map<string, Json>();
   const serviceTokens = new Map<string, Json>();
   const meshNodes = new Map<string, Json>();
+  const organizations = new Map<string, Json>();
+  const identityProviders = new Map<string, Json[]>();
+  for (const [accountId, seed] of Object.entries(options.zeroTrust ?? {})) {
+    organizations.set(accountId, { name: seed.teamDomain, auth_domain: seed.teamDomain });
+    identityProviders.set(accountId, copy(seed.identityProviders ?? []));
+  }
   const uuid = () => {
     const hex = nextId();
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
@@ -493,7 +508,13 @@ export function createFakeCloudflare(options: {
       (state) => (state.zone.account as Json | undefined)?.id === accountId,
     );
     const permission: CloudflareAnyPermissionId =
-      area === 'cfd_tunnel' ? 'tunnel' : area === 'warp_connector' ? 'mesh' : 'access';
+      area === 'cfd_tunnel'
+        ? 'tunnel'
+        : area === 'warp_connector'
+          ? 'mesh'
+          : area === 'access/organizations' || area === 'access/identity_providers'
+            ? 'accessLogin'
+            : 'access';
     if (!known || !allowed(token, permission, method === 'GET' ? 'read' : 'edit')) {
       return { status: 403, body: copy(recorded.permissionDenied) };
     }
@@ -583,23 +604,87 @@ export function createFakeCloudflare(options: {
       }
       return fail(404, 7000, 'No route for that URI');
     }
-    if (area === 'access/apps') {
+    if (area === 'access/organizations') {
+      if (method === 'GET') {
+        const organization = organizations.get(accountId);
+        return organization ? ok(organization) : fail(404, 12130, 'access.api.error.not_found');
+      }
+      if (method === 'POST') {
+        if (organizations.has(accountId)) return fail(400, 12111, 'organization already exists');
+        const domain = String(body.auth_domain ?? '');
+        if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(domain)) {
+          return fail(400, 12000, 'auth_domain is invalid');
+        }
+        if (domain.startsWith('taken-')) return fail(400, 12112, 'auth_domain is already taken');
+        const organization = { name: body.name, auth_domain: domain };
+        organizations.set(accountId, organization);
+        identityProviders.set(accountId, identityProviders.get(accountId) ?? []);
+        return ok(organization);
+      }
+      return fail(404, 7000, 'No route for that URI');
+    }
+    if (area === 'access/identity_providers') {
+      if (!organizations.has(accountId)) return fail(400, 12130, 'access.api.error.not_found');
+      const list = identityProviders.get(accountId) ?? [];
+      identityProviders.set(accountId, list);
+      if (rest === '' && method === 'GET') return page(list, request.query, 50);
       if (rest === '' && method === 'POST') {
+        const provider = { id: uuid(), ...body };
+        list.push(provider);
+        return ok(provider);
+      }
+      return fail(404, 7000, 'No route for that URI');
+    }
+    if (area === 'access/apps') {
+      const notFound = () => fail(404, 12130, 'access.api.error.not_found');
+      if (rest === '' && method === 'POST') {
+        if (body.type === 'self_hosted' && !organizations.has(accountId)) return notFound();
         const app = { id: uuid(), aud: nextId(), ...body };
         accessApps.set(String(app.id), app);
         return ok(app);
       }
       if (rest === '' && method === 'GET') return page([...accessApps.values()], request.query, 50);
-      const policy = rest.match(/^\/([0-9a-f-]{36})\/policies$/);
-      if (policy && method === 'POST') {
+      const policies = rest.match(/^\/([0-9a-f-]{36})\/policies$/);
+      if (policies) {
+        const app = accessApps.get(policies[1]);
+        if (!app) return notFound();
+        const list = (app.policies as Json[] | undefined) ?? [];
+        if (method === 'GET') return page(list, request.query, 50);
+        if (method === 'POST') {
+          app.policies = [...list, { id: uuid(), ...body }];
+          return ok((app.policies as Json[]).at(-1));
+        }
+      }
+      const policy = rest.match(/^\/([0-9a-f-]{36})\/policies\/([0-9a-f-]{36})$/);
+      if (policy) {
         const app = accessApps.get(policy[1]);
-        if (!app) return fail(404, 12130, 'access.api.error.not_found');
-        app.policies = [...((app.policies as Json[] | undefined) ?? []), { id: uuid(), ...body }];
-        return ok((app.policies as Json[]).at(-1));
+        const list = (app?.policies as Json[] | undefined) ?? [];
+        const index = list.findIndex((item) => item.id === policy[2]);
+        if (!app || index < 0) return notFound();
+        if (method === 'GET') return ok(list[index]);
+        if (method === 'PUT') {
+          list[index] = { ...body, id: policy[2] };
+          return ok(list[index]);
+        }
+        if (method === 'DELETE') {
+          list.splice(index, 1);
+          return ok({ id: policy[2] });
+        }
       }
       const one = rest.match(/^\/([0-9a-f-]{36})$/);
+      if (one && method === 'GET') {
+        const app = accessApps.get(one[1]);
+        return app ? ok(app) : notFound();
+      }
+      if (one && method === 'PUT') {
+        const app = accessApps.get(one[1]);
+        if (!app) return notFound();
+        const updated = { ...body, id: app.id, aud: app.aud, policies: app.policies };
+        accessApps.set(one[1], updated);
+        return ok(updated);
+      }
       if (one && method === 'DELETE') {
-        if (!accessApps.delete(one[1])) return fail(404, 12130, 'access.api.error.not_found');
+        if (!accessApps.delete(one[1])) return notFound();
         return ok({ id: one[1] });
       }
       return fail(404, 7000, 'No route for that URI');
@@ -782,7 +867,7 @@ export function createFakeCloudflare(options: {
       return page(visible, query, 20);
     }
     const tunnelMatch = path.match(
-      /^\/accounts\/([0-9a-f]{32})\/(cfd_tunnel|warp_connector|access\/apps|access\/service_tokens)(\/.*)?$/,
+      /^\/accounts\/([0-9a-f]{32})\/(cfd_tunnel|warp_connector|access\/apps|access\/service_tokens|access\/organizations|access\/identity_providers)(\/.*)?$/,
     );
     if (tunnelMatch)
       return accountRoutes(token, request, tunnelMatch[1], tunnelMatch[2], tunnelMatch[3] ?? '');
@@ -912,5 +997,7 @@ export function createFakeCloudflare(options: {
     accessApps,
     serviceTokens,
     meshNodes,
+    organizations,
+    identityProviders,
   };
 }

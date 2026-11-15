@@ -1943,6 +1943,16 @@ export const IPC = {
     joinMesh: 'cloudflareTunnel:joinMesh',
     breakGlass: 'cloudflareTunnel:breakGlass',
   },
+  /** The email code gate (E96): Cloudflare Access with a one-time PIN in front of a hostname. */
+  cloudflareEmailGate: {
+    plan: 'cloudflareEmailGate:plan',
+    find: 'cloudflareEmailGate:find',
+    prepare: 'cloudflareEmailGate:prepare',
+    save: 'cloudflareEmailGate:save',
+    remove: 'cloudflareEmailGate:remove',
+    letThisComputerThrough: 'cloudflareEmailGate:letThisComputerThrough',
+    proxy: 'cloudflareEmailGate:proxy',
+  },
   /** The workspace Pull request tab: the current branch's PR, its checks, review and merge. */
   pullRequests: {
     status: 'pullRequests:status',

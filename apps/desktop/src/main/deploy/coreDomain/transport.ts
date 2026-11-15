@@ -65,10 +65,21 @@ export function coreDomainTransport(
   };
 }
 
+/** This computer's Access service token for an email code gate on the domain (E96). */
+export interface AccessPass {
+  clientId: string;
+  clientSecret: string;
+}
+
+export type AccessPassLookup = (domain: string) => Promise<AccessPass | null>;
+
+const PASS_VALUE = /^[\x21-\x7e]{1,512}$/;
+
 /**
  * The core domain behind Cloudflare: TLS to Cloudflare's edge with no client certificate, and
  * every request signed with the device key. The key is opened once per stream, before the request
- * goes out.
+ * goes out. With an email code gate on the domain, the request also carries this computer's pass,
+ * so Cloudflare Access lets the app through without a code.
  */
 export function cloudflareCoreDomainTransport(
   domain: string,
@@ -76,6 +87,7 @@ export function cloudflareCoreDomainTransport(
   connect: TlsConnect = tlsConnect,
   timeoutMs = HANDSHAKE_TIMEOUT_MS,
   now: () => number = Date.now,
+  pass: AccessPassLookup = async () => null,
 ): CoreTransport {
   return {
     kind: 'core-domain',
@@ -83,9 +95,17 @@ export function cloudflareCoreDomainTransport(
     maxRequestBytes: CLOUDFLARE_MAX_REQUEST_BYTES,
     openStream: async () => {
       const key = await proofKey();
+      const held = await pass(domain);
+      if (held && !(PASS_VALUE.test(held.clientId) && PASS_VALUE.test(held.clientSecret))) {
+        throw new Error(`The saved pass through the email code gate on ${domain} is not usable.`);
+      }
       const socket = await openTls(domain, {}, connect, timeoutMs);
-      return signFirstRequest(socket, (method, target) =>
-        coreDomainProof(key, method, target, domain, now()),
+      return signFirstRequest(
+        socket,
+        (method, target) => coreDomainProof(key, method, target, domain, now()),
+        held
+          ? { 'CF-Access-Client-Id': held.clientId, 'CF-Access-Client-Secret': held.clientSecret }
+          : {},
       );
     },
   };

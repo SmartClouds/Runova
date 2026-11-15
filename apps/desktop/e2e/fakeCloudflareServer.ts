@@ -5,6 +5,7 @@ import {
   createFakeCloudflare,
   type FakeCloudflare,
   type FakeToken,
+  type FakeZoneSeed,
 } from '../src/main/deploy/cloudflare/testing/fakeCloudflare';
 
 /**
@@ -27,6 +28,8 @@ export async function startFakeCloudflare(
   options: {
     /** Grants on top of the default ones, such as Zone Edit for adding a domain. */
     grants?: FakeToken['grants'];
+    /** The zones and their records; the recorded example.com with none when left out. */
+    zones?: FakeZoneSeed[];
   } = {},
 ): Promise<FakeCloudflareServer> {
   const fake = createFakeCloudflare({
@@ -41,10 +44,12 @@ export async function startFakeCloudflare(
           tunnel: 'edit',
           access: 'edit',
           mesh: 'edit',
+          accessLogin: 'edit',
           ...options.grants,
         },
       },
     },
+    ...(options.zones ? { zones: options.zones } : {}),
   });
   const server = createServer((request, response) => {
     const chunks: Buffer[] = [];

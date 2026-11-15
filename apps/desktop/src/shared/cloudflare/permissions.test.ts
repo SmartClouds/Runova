@@ -39,6 +39,7 @@ describe('the permission catalog', () => {
       'tunnel',
       'access',
       'mesh',
+      'accessLogin',
     ]);
     const turnstile = cloudflarePermission('turnstile');
     expect(turnstile.label).toBe('Account > Turnstile > Edit');
@@ -55,6 +56,17 @@ describe('the permission catalog', () => {
     expect(permissionDeniedMessage('mesh')).toBe(
       'This token is not allowed to add servers to Cloudflare Mesh. On Cloudflare, edit the token and add Account > Cloudflare One Connectors > Edit, then check it again here.',
     );
+  });
+
+  it('asks for the Access login permission only for the email code gate (E96)', () => {
+    const login = cloudflarePermission('accessLogin');
+    expect(login.label).toBe(
+      'Account > Access: Organizations, Identity Providers, and Groups > Edit',
+    );
+    expect(login.apiNames).toContain('Access: Organizations, Identity Providers, and Groups Write');
+    expect(login.template).toBeUndefined();
+    expect(cloudflarePermission('access').purpose).toMatch(/email code/i);
+    expect(permissionDeniedMessage('accessLogin')).toMatch(/turn on email codes/);
   });
 
   it('asks for Zone Edit only when a domain is added, so the main token can stay read-only', () => {

@@ -101,7 +101,7 @@ export function SiteEditor({
   const error = (path: string) =>
     local[path] ?? placed.find((problem) => problem.path === path)?.message;
   const set = (patch: Partial<SiteDraft>) => setDraft((current) => ({ ...current, ...patch }));
-  const tabProps = { draft, set, error, readOnly };
+  const tabProps = { draft, set, error, readOnly, savedDomains: site?.settings.domains ?? [] };
   const title = site ? (site.settings.domains[0] ?? site.settings.id) : 'New site';
 
   async function save(): Promise<void> {

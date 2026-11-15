@@ -120,6 +120,21 @@ describe('judge through Cloudflare', () => {
     expect(blocked).toMatchObject({ ok: false, problem: 'device-proof' });
     expect(blocked.ok ? '' : blocked.message).toMatch(/Cloudflare rule/);
   });
+
+  it('names the email code gate when Cloudflare Access sends the app to its login (E96)', () => {
+    const login = verdict(302, {
+      ...via,
+      location: 'https://acme.cloudflareaccess.com/cdn-cgi/access/login/core.example.com?kid=1',
+    });
+    const refused = verdict(403, { ...via, 'cf-access-domain': 'core.example.com' });
+
+    expect(login).toMatchObject({ ok: false, problem: 'access-gate' });
+    expect(login.ok ? '' : login.message).toMatch(/Let this computer through/);
+    expect(refused).toMatchObject({ ok: false, problem: 'access-gate' });
+    expect(verdict(302, { ...via, location: 'https://core.example.com/' })).toMatchObject({
+      problem: 'unreachable',
+    });
+  });
 });
 
 describe('checkCoreDomain', () => {

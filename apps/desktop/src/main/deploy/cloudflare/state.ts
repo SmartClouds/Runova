@@ -32,9 +32,25 @@ export interface StoredCloudflareAccount {
   report: CloudflareTokenReport | null;
 }
 
+/**
+ * This computer's pass through the email code gate on a core domain (E96): an Access service token
+ * the app sends with every request to that domain, so the gate stops visitors but not the app.
+ */
+export interface StoredAccessPass {
+  hostname: string;
+  cloudflareAccountId: string;
+  appId: string;
+  policyId: string;
+  serviceTokenId: string;
+  clientId: string;
+  clientSecret: SecretEnvelope;
+}
+
 export interface CloudflareStateFile {
   version: 2;
   accounts: StoredCloudflareAccount[];
+  /** Left out by files written before E96. */
+  passes?: StoredAccessPass[];
 }
 
 export interface CloudflareStatePort {
@@ -122,6 +138,39 @@ function toAccount(value: unknown): StoredCloudflareAccount | null {
   };
 }
 
+function toPass(value: unknown): StoredAccessPass | null {
+  if (!isObject(value) || !isEnvelope(value.clientSecret)) return null;
+  const fields = [
+    'hostname',
+    'cloudflareAccountId',
+    'appId',
+    'policyId',
+    'serviceTokenId',
+    'clientId',
+  ];
+  if (!fields.every((field) => typeof value[field] === 'string' && value[field] !== ''))
+    return null;
+  return {
+    hostname: String(value.hostname).toLowerCase(),
+    cloudflareAccountId: String(value.cloudflareAccountId),
+    appId: String(value.appId),
+    policyId: String(value.policyId),
+    serviceTokenId: String(value.serviceTokenId),
+    clientId: String(value.clientId),
+    clientSecret: value.clientSecret,
+  };
+}
+
+function parsePasses(value: unknown): StoredAccessPass[] {
+  if (!Array.isArray(value)) return [];
+  const passes = new Map<string, StoredAccessPass>();
+  for (const raw of value) {
+    const pass = toPass(raw);
+    if (pass && !passes.has(pass.hostname)) passes.set(pass.hostname, pass);
+  }
+  return [...passes.values()];
+}
+
 function parse(value: unknown): CloudflareStateFile {
   if (!isObject(value)) return { version: 2, accounts: [] };
   if (value.version === 1) {
@@ -140,6 +189,7 @@ function parse(value: unknown): CloudflareStateFile {
     };
   }
   if (value.version !== 2 || !Array.isArray(value.accounts)) return { version: 2, accounts: [] };
+  const passes = parsePasses(value.passes);
   const seen = new Set<string>();
   const accounts: StoredCloudflareAccount[] = [];
   for (const raw of value.accounts) {
@@ -149,7 +199,7 @@ function parse(value: unknown): CloudflareStateFile {
       accounts.push(account);
     }
   }
-  return { version: 2, accounts };
+  return { version: 2, accounts, ...(passes.length > 0 ? { passes } : {}) };
 }
 
 export class CloudflareState {
@@ -158,10 +208,12 @@ export class CloudflareState {
   /** Moves every sealed token when the Servers passkey changes (see vault.ts). */
   readonly sealedKeys: SealedSecretStore = {
     prepare: async (move) => {
-      const accounts = (await this.read()).accounts;
-      if (accounts.length === 0) return async () => undefined;
+      const { accounts, passes = [] } = await this.read();
+      if (accounts.length === 0 && passes.length === 0) return async () => undefined;
       const moved = new Map<string, SecretEnvelope>();
       for (const account of accounts) moved.set(account.id, await move(account.token.envelope));
+      const movedPasses = new Map<string, SecretEnvelope>();
+      for (const pass of passes) movedPasses.set(pass.hostname, await move(pass.clientSecret));
       return () =>
         this.update((file) => ({
           ...file,
@@ -169,6 +221,14 @@ export class CloudflareState {
             const envelope = moved.get(account.id);
             return envelope ? { ...account, token: { ...account.token, envelope } } : account;
           }),
+          ...(file.passes
+            ? {
+                passes: file.passes.map((pass) => {
+                  const clientSecret = movedPasses.get(pass.hostname);
+                  return clientSecret ? { ...pass, clientSecret } : pass;
+                }),
+              }
+            : {}),
         }));
     },
   };
@@ -205,6 +265,33 @@ export class CloudflareState {
         check.id === permission ? { ...check, state: 'missing' as const } : check,
       );
       return { ...account, report: { ...account.report, permissions } };
+    });
+  }
+
+  async passes(): Promise<StoredAccessPass[]> {
+    return (await this.read()).passes ?? [];
+  }
+
+  async pass(hostname: string): Promise<StoredAccessPass | null> {
+    const name = hostname.toLowerCase();
+    return (await this.passes()).find((pass) => pass.hostname === name) ?? null;
+  }
+
+  /** Adds this computer's pass for a hostname, or replaces the one it had. */
+  savePass(pass: StoredAccessPass): Promise<void> {
+    const saved = { ...pass, hostname: pass.hostname.toLowerCase() };
+    return this.update((file) => ({
+      ...file,
+      passes: [...(file.passes ?? []).filter((item) => item.hostname !== saved.hostname), saved],
+    }));
+  }
+
+  removePass(hostname: string): Promise<void> {
+    const name = hostname.toLowerCase();
+    return this.update((file) => {
+      const passes = (file.passes ?? []).filter((item) => item.hostname !== name);
+      const { passes: _old, ...rest } = file;
+      return passes.length > 0 ? { ...rest, passes } : rest;
     });
   }
 

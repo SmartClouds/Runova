@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { EmailGateShortcut } from '@/components/cloudflare/access/EmailGateShortcut';
 import { CloudflareMark } from '@/components/cloudflare/CloudflareMark';
 import { ArrowRight, Globe, Lock, Pencil, Power, RefreshCw, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -207,6 +208,9 @@ export function CoreDomainCard({
           </Notice>
         )}
         <CoreDomainDetails info={info.data} connection={connection} />
+        {status.enabled && throughCloudflare && status.domain && (
+          <EmailGateShortcut hostname={status.domain} label="Visitors to the domain" />
+        )}
         {status.enabled && needsCertificate && (
           <Notice tone="primary" icon={Lock}>
             <div className="flex flex-wrap items-start gap-3">

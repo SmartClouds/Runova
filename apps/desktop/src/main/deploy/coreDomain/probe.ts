@@ -77,6 +77,24 @@ function viaCloudflare(answer: ProbeAnswer): boolean {
   );
 }
 
+/**
+ * Cloudflare Access turned the request away (E96): it sends a request without a pass to the
+ * team's login page, and answers a pass it does not take with 403 and its own headers.
+ */
+function accessGate(answer: ProbeAnswer): boolean {
+  if (answer.status >= 300 && answer.status < 400) {
+    try {
+      return new URL(answer.headers.location ?? '').hostname.endsWith('.cloudflareaccess.com');
+    } catch {
+      return false;
+    }
+  }
+  return (
+    answer.status === 403 &&
+    Object.keys(answer.headers).some((name) => name.startsWith('cf-access-'))
+  );
+}
+
 /** What an answer means for the core domain. */
 export function judge(
   answer: ProbeAnswer,
@@ -133,6 +151,12 @@ function judgeCloudflare(answer: ProbeAnswer, domain: string, now: number): Depl
     return fail(
       'device-proof',
       `The server core turned this computer's signed request down. This device may have been revoked on the core.`,
+    );
+  }
+  if (accessGate(answer)) {
+    return fail(
+      'access-gate',
+      `The email code gate on ${domain} stopped this computer. Open the core domain card and choose Let this computer through, or turn the gate off on the Cloudflare page.`,
     );
   }
   if (proxied && [521, 522, 523].includes(answer.status)) {

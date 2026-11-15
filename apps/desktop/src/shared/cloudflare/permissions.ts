@@ -88,8 +88,8 @@ export const CLOUDFLARE_PERMISSIONS: readonly CloudflarePermission[] = [
  * API Tokens (a user permission, which is why pasting a token made by hand is offered too),
  * Turnstile widgets need Turnstile, an account permission, adding a domain needs Zone Edit, the
  * AI bot and Bot Fight Mode switches need Bot Management, and a server's Cloudflare Tunnel needs
- * Cloudflare Tunnel (with Access for SSH through it and Connectors for Mesh), all account
- * permissions.
+ * Cloudflare Tunnel (with Access for SSH through it and Connectors for Mesh), and the email code
+ * gate needs Access with its One-time PIN login, all account permissions.
  */
 export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<CloudflareExtraPermissionId>[] =
   [
@@ -142,8 +142,8 @@ export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<Cloudfl
     {
       id: 'access',
       label: 'Account > Access: Apps and Policies > Edit, and Access: Service Tokens > Edit',
-      purpose: "SSH through a server's tunnel, behind Cloudflare Access",
-      action: 'set up Cloudflare Access for SSH',
+      purpose: "Cloudflare Access: email code gates, and SSH through a server's tunnel",
+      action: 'set up Cloudflare Access',
       apiNames: ['Access: Apps and Policies Write', 'Access: Service Tokens Write'],
     },
     {
@@ -152,6 +152,13 @@ export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<Cloudfl
       purpose: 'A server on Cloudflare Mesh, for SSH from your own devices only',
       action: 'add servers to Cloudflare Mesh',
       apiNames: ['Cloudflare One Connectors Write', 'Cloudflare One Connector: WARP Write'],
+    },
+    {
+      id: 'accessLogin',
+      label: 'Account > Access: Organizations, Identity Providers, and Groups > Edit',
+      purpose: 'Turn on the email code login (One-time PIN) for email code gates',
+      action: 'turn on email codes for Cloudflare Access',
+      apiNames: ['Access: Organizations, Identity Providers, and Groups Write'],
     },
   ];
 

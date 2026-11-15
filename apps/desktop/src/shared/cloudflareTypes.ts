@@ -319,7 +319,8 @@ export type CloudflareExtraPermissionId =
   | 'botManagement'
   | 'tunnel'
   | 'access'
-  | 'mesh';
+  | 'mesh'
+  | 'accessLogin';
 
 export type CloudflareAnyPermissionId = CloudflarePermissionId | CloudflareExtraPermissionId;
 
@@ -465,6 +466,84 @@ export interface CloudflareTunnelBreakGlassInput {
   serverId: string;
   enabled: boolean;
   delayMinutes: number;
+}
+
+/** How long a visitor stays in after typing the code (Cloudflare's session_duration). */
+export type EmailGateSession = '30m' | '6h' | '24h' | '168h' | '720h';
+
+/** Who may ask for a code: single addresses and whole email domains (company.com). */
+export interface EmailGatePeople {
+  emails: string[];
+  emailDomains: string[];
+}
+
+export interface EmailGateSettings extends EmailGatePeople {
+  session: EmailGateSession;
+}
+
+/** Turn the email code gate on for a hostname, or change who gets in and for how long (E96). */
+export interface EmailGateInput extends EmailGateSettings {
+  zoneId: string;
+  hostname: string;
+}
+
+export interface EmailGateTarget {
+  zoneId: string;
+  hostname: string;
+}
+
+/** What a hostname is to the app, when one of the saved servers serves it. */
+export type EmailGateRole = 'core' | 'site' | 'ssh' | 'other';
+
+export type EmailGateState =
+  | { kind: 'off' }
+  | ({ kind: 'on'; appId: string } & EmailGateSettings)
+  /** An Access application the app did not make: shown, never changed. */
+  | { kind: 'elsewhere'; appId: string; name: string };
+
+/** One hostname of a zone on the Access tab. */
+export interface EmailGateHost {
+  hostname: string;
+  /** Access only works behind Cloudflare's proxy (the orange cloud). */
+  proxied: boolean;
+  /** The DNS record to proxy when it is not; null when no record of the zone names it. */
+  recordId: string | null;
+  role: EmailGateRole;
+  /** The server and, for a site, the site that serves it. */
+  serverId: string | null;
+  serverName: string | null;
+  siteName: string | null;
+  gate: EmailGateState;
+  /** The core domain only: whether this computer holds a pass through the gate. */
+  thisComputerPass: boolean;
+}
+
+/** Whether the Cloudflare account can send email codes yet. */
+export interface EmailGateReadiness {
+  /** Zero Trust is set up, with a team domain (team.cloudflareaccess.com). */
+  organization: boolean;
+  teamDomain: string | null;
+  /** The One-time PIN login is turned on. */
+  oneTimePin: boolean;
+}
+
+export interface EmailGatePlan {
+  cloudflareAccountId: string;
+  readiness: EmailGateReadiness;
+  hosts: EmailGateHost[];
+}
+
+/** One name's gate and its zone, for the shortcuts on the core domain card and a site. */
+export interface EmailGateLookup {
+  zone: CloudflareZone;
+  readiness: EmailGateReadiness;
+  host: EmailGateHost;
+}
+
+export interface EmailGatePrepareInput {
+  zoneId: string;
+  /** Needed only when the account has no Zero Trust organization yet. */
+  teamName?: string;
 }
 
 /** Whether SSH answers over a route, and from which address the server saw it. */

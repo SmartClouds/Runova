@@ -8,4 +8,6 @@ export interface SiteTabProps {
   error: (path: string) => string | undefined;
   /** Viewers and Operators see the settings but cannot change them. */
   readOnly: boolean;
+  /** The domains the site is saved with; empty for a new site. */
+  savedDomains?: readonly string[];
 }

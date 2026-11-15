@@ -60,7 +60,11 @@ import {
   devTcpTransport,
   streamLocalTransport,
 } from './connection/transport';
-import { cloudflareCoreDomainTransport, coreDomainTransport } from './coreDomain/transport';
+import {
+  type AccessPassLookup,
+  cloudflareCoreDomainTransport,
+  coreDomainTransport,
+} from './coreDomain/transport';
 import { updateCoreLive } from './coreUpdate';
 import { clientCertificate } from './directTls/clientCertificate';
 import { directTlsTransport, PinMismatchError, type TlsConnect } from './directTls/transport';
@@ -136,6 +140,8 @@ export interface DeployServiceDeps {
   serversChanged?: () => void;
   /** Opens a TLS socket for direct TLS and the core domain; tests pass a fake. */
   tlsConnect?: TlsConnect;
+  /** This computer's pass through an email code gate on a core domain behind Cloudflare (E96). */
+  accessPass?: AccessPassLookup;
   now?: () => number;
 }
 
@@ -1012,6 +1018,7 @@ export class DeployService {
         this.deps.tlsConnect,
         undefined,
         this.now,
+        this.deps.accessPass,
       );
     }
     return coreDomainTransport(

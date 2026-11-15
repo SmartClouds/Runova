@@ -544,6 +544,7 @@ import type { EditCommand, SpellcheckMenuPayload } from '../shared/spellcheck';
 import type { SshHostKeyStatus } from '../shared/sshHostKey';
 import { createAccount, createSync, createTeams } from './account';
 import { createCiAutoFix } from './ciAutoFix';
+import { cloudflareEmailGate } from './cloudflareEmailGate';
 import { cloudflareServer } from './cloudflareServer';
 import { cloudflareTunnel } from './cloudflareTunnel';
 import { createDatabase } from './database';
@@ -3216,6 +3217,7 @@ const runovaApi = {
   cloudflare,
   cloudflareServer,
   cloudflareTunnel,
+  cloudflareEmailGate,
   pullRequests,
   tests,
   appNotifications,

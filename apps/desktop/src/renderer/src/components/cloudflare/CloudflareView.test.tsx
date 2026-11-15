@@ -7,6 +7,7 @@ import {
   A_RECORD,
   ACCOUNT,
   CONNECTED,
+  EMAIL_GATE_PLAN,
   ipcError,
   OTHER_ZONE,
   SETTINGS,
@@ -117,6 +118,7 @@ describe('CloudflareView', () => {
       'SSL/TLS',
       'Caching',
       'Security',
+      'Access',
       'Servers',
       'Turnstile',
     ]);
@@ -147,6 +149,20 @@ describe('CloudflareView', () => {
     await user.click(screen.getByRole('tab', { name: 'DNS' }));
     await user.click(screen.getByRole('tab', { name: 'Turnstile' }));
     expect(address().get('tab')).toBe('turnstile');
+  });
+
+  it('opens the Access tab from the address, with a switch per name (E96)', async () => {
+    renderPage(
+      { 'cloudflareEmailGate.plan': async () => EMAIL_GATE_PLAN },
+      `/deploy?cloudflare=1&zone=${ZONE.id}&tab=access`,
+    );
+    expect(await screen.findByRole('tab', { name: 'Access' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(
+      await screen.findByRole('switch', { name: 'Email code for blog.example.com' }),
+    ).toBeInTheDocument();
   });
 
   it('opens an old Settings link on the SSL/TLS tab', async () => {

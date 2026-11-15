@@ -1,3 +1,4 @@
+import { Duplex } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SecretEnvelope } from '../../shared/apiTypes';
 import { coreErrorCode } from '../../shared/coreErrors';
@@ -74,6 +75,9 @@ interface Setup {
   refusals?: Outcome[];
   /** What a health check over each transport kind throws, if anything. */
   health?: Partial<Record<CoreTransportKind, unknown>>;
+  /** This computer's pass through an email code gate on the domain (E96). */
+  accessPass?: DeployServiceDeps['accessPass'];
+  tlsConnect?: DeployServiceDeps['tlsConnect'];
 }
 
 async function setup(options: Setup = {}) {
@@ -180,6 +184,8 @@ async function setup(options: Setup = {}) {
       return { hub: connection, stop: () => connection.stop() };
     },
     liveHub,
+    ...(options.accessPass ? { accessPass: options.accessPass } : {}),
+    ...(options.tlsConnect ? { tlsConnect: options.tlsConnect } : {}),
   };
   service = new DeployService(deps);
   return { service, core, pool, state, opened, restOver, shortOver };
@@ -270,6 +276,39 @@ describe('DeployService with the core domain', () => {
 
     expect(seen).toEqual([{ host: 'core.example.com', limit: CLOUDFLARE_MAX_REQUEST_BYTES }]);
     expect(service.connection('srv-1')).toMatchObject({ transport: 'core-domain' });
+  });
+
+  it("sends this computer's pass through an email code gate on the domain (E96)", async () => {
+    const written: string[] = [];
+    const socket = new Duplex({
+      read() {
+        // Nothing comes back in this test.
+      },
+      write(chunk, _encoding, done) {
+        written.push(String(chunk));
+        done();
+      },
+    });
+    const accessPass = vi.fn(async (domain: string) =>
+      domain === 'core.example.com' ? { clientId: 'id.access', clientSecret: 'secret' } : null,
+    );
+    const { service } = await setup({
+      domainMode: 'cloudflare',
+      accessPass,
+      tlsConnect: () => {
+        queueMicrotask(() => socket.emit('secureConnect'));
+        return socket as never;
+      },
+    });
+
+    const transport = await service.coreDomainTransport('srv-1', 'core.example.com', 'cloudflare');
+    const stream = await transport!.openStream();
+    stream.write('GET /api/v1/health HTTP/1.1\r\nHost: core.example.com\r\n\r\n');
+
+    expect(accessPass).toHaveBeenCalledWith('core.example.com');
+    expect(written.join('')).toContain('CF-Access-Client-Id: id.access\r\n');
+    expect(written.join('')).toContain('CF-Access-Client-Secret: secret\r\n');
+    socket.destroy();
   });
 
   it("sends an upload over Cloudflare's limit through direct TLS, or SSH without it", async () => {

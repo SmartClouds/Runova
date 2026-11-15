@@ -1,3 +1,4 @@
+import { EmailGateShortcut } from '@/components/cloudflare/access/EmailGateShortcut';
 import { Plus, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,13 @@ import type { SiteTabProps } from './tabTypes';
 
 const MAX_DOMAINS = 50;
 
-export function DomainsTab({ draft, set, error, readOnly }: SiteTabProps): React.JSX.Element {
+export function DomainsTab({
+  draft,
+  set,
+  error,
+  readOnly,
+  savedDomains = [],
+}: SiteTabProps): React.JSX.Element {
   function setDomain(index: number, value: string): void {
     const domains = draft.domains.map((domain, at) => (at === index ? value : domain));
     // A new site's id follows its first domain until someone types one of their own.
@@ -58,6 +65,10 @@ export function DomainsTab({ draft, set, error, readOnly }: SiteTabProps): React
                 )}
               </div>
               <FieldError message={error(`domains[${index}]`)} />
+              {/* Saved names only, so typing a domain does not look it up at Cloudflare. */}
+              {savedDomains.includes(domain) && !domain.includes('*') && (
+                <EmailGateShortcut hostname={domain} />
+              )}
             </li>
           ))}
         </ul>

@@ -1,9 +1,11 @@
 import { lookup } from 'node:dns/promises';
+import { hostname as computerName } from 'node:os';
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
 import type { SshRoute } from '../../../shared/apiTypes';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import { registerCloudflareHandlers } from '../../ipc/cloudflare';
+import { registerCloudflareEmailGateHandlers } from '../../ipc/cloudflareEmailGate';
 import { registerCloudflareServerHandlers } from '../../ipc/cloudflareServer';
 import { registerCloudflareTunnelHandlers } from '../../ipc/cloudflareTunnel';
 import { getMainWindow } from '../../mainWindow';
@@ -16,7 +18,9 @@ import {
 } from '../../ssh/vault';
 import { store } from '../../store';
 import { isE2E } from '../../testMode';
+import type { AccessPassLookup } from '../coreDomain/transport';
 import { setLiveDeployServices } from '../liveServices';
+import { CloudflareEmailGateOps, type EmailGateServer } from './emailGate';
 import { addressesFromCore, addressesOfHost, type ServerAddresses } from './pointDomain';
 import { CloudflareServerOps } from './serverOps';
 import { CloudflareService } from './service';
@@ -39,6 +43,8 @@ export interface CloudflareCoreAccess {
     work: (sshConnection: string | undefined) => Promise<T>,
   ) => Promise<T>;
   serverName: (serverId: string) => Promise<string>;
+  /** The saved servers, for what each name on the Access tab is (E96). */
+  servers: () => Promise<EmailGateServer[]>;
   /** `$SSH_CONNECTION` over a brand-new SSH connection taking this route (E95). */
   probeSsh: (serverId: string, route: SshRoute) => Promise<string>;
   /** Drops the server's SSH connections and its link, so new ones take its new route. */
@@ -101,11 +107,28 @@ async function tunnelTargetOf(
   }
 }
 
+/**
+ * This computer's pass through an email code gate on a domain (E96), for the core domain
+ * transport. Null until the Cloudflare page is wired, and for a domain with no pass.
+ */
+let passes: CloudflareState | null = null;
+
+export const accessPassFor: AccessPassLookup = async (domain) => {
+  const pass = await passes?.pass(domain);
+  if (!pass || isLockedEnvelope(pass.clientSecret)) return null;
+  try {
+    return { clientId: pass.clientId, clientSecret: await decryptSecret(pass.clientSecret) };
+  } catch {
+    return null;
+  }
+};
+
 export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
   const state = new CloudflareState(
     cloudflareFilePort(join(app.getPath('userData'), 'data', 'cloudflare.json')),
   );
   registerSealedSecretStore(state.sealedKeys);
+  passes = state;
   const baseURL = cloudflareApiBase();
   const service = new CloudflareService({
     state,
@@ -149,6 +172,18 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
         probeSsh: core.probeSsh,
         resetSsh: core.resetSsh,
         withCoreDomainHub: core.withCoreDomainHub,
+      }),
+      guard,
+    });
+    registerCloudflareEmailGateHandlers({
+      ipc: ipcMain,
+      ops: new CloudflareEmailGateOps({
+        cloudflare: service,
+        passes: state,
+        seal: encryptSecret,
+        servers: core.servers,
+        links: { call: core.call },
+        computerName,
       }),
       guard,
     });

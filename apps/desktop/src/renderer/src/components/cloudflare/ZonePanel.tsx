@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { AccessRulesCard } from './AccessRulesCard';
 import { AiBotsCard } from './AiBotsCard';
+import { EmailGateCard } from './access/EmailGateCard';
 import { CachingCard } from './CachingCard';
 import { CustomRulesCard } from './CustomRulesCard';
 import { DnsRecordsCard } from './DnsRecordsCard';
@@ -18,13 +19,14 @@ import { TurnstileCard } from './turnstile/TurnstileCard';
 import { ZoneQuickToggles } from './ZoneQuickToggles';
 import { zoneStateText } from './ZoneRail';
 
-export type ZoneTab = 'dns' | 'ssl' | 'caching' | 'security' | 'servers' | 'turnstile';
+export type ZoneTab = 'dns' | 'ssl' | 'caching' | 'security' | 'access' | 'servers' | 'turnstile';
 
 const TABS: { value: ZoneTab; label: string }[] = [
   { value: 'dns', label: 'DNS' },
   { value: 'ssl', label: 'SSL/TLS' },
   { value: 'caching', label: 'Caching' },
   { value: 'security', label: 'Security' },
+  { value: 'access', label: 'Access' },
   { value: 'servers', label: 'Servers' },
   { value: 'turnstile', label: 'Turnstile' },
 ];
@@ -44,7 +46,8 @@ const CONTENT = 'mt-0 flex flex-col gap-2 focus-visible:ring-offset-0';
 /**
  * One zone: its state with the quick switches (development mode, I'm Under Attack and AI bots),
  * and by tab its DNS records, its SSL/TLS, its caching, its rules and AI bot access, the DNS
- * tokens its servers hold for DNS-01, and the Turnstile widgets (captcha) that cover it.
+ * tokens its servers hold for DNS-01, the Turnstile widgets (captcha) that cover it, and the email
+ * code gate (Cloudflare Access) on each of its names.
  */
 export function ZonePanel({
   zone,
@@ -143,6 +146,9 @@ export function ZonePanel({
         <AiBotsCard zone={zone} />
         <CustomRulesCard zone={zone} />
         <AccessRulesCard zone={zone} />
+      </TabsContent>
+      <TabsContent value="access" className={CONTENT}>
+        <EmailGateCard zone={zone} />
       </TabsContent>
       <TabsContent value="servers" className={CONTENT}>
         <DnsTokensCard zone={zone} />

@@ -78,11 +78,21 @@ export function coreDomainProof(
  * single request (REST runs without keep-alive, and the hub's WebSocket is one upgrade), so the
  * first head written is the only one to sign. The head is held until it is complete, the proof is
  * added as its last header, and everything after it (a body, WebSocket frames) passes untouched.
+ * `extra` headers (an email code gate's pass, E96) go just before the proof.
  */
 export function signFirstRequest<T extends Duplex>(
   stream: T,
   proof: (method: string, target: string) => string,
+  extra: Readonly<Record<string, string>> = {},
 ): T {
+  for (const [name, value] of Object.entries(extra)) {
+    if (!/^[A-Za-z0-9-]+$/.test(name) || /[\r\n]/.test(value)) {
+      throw new Error(`The header ${name} cannot go in a request head.`);
+    }
+  }
+  const added = Object.entries(extra)
+    .map(([name, value]) => `\r\n${name}: ${value}`)
+    .join('');
   type Write = (chunk: unknown, encoding?: unknown, callback?: unknown) => boolean;
   const write = stream.write.bind(stream) as Write;
   let pending: Buffer | null = Buffer.alloc(0);
@@ -109,7 +119,7 @@ export function signFirstRequest<T extends Duplex>(
     pending = null;
     const [method = 'GET', target = '/'] = (head.split('\r\n')[0] ?? '').split(' ');
     const signed = Buffer.concat([
-      Buffer.from(`${head}\r\n${PROOF_HEADER}: ${proof(method, target)}`, 'latin1'),
+      Buffer.from(`${head}${added}\r\n${PROOF_HEADER}: ${proof(method, target)}`, 'latin1'),
       rest,
     ]);
     return write(signed, done);
