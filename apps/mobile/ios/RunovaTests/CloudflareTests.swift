@@ -68,7 +68,8 @@ final class CloudflareTests: XCTestCase {
         return CloudflareScreen(
             loading: false, configured: !listed.isEmpty, problem: nil, accounts: listed, zone: zone, tokenForm: token,
             addDomain: nil, recordForm: form, pointDomain: point, ruleBuilder: nil, accessRuleForm: nil,
-            emailGateForm: nil, ipLimitForm: nil, widgetForm: nil, revealedSecret: nil, biometric: nil)
+            emailGateForm: nil, ipLimitForm: nil, widgetForm: nil, servers: [], origin: nil, originDialog: nil,
+                revealedSecret: nil, biometric: nil)
     }
 
     private func draft() -> RecordDraft {

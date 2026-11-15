@@ -107,7 +107,8 @@ final class CloudflareSettingsTests: XCTestCase {
             cloudflare: CloudflareScreen(
                 loading: false, configured: true, problem: nil, accounts: [], zone: zone, tokenForm: nil,
                 addDomain: nil, recordForm: nil, pointDomain: nil, ruleBuilder: builder, accessRuleForm: access,
-                emailGateForm: nil, ipLimitForm: nil, widgetForm: nil, revealedSecret: nil, biometric: nil))
+                emailGateForm: nil, ipLimitForm: nil, widgetForm: nil, servers: [], origin: nil, originDialog: nil,
+                revealedSecret: nil, biometric: nil))
     }
 
     func testSsl() throws {

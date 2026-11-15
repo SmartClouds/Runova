@@ -386,7 +386,30 @@ final class AppModel: NSObject, ObservableObject {
             rotateSecret: { [weak self] in self?.engine?.cloudflareRotateSecret(sitekey: $0, now: $1) },
             dnsTokenMint: { [weak self] in self?.engine?.cloudflareDnsTokenMint(serverId: $0) },
             dnsTokenPaste: { [weak self] in self?.engine?.cloudflareDnsTokenPaste(serverId: $0, token: $1) },
-            dnsTokenRemove: { [weak self] in self?.engine?.cloudflareDnsTokenRemove(serverId: $0) })
+            dnsTokenRemove: { [weak self] in self?.engine?.cloudflareDnsTokenRemove(serverId: $0) },
+            openOrigin: { [weak self] in self?.engine?.cloudflareOpenOrigin(serverId: $0) },
+            closeOrigin: { [weak self] in self?.engine?.cloudflareCloseOrigin() },
+            originMode: { [weak self] in self?.engine?.cloudflareOriginMode(mode: $0) },
+            closeOriginDialog: { [weak self] in self?.engine?.cloudflareCloseOriginDialog() },
+            originApply: { [weak self] in self?.engine?.cloudflareOriginApply() },
+            lockOpen: { [weak self] in self?.engine?.cloudflareLockOpen(enable: $0) },
+            lockSetAop: { [weak self] in self?.engine?.cloudflareLockSetAop(on: $0) },
+            tunnelSetupOpen: { [weak self] in self?.engine?.cloudflareTunnelSetupOpen() },
+            tunnelSetupAccount: { [weak self] in self?.engine?.cloudflareTunnelSetupAccount(accountId: $0) },
+            tunnelSetupSsh: { [weak self] in self?.engine?.cloudflareTunnelSetupSsh(route: $0, name: $1) },
+            tunnelSetupAck: { [weak self] in self?.engine?.cloudflareTunnelSetupAck(acked: $0) },
+            tunnelPortsOpen: { [weak self] in self?.engine?.cloudflareTunnelPortsOpen() },
+            tunnelSshOpen: { [weak self] in self?.engine?.cloudflareTunnelSshOpen() },
+            tunnelSshMode: { [weak self] in self?.engine?.cloudflareTunnelSshMode(mode: $0) },
+            tunnelSshTest: { [weak self] in self?.engine?.cloudflareTunnelSshTest() },
+            tunnelJoinMesh: { [weak self] in self?.engine?.cloudflareTunnelJoinMesh() },
+            tunnelSshApply: { [weak self] in self?.engine?.cloudflareTunnelSshApply(phrase: $0, password: $1) },
+            tunnelOffOpen: { [weak self] in self?.engine?.cloudflareTunnelOffOpen() },
+            tunnelOffReopen: { [weak self] in self?.engine?.cloudflareTunnelOffReopen(reopenWeb: $0) },
+            tunnelOffPointBack: { [weak self] in self?.engine?.cloudflareTunnelOffPointBack(pointBack: $0) },
+            tunnelBreakGlass: { [weak self] in self?.engine?.cloudflareTunnelBreakGlass(enabled: $0, delayMinutes: $1) },
+            firewallKeep: { [weak self] in self?.engine?.cloudflareFirewallKeep() },
+            firewallRevert: { [weak self] in self?.engine?.cloudflareFirewallRevert() })
     }
 
     private var gitIntents: GitIntents {

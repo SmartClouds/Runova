@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
@@ -58,6 +59,7 @@ import uniffi.runova_ffi.CloudflareAccountView
 import uniffi.runova_ffi.CloudflareAddDomainView
 import uniffi.runova_ffi.CloudflarePointDomainView
 import uniffi.runova_ffi.CloudflareRecordFormView
+import uniffi.runova_ffi.CloudflareOriginMode
 import uniffi.runova_ffi.CloudflareRecordView
 import uniffi.runova_ffi.CloudflareRevealedSecretView
 import uniffi.runova_ffi.CloudflareTab
@@ -153,6 +155,29 @@ data class CloudflareIntents(
     val dnsTokenMint: (String) -> Unit = {},
     val dnsTokenPaste: (String, String) -> Unit = { _, _ -> },
     val dnsTokenRemove: (String) -> Unit = {},
+    val openOrigin: (String) -> Unit = {},
+    val closeOrigin: () -> Unit = {},
+    val originMode: (CloudflareOriginMode) -> Unit = {},
+    val closeOriginDialog: () -> Unit = {},
+    val originApply: () -> Unit = {},
+    val lockOpen: (Boolean) -> Unit = {},
+    val lockSetAop: (Boolean) -> Unit = {},
+    val tunnelSetupOpen: () -> Unit = {},
+    val tunnelSetupAccount: (String) -> Unit = {},
+    val tunnelSetupSsh: (Boolean, String) -> Unit = { _, _ -> },
+    val tunnelSetupAck: (Boolean) -> Unit = {},
+    val tunnelPortsOpen: () -> Unit = {},
+    val tunnelSshOpen: () -> Unit = {},
+    val tunnelSshMode: (String) -> Unit = {},
+    val tunnelSshTest: () -> Unit = {},
+    val tunnelJoinMesh: () -> Unit = {},
+    val tunnelSshApply: (String, String) -> Unit = { _, _ -> },
+    val tunnelOffOpen: () -> Unit = {},
+    val tunnelOffReopen: (Boolean) -> Unit = {},
+    val tunnelOffPointBack: (Boolean) -> Unit = {},
+    val tunnelBreakGlass: (Boolean, UInt) -> Unit = { _, _ -> },
+    val firewallKeep: () -> Unit = {},
+    val firewallRevert: () -> Unit = {},
 )
 
 internal fun CloudflareTone.badge() = when (this) {
@@ -167,6 +192,8 @@ fun CloudflareOverlay(view: AppView, intents: CloudflareIntents): Boolean {
     val screen = view.cloudflare
     screen.tokenForm?.let { TokenScreen(it, view.error, intents); return true }
     screen.addDomain?.let { AddDomainScreen(it, intents); return true }
+    screen.originDialog?.let { OriginDialogScreen(it, intents); return true }
+    screen.origin?.let { OriginScreen(it, view.error, intents); return true }
     val zone = screen.zone ?: return false
     screen.recordForm?.let { RecordScreen(it, intents); return true }
     screen.pointDomain?.let { PointDomainScreen(it, intents); return true }
@@ -199,6 +226,9 @@ fun CloudflareTab(view: AppView, intents: CloudflareIntents) {
         }
         else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(screen.accounts, key = { it.id }) { AccountCard(it, intents) }
+            if (screen.servers.isNotEmpty()) {
+                item(key = "servers") { ServersCard(screen.servers, intents) }
+            }
             item(key = "connect") {
                 RunovaButton(
                     "Connect another account",
@@ -447,15 +477,15 @@ internal fun Field(label: String, hint: String? = null, content: @Composable () 
 /** Chips that wrap onto more lines rather than run off the edge. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun Wrap(content: @Composable () -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+internal fun Wrap(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         content()
     }
 }
 
 @Composable
 internal fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, enabled: Boolean = true, onSelect: (T) -> Unit) {
-    Wrap {
+    Wrap(Modifier.alpha(if (enabled) 1f else 0.55f)) {
         options.forEach { (value, label) ->
             RunovaChip(
                 label,

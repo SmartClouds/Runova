@@ -85,6 +85,29 @@ struct CloudflareIntents {
     var dnsTokenMint: (String) -> Void = { _ in }
     var dnsTokenPaste: (String, String) -> Void = { _, _ in }
     var dnsTokenRemove: (String) -> Void = { _ in }
+    var openOrigin: (String) -> Void = { _ in }
+    var closeOrigin: () -> Void = {}
+    var originMode: (CloudflareOriginMode) -> Void = { _ in }
+    var closeOriginDialog: () -> Void = {}
+    var originApply: () -> Void = {}
+    var lockOpen: (Bool) -> Void = { _ in }
+    var lockSetAop: (Bool) -> Void = { _ in }
+    var tunnelSetupOpen: () -> Void = {}
+    var tunnelSetupAccount: (String) -> Void = { _ in }
+    var tunnelSetupSsh: (Bool, String) -> Void = { _, _ in }
+    var tunnelSetupAck: (Bool) -> Void = { _ in }
+    var tunnelPortsOpen: () -> Void = {}
+    var tunnelSshOpen: () -> Void = {}
+    var tunnelSshMode: (String) -> Void = { _ in }
+    var tunnelSshTest: () -> Void = {}
+    var tunnelJoinMesh: () -> Void = {}
+    var tunnelSshApply: (String, String) -> Void = { _, _ in }
+    var tunnelOffOpen: () -> Void = {}
+    var tunnelOffReopen: (Bool) -> Void = { _ in }
+    var tunnelOffPointBack: (Bool) -> Void = { _ in }
+    var tunnelBreakGlass: (Bool, UInt32) -> Void = { _, _ in }
+    var firewallKeep: () -> Void = {}
+    var firewallRevert: () -> Void = {}
 }
 
 extension CloudflareTone {
@@ -146,7 +169,8 @@ struct CloudflareOverlay: View {
 
     static func shows(_ view: AppView) -> Bool {
         let screen = view.cloudflare
-        return screen.tokenForm != nil || screen.addDomain != nil || screen.zone != nil
+        return screen.tokenForm != nil || screen.addDomain != nil || screen.zone != nil || screen.origin != nil
+            || screen.originDialog != nil
     }
 
     var body: some View {
@@ -155,6 +179,10 @@ struct CloudflareOverlay: View {
             TokenScreen(form: form, error: view.error, intents: intents)
         } else if let form = screen.addDomain {
             AddDomainScreen(form: form, intents: intents)
+        } else if let dialog = screen.originDialog {
+            OriginDialogScreen(dialog: dialog, intents: intents)
+        } else if let origin = screen.origin {
+            OriginScreen(origin: origin, error: view.error, intents: intents)
         } else if let zone = screen.zone {
             if let form = screen.recordForm {
                 RecordScreen(form: form, intents: intents)
@@ -200,6 +228,7 @@ struct CloudflareTab: View {
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(screen.accounts, id: \.id) { AccountCard(account: $0, intents: intents) }
+                    if !screen.servers.isEmpty { ServersCard(servers: screen.servers, intents: intents) }
                     RunovaButton(text: "Connect another account", kind: .soft, icon: RunovaIcons.add) {
                         intents.openTokenForm(nil)
                     }
@@ -498,6 +527,7 @@ struct Field<Content: View>: View {
 struct ChoiceChips<Value: Hashable>: View {
     let options: [(Value, String)]
     let selected: Value
+    var enabled = true
     let onSelect: (Value) -> Void
 
     var body: some View {
@@ -510,6 +540,8 @@ struct ChoiceChips<Value: Hashable>: View {
                 .accessibilityLabel(chosen ? "\(option.1), chosen" : option.1)
             }
         }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
     }
 }
 

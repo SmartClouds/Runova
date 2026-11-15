@@ -157,22 +157,20 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
     });
     setLiveDeployServices({ cloudflareServer: serverOps });
     registerCloudflareServerHandlers({ ipc: ipcMain, ops: serverOps, guard });
-    registerCloudflareTunnelHandlers({
-      ipc: ipcMain,
-      ops: new CloudflareTunnelOps({
-        cloudflare: service,
-        links: { call: core.call },
-        roles: core.roles,
-        onLinkConnection: core.onLinkConnection,
-        serverName: core.serverName,
-        addresses: (serverId) => savedServerAddresses(serverId, core),
-        tunnelSsh: { read: readTunnelSsh, update: updateTunnelSsh, seal: encryptSecret },
-        probeSsh: core.probeSsh,
-        resetSsh: core.resetSsh,
-        withCoreDomainHub: core.withCoreDomainHub,
-      }),
-      guard,
+    const tunnelOps = new CloudflareTunnelOps({
+      cloudflare: service,
+      links: { call: core.call },
+      roles: core.roles,
+      onLinkConnection: core.onLinkConnection,
+      serverName: core.serverName,
+      addresses: (serverId) => savedServerAddresses(serverId, core),
+      tunnelSsh: { read: readTunnelSsh, update: updateTunnelSsh, seal: encryptSecret },
+      probeSsh: core.probeSsh,
+      resetSsh: core.resetSsh,
+      withCoreDomainHub: core.withCoreDomainHub,
     });
+    setLiveDeployServices({ cloudflareTunnel: tunnelOps });
+    registerCloudflareTunnelHandlers({ ipc: ipcMain, ops: tunnelOps, guard });
     const emailGate = new CloudflareEmailGateOps({
       cloudflare: service,
       passes: state,

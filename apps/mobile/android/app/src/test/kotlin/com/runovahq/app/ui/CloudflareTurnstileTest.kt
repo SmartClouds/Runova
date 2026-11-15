@@ -67,7 +67,7 @@ private fun view(
     revealed: CloudflareRevealedSecretView? = null,
 ) = appView(
     connection = connected,
-    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(tab), null, null, null, null, null, null, null, null, form, revealed, null),
+    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(tab), null, null, null, null, null, null, null, null, form, emptyList(), null, null, revealed, null),
 )
 
 private fun options(vararg pairs: Pair<String, String>) = pairs.map { CloudflareOptionView(it.first, it.second) }

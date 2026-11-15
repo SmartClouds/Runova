@@ -54,7 +54,8 @@ final class CloudflareAccessTests: XCTestCase {
             cloudflare: CloudflareScreen(
                 loading: false, configured: true, problem: nil, accounts: [], zone: zone, tokenForm: nil,
                 addDomain: nil, recordForm: nil, pointDomain: nil, ruleBuilder: nil, accessRuleForm: nil,
-                emailGateForm: gate, ipLimitForm: limit, widgetForm: nil, revealedSecret: nil, biometric: nil))
+                emailGateForm: gate, ipLimitForm: limit, widgetForm: nil, servers: [], origin: nil, originDialog: nil,
+                revealedSecret: nil, biometric: nil))
     }
 
     private var sessions: [CloudflareOptionView] {

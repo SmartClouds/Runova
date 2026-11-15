@@ -110,7 +110,7 @@ private fun zone(tab: CloudflareTab, groups: List<CloudflareSettingsGroup>) = Cl
 
 private fun view(zone: CloudflareZoneView, builder: CloudflareFormView? = null, access: CloudflareFormView? = null) = appView(
     connection = connected,
-    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone, null, null, null, null, builder, access, null, null, null, null, null),
+    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone, null, null, null, null, builder, access, null, null, null, emptyList(), null, null, null, null),
 )
 
 @RunWith(AndroidJUnit4::class)

@@ -35,6 +35,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
       publicIp: async () => null,
       serverOps: {} as never,
     },
+    cloudflareOrigin: {} as never,
     forgetPhone: async () => undefined,
     setPhoneSealKey: async () => undefined,
     monitoring: {} as ManageMonitoringDeps,

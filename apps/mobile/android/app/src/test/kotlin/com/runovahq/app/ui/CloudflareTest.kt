@@ -90,7 +90,7 @@ private fun screen(
     token: CloudflareTokenFormView? = null,
     form: CloudflareRecordFormView? = null,
     point: CloudflarePointDomainView? = null,
-) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null, null, null, null, null, null, null)
+) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null, null, null, null, null, emptyList(), null, null, null, null)
 
 private fun draft(type: String = "A", name: String = "", content: String = "") = RecordDraft(
     type, name, content, 1u, true, 10u, "", 0u.toUByte(), "issue", "", 0u, 0u, 0u, "",

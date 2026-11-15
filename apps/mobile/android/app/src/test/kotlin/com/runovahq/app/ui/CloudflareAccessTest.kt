@@ -69,7 +69,7 @@ private fun view(
     limit: CloudflareIpLimitFormView? = null,
 ) = appView(
     connection = connected,
-    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(access), null, null, null, null, null, null, gate, limit, null, null, null),
+    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(access), null, null, null, null, null, null, gate, limit, null, emptyList(), null, null, null, null),
 )
 
 private val sessions = listOf("30m" to "30 min", "6h" to "6 hours", "24h" to "24 hours", "168h" to "7 days", "720h" to "30 days")

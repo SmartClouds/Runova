@@ -300,6 +300,10 @@ pub struct CloudflareScreen {
     pub email_gate_form: Option<CloudflareEmailGateFormView>,
     pub ip_limit_form: Option<CloudflareIpLimitFormView>,
     pub widget_form: Option<CloudflareWidgetFormView>,
+    /// Saved servers, for their Cloudflare-only origin.
+    pub servers: Vec<CloudflareChoiceView>,
+    pub origin: Option<CloudflareOriginView>,
+    pub origin_dialog: Option<CloudflareOriginDialogView>,
     pub revealed_secret: Option<CloudflareRevealedSecretView>,
     /// The phone's own check, before a pasted token leaves it.
     pub biometric: Option<BiometricRequestView>,
@@ -479,4 +483,172 @@ pub struct CloudflarePlannedChangeView {
     pub content: String,
     pub previous: Option<String>,
     pub reason: Option<String>,
+}
+
+/// How Cloudflare reaches a server: through a tunnel it dials out on, or only from Cloudflare's addresses.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
+pub enum CloudflareOriginMode {
+    #[default]
+    Tunnel,
+    Ips,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareFactView {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareOriginLockView {
+    pub state_label: String,
+    pub tone: CloudflareTone,
+    pub enabled: bool,
+    /// "Bring up to date" or "Lock to Cloudflare", or None when it is on and current.
+    pub enable_label: Option<String>,
+    pub details: Vec<String>,
+    /// What does not match, one line per kind: "Not allowed yet: 173.245.48.0/20".
+    pub drift: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareTunnelView {
+    pub state_label: String,
+    pub tone: CloudflareTone,
+    pub enabled: bool,
+    /// Setting up or connecting, so the screen shows it working.
+    pub working: bool,
+    pub intro: Option<String>,
+    pub facts: Vec<CloudflareFactView>,
+    pub drift: Vec<String>,
+    pub last_error: Option<String>,
+    pub warnings: Vec<String>,
+    pub break_glass: bool,
+    pub break_glass_minutes: u32,
+    pub break_glass_text: String,
+    /// "Set up tunnel" or "Try again", when it can be set up.
+    pub set_up_label: Option<String>,
+    pub can_close_ports: bool,
+    pub can_change_ssh: bool,
+    pub can_turn_off: bool,
+    pub hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflarePendingChangeView {
+    pub id: String,
+    pub summary: String,
+    pub commands: Vec<String>,
+    /// "Rolls back in 4 min unless you keep it."
+    pub deadline_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareOriginView {
+    pub server_id: String,
+    pub server_name: String,
+    pub loading: bool,
+    pub problem: Option<String>,
+    pub can_admin: bool,
+    pub can_own: bool,
+    pub mode: CloudflareOriginMode,
+    /// The other way is on, so the choice cannot change here.
+    pub mode_locked: bool,
+    pub mode_note: Option<String>,
+    pub lock: Option<CloudflareOriginLockView>,
+    pub lock_problem: Option<String>,
+    pub tunnel: Option<CloudflareTunnelView>,
+    pub tunnel_problem: Option<String>,
+    pub pending: Option<CloudflarePendingChangeView>,
+}
+
+/// Which change an origin dialog makes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum CloudflareOriginDialogKind {
+    LockOn,
+    LockOff,
+    Setup,
+    Ports,
+    Ssh,
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum CloudflareStepState {
+    Waiting,
+    Running,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareStepView {
+    pub label: String,
+    pub state: CloudflareStepState,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareCheckedRowView {
+    pub label: String,
+    pub text: String,
+    /// Fine as it is; otherwise drawn as a warning.
+    pub ok: bool,
+    pub chip: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareSshModeView {
+    pub value: String,
+    pub title: String,
+    pub line: String,
+    /// What to know before choosing it, or why it cannot be chosen.
+    pub risk: String,
+    pub available: bool,
+    pub now: bool,
+}
+
+/// One dialog of a server's Cloudflare-only origin, filled in by its kind.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareOriginDialogView {
+    pub kind: CloudflareOriginDialogKind,
+    pub title: String,
+    pub description: String,
+    pub loading: bool,
+    pub rows: Vec<CloudflareCheckedRowView>,
+    pub rows_title: Option<String>,
+    pub rows_warning: Option<String>,
+    pub firewall_title: Option<String>,
+    pub commands: Vec<String>,
+    pub notes: Vec<String>,
+    /// Why it cannot go ahead: a blocker, a guard, a core domain pointing straight at the server.
+    pub blocked: Option<String>,
+    pub problem: Option<String>,
+    pub saving: bool,
+    pub can_apply: bool,
+    pub apply_label: String,
+    pub danger: bool,
+    /// Authenticated Origin Pulls, for turning the lock on.
+    pub aop: bool,
+    pub accounts: Vec<CloudflareChoiceView>,
+    pub account: String,
+    pub route_ssh: bool,
+    pub ssh_name: String,
+    pub ssh_name_problem: Option<String>,
+    /// Some names stop answering, and the person said they understand.
+    pub needs_ack: bool,
+    pub acked: bool,
+    pub steps: Vec<CloudflareStepView>,
+    pub ssh_modes: Vec<CloudflareSshModeView>,
+    pub ssh_mode: String,
+    pub probe: Option<String>,
+    pub probe_ok: bool,
+    pub can_test: bool,
+    pub test_label: Option<String>,
+    pub mesh_address: Option<String>,
+    pub can_join_mesh: bool,
+    pub phrase: Option<String>,
+    pub reopen_web: bool,
+    pub point_back: bool,
 }

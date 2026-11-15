@@ -36,7 +36,7 @@ import { onStudioEvent } from '../../studio/host';
 import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
 import { liveAgents } from './liveAgents';
-import { liveCloudflare } from './liveCloudflare';
+import { liveCloudflare, liveCloudflareOrigin } from './liveCloudflare';
 import { liveDeploy } from './liveDeploy';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
@@ -129,6 +129,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone' | 'setPhoneSea
   },
   deploy: liveDeploy,
   cloudflare: liveCloudflare,
+  cloudflareOrigin: liveCloudflareOrigin,
   monitoring: {
     list: () => listHealthSummaries(),
     check: checkHealthNow,

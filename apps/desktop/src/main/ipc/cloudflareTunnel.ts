@@ -145,6 +145,17 @@ function route(value: unknown): SshRoute {
   return value as SshRoute;
 }
 
+/** The same checks for the phone's calls (E102), so what the desktop refuses is refused there too. */
+export const cloudflareTunnelInputs = {
+  serverId,
+  flag,
+  setupInput,
+  sshInput,
+  offInput,
+  breakGlassInput,
+  route,
+};
+
 export function registerCloudflareTunnelHandlers({
   ipc,
   ops,

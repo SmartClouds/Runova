@@ -48,7 +48,8 @@ final class CloudflareTurnstileTests: XCTestCase {
             cloudflare: CloudflareScreen(
                 loading: false, configured: true, problem: nil, accounts: [], zone: zone, tokenForm: nil,
                 addDomain: nil, recordForm: nil, pointDomain: nil, ruleBuilder: nil, accessRuleForm: nil,
-                emailGateForm: nil, ipLimitForm: nil, widgetForm: form, revealedSecret: nil, biometric: nil))
+                emailGateForm: nil, ipLimitForm: nil, widgetForm: form, servers: [], origin: nil, originDialog: nil,
+                revealedSecret: nil, biometric: nil))
     }
 
     private func options(_ pairs: [(String, String)]) -> [CloudflareOptionView] {

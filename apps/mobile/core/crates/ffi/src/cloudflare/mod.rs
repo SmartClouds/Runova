@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use zeroize::Zeroizing;
 
 mod access;
+mod origin;
 mod settings;
 mod turnstile;
 
@@ -47,6 +48,7 @@ pub(crate) struct CloudflareState {
     access_rules: Vec<settings::AccessRuleDto>,
     access: access::AccessState,
     widgets: Vec<turnstile::WidgetDto>,
+    origin: origin::OriginState,
 }
 
 struct PendingToken {
@@ -645,6 +647,11 @@ impl Runner {
     }
 
     pub(crate) fn refresh_cloudflare(&mut self) {
+        if self.view.cloudflare.origin.is_some() {
+            self.refresh_origin();
+            self.ticks = self.ticks.wrapping_add(1);
+            return;
+        }
         let due = self.ticks.is_multiple_of(RELOAD_EVERY_TICKS);
         self.ticks = self.ticks.wrapping_add(1);
         if !due {
@@ -686,6 +693,7 @@ impl Runner {
     fn load_cloudflare_status(&mut self) {
         let screen = &mut self.view.cloudflare;
         screen.loading = screen.accounts.is_empty() && !screen.configured;
+        self.load_servers_list();
         self.cf(
             "cloudflare.status",
             None,

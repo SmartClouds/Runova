@@ -1,6 +1,7 @@
 import type { CloudflareEmailGateOps } from './cloudflare/emailGate';
 import type { CloudflareServerOps } from './cloudflare/serverOps';
 import type { CloudflareService } from './cloudflare/service';
+import type { CloudflareTunnelOps } from './cloudflare/tunnel';
 import type { DeployDocker } from './docker';
 import type { DeployFirewall } from './firewall';
 import type { ServerBackups } from './serverBackups/service';
@@ -26,6 +27,7 @@ export interface LiveDeployServices {
   cloudflareEmailGate: CloudflareEmailGateOps;
   /** DNS tokens and the origin lock on a server, for a phone (E101, E102). */
   cloudflareServer: CloudflareServerOps;
+  cloudflareTunnel: CloudflareTunnelOps;
   wordpress: WordPressProjectService;
   system: DeploySystem;
   firewall: DeployFirewall;
