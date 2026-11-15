@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { maintenanceActions, maintenanceStatements } from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
@@ -13,10 +14,28 @@ import type { DbDriver, DriverConnectOptions } from './types';
 /**
  * SQL Server and Cassandra against real servers, where their images can be pulled (CI). Both
  * take a while to start, so each waits up to a few minutes.
+ *
+ * SQL Server can also run against one already installed: set RUNOVA_TEST_MSSQL_HOST, _PORT, _USER
+ * and _PASSWORD (a login that can create databases). The test then makes its own database with a
+ * random name and drops it at the end.
  */
 
 const MSSQL_IMAGE = 'mcr.microsoft.com/mssql/server:2022-latest';
 const CASSANDRA_IMAGE = 'cassandra:5';
+
+const EXISTING_MSSQL: DriverConnectOptions | null = process.env.RUNOVA_TEST_MSSQL_HOST
+  ? {
+      engine: 'mssql',
+      host: process.env.RUNOVA_TEST_MSSQL_HOST,
+      port: Number(process.env.RUNOVA_TEST_MSSQL_PORT ?? 1433),
+      user: process.env.RUNOVA_TEST_MSSQL_USER,
+      password: process.env.RUNOVA_TEST_MSSQL_PASSWORD,
+      database: 'master',
+      tls: false,
+      srv: false,
+    }
+  : null;
+const MSSQL_DB = EXISTING_MSSQL ? `runova_test_${randomBytes(4).toString('hex')}` : 'shop';
 
 const run = (driver: DbDriver, text: string, readOnly = false, database?: string) =>
   driver.query(text, {
@@ -26,141 +45,178 @@ const run = (driver: DbDriver, text: string, readOnly = false, database?: string
     database: database ?? null,
   });
 
-describe.skipIf(!dockerAvailable() || !imageUsable(MSSQL_IMAGE))('SQL Server driver', () => {
-  let db: TestDatabase;
-  let driver: DbDriver;
-  let options: DriverConnectOptions;
+describe.skipIf(!EXISTING_MSSQL && (!dockerAvailable() || !imageUsable(MSSQL_IMAGE)))(
+  'SQL Server driver',
+  () => {
+    let db: TestDatabase;
+    let driver: DbDriver;
+    let options: DriverConnectOptions;
 
-  beforeAll(async () => {
-    db = startDatabase({
-      image: MSSQL_IMAGE,
-      port: 1433,
-      env: { ACCEPT_EULA: 'Y', MSSQL_SA_PASSWORD: 'Runova-Str0ng!' },
+    beforeAll(async () => {
+      if (EXISTING_MSSQL) {
+        options = EXISTING_MSSQL;
+        driver = await openDriver(options);
+      } else {
+        db = startDatabase({
+          image: MSSQL_IMAGE,
+          port: 1433,
+          env: { ACCEPT_EULA: 'Y', MSSQL_SA_PASSWORD: 'Runova-Str0ng!' },
+        });
+        options = {
+          engine: 'mssql',
+          host: db.host,
+          port: db.port,
+          user: 'sa',
+          password: 'Runova-Str0ng!',
+          database: 'master',
+          tls: false,
+          srv: false,
+        };
+        driver = await waitFor(() => openDriver(options), 300_000);
+      }
+      expect((await run(driver, `CREATE DATABASE [${MSSQL_DB}]`)).error).toBeUndefined();
+      const setup = await run(
+        driver,
+        "CREATE TABLE dbo.items (id int IDENTITY PRIMARY KEY, name nvarchar(50) NOT NULL);\nINSERT INTO dbo.items (name) VALUES (N'apple'), (N'pear')",
+        false,
+        MSSQL_DB,
+      );
+      expect(setup.error).toBeUndefined();
+    }, 360_000);
+
+    afterAll(async () => {
+      if (EXISTING_MSSQL && driver) {
+        // A server that outlives the test keeps nothing of it.
+        await run(
+          driver,
+          `ALTER DATABASE [${MSSQL_DB}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;\nDROP DATABASE [${MSSQL_DB}]`,
+          false,
+          'master',
+        );
+      }
+      await driver?.close();
+      db?.remove();
     });
-    options = {
-      engine: 'mssql',
-      host: db.host,
-      port: db.port,
-      user: 'sa',
-      password: 'Runova-Str0ng!',
-      database: 'master',
-      tls: false,
-      srv: false,
-    };
-    driver = await waitFor(() => openDriver(options), 300_000);
-    expect((await run(driver, 'CREATE DATABASE shop')).error).toBeUndefined();
-    const setup = await run(
-      driver,
-      "CREATE TABLE dbo.items (id int IDENTITY PRIMARY KEY, name nvarchar(50) NOT NULL);\nINSERT INTO dbo.items (name) VALUES (N'apple'), (N'pear')",
-      false,
-      'shop',
-    );
-    expect(setup.error).toBeUndefined();
-  }, 360_000);
 
-  afterAll(async () => {
-    await driver?.close();
-    db?.remove();
-  });
-
-  it('browses databases, schemas and tables, and describes one', async () => {
-    expect((await driver.listObjects(null, null)).some((node) => node.name === 'shop')).toBe(true);
-    const schemas = await driver.listObjects({ database: 'shop', name: 'shop' }, 'database');
-    expect(schemas.map((node) => node.name)).toContain('dbo');
-    const tables = await driver.listObjects(
-      { database: 'shop', schema: 'dbo', name: 'dbo' },
-      'schema',
-    );
-    expect(tables).toEqual([
-      expect.objectContaining({ kind: 'table', name: 'items', rowEstimate: 2 }),
-    ]);
-    const table = await driver.describe({ database: 'shop', schema: 'dbo', name: 'items' });
-    expect(table.columns[0]).toMatchObject({ name: 'id', primaryKey: true, generated: true });
-  });
-
-  it('pages rows, and keeps nothing a read-only run writes', async () => {
-    const page = await driver.readRows({
-      ref: { database: 'shop', schema: 'dbo', name: 'items' },
-      limit: 10,
-      offset: 0,
+    it('browses databases, schemas and tables, and describes one', async () => {
+      expect((await driver.listObjects(null, null)).some((node) => node.name === MSSQL_DB)).toBe(
+        true,
+      );
+      const schemas = await driver.listObjects({ database: MSSQL_DB, name: MSSQL_DB }, 'database');
+      expect(schemas.map((node) => node.name)).toContain('dbo');
+      const tables = await driver.listObjects(
+        { database: MSSQL_DB, schema: 'dbo', name: 'dbo' },
+        'schema',
+      );
+      expect(tables).toEqual([
+        expect.objectContaining({ kind: 'table', name: 'items', rowEstimate: 2 }),
+      ]);
+      const table = await driver.describe({ database: MSSQL_DB, schema: 'dbo', name: 'items' });
+      expect(table.columns[0]).toMatchObject({ name: 'id', primaryKey: true, generated: true });
     });
-    expect(page.result.rows.map((row) => row[1])).toEqual(['apple', 'pear']);
-    await run(driver, "INSERT INTO dbo.items (name) VALUES (N'sneaky')", true, 'shop');
-    expect(
-      (await run(driver, 'SELECT COUNT(*) AS n FROM dbo.items', false, 'shop')).results[0]?.rows,
-    ).toEqual([[2]]);
-  });
 
-  it('reports a refused password as such', async () => {
-    await expect(openDriver({ ...options, password: 'wrong' })).rejects.toMatchObject({
-      authFailed: true,
+    it('pages rows, and keeps nothing a read-only run writes', async () => {
+      const page = await driver.readRows({
+        ref: { database: MSSQL_DB, schema: 'dbo', name: 'items' },
+        limit: 10,
+        offset: 0,
+      });
+      expect(page.result.rows.map((row) => row[1])).toEqual(['apple', 'pear']);
+      await run(driver, "INSERT INTO dbo.items (name) VALUES (N'sneaky')", true, MSSQL_DB);
+      expect(
+        (await run(driver, 'SELECT COUNT(*) AS n FROM dbo.items', false, MSSQL_DB)).results[0]
+          ?.rows,
+      ).toEqual([[2]]);
     });
-  });
 
-  it('reads the tables and foreign keys the diagram draws', async () => {
-    const setup = await run(
-      driver,
-      'CREATE TABLE dbo.notes (id int IDENTITY PRIMARY KEY, item_id int NULL, body nvarchar(max), CONSTRAINT FK_notes_items FOREIGN KEY (item_id) REFERENCES dbo.items (id) ON DELETE SET NULL);\nCREATE TABLE dbo.log (at datetime2 NOT NULL, line nvarchar(200));\nCREATE INDEX IX_notes_item ON dbo.notes (item_id)',
-      false,
-      'shop',
-    );
-    expect(setup.error).toBeUndefined();
-    const graph = await driver.schemaGraph?.({ database: 'shop', schema: 'dbo' });
-    expect(graph?.tables.map((table) => table.ref.name)).toEqual(['items', 'log', 'notes']);
-    expect(graph?.tables[2]?.columns.map((column) => column.type)).toEqual([
-      'int',
-      'int',
-      'nvarchar(max)',
-    ]);
-    expect(graph?.relations).toEqual([
-      {
-        name: 'FK_notes_items',
-        from: { ref: { database: 'shop', schema: 'dbo', name: 'notes' }, columns: ['item_id'] },
-        to: { ref: { database: 'shop', schema: 'dbo', name: 'items' }, columns: ['id'] },
-        onDelete: 'SET NULL',
-        onUpdate: 'NO ACTION',
-      },
-    ]);
-  });
+    it('reports a refused password as such', async () => {
+      await expect(openDriver({ ...options, password: 'wrong' })).rejects.toMatchObject({
+        authFailed: true,
+      });
+    });
 
-  it('reads fragmentation of clustered, nonclustered and heap, and rebuilds and reorganizes', async () => {
-    for (const scan of ['fast', 'thorough'] as const) {
-      const report = await driver.health?.({ database: 'shop', schema: null, scan });
-      const types = new Set(report?.indexes.map((index) => index.type));
-      expect(types).toEqual(new Set(['clustered', 'nonclustered', 'heap']));
-      expect(report?.totalBytes).toBeGreaterThan(0);
-      expect(report?.tables.map((table) => table.table.name)).toContain('items');
-    }
-    const items = { database: 'shop', schema: 'dbo', name: 'items' };
-    const notes = { database: 'shop', schema: 'dbo', name: 'notes' };
-    const statements = [
-      ...maintenanceStatements('mssql', 'reorganize', {
-        scope: 'index',
-        table: notes,
-        index: 'IX_notes_item',
-      }),
-      ...maintenanceStatements(
-        'mssql',
-        'rebuild',
-        { scope: 'index', table: notes, index: 'IX_notes_item' },
-        { fillFactor: 90, sortInTempdb: true },
-      ),
-      ...maintenanceStatements('mssql', 'rebuild', { scope: 'table', table: items }),
-      ...maintenanceStatements('mssql', 'reorganize', { scope: 'table', table: items }),
-      ...maintenanceStatements('mssql', 'statistics', { scope: 'table', table: items }),
-      ...maintenanceStatements('mssql', 'rebuild', {
-        scope: 'heap',
-        table: { database: 'shop', schema: 'dbo', name: 'log' },
-      }),
-      ...maintenanceStatements('mssql', 'statistics', { scope: 'database' }),
-    ];
-    expect(maintenanceActions('mssql', 'index').length).toBeGreaterThan(0);
-    for (const statement of statements) {
-      const outcome = await run(driver, statement, false, 'shop');
-      expect(outcome.error, statement).toBeUndefined();
-    }
-  }, 120_000);
-});
+    it('reads the tables and foreign keys the diagram draws', async () => {
+      const setup = await run(
+        driver,
+        'CREATE TABLE dbo.notes (id int IDENTITY PRIMARY KEY, item_id int NULL, body nvarchar(max), CONSTRAINT FK_notes_items FOREIGN KEY (item_id) REFERENCES dbo.items (id) ON DELETE SET NULL);\nCREATE TABLE dbo.log (at datetime2 NOT NULL, line nvarchar(200));\nCREATE INDEX IX_notes_item ON dbo.notes (item_id)',
+        false,
+        MSSQL_DB,
+      );
+      expect(setup.error).toBeUndefined();
+      const graph = await driver.schemaGraph?.({ database: MSSQL_DB, schema: 'dbo' });
+      expect(graph?.tables.map((table) => table.ref.name)).toEqual(['items', 'log', 'notes']);
+      expect(graph?.tables[2]?.columns.map((column) => column.type)).toEqual([
+        'int',
+        'int',
+        'nvarchar(max)',
+      ]);
+      expect(graph?.relations).toEqual([
+        {
+          name: 'FK_notes_items',
+          from: { ref: { database: MSSQL_DB, schema: 'dbo', name: 'notes' }, columns: ['item_id'] },
+          to: { ref: { database: MSSQL_DB, schema: 'dbo', name: 'items' }, columns: ['id'] },
+          onDelete: 'SET NULL',
+          onUpdate: 'NO ACTION',
+        },
+      ]);
+    });
+
+    it('reads fragmentation of clustered, nonclustered and heap, and rebuilds and reorganizes', async () => {
+      for (const scan of ['fast', 'thorough'] as const) {
+        const report = await driver.health?.({ database: MSSQL_DB, schema: null, scan });
+        const types = new Set(report?.indexes.map((index) => index.type));
+        expect(types).toEqual(new Set(['clustered', 'nonclustered', 'heap']));
+        expect(report?.totalBytes).toBeGreaterThan(0);
+        expect(report?.tables.map((table) => table.table.name)).toContain('items');
+      }
+      const items = { database: MSSQL_DB, schema: 'dbo', name: 'items' };
+      const notes = { database: MSSQL_DB, schema: 'dbo', name: 'notes' };
+      const statements = [
+        ...maintenanceStatements('mssql', 'reorganize', {
+          scope: 'index',
+          table: notes,
+          index: 'IX_notes_item',
+        }),
+        ...maintenanceStatements(
+          'mssql',
+          'rebuild',
+          { scope: 'index', table: notes, index: 'IX_notes_item' },
+          { fillFactor: 90, sortInTempdb: true },
+        ),
+        ...maintenanceStatements('mssql', 'rebuild', { scope: 'table', table: items }),
+        ...maintenanceStatements('mssql', 'reorganize', { scope: 'table', table: items }),
+        ...maintenanceStatements('mssql', 'statistics', { scope: 'table', table: items }),
+        ...maintenanceStatements('mssql', 'rebuild', {
+          scope: 'heap',
+          table: { database: MSSQL_DB, schema: 'dbo', name: 'log' },
+        }),
+        ...maintenanceStatements('mssql', 'statistics', { scope: 'database' }),
+      ];
+      const report = await driver.health?.({ database: MSSQL_DB, schema: null, scan: 'fast' });
+      if (report?.onlineRebuild) {
+        statements.push(
+          ...maintenanceStatements(
+            'mssql',
+            'rebuild',
+            { scope: 'index', table: notes, index: 'IX_notes_item' },
+            { online: true },
+          ),
+          ...maintenanceStatements(
+            'mssql',
+            'rebuild',
+            { scope: 'heap', table: { database: MSSQL_DB, schema: 'dbo', name: 'log' } },
+            { online: true },
+          ),
+        );
+      }
+      expect(maintenanceActions('mssql', 'index').length).toBeGreaterThan(0);
+      for (const statement of statements) {
+        const outcome = await run(driver, statement, false, MSSQL_DB);
+        expect(outcome.error, statement).toBeUndefined();
+      }
+    }, 120_000);
+  },
+);
 
 describe.skipIf(!dockerAvailable() || !imageUsable(CASSANDRA_IMAGE))('Cassandra driver', () => {
   let db: TestDatabase;

@@ -55,20 +55,24 @@ neither, and show no button for them (`diagram` and `maintenance` in `DbCapabili
 - Core rules have unit tests, inside the database folder's 95% line and 90% branch threshold.
 - Driver mapping has unit tests with fake clients for PostgreSQL, MySQL and SQL Server, and the
   SQLite driver ran against a real file (foreign keys, free pages, VACUUM).
-- PostgreSQL 17 in Docker (`sql.int.test.ts`): the diagram's foreign keys, both scans, REINDEX
-  CONCURRENTLY with a fill factor, VACUUM, ANALYZE, and exact numbers after adding pgstattuple.
-- SQL Server 2025 Developer edition: the exact T-SQL the diagram, both health scans and every
-  maintenance statement send ran through `sqlcmd` on tables in tempdb. It read clustered,
-  nonclustered and heap fragmentation, rebuilt with FILLFACTOR and SORT_IN_TEMPDB, reorganized,
-  rebuilt a heap and updated statistics.
+- Every engine ran against a real server through the app's own driver:
+  - PostgreSQL 17, MySQL 8.4 and MariaDB 11 in Docker (`sql.int.test.ts`, 42 tests). Each one
+    covered the diagram's foreign keys, both scans, and every table, index and database action the
+    engine offers: REINDEX CONCURRENTLY with a fill factor, VACUUM and ANALYZE on PostgreSQL, and
+    OPTIMIZE and ANALYZE TABLE on MySQL and MariaDB. PostgreSQL also gave exact numbers after
+    pgstattuple was added.
+  - SQL Server 2025 Developer edition installed on the development machine
+    (`mssqlCassandra.int.test.ts`, pointed at it with `RUNOVA_TEST_MSSQL_*`). It read
+    clustered, nonclustered and heap fragmentation in both scans. It reorganized, rebuilt with
+    FILLFACTOR and SORT_IN_TEMPDB, rebuilt online, rebuilt a heap and updated statistics.
+  - SQLite on a real file.
 - The e2e (`apps/desktop/e2e/database.e2e.ts`) draws two related tables, opens the details panel
   and reindexes the primary key from Index health against a real Postgres container.
 
 ## Known limits
 
-- MySQL, MariaDB and SQL Server integration tests are written (`sql.int.test.ts`,
-  `mssqlCassandra.int.test.ts`) but did not run here: Docker could not reach the registry for
-  their images. They run in CI's unit tests wherever the runner has Docker.
+- Online rebuilds were tried on an edition that has them. The refusal path for editions without
+  them (Standard, Express) is covered by unit tests only.
 - MySQL and MariaDB do not measure fragmentation per index, so their advice is per table
   (OPTIMIZE TABLE rebuilds the table with all its indexes).
 - PostgreSQL bloat without pgstattuple is an estimate, and an index the planner has no statistics
