@@ -46,13 +46,15 @@ final class CloudflareAccessTests: XCTestCase {
             plan: "Free Website", nameServers: [], tab: .access, toggles: nil,
             dns: CloudflareDnsView(loading: false, problem: nil, records: []), settings: [],
             rules: CloudflareRulesView(loading: false, problem: nil, custom: [], access: [], accessProblem: nil),
-            access: access)
+            access: access,
+            turnstile: CloudflareTurnstileView(loading: false, problem: nil, widgets: []),
+            servers: CloudflareServersView(loading: false, problem: nil, servers: []))
         return fixtureView(
             connection: connected,
             cloudflare: CloudflareScreen(
                 loading: false, configured: true, problem: nil, accounts: [], zone: zone, tokenForm: nil,
                 addDomain: nil, recordForm: nil, pointDomain: nil, ruleBuilder: nil, accessRuleForm: nil,
-                emailGateForm: gate, ipLimitForm: limit, biometric: nil))
+                emailGateForm: gate, ipLimitForm: limit, widgetForm: nil, revealedSecret: nil, biometric: nil))
     }
 
     private var sessions: [CloudflareOptionView] {

@@ -106,6 +106,9 @@ function removeInput(value: unknown): CloudflareRemoveDnsTokenInput {
   };
 }
 
+/** The same checks for the phone's calls (E101), so what the desktop refuses is refused there too. */
+export const cloudflareServerInputs = { serverId, lockInput, dnsTokenInput, removeInput };
+
 export function registerCloudflareServerHandlers({
   ipc,
   ops,

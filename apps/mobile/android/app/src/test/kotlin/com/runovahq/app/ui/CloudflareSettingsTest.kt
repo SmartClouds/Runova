@@ -19,6 +19,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.CloudflareServersView
+import uniffi.runova_ffi.CloudflareTurnstileView
 import uniffi.runova_ffi.CloudflareAccessView
 import uniffi.runova_ffi.CloudflareAccessRuleView
 import uniffi.runova_ffi.CloudflareDnsView
@@ -103,11 +105,12 @@ private fun zone(tab: CloudflareTab, groups: List<CloudflareSettingsGroup>) = Cl
     "z1", "example.com", "acct-1", "Active", true, false, "Free Website", emptyList(), tab, null,
     CloudflareDnsView(false, null, emptyList()), groups, rules,
     CloudflareAccessView(false, null, true, false, null, emptyList(), emptyList(), null),
+    CloudflareTurnstileView(false, null, emptyList()), CloudflareServersView(false, null, emptyList()),
 )
 
 private fun view(zone: CloudflareZoneView, builder: CloudflareFormView? = null, access: CloudflareFormView? = null) = appView(
     connection = connected,
-    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone, null, null, null, null, builder, access, null, null, null),
+    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone, null, null, null, null, builder, access, null, null, null, null, null),
 )
 
 @RunWith(AndroidJUnit4::class)

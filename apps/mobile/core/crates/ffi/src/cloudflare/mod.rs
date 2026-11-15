@@ -20,6 +20,7 @@ use zeroize::Zeroizing;
 
 mod access;
 mod settings;
+mod turnstile;
 
 /// Cloudflare is read again every this many ticks while its screen is open.
 const RELOAD_EVERY_TICKS: u32 = 8;
@@ -33,7 +34,8 @@ pub(crate) struct CloudflareState {
     zones: Vec<ZoneDto>,
     records: Vec<RecordDto>,
     settings: Option<SettingsDto>,
-    pending_token: Option<PendingToken>,
+    /// What waits for the phone's own check: a pasted token, a secret to show, a DNS token.
+    pending: Option<Pending>,
     /// The security level before I'm Under Attack went on, per zone.
     level_before_attack: HashMap<String, String>,
     point_input: Option<Value>,
@@ -44,12 +46,26 @@ pub(crate) struct CloudflareState {
     custom_rules: Vec<settings::RuleDto>,
     access_rules: Vec<settings::AccessRuleDto>,
     access: access::AccessState,
+    widgets: Vec<turnstile::WidgetDto>,
 }
 
 struct PendingToken {
     token: Zeroizing<String>,
     label: String,
     account_id: Option<String>,
+}
+
+enum Pending {
+    Token(PendingToken),
+    Secret {
+        sitekey: String,
+        name: String,
+    },
+    DnsToken {
+        server_id: String,
+        zone_id: String,
+        token: Zeroizing<String>,
+    },
 }
 
 #[derive(Deserialize, Clone)]
@@ -347,6 +363,8 @@ fn zone_view(zone: &ZoneDto) -> CloudflareZoneView {
         settings: Vec::new(),
         rules: Default::default(),
         access: Default::default(),
+        turnstile: Default::default(),
+        servers: Default::default(),
     }
 }
 
@@ -959,6 +977,8 @@ impl Runner {
         self.view.cloudflare.access_rule_form = None;
         self.view.cloudflare.email_gate_form = None;
         self.view.cloudflare.ip_limit_form = None;
+        self.view.cloudflare.widget_form = None;
+        self.hide_secret();
         self.cloudflare.records.clear();
         self.cloudflare.settings = None;
         self.load_cloudflare_status();
@@ -1128,7 +1148,7 @@ impl Runner {
 
     fn open_token_form(&mut self, account_id: Option<String>) {
         let account_label = account_id.as_deref().and_then(|id| self.account_label(id));
-        self.cloudflare.pending_token = None;
+        self.cloudflare.pending = None;
         self.view.cloudflare.biometric = None;
         self.view.cloudflare.token_form = Some(CloudflareTokenFormView {
             account_id,
@@ -1158,11 +1178,21 @@ impl Runner {
             id: self.biometric_serial,
             reason,
         });
-        self.cloudflare.pending_token = Some(PendingToken {
+        self.cloudflare.pending = Some(Pending::Token(PendingToken {
             token: trimmed,
             label: label.trim().to_owned(),
             account_id: form.account_id.clone(),
+        }));
+    }
+
+    /// Asks for the phone's own check before `pending` goes ahead.
+    fn ask_biometric(&mut self, reason: String, pending: Pending) {
+        self.biometric_serial = self.biometric_serial.wrapping_add(1);
+        self.view.cloudflare.biometric = Some(BiometricRequestView {
+            id: self.biometric_serial,
+            reason,
         });
+        self.cloudflare.pending = Some(pending);
     }
 
     pub(crate) fn cloudflare_biometric_result(&mut self, id: u64, confirmed: bool) {
@@ -1170,11 +1200,25 @@ impl Runner {
             return;
         }
         self.view.cloudflare.biometric = None;
-        let pending = self.cloudflare.pending_token.take();
+        match self.cloudflare.pending.take() {
+            Some(Pending::Token(token)) => self.token_checked(confirmed.then_some(token)),
+            Some(Pending::Secret { sitekey, name }) => {
+                self.secret_checked(sitekey, name, confirmed)
+            }
+            Some(Pending::DnsToken {
+                server_id,
+                zone_id,
+                token,
+            }) => self.dns_token_checked(server_id, zone_id, token, confirmed),
+            None => {}
+        }
+    }
+
+    fn token_checked(&mut self, pending: Option<PendingToken>) {
         let Some(form) = self.view.cloudflare.token_form.as_mut() else {
             return;
         };
-        let Some(pending) = pending.filter(|_| confirmed) else {
+        let Some(pending) = pending else {
             form.problem = Some(NOT_CONFIRMED.to_owned());
             return;
         };
@@ -1521,7 +1565,7 @@ impl Engine {
         self.run(|r| {
             r.view.cloudflare.token_form = None;
             r.view.cloudflare.biometric = None;
-            r.cloudflare.pending_token = None;
+            r.cloudflare.pending = None;
         });
     }
 

@@ -30,6 +30,11 @@ export const liveCloudflare: ManageCloudflareDeps = {
   service,
   emailGate,
   publicIp: publicIpAddress,
+  serverOps: {
+    dnsTokens: (id) => liveDeployService('cloudflareServer').dnsTokens(id),
+    provisionDnsToken: (input) => liveDeployService('cloudflareServer').provisionDnsToken(input),
+    removeDnsToken: (input) => liveDeployService('cloudflareServer').removeDnsToken(input),
+  },
   servers: async () =>
     (await liveDeployService('deploy').listServers())
       .filter((server) => !server.dev)

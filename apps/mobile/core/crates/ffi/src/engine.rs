@@ -604,8 +604,16 @@ impl Runner {
 
     fn publish(&mut self) {
         if self.published.as_ref() != Some(&self.view) {
-            if let Some(mut old) = self.published.take().and_then(|view| view.vault.revealed) {
-                old.value.zeroize();
+            if let Some(old) = self.published.take() {
+                let AppView {
+                    vault, cloudflare, ..
+                } = old;
+                if let Some(mut secret) = vault.revealed {
+                    secret.value.zeroize();
+                }
+                if let Some(mut secret) = cloudflare.revealed_secret {
+                    secret.value.zeroize();
+                }
             }
             self.published = Some(self.view.clone());
             self.deps.listener.on_view(self.view.clone());

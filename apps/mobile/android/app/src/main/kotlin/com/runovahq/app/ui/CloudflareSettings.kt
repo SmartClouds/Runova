@@ -47,6 +47,7 @@ import com.runovahq.app.design.RunovaToggle
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.CloudflareAccessRuleView
 import uniffi.runova_ffi.CloudflareFormView
+import uniffi.runova_ffi.CloudflareRevealedSecretView
 import uniffi.runova_ffi.CloudflareRuleView
 import uniffi.runova_ffi.CloudflareSettingKind
 import uniffi.runova_ffi.CloudflareSettingView
@@ -62,6 +63,8 @@ private val ZONE_TABS = listOf(
     CloudflareTab.CACHING to "Caching",
     CloudflareTab.SECURITY to "Security",
     CloudflareTab.ACCESS to "Access",
+    CloudflareTab.SERVERS to "Servers",
+    CloudflareTab.TURNSTILE to "Turnstile",
 )
 
 /** A choice with more options than this folds away behind its current value. */
@@ -116,10 +119,16 @@ internal fun ZoneTabs(selected: CloudflareTab, onSelect: (CloudflareTab) -> Unit
 }
 
 /** Everything a tab other than DNS shows, under the switches and the tab strip. */
-internal fun LazyListScope.zoneTab(zone: CloudflareZoneView, intents: CloudflareIntents) {
-    if (zone.tab == CloudflareTab.ACCESS) {
-        accessTab(zone.access, intents)
-        return
+internal fun LazyListScope.zoneTab(
+    zone: CloudflareZoneView,
+    revealed: CloudflareRevealedSecretView?,
+    intents: CloudflareIntents,
+) {
+    when (zone.tab) {
+        CloudflareTab.ACCESS -> return accessTab(zone.access, intents)
+        CloudflareTab.TURNSTILE -> return turnstileTab(zone, revealed, intents)
+        CloudflareTab.SERVERS -> return serversTab(zone, intents)
+        else -> {}
     }
     if (zone.settings.isEmpty()) {
         item(key = "settings-loading") { LoadingRows() }

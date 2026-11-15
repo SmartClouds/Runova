@@ -20,6 +20,89 @@ pub enum CloudflareTab {
     Caching,
     Security,
     Access,
+    Servers,
+    Turnstile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareWidgetView {
+    pub sitekey: String,
+    pub name: String,
+    pub domains: Vec<String>,
+    pub mode_label: String,
+    pub clearance_label: String,
+    /// The HTML that puts the widget on a page, with its site key in.
+    pub snippet: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareTurnstileView {
+    pub loading: bool,
+    pub problem: Option<String>,
+    pub widgets: Vec<CloudflareWidgetView>,
+}
+
+/// A widget as its form holds it; the same shape goes back when it is saved.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct WidgetDraft {
+    pub name: String,
+    pub domains: Vec<String>,
+    pub mode: String,
+    pub clearance: String,
+    pub region: String,
+    pub offlabel: bool,
+    pub ephemeral_id: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareWidgetFormView {
+    /// None for a new widget.
+    pub sitekey: Option<String>,
+    pub title: String,
+    pub draft: WidgetDraft,
+    pub modes: Vec<CloudflareOptionView>,
+    pub clearances: Vec<CloudflareOptionView>,
+    pub regions: Vec<CloudflareOptionView>,
+    pub problem: Option<String>,
+    pub saving: bool,
+}
+
+/// A widget's secret, on screen after the phone's own check, and wiped when it goes.
+#[derive(Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareRevealedSecretView {
+    pub sitekey: String,
+    pub name: String,
+    pub value: String,
+}
+
+impl std::fmt::Debug for CloudflareRevealedSecretView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudflareRevealedSecretView")
+            .field("sitekey", &self.sitekey)
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareDnsServerView {
+    pub id: String,
+    pub name: String,
+    /// It holds a DNS token for this domain, so it can get wildcard certificates.
+    pub has_token: bool,
+    /// Runova made the token, so removing it deletes it at Cloudflare too.
+    pub made_here: bool,
+    pub detail: String,
+    pub loading: bool,
+    pub busy: bool,
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareServersView {
+    pub loading: bool,
+    pub problem: Option<String>,
+    pub servers: Vec<CloudflareDnsServerView>,
 }
 
 /// Where a name stands with the email code gate.
@@ -216,6 +299,8 @@ pub struct CloudflareScreen {
     pub access_rule_form: Option<CloudflareFormView>,
     pub email_gate_form: Option<CloudflareEmailGateFormView>,
     pub ip_limit_form: Option<CloudflareIpLimitFormView>,
+    pub widget_form: Option<CloudflareWidgetFormView>,
+    pub revealed_secret: Option<CloudflareRevealedSecretView>,
     /// The phone's own check, before a pasted token leaves it.
     pub biometric: Option<BiometricRequestView>,
 }
@@ -266,6 +351,8 @@ pub struct CloudflareZoneView {
     pub settings: Vec<CloudflareSettingsGroup>,
     pub rules: CloudflareRulesView,
     pub access: CloudflareAccessView,
+    pub turnstile: CloudflareTurnstileView,
+    pub servers: CloudflareServersView,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]

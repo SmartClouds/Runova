@@ -375,7 +375,18 @@ final class AppModel: NSObject, ObservableObject {
             ipLimitAddThisComputer: { [weak self] in self?.engine?.cloudflareIpLimitAddThisComputer() },
             ipLimitSave: { [weak self] in self?.engine?.cloudflareIpLimitSave() },
             ipLimitSetEnabled: { [weak self] in self?.engine?.cloudflareIpLimitSetEnabled(id: $0, enabled: $1) },
-            ipLimitDelete: { [weak self] in self?.engine?.cloudflareIpLimitDelete(id: $0) })
+            ipLimitDelete: { [weak self] in self?.engine?.cloudflareIpLimitDelete(id: $0) },
+            newWidget: { [weak self] in self?.engine?.cloudflareNewWidget() },
+            editWidget: { [weak self] in self?.engine?.cloudflareEditWidget(sitekey: $0) },
+            closeWidgetForm: { [weak self] in self?.engine?.cloudflareCloseWidgetForm() },
+            saveWidget: { [weak self] in self?.engine?.cloudflareSaveWidget(draft: $0) },
+            deleteWidget: { [weak self] in self?.engine?.cloudflareDeleteWidget(sitekey: $0) },
+            revealSecret: { [weak self] in self?.engine?.cloudflareRevealSecret(sitekey: $0) },
+            hideSecret: { [weak self] in self?.engine?.cloudflareHideSecret() },
+            rotateSecret: { [weak self] in self?.engine?.cloudflareRotateSecret(sitekey: $0, now: $1) },
+            dnsTokenMint: { [weak self] in self?.engine?.cloudflareDnsTokenMint(serverId: $0) },
+            dnsTokenPaste: { [weak self] in self?.engine?.cloudflareDnsTokenPaste(serverId: $0, token: $1) },
+            dnsTokenRemove: { [weak self] in self?.engine?.cloudflareDnsTokenRemove(serverId: $0) })
     }
 
     private var gitIntents: GitIntents {

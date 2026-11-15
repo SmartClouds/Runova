@@ -148,17 +148,15 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
   setLiveDeployServices({ cloudflare: service });
   registerCloudflareHandlers({ ipc: ipcMain, service, guard });
   if (core) {
-    registerCloudflareServerHandlers({
-      ipc: ipcMain,
-      ops: new CloudflareServerOps({
-        cloudflare: service,
-        links: { call: core.call },
-        roles: core.roles,
-        onLinkConnection: core.onLinkConnection,
-        serverName: core.serverName,
-      }),
-      guard,
+    const serverOps = new CloudflareServerOps({
+      cloudflare: service,
+      links: { call: core.call },
+      roles: core.roles,
+      onLinkConnection: core.onLinkConnection,
+      serverName: core.serverName,
     });
+    setLiveDeployServices({ cloudflareServer: serverOps });
+    registerCloudflareServerHandlers({ ipc: ipcMain, ops: serverOps, guard });
     registerCloudflareTunnelHandlers({
       ipc: ipcMain,
       ops: new CloudflareTunnelOps({

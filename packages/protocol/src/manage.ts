@@ -142,6 +142,17 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'cloudflare.ipLimits': { scope: 'cloudflare', risk: 'read' },
   'cloudflare.saveIpLimit': { scope: 'cloudflare', risk: 'write' },
   'cloudflare.publicAddress': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.turnstileWidgets': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.createTurnstileWidget': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.updateTurnstileWidget': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.deleteTurnstileWidget': { scope: 'cloudflare', risk: 'danger' },
+  // A widget's secret only goes to a phone when it asks after its own biometric check.
+  'cloudflare.turnstileSecret': { scope: 'cloudflare', risk: 'danger', audited: true },
+  'cloudflare.rotateTurnstileSecret': { scope: 'cloudflare', risk: 'danger' },
+  'cloudflare.dnsTokens': { scope: 'cloudflare', risk: 'read' },
+  // A pasted DNS token passes through the phone, so it is worth its own audit row.
+  'cloudflare.provisionDnsToken': { scope: 'cloudflare', risk: 'write', audited: true },
+  'cloudflare.removeDnsToken': { scope: 'cloudflare', risk: 'danger' },
   'monitoring.list': { scope: 'ops', risk: 'read' },
   'monitoring.check': { scope: 'ops', risk: 'write' },
   'monitoring.pause': { scope: 'ops', risk: 'write' },

@@ -7,9 +7,11 @@ import type {
   CloudflareStatus,
 } from '../../../shared/cloudflareTypes';
 import type { CloudflareEmailGateOps } from '../../deploy/cloudflare/emailGate';
+import type { CloudflareServerOps } from '../../deploy/cloudflare/serverOps';
 import type { CloudflareService } from '../../deploy/cloudflare/service';
 import { cloudflareInputs as check } from '../../ipc/cloudflare';
 import { emailGateInputs as gate } from '../../ipc/cloudflareEmailGate';
+import { cloudflareServerInputs as server } from '../../ipc/cloudflareServer';
 import { ManageError, type ManageMethods } from './session';
 
 /** The parts of the desktop's Cloudflare service a phone reaches. */
@@ -42,6 +44,12 @@ export type ManageCloudflareService = Pick<
   | 'createAccessRule'
   | 'deleteAccessRule'
   | 'updateCustomRule'
+  | 'listTurnstileWidgets'
+  | 'createTurnstileWidget'
+  | 'updateTurnstileWidget'
+  | 'deleteTurnstileWidget'
+  | 'turnstileSecret'
+  | 'rotateTurnstileSecret'
 >;
 
 /** What the Cloudflare methods need from the rest of the app. */
@@ -55,6 +63,7 @@ export interface ManageCloudflareDeps {
   >;
   /** This computer's address on the internet, for an IP limit that lets it in. */
   publicIp(): Promise<string | null>;
+  serverOps: Pick<CloudflareServerOps, 'dnsTokens' | 'provisionDnsToken' | 'removeDnsToken'>;
 }
 
 /** An IP limit as a phone lists it: read back from its rule by the desktop's own reader. */
@@ -341,6 +350,63 @@ export function cloudflareMethods(deps: ManageCloudflareDeps): ManageMethods['ca
           : service.updateCustomRule(zone, id, input),
       );
       return ipLimits(rules);
+    },
+    'cloudflare.turnstileWidgets': async (params) => {
+      const zone = zoneOf(params);
+      return run(() => service.listTurnstileWidgets(zone));
+    },
+    // A new widget's secret stays on the computer; the phone asks for it on its own.
+    'cloudflare.createTurnstileWidget': async (params) => {
+      const zone = zoneOf(params);
+      const input = checked(() => check.turnstileInput(field(params, 'input')));
+      const { widget } = await run(() => service.createTurnstileWidget(zone, input));
+      return { widget };
+    },
+    'cloudflare.updateTurnstileWidget': async (params) => {
+      const zone = zoneOf(params);
+      const key = checked(() => check.sitekey(field(params, 'sitekey')));
+      const input = checked(() => check.turnstileInput(field(params, 'input')));
+      return run(() => service.updateTurnstileWidget(zone, key, input));
+    },
+    'cloudflare.deleteTurnstileWidget': async (params) => {
+      const zone = zoneOf(params);
+      const key = checked(() => check.sitekey(field(params, 'sitekey')));
+      await run(() => service.deleteTurnstileWidget(zone, key));
+      return { ok: true, message: 'Deleted the widget.' };
+    },
+    'cloudflare.turnstileSecret': async (params) => {
+      const zone = zoneOf(params);
+      const key = checked(() => check.sitekey(field(params, 'sitekey')));
+      return { secret: await run(() => service.turnstileSecret(zone, key)) };
+    },
+    'cloudflare.rotateTurnstileSecret': async (params) => {
+      const zone = zoneOf(params);
+      const key = checked(() => check.sitekey(field(params, 'sitekey')));
+      const now = checked(() =>
+        check.flag(field(params, 'now'), 'Say whether the old secret stops working now.'),
+      );
+      const { widget } = await run(() => service.rotateTurnstileSecret(zone, key, now));
+      return { widget };
+    },
+    'cloudflare.dnsTokens': async (params) => {
+      const id = checked(() => server.serverId(field(params, 'serverId')));
+      const tokens = await run(() => deps.serverOps.dnsTokens(id));
+      return tokens.map((token) => ({
+        zone: token.zone,
+        zoneId: token.zoneId,
+        madeHere: Boolean(token.tokenId),
+        updatedAt: token.updatedAtUnixMs,
+      }));
+    },
+    'cloudflare.provisionDnsToken': async (params) => {
+      const input = checked(() => server.dnsTokenInput(params));
+      await run(() => deps.serverOps.provisionDnsToken(input));
+      return { ok: true, message: 'The server has a DNS token for this domain now.' };
+    },
+    'cloudflare.removeDnsToken': async (params) => {
+      const input = checked(() => server.removeInput(params));
+      await run(() => deps.serverOps.removeDnsToken(input));
+      return { ok: true, message: 'The server forgot its DNS token for this domain.' };
     },
     'cloudflare.publicAddress': async () => {
       try {

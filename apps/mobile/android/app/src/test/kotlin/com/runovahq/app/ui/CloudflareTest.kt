@@ -19,6 +19,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.CloudflareServersView
+import uniffi.runova_ffi.CloudflareTurnstileView
 import uniffi.runova_ffi.CloudflareAccessView
 import uniffi.runova_ffi.CloudflareAccountView
 import uniffi.runova_ffi.CloudflareChoiceView
@@ -79,6 +81,7 @@ private fun zone(pending: Boolean = false) = CloudflareZoneView(
     "Free Website", listOf("bob.ns.cloudflare.com", "lola.ns.cloudflare.com"), CloudflareTab.DNS,
     toggles, CloudflareDnsView(false, null, records), emptyList(), CloudflareRulesView(false, null, emptyList(), emptyList(), null),
     CloudflareAccessView(false, null, true, false, null, emptyList(), emptyList(), null),
+    CloudflareTurnstileView(false, null, emptyList()), CloudflareServersView(false, null, emptyList()),
 )
 
 private fun screen(
@@ -87,7 +90,7 @@ private fun screen(
     token: CloudflareTokenFormView? = null,
     form: CloudflareRecordFormView? = null,
     point: CloudflarePointDomainView? = null,
-) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null, null, null, null, null)
+) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null, null, null, null, null, null, null)
 
 private fun draft(type: String = "A", name: String = "", content: String = "") = RecordDraft(
     type, name, content, 1u, true, 10u, "", 0u.toUByte(), "issue", "", 0u, 0u, 0u, "",

@@ -59,12 +59,14 @@ import uniffi.runova_ffi.CloudflareAddDomainView
 import uniffi.runova_ffi.CloudflarePointDomainView
 import uniffi.runova_ffi.CloudflareRecordFormView
 import uniffi.runova_ffi.CloudflareRecordView
+import uniffi.runova_ffi.CloudflareRevealedSecretView
 import uniffi.runova_ffi.CloudflareTab
 import uniffi.runova_ffi.CloudflareTogglesView
 import uniffi.runova_ffi.CloudflareTokenFormView
 import uniffi.runova_ffi.CloudflareTone
 import uniffi.runova_ffi.CloudflareZoneView
 import uniffi.runova_ffi.RecordDraft
+import uniffi.runova_ffi.WidgetDraft
 
 /** Cloudflare's own page for API tokens, where the user makes one for Runova. */
 private const val TOKEN_PAGE = "https://dash.cloudflare.com/profile/api-tokens"
@@ -140,6 +142,17 @@ data class CloudflareIntents(
     val ipLimitSave: () -> Unit = {},
     val ipLimitSetEnabled: (String, Boolean) -> Unit = { _, _ -> },
     val ipLimitDelete: (String) -> Unit = {},
+    val newWidget: () -> Unit = {},
+    val editWidget: (String) -> Unit = {},
+    val closeWidgetForm: () -> Unit = {},
+    val saveWidget: (WidgetDraft) -> Unit = {},
+    val deleteWidget: (String) -> Unit = {},
+    val revealSecret: (String) -> Unit = {},
+    val hideSecret: () -> Unit = {},
+    val rotateSecret: (String, Boolean) -> Unit = { _, _ -> },
+    val dnsTokenMint: (String) -> Unit = {},
+    val dnsTokenPaste: (String, String) -> Unit = { _, _ -> },
+    val dnsTokenRemove: (String) -> Unit = {},
 )
 
 internal fun CloudflareTone.badge() = when (this) {
@@ -161,7 +174,8 @@ fun CloudflareOverlay(view: AppView, intents: CloudflareIntents): Boolean {
     screen.accessRuleForm?.let { AccessRuleScreen(it, intents); return true }
     screen.emailGateForm?.let { EmailGateScreen(it, intents); return true }
     screen.ipLimitForm?.let { IpLimitScreen(it, intents); return true }
-    ZoneScreen(zone, view.error, intents)
+    screen.widgetForm?.let { WidgetScreen(it, intents); return true }
+    ZoneScreen(zone, screen.revealedSecret, view.error, intents)
     return true
 }
 
@@ -255,7 +269,12 @@ private fun AccountCard(account: CloudflareAccountView, intents: CloudflareInten
 }
 
 @Composable
-private fun ZoneScreen(zone: CloudflareZoneView, error: String?, intents: CloudflareIntents) {
+private fun ZoneScreen(
+    zone: CloudflareZoneView,
+    revealed: CloudflareRevealedSecretView?,
+    error: String?,
+    intents: CloudflareIntents,
+) {
     RunovaScreen(zone.name, subtitle = "${zone.statusLabel} · ${zone.plan}", onBack = intents.closeZone) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (zone.pending) {
@@ -264,7 +283,7 @@ private fun ZoneScreen(zone: CloudflareZoneView, error: String?, intents: Cloudf
             zone.toggles?.let { toggles -> item(key = "toggles") { TogglesCard(toggles, intents) } }
             item(key = "tabs") { ZoneTabs(zone.tab, intents.openTab) }
             if (zone.tab != CloudflareTab.DNS) {
-                zoneTab(zone, intents)
+                zoneTab(zone, revealed, intents)
                 return@LazyColumn
             }
             item(key = "dns-title") {

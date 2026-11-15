@@ -18,7 +18,10 @@ struct RunovaApp: App {
                 .onChange(of: phase) { model.scene($0) }
                 .overlay {
                     // iOS has no way to refuse a screenshot, but the app switcher can show this instead.
-                    if phase != .active && model.view?.vault.onShow == true {
+                    // A Cloudflare secret on show hides the same way.
+                    if phase != .active
+                        && (model.view?.vault.onShow == true || model.view?.cloudflare.revealedSecret != nil)
+                    {
                         RunovaTokens.dark.background.ignoresSafeArea()
                     }
                 }

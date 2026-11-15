@@ -74,6 +74,17 @@ struct CloudflareIntents {
     var ipLimitSave: () -> Void = {}
     var ipLimitSetEnabled: (String, Bool) -> Void = { _, _ in }
     var ipLimitDelete: (String) -> Void = { _ in }
+    var newWidget: () -> Void = {}
+    var editWidget: (String) -> Void = { _ in }
+    var closeWidgetForm: () -> Void = {}
+    var saveWidget: (WidgetDraft) -> Void = { _ in }
+    var deleteWidget: (String) -> Void = { _ in }
+    var revealSecret: (String) -> Void = { _ in }
+    var hideSecret: () -> Void = {}
+    var rotateSecret: (String, Bool) -> Void = { _, _ in }
+    var dnsTokenMint: (String) -> Void = { _ in }
+    var dnsTokenPaste: (String, String) -> Void = { _, _ in }
+    var dnsTokenRemove: (String) -> Void = { _ in }
 }
 
 extension CloudflareTone {
@@ -157,8 +168,10 @@ struct CloudflareOverlay: View {
                 EmailGateScreen(form: gate, intents: intents)
             } else if let limit = screen.ipLimitForm {
                 IpLimitScreen(form: limit, intents: intents)
+            } else if let widget = screen.widgetForm {
+                WidgetScreen(form: widget, intents: intents)
             } else {
-                ZoneScreen(zone: zone, error: view.error, intents: intents)
+                ZoneScreen(zone: zone, revealed: screen.revealedSecret, error: view.error, intents: intents)
             }
         }
     }
@@ -266,6 +279,7 @@ let monoSmall = RunovaTextStyle(
 
 private struct ZoneScreen: View {
     let zone: CloudflareZoneView
+    let revealed: CloudflareRevealedSecretView?
     let error: String?
     let intents: CloudflareIntents
 
@@ -279,7 +293,7 @@ private struct ZoneScreen: View {
                     if let toggles = zone.toggles { TogglesCard(toggles: toggles, intents: intents) }
                     ZoneTabs(selected: zone.tab, onSelect: intents.openTab)
                     if zone.tab != .dns {
-                        ZoneTabContent(zone: zone, intents: intents)
+                        ZoneTabContent(zone: zone, revealed: revealed, intents: intents)
                     } else {
                         dns
                     }

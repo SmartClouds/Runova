@@ -3,6 +3,7 @@ import SwiftUI
 /// The tabs of a domain, in the desktop's order.
 private let zoneTabs: [(CloudflareTab, String)] = [
     (.dns, "DNS"), (.ssl, "SSL/TLS"), (.caching, "Caching"), (.security, "Security"), (.access, "Access"),
+    (.servers, "Servers"), (.turnstile, "Turnstile"),
 ]
 
 /// A choice with more options than this folds away behind its current value.
@@ -65,13 +66,15 @@ struct ZoneTabs: View {
 /// Everything a tab other than DNS shows, under the switches and the tab strip.
 struct ZoneTabContent: View {
     let zone: CloudflareZoneView
+    let revealed: CloudflareRevealedSecretView?
     let intents: CloudflareIntents
 
     var body: some View {
-        if zone.tab == .access {
-            AccessTab(access: zone.access, intents: intents)
-        } else {
-            settings
+        switch zone.tab {
+        case .access: AccessTab(access: zone.access, intents: intents)
+        case .turnstile: TurnstileTab(zone: zone, revealed: revealed, intents: intents)
+        case .servers: ServersTab(zone: zone, intents: intents)
+        default: settings
         }
     }
 

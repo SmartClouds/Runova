@@ -225,7 +225,10 @@ pub(super) fn groups(
     saving: bool,
 ) -> Vec<CloudflareSettingsGroup> {
     match tab {
-        CloudflareTab::Dns | CloudflareTab::Access => Vec::new(),
+        CloudflareTab::Dns
+        | CloudflareTab::Access
+        | CloudflareTab::Servers
+        | CloudflareTab::Turnstile => Vec::new(),
         CloudflareTab::Ssl => vec![ssl_group(zone, settings, saving)],
         CloudflareTab::Caching => vec![caching_group(zone, settings, saving)],
         CloudflareTab::Security => {
@@ -576,6 +579,8 @@ impl Runner {
         match zone.tab {
             CloudflareTab::Security => self.load_rules(),
             CloudflareTab::Access => self.load_access(),
+            CloudflareTab::Turnstile => self.load_widgets(),
+            CloudflareTab::Servers => self.load_dns_servers(),
             _ => {}
         }
     }
@@ -585,6 +590,8 @@ impl Runner {
             return;
         };
         zone.tab = tab;
+        // A secret on show goes as soon as its tab does.
+        self.hide_secret();
         self.redraw_zone();
         self.load_tab_data();
     }

@@ -88,6 +88,39 @@ const IP_LIMIT = {
   lastUpdated: '2026-11-15T10:00:00Z',
 };
 
+const SITEKEY = '0x4AAAAAAABkMYinukE8nzY';
+const SECRET = '0x4AAAAAAABkMYsecretValue123';
+const WIDGET = {
+  sitekey: SITEKEY,
+  name: 'Contact form',
+  domains: ['example.com'],
+  mode: 'managed' as const,
+  clearance: 'no_clearance' as const,
+  region: 'world' as const,
+  offlabel: false,
+  ephemeralId: false,
+  createdOn: '2026-03-01T10:00:00Z',
+  modifiedOn: '2026-03-01T10:00:00Z',
+};
+const WIDGET_INPUT = {
+  name: 'Contact form',
+  domains: ['example.com'],
+  mode: 'managed',
+  clearance: 'no_clearance',
+  region: 'world',
+  offlabel: false,
+  ephemeralId: false,
+};
+const DNS_TOKEN = {
+  zone: 'example.com',
+  zoneId: ZONE,
+  provider: 'cloudflare',
+  createdAtUnixMs: 1,
+  updatedAtUnixMs: 2,
+  tokenId: 'abc',
+  createdBy: 'Runova',
+};
+
 const RULE_ID = '3a03d665bac047339bb530ecb439a90d';
 const RULE = {
   id: RULE_ID,
@@ -144,6 +177,12 @@ function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageClou
       createAccessRule: vi.fn(async () => ACCESS_RULE),
       deleteAccessRule: vi.fn(async () => undefined),
       updateCustomRule: vi.fn(async () => []),
+      listTurnstileWidgets: vi.fn(async () => [WIDGET]),
+      createTurnstileWidget: vi.fn(async () => ({ widget: WIDGET, secret: SECRET })),
+      updateTurnstileWidget: vi.fn(async () => WIDGET),
+      deleteTurnstileWidget: vi.fn(async () => undefined),
+      turnstileSecret: vi.fn(async () => SECRET),
+      rotateTurnstileSecret: vi.fn(async () => ({ widget: WIDGET, secret: SECRET })),
       planPointDomain: vi.fn(async () => ({
         zoneName: 'example.com',
         names: ['example.com'],
@@ -176,6 +215,11 @@ function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageClou
       proxy: vi.fn(async () => undefined),
     },
     publicIp: async () => '203.0.113.77',
+    serverOps: {
+      dnsTokens: vi.fn(async () => [DNS_TOKEN]),
+      provisionDnsToken: vi.fn(async () => DNS_TOKEN),
+      removeDnsToken: vi.fn(async () => undefined),
+    },
   };
 }
 
@@ -516,6 +560,93 @@ describe('cloudflare methods', () => {
       },
     };
     expect(await call(failing, 'cloudflare.publicAddress')).toEqual({ ip: null });
+  });
+
+  it('manages Turnstile widgets, and hands a secret over only when asked (E101)', async () => {
+    const d = deps();
+    expect(await call(d, 'cloudflare.turnstileWidgets', { zoneId: ZONE })).toEqual([WIDGET]);
+    const created = await call(d, 'cloudflare.createTurnstileWidget', {
+      zoneId: ZONE,
+      input: WIDGET_INPUT,
+    });
+    expect(created).toEqual({ widget: WIDGET });
+    expect(JSON.stringify(created)).not.toContain(SECRET);
+    await call(d, 'cloudflare.updateTurnstileWidget', {
+      zoneId: ZONE,
+      sitekey: SITEKEY,
+      input: WIDGET_INPUT,
+    });
+    expect(
+      await call(d, 'cloudflare.deleteTurnstileWidget', { zoneId: ZONE, sitekey: SITEKEY }),
+    ).toEqual({ ok: true, message: 'Deleted the widget.' });
+    const rotated = await call(d, 'cloudflare.rotateTurnstileSecret', {
+      zoneId: ZONE,
+      sitekey: SITEKEY,
+      now: false,
+    });
+    expect(JSON.stringify(rotated)).not.toContain(SECRET);
+    expect(await call(d, 'cloudflare.turnstileSecret', { zoneId: ZONE, sitekey: SITEKEY })).toEqual(
+      {
+        secret: SECRET,
+      },
+    );
+
+    expect(MANAGE_METHODS['cloudflare.turnstileSecret']).toEqual({
+      scope: 'cloudflare',
+      risk: 'danger',
+      audited: true,
+    });
+    expect(d.service.updateTurnstileWidget).toHaveBeenCalledWith(ZONE, SITEKEY, WIDGET_INPUT);
+    expect(d.service.rotateTurnstileSecret).toHaveBeenCalledWith(ZONE, SITEKEY, false);
+    const bad = await failure(
+      call(d, 'cloudflare.turnstileSecret', { zoneId: ZONE, sitekey: 'not a key' }),
+    );
+    expect(bad.code).toBe('bad-params');
+  });
+
+  it('sends a server a DNS token, made here or pasted, and takes one back (E101)', async () => {
+    const d = deps();
+    expect(await call(d, 'cloudflare.dnsTokens', { serverId: 'srv-1' })).toEqual([
+      { zone: 'example.com', zoneId: ZONE, madeHere: true, updatedAt: 2 },
+    ]);
+    await call(d, 'cloudflare.provisionDnsToken', {
+      serverId: 'srv-1',
+      zoneId: ZONE,
+      mode: 'mint',
+    });
+    await call(d, 'cloudflare.provisionDnsToken', {
+      serverId: 'srv-1',
+      zoneId: ZONE,
+      mode: 'paste',
+      token: TOKEN,
+    });
+    await call(d, 'cloudflare.removeDnsToken', {
+      serverId: 'srv-1',
+      zone: 'example.com',
+      deleteAtCloudflare: true,
+    });
+
+    expect(d.serverOps.provisionDnsToken).toHaveBeenCalledWith({
+      serverId: 'srv-1',
+      zoneId: ZONE,
+      mode: 'mint',
+    });
+    expect(d.serverOps.provisionDnsToken).toHaveBeenCalledWith({
+      serverId: 'srv-1',
+      zoneId: ZONE,
+      mode: 'paste',
+      token: TOKEN,
+    });
+    expect(d.serverOps.removeDnsToken).toHaveBeenCalledWith({
+      serverId: 'srv-1',
+      zone: 'example.com',
+      deleteAtCloudflare: true,
+    });
+    expect(MANAGE_METHODS['cloudflare.provisionDnsToken']).toMatchObject({ audited: true });
+    const bad = await failure(
+      call(d, 'cloudflare.provisionDnsToken', { serverId: '../x', zoneId: ZONE, mode: 'mint' }),
+    );
+    expect(bad.code).toBe('bad-params');
   });
 
   it('refuses parameters of the wrong shape before Cloudflare sees them', async () => {

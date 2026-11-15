@@ -94,7 +94,9 @@ final class CloudflareSettingsTests: XCTestCase {
             dns: CloudflareDnsView(loading: false, problem: nil, records: []), settings: groups, rules: rules,
             access: CloudflareAccessView(
                 loading: false, problem: nil, ready: true, needsTeam: false, teamDomain: nil, hosts: [], limits: [],
-                limitsProblem: nil))
+                limitsProblem: nil),
+            turnstile: CloudflareTurnstileView(loading: false, problem: nil, widgets: []),
+            servers: CloudflareServersView(loading: false, problem: nil, servers: []))
     }
 
     private func view(
@@ -105,7 +107,7 @@ final class CloudflareSettingsTests: XCTestCase {
             cloudflare: CloudflareScreen(
                 loading: false, configured: true, problem: nil, accounts: [], zone: zone, tokenForm: nil,
                 addDomain: nil, recordForm: nil, pointDomain: nil, ruleBuilder: builder, accessRuleForm: access,
-                emailGateForm: nil, ipLimitForm: nil, biometric: nil))
+                emailGateForm: nil, ipLimitForm: nil, widgetForm: nil, revealedSecret: nil, biometric: nil))
     }
 
     func testSsl() throws {

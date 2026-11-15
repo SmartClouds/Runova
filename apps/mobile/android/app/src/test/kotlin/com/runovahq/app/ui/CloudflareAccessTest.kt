@@ -19,6 +19,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import uniffi.runova_ffi.AppView
+import uniffi.runova_ffi.CloudflareServersView
+import uniffi.runova_ffi.CloudflareTurnstileView
 import uniffi.runova_ffi.CloudflareAccessView
 import uniffi.runova_ffi.CloudflareDnsView
 import uniffi.runova_ffi.CloudflareEmailGateFormView
@@ -58,7 +60,7 @@ private fun access(ready: Boolean = true, needsTeam: Boolean = false) =
 
 private fun zone(access: CloudflareAccessView) = CloudflareZoneView(
     "z1", "example.com", "acct-1", "Active", true, false, "Free Website", emptyList(), CloudflareTab.ACCESS, null,
-    CloudflareDnsView(false, null, emptyList()), emptyList(), CloudflareRulesView(false, null, emptyList(), emptyList(), null), access,
+    CloudflareDnsView(false, null, emptyList()), emptyList(), CloudflareRulesView(false, null, emptyList(), emptyList(), null), access, CloudflareTurnstileView(false, null, emptyList()), CloudflareServersView(false, null, emptyList()),
 )
 
 private fun view(
@@ -67,7 +69,7 @@ private fun view(
     limit: CloudflareIpLimitFormView? = null,
 ) = appView(
     connection = connected,
-    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(access), null, null, null, null, null, null, gate, limit, null),
+    cloudflare = CloudflareScreen(false, true, null, emptyList(), zone(access), null, null, null, null, null, null, gate, limit, null, null, null),
 )
 
 private val sessions = listOf("30m" to "30 min", "6h" to "6 hours", "24h" to "24 hours", "168h" to "7 days", "720h" to "30 days")

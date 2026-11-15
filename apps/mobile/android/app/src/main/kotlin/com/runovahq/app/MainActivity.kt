@@ -223,6 +223,17 @@ class MainActivity : FragmentActivity(), ViewListener {
                 ipLimitSave = { engine.cloudflareIpLimitSave() },
                 ipLimitSetEnabled = { id, on -> engine.cloudflareIpLimitSetEnabled(id, on) },
                 ipLimitDelete = { engine.cloudflareIpLimitDelete(it) },
+                newWidget = { engine.cloudflareNewWidget() },
+                editWidget = { engine.cloudflareEditWidget(it) },
+                closeWidgetForm = { engine.cloudflareCloseWidgetForm() },
+                saveWidget = { engine.cloudflareSaveWidget(it) },
+                deleteWidget = { engine.cloudflareDeleteWidget(it) },
+                revealSecret = { engine.cloudflareRevealSecret(it) },
+                hideSecret = { engine.cloudflareHideSecret() },
+                rotateSecret = { key, now -> engine.cloudflareRotateSecret(key, now) },
+                dnsTokenMint = { engine.cloudflareDnsTokenMint(it) },
+                dnsTokenPaste = { server, token -> engine.cloudflareDnsTokenPaste(server, token) },
+                dnsTokenRemove = { engine.cloudflareDnsTokenRemove(it) },
             ),
             monitoring = MonitoringIntents(
                 open = { engine.monitorOpen(it) },
@@ -428,7 +439,8 @@ class MainActivity : FragmentActivity(), ViewListener {
 
     /** Keeps the Vault out of screenshots and the app switcher, and runs the phone's own check. */
     private fun guardVault(view: AppView) {
-        if (view.vault.onShow) {
+        // A Cloudflare secret on show is kept out of screenshots the same way.
+        if (view.vault.onShow || view.cloudflare.revealedSecret != null) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

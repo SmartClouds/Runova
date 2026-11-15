@@ -1,4 +1,5 @@
 import type { CloudflareEmailGateOps } from './cloudflare/emailGate';
+import type { CloudflareServerOps } from './cloudflare/serverOps';
 import type { CloudflareService } from './cloudflare/service';
 import type { DeployDocker } from './docker';
 import type { DeployFirewall } from './firewall';
@@ -23,6 +24,8 @@ export interface LiveDeployServices {
   cloudflare: CloudflareService;
   /** Only once a server core is wired; a phone asks for it on the Access tab (E100). */
   cloudflareEmailGate: CloudflareEmailGateOps;
+  /** DNS tokens and the origin lock on a server, for a phone (E101, E102). */
+  cloudflareServer: CloudflareServerOps;
   wordpress: WordPressProjectService;
   system: DeploySystem;
   firewall: DeployFirewall;

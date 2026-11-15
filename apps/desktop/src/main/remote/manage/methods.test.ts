@@ -33,6 +33,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
       servers: async () => [],
       emailGate: {} as never,
       publicIp: async () => null,
+      serverOps: {} as never,
     },
     forgetPhone: async () => undefined,
     setPhoneSealKey: async () => undefined,
