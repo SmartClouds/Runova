@@ -33,6 +33,7 @@ import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.ui.AccountIntents
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
+import com.runovahq.app.ui.CloudflareIntents
 import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.NotificationIntents
@@ -160,6 +161,32 @@ class MainActivity : FragmentActivity(), ViewListener {
                 containerAction = { id, action -> engine.deployContainerAction(id, action) },
                 stackAction = { stack, action -> engine.deployStackAction(stack, action) },
                 redeploy = { engine.deployStackRedeploy(it) },
+            ),
+            cloudflare = CloudflareIntents(
+                openZone = { engine.cloudflareOpenZone(it) },
+                closeZone = { engine.cloudflareCloseZone() },
+                setDevMode = { engine.cloudflareSetDevMode(it) },
+                setUnderAttack = { engine.cloudflareSetUnderAttack(it) },
+                setAiBotsBlocked = { engine.cloudflareSetAiBotsBlocked(it) },
+                newRecord = { engine.cloudflareNewRecord() },
+                editRecord = { engine.cloudflareEditRecord(it) },
+                closeRecordForm = { engine.cloudflareCloseRecordForm() },
+                saveRecord = { engine.cloudflareSaveRecord(it) },
+                setProxied = { id, on -> engine.cloudflareSetProxied(id, on) },
+                deleteRecord = { engine.cloudflareDeleteRecord(it) },
+                openTokenForm = { engine.cloudflareOpenTokenForm(it) },
+                closeTokenForm = { engine.cloudflareCloseTokenForm() },
+                saveToken = { token, label -> engine.cloudflareSaveToken(token, label) },
+                checkToken = { engine.cloudflareCheckToken(it) },
+                removeToken = { engine.cloudflareRemoveToken(it) },
+                openAddDomain = { engine.cloudflareOpenAddDomain(it) },
+                closeAddDomain = { engine.cloudflareCloseAddDomain() },
+                addDomain = { name, account -> engine.cloudflareAddDomain(name, account) },
+                checkActivation = { engine.cloudflareCheckActivation() },
+                openPointDomain = { engine.cloudflareOpenPointDomain() },
+                closePointDomain = { engine.cloudflareClosePointDomain() },
+                previewPointDomain = { name, server, www, proxied -> engine.cloudflarePreviewPointDomain(name, server, www, proxied) },
+                applyPointDomain = { engine.cloudflareApplyPointDomain() },
             ),
             monitoring = MonitoringIntents(
                 open = { engine.monitorOpen(it) },
@@ -370,7 +397,8 @@ class MainActivity : FragmentActivity(), ViewListener {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
-        val request = view.vault.biometric ?: return
+        // The same check guards a Cloudflare token pasted on the phone.
+        val request = view.vault.biometric ?: view.cloudflare.biometric ?: return
         if (request.id != lastBiometric) {
             lastBiometric = request.id
             confirmIdentity(request)

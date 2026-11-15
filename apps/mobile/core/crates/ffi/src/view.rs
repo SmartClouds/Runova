@@ -126,6 +126,7 @@ pub struct TerminalProcessView {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum Section {
     Clis,
+    Cloudflare,
     Git,
     Status,
     Vault,
@@ -1359,6 +1360,7 @@ pub struct AppView {
     pub status: StatusScreen,
     pub vault: VaultScreen,
     pub deploy: DeployScreen,
+    pub cloudflare: CloudflareScreen,
     pub monitoring: MonitoringScreen,
     pub errors: ErrorsScreen,
     pub pipelines: PipelinesScreen,
@@ -1407,6 +1409,7 @@ impl AppView {
             status: StatusScreen::default(),
             vault: VaultScreen::default(),
             deploy: DeployScreen::default(),
+            cloudflare: CloudflareScreen::default(),
             monitoring: MonitoringScreen::default(),
             errors: ErrorsScreen::default(),
             pipelines: PipelinesScreen::default(),
@@ -1431,6 +1434,8 @@ impl AppView {
         }
     }
 }
+
+pub use crate::cloudflare_view::*;
 
 #[uniffi::export(with_foreign)]
 pub trait ViewListener: Send + Sync {

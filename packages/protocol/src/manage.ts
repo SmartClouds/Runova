@@ -14,6 +14,7 @@ export type ManageScope =
   | 'git'
   | 'vault'
   | 'deploy'
+  | 'cloudflare'
   | 'ops'
   | 'studio'
   | 'control'
@@ -35,6 +36,7 @@ export const MANAGE_GRANTABLE_SCOPES: readonly ManageScope[] = [
   'git',
   'vault',
   'deploy',
+  'cloudflare',
   'ops',
   'studio',
   'control',
@@ -102,6 +104,27 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'deploy.containerAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackRedeploy': { scope: 'deploy', risk: 'danger' },
+  // Cloudflare (E98 to E101): the desktop's own Cloudflare service and saved tokens.
+  'cloudflare.status': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.checkToken': { scope: 'cloudflare', risk: 'read' },
+  // A token is full control of a Cloudflare account, so saving one is worth its own audit row.
+  'cloudflare.saveToken': { scope: 'cloudflare', risk: 'danger', audited: true },
+  'cloudflare.removeToken': { scope: 'cloudflare', risk: 'danger' },
+  'cloudflare.zones': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.accounts': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.createZone': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.checkActivation': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.records': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.createRecord': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.updateRecord': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.deleteRecord': { scope: 'cloudflare', risk: 'danger' },
+  'cloudflare.zoneSettings': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.changeSetting': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.botSettings': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.changeBotSetting': { scope: 'cloudflare', risk: 'write' },
+  'cloudflare.servers': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.planPointDomain': { scope: 'cloudflare', risk: 'read' },
+  'cloudflare.pointDomain': { scope: 'cloudflare', risk: 'write' },
   'monitoring.list': { scope: 'ops', risk: 'read' },
   'monitoring.check': { scope: 'ops', risk: 'write' },
   'monitoring.pause': { scope: 'ops', risk: 'write' },

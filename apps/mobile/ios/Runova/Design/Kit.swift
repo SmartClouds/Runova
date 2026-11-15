@@ -362,6 +362,8 @@ struct RunovaTextField: View {
     let placeholder: String
     var secure = false
     var icon: String?
+    /// What the field is, for VoiceOver, when the placeholder is an example rather than a name.
+    var label: String?
 
     @State private var revealed = false
     @FocusState private var focused: Bool
@@ -387,6 +389,7 @@ struct RunovaTextField: View {
                 .foregroundColor(palette.foreground)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .accessibilityLabel(label ?? placeholder)
             }
             if secure {
                 Button {

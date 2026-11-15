@@ -200,6 +200,10 @@ const SCOPE_LABELS: Record<ManageScope, { label: string; description: string }> 
     label: 'Deploy and servers',
     description: 'See servers and restart what runs on them.',
   },
+  cloudflare: {
+    label: 'Cloudflare',
+    description: 'Domains, DNS, security and access rules, with the tokens saved here.',
+  },
   ops: { label: 'Monitoring and pipelines', description: 'See checks and CI, and start runs.' },
   studio: { label: 'Studio', description: 'Make videos: write scenes, animate and render.' },
   control: { label: 'Control the screen', description: 'See the screen and use the mouse.' },

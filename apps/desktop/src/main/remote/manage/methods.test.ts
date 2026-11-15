@@ -28,6 +28,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     status: {} as ManageStatusDeps,
     vault: {} as ManageVaultDeps,
     deploy: {} as ManageDeployDeps,
+    cloudflare: { service: {} as never, servers: async () => [] },
     forgetPhone: async () => undefined,
     setPhoneSealKey: async () => undefined,
     monitoring: {} as ManageMonitoringDeps,

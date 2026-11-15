@@ -85,6 +85,7 @@ private val MoreSections = listOf(
     TabItem("prompts", "Prompt Builder", RunovaIcons.Sparkles),
     TabItem("vault", "Vault", RunovaIcons.Vault),
     TabItem("deploy", "Deploy", RunovaIcons.Deploy),
+    TabItem("cloudflare", "Cloudflare", RunovaIcons.Cloud),
     TabItem("monitoring", "Monitoring", RunovaIcons.Monitoring),
     TabItem("pipelines", "Pipelines", RunovaIcons.Pipelines),
     TabItem("notifications", "Notifications", RunovaIcons.Notifications),
@@ -131,6 +132,7 @@ fun DeviceShell(
         section == "status" -> Section.STATUS
         section == "vault" -> Section.VAULT
         section == "deploy" -> Section.DEPLOY
+        section == "cloudflare" -> Section.CLOUDFLARE
         section == "monitoring" -> Section.MONITORING
         section == "pipelines" -> Section.PIPELINES
         section == "notifications" -> Section.NOTIFICATIONS
@@ -151,6 +153,7 @@ fun DeviceShell(
         StatusOverlay(view, intents.status) ||
         VaultOverlay(view, intents.vault) ||
         DeployOverlay(view, intents.deploy) ||
+        (section == "cloudflare" && CloudflareOverlay(view, intents.cloudflare)) ||
         (section == "studio" && StudioOverlay(view, intents.studio)) ||
         (section == "monitoring" && MonitorOverlay(view, intents.monitoring)) ||
         PipelineOverlay(view, intents.pipelines)
@@ -173,6 +176,7 @@ fun DeviceShell(
                     view.error?.let { ErrorLine(it) }
                 }
                 "deploy" -> DeployTab(view, intents.deploy)
+                "cloudflare" -> CloudflareTab(view, intents.cloudflare)
                 "studio" -> StudioTab(view, intents.studio)
                 "prompts" -> PromptsTab(view, intents.prompts)
                 "monitoring" -> MonitoringTab(view, intents.monitoring)

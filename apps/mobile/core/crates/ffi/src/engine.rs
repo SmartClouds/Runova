@@ -309,6 +309,7 @@ pub(crate) struct Runner {
     pub(crate) seal_key: Option<Arc<runova_crypto::sealed::SealKey>>,
     pub(crate) qr_task: Option<JoinHandle<()>>,
     pub(crate) qr_generation: u64,
+    pub(crate) cloudflare: crate::cloudflare::CloudflareState,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -384,6 +385,7 @@ impl Runner {
             seal_key: None,
             qr_task: None,
             qr_generation: 0,
+            cloudflare: Default::default(),
         }
     }
 
@@ -512,6 +514,7 @@ impl Runner {
             Some(Section::Status) => self.refresh_status(),
             Some(Section::Vault) => self.refresh_vault(),
             Some(Section::Deploy) => self.refresh_deploy(),
+            Some(Section::Cloudflare) => self.refresh_cloudflare(),
             Some(Section::Monitoring) => self.refresh_monitoring(),
             Some(Section::Pipelines) => self.refresh_pipelines(),
             Some(Section::Account) => self.refresh_account(),
@@ -583,6 +586,7 @@ impl Runner {
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();
+        self.clear_cloudflare();
         self.view.pipelines = PipelinesScreen::default();
         self.view.monitoring.local.clear();
         self.view.errors = Default::default();

@@ -76,6 +76,7 @@ data class AppIntents(
     val status: StatusIntents = StatusIntents(),
     val vault: VaultIntents = VaultIntents(),
     val deploy: DeployIntents = DeployIntents(),
+    val cloudflare: CloudflareIntents = CloudflareIntents(),
     val monitoring: MonitoringIntents = MonitoringIntents(),
     val pipelines: PipelineIntents = PipelineIntents(),
     val account: AccountIntents = AccountIntents(),

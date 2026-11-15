@@ -14,6 +14,7 @@ private let moreSections = [
     TabItem(id: "prompts", title: "Prompt Builder", icon: RunovaIcons.sparkles),
     TabItem(id: "vault", title: "Vault", icon: RunovaIcons.vault),
     TabItem(id: "deploy", title: "Deploy", icon: RunovaIcons.deploy),
+    TabItem(id: "cloudflare", title: "Cloudflare", icon: RunovaIcons.cloud),
     TabItem(id: "monitoring", title: "Monitoring", icon: RunovaIcons.monitoring),
     TabItem(id: "pipelines", title: "Pipelines", icon: RunovaIcons.pipelines),
     TabItem(id: "notifications", title: "Notifications", icon: RunovaIcons.notifications),
@@ -60,6 +61,7 @@ struct DeviceShell: View {
         case "status": return .status
         case "vault": return .vault
         case "deploy": return .deploy
+        case "cloudflare": return .cloudflare
         case "monitoring": return .monitoring
         case "pipelines": return .pipelines
         case "notifications": return .notifications
@@ -98,6 +100,8 @@ struct DeviceShell: View {
                 LogsScreen(logs: logs, intents: intents.deploy)
             } else if let server = view.deploy.server {
                 ServerScreen(server: server, error: view.error, intents: intents.deploy)
+            } else if section == "cloudflare", CloudflareOverlay.shows(view) {
+                CloudflareOverlay(view: view, intents: intents.cloudflare)
             } else if section == "monitoring", let detail = view.errors.detail {
                 IssueDetailPage(detail: detail, error: view.error, intents: intents.monitoring)
             } else if section == "monitoring", view.errors.open {
@@ -131,6 +135,7 @@ struct DeviceShell: View {
                                     if let error = view.error { ErrorLine(message: error) }
                                 }
                             case "deploy": DeployTab(view: view, intents: intents.deploy)
+                            case "cloudflare": CloudflareTab(view: view, intents: intents.cloudflare)
                             case "studio": StudioTab(view: view, intents: intents.studio)
                             case "prompts": PromptsTab(view: view, intents: intents.prompts)
                             case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)

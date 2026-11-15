@@ -257,6 +257,9 @@ func fixtureView(
         state: .unknown, loading: false, onShow: false, inBackground: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
+    cloudflare: CloudflareScreen = CloudflareScreen(
+        loading: false, configured: false, problem: nil, accounts: [], zone: nil, tokenForm: nil, addDomain: nil,
+        recordForm: nil, pointDomain: nil, biometric: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
     errors: ErrorsScreen = ErrorsScreen(
         open: false, loading: false, issues: [], note: nil, problems: [], cutNote: nil, detail: nil),
@@ -282,7 +285,7 @@ func fixtureView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
         projects: projects, projectsLoading: false, selectedProject: selected, terminals: terminals,
         terminalsLoading: false, terminal: terminal, terminalProcesses: processes, git: git, status: status, vault: vault, deploy: deploy,
-        monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
+        cloudflare: cloudflare, monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn)

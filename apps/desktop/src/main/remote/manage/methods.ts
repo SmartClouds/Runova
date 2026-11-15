@@ -1,6 +1,7 @@
 import type { Project } from '@runova/core';
 import type { ManageProject, ManageTerminal, ManageTerminalProcess } from '@runova/protocol';
 import { agentMethods, type ManageAgentDeps } from './agentMethods';
+import { cloudflareMethods, type ManageCloudflareDeps } from './cloudflareMethods';
 import { deployMethods, type ManageDeployDeps } from './deployMethods';
 import { gitMethods, type ManageGitDeps } from './gitMethods';
 import {
@@ -36,6 +37,7 @@ export interface ManageMethodDeps {
   status: ManageStatusDeps;
   vault: ManageVaultDeps;
   deploy: ManageDeployDeps;
+  cloudflare: ManageCloudflareDeps;
   /** Takes a phone off this computer's trusted list. */
   forgetPhone(key: string): Promise<void>;
   /** Remembers the key this phone opens sealed notifications with. */
@@ -111,6 +113,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...statusMethods(deps.status),
       ...vaultMethods(deps.vault),
       ...deployMethods(deps.deploy),
+      ...cloudflareMethods(deps.cloudflare),
       ...opsMethods(deps.monitoring, deps.pipelines, deps.errorTracking),
       ...studioMethods(deps.studio),
       ...downloads.calls,

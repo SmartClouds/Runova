@@ -7,6 +7,7 @@ import uniffi.runova_ffi.AutoFixSessionView
 import uniffi.runova_ffi.PromptsScreen
 import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
+import uniffi.runova_ffi.CloudflareScreen
 import uniffi.runova_ffi.DeployScreen
 import uniffi.runova_ffi.ErrorsScreen
 import uniffi.runova_ffi.EncryptionScreen
@@ -32,6 +33,7 @@ import uniffi.runova_ffi.VaultScreen
 val emptyGit = GitScreen(null, false, null, false, emptyList(), emptyList())
 val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null, emptyList())
 val emptyDeploy = DeployScreen(emptyList(), false, null, null)
+val emptyCloudflare = CloudflareScreen(false, false, null, emptyList(), null, null, null, null, null, null)
 val emptyMonitoring = MonitoringScreen(emptyList(), emptyList(), false, null, null)
 val emptyErrors = ErrorsScreen(false, false, emptyList(), null, emptyList(), null, null)
 val emptyPipelines = PipelinesScreen(null, false, null, null, null)
@@ -54,6 +56,7 @@ fun appView(
     status: StatusScreen = emptyStatus,
     vault: VaultScreen = emptyVault,
     deploy: DeployScreen = emptyDeploy,
+    cloudflare: CloudflareScreen = emptyCloudflare,
     monitoring: MonitoringScreen = emptyMonitoring,
     errors: ErrorsScreen = emptyErrors,
     pipelines: PipelinesScreen = emptyPipelines,
@@ -92,6 +95,7 @@ fun appView(
     status,
     vault,
     deploy,
+    cloudflare,
     monitoring,
     errors,
     pipelines,

@@ -25,6 +25,7 @@ struct AppIntents {
     var status = StatusIntents()
     var vault = VaultIntents()
     var deploy = DeployIntents()
+    var cloudflare = CloudflareIntents()
     var monitoring = MonitoringIntents()
     var pipelines = PipelineIntents()
     var account = AccountIntents()

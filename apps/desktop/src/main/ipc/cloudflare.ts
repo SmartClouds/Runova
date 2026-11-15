@@ -345,6 +345,28 @@ function pointDomainInput(value: unknown): CloudflarePointDomainInput {
   };
 }
 
+/**
+ * The same checks for the phone's Cloudflare calls (E98), so a value the desktop refuses is refused
+ * there too. Each throws a plain Error that says what is wrong.
+ */
+export const cloudflareInputs = {
+  accountId,
+  zoneId,
+  itemId,
+  saveInput,
+  newZoneInput,
+  recordInput,
+  settingChange,
+  botChange,
+  purgeRequest,
+  customRuleInput,
+  accessRuleInput,
+  sitekey,
+  turnstileInput,
+  pointDomainInput,
+  flag,
+};
+
 export function registerCloudflareHandlers({ ipc, service, guard }: CloudflareHandlerDeps): void {
   const handle = (channel: string, run: (...args: unknown[]) => unknown) => {
     ipc.handle(channel, async (event, ...args) => {

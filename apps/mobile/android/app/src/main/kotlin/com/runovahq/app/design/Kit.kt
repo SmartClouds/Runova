@@ -345,6 +345,8 @@ fun RunovaTextField(
     modifier: Modifier = Modifier,
     secure: Boolean = false,
     icon: String? = null,
+    /** What the field is, for screen readers, when the placeholder is an example rather than a name. */
+    label: String? = null,
 ) {
     val colors = RunovaTheme.colors
     var focused by remember { mutableStateOf(false) }
@@ -374,7 +376,10 @@ fun RunovaTextField(
             keyboardOptions = if (secure) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
             textStyle = RunovaType.body.copy(color = colors.foreground),
             cursorBrush = SolidColor(colors.primary),
-            modifier = Modifier.weight(1f).onFocusChanged { focused = it.isFocused },
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { focused = it.isFocused }
+                .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier),
             decorationBox = { inner ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {

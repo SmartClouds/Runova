@@ -70,6 +70,7 @@ describe('the method table', () => {
       'git',
       'vault',
       'deploy',
+      'cloudflare',
       'ops',
       'studio',
       'control',

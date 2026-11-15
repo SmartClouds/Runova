@@ -110,6 +110,7 @@ final class AppModel: NSObject, ObservableObject {
                 containerAction: { [weak self] in self?.engine?.deployContainerAction(containerId: $0, action: $1) },
                 stackAction: { [weak self] in self?.engine?.deployStackAction(stack: $0, action: $1) },
                 redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) }),
+            cloudflare: cloudflareIntents,
             monitoring: MonitoringIntents(
                 open: { [weak self] in self?.engine?.monitorOpen(id: $0) },
                 close: { [weak self] in self?.engine?.monitorClose() },
@@ -292,7 +293,8 @@ final class AppModel: NSObject, ObservableObject {
 
     /// Runs the phone's own check. The core only asks for the value if this says yes.
     func confirmIdentityIfAsked(_ view: AppView) {
-        guard let request = view.vault.biometric, request.id != lastBiometric else { return }
+        // The same check guards a Cloudflare token pasted on the phone.
+        guard let request = view.vault.biometric ?? view.cloudflare.biometric, request.id != lastBiometric else { return }
         lastBiometric = request.id
         let id = request.id
         let context = LAContext()
@@ -304,6 +306,37 @@ final class AppModel: NSObject, ObservableObject {
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: request.reason) { [weak self] ok, _ in
             Task { @MainActor in self?.engine?.biometricResult(id: id, confirmed: ok) }
         }
+    }
+
+    private var cloudflareIntents: CloudflareIntents {
+        CloudflareIntents(
+            openZone: { [weak self] in self?.engine?.cloudflareOpenZone(id: $0) },
+            closeZone: { [weak self] in self?.engine?.cloudflareCloseZone() },
+            setDevMode: { [weak self] in self?.engine?.cloudflareSetDevMode(on: $0) },
+            setUnderAttack: { [weak self] in self?.engine?.cloudflareSetUnderAttack(on: $0) },
+            setAiBotsBlocked: { [weak self] in self?.engine?.cloudflareSetAiBotsBlocked(on: $0) },
+            newRecord: { [weak self] in self?.engine?.cloudflareNewRecord() },
+            editRecord: { [weak self] in self?.engine?.cloudflareEditRecord(id: $0) },
+            closeRecordForm: { [weak self] in self?.engine?.cloudflareCloseRecordForm() },
+            saveRecord: { [weak self] in self?.engine?.cloudflareSaveRecord(draft: $0) },
+            setProxied: { [weak self] in self?.engine?.cloudflareSetProxied(id: $0, proxied: $1) },
+            deleteRecord: { [weak self] in self?.engine?.cloudflareDeleteRecord(id: $0) },
+            openTokenForm: { [weak self] in self?.engine?.cloudflareOpenTokenForm(accountId: $0) },
+            closeTokenForm: { [weak self] in self?.engine?.cloudflareCloseTokenForm() },
+            saveToken: { [weak self] in self?.engine?.cloudflareSaveToken(token: $0, label: $1) },
+            checkToken: { [weak self] in self?.engine?.cloudflareCheckToken(accountId: $0) },
+            removeToken: { [weak self] in self?.engine?.cloudflareRemoveToken(accountId: $0) },
+            openAddDomain: { [weak self] in self?.engine?.cloudflareOpenAddDomain(accountId: $0) },
+            closeAddDomain: { [weak self] in self?.engine?.cloudflareCloseAddDomain() },
+            addDomain: { [weak self] in self?.engine?.cloudflareAddDomain(name: $0, cloudflareAccountId: $1) },
+            checkActivation: { [weak self] in self?.engine?.cloudflareCheckActivation() },
+            openPointDomain: { [weak self] in self?.engine?.cloudflareOpenPointDomain() },
+            closePointDomain: { [weak self] in self?.engine?.cloudflareClosePointDomain() },
+            previewPointDomain: { [weak self] name, server, www, proxied in
+                self?.engine?.cloudflarePreviewPointDomain(
+                    name: name, serverId: server, includeWww: www, proxied: proxied)
+            },
+            applyPointDomain: { [weak self] in self?.engine?.cloudflareApplyPointDomain() })
     }
 
     private var gitIntents: GitIntents {
