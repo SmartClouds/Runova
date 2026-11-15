@@ -260,6 +260,12 @@ export const queryKeys = {
     ['database', 'session', sessionId, 'rows', table, page] as const,
   databaseTable: (sessionId: string, table: string) =>
     ['database', 'session', sessionId, 'table', table] as const,
+  /** The tables and foreign keys of one database or schema, for the diagram. */
+  databaseDiagram: (sessionId: string, scope: string) =>
+    ['database', 'session', sessionId, 'diagram', scope] as const,
+  /** Index fragmentation and free space. Rescanning refetches it. */
+  databaseHealth: (sessionId: string, scope: string, scan: string) =>
+    ['database', 'session', sessionId, 'health', scope, scan] as const,
   /** Prefix of a core's Security area: users, devices, sessions, the audit trail and the step-up. */
   deploySecurity: (serverId: string) => ['deploy', 'security', serverId] as const,
   deployUsers: (serverId: string) => ['deploy', 'security', serverId, 'users'] as const,

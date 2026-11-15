@@ -14,6 +14,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
+import { type PgQueryable, pgHealth, pgSchemaGraph } from './postgresInsights';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
 import {
   type DbDriver,
@@ -290,6 +291,18 @@ export async function openPostgres(options: DriverConnectOptions): Promise<DbDri
     },
 
     describe: describeTable,
+
+    async schemaGraph(where) {
+      const database = where.database || defaultDatabase;
+      const client = (await clientFor(database)) as unknown as PgQueryable;
+      return pgSchemaGraph(client, database, where.schema);
+    },
+
+    async health(where) {
+      const database = where.database || defaultDatabase;
+      const client = (await clientFor(database)) as unknown as PgQueryable;
+      return pgHealth(client, database, where.schema, where.scan);
+    },
 
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const client = await clientFor(input.ref.database);

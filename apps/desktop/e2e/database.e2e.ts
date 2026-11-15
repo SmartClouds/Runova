@@ -8,7 +8,8 @@ import { dockerAvailable } from './sshServer';
 /**
  * The Database section end to end (E45), against a real PostgreSQL in this computer's Docker:
  * the container shows as a card, one click connects with the password read from its environment,
- * and then a table is made, filled, read in the grid and queried.
+ * and then a table is made, filled, read in the grid and queried. The second test draws related
+ * tables as a diagram and reindexes one from Index health (E94).
  *
  * Needs Docker and the postgres:17-alpine image. On CI the image is pulled when missing, and the
  * test skips where the runner has no Docker (the macOS runner). RUNOVA_E2E_SCREENSHOTS names a
@@ -55,8 +56,8 @@ async function shot(name: string): Promise<void> {
   if (folder && launched) await launched.page.screenshot({ path: join(folder, `${name}.png`) });
 }
 
-test('connects to a Postgres container in one click and works with its tables', async () => {
-  test.skip(!dockerHasImage(), `needs Docker with ${IMAGE}`);
+/** Starts a Postgres container for the test; afterEach removes it. */
+function startPostgres(): string {
   const name = `runova-e2e-pg-${randomBytes(3).toString('hex')}`;
   container = execFileSync(
     'docker',
@@ -75,6 +76,34 @@ test('connects to a Postgres container in one click and works with its tables', 
     ],
     { encoding: 'utf-8', windowsHide: true },
   ).trim();
+  return name;
+}
+
+/** Opens this computer's databases and connects to the container in one click. */
+async function connect(name: string): Promise<void> {
+  const page = launched?.page;
+  if (!page) return;
+  await page.getByRole('link', { name: 'Deploy' }).click();
+  await page.getByRole('button', { name: 'Databases on this computer' }).click();
+  const card = page.getByRole('group', { name });
+  await expect(card).toBeVisible({ timeout: 60_000 });
+  await expect(async () => {
+    execFileSync(
+      'docker',
+      ['exec', name, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'shop'],
+      {
+        stdio: 'ignore',
+        windowsHide: true,
+      },
+    );
+  }).toPass({ timeout: 60_000 });
+  await card.getByRole('button', { name: 'Connect' }).click();
+  await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 30_000 });
+}
+
+test('connects to a Postgres container in one click and works with its tables', async () => {
+  test.skip(!dockerHasImage(), `needs Docker with ${IMAGE}`);
+  const name = startPostgres();
 
   launched = await launchApp({});
   const { page } = launched;
@@ -87,12 +116,18 @@ test('connects to a Postgres container in one click and works with its tables', 
   await expect(card.getByText('PostgreSQL')).toBeVisible();
   await shot('1-cards');
 
-  // Postgres takes a moment to accept connections after the container starts.
+  // Postgres takes a moment to accept connections after the container starts. The image first
+  // runs a temporary server on its Unix socket only, so readiness is checked over TCP: the
+  // socket answers during that init run, then the server restarts under a fresh connection.
   await expect(async () => {
-    execFileSync('docker', ['exec', name, 'pg_isready', '-U', 'postgres', '-d', 'shop'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
+    execFileSync(
+      'docker',
+      ['exec', name, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', 'shop'],
+      {
+        stdio: 'ignore',
+        windowsHide: true,
+      },
+    );
   }).toPass({ timeout: 60_000 });
   await card.getByRole('button', { name: 'Connect' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 30_000 });
@@ -133,4 +168,42 @@ test('connects to a Postgres container in one click and works with its tables', 
 
   await page.getByRole('button', { name: 'Disconnect' }).click();
   await expect(card).toBeVisible();
+});
+
+test('draws related tables as a diagram and reindexes one from index health', async () => {
+  test.skip(!dockerHasImage(), `needs Docker with ${IMAGE}`);
+  const name = startPostgres();
+  launched = await launchApp({});
+  const { page } = launched;
+  await connect(name);
+
+  await page.getByRole('button', { name: 'New query' }).click();
+  await typeQuery(
+    "CREATE TABLE customers (id serial PRIMARY KEY, name text NOT NULL); CREATE TABLE orders (id serial PRIMARY KEY, customer_id int REFERENCES customers (id) ON DELETE CASCADE, total numeric(8,2)); INSERT INTO customers (name) VALUES ('Ada'); INSERT INTO orders (customer_id, total) VALUES (1, 12.5);",
+  );
+  await page.keyboard.press('Control+Enter');
+  await expect(page.getByText(/1 row changed/).first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Diagram', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^customers table/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^orders table/ })).toBeVisible();
+  await expect(page.getByText('2 tables · 1 relationship')).toBeVisible();
+  await page.getByRole('button', { name: /^orders table/ }).click();
+  const details = page.getByRole('complementary', { name: 'orders' });
+  await expect(details.getByRole('button', { name: 'customers' })).toBeVisible();
+  await shot('4-diagram');
+
+  await page.getByRole('button', { name: 'Index health', exact: true }).click();
+  const row = page.getByRole('row', { name: /orders_pkey/ });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await shot('5-health');
+  await row.getByRole('button', { name: 'Reindex orders_pkey' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Statements to run')).toContainText(
+    'REINDEX INDEX CONCURRENTLY "public"."orders_pkey";',
+  );
+  await shot('6-reindex');
+  await dialog.getByRole('button', { name: 'Reindex', exact: true }).click();
+  await expect(dialog).toHaveCount(0, { timeout: 30_000 });
+  await expect(row).toBeVisible();
 });

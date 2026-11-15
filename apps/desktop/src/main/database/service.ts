@@ -30,6 +30,9 @@ import type {
   DatabaseTarget,
   DbAiContext,
   DbAiContextInput,
+  DbDiagramInput,
+  DbHealthInput,
+  DbHealthReport,
   DbListObjectsInput,
   DbObjectNode,
   DbObjectRef,
@@ -37,6 +40,7 @@ import type {
   DbQueryOutcome,
   DbReadRowsInput,
   DbRowsPage,
+  DbSchemaGraph,
   DbSetting,
   DbTableDescription,
   DbUser,
@@ -68,6 +72,8 @@ const AI_DESCRIBED_TABLES = 60;
 const AI_SCHEMAS = 8;
 const AI_SAMPLED_TABLES = 8;
 const AI_SAMPLE_ROWS = 3;
+/** The most tables a diagram draws; past this the user picks a schema. */
+const DIAGRAM_TABLES = 400;
 
 export interface ServerDocker {
   listContainers: (serverId: string) => Promise<ContainerList>;
@@ -743,6 +749,50 @@ export class DatabaseService {
       }
       return { database: containers[0]?.name ?? database, schema, samples };
     });
+  }
+
+  /**
+   * The tables and foreign keys the diagram draws, for the database in use when none is named.
+   * A database with hundreds of tables is cut to the first DIAGRAM_TABLES, keeping only the
+   * relations between the tables kept (and those that point into another schema).
+   */
+  schemaGraph(input: DbDiagramInput): Promise<DbSchemaGraph> {
+    return this.withSession(input.sessionId, async (session) => {
+      if (!session.driver.schemaGraph) throw new Error('This database has no diagram to draw.');
+      const database = input.database ?? (await this.defaultDatabase(session));
+      const graph = await session.driver.schemaGraph({ database, schema: input.schema });
+      const key = (ref: DbObjectRef) =>
+        JSON.stringify([ref.database ?? null, ref.schema ?? null, ref.name]);
+      const all = new Set(graph.tables.map((table) => key(table.ref)));
+      const tables = graph.tables.slice(0, DIAGRAM_TABLES);
+      const kept = new Set(tables.map((table) => key(table.ref)));
+      const relations = graph.relations.filter(
+        (relation) =>
+          kept.has(key(relation.from.ref)) &&
+          (kept.has(key(relation.to.ref)) || !all.has(key(relation.to.ref))),
+      );
+      return {
+        ...graph,
+        tables,
+        relations,
+        totalTables: graph.tables.length,
+        truncated: graph.tables.length > tables.length,
+      };
+    });
+  }
+
+  /** Index fragmentation and free space, measured the engine's own way. */
+  health(input: DbHealthInput): Promise<DbHealthReport> {
+    return this.withSession(input.sessionId, async (session) => {
+      if (!session.driver.health) throw new Error('This database has no health numbers to read.');
+      const database = input.database ?? (await this.defaultDatabase(session));
+      return session.driver.health({ database, schema: input.schema, scan: input.scan });
+    });
+  }
+
+  private async defaultDatabase(session: Session): Promise<string | null> {
+    const stored = await this.deps.connections.get(session.connectionId);
+    return stored.database ?? null;
   }
 
   /** The server's settings, or none where the engine has none to show. */

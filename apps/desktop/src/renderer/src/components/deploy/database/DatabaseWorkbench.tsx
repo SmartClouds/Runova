@@ -5,6 +5,8 @@ import { useState } from 'react';
 import {
   Archive,
   Code,
+  DiagramProject,
+  Gauge,
   Layers,
   Lock,
   Plug,
@@ -25,11 +27,14 @@ import {
   useDatabaseWorkbenchStore,
   type WorkbenchScope,
   type WorkbenchTab,
+  type WorkbenchTabScope,
 } from '@/stores/databaseWorkbenchStore';
 import { AiPanel, type AiSeed } from './AiPanel';
 import { BackupsTab } from './BackupsTab';
 import { DataTab } from './DataTab';
+import { DiagramTab } from './DiagramTab';
 import { EngineMark } from './EngineMark';
+import { HealthTab } from './HealthTab';
 import { ObjectTree } from './ObjectTree';
 import { QueryTab } from './QueryTab';
 import { SettingsTab } from './SettingsTab';
@@ -49,6 +54,8 @@ const TAB_ICONS = {
   settings: Sliders,
   users: Users,
   backups: Archive,
+  diagram: DiagramProject,
+  health: Gauge,
 } as const;
 
 function starterQuery(
@@ -99,6 +106,17 @@ export function DatabaseWorkbench({
       database: node?.ref.database ?? connection.database,
     });
 
+  const openInsight = (kind: 'diagram' | 'health', where: WorkbenchTabScope) =>
+    store.openTab(scope, {
+      kind,
+      title: `${kind === 'diagram' ? 'Diagram' : 'Health'} · ${where.schema ?? where.database ?? connection.name}`,
+      scope: where,
+    });
+  const whereOf = (node: DbObjectNode): WorkbenchTabScope => ({
+    database: node.ref.database ?? (node.kind === 'database' ? node.name : connection.database),
+    schema: node.kind === 'schema' ? (node.ref.schema ?? node.name) : null,
+  });
+
   const actions = {
     openRows: (node: DbObjectNode) =>
       store.openTab(scope, {
@@ -115,6 +133,12 @@ export function DatabaseWorkbench({
         objectKind: node.kind,
       }),
     openQuery: (node: DbObjectNode) => openQuery(node),
+    ...(info.capabilities.diagram
+      ? { openDiagram: (node: DbObjectNode) => openInsight('diagram', whereOf(node)) }
+      : {}),
+    ...(info.capabilities.maintenance
+      ? { openHealth: (node: DbObjectNode) => openInsight('health', whereOf(node)) }
+      : {}),
     ...(info.capabilities.createTable
       ? {
           newTable: (node: DbObjectNode) =>
@@ -140,7 +164,7 @@ export function DatabaseWorkbench({
     <div className="flex h-[calc(100vh-13rem)] min-h-[32rem] flex-col gap-2">
       <header className={cn(GLASS_PANEL, 'flex-row flex-wrap items-center gap-3 px-3 py-2.5')}>
         <EngineMark engine={connection.engine} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold">{connection.name}</h2>
             {connection.readOnly ? (
@@ -167,6 +191,17 @@ export function DatabaseWorkbench({
         <Button size="sm" shape="pill" variant="tint" onClick={() => openQuery()}>
           <Plus /> New query
         </Button>
+        {info.capabilities.diagram ? (
+          <Button
+            size="sm"
+            shape="pill"
+            variant="soft"
+            title="See how the tables relate"
+            onClick={() => openInsight('diagram', { database: connection.database, schema: null })}
+          >
+            <DiagramProject /> Diagram
+          </Button>
+        ) : null}
         <Button
           size="sm"
           shape="pill"
@@ -176,6 +211,17 @@ export function DatabaseWorkbench({
         >
           <Sparkles /> Ask AI
         </Button>
+        {info.capabilities.maintenance ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Index health"
+            title="Index health: fragmentation, free space and rebuilds"
+            onClick={() => openInsight('health', { database: connection.database, schema: null })}
+          >
+            <Gauge />
+          </Button>
+        ) : null}
         {info.capabilities.users ? (
           <Button
             size="icon-sm"
@@ -294,6 +340,22 @@ export function DatabaseWorkbench({
                     : undefined
                 }
                 onAskAi={askAi}
+                onOpenRows={(ref) =>
+                  store.openTab(scope, { kind: 'data', title: ref.name, ref, objectKind: 'table' })
+                }
+                onOpenStructure={(ref) =>
+                  store.openTab(scope, {
+                    kind: 'structure',
+                    title: ref.name,
+                    ref,
+                    objectKind: 'table',
+                  })
+                }
+                onOpenHealth={
+                  info.capabilities.maintenance
+                    ? (database) => openInsight('health', { database, schema: null })
+                    : undefined
+                }
               />
             ) : (
               <EmptyState
@@ -391,12 +453,18 @@ function TabBody({
   tab,
   onEditColumns,
   onAskAi,
+  onOpenRows,
+  onOpenStructure,
+  onOpenHealth,
 }: {
   scope: string;
   state: WorkbenchScope;
   tab: WorkbenchTab;
   onEditColumns?: (table: DbTableDescription) => void;
   onAskAi?: (request: { question: string; lastQuery: string; lastError: string }) => void;
+  onOpenRows: (ref: DbObjectRef) => void;
+  onOpenStructure: (ref: DbObjectRef) => void;
+  onOpenHealth?: (database: string | null) => void;
 }): React.JSX.Element {
   const updateTab = useDatabaseWorkbenchStore((store) => store.updateTab);
   const { session } = state;
@@ -429,6 +497,29 @@ function TabBody({
         sessionId={session.sessionId}
         objectRef={tab.ref}
         onEditColumns={onEditColumns}
+        onOpenHealth={onOpenHealth}
+      />
+    );
+  }
+  if (tab.kind === 'diagram') {
+    return (
+      <DiagramTab
+        sessionId={session.sessionId}
+        scope={tab.scope ?? { database: session.connection.database, schema: null }}
+        positions={tab.positions}
+        onPositionsChange={(positions) => updateTab(scope, tab.id, { positions })}
+        onOpenRows={onOpenRows}
+        onOpenStructure={onOpenStructure}
+      />
+    );
+  }
+  if (tab.kind === 'health') {
+    return (
+      <HealthTab
+        sessionId={session.sessionId}
+        engine={session.connection.engine}
+        readOnly={session.connection.readOnly}
+        scope={tab.scope ?? { database: session.connection.database, schema: null }}
       />
     );
   }

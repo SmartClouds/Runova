@@ -12,6 +12,9 @@ import type {
   DatabaseSignIns,
   DbAiContext,
   DbAiContextInput,
+  DbDiagramInput,
+  DbHealthInput,
+  DbHealthReport,
   DbListObjectsInput,
   DbObjectNode,
   DbObjectRef,
@@ -19,6 +22,7 @@ import type {
   DbQueryOutcome,
   DbReadRowsInput,
   DbRowsPage,
+  DbSchemaGraph,
   DbSetting,
   DbTableDescription,
   DbUser,
@@ -65,6 +69,12 @@ export function createDatabase(subscribe: Subscribe) {
       ipcRenderer.invoke(IPC.database.query, input),
     aiContext: (input: DbAiContextInput): Promise<DbAiContext> =>
       ipcRenderer.invoke(IPC.database.aiContext, input),
+    /** The tables and foreign keys of one database (or schema), for the diagram. */
+    schemaGraph: (input: DbDiagramInput): Promise<DbSchemaGraph> =>
+      ipcRenderer.invoke(IPC.database.schemaGraph, input),
+    /** Index fragmentation and free space. SQL Server's thorough scan can take a while. */
+    health: (input: DbHealthInput): Promise<DbHealthReport> =>
+      ipcRenderer.invoke(IPC.database.health, input),
     settings: (sessionId: string): Promise<DbSetting[]> =>
       ipcRenderer.invoke(IPC.database.settings, sessionId),
     users: (sessionId: string): Promise<DbUser[]> =>

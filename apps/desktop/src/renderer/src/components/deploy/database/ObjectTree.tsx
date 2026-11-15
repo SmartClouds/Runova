@@ -5,8 +5,10 @@ import {
   ChevronRight,
   Code,
   Database,
+  DiagramProject,
   Eye,
   Folder,
+  Gauge,
   Key,
   Layers,
   Plus,
@@ -41,6 +43,10 @@ export interface ObjectTreeActions {
   openStructure: (node: DbObjectNode) => void;
   /** Starts a new table inside this node. */
   newTable?: (node: DbObjectNode) => void;
+  /** The diagram of a database or schema. */
+  openDiagram?: (node: DbObjectNode) => void;
+  /** The index health of a database or schema. */
+  openHealth?: (node: DbObjectNode) => void;
 }
 
 export function ObjectTree({
@@ -222,14 +228,35 @@ function Node({
               </HoverButton>
             ) : null}
           </span>
-        ) : actions.newTable && tablesLiveIn === node.kind ? (
-          <span className="hidden shrink-0 items-center group-focus-within:flex group-hover:flex">
-            <HoverButton
-              label={`New table in ${node.name}`}
-              onClick={() => actions.newTable?.(node)}
-            >
-              <Plus className="h-3 w-3" />
-            </HoverButton>
+        ) : (node.kind === 'database' || node.kind === 'schema') &&
+          ((actions.newTable && tablesLiveIn === node.kind) ||
+            actions.openDiagram ||
+            actions.openHealth) ? (
+          <span className="hidden shrink-0 items-center gap-0.5 group-focus-within:flex group-hover:flex">
+            {actions.openDiagram ? (
+              <HoverButton
+                label={`Diagram of ${node.name}`}
+                onClick={() => actions.openDiagram?.(node)}
+              >
+                <DiagramProject className="h-3 w-3" />
+              </HoverButton>
+            ) : null}
+            {actions.openHealth ? (
+              <HoverButton
+                label={`Index health of ${node.name}`}
+                onClick={() => actions.openHealth?.(node)}
+              >
+                <Gauge className="h-3 w-3" />
+              </HoverButton>
+            ) : null}
+            {actions.newTable && tablesLiveIn === node.kind ? (
+              <HoverButton
+                label={`New table in ${node.name}`}
+                onClick={() => actions.newTable?.(node)}
+              >
+                <Plus className="h-3 w-3" />
+              </HoverButton>
+            ) : null}
           </span>
         ) : null}
         {leaf && node.rowEstimate !== null ? (

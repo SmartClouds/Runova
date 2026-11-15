@@ -1,4 +1,12 @@
-import { buildRowEdits, createUserStatements, dropUserStatement } from '@runova/core';
+import {
+  buildRowEdits,
+  createUserStatements,
+  type DbEngine,
+  dropUserStatement,
+  maintenanceActions,
+  maintenanceStatements,
+  PRECISE_STATS_STATEMENT,
+} from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import {
@@ -18,6 +26,7 @@ import type { DbDriver, DriverConnectOptions } from './types';
 
 interface SqlEngineCase {
   label: string;
+  engine: DbEngine;
   image: string;
   port: number;
   env: Record<string, string>;
@@ -26,12 +35,15 @@ interface SqlEngineCase {
   ref: { database?: string; schema?: string };
   database: string;
   createTable: string;
+  /** A table with a foreign key to items, for the diagram. */
+  relatedTable: string;
   sleep: string;
 }
 
 const CASES: SqlEngineCase[] = [
   {
     label: 'PostgreSQL',
+    engine: 'postgres',
     image: 'postgres:17-alpine',
     port: 5432,
     env: { POSTGRES_PASSWORD: 'pw', POSTGRES_DB: 'shop' },
@@ -49,10 +61,13 @@ const CASES: SqlEngineCase[] = [
     database: 'shop',
     createTable:
       'CREATE TABLE items (id serial PRIMARY KEY, name text NOT NULL, price numeric(8,2) DEFAULT 0, added timestamptz DEFAULT now())',
+    relatedTable:
+      'CREATE TABLE item_notes (id serial PRIMARY KEY, item_id int NOT NULL REFERENCES items (id) ON DELETE CASCADE, body text)',
     sleep: 'SELECT pg_sleep(30)',
   },
   {
     label: 'MySQL',
+    engine: 'mysql',
     image: 'mysql:8.4',
     port: 3306,
     env: { MYSQL_ROOT_PASSWORD: 'pw', MYSQL_DATABASE: 'shop' },
@@ -70,10 +85,13 @@ const CASES: SqlEngineCase[] = [
     database: 'shop',
     createTable:
       'CREATE TABLE items (id int AUTO_INCREMENT PRIMARY KEY, name varchar(100) NOT NULL, price decimal(8,2) DEFAULT 0, added datetime DEFAULT CURRENT_TIMESTAMP)',
+    relatedTable:
+      'CREATE TABLE item_notes (id int AUTO_INCREMENT PRIMARY KEY, item_id int NOT NULL, body text, CONSTRAINT fk_notes_item FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE)',
     sleep: 'SELECT SLEEP(30)',
   },
   {
     label: 'MariaDB',
+    engine: 'mariadb',
     image: 'mariadb:11',
     port: 3306,
     env: { MARIADB_ROOT_PASSWORD: 'pw', MARIADB_DATABASE: 'shop' },
@@ -91,6 +109,8 @@ const CASES: SqlEngineCase[] = [
     database: 'shop',
     createTable:
       'CREATE TABLE items (id int AUTO_INCREMENT PRIMARY KEY, name varchar(100) NOT NULL, price decimal(8,2) DEFAULT 0, added datetime DEFAULT CURRENT_TIMESTAMP)',
+    relatedTable:
+      'CREATE TABLE item_notes (id int AUTO_INCREMENT PRIMARY KEY, item_id int NOT NULL, body text, CONSTRAINT fk_notes_item FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE)',
     sleep: 'SELECT SLEEP(30)',
   },
 ];
@@ -326,5 +346,87 @@ for (const engine of CASES) {
         authFailed: true,
       });
     });
+
+    it('reads the tables and foreign keys the diagram draws', async () => {
+      expect((await run(driver, engine.relatedTable)).error).toBeUndefined();
+      const graph = await driver.schemaGraph?.({
+        database: engine.database,
+        schema: engine.ref.schema ?? null,
+      });
+      expect(graph?.tables.map((table) => table.ref.name)).toEqual(
+        expect.arrayContaining(['items', 'item_notes']),
+      );
+      const items = graph?.tables.find((table) => table.ref.name === 'items');
+      expect(items?.columns[0]).toMatchObject({ name: 'id', primaryKey: true, nullable: false });
+      expect(graph?.relations).toContainEqual(
+        expect.objectContaining({
+          from: { ref: expect.objectContaining({ name: 'item_notes' }), columns: ['item_id'] },
+          to: { ref: expect.objectContaining({ name: 'items' }), columns: ['id'] },
+          onDelete: 'CASCADE',
+        }),
+      );
+    });
+
+    it("measures index health and runs the engine's own clean-up", async () => {
+      for (const scan of ['fast', 'thorough'] as const) {
+        const report = await driver.health?.({
+          database: engine.database,
+          schema: engine.ref.schema ?? null,
+          scan,
+        });
+        expect(report?.indexes.some((index) => index.table.name === 'items' && index.primary)).toBe(
+          true,
+        );
+        expect(report?.tables.some((table) => table.table.name === 'items')).toBe(true);
+        expect(report?.totalBytes).toBeGreaterThan(0);
+      }
+      const report = await driver.health?.({
+        database: engine.database,
+        schema: engine.ref.schema ?? null,
+        scan: 'fast',
+      });
+      const primary = report?.indexes.find(
+        (index) => index.table.name === 'items' && index.primary,
+      );
+      const table = ref;
+      for (const one of maintenanceActions(engine.engine, 'table')) {
+        const statements = maintenanceStatements(
+          engine.engine,
+          one.action,
+          { scope: 'table', table },
+          engine.engine === 'postgres' && one.action === 'rebuild' ? { concurrently: true } : {},
+        );
+        const outcome = await run(driver, statements.join('\n'));
+        expect(outcome.error, `${one.label}: ${statements.join(' ')}`).toBeUndefined();
+      }
+      for (const one of maintenanceActions(engine.engine, 'index')) {
+        const statements = maintenanceStatements(
+          engine.engine,
+          one.action,
+          { scope: 'index', table, index: primary?.name ?? '' },
+          engine.engine === 'postgres' ? { concurrently: true, fillFactor: 90 } : {},
+        );
+        const outcome = await run(driver, statements.join('\n'));
+        expect(outcome.error, `${one.label}: ${statements.join(' ')}`).toBeUndefined();
+      }
+      for (const one of maintenanceActions(engine.engine, 'database')) {
+        const statements = maintenanceStatements(engine.engine, one.action, { scope: 'database' });
+        const outcome = await run(driver, statements.join('\n'));
+        expect(outcome.error, `${one.label}: ${statements.join(' ')}`).toBeUndefined();
+      }
+      if (engine.engine === 'postgres') {
+        // The official image ships pgstattuple: once added, a thorough scan is exact.
+        expect(report?.canBePrecise).toBe(true);
+        expect((await run(driver, PRECISE_STATS_STATEMENT)).error).toBeUndefined();
+        const exact = await driver.health?.({
+          database: engine.database,
+          schema: 'public',
+          scan: 'thorough',
+        });
+        expect(exact).toMatchObject({ precise: true, canBePrecise: false, method: 'pgstattuple' });
+        const pk = exact?.indexes.find((index) => index.table.name === 'items' && index.primary);
+        expect(pk?.fragmentationPercent).toEqual(expect.any(Number));
+      }
+    }, 60_000);
   });
 }

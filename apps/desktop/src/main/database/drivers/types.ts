@@ -1,11 +1,13 @@
 import type { DbEngine } from '@runova/core';
 import type {
+  DbHealthReport,
   DbObjectKind,
   DbObjectNode,
   DbObjectRef,
   DbReadRowsInput,
   DbResultSet,
   DbRowsPage,
+  DbSchemaGraph,
   DbSetting,
   DbTableDescription,
   DbUser,
@@ -63,8 +65,20 @@ export interface DbDriver {
   settings?(): Promise<DbSetting[]>;
   /** The users or roles. Left out where the engine has none. */
   users?(): Promise<DbUser[]>;
+  /** The tables, columns and foreign keys of one database or schema, for the diagram. */
+  schemaGraph?(where: DriverScope): Promise<DriverSchemaGraph>;
+  /** Index fragmentation and free space. Left out where the engine has no such numbers. */
+  health?(where: DriverScope & { scan: 'fast' | 'thorough' }): Promise<DbHealthReport>;
   close(): Promise<void>;
 }
+
+/** One database (null: the one signed in to) and one schema (null: all of them). */
+export interface DriverScope {
+  database: string | null;
+  schema: string | null;
+}
+
+export type DriverSchemaGraph = Omit<DbSchemaGraph, 'truncated' | 'totalTables'>;
 
 export class DriverError extends Error {
   constructor(

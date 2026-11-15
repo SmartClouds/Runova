@@ -801,6 +801,102 @@ describe('queries', () => {
     ]);
   });
 
+  it('reads the diagram from the database in use, and caps a huge one', async () => {
+    const table = (name: string, schema = 'public') => ({
+      ref: { database: 'shop', schema, name },
+      kind: 'table' as const,
+      columns: [{ name: 'id', type: 'int', nullable: false, primaryKey: true }],
+      rowEstimate: 1,
+    });
+    const tables = Array.from({ length: 405 }, (_, i) => table(`t${String(i).padStart(3, '0')}`));
+    const schemaGraph = vi.fn(async () => ({
+      database: 'shop',
+      schema: null,
+      tables,
+      relations: [
+        {
+          name: 'kept',
+          from: { ref: tables[1]?.ref ?? { name: '' }, columns: ['id'] },
+          to: { ref: tables[0]?.ref ?? { name: '' }, columns: ['id'] },
+          onDelete: null,
+          onUpdate: null,
+        },
+        {
+          name: 'cut off',
+          from: { ref: tables[404]?.ref ?? { name: '' }, columns: ['id'] },
+          to: { ref: tables[0]?.ref ?? { name: '' }, columns: ['id'] },
+          onDelete: null,
+          onUpdate: null,
+        },
+        {
+          name: 'points at a dropped table',
+          from: { ref: tables[2]?.ref ?? { name: '' }, columns: ['id'] },
+          to: { ref: tables[403]?.ref ?? { name: '' }, columns: ['id'] },
+          onDelete: null,
+          onUpdate: null,
+        },
+        {
+          name: 'other schema',
+          from: { ref: tables[3]?.ref ?? { name: '' }, columns: ['id'] },
+          to: { ref: { database: 'shop', schema: 'auth', name: 'users' }, columns: ['id'] },
+          onDelete: 'CASCADE',
+          onUpdate: null,
+        },
+      ],
+    }));
+    const h = harness({ open: async () => fakeDriver({ schemaGraph }) });
+    const result = await h.service.connectCandidate({ serverId: 's1', containerId: 'c-pg' });
+    if (!('sessionId' in result)) throw new Error('not connected');
+    const graph = await h.service.schemaGraph({
+      sessionId: result.sessionId,
+      database: null,
+      schema: null,
+    });
+    expect(schemaGraph).toHaveBeenCalledWith({ database: 'shop', schema: null });
+    expect(graph.tables).toHaveLength(400);
+    expect(graph).toMatchObject({ truncated: true, totalTables: 405 });
+    expect(graph.relations.map((one) => one.name)).toEqual(['kept', 'other schema']);
+  });
+
+  it('passes the scan to the health report', async () => {
+    const report = {
+      database: 'shop',
+      measuredAt: '2026-11-15T10:00:00.000Z',
+      method: 'pg_stat',
+      precise: false,
+      canBePrecise: true,
+      onlineRebuild: false,
+      indexes: [],
+      tables: [],
+      totalBytes: 1,
+      freeBytes: null,
+      notes: [],
+    };
+    const health = vi.fn(async () => report);
+    const h = harness({ open: async () => fakeDriver({ health }) });
+    const result = await h.service.connectCandidate({ serverId: 's1', containerId: 'c-pg' });
+    if (!('sessionId' in result)) throw new Error('not connected');
+    expect(
+      await h.service.health({
+        sessionId: result.sessionId,
+        database: 'other',
+        schema: 'sales',
+        scan: 'thorough',
+      }),
+    ).toEqual(report);
+    expect(health).toHaveBeenCalledWith({ database: 'other', schema: 'sales', scan: 'thorough' });
+  });
+
+  it('says so when the engine has no diagram or health report', async () => {
+    const { service, sessionId } = await connected();
+    await expect(service.schemaGraph({ sessionId, database: null, schema: null })).rejects.toThrow(
+      /diagram/,
+    );
+    await expect(
+      service.health({ sessionId, database: null, schema: null, scan: 'fast' }),
+    ).rejects.toThrow(/health/);
+  });
+
   it('removing a connection closes its sessions', async () => {
     const { service, driver, sessionId } = await connected();
     const [saved] = await service.listConnections();

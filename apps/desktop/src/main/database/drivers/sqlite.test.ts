@@ -112,6 +112,72 @@ describe('SQLite driver', () => {
     expect(settings.every((setting) => !setting.editable)).toBe(true);
   });
 
+  it('draws its tables and foreign keys, filling in a key that names no column', async () => {
+    await run(`
+      CREATE TABLE orders (id INTEGER PRIMARY KEY, placed TEXT);
+      CREATE TABLE order_items (
+        order_id INTEGER NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+        item_id INTEGER REFERENCES items,
+        qty INT
+      );
+    `);
+    const graph = await driver.schemaGraph?.({ database: null, schema: null });
+    expect(graph?.tables.map((table) => table.ref.name)).toEqual([
+      'items',
+      'order_items',
+      'orders',
+    ]);
+    expect(graph?.tables[1]?.columns[0]).toEqual({
+      name: 'order_id',
+      type: 'INTEGER',
+      nullable: false,
+      primaryKey: false,
+    });
+    expect(graph?.relations).toEqual([
+      {
+        name: 'order_items_item_id_fkey',
+        from: { ref: { name: 'order_items' }, columns: ['item_id'] },
+        to: { ref: { name: 'items' }, columns: ['id'] },
+        onDelete: 'NO ACTION',
+        onUpdate: 'NO ACTION',
+      },
+      {
+        name: 'order_items_order_id_fkey',
+        from: { ref: { name: 'order_items' }, columns: ['order_id'] },
+        to: { ref: { name: 'orders' }, columns: ['id'] },
+        onDelete: 'CASCADE',
+        onUpdate: 'NO ACTION',
+      },
+    ]);
+  });
+
+  it('measures free pages, and a vacuum gives them back', async () => {
+    await run(`
+      CREATE TABLE junk (id INTEGER PRIMARY KEY, body TEXT);
+      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000)
+        INSERT INTO junk (body) SELECT printf('%.500c', 'x') FROM n;
+      DELETE FROM junk;
+    `);
+    const before = await driver.health?.({ database: null, schema: null, scan: 'fast' });
+    expect(before?.totalBytes).toBeGreaterThan(1_000_000);
+    expect(before?.freeBytes).toBeGreaterThan(500_000);
+    expect(before?.tables.length).toBeGreaterThan(0);
+    const index = before?.indexes.find((one) => one.name === 'items_name');
+    expect(index).toMatchObject({
+      table: { name: 'items' },
+      type: 'btree',
+      columns: ['name'],
+      unique: false,
+      primary: false,
+    });
+    expect(before?.precise).toBe(true);
+
+    expect((await run('VACUUM;')).error).toBeUndefined();
+    const after = await driver.health?.({ database: null, schema: null, scan: 'fast' });
+    expect(after?.freeBytes).toBe(0);
+    expect(after?.totalBytes).toBeLessThan(before?.totalBytes ?? 0);
+  });
+
   it('turns down a file that is not there', async () => {
     await expect(
       openDriver({

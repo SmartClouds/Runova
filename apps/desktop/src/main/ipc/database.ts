@@ -5,11 +5,13 @@ import type {
   DatabaseSaveInput,
   DatabaseSignInInput,
   DatabaseTarget,
+  DbHealthInput,
   DbListObjectsInput,
   DbObjectKind,
   DbObjectRef,
   DbQueryInput,
   DbReadRowsInput,
+  DbScopeInput,
 } from '../../shared/databaseTypes';
 import { IPC } from '../../shared/ipcChannels';
 import type { DatabaseService } from '../database/service';
@@ -53,6 +55,8 @@ export interface DatabaseHandlerDeps {
     | 'settings'
     | 'users'
     | 'aiContext'
+    | 'schemaGraph'
+    | 'health'
   >;
   guard: (event: IpcMainInvokeEvent) => boolean;
 }
@@ -282,6 +286,26 @@ function queryInput(value: unknown): DbQueryInput {
   return out;
 }
 
+function nullableName(value: unknown, label: string): string | null {
+  return value === undefined || value === null ? null : text(value, MAX_NAME, label);
+}
+
+function scopeInput(value: unknown): DbScopeInput {
+  const input = object(value, 'where to look');
+  return {
+    sessionId: id(input.sessionId, 'connection'),
+    database: nullableName(input.database, 'database'),
+    schema: nullableName(input.schema, 'schema'),
+  };
+}
+
+function healthInput(value: unknown): DbHealthInput {
+  const input = object(value, 'what to scan');
+  const scan = input.scan ?? 'fast';
+  if (scan !== 'fast' && scan !== 'thorough') throw new Error('Pick a fast or a thorough scan.');
+  return { ...scopeInput(value), scan };
+}
+
 const BACKUP_NAME = /^[A-Za-z0-9._-]{1,200}$/;
 
 function backupName(value: unknown): string {
@@ -350,6 +374,8 @@ export function registerDatabaseHandlers({
       includeSamples: input.includeSamples === true,
     });
   });
+  handle(IPC.database.schemaGraph, (value) => service.schemaGraph(scopeInput(value)));
+  handle(IPC.database.health, (value) => service.health(healthInput(value)));
   handle(IPC.database.settings, (sessionId) => service.settings(id(sessionId, 'connection')));
   handle(IPC.database.users, (sessionId) => service.users(id(sessionId, 'connection')));
   handle(IPC.database.cancelQuery, (sessionId, queryId) =>

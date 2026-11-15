@@ -2160,6 +2160,10 @@ export const IPC = {
     users: 'database:users',
     // (DbAiContextInput) -> DbAiContext: the schema (and sample rows if allowed) for the AI
     aiContext: 'database:aiContext',
+    // (DbDiagramInput) -> DbSchemaGraph: tables, columns and foreign keys for the diagram
+    schemaGraph: 'database:schemaGraph',
+    // (DbHealthInput) -> DbHealthReport: index fragmentation and free space
+    health: 'database:health',
     // (connectionId) -> DatabaseBackupFile[]
     listBackups: 'database:listBackups',
     // (connectionId) -> DatabaseBackupFile, once the engine's own tool finished

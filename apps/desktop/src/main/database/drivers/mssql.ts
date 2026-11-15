@@ -13,6 +13,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
+import { mssqlHealth, mssqlSchemaGraph } from './mssqlInsights';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
 import {
   type DbDriver,
@@ -246,6 +247,14 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
     },
 
     describe,
+
+    async schemaGraph(where) {
+      return mssqlSchemaGraph(rowsOf, where.database || current, where.schema);
+    },
+
+    async health(where) {
+      return mssqlHealth(rowsOf, where.database || current, where.schema, where.scan);
+    },
 
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describe(input.ref);

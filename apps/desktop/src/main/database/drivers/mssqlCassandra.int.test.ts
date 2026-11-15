@@ -1,3 +1,4 @@
+import { maintenanceActions, maintenanceStatements } from '@runova/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDriver } from './index';
 import {
@@ -95,6 +96,70 @@ describe.skipIf(!dockerAvailable() || !imageUsable(MSSQL_IMAGE))('SQL Server dri
       authFailed: true,
     });
   });
+
+  it('reads the tables and foreign keys the diagram draws', async () => {
+    const setup = await run(
+      driver,
+      'CREATE TABLE dbo.notes (id int IDENTITY PRIMARY KEY, item_id int NULL, body nvarchar(max), CONSTRAINT FK_notes_items FOREIGN KEY (item_id) REFERENCES dbo.items (id) ON DELETE SET NULL);\nCREATE TABLE dbo.log (at datetime2 NOT NULL, line nvarchar(200));\nCREATE INDEX IX_notes_item ON dbo.notes (item_id)',
+      false,
+      'shop',
+    );
+    expect(setup.error).toBeUndefined();
+    const graph = await driver.schemaGraph?.({ database: 'shop', schema: 'dbo' });
+    expect(graph?.tables.map((table) => table.ref.name)).toEqual(['items', 'log', 'notes']);
+    expect(graph?.tables[2]?.columns.map((column) => column.type)).toEqual([
+      'int',
+      'int',
+      'nvarchar(max)',
+    ]);
+    expect(graph?.relations).toEqual([
+      {
+        name: 'FK_notes_items',
+        from: { ref: { database: 'shop', schema: 'dbo', name: 'notes' }, columns: ['item_id'] },
+        to: { ref: { database: 'shop', schema: 'dbo', name: 'items' }, columns: ['id'] },
+        onDelete: 'SET NULL',
+        onUpdate: 'NO ACTION',
+      },
+    ]);
+  });
+
+  it('reads fragmentation of clustered, nonclustered and heap, and rebuilds and reorganizes', async () => {
+    for (const scan of ['fast', 'thorough'] as const) {
+      const report = await driver.health?.({ database: 'shop', schema: null, scan });
+      const types = new Set(report?.indexes.map((index) => index.type));
+      expect(types).toEqual(new Set(['clustered', 'nonclustered', 'heap']));
+      expect(report?.totalBytes).toBeGreaterThan(0);
+      expect(report?.tables.map((table) => table.table.name)).toContain('items');
+    }
+    const items = { database: 'shop', schema: 'dbo', name: 'items' };
+    const notes = { database: 'shop', schema: 'dbo', name: 'notes' };
+    const statements = [
+      ...maintenanceStatements('mssql', 'reorganize', {
+        scope: 'index',
+        table: notes,
+        index: 'IX_notes_item',
+      }),
+      ...maintenanceStatements(
+        'mssql',
+        'rebuild',
+        { scope: 'index', table: notes, index: 'IX_notes_item' },
+        { fillFactor: 90, sortInTempdb: true },
+      ),
+      ...maintenanceStatements('mssql', 'rebuild', { scope: 'table', table: items }),
+      ...maintenanceStatements('mssql', 'reorganize', { scope: 'table', table: items }),
+      ...maintenanceStatements('mssql', 'statistics', { scope: 'table', table: items }),
+      ...maintenanceStatements('mssql', 'rebuild', {
+        scope: 'heap',
+        table: { database: 'shop', schema: 'dbo', name: 'log' },
+      }),
+      ...maintenanceStatements('mssql', 'statistics', { scope: 'database' }),
+    ];
+    expect(maintenanceActions('mssql', 'index').length).toBeGreaterThan(0);
+    for (const statement of statements) {
+      const outcome = await run(driver, statement, false, 'shop');
+      expect(outcome.error, statement).toBeUndefined();
+    }
+  }, 120_000);
 });
 
 describe.skipIf(!dockerAvailable() || !imageUsable(CASSANDRA_IMAGE))('Cassandra driver', () => {

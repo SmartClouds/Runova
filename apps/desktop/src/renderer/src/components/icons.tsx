@@ -63,6 +63,7 @@ import {
   faCrosshairs,
   faCubes,
   faDatabase,
+  faDiagramProject,
   faDice,
   faDisplay,
   faDownload,
@@ -83,6 +84,7 @@ import {
   faFolderTree,
   faGamepad,
   faGaugeHigh,
+  faGaugeSimpleHigh,
   faGear,
   faGlobe,
   faGraduationCap,
@@ -482,6 +484,8 @@ export const CodeCompare = makeIcon(faCodeCompare);
 export const Minus = makeIcon(faMinus);
 export const Expand = makeIcon(faExpand);
 export const Compress = makeIcon(faCompress);
+export const DiagramProject = makeIcon(faDiagramProject);
+export const Gauge = makeIcon(faGaugeSimpleHigh);
 export const ImageIcon = makeIcon(faImage);
 export const ZoomIn = makeIcon(faMagnifyingGlassPlus);
 export const ZoomOut = makeIcon(faMagnifyingGlassMinus);

@@ -272,4 +272,44 @@ describe('registerDatabaseHandlers', () => {
       call(C.query, { sessionId: SESSION, queryId: 'q1', text: 'x', confirmed: 'yes' }),
     ).rejects.toThrow();
   });
+
+  it('checks where a diagram looks', async () => {
+    const { call, service } = harness();
+    await call(C.schemaGraph, { sessionId: SESSION, database: 'shop', schema: 'sales', extra: 1 });
+    expect(service.schemaGraph).toHaveBeenCalledWith({
+      sessionId: SESSION,
+      database: 'shop',
+      schema: 'sales',
+    });
+    await call(C.schemaGraph, { sessionId: SESSION });
+    expect(service.schemaGraph).toHaveBeenLastCalledWith({
+      sessionId: SESSION,
+      database: null,
+      schema: null,
+    });
+    await expect(call(C.schemaGraph, { sessionId: '../x', database: null })).rejects.toThrow();
+    await expect(call(C.schemaGraph, { sessionId: SESSION, database: 42 })).rejects.toThrow();
+    await expect(
+      call(C.schemaGraph, { sessionId: SESSION, schema: 'x'.repeat(2000) }),
+    ).rejects.toThrow();
+  });
+
+  it('checks a health scan', async () => {
+    const { call, service } = harness();
+    await call(C.health, { sessionId: SESSION, database: 'shop', schema: null, scan: 'thorough' });
+    expect(service.health).toHaveBeenCalledWith({
+      sessionId: SESSION,
+      database: 'shop',
+      schema: null,
+      scan: 'thorough',
+    });
+    await call(C.health, { sessionId: SESSION });
+    expect(service.health).toHaveBeenLastCalledWith({
+      sessionId: SESSION,
+      database: null,
+      schema: null,
+      scan: 'fast',
+    });
+    await expect(call(C.health, { sessionId: SESSION, scan: 'detailed' })).rejects.toThrow(/scan/);
+  });
 });

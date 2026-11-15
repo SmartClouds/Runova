@@ -9,6 +9,8 @@ const ALL: DbCapabilities = {
   settings: true,
   backup: true,
   transactions: true,
+  diagram: true,
+  maintenance: true,
 };
 
 /** Every engine the Database section supports, in the order the UI lists them. */
@@ -55,7 +57,7 @@ export const DB_ENGINES: readonly DbEngineInfo[] = [
     passwordRequired: false,
     objectNoun: 'collection',
     sampleQuery: 'db.getCollectionNames()',
-    capabilities: { ...ALL, transactions: false },
+    capabilities: { ...ALL, transactions: false, diagram: false, maintenance: false },
   },
   {
     engine: 'redis',
@@ -66,7 +68,13 @@ export const DB_ENGINES: readonly DbEngineInfo[] = [
     passwordRequired: false,
     objectNoun: 'key',
     sampleQuery: 'SCAN 0 COUNT 100',
-    capabilities: { ...ALL, createTable: false, transactions: false },
+    capabilities: {
+      ...ALL,
+      createTable: false,
+      transactions: false,
+      diagram: false,
+      maintenance: false,
+    },
   },
   {
     engine: 'sqlite',
@@ -88,7 +96,7 @@ export const DB_ENGINES: readonly DbEngineInfo[] = [
     passwordRequired: false,
     objectNoun: 'table',
     sampleQuery: 'SELECT keyspace_name, table_name FROM system_schema.tables;',
-    capabilities: { ...ALL, transactions: false },
+    capabilities: { ...ALL, transactions: false, diagram: false, maintenance: false },
   },
   {
     engine: 'mssql',

@@ -48,6 +48,15 @@ describe('DB_ENGINES', () => {
     }
   });
 
+  it('offers the diagram and index maintenance on the SQL engines only', () => {
+    for (const engine of ['postgres', 'mysql', 'mariadb', 'sqlite', 'mssql'] as const) {
+      expect(engineInfo(engine).capabilities).toMatchObject({ diagram: true, maintenance: true });
+    }
+    for (const engine of ['mongodb', 'redis', 'cassandra'] as const) {
+      expect(engineInfo(engine).capabilities).toMatchObject({ diagram: false, maintenance: false });
+    }
+  });
+
   it('names the query language and the editor mode', () => {
     expect(engineInfo('postgres')).toMatchObject({ queryLanguage: 'sql', editorLanguage: 'pgsql' });
     expect(engineInfo('mysql')).toMatchObject({ queryLanguage: 'sql', editorLanguage: 'mysql' });

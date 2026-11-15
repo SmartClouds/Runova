@@ -1,5 +1,6 @@
 import { maskSecret } from '@runova/core';
 import { useState } from 'react';
+import { Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,6 +27,8 @@ export interface PendingStatements {
   action: string;
   destructive?: boolean;
   database?: string | null;
+  /** Says, while it runs, that it may take a while (index rebuilds, vacuums). */
+  longRunning?: boolean;
   onDone?: () => void;
 }
 
@@ -33,10 +36,13 @@ export function RunStatementsDialog({
   sessionId,
   pending,
   onClose,
+  children,
 }: {
   sessionId: string;
   pending: PendingStatements | null;
   onClose: () => void;
+  /** Options that change the statements, shown above them. The caller rebuilds `pending`. */
+  children?: React.ReactNode;
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -84,12 +90,19 @@ export function RunStatementsDialog({
             <DialogDescription>{pending.description}</DialogDescription>
           ) : null}
         </DialogHeader>
+        {children}
         <pre
           aria-label="Statements to run"
           className={cn(CODE_WELL, 'max-h-64 whitespace-pre-wrap')}
         >
           {pending?.secret ? maskSecret(text, pending.secret) : text}
         </pre>
+        {busy && pending?.longRunning ? (
+          <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner className="h-3 w-3 animate-spin" /> Running. On a big table this can take a
+            while.
+          </p>
+        ) : null}
         {problem ? (
           <p role="alert" className="text-xs text-destructive">
             {problem}
@@ -102,7 +115,7 @@ export function RunStatementsDialog({
           <Button
             variant={pending?.destructive ? 'destructive' : 'default'}
             onClick={() => void run()}
-            disabled={busy}
+            disabled={busy || !pending || pending.statements.length === 0}
           >
             {pending?.action}
           </Button>

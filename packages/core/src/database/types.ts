@@ -26,6 +26,10 @@ export interface DbCapabilities {
   settings: boolean;
   backup: boolean;
   transactions: boolean;
+  /** An entity relationship diagram drawn from the foreign keys. */
+  diagram: boolean;
+  /** Index and storage health, with rebuilds and the engine's own clean-up commands. */
+  maintenance: boolean;
 }
 
 export interface DbEngineInfo {

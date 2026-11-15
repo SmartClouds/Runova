@@ -2,12 +2,12 @@
 title: Databases
 category: Deploy
 order: 64
-summary: Connect in one click to the databases in your containers, on a server or on this computer, or to any database by URL. Browse tables, edit rows, run queries, design tables, manage users and settings, back up and restore, and ask the AI for queries.
-keywords: database, postgres, postgresql, mysql, mariadb, mongodb, mongo, redis, sqlite, cassandra, scylla, sql server, mssql, query, table, sql editor, backup, restore, pg_dump, mysqldump, mongodump, users, grants, access, settings, ai, connect, container
+summary: Connect in one click to the databases in your containers, on a server or on this computer, or to any database by URL. Browse tables, edit rows, run queries, design tables, see them in a diagram, check index health and rebuild indexes, manage users and settings, back up and restore, and ask the AI for queries.
+keywords: database, postgres, postgresql, mysql, mariadb, mongodb, mongo, redis, sqlite, cassandra, scylla, sql server, mssql, query, table, sql editor, backup, restore, pg_dump, mysqldump, mongodump, users, grants, access, settings, ai, connect, container, erd, diagram, entity relationship, foreign key, index, fragmentation, rebuild, reorganize, clustered, nonclustered, reindex, vacuum, optimize, bloat
 route: /deploy?databases=1
 ---
 
-The Database section lets you work with your databases without another tool. Runova finds the database containers on a server (and in Docker on this computer), reads how to sign in from each container, and connects in one click. Once connected you can browse, read and edit rows, run queries, design tables, manage users and settings, back up and restore, and ask the AI to write queries for you.
+The Database section lets you work with your databases without another tool. Runova finds the database containers on a server (and in Docker on this computer), reads how to sign in from each container, and connects in one click. Once connected you can browse, read and edit rows, run queries, design tables, see how tables relate in a diagram, check index health and rebuild indexes, manage users and settings, back up and restore, and ask the AI to write queries for you.
 
 It works with PostgreSQL, MySQL, MariaDB, MongoDB, Redis, SQLite, Cassandra (and Scylla) and SQL Server.
 
@@ -65,6 +65,58 @@ Click **New table** (or the plus button on a database or schema) to make a table
 
 On a table's structure tab, **Edit columns** renames, retypes, adds or removes columns the same way. SQLite and Cassandra cannot change a column's type in place, so the designer says so.
 
+## See how tables relate
+
+Click **Diagram** at the top to draw the database's tables as an entity relationship diagram. To draw one schema, hover it in the tree and click its diagram button. It works with PostgreSQL, MySQL, MariaDB, SQL Server and SQLite.
+
+- Each table is a card with its columns. **PK** marks the primary key and **FK** a column that points at another table.
+- Each foreign key is a line. The fork end sits on the table that holds the key (many rows), the bar end on the table it points at (one row). A dashed line with a ring means the key can be empty.
+- Hover a line for the key's name and what happens on delete and update.
+- A table in another schema that a key points at shows as a faded card.
+
+Hover or click a table to light up the tables it is linked to. Clicking also opens a panel with its keys and columns, and links to the tables on the other end. Double-click a table, or press Enter on it, to open its rows.
+
+To move around:
+
+- Drag the background, scroll, or use the arrow keys.
+- Hold Ctrl and scroll (or pinch) to zoom. The percent button fits the whole diagram on screen.
+- Drag a table to move it. Runova remembers where you put it until you click **Re-arrange**.
+- **Find a table** fades everything else, and Enter jumps to the first match.
+- **Keys only** hides the columns that are not keys, for a compact picture of a big schema.
+
+**SVG** and **PNG** save the whole diagram as a picture. A database with more than 400 tables shows the first 400 and says so; open the diagram of one schema to see the rest.
+
+## Index health and maintenance
+
+The gauge button at the top (or the one on a database or schema in the tree) opens **Index health**. It measures how fragmented each index is and how much free space each table holds, and offers each engine's own way to tidy up. It works with PostgreSQL, MySQL, MariaDB, SQL Server and SQLite.
+
+Every index gets a bar and an advice chip:
+
+| Engine | What is measured | Advice |
+| --- | --- | --- |
+| SQL Server | Fragmentation of clustered and nonclustered indexes and heaps, from `sys.dm_db_index_physical_stats` | Under 5%: healthy. 5% to 30%: reorganize. Over 30%: rebuild. Indexes under 1,000 pages are too small to matter. |
+| PostgreSQL | Index bloat, and dead rows per table | Reindex at 30% bloat or more, vacuum a table with many dead rows. Indexes under 8 MB are too small to matter. |
+| MySQL and MariaDB | Free space per table (`DATA_FREE`) | Optimize a table over 10 MB that is 10% or more free space. |
+| SQLite | Empty space in each index and free pages in the file | Reindex, or vacuum the file when 10% or more of it is free. |
+
+Use **Fast** or **Thorough** on SQL Server and PostgreSQL. A fast scan on SQL Server reads only the upper levels of each index (`LIMITED`). A thorough scan samples the leaves too (`SAMPLED`), which takes longer on a big database. On PostgreSQL, bloat is estimated from the planner's statistics. With the `pgstattuple` extension, a thorough scan reads it exactly. Runova offers to add the extension when it is available.
+
+**Needs attention** lists only what the advice says to fix. **Clustered** and **Nonclustered** show one kind on SQL Server (and on MySQL, where the primary key is the clustered index).
+
+To fix something:
+
+- Click **Reorganize**, **Rebuild**, **Reindex**, **Optimize**, **Vacuum** or **Analyze** on a row.
+- Or tick the indexes you want and click **Fix**. Each one gets what its numbers call for.
+
+Before anything runs, Runova shows the statements, with options where the engine has them:
+
+- **Online** (SQL Server): the table stays usable during a rebuild. It needs the Enterprise or Developer edition, or Azure SQL. Without it, the table is locked until the rebuild ends.
+- **Concurrently** (PostgreSQL, on by default): writes carry on during a reindex.
+- **Fill factor**: how full to pack each page. Lower leaves room for new rows.
+- **Sort in tempdb** (SQL Server).
+
+When it is done, the numbers are measured again. On a read-only connection the numbers show, but nothing can be rebuilt. A table's **Structure** tab also links to its database's index health.
+
 ## Users and access
 
 The users button opens **Users**: who can sign in, and what each can reach. Access is a level per database:
@@ -109,4 +161,6 @@ Click **Ask AI** to open a panel beside the tables. Ask in plain words, like "or
 - **"Docker on this computer is not running":** start Docker Desktop, then click **Look again**.
 - **A server shows no containers:** the server needs Runova's server core for its containers to be listed. You can still add a connection by hand and reach it through the server.
 - **A password is turned down:** Runova asks for it again; the new one replaces the saved one.
+- **"Reading fragmentation needs the VIEW DATABASE STATE permission":** SQL Server shows index fragmentation only to users with that permission (VIEW DATABASE PERFORMANCE STATE on SQL Server 2022). Connect as an administrator, or ask one to grant it.
+- **MySQL index sizes are missing:** they come from `mysql.innodb_index_stats`, which the signed-in user cannot read. Everything else still shows.
 - **A local container has no published port:** Runova starts a short-lived `alpine/socat` helper on its network. It needs that image, so the first connect may take a moment while Docker pulls it.

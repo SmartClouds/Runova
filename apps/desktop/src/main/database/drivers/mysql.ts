@@ -19,6 +19,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
+import { mysqlHealth, mysqlSchemaGraph } from './mysqlInsights';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
 import {
   type DbDriver,
@@ -215,6 +216,16 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
     return [asResultSet(rows, fields, statement, started, maxRows)];
   };
 
+  /** The database a diagram or health scan reads: the one named, or the one in use. */
+  const databaseFor = async (database: string | null): Promise<string> => {
+    if (database) return database;
+    if (current) return current;
+    const [found] = await connection.query('SELECT DATABASE() AS name');
+    const name = (found as { name: string | null }[])[0]?.name;
+    if (!name) throw new DriverError('Pick a database first. This connection is not in one.');
+    return name;
+  };
+
   return {
     engine,
 
@@ -256,6 +267,14 @@ export async function openMysql(options: DriverConnectOptions): Promise<DbDriver
     },
 
     describe: describeTable,
+
+    async schemaGraph(where) {
+      return mysqlSchemaGraph(connection, await databaseFor(where.database));
+    },
+
+    async health(where) {
+      return mysqlHealth(connection, await databaseFor(where.database), engine);
+    },
 
     async readRows(input: Omit<DbReadRowsInput, 'sessionId'>): Promise<DbRowsPage> {
       const table = await describeTable(input.ref);

@@ -3,14 +3,18 @@ import { buildReadRows, limitStatement, qualifiedName, splitStatements } from '@
 import Database from 'better-sqlite3';
 import type {
   DbColumn,
+  DbHealthReport,
   DbIndex,
+  DbIndexHealth,
   DbObjectNode,
   DbObjectRef,
   DbReadRowsInput,
+  DbRelation,
   DbResultSet,
   DbRowsPage,
   DbSetting,
   DbTableDescription,
+  DbTableStorage,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
@@ -20,6 +24,7 @@ import {
   DriverError,
   type DriverQueryOptions,
   type DriverQueryResult,
+  type DriverSchemaGraph,
 } from './types';
 
 /**
@@ -152,8 +157,150 @@ export async function openSqlite(options: DriverConnectOptions): Promise<DbDrive
     };
   };
 
+  const quoted = (name: string) => qualifiedName('sqlite', { name });
+  const tableNames = () =>
+    all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+    ).map((row) => row.name);
+
+  const schemaGraph = async (): Promise<DriverSchemaGraph> => {
+    const names = tableNames();
+    const keysOf = new Map<string, string[]>();
+    const tables = names.map((name) => {
+      const info = all<{ name: string; type: string; notnull: number; pk: number }>(
+        `PRAGMA table_info(${quoted(name)})`,
+      );
+      keysOf.set(
+        name,
+        info
+          .filter((column) => column.pk > 0)
+          .sort((a, b) => a.pk - b.pk)
+          .map((column) => column.name),
+      );
+      return {
+        ref: { name },
+        kind: 'table' as const,
+        columns: info.map((column) => ({
+          name: column.name,
+          type: column.type || 'ANY',
+          nullable: column.notnull === 0 && column.pk === 0,
+          primaryKey: column.pk > 0,
+        })),
+        rowEstimate: null,
+      };
+    });
+    const relations: DbRelation[] = [];
+    for (const name of names) {
+      const keys = all<{
+        id: number;
+        seq: number;
+        table: string;
+        from: string;
+        to: string | null;
+        on_update: string;
+        on_delete: string;
+      }>(`PRAGMA foreign_key_list(${quoted(name)})`);
+      const byId = new Map<number, typeof keys>();
+      for (const key of keys) byId.set(key.id, [...(byId.get(key.id) ?? []), key]);
+      for (const parts of byId.values()) {
+        parts.sort((a, b) => a.seq - b.seq);
+        const first = parts[0];
+        if (!first) continue;
+        const from = parts.map((part) => part.from);
+        // REFERENCES items with no column means the target's primary key.
+        const to = parts.every((part) => part.to)
+          ? parts.map((part) => part.to as string)
+          : (keysOf.get(first.table) ?? []);
+        relations.push({
+          name: `${name}_${from.join('_')}_fkey`,
+          from: { ref: { name }, columns: from },
+          to: { ref: { name: first.table }, columns: to },
+          onDelete: first.on_delete,
+          onUpdate: first.on_update,
+        });
+      }
+    }
+    relations.sort((a, b) => a.name.localeCompare(b.name));
+    return { database: null, schema: null, tables, relations };
+  };
+
+  const health = async (): Promise<DbHealthReport> => {
+    const pragma = (name: string) =>
+      Number(Object.values(all<Record<string, unknown>>(`PRAGMA ${name}`)[0] ?? {})[0] ?? 0);
+    const pageSize = pragma('page_size');
+    const pageCount = pragma('page_count');
+    const freePages = pragma('freelist_count');
+    const notes: string[] = [];
+    let stats: Map<string, { size: number; unused: number; pages: number }> | null = null;
+    try {
+      stats = new Map(
+        all<{ name: string; size: number; unused: number; pages: number }>(
+          'SELECT name, SUM(pgsize) AS size, SUM(unused) AS unused, COUNT(*) AS pages FROM dbstat GROUP BY name',
+        ).map((row) => [
+          row.name,
+          { size: Number(row.size), unused: Number(row.unused), pages: Number(row.pages) },
+        ]),
+      );
+    } catch {
+      notes.push('This SQLite build has no dbstat table, so only the whole file is measured.');
+    }
+    const percent = (part: number, whole: number) =>
+      whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0;
+
+    const indexes: DbIndexHealth[] = [];
+    const tables: DbTableStorage[] = [];
+    for (const name of tableNames()) {
+      let indexBytes = 0;
+      for (const index of all<{ name: string; unique: number; origin: string }>(
+        `PRAGMA index_list(${quoted(name)})`,
+      )) {
+        const stat = stats?.get(index.name);
+        indexBytes += stat?.size ?? 0;
+        indexes.push({
+          table: { name },
+          name: index.name,
+          type: 'btree',
+          columns: all<{ name: string | null }>(`PRAGMA index_info(${quoted(index.name)})`).map(
+            (column) => column.name ?? '(expression)',
+          ),
+          unique: index.unique === 1,
+          primary: index.origin === 'pk',
+          sizeBytes: stat?.size ?? null,
+          pageCount: stat?.pages ?? null,
+          fragmentationPercent: stat ? percent(stat.unused, stat.size) : null,
+        });
+      }
+      const stat = stats?.get(name);
+      tables.push({
+        table: { name },
+        rowEstimate: null,
+        dataBytes: stat?.size ?? null,
+        indexBytes: stats ? indexBytes : null,
+        freeBytes: stat?.unused ?? null,
+        freePercent: stat ? percent(stat.unused, stat.size) : null,
+      });
+    }
+    return {
+      database: null,
+      measuredAt: new Date().toISOString(),
+      method: stats ? 'dbstat and page counts' : 'page counts',
+      precise: true,
+      canBePrecise: false,
+      onlineRebuild: false,
+      indexes,
+      tables,
+      totalBytes: pageSize * pageCount,
+      freeBytes: pageSize * freePages,
+      notes,
+    };
+  };
+
   return {
     engine: 'sqlite',
+
+    schemaGraph,
+
+    health,
 
     async serverVersion() {
       return String(

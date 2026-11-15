@@ -1,6 +1,6 @@
 import type { DbObjectRef, DbTableDescription } from '@shared/databaseTypes';
 import { useQuery } from '@tanstack/react-query';
-import { Key, Pencil } from '@/components/icons';
+import { Gauge, Key, Pencil } from '@/components/icons';
 import { Notice, SECTION_HEADING } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,11 +13,14 @@ export function StructureTab({
   sessionId,
   objectRef,
   onEditColumns,
+  onOpenHealth,
 }: {
   sessionId: string;
   objectRef: DbObjectRef;
   /** Opens the designer on this table. Left out where the engine cannot change columns. */
   onEditColumns?: (table: DbTableDescription) => void;
+  /** Opens index health for the table's database. Left out where the engine has none. */
+  onOpenHealth?: (database: string | null) => void;
 }): React.JSX.Element {
   const table = useQuery({
     queryKey: queryKeys.databaseTable(sessionId, JSON.stringify(objectRef)),
@@ -92,7 +95,19 @@ export function StructureTab({
       </section>
       {indexes.length > 0 ? (
         <section className="space-y-2">
-          <h4 className={SECTION_HEADING}>Indexes</h4>
+          <div className="flex items-center justify-between gap-2">
+            <h4 className={SECTION_HEADING}>Indexes</h4>
+            {onOpenHealth ? (
+              <Button
+                size="xs"
+                shape="pill"
+                variant="ghost"
+                onClick={() => onOpenHealth(table.data.ref.database ?? null)}
+              >
+                <Gauge /> See index health
+              </Button>
+            ) : null}
+          </div>
           <ul className="space-y-1 text-xs">
             {indexes.map((index) => (
               <li key={index.name} className="flex flex-wrap items-center gap-2">

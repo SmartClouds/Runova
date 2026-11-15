@@ -225,6 +225,127 @@ export interface DbTableDescription {
   definition: string | null;
 }
 
+/** Where a diagram or a health report looks: one database, and one schema or all of them. */
+export interface DbScopeInput {
+  sessionId: string;
+  /** Null for the connection's own database (and for SQLite, which has one). */
+  database: string | null;
+  /** Null for every schema. Engines with no schemas ignore it. */
+  schema: string | null;
+}
+
+export type DbDiagramInput = DbScopeInput;
+
+export interface DbDiagramColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  primaryKey: boolean;
+}
+
+export interface DbDiagramTable {
+  ref: DbObjectRef;
+  kind: DbObjectKind;
+  columns: DbDiagramColumn[];
+  rowEstimate: number | null;
+}
+
+/** A foreign key: the columns of `from` point at the columns of `to`. */
+export interface DbRelation {
+  name: string;
+  from: { ref: DbObjectRef; columns: string[] };
+  to: { ref: DbObjectRef; columns: string[] };
+  /** CASCADE, SET NULL, NO ACTION and so on, as the engine writes it. Null when it does not say. */
+  onDelete: string | null;
+  onUpdate: string | null;
+}
+
+/** The tables and foreign keys an entity relationship diagram is drawn from. */
+export interface DbSchemaGraph {
+  database: string | null;
+  schema: string | null;
+  tables: DbDiagramTable[];
+  relations: DbRelation[];
+  /** How many tables there are in all, when more than came back. */
+  totalTables: number;
+  truncated: boolean;
+}
+
+export interface DbHealthInput extends DbScopeInput {
+  /**
+   * SQL Server: LIMITED (fast, reads the upper index levels) or SAMPLED (thorough). Other engines
+   * read the same numbers either way.
+   */
+  scan: 'fast' | 'thorough';
+}
+
+export type DbIndexType =
+  | 'clustered'
+  | 'nonclustered'
+  | 'heap'
+  | 'columnstore'
+  | 'btree'
+  | 'hash'
+  | 'gin'
+  | 'gist'
+  | 'brin'
+  | 'spgist'
+  | 'fulltext'
+  | 'spatial'
+  | 'other';
+
+export interface DbIndexHealth {
+  /** The table the index belongs to. */
+  table: DbObjectRef;
+  /** Null for a SQL Server heap, which is a table with no clustered index. */
+  name: string | null;
+  type: DbIndexType;
+  columns: string[];
+  unique: boolean;
+  primary: boolean;
+  sizeBytes: number | null;
+  pageCount: number | null;
+  /**
+   * SQL Server: logical fragmentation. PostgreSQL: bloat. Null when the engine cannot measure it
+   * per index (MySQL and MariaDB measure free space per table).
+   */
+  fragmentationPercent: number | null;
+}
+
+export interface DbTableStorage {
+  table: DbObjectRef;
+  rowEstimate: number | null;
+  dataBytes: number | null;
+  indexBytes: number | null;
+  /** Space allocated but holding nothing (MySQL DATA_FREE, PostgreSQL dead rows, SQLite free pages). */
+  freeBytes: number | null;
+  freePercent: number | null;
+  /** PostgreSQL: rows deleted or updated that a vacuum has not cleared yet. */
+  deadRows?: number | null;
+  lastVacuum?: string | null;
+  lastAnalyze?: string | null;
+}
+
+export interface DbHealthReport {
+  database: string | null;
+  measuredAt: string;
+  /** How the numbers were read, in a few words for the UI. */
+  method: string;
+  /** False when fragmentation is an estimate (PostgreSQL without pgstattuple). */
+  precise: boolean;
+  /** PostgreSQL: pgstattuple can be added to make the numbers exact. */
+  canBePrecise: boolean;
+  /** SQL Server: the edition can rebuild an index while the table stays usable. */
+  onlineRebuild: boolean;
+  indexes: DbIndexHealth[];
+  tables: DbTableStorage[];
+  /** The whole database or file. */
+  totalBytes: number | null;
+  freeBytes: number | null;
+  /** Anything worth knowing about how far the numbers go. */
+  notes: string[];
+}
+
 /**
  * A cell as it travels to the renderer: plain JSON. Dates arrive as ISO text, big numbers and
  * binary as text, and documents or arrays as JSON values.

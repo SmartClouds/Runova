@@ -26,6 +26,8 @@ export * from './database/ddl.js';
 export * from './database/detectContainer.js';
 export * from './database/dump.js';
 export * from './database/engines.js';
+export * from './database/erdLayout.js';
+export * from './database/maintenance.js';
 export * from './database/mongoShell.js';
 export * from './database/redisArgs.js';
 export * from './database/signIns.js';

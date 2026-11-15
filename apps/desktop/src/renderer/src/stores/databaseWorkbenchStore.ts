@@ -7,7 +7,21 @@ import { create } from 'zustand';
  * finds the same tabs. Not saved: sessions end when the app quits.
  */
 
-export type WorkbenchTabKind = 'data' | 'query' | 'structure' | 'settings' | 'users' | 'backups';
+export type WorkbenchTabKind =
+  | 'data'
+  | 'query'
+  | 'structure'
+  | 'settings'
+  | 'users'
+  | 'backups'
+  | 'diagram'
+  | 'health';
+
+/** The database and schema a diagram or health tab looks at. Null schema means all of them. */
+export interface WorkbenchTabScope {
+  database: string | null;
+  schema: string | null;
+}
 
 export interface WorkbenchTab {
   id: string;
@@ -19,6 +33,10 @@ export interface WorkbenchTab {
   text?: string;
   /** The database a query tab runs in. */
   database?: string | null;
+  /** Diagram and health tabs: where they look. */
+  scope?: WorkbenchTabScope;
+  /** A diagram's tables the user moved, by table key, so leaving and coming back keeps them. */
+  positions?: Record<string, { x: number; y: number }>;
 }
 
 export interface WorkbenchScope {
@@ -42,6 +60,13 @@ let nextId = 0;
 const newId = () => `tab-${Date.now().toString(36)}-${(nextId++).toString(36)}`;
 
 function sameObject(a: WorkbenchTab, b: Omit<WorkbenchTab, 'id'>): boolean {
+  if (a.kind === 'diagram' || a.kind === 'health') {
+    return (
+      a.kind === b.kind &&
+      (a.scope?.database ?? null) === (b.scope?.database ?? null) &&
+      (a.scope?.schema ?? null) === (b.scope?.schema ?? null)
+    );
+  }
   return (
     a.kind === b.kind &&
     a.kind !== 'query' &&
