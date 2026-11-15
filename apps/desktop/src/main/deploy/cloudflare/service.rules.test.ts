@@ -152,6 +152,99 @@ describe('WAF custom rules (T4)', () => {
   });
 });
 
+describe('IP limits (E97)', () => {
+  const ACME = 'not starts_with(http.request.uri.path, "/.well-known/acme-challenge/")';
+  const lock = {
+    kind: 'ip-lock' as const,
+    hostname: 'app.example.com',
+    path: '/admin',
+    match: 'prefix' as const,
+    ips: ['203.0.113.10'],
+  };
+
+  it('adds a limit after the rules already there, as a block for everyone not listed', async () => {
+    const { service, fake } = await connectedService({
+      zones: [{ id: ZONE_ID, name: 'example.com', ruleset: customRuleset }],
+    });
+
+    const rules = await service.createCustomRule(ZONE_ID, {
+      description: 'Only listed IPs, app.example.com/admin*',
+      spec: lock,
+    });
+
+    expect(fake.writes()[0].body).toEqual({
+      description: 'Only listed IPs, app.example.com/admin*',
+      expression:
+        '(http.host eq "app.example.com" and starts_with(http.request.uri.path, "/admin") and not ip.src in {203.0.113.10})',
+      action: 'block',
+      enabled: true,
+    });
+    expect(rules.map((rule) => rule.description)).toEqual([
+      'Block Tor exit nodes',
+      'Only listed IPs, app.example.com/admin*',
+    ]);
+  });
+
+  it('changes a limit in place and keeps it switched off when it was', async () => {
+    const { service, fake } = await connectedService({
+      zones: [{ id: ZONE_ID, name: 'example.com', ruleset: customRuleset }],
+    });
+    const added = await service.createCustomRule(ZONE_ID, {
+      description: 'Only listed IPs, app.example.com/admin*',
+      spec: lock,
+    });
+    const id = added[1].id;
+    await service.setCustomRuleEnabled(ZONE_ID, id, false);
+
+    const rules = await service.updateCustomRule(ZONE_ID, id, {
+      description: 'Only listed IPs, app.example.com',
+      spec: { ...lock, path: null, ips: ['203.0.113.10', '198.51.100.0/24'] },
+    });
+
+    expect(fake.writes().at(-1)).toMatchObject({
+      method: 'PATCH',
+      path: `/zones/${ZONE_ID}/rulesets/${RULESET_ID}/rules/${id}`,
+      body: {
+        description: 'Only listed IPs, app.example.com',
+        expression: `(http.host eq "app.example.com" and ${ACME} and not ip.src in {203.0.113.10 198.51.100.0/24})`,
+        action: 'block',
+        enabled: false,
+      },
+    });
+    expect(rules.map((rule) => rule.id)).toEqual([RULE_ID, id]);
+    expect(rules[1]).toMatchObject({
+      enabled: false,
+      description: 'Only listed IPs, app.example.com',
+    });
+  });
+
+  it('never rewrites a rule that is not an IP limit, or into something that is not one', async () => {
+    const { service, fake } = await connectedService({
+      zones: [{ id: ZONE_ID, name: 'example.com', ruleset: customRuleset }],
+    });
+    await expect(
+      service.updateCustomRule(ZONE_ID, RULE_ID, { description: 'x', spec: lock }),
+    ).rejects.toThrow('Runova only changes the IP limits it made. Change this rule in Cloudflare.');
+    await expect(
+      service.updateCustomRule(ZONE_ID, RULE_ID, {
+        description: 'x',
+        spec: { kind: 'block-countries', countries: ['CN'] },
+      }),
+    ).rejects.toThrow('Only an IP limit can be changed here.');
+    await expect(
+      service.updateCustomRule(ZONE_ID, RULE_ID, { description: 'x', spec: { ...lock, ips: [] } }),
+    ).rejects.toThrow(/at least one IP address/);
+    expect(fake.writes()).toEqual([]);
+  });
+
+  it('says a limit is gone when someone removed it at Cloudflare', async () => {
+    const { service } = await connectedService();
+    await expect(
+      service.updateCustomRule(ZONE_ID, RULE_ID, { description: 'x', spec: lock }),
+    ).rejects.toThrow(/not in this zone any more/);
+  });
+});
+
 describe('IP access rules (T4)', () => {
   it('lists, creates and deletes rules, working out the target from the value', async () => {
     const { service, fake } = await connectedService({

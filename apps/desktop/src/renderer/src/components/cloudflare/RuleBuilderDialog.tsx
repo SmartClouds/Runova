@@ -22,7 +22,8 @@ import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { Field } from './fields';
 
-type Kind = CloudflareRuleSpec['kind'];
+/** IP limits have their own dialog on the Access tab (E97). */
+type Kind = Exclude<CloudflareRuleSpec['kind'], 'ip-lock'>;
 
 const KINDS: Array<{ kind: Kind; label: string; description: string }> = [
   {

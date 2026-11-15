@@ -2376,6 +2376,13 @@ const cloudflare = {
     enabled: boolean,
   ): Promise<CloudflareCustomRule[]> =>
     ipcRenderer.invoke(IPC.cloudflare.setCustomRuleEnabled, zoneId, ruleId, enabled),
+  /** Changes an IP limit in place (E97); any other rule is refused. */
+  updateCustomRule: (
+    zoneId: string,
+    ruleId: string,
+    input: CloudflareCustomRuleInput,
+  ): Promise<CloudflareCustomRule[]> =>
+    ipcRenderer.invoke(IPC.cloudflare.updateCustomRule, zoneId, ruleId, input),
   deleteCustomRule: (zoneId: string, ruleId: string): Promise<CloudflareCustomRule[]> =>
     ipcRenderer.invoke(IPC.cloudflare.deleteCustomRule, zoneId, ruleId),
   listAccessRules: (zoneId: string): Promise<CloudflareAccessRule[]> =>

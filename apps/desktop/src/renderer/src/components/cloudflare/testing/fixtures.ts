@@ -1,6 +1,7 @@
 import type {
   CloudflareAccountStatus,
   CloudflareBotSettings,
+  CloudflareCustomRule,
   CloudflareDnsRecord,
   CloudflareStatus,
   CloudflareZone,
@@ -183,3 +184,14 @@ export function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+/** An IP limit (E97): only two addresses may open app.example.com/admin and below. */
+export const IP_LOCK_RULE: CloudflareCustomRule = {
+  id: 'e'.repeat(32),
+  description: 'Only listed IPs, app.example.com/admin*',
+  expression:
+    '(http.host eq "app.example.com" and starts_with(http.request.uri.path, "/admin") and not ip.src in {203.0.113.10 198.51.100.0/24})',
+  action: 'block',
+  enabled: true,
+  lastUpdated: '2026-11-15T10:00:00Z',
+};

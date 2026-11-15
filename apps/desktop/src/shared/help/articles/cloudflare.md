@@ -3,7 +3,7 @@ title: Cloudflare
 category: Deploy
 order: 90
 summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, ask for an email code before a name opens, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates, the Cloudflare-only origin lock and the Cloudflare Tunnel.
-keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key, cloudflare tunnel, cloudflared, closed ports, ssh through cloudflare, cloudflare access, cloudflare mesh, warp, break-glass, email code, one-time pin, otp, zero trust, access application, protect a url, login page, service token
+keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key, cloudflare tunnel, cloudflared, closed ports, ssh through cloudflare, cloudflare access, cloudflare mesh, warp, break-glass, email code, one-time pin, otp, zero trust, access application, protect a url, login page, service token, limit by ip, ip allowlist, ip whitelist, restrict ip, office ip, allowed ips
 route: /deploy?cloudflare=1
 ---
 
@@ -183,6 +183,8 @@ Click **Add rule** to open the builder. Pick one of three kinds:
 
 The dialog shows the **Description** (editable) and the exact expression and action Cloudflare will run, so nothing is added that you have not seen. Click **Add rule**.
 
+IP limits made on the Access tab are custom rules too. They show in this list as Block rules named **Only listed IPs**.
+
 ### IP access rules
 
 Block, challenge or allow an address, a range, a country or a network (ASN) for the whole zone. Type the value (for example `203.0.113.0/24`, `DE` or `AS13335`). The form says how it reads it (IP address, IPv6 address, IP range, Country or Network). Choose the **Action** (Block, Interactive challenge, JavaScript challenge, Managed challenge or Allow), add **Notes** if you like, and click **Add access rule**. Existing rules are listed with a trash button.
@@ -224,6 +226,20 @@ Another computer of yours has no pass yet, so its app takes another way in (dire
 The **Core domain** card (Through Cloudflare) and the **Domains** tab of a saved site show an **Email code on** or **Email code off** pill next to each name a connected zone holds. Click it to change the gate without leaving the page. If email codes are not turned on for the account yet, it opens this tab.
 
 This needs **Account > Access: Apps and Policies > Edit**, **Account > Access: Service Tokens > Edit** and **Account > Access: Organizations, Identity Providers, and Groups > Edit** on the token. Without one of them, the tab names it and offers **Open Cloudflare's token page**.
+
+### Limit by IP address
+
+The **Limit by IP address** card lets only the addresses you list open a name, or one path on it. Everyone else gets Cloudflare's block page before anything reaches your server. Use it to keep an admin page to your office, or a whole name to your VPN.
+
+1. Click **Add IP limit**.
+2. Pick the **Name**, or **Every name in** the domain. Only names behind Cloudflare's proxy (the orange cloud) are listed, since the others go straight to your server.
+3. Under **Covers**, keep **Every page**, or pick **One path** and type it (for example `/admin`). **Path and below** also covers everything under it, such as `/admin/users`; **Only this path** covers that one address.
+4. In **Addresses that get in**, type an address or a range like `198.51.100.0/24` and press Enter (or a comma or space). A pasted list is split up, and anything that is not an address or a range is listed under the field with the reason. **This computer** adds the address this computer reaches the internet from.
+5. Read the sentence under the field, which says who can open what, and click **Add limit**.
+
+If this computer is not on the list, the dialog says so, since it would get the block page too. Let's Encrypt's certificate checks still get through a limit on a whole name, so renewals keep working.
+
+Each limit shows what it covers and its addresses. The switch pauses a limit without losing it, the pencil changes it, and the trash deletes it after asking. A limit is a WAF custom rule, so it needs **Zone > Zone WAF > Edit** on the token and also shows on the Security tab. Cloudflare's Free plan holds five custom rules per domain; past that, the dialog shows Cloudflare's message.
 
 ## Servers tab
 

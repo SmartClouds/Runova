@@ -22,7 +22,8 @@ type Listed = { ok: true; values: string[] } | { ok: false; problem: string };
 
 const COUNTRY = /^(T1|[A-Z]{2})$/;
 const MAX_COUNTRIES = 250;
-const MAX_ADDRESSES = 100;
+/** What one rule lists at most, so it stays something a person can read. */
+export const MAX_RULE_ADDRESSES = 100;
 const MAX_PATH = 512;
 const MAX_DESCRIPTION = 120;
 
@@ -69,8 +70,11 @@ function addresses(list: string[]): Listed {
   }
   const unique = [...new Set(values)];
   if (unique.length === 0) return { ok: false, problem: 'Add at least one IP address or range.' };
-  if (unique.length > MAX_ADDRESSES) {
-    return { ok: false, problem: `A rule can list up to ${MAX_ADDRESSES} addresses and ranges.` };
+  if (unique.length > MAX_RULE_ADDRESSES) {
+    return {
+      ok: false,
+      problem: `A rule can list up to ${MAX_RULE_ADDRESSES} addresses and ranges.`,
+    };
   }
   return { ok: true, values: unique };
 }
@@ -108,13 +112,110 @@ export function buildRule(spec: CloudflareRuleSpec): RuleBuild {
         },
       };
     }
+    case 'ip-lock':
+      return buildIpLock(spec);
     default:
       return { ok: false, problem: 'That is not a rule Runova can build.' };
   }
 }
 
+type IpLockSpec = Extract<CloudflareRuleSpec, { kind: 'ip-lock' }>;
+
+const HOSTNAME = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const HOST_CLAUSE = /^http\.host eq "([^"]+)"$/;
+const EXACT_CLAUSE = /^http\.request\.uri\.path eq "([^"]+)"$/;
+const PREFIX_CLAUSE = /^starts_with\(http\.request\.uri\.path, "([^"]+)"\)$/;
+const IPS_CLAUSE = /^not ip\.src in \{([^{}]*)\}$/;
+/** Let's Encrypt's HTTP-01 checks come here; an IP limit never blocks them. */
+const ACME_PREFIX = '/.well-known/acme-challenge/';
+const ACME_CLAUSE = `not starts_with(http.request.uri.path, "${ACME_PREFIX}")`;
+
+/**
+ * An IP limit is a block rule for everyone not listed, on one name (or all of them) and one path
+ * (or all of them). Certificate checks stay open whenever the limit would cover them, so
+ * renewals by HTTP-01 keep working.
+ */
+function buildIpLock(spec: IpLockSpec): RuleBuild {
+  const clauses: string[] = [];
+  if (spec.hostname !== null) {
+    const hostname = spec.hostname.trim().toLowerCase();
+    if (!HOSTNAME.test(hostname)) {
+      return { ok: false, problem: 'Pick one name, such as app.example.com, with no wildcard.' };
+    }
+    clauses.push(`http.host eq "${hostname}"`);
+  }
+  const path = spec.path;
+  const prefix = path === null || spec.match === 'prefix';
+  if (path !== null) {
+    const problem = pathProblem(path);
+    if (problem) return { ok: false, problem };
+    clauses.push(
+      prefix
+        ? `starts_with(http.request.uri.path, "${path}")`
+        : `http.request.uri.path eq "${path}"`,
+    );
+  }
+  if (path === null || (prefix && ACME_PREFIX.startsWith(path))) clauses.push(ACME_CLAUSE);
+  const listed = addresses(spec.ips);
+  if (!listed.ok) return listed;
+  clauses.push(`not ip.src in {${listed.values.join(' ')}}`);
+  return {
+    ok: true,
+    rule: { expression: `(${clauses.join(' and ')})`, action: 'block', first: false },
+  };
+}
+
+/**
+ * The IP limit a rule is, or null for any other rule. Only an expression the app would write
+ * itself counts, so a rule made by hand in Cloudflare is never read as one and changed.
+ */
+export function parseIpLock(rule: { expression: string; action: string }): IpLockSpec | null {
+  if (rule.action !== 'block') return null;
+  const inner = rule.expression.match(/^\((.*)\)$/s)?.[1];
+  if (!inner) return null;
+  const clauses = inner.split(' and ');
+  let index = 0;
+  const take = (pattern: RegExp): string | null => {
+    const found = clauses[index]?.match(pattern);
+    if (!found) return null;
+    index += 1;
+    return found[1] ?? '';
+  };
+  const hostname = take(HOST_CLAUSE);
+  const exact = take(EXACT_CLAUSE);
+  const startsWith = exact === null ? take(PREFIX_CLAUSE) : null;
+  if (clauses[index] === ACME_CLAUSE) index += 1;
+  const ips = take(IPS_CLAUSE);
+  if (ips === null || index !== clauses.length) return null;
+  const spec: IpLockSpec = {
+    kind: 'ip-lock',
+    hostname,
+    path: exact ?? startsWith,
+    match: exact === null ? 'prefix' : 'exact',
+    ips: ips.split(' ').filter(Boolean),
+  };
+  const built = buildIpLock(spec);
+  return built.ok && built.rule.expression === rule.expression ? spec : null;
+}
+
+/** "Only listed IPs, app.example.com/admin*": the rule's description at Cloudflare. */
+export function ipLockDescription(spec: IpLockSpec): string {
+  const name = spec.hostname?.toLowerCase() ?? 'every name';
+  const path =
+    spec.path === null
+      ? ''
+      : `${spec.hostname ? '' : ' '}${spec.path}${spec.match === 'prefix' ? '*' : ''}`;
+  const text = `Only listed IPs, ${name}${path}`;
+  return text.length > MAX_LOCK_DESCRIPTION
+    ? `${text.slice(0, MAX_LOCK_DESCRIPTION - 3)}...`
+    : text;
+}
+
+const MAX_LOCK_DESCRIPTION = 500;
+
 /** A description to start from, saying what the rule does. */
 export function describeRule(spec: CloudflareRuleSpec): string {
+  if (spec.kind === 'ip-lock') return ipLockDescription(spec);
   let text: string;
   if (spec.kind === 'block-countries') {
     const codes = [...new Set(spec.countries.map((code) => code.trim().toUpperCase()))];

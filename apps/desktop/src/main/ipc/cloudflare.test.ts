@@ -87,6 +87,10 @@ describe('registerCloudflareHandlers', () => {
       spec: { kind: 'block-countries', countries: ['CN'] },
     });
     await call(IPC.cloudflare.setCustomRuleEnabled, ZONE, RECORD, false);
+    await call(IPC.cloudflare.updateCustomRule, ZONE, RECORD, {
+      description: 'Only listed IPs, every name',
+      spec: { kind: 'ip-lock', hostname: null, path: null, match: 'prefix', ips: ['203.0.113.10'] },
+    });
     await call(IPC.cloudflare.deleteCustomRule, ZONE, RECORD);
     await call(IPC.cloudflare.listAccessRules, ZONE);
     await call(IPC.cloudflare.createAccessRule, ZONE, {
@@ -378,6 +382,52 @@ describe('registerCloudflareHandlers', () => {
     expect(service.purgeCache).not.toHaveBeenCalled();
     expect(service.createCustomRule).not.toHaveBeenCalled();
     expect(service.setCustomRuleEnabled).not.toHaveBeenCalled();
+  });
+
+  it('passes an IP limit through, and changes only through the IP limit shape', async () => {
+    const { service, call } = harness();
+    const lock = {
+      kind: 'ip-lock',
+      hostname: 'app.example.com',
+      path: '/admin',
+      match: 'prefix',
+      ips: ['203.0.113.10'],
+    };
+    const whole = { ...lock, hostname: null, path: null };
+    await call(IPC.cloudflare.createCustomRule, ZONE, { description: 'Only', spec: lock });
+    await call(IPC.cloudflare.updateCustomRule, ZONE, RECORD, { description: 'Only', spec: whole });
+    expect(service.createCustomRule).toHaveBeenCalledWith(ZONE, {
+      description: 'Only',
+      spec: lock,
+    });
+    expect(service.updateCustomRule).toHaveBeenCalledWith(ZONE, RECORD, {
+      description: 'Only',
+      spec: whole,
+    });
+
+    for (const spec of [
+      { ...lock, hostname: 'app.example.com" or true or "' },
+      { ...lock, hostname: 7 },
+      { ...lock, path: 5 },
+      { ...lock, match: 'regex' },
+      { ...lock, ips: '203.0.113.10' },
+      { ...lock, ips: ['203.0.113.10}'] },
+    ]) {
+      await expect(
+        call(IPC.cloudflare.updateCustomRule, ZONE, RECORD, { description: 'x', spec }),
+        JSON.stringify(spec),
+      ).rejects.toThrow();
+    }
+    await expect(
+      call(IPC.cloudflare.updateCustomRule, 'nope', RECORD, { description: 'x', spec: lock }),
+    ).rejects.toThrow();
+    await expect(
+      call(IPC.cloudflare.updateCustomRule, ZONE, RECORD, {
+        description: 'x',
+        spec: { kind: 'block-countries', countries: ['CN'] },
+      }),
+    ).rejects.toThrow('Only an IP limit can be changed here.');
+    expect(service.updateCustomRule).toHaveBeenCalledTimes(1);
   });
 
   it('refuses access rules and point-domain requests of the wrong shape', async () => {

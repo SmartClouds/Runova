@@ -218,7 +218,18 @@ export type CloudflarePurgeRequest = { everything: true } | { urls: string[] };
 export type CloudflareRuleSpec =
   | { kind: 'block-countries'; countries: string[] }
   | { kind: 'challenge-path'; path: string; match: 'exact' | 'prefix' }
-  | { kind: 'allow-ips'; ips: string[] };
+  | { kind: 'allow-ips'; ips: string[] }
+  /**
+   * Only these addresses may open a name (null: every name in the zone), or a path on it (null:
+   * the whole name). Everyone else is blocked.
+   */
+  | {
+      kind: 'ip-lock';
+      hostname: string | null;
+      path: string | null;
+      match: 'exact' | 'prefix';
+      ips: string[];
+    };
 
 export interface CloudflareCustomRuleInput {
   description: string;

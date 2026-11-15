@@ -141,3 +141,23 @@ export function checkCidr(text: string): CidrCheck {
   }
   return { ok: true, version, prefix, network };
 }
+
+/** Whether an address is one of the list, or inside one of its ranges. IPv4 never matches IPv6. */
+export function addressInList(ip: string, list: readonly string[]): boolean {
+  const v4 = parseIpv4(ip);
+  const chunks = v4 ?? parseIpv6(ip);
+  if (!chunks) return false;
+  const bits = v4 ? 8 : 16;
+  return list.some((entry) => {
+    const slash = entry.indexOf('/');
+    const address = slash < 0 ? entry : entry.slice(0, slash);
+    const prefix = slash < 0 ? (v4 ? 32 : 128) : Number(entry.slice(slash + 1));
+    const other = v4 ? parseIpv4(address) : parseIpv4(address) ? null : parseIpv6(address);
+    if (!other || !Number.isInteger(prefix) || prefix < 0 || prefix > chunks.length * bits) {
+      return false;
+    }
+    const a = mask(chunks, bits, prefix);
+    const b = mask(other, bits, prefix);
+    return a.every((value, index) => value === b[index]);
+  });
+}

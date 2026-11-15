@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalIp, checkCidr, ipVersion, isPublicAddress } from './ip';
+import { addressInList, canonicalIp, checkCidr, ipVersion, isPublicAddress } from './ip';
 
 /**
  * Addresses reach Cloudflare as DNS record contents, WAF expressions and IP access rules, and
@@ -127,5 +127,23 @@ describe('checkCidr', () => {
     expect(checkCidr('203.0.113.0/024')).toMatchObject({ ok: false });
     expect(checkCidr('203.0.113.0')).toMatchObject({ ok: false });
     expect(checkCidr('example.com/24')).toMatchObject({ ok: false });
+  });
+});
+
+describe('addressInList', () => {
+  it('finds an address listed on its own or inside a listed range', () => {
+    expect(addressInList('203.0.113.10', ['198.51.100.1', '203.0.113.10'])).toBe(true);
+    expect(addressInList('203.0.113.10', ['203.0.113.0/24'])).toBe(true);
+    expect(addressInList('203.0.114.10', ['203.0.113.0/24'])).toBe(false);
+    expect(addressInList('2001:DB8::1', ['2001:db8::/32'])).toBe(true);
+    expect(addressInList('2001:db9::1', ['2001:db8::/32'])).toBe(false);
+    expect(addressInList('10.1.2.3', ['0.0.0.0/0'])).toBe(true);
+  });
+
+  it('never matches across IPv4 and IPv6, or on text that is not an address', () => {
+    expect(addressInList('203.0.113.10', ['::/0'])).toBe(false);
+    expect(addressInList('2001:db8::1', ['0.0.0.0/0'])).toBe(false);
+    expect(addressInList('nowhere', ['0.0.0.0/0'])).toBe(false);
+    expect(addressInList('203.0.113.10', ['not a range', ''])).toBe(false);
   });
 });

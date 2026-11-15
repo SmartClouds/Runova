@@ -265,6 +265,18 @@ function ruleSpec(value: unknown): CloudflareRuleSpec {
   if (input.kind === 'allow-ips') {
     return { kind: 'allow-ips', ips: list(input.ips, MAX_LIST, 'addresses') };
   }
+  if (input.kind === 'ip-lock') {
+    if (input.match !== 'exact' && input.match !== 'prefix') {
+      throw new Error('The path match must be exact or prefix.');
+    }
+    return {
+      kind: 'ip-lock',
+      hostname: input.hostname === null ? null : text(input.hostname, 253, 'name'),
+      path: input.path === null ? null : text(input.path, 600, 'path'),
+      match: input.match,
+      ips: list(input.ips, MAX_LIST, 'addresses'),
+    };
+  }
   throw new Error('That is not a rule the builder makes.');
 }
 
@@ -383,6 +395,11 @@ export function registerCloudflareHandlers({ ipc, service, guard }: CloudflareHa
       flag(enabled, 'Say whether the rule is on or off.'),
     ),
   );
+  handle(IPC.cloudflare.updateCustomRule, (zone, id, input) => {
+    const checked = customRuleInput(input);
+    if (checked.spec.kind !== 'ip-lock') throw new Error('Only an IP limit can be changed here.');
+    return service.updateCustomRule(zoneId(zone), itemId(id, 'rule'), checked);
+  });
   handle(IPC.cloudflare.deleteCustomRule, (zone, id) =>
     service.deleteCustomRule(zoneId(zone), itemId(id, 'rule')),
   );

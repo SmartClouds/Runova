@@ -1886,6 +1886,7 @@ export const IPC = {
     listCustomRules: 'cloudflare:listCustomRules',
     createCustomRule: 'cloudflare:createCustomRule',
     setCustomRuleEnabled: 'cloudflare:setCustomRuleEnabled',
+    updateCustomRule: 'cloudflare:updateCustomRule',
     deleteCustomRule: 'cloudflare:deleteCustomRule',
     listAccessRules: 'cloudflare:listAccessRules',
     createAccessRule: 'cloudflare:createAccessRule',

@@ -14,7 +14,12 @@ import type { SecretEnvelope } from '../../../shared/apiTypes';
 import { PROXIABLE_TYPES } from '../../../shared/cloudflare/dns';
 import { checkNewDomain } from '../../../shared/cloudflare/newDomain';
 import { CLOUDFLARE_PERMISSIONS, tokenProblem } from '../../../shared/cloudflare/permissions';
-import { accessRuleTarget, type BuiltRule, buildRule } from '../../../shared/cloudflare/rules';
+import {
+  accessRuleTarget,
+  type BuiltRule,
+  buildRule,
+  parseIpLock,
+} from '../../../shared/cloudflare/rules';
 import { isTurnstileSitekey, validateTurnstileInput } from '../../../shared/cloudflare/turnstile';
 import { encodeCloudflareError } from '../../../shared/cloudflareErrors';
 import type {
@@ -727,6 +732,37 @@ export class CloudflareService {
         description: rule.description ?? '',
         enabled,
         ...(rule.action_parameters ? { action_parameters: rule.action_parameters } : {}),
+      } as unknown as RuleEditParams;
+      return rulesOf((await api.rulesets.rules.edit(ruleId, params)) as unknown as ApiRuleset);
+    });
+  }
+
+  /**
+   * Changes an IP limit (E97) in place: its name, path and addresses. Only a rule that reads back
+   * as an IP limit the app wrote is changed, and it keeps its place and its on or off state.
+   */
+  updateCustomRule(
+    zoneId: string,
+    ruleId: string,
+    input: CloudflareCustomRuleInput,
+  ): Promise<CloudflareCustomRule[]> {
+    if (input.spec.kind !== 'ip-lock') {
+      return Promise.reject(new Error('Only an IP limit can be changed here.'));
+    }
+    const built = buildRule(input.spec);
+    if (!built.ok) return Promise.reject(new Error(built.problem));
+    return this.withZone(zoneId, 'waf', async (api) => {
+      const { ruleset, rule } = await this.findRule(api, zoneId, ruleId);
+      if (!parseIpLock({ expression: rule.expression ?? '', action: rule.action ?? '' })) {
+        throw new Error(
+          'Runova only changes the IP limits it made. Change this rule in Cloudflare.',
+        );
+      }
+      const params = {
+        zone_id: zoneId,
+        ruleset_id: ruleset.id,
+        ...ruleBody(built.rule, input.description),
+        enabled: rule.enabled ?? true,
       } as unknown as RuleEditParams;
       return rulesOf((await api.rulesets.rules.edit(ruleId, params)) as unknown as ApiRuleset);
     });

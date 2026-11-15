@@ -115,3 +115,79 @@ test('turns email codes on, gates a name, changes it and takes it off', async ()
   await expect(app.getByText('Open to everyone')).toBeVisible();
   expect(fake.accessApps.size).toBe(0);
 });
+
+test('limits a path to listed addresses, changes it, pauses it and deletes it (E97)', async () => {
+  if (!cloudflare) throw new Error('The Cloudflare fake did not start');
+  const fake = cloudflare.fake;
+  const here = '203.0.113.77';
+  launched = await launchApp({
+    settings: {},
+    env: {
+      RUNOVA_E2E_CLOUDFLARE_API: cloudflare.base,
+      RUNOVA_E2E_IP_GEO: JSON.stringify({ ip: here, country: 'Testland', countryCode: 'TL' }),
+    },
+  });
+  const { page } = launched;
+  const rules = () => (fake.zones.get(ZONE_ID)?.ruleset?.rules ?? []) as Record<string, unknown>[];
+
+  await page.getByRole('link', { name: 'Deploy' }).click();
+  await page.getByRole('button', { name: 'Manage Cloudflare' }).click();
+  await page.getByLabel('API token').fill(E2E_CLOUDFLARE_TOKEN);
+  await page.getByRole('button', { name: 'Save and check' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Choose a domain, example.com is open' }),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('tab', { name: 'Access' }).click();
+  await expect(page.getByText('No IP limits yet')).toBeVisible();
+
+  // /admin on app.example.com, for one address and this computer.
+  await page.getByRole('button', { name: 'Add IP limit' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Limit by IP address' });
+  await dialog.getByRole('combobox', { name: 'Name' }).click();
+  await page.getByRole('option', { name: 'app.example.com', exact: true }).click();
+  await dialog.getByRole('radio', { name: 'One path' }).click();
+  await dialog.getByLabel('Path').fill('/admin');
+  await dialog.getByLabel('Addresses that get in').fill('198.51.100.7 ');
+  await expect(dialog.getByText(`This computer (${here}) is not on the list`)).toBeVisible();
+  await dialog.getByRole('button', { name: `Add this computer, ${here}` }).click();
+  await expect(
+    dialog.getByText(
+      `Only 198.51.100.7 and ${here} can open app.example.com/admin and below. Everyone else gets Cloudflare's block page.`,
+    ),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Add limit' }).click();
+
+  const row = page.getByRole('listitem', { name: 'app.example.com/admin and below' });
+  await expect(row.getByText('198.51.100.7')).toBeVisible();
+  expect(rules()).toEqual([
+    expect.objectContaining({
+      action: 'block',
+      enabled: true,
+      expression: `(http.host eq "app.example.com" and starts_with(http.request.uri.path, "/admin") and not ip.src in {198.51.100.7 ${here}})`,
+    }),
+  ]);
+
+  // One address fewer, from the pencil.
+  await row
+    .getByRole('button', { name: 'Edit IP limit for app.example.com/admin and below' })
+    .click();
+  const edit = page.getByRole('dialog', { name: 'Change the IP limit' });
+  await edit.getByRole('button', { name: 'Remove 198.51.100.7' }).click();
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(row.getByText('198.51.100.7')).toBeHidden();
+  expect(rules()[0]?.expression).toContain(`not ip.src in {${here}})`);
+
+  // Paused, then gone.
+  await row.getByRole('switch', { name: 'IP limit for app.example.com/admin and below' }).click();
+  await expect(row.getByText('Off')).toBeVisible();
+  expect(rules()[0]?.enabled).toBe(false);
+  await row
+    .getByRole('button', { name: 'Delete IP limit for app.example.com/admin and below' })
+    .click();
+  await page
+    .getByRole('dialog', { name: /Delete the IP limit/ })
+    .getByRole('button', { name: 'Delete limit' })
+    .click();
+  await expect(page.getByText('No IP limits yet')).toBeVisible();
+  expect(rules()).toEqual([]);
+});
