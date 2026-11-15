@@ -2,6 +2,8 @@
 //! the server and the network are stood in for.
 #![allow(dead_code)]
 
+pub mod cloudflare;
+
 use async_trait::async_trait;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;

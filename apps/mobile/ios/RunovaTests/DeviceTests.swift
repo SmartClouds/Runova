@@ -259,7 +259,7 @@ func fixtureView(
     deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
     cloudflare: CloudflareScreen = CloudflareScreen(
         loading: false, configured: false, problem: nil, accounts: [], zone: nil, tokenForm: nil, addDomain: nil,
-        recordForm: nil, pointDomain: nil, biometric: nil),
+        recordForm: nil, pointDomain: nil, ruleBuilder: nil, accessRuleForm: nil, biometric: nil),
     monitoring: MonitoringScreen = MonitoringScreen(local: [], cloud: [], loading: false, localNote: nil, open: nil),
     errors: ErrorsScreen = ErrorsScreen(
         open: false, loading: false, issues: [], note: nil, problems: [], cutNote: nil, detail: nil),

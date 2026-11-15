@@ -336,7 +336,23 @@ final class AppModel: NSObject, ObservableObject {
                 self?.engine?.cloudflarePreviewPointDomain(
                     name: name, serverId: server, includeWww: www, proxied: proxied)
             },
-            applyPointDomain: { [weak self] in self?.engine?.cloudflareApplyPointDomain() })
+            applyPointDomain: { [weak self] in self?.engine?.cloudflareApplyPointDomain() },
+            openTab: { [weak self] in self?.engine?.cloudflareOpenTab(tab: $0) },
+            changeSetting: { [weak self] in self?.engine?.cloudflareChangeSetting(key: $0, value: $1) },
+            setRuleEnabled: { [weak self] in self?.engine?.cloudflareSetRuleEnabled(id: $0, enabled: $1) },
+            deleteRule: { [weak self] in self?.engine?.cloudflareDeleteRule(id: $0) },
+            openRuleBuilder: { [weak self] in self?.engine?.cloudflareOpenRuleBuilder() },
+            closeRuleBuilder: { [weak self] in self?.engine?.cloudflareCloseRuleBuilder() },
+            addRule: { [weak self] kind, values, path, prefix, description in
+                self?.engine?.cloudflareAddRule(
+                    kind: kind, values: values, path: path, prefix: prefix, description: description)
+            },
+            openAccessRuleForm: { [weak self] in self?.engine?.cloudflareOpenAccessRuleForm() },
+            closeAccessRuleForm: { [weak self] in self?.engine?.cloudflareCloseAccessRuleForm() },
+            addAccessRule: { [weak self] in self?.engine?.cloudflareAddAccessRule(value: $0, mode: $1, notes: $2) },
+            deleteAccessRule: { [weak self] in self?.engine?.cloudflareDeleteAccessRule(id: $0) },
+            purgeEverything: { [weak self] in self?.engine?.cloudflarePurgeEverything() },
+            purgeUrls: { [weak self] in self?.engine?.cloudflarePurgeUrls(text: $0) })
     }
 
     private var gitIntents: GitIntents {

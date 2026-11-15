@@ -49,7 +49,9 @@ final class CloudflareTests: XCTestCase {
                     record("r1", "A", "@", "203.0.113.10", proxied: true),
                     record("r2", "CNAME", "www", "example.com", proxied: true),
                     record("r3", "MX", "@", "mx.example.net", proxied: false, ttl: "1 hr"),
-                ]))
+                ]),
+            settings: [],
+            rules: CloudflareRulesView(loading: false, problem: nil, custom: [], access: [], accessProblem: nil))
     }
 
     private func screen(
@@ -60,7 +62,7 @@ final class CloudflareTests: XCTestCase {
         let listed = accounts ?? [work, home]
         return CloudflareScreen(
             loading: false, configured: !listed.isEmpty, problem: nil, accounts: listed, zone: zone, tokenForm: token,
-            addDomain: nil, recordForm: form, pointDomain: point, biometric: nil)
+            addDomain: nil, recordForm: form, pointDomain: point, ruleBuilder: nil, accessRuleForm: nil, biometric: nil)
     }
 
     private func draft() -> RecordDraft {

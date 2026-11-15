@@ -38,6 +38,19 @@ struct CloudflareIntents {
     var closePointDomain: () -> Void = {}
     var previewPointDomain: (String, String, Bool, Bool) -> Void = { _, _, _, _ in }
     var applyPointDomain: () -> Void = {}
+    var openTab: (CloudflareTab) -> Void = { _ in }
+    var changeSetting: (String, String) -> Void = { _, _ in }
+    var setRuleEnabled: (String, Bool) -> Void = { _, _ in }
+    var deleteRule: (String) -> Void = { _ in }
+    var openRuleBuilder: () -> Void = {}
+    var closeRuleBuilder: () -> Void = {}
+    var addRule: (String, String, String, Bool, String) -> Void = { _, _, _, _, _ in }
+    var openAccessRuleForm: () -> Void = {}
+    var closeAccessRuleForm: () -> Void = {}
+    var addAccessRule: (String, String, String) -> Void = { _, _, _ in }
+    var deleteAccessRule: (String) -> Void = { _ in }
+    var purgeEverything: () -> Void = {}
+    var purgeUrls: (String) -> Void = { _ in }
 }
 
 extension CloudflareTone {
@@ -51,7 +64,7 @@ extension CloudflareTone {
 }
 
 /// Lays chips out in rows, wrapping onto the next line rather than running off the edge.
-private struct Wrap: Layout {
+struct Wrap: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -113,6 +126,10 @@ struct CloudflareOverlay: View {
                 RecordScreen(form: form, intents: intents)
             } else if let point = screen.pointDomain {
                 PointDomainScreen(form: point, intents: intents)
+            } else if let builder = screen.ruleBuilder {
+                RuleBuilderScreen(form: builder, intents: intents)
+            } else if let access = screen.accessRuleForm {
+                AccessRuleScreen(form: access, intents: intents)
             } else {
                 ZoneScreen(zone: zone, error: view.error, intents: intents)
             }
@@ -217,7 +234,7 @@ private struct AccountCard: View {
 }
 
 /// The mono style at the small size, for addresses and permission names.
-private let monoSmall = RunovaTextStyle(
+let monoSmall = RunovaTextStyle(
     size: 12, lineHeight: 16, weight: 400, tracking: 0, fontName: "JetBrainsMono-Regular")
 
 private struct ZoneScreen: View {
@@ -233,28 +250,37 @@ private struct ZoneScreen: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if zone.pending { PendingCard(zone: zone, intents: intents) }
                     if let toggles = zone.toggles { TogglesCard(toggles: toggles, intents: intents) }
-                    RunovaSectionTitle(text: "DNS records")
-                    Wrap {
-                        RunovaChip(text: "Add record", icon: RunovaIcons.add, tone: .primary, action: intents.newRecord)
-                        RunovaChip(text: "Point to a server", icon: RunovaIcons.server, action: intents.openPointDomain)
-                    }
-                    if zone.dns.loading {
-                        LoadingRows()
-                    } else if let problem = zone.dns.problem {
-                        RunovaText(problem, style: RunovaType.small, color: palette.destructive)
-                    } else if zone.dns.records.isEmpty {
-                        RunovaText("No records yet.", style: RunovaType.small, color: palette.mutedForeground)
+                    ZoneTabs(selected: zone.tab, onSelect: intents.openTab)
+                    if zone.tab != .dns {
+                        ZoneTabContent(zone: zone, intents: intents)
                     } else {
-                        VStack(spacing: 0) {
-                            ForEach(zone.dns.records, id: \.id) { RecordRow(record: $0, intents: intents) }
-                        }
-                        .padding(.vertical, 4)
-                        .runovaGlass()
+                        dns
                     }
                 }
                 .padding(16)
             }
             if let error { RunovaText(error, style: RunovaType.small, color: palette.destructive).padding(16) }
+        }
+    }
+
+    @ViewBuilder private var dns: some View {
+        RunovaSectionTitle(text: "DNS records")
+        Wrap {
+            RunovaChip(text: "Add record", icon: RunovaIcons.add, tone: .primary, action: intents.newRecord)
+            RunovaChip(text: "Point to a server", icon: RunovaIcons.server, action: intents.openPointDomain)
+        }
+        if zone.dns.loading {
+            LoadingRows()
+        } else if let problem = zone.dns.problem {
+            RunovaText(problem, style: RunovaType.small, color: palette.destructive)
+        } else if zone.dns.records.isEmpty {
+            RunovaText("No records yet.", style: RunovaType.small, color: palette.mutedForeground)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(zone.dns.records, id: \.id) { RecordRow(record: $0, intents: intents) }
+            }
+            .padding(.vertical, 4)
+            .runovaGlass()
         }
     }
 }
@@ -308,7 +334,7 @@ private struct TogglesCard: View {
     }
 }
 
-private struct SwitchRow: View {
+struct SwitchRow: View {
     let title: String
     let detail: String
     let icon: String
@@ -397,7 +423,7 @@ private struct ProxyPill: View {
     }
 }
 
-private struct FormScreen<Content: View>: View {
+struct FormScreen<Content: View>: View {
     let title: String
     let subtitle: String?
     let onBack: () -> Void
@@ -412,7 +438,7 @@ private struct FormScreen<Content: View>: View {
     }
 }
 
-private struct Field<Content: View>: View {
+struct Field<Content: View>: View {
     let label: String
     var hint: String?
     @ViewBuilder let content: () -> Content
@@ -428,7 +454,7 @@ private struct Field<Content: View>: View {
     }
 }
 
-private struct ChoiceChips<Value: Hashable>: View {
+struct ChoiceChips<Value: Hashable>: View {
     let options: [(Value, String)]
     let selected: Value
     let onSelect: (Value) -> Void
@@ -446,7 +472,7 @@ private struct ChoiceChips<Value: Hashable>: View {
     }
 }
 
-private struct ErrorText: View {
+struct ErrorText: View {
     let message: String
 
     @Environment(\.palette) private var palette

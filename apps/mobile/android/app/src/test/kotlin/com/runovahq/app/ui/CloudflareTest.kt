@@ -27,6 +27,7 @@ import uniffi.runova_ffi.CloudflarePointDomainView
 import uniffi.runova_ffi.CloudflarePointPlanView
 import uniffi.runova_ffi.CloudflareRecordFormView
 import uniffi.runova_ffi.CloudflareRecordView
+import uniffi.runova_ffi.CloudflareRulesView
 import uniffi.runova_ffi.CloudflareScreen
 import uniffi.runova_ffi.CloudflareTab
 import uniffi.runova_ffi.CloudflareTogglesView
@@ -75,7 +76,7 @@ private val toggles = CloudflareTogglesView(true, "On, 2 h 59 min left", true, f
 private fun zone(pending: Boolean = false) = CloudflareZoneView(
     "z1", "example.com", "acct-1", if (pending) "Waiting for name servers" else "Active", !pending, pending,
     "Free Website", listOf("bob.ns.cloudflare.com", "lola.ns.cloudflare.com"), CloudflareTab.DNS,
-    toggles, CloudflareDnsView(false, null, records),
+    toggles, CloudflareDnsView(false, null, records), emptyList(), CloudflareRulesView(false, null, emptyList(), emptyList(), null),
 )
 
 private fun screen(
@@ -84,7 +85,7 @@ private fun screen(
     token: CloudflareTokenFormView? = null,
     form: CloudflareRecordFormView? = null,
     point: CloudflarePointDomainView? = null,
-) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null)
+) = CloudflareScreen(false, accounts.isNotEmpty(), null, accounts, zone, token, null, form, point, null, null, null)
 
 private fun draft(type: String = "A", name: String = "", content: String = "") = RecordDraft(
     type, name, content, 1u, true, 10u, "", 0u.toUByte(), "issue", "", 0u, 0u, 0u, "",

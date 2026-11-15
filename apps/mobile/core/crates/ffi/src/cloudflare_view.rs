@@ -16,6 +16,86 @@ pub enum CloudflareTone {
 pub enum CloudflareTab {
     #[default]
     Dns,
+    Ssl,
+    Caching,
+    Security,
+}
+
+/// A setting is a switch, or a choice between a few values.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
+pub enum CloudflareSettingKind {
+    #[default]
+    Switch,
+    Choice,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareOptionView {
+    pub value: String,
+    pub label: String,
+}
+
+/// One setting, drawn the same way whatever it is: its name, what it does, and its value.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareSettingView {
+    /// What `cloudflare_change_setting` takes back.
+    pub key: String,
+    pub title: String,
+    pub detail: String,
+    pub kind: CloudflareSettingKind,
+    /// The chosen option's value, for a choice.
+    pub value: String,
+    /// Whether a switch is on.
+    pub on: bool,
+    pub options: Vec<CloudflareOptionView>,
+    pub editable: bool,
+    /// What the current value means, when it is worth saying.
+    pub note: Option<String>,
+    pub note_tone: CloudflareTone,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareSettingsGroup {
+    pub title: String,
+    pub detail: String,
+    pub items: Vec<CloudflareSettingView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareRuleView {
+    pub id: String,
+    pub description: String,
+    pub action_label: String,
+    pub tone: CloudflareTone,
+    pub expression: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareAccessRuleView {
+    pub id: String,
+    pub value: String,
+    /// "IP address", "IP range", "Country", "Network (ASN)".
+    pub target_label: String,
+    pub mode_label: String,
+    pub tone: CloudflareTone,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareRulesView {
+    pub loading: bool,
+    pub problem: Option<String>,
+    pub custom: Vec<CloudflareRuleView>,
+    pub access: Vec<CloudflareAccessRuleView>,
+    pub access_problem: Option<String>,
+}
+
+/// A small form's state: why the computer refused it, and whether it is on its way.
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareFormView {
+    pub problem: Option<String>,
+    pub saving: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
@@ -31,6 +111,8 @@ pub struct CloudflareScreen {
     pub add_domain: Option<CloudflareAddDomainView>,
     pub record_form: Option<CloudflareRecordFormView>,
     pub point_domain: Option<CloudflarePointDomainView>,
+    pub rule_builder: Option<CloudflareFormView>,
+    pub access_rule_form: Option<CloudflareFormView>,
     /// The phone's own check, before a pasted token leaves it.
     pub biometric: Option<BiometricRequestView>,
 }
@@ -77,6 +159,9 @@ pub struct CloudflareZoneView {
     /// None until the settings are read, and when the token may not read them.
     pub toggles: Option<CloudflareTogglesView>,
     pub dns: CloudflareDnsView,
+    /// The settings of the open tab, in groups, as the desktop's cards have them.
+    pub settings: Vec<CloudflareSettingsGroup>,
+    pub rules: CloudflareRulesView,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]

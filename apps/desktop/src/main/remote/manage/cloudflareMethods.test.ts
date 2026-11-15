@@ -73,6 +73,24 @@ const A_RECORD: CloudflareDnsRecord = {
 
 const SETTINGS = { developmentMode: { value: 'off' } } as unknown as CloudflareZoneSettings;
 
+const RULE_ID = '3a03d665bac047339bb530ecb439a90d';
+const RULE = {
+  id: RULE_ID,
+  description: 'Block Tor exit nodes',
+  expression: '(ip.src.country in {"T1"})',
+  action: 'block',
+  enabled: true,
+  lastUpdated: '2024-06-01T12:00:00Z',
+};
+const ACCESS_RULE = {
+  id: '92f17202ed8bd63d69a66b86a49a8f6b',
+  mode: 'block' as const,
+  target: 'ip' as const,
+  value: '198.51.100.4',
+  notes: 'Scraper',
+  createdOn: '2024-06-01T12:00:00Z',
+};
+
 function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageCloudflareDeps {
   return {
     service: {
@@ -102,6 +120,14 @@ function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageClou
         preferenceSync: false,
         fightMode: false,
       })),
+      purgeCache: vi.fn(async () => undefined),
+      listCustomRules: vi.fn(async () => [RULE]),
+      createCustomRule: vi.fn(async () => [RULE]),
+      setCustomRuleEnabled: vi.fn(async () => [{ ...RULE, enabled: false }]),
+      deleteCustomRule: vi.fn(async () => []),
+      listAccessRules: vi.fn(async () => [ACCESS_RULE]),
+      createAccessRule: vi.fn(async () => ACCESS_RULE),
+      deleteAccessRule: vi.fn(async () => undefined),
       planPointDomain: vi.fn(async () => ({
         zoneName: 'example.com',
         names: ['example.com'],
@@ -273,6 +299,78 @@ describe('cloudflare methods', () => {
     await call(d, 'cloudflare.planPointDomain', input);
     expect(await call(d, 'cloudflare.pointDomain', input)).toMatchObject({ applied: 2 });
     expect(d.service.pointDomain).toHaveBeenCalledWith(input);
+  });
+
+  it('purges everything or a list of addresses, and says how it went (E99)', async () => {
+    const d = deps();
+    expect(await call(d, 'cloudflare.purgeCache', { zoneId: ZONE, everything: true })).toEqual({
+      ok: true,
+      message: 'Purged everything. Visitors get fresh copies now.',
+    });
+    expect(
+      await call(d, 'cloudflare.purgeCache', {
+        zoneId: ZONE,
+        urls: ['https://example.com/a.css', 'https://example.com/b.js'],
+      }),
+    ).toEqual({ ok: true, message: 'Purged 2 files.' });
+    expect(d.service.purgeCache).toHaveBeenNthCalledWith(1, ZONE, { everything: true });
+    expect(d.service.purgeCache).toHaveBeenNthCalledWith(2, ZONE, {
+      urls: ['https://example.com/a.css', 'https://example.com/b.js'],
+    });
+    const bad = await failure(
+      call(d, 'cloudflare.purgeCache', { zoneId: ZONE, urls: ['ftp://example.com/a'] }),
+    );
+    expect(bad.code).toBe('bad-params');
+  });
+
+  it('lists, adds, switches and deletes WAF custom rules (E99)', async () => {
+    const d = deps();
+    expect(await call(d, 'cloudflare.customRules', { zoneId: ZONE })).toEqual([RULE]);
+    const spec = { kind: 'block-countries', countries: ['CN'] };
+    await call(d, 'cloudflare.createCustomRule', {
+      zoneId: ZONE,
+      input: { description: 'Block CN', spec },
+    });
+    await call(d, 'cloudflare.setCustomRuleEnabled', {
+      zoneId: ZONE,
+      ruleId: RULE_ID,
+      enabled: false,
+    });
+    await call(d, 'cloudflare.deleteCustomRule', { zoneId: ZONE, ruleId: RULE_ID });
+
+    expect(d.service.createCustomRule).toHaveBeenCalledWith(ZONE, {
+      description: 'Block CN',
+      spec,
+    });
+    expect(d.service.setCustomRuleEnabled).toHaveBeenCalledWith(ZONE, RULE_ID, false);
+    expect(d.service.deleteCustomRule).toHaveBeenCalledWith(ZONE, RULE_ID);
+    const raw = await failure(
+      call(d, 'cloudflare.createCustomRule', {
+        zoneId: ZONE,
+        input: { description: 'x', spec: { kind: 'raw', expression: 'true' } },
+      }),
+    );
+    expect(raw.code).toBe('bad-params');
+  });
+
+  it('lists, adds and deletes IP access rules (E99)', async () => {
+    const d = deps();
+    expect(await call(d, 'cloudflare.accessRules', { zoneId: ZONE })).toEqual([ACCESS_RULE]);
+    const input = { mode: 'block', value: '198.51.100.4', notes: 'Scraper' };
+    expect(await call(d, 'cloudflare.createAccessRule', { zoneId: ZONE, input })).toEqual(
+      ACCESS_RULE,
+    );
+    expect(
+      await call(d, 'cloudflare.deleteAccessRule', { zoneId: ZONE, ruleId: ACCESS_RULE.id }),
+    ).toEqual({ ok: true, message: 'Deleted the access rule.' });
+    expect(d.service.createAccessRule).toHaveBeenCalledWith(ZONE, input);
+    const wide = await failure(
+      call(d, 'cloudflare.createAccessRule', {
+        zoneId: ZONE,
+        input: { mode: 'block', value: '203.0.0.0/8', notes: '' },
+      }),
+    );
+    expect(wide.code).toBe('bad-params');
   });
 
   it('refuses parameters of the wrong shape before Cloudflare sees them', async () => {

@@ -59,6 +59,7 @@ import uniffi.runova_ffi.CloudflareAddDomainView
 import uniffi.runova_ffi.CloudflarePointDomainView
 import uniffi.runova_ffi.CloudflareRecordFormView
 import uniffi.runova_ffi.CloudflareRecordView
+import uniffi.runova_ffi.CloudflareTab
 import uniffi.runova_ffi.CloudflareTogglesView
 import uniffi.runova_ffi.CloudflareTokenFormView
 import uniffi.runova_ffi.CloudflareTone
@@ -103,9 +104,22 @@ data class CloudflareIntents(
     val closePointDomain: () -> Unit = {},
     val previewPointDomain: (String, String, Boolean, Boolean) -> Unit = { _, _, _, _ -> },
     val applyPointDomain: () -> Unit = {},
+    val openTab: (CloudflareTab) -> Unit = {},
+    val changeSetting: (String, String) -> Unit = { _, _ -> },
+    val setRuleEnabled: (String, Boolean) -> Unit = { _, _ -> },
+    val deleteRule: (String) -> Unit = {},
+    val openRuleBuilder: () -> Unit = {},
+    val closeRuleBuilder: () -> Unit = {},
+    val addRule: (String, String, String, Boolean, String) -> Unit = { _, _, _, _, _ -> },
+    val openAccessRuleForm: () -> Unit = {},
+    val closeAccessRuleForm: () -> Unit = {},
+    val addAccessRule: (String, String, String) -> Unit = { _, _, _ -> },
+    val deleteAccessRule: (String) -> Unit = {},
+    val purgeEverything: () -> Unit = {},
+    val purgeUrls: (String) -> Unit = {},
 )
 
-private fun CloudflareTone.badge() = when (this) {
+internal fun CloudflareTone.badge() = when (this) {
     CloudflareTone.GOOD -> BadgeTone.Success
     CloudflareTone.WARNING -> BadgeTone.Warning
     CloudflareTone.BAD -> BadgeTone.Danger
@@ -120,6 +134,8 @@ fun CloudflareOverlay(view: AppView, intents: CloudflareIntents): Boolean {
     val zone = screen.zone ?: return false
     screen.recordForm?.let { RecordScreen(it, intents); return true }
     screen.pointDomain?.let { PointDomainScreen(it, intents); return true }
+    screen.ruleBuilder?.let { RuleBuilderScreen(it, intents); return true }
+    screen.accessRuleForm?.let { AccessRuleScreen(it, intents); return true }
     ZoneScreen(zone, view.error, intents)
     return true
 }
@@ -221,6 +237,11 @@ private fun ZoneScreen(zone: CloudflareZoneView, error: String?, intents: Cloudf
                 item(key = "pending") { PendingCard(zone, intents) }
             }
             zone.toggles?.let { toggles -> item(key = "toggles") { TogglesCard(toggles, intents) } }
+            item(key = "tabs") { ZoneTabs(zone.tab, intents.openTab) }
+            if (zone.tab != CloudflareTab.DNS) {
+                zoneTab(zone, intents)
+                return@LazyColumn
+            }
             item(key = "dns-title") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RunovaSectionTitle("DNS records", Modifier.weight(1f))
@@ -290,7 +311,7 @@ private fun TogglesCard(toggles: CloudflareTogglesView, intents: CloudflareInten
 }
 
 @Composable
-private fun SwitchRow(title: String, detail: String, icon: String, on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(title: String, detail: String, icon: String, on: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     val colors = RunovaTheme.colors
     Row(
         Modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -360,7 +381,7 @@ private fun ProxyPill(record: CloudflareRecordView, intents: CloudflareIntents) 
 }
 
 @Composable
-private fun FormScreen(title: String, subtitle: String?, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun FormScreen(title: String, subtitle: String?, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     RunovaScreen(title, subtitle = subtitle, onBack = onBack) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -371,7 +392,7 @@ private fun FormScreen(title: String, subtitle: String?, onBack: () -> Unit, con
 }
 
 @Composable
-private fun Field(label: String, hint: String? = null, content: @Composable () -> Unit) {
+internal fun Field(label: String, hint: String? = null, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         RunovaText(label, style = RunovaType.label)
         content()
@@ -382,14 +403,14 @@ private fun Field(label: String, hint: String? = null, content: @Composable () -
 /** Chips that wrap onto more lines rather than run off the edge. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Wrap(content: @Composable () -> Unit) {
+internal fun Wrap(content: @Composable () -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         content()
     }
 }
 
 @Composable
-private fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, enabled: Boolean = true, onSelect: (T) -> Unit) {
+internal fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, enabled: Boolean = true, onSelect: (T) -> Unit) {
     Wrap {
         options.forEach { (value, label) ->
             RunovaChip(
@@ -404,7 +425,7 @@ private fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, enabled
 }
 
 @Composable
-private fun ErrorText(message: String, modifier: Modifier = Modifier) {
+internal fun ErrorText(message: String, modifier: Modifier = Modifier) {
     RunovaText(message, modifier, RunovaType.small, RunovaTheme.colors.destructive)
 }
 

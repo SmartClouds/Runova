@@ -18,6 +18,8 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use zeroize::Zeroizing;
 
+mod settings;
+
 /// Cloudflare is read again every this many ticks while its screen is open.
 const RELOAD_EVERY_TICKS: u32 = 8;
 const UNREADABLE: &str = "This computer sent something this version of the app can't read.";
@@ -35,6 +37,11 @@ pub(crate) struct CloudflareState {
     level_before_attack: HashMap<String, String>,
     point_input: Option<Value>,
     point_server: String,
+    bots: Option<BotsDto>,
+    /// A setting or switch is being written.
+    saving: bool,
+    custom_rules: Vec<settings::RuleDto>,
+    access_rules: Vec<settings::AccessRuleDto>,
 }
 
 struct PendingToken {
@@ -143,12 +150,25 @@ struct ValueSetting {
 struct SettingsDto {
     development_mode: ValueSetting,
     security_level: ValueSetting,
+    ssl: Option<ValueSetting>,
+    always_use_https: Option<ValueSetting>,
+    automatic_https_rewrites: Option<ValueSetting>,
+    min_tls_version: Option<ValueSetting>,
+    tls13: Option<ValueSetting>,
+    cache_level: Option<ValueSetting>,
+    browser_cache_ttl: Option<ValueSetting>,
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct BotsDto {
     ai_bots: String,
+    #[serde(default)]
+    ai_labyrinth: bool,
+    #[serde(default)]
+    preference_sync: bool,
+    /// None on a plan with Super Bot Fight Mode instead.
+    fight_mode: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -322,6 +342,8 @@ fn zone_view(zone: &ZoneDto) -> CloudflareZoneView {
             problem: None,
             records: Vec::new(),
         },
+        settings: Vec::new(),
+        rules: Default::default(),
     }
 }
 
@@ -380,18 +402,6 @@ fn remaining(seconds: u32) -> String {
         (0, m) => format!("{m} min left"),
         (h, 0) => format!("{h} h left"),
         (h, m) => format!("{h} h {m} min left"),
-    }
-}
-
-fn level_label(level: &str) -> &str {
-    match level {
-        "off" => "Off",
-        "essentially_off" => "Essentially off",
-        "low" => "Low",
-        "medium" => "Medium",
-        "high" => "High",
-        "under_attack" => "I'm Under Attack",
-        other => other,
     }
 }
 
@@ -740,6 +750,7 @@ impl Runner {
     fn load_zone_data(&mut self) {
         self.load_records();
         self.load_toggles();
+        self.load_tab_data();
     }
 
     fn load_records(&mut self) {
@@ -800,36 +811,31 @@ impl Runner {
         );
     }
 
-    /// Redraws the switches from the settings held, with new bot settings when there are some.
-    fn show_toggles(&mut self, bots: Option<BotsDto>, saving: bool) {
+    /// Keeps new bot settings when there are some, and redraws the switches and the open tab.
+    fn show_toggles(&mut self, bots: Option<BotsDto>, _saving: bool) {
+        if let Some(bots) = bots {
+            self.cloudflare.bots = Some(bots);
+        }
+        self.redraw_zone();
+    }
+
+    /// Draws the switches and the open tab's settings from what is held.
+    fn redraw_zone(&mut self) {
         let Some(settings) = self.cloudflare.settings.clone() else {
             return;
         };
+        let bots = self.cloudflare.bots.clone();
+        let saving = self.cloudflare.saving;
         let Some(zone) = self.view.cloudflare.zone.as_mut() else {
             return;
         };
-        let before = zone.toggles.clone();
-        let mut toggles = toggles_of(&settings, bots.as_ref(), saving);
-        if bots.is_none()
-            && let Some(before) = before
-        {
-            toggles.ai_bots_blocked = before.ai_bots_blocked;
-            toggles.ai_bots_detail = before.ai_bots_detail;
-            toggles.ai_bots_available = before.ai_bots_available;
-        }
-        zone.toggles = Some(toggles);
+        zone.toggles = Some(toggles_of(&settings, bots.as_ref(), saving));
+        zone.settings = settings::groups(zone.tab, &zone.name, &settings, bots.as_ref(), saving);
     }
 
     fn set_toggles_saving(&mut self, saving: bool) {
-        if let Some(toggles) = self
-            .view
-            .cloudflare
-            .zone
-            .as_mut()
-            .and_then(|z| z.toggles.as_mut())
-        {
-            toggles.saving = saving;
-        }
+        self.cloudflare.saving = saving;
+        self.redraw_zone();
     }
 
     fn change_setting(&mut self, change: Value, notice: String) {
@@ -893,7 +899,7 @@ impl Runner {
                 .unwrap_or_else(|| DEFAULT_LEVEL.to_owned());
             let notice = format!(
                 "I'm Under Attack is off. Security level is {} again.",
-                level_label(&level)
+                settings::level_label(&level)
             );
             self.change_setting(json!({"setting": "securityLevel", "value": level}), notice);
         }
@@ -935,6 +941,9 @@ impl Runner {
         };
         self.cloudflare.records.clear();
         self.cloudflare.settings = None;
+        self.cloudflare.bots = None;
+        self.cloudflare.custom_rules.clear();
+        self.cloudflare.access_rules.clear();
         self.view.cloudflare.zone = Some(zone_view(&zone));
         self.load_zone_data();
     }
@@ -943,6 +952,8 @@ impl Runner {
         self.view.cloudflare.zone = None;
         self.view.cloudflare.record_form = None;
         self.view.cloudflare.point_domain = None;
+        self.view.cloudflare.rule_builder = None;
+        self.view.cloudflare.access_rule_form = None;
         self.cloudflare.records.clear();
         self.cloudflare.settings = None;
         self.load_cloudflare_status();

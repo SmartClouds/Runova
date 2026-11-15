@@ -30,6 +30,14 @@ export type ManageCloudflareService = Pick<
   | 'changeBotSetting'
   | 'planPointDomain'
   | 'pointDomain'
+  | 'purgeCache'
+  | 'listCustomRules'
+  | 'createCustomRule'
+  | 'setCustomRuleEnabled'
+  | 'deleteCustomRule'
+  | 'listAccessRules'
+  | 'createAccessRule'
+  | 'deleteAccessRule'
 >;
 
 /** What the Cloudflare methods need from the rest of the app. */
@@ -107,6 +115,8 @@ const accountOf = (params: unknown) => checked(() => check.accountId(field(param
 const zoneOf = (params: unknown) => checked(() => check.zoneId(field(params, 'zoneId')));
 const recordOf = (params: unknown) =>
   checked(() => check.itemId(field(params, 'recordId'), 'record'));
+const ruleOf = (params: unknown, what: string) =>
+  checked(() => check.itemId(field(params, 'ruleId'), what));
 
 /**
  * Cloudflare for a phone (E98): every call goes to the desktop's own Cloudflare service, with its
@@ -200,6 +210,59 @@ export function cloudflareMethods(deps: ManageCloudflareDeps): ManageMethods['ca
     'cloudflare.pointDomain': async (params) => {
       const input = checked(() => check.pointDomainInput(params));
       return run(() => service.pointDomain(input));
+    },
+    'cloudflare.purgeCache': async (params) => {
+      const zone = zoneOf(params);
+      const request = checked(() =>
+        check.purgeRequest(
+          field(params, 'everything') === true
+            ? { everything: true }
+            : { urls: field(params, 'urls') },
+        ),
+      );
+      await run(() => service.purgeCache(zone, request));
+      const message =
+        'everything' in request
+          ? 'Purged everything. Visitors get fresh copies now.'
+          : `Purged ${request.urls.length} ${request.urls.length === 1 ? 'file' : 'files'}.`;
+      return { ok: true, message };
+    },
+    'cloudflare.customRules': async (params) => {
+      const zone = zoneOf(params);
+      return run(() => service.listCustomRules(zone));
+    },
+    'cloudflare.createCustomRule': async (params) => {
+      const zone = zoneOf(params);
+      const input = checked(() => check.customRuleInput(field(params, 'input')));
+      return run(() => service.createCustomRule(zone, input));
+    },
+    'cloudflare.setCustomRuleEnabled': async (params) => {
+      const zone = zoneOf(params);
+      const id = ruleOf(params, 'rule');
+      const enabled = checked(() =>
+        check.flag(field(params, 'enabled'), 'Say whether the rule is on or off.'),
+      );
+      return run(() => service.setCustomRuleEnabled(zone, id, enabled));
+    },
+    'cloudflare.deleteCustomRule': async (params) => {
+      const zone = zoneOf(params);
+      const id = ruleOf(params, 'rule');
+      return run(() => service.deleteCustomRule(zone, id));
+    },
+    'cloudflare.accessRules': async (params) => {
+      const zone = zoneOf(params);
+      return run(() => service.listAccessRules(zone));
+    },
+    'cloudflare.createAccessRule': async (params) => {
+      const zone = zoneOf(params);
+      const input = checked(() => check.accessRuleInput(field(params, 'input')));
+      return run(() => service.createAccessRule(zone, input));
+    },
+    'cloudflare.deleteAccessRule': async (params) => {
+      const zone = zoneOf(params);
+      const id = ruleOf(params, 'access rule');
+      await run(() => service.deleteAccessRule(zone, id));
+      return { ok: true, message: 'Deleted the access rule.' };
     },
   };
 }
