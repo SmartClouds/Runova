@@ -352,7 +352,30 @@ final class AppModel: NSObject, ObservableObject {
             addAccessRule: { [weak self] in self?.engine?.cloudflareAddAccessRule(value: $0, mode: $1, notes: $2) },
             deleteAccessRule: { [weak self] in self?.engine?.cloudflareDeleteAccessRule(id: $0) },
             purgeEverything: { [weak self] in self?.engine?.cloudflarePurgeEverything() },
-            purgeUrls: { [weak self] in self?.engine?.cloudflarePurgeUrls(text: $0) })
+            purgeUrls: { [weak self] in self?.engine?.cloudflarePurgeUrls(text: $0) },
+            gatePrepare: { [weak self] in self?.engine?.cloudflareGatePrepare(teamName: $0) },
+            gateSwitch: { [weak self] in self?.engine?.cloudflareGateSwitch(hostname: $0, on: $1) },
+            gateEdit: { [weak self] in self?.engine?.cloudflareGateEdit(hostname: $0) },
+            gateClose: { [weak self] in self?.engine?.cloudflareGateClose() },
+            gateAddPeople: { [weak self] in self?.engine?.cloudflareGateAddPeople(text: $0) },
+            gateRemovePerson: { [weak self] in self?.engine?.cloudflareGateRemovePerson(value: $0, domain: $1) },
+            gateSetSession: { [weak self] in self?.engine?.cloudflareGateSetSession(session: $0) },
+            gateSave: { [weak self] in self?.engine?.cloudflareGateSave() },
+            gateTurnOff: { [weak self] in self?.engine?.cloudflareGateTurnOff(hostname: $0) },
+            gateProxy: { [weak self] in self?.engine?.cloudflareGateProxy(hostname: $0) },
+            gateLetThrough: { [weak self] in self?.engine?.cloudflareGateLetThrough(hostname: $0) },
+            openIpLimit: { [weak self] in self?.engine?.cloudflareOpenIpLimit(ruleId: $0) },
+            closeIpLimit: { [weak self] in self?.engine?.cloudflareCloseIpLimit() },
+            ipLimitSetName: { [weak self] in self?.engine?.cloudflareIpLimitSetName(hostname: $0) },
+            ipLimitSetScope: { [weak self] in self?.engine?.cloudflareIpLimitSetScope(wholeSite: $0) },
+            ipLimitSetPath: { [weak self] in self?.engine?.cloudflareIpLimitSetPath(path: $0) },
+            ipLimitSetPrefix: { [weak self] in self?.engine?.cloudflareIpLimitSetPrefix(prefix: $0) },
+            ipLimitAddAddresses: { [weak self] in self?.engine?.cloudflareIpLimitAddAddresses(text: $0) },
+            ipLimitRemoveAddress: { [weak self] in self?.engine?.cloudflareIpLimitRemoveAddress(address: $0) },
+            ipLimitAddThisComputer: { [weak self] in self?.engine?.cloudflareIpLimitAddThisComputer() },
+            ipLimitSave: { [weak self] in self?.engine?.cloudflareIpLimitSave() },
+            ipLimitSetEnabled: { [weak self] in self?.engine?.cloudflareIpLimitSetEnabled(id: $0, enabled: $1) },
+            ipLimitDelete: { [weak self] in self?.engine?.cloudflareIpLimitDelete(id: $0) })
     }
 
     private var gitIntents: GitIntents {

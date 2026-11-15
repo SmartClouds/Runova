@@ -3,6 +3,10 @@ package com.runovahq.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +61,7 @@ private val ZONE_TABS = listOf(
     CloudflareTab.SSL to "SSL/TLS",
     CloudflareTab.CACHING to "Caching",
     CloudflareTab.SECURITY to "Security",
+    CloudflareTab.ACCESS to "Access",
 )
 
 /** A choice with more options than this folds away behind its current value. */
@@ -80,24 +85,28 @@ private val ACCESS_MODES = listOf(
 @Composable
 internal fun ZoneTabs(selected: CloudflareTab, onSelect: (CloudflareTab) -> Unit) {
     val colors = RunovaTheme.colors
-    Row(
+    // Scrolls sideways when the tabs are wider than the phone, and keeps the open one in view.
+    val strip = rememberLazyListState()
+    val index = ZONE_TABS.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    LaunchedEffect(index) { strip.animateScrollToItem(index) }
+    LazyRow(
         Modifier
             .fillMaxWidth()
             .clip(CircleShape)
-            .background(colors.foreground.copy(alpha = 0.05f))
-            .padding(3.dp),
+            .background(colors.foreground.copy(alpha = 0.05f)),
+        state = strip,
+        contentPadding = PaddingValues(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        ZONE_TABS.forEach { (tab, label) ->
+        items(ZONE_TABS, key = { it.second }) { (tab, label) ->
             val on = tab == selected
             Box(
                 Modifier
-                    .weight(1f)
                     .clip(CircleShape)
                     .background(if (on) colors.primary.copy(alpha = 0.14f) else colors.foreground.copy(alpha = 0f))
                     .clickable(role = Role.Tab) { onSelect(tab) }
                     .semantics { this.selected = on }
-                    .padding(vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 RunovaText(label, style = RunovaType.labelStrong, color = if (on) colors.primary else colors.mutedForeground, maxLines = 1)
@@ -108,6 +117,10 @@ internal fun ZoneTabs(selected: CloudflareTab, onSelect: (CloudflareTab) -> Unit
 
 /** Everything a tab other than DNS shows, under the switches and the tab strip. */
 internal fun LazyListScope.zoneTab(zone: CloudflareZoneView, intents: CloudflareIntents) {
+    if (zone.tab == CloudflareTab.ACCESS) {
+        accessTab(zone.access, intents)
+        return
+    }
     if (zone.settings.isEmpty()) {
         item(key = "settings-loading") { LoadingRows() }
     }

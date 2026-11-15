@@ -1,3 +1,4 @@
+import { type IpLockSpec, ipLockDescription, parseIpLock } from '../../../shared/cloudflare/ipLock';
 import { cloudflarePermission, tokenProblem } from '../../../shared/cloudflare/permissions';
 import { cloudflareErrorMessage } from '../../../shared/cloudflareErrors';
 import type {
@@ -5,8 +6,10 @@ import type {
   CloudflarePermissionId,
   CloudflareStatus,
 } from '../../../shared/cloudflareTypes';
+import type { CloudflareEmailGateOps } from '../../deploy/cloudflare/emailGate';
 import type { CloudflareService } from '../../deploy/cloudflare/service';
 import { cloudflareInputs as check } from '../../ipc/cloudflare';
+import { emailGateInputs as gate } from '../../ipc/cloudflareEmailGate';
 import { ManageError, type ManageMethods } from './session';
 
 /** The parts of the desktop's Cloudflare service a phone reaches. */
@@ -38,6 +41,7 @@ export type ManageCloudflareService = Pick<
   | 'listAccessRules'
   | 'createAccessRule'
   | 'deleteAccessRule'
+  | 'updateCustomRule'
 >;
 
 /** What the Cloudflare methods need from the rest of the app. */
@@ -45,6 +49,31 @@ export interface ManageCloudflareDeps {
   service: ManageCloudflareService;
   /** Saved servers a domain can point at; this computer's own dev host is left out. */
   servers(): Promise<{ id: string; name: string }[]>;
+  emailGate: Pick<
+    CloudflareEmailGateOps,
+    'plan' | 'prepare' | 'save' | 'remove' | 'letThisComputerThrough' | 'proxy'
+  >;
+  /** This computer's address on the internet, for an IP limit that lets it in. */
+  publicIp(): Promise<string | null>;
+}
+
+/** An IP limit as a phone lists it: read back from its rule by the desktop's own reader. */
+export interface ManageIpLimit {
+  id: string;
+  enabled: boolean;
+  hostname: string | null;
+  path: string | null;
+  match: 'exact' | 'prefix';
+  ips: string[];
+}
+
+function ipLimits(rules: { id: string; enabled: boolean; expression: string; action: string }[]) {
+  return rules.flatMap((rule): ManageIpLimit[] => {
+    const spec = parseIpLock(rule);
+    if (!spec) return [];
+    const { hostname, path, match, ips } = spec;
+    return [{ id: rule.id, enabled: rule.enabled, hostname, path, match, ips }];
+  });
 }
 
 /** How one account stands, for a phone: its permissions in words, never its token's id. */
@@ -257,6 +286,68 @@ export function cloudflareMethods(deps: ManageCloudflareDeps): ManageMethods['ca
       const zone = zoneOf(params);
       const input = checked(() => check.accessRuleInput(field(params, 'input')));
       return run(() => service.createAccessRule(zone, input));
+    },
+    'cloudflare.emailGatePlan': async (params) => {
+      const zone = zoneOf(params);
+      return run(() => deps.emailGate.plan(zone));
+    },
+    'cloudflare.emailGatePrepare': async (params) => {
+      const input = checked(() => gate.prepareInput(params));
+      return run(() => deps.emailGate.prepare(input));
+    },
+    'cloudflare.emailGateSave': async (params) => {
+      const input = checked(() => gate.emailGateInput(params));
+      return run(() => deps.emailGate.save(input));
+    },
+    'cloudflare.emailGateRemove': async (params) => {
+      const target = checked(() => gate.target(params));
+      await run(() => deps.emailGate.remove(target));
+      return { ok: true, message: `${target.hostname} is open to everyone again.` };
+    },
+    'cloudflare.emailGateLetThrough': async (params) => {
+      const target = checked(() => gate.target(params));
+      await run(() => deps.emailGate.letThisComputerThrough(target));
+      return {
+        ok: true,
+        message: `This computer has its own pass through ${target.hostname} now.`,
+      };
+    },
+    'cloudflare.emailGateProxy': async (params) => {
+      const target = checked(() => gate.target(params));
+      await run(() => deps.emailGate.proxy(target));
+      return { ok: true, message: `${target.hostname} goes through Cloudflare's proxy now.` };
+    },
+    'cloudflare.ipLimits': async (params) => {
+      const zone = zoneOf(params);
+      return ipLimits(await run(() => service.listCustomRules(zone)));
+    },
+    'cloudflare.saveIpLimit': async (params) => {
+      const zone = zoneOf(params);
+      const ruleId = field(params, 'ruleId');
+      const id = ruleId === undefined ? null : ruleOf(params, 'rule');
+      const input = checked(() => {
+        const checkedInput = check.customRuleInput({
+          description: 'IP limit',
+          spec: field(params, 'spec'),
+        });
+        if (checkedInput.spec.kind !== 'ip-lock')
+          throw new Error('Only an IP limit is saved here.');
+        const spec = checkedInput.spec as IpLockSpec;
+        return { description: ipLockDescription(spec), spec };
+      });
+      const rules = await run(() =>
+        id === null
+          ? service.createCustomRule(zone, input)
+          : service.updateCustomRule(zone, id, input),
+      );
+      return ipLimits(rules);
+    },
+    'cloudflare.publicAddress': async () => {
+      try {
+        return { ip: await deps.publicIp() };
+      } catch {
+        return { ip: null };
+      }
     },
     'cloudflare.deleteAccessRule': async (params) => {
       const zone = zoneOf(params);

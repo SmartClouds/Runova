@@ -93,6 +93,9 @@ function prepareInput(value: unknown): EmailGatePrepareInput {
   return { zoneId: zoneId(input.zoneId), teamName: input.teamName.trim() };
 }
 
+/** The same checks for the phone's calls (E100), so what the desktop refuses is refused there too. */
+export const emailGateInputs = { zoneId, target, emailGateInput, prepareInput };
+
 export function registerCloudflareEmailGateHandlers({
   ipc,
   ops,

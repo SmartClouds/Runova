@@ -73,6 +73,21 @@ const A_RECORD: CloudflareDnsRecord = {
 
 const SETTINGS = { developmentMode: { value: 'off' } } as unknown as CloudflareZoneSettings;
 
+const GATE_PLAN = {
+  cloudflareAccountId: '01a7362d577a6c3019a474fd6f485823',
+  readiness: { organization: true, teamDomain: 'acme.cloudflareaccess.com', oneTimePin: true },
+  hosts: [],
+};
+const IP_LIMIT = {
+  id: 'e'.repeat(32),
+  description: 'Only listed IPs, app.example.com/admin*',
+  expression:
+    '(http.host eq "app.example.com" and starts_with(http.request.uri.path, "/admin") and not ip.src in {203.0.113.10 198.51.100.0/24})',
+  action: 'block',
+  enabled: true,
+  lastUpdated: '2026-11-15T10:00:00Z',
+};
+
 const RULE_ID = '3a03d665bac047339bb530ecb439a90d';
 const RULE = {
   id: RULE_ID,
@@ -128,6 +143,7 @@ function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageClou
       listAccessRules: vi.fn(async () => [ACCESS_RULE]),
       createAccessRule: vi.fn(async () => ACCESS_RULE),
       deleteAccessRule: vi.fn(async () => undefined),
+      updateCustomRule: vi.fn(async () => []),
       planPointDomain: vi.fn(async () => ({
         zoneName: 'example.com',
         names: ['example.com'],
@@ -151,6 +167,15 @@ function deps(change: Partial<ManageCloudflareDeps['service']> = {}): ManageClou
       { id: 'srv-1', name: 'prod' },
       { id: 'dev', name: 'This computer' },
     ],
+    emailGate: {
+      plan: vi.fn(async () => GATE_PLAN),
+      prepare: vi.fn(async () => GATE_PLAN.readiness),
+      save: vi.fn(async () => ({ kind: 'off' as const })),
+      remove: vi.fn(async () => undefined),
+      letThisComputerThrough: vi.fn(async () => undefined),
+      proxy: vi.fn(async () => undefined),
+    },
+    publicIp: async () => '203.0.113.77',
   };
 }
 
@@ -371,6 +396,126 @@ describe('cloudflare methods', () => {
       }),
     );
     expect(wide.code).toBe('bad-params');
+  });
+
+  it("runs the email code gate through the desktop's own checks (E100)", async () => {
+    const d = deps();
+    const target = { zoneId: ZONE, hostname: 'App.Example.com' };
+    expect(await call(d, 'cloudflare.emailGatePlan', { zoneId: ZONE })).toEqual(GATE_PLAN);
+    await call(d, 'cloudflare.emailGatePrepare', { zoneId: ZONE, teamName: ' acme ' });
+    await call(d, 'cloudflare.emailGateSave', {
+      ...target,
+      emails: ['Ana@Example.com'],
+      emailDomains: ['company.com'],
+      session: '24h',
+    });
+    expect(await call(d, 'cloudflare.emailGateRemove', target)).toEqual({
+      ok: true,
+      message: 'app.example.com is open to everyone again.',
+    });
+    expect(await call(d, 'cloudflare.emailGateLetThrough', target)).toEqual({
+      ok: true,
+      message: 'This computer has its own pass through app.example.com now.',
+    });
+    expect(await call(d, 'cloudflare.emailGateProxy', target)).toEqual({
+      ok: true,
+      message: "app.example.com goes through Cloudflare's proxy now.",
+    });
+
+    expect(d.emailGate.prepare).toHaveBeenCalledWith({ zoneId: ZONE, teamName: 'acme' });
+    expect(d.emailGate.save).toHaveBeenCalledWith({
+      zoneId: ZONE,
+      hostname: 'app.example.com',
+      emails: ['ana@example.com'],
+      emailDomains: ['company.com'],
+      session: '24h',
+    });
+    expect(d.emailGate.remove).toHaveBeenCalledWith({ zoneId: ZONE, hostname: 'app.example.com' });
+    const wildcard = await failure(
+      call(d, 'cloudflare.emailGateSave', {
+        ...target,
+        hostname: '*.example.com',
+        emails: [],
+        emailDomains: [],
+        session: '24h',
+      }),
+    );
+    expect(wildcard.code).toBe('bad-params');
+    const session = await failure(
+      call(d, 'cloudflare.emailGateSave', {
+        ...target,
+        emails: [],
+        emailDomains: [],
+        session: '1y',
+      }),
+    );
+    expect(session.code).toBe('bad-params');
+  });
+
+  it('lists IP limits already read back, and saves one with its description (E100)', async () => {
+    const d = deps({
+      listCustomRules: vi.fn(async () => [RULE, IP_LIMIT]),
+      createCustomRule: vi.fn(async () => [RULE, IP_LIMIT]),
+      updateCustomRule: vi.fn(async () => [RULE, IP_LIMIT]),
+    });
+    const limit = {
+      id: IP_LIMIT.id,
+      enabled: true,
+      hostname: 'app.example.com',
+      path: '/admin',
+      match: 'prefix',
+      ips: ['203.0.113.10', '198.51.100.0/24'],
+    };
+    expect(await call(d, 'cloudflare.ipLimits', { zoneId: ZONE })).toEqual([limit]);
+
+    const spec = {
+      kind: 'ip-lock',
+      hostname: null,
+      path: null,
+      match: 'prefix',
+      ips: ['203.0.113.10'],
+    };
+    expect(await call(d, 'cloudflare.saveIpLimit', { zoneId: ZONE, spec })).toEqual([limit]);
+    expect(d.service.createCustomRule).toHaveBeenCalledWith(ZONE, {
+      description: 'Only listed IPs, every name',
+      spec,
+    });
+    await call(d, 'cloudflare.saveIpLimit', { zoneId: ZONE, ruleId: IP_LIMIT.id, spec });
+    expect(d.service.updateCustomRule).toHaveBeenCalledWith(ZONE, IP_LIMIT.id, {
+      description: 'Only listed IPs, every name',
+      spec,
+    });
+
+    const notALimit = await failure(
+      call(d, 'cloudflare.saveIpLimit', {
+        zoneId: ZONE,
+        spec: { kind: 'block-countries', countries: ['CN'] },
+      }),
+    );
+    expect(notALimit).toMatchObject({
+      code: 'bad-params',
+      message: 'Only an IP limit is saved here.',
+    });
+    const leaky = await failure(
+      call(d, 'cloudflare.saveIpLimit', {
+        zoneId: ZONE,
+        spec: { ...spec, ips: ['203.0.113.10}'] },
+      }),
+    );
+    expect(leaky.code).toBe('bad-params');
+  });
+
+  it("says this computer's public address, or that it is not known (E100)", async () => {
+    expect(await call(deps(), 'cloudflare.publicAddress')).toEqual({ ip: '203.0.113.77' });
+    const offline = { ...deps(), publicIp: async () => null };
+    expect(await call(offline, 'cloudflare.publicAddress')).toEqual({ ip: null });
+    const failing = {
+      ...deps(),
+      publicIp: async () => {
+        throw new Error('offline');
+      },
+    };
+    expect(await call(failing, 'cloudflare.publicAddress')).toEqual({ ip: null });
   });
 
   it('refuses parameters of the wrong shape before Cloudflare sees them', async () => {

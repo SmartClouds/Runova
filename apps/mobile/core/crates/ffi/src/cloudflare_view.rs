@@ -19,6 +19,107 @@ pub enum CloudflareTab {
     Ssl,
     Caching,
     Security,
+    Access,
+}
+
+/// Where a name stands with the email code gate.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
+pub enum CloudflareGateState {
+    #[default]
+    Off,
+    On,
+    /// An Access application the app did not make: shown, never changed.
+    Elsewhere,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareGateHostView {
+    pub hostname: String,
+    /// "Core server", "Site blog", "SSH", or none for a name no server claims.
+    pub role_label: Option<String>,
+    pub proxied: bool,
+    /// Its record can be put behind the proxy from here.
+    pub can_proxy: bool,
+    pub state: CloudflareGateState,
+    /// "Email code, 3 people, 24 hours", "Open to everyone", and so on.
+    pub summary: String,
+    /// The core server's domain, where this computer needs a pass.
+    pub core: bool,
+    pub this_computer_pass: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareIpLimitView {
+    pub id: String,
+    /// "app.example.com/admin and below", "every name in example.com".
+    pub target: String,
+    pub ips: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareAccessView {
+    pub loading: bool,
+    pub problem: Option<String>,
+    /// Email codes are turned on for the account.
+    pub ready: bool,
+    /// The account has no Zero Trust team yet, so turning codes on needs a team name.
+    pub needs_team: bool,
+    pub team_domain: Option<String>,
+    pub hosts: Vec<CloudflareGateHostView>,
+    pub limits: Vec<CloudflareIpLimitView>,
+    pub limits_problem: Option<String>,
+}
+
+/// Someone who may ask for a code: an address, or everyone at a domain.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflarePersonView {
+    pub value: String,
+    pub domain: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareEmailGateFormView {
+    pub hostname: String,
+    /// The name has a gate already; the form changes it.
+    pub existing: bool,
+    pub people: Vec<CloudflarePersonView>,
+    /// What could not be used, with why: "nope: Type an email address...".
+    pub invalid: Vec<String>,
+    pub session: String,
+    pub sessions: Vec<CloudflareOptionView>,
+    /// Who can open the name and for how long, in one sentence.
+    pub preview: String,
+    pub core_note: Option<String>,
+    /// The people came from the last list used.
+    pub from_last: bool,
+    pub saving: bool,
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CloudflareIpLimitFormView {
+    /// None for a new limit.
+    pub rule_id: Option<String>,
+    /// The names behind the proxy, and "*" for every name.
+    pub names: Vec<CloudflareOptionView>,
+    /// The chosen name, "*" for every name, or empty until one is picked.
+    pub hostname: String,
+    pub whole_site: bool,
+    pub path: String,
+    pub prefix: bool,
+    pub path_problem: Option<String>,
+    pub ips: Vec<String>,
+    pub invalid: Vec<String>,
+    /// The computer's own address on the internet, when it is known.
+    pub this_computer: Option<String>,
+    pub can_add_this_computer: bool,
+    /// The list leaves the computer out, so it would get the block page too.
+    pub shut_out: bool,
+    pub preview: String,
+    pub can_save: bool,
+    pub saving: bool,
+    pub problem: Option<String>,
 }
 
 /// A setting is a switch, or a choice between a few values.
@@ -113,6 +214,8 @@ pub struct CloudflareScreen {
     pub point_domain: Option<CloudflarePointDomainView>,
     pub rule_builder: Option<CloudflareFormView>,
     pub access_rule_form: Option<CloudflareFormView>,
+    pub email_gate_form: Option<CloudflareEmailGateFormView>,
+    pub ip_limit_form: Option<CloudflareIpLimitFormView>,
     /// The phone's own check, before a pasted token leaves it.
     pub biometric: Option<BiometricRequestView>,
 }
@@ -162,6 +265,7 @@ pub struct CloudflareZoneView {
     /// The settings of the open tab, in groups, as the desktop's cards have them.
     pub settings: Vec<CloudflareSettingsGroup>,
     pub rules: CloudflareRulesView,
+    pub access: CloudflareAccessView,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]

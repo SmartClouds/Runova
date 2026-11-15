@@ -175,17 +175,15 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
       }),
       guard,
     });
-    registerCloudflareEmailGateHandlers({
-      ipc: ipcMain,
-      ops: new CloudflareEmailGateOps({
-        cloudflare: service,
-        passes: state,
-        seal: encryptSecret,
-        servers: core.servers,
-        links: { call: core.call },
-        computerName,
-      }),
-      guard,
+    const emailGate = new CloudflareEmailGateOps({
+      cloudflare: service,
+      passes: state,
+      seal: encryptSecret,
+      servers: core.servers,
+      links: { call: core.call },
+      computerName,
     });
+    setLiveDeployServices({ cloudflareEmailGate: emailGate });
+    registerCloudflareEmailGateHandlers({ ipc: ipcMain, ops: emailGate, guard });
   }
 }

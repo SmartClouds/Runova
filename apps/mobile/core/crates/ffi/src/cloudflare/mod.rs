@@ -18,6 +18,7 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use zeroize::Zeroizing;
 
+mod access;
 mod settings;
 
 /// Cloudflare is read again every this many ticks while its screen is open.
@@ -42,6 +43,7 @@ pub(crate) struct CloudflareState {
     saving: bool,
     custom_rules: Vec<settings::RuleDto>,
     access_rules: Vec<settings::AccessRuleDto>,
+    access: access::AccessState,
 }
 
 struct PendingToken {
@@ -344,6 +346,7 @@ fn zone_view(zone: &ZoneDto) -> CloudflareZoneView {
         },
         settings: Vec::new(),
         rules: Default::default(),
+        access: Default::default(),
     }
 }
 
@@ -954,6 +957,8 @@ impl Runner {
         self.view.cloudflare.point_domain = None;
         self.view.cloudflare.rule_builder = None;
         self.view.cloudflare.access_rule_form = None;
+        self.view.cloudflare.email_gate_form = None;
+        self.view.cloudflare.ip_limit_form = None;
         self.cloudflare.records.clear();
         self.cloudflare.settings = None;
         self.load_cloudflare_status();

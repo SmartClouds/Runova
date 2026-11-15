@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The tabs of a domain, in the desktop's order.
 private let zoneTabs: [(CloudflareTab, String)] = [
-    (.dns, "DNS"), (.ssl, "SSL/TLS"), (.caching, "Caching"), (.security, "Security"),
+    (.dns, "DNS"), (.ssl, "SSL/TLS"), (.caching, "Caching"), (.security, "Security"), (.access, "Access"),
 ]
 
 /// A choice with more options than this folds away behind its current value.
@@ -26,28 +26,39 @@ struct ZoneTabs: View {
 
     @Environment(\.palette) private var palette
 
+    // Scrolls sideways when the tabs are wider than the phone, and keeps the open one in view.
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(zoneTabs.enumerated()), id: \.offset) { _, entry in
-                let on = entry.0 == selected
-                Button {
-                    onSelect(entry.0)
-                } label: {
-                    RunovaText(
-                        entry.1, style: RunovaType.labelStrong, color: on ? palette.primary : palette.mutedForeground,
-                        maxLines: 1
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(on ? palette.primary.opacity(0.14) : Color.clear))
-                    .contentShape(Capsule())
+        ScrollViewReader { reader in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(Array(zoneTabs.enumerated()), id: \.offset) { index, entry in
+                        let on = entry.0 == selected
+                        Button {
+                            onSelect(entry.0)
+                        } label: {
+                            RunovaText(
+                                entry.1, style: RunovaType.labelStrong,
+                                color: on ? palette.primary : palette.mutedForeground, maxLines: 1
+                            )
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(on ? palette.primary.opacity(0.14) : Color.clear))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? [.isSelected] : [])
+                        .id(index)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? [.isSelected] : [])
+                .padding(3)
+            }
+            .background(Capsule().fill(palette.foreground.opacity(0.05)))
+            .clipShape(Capsule())
+            .onAppear { reader.scrollTo(zoneTabs.firstIndex { $0.0 == selected } ?? 0) }
+            .onChange(of: selected) { tab in
+                withAnimation { reader.scrollTo(zoneTabs.firstIndex { $0.0 == tab } ?? 0) }
             }
         }
-        .padding(3)
-        .background(Capsule().fill(palette.foreground.opacity(0.05)))
     }
 }
 
@@ -57,6 +68,14 @@ struct ZoneTabContent: View {
     let intents: CloudflareIntents
 
     var body: some View {
+        if zone.tab == .access {
+            AccessTab(access: zone.access, intents: intents)
+        } else {
+            settings
+        }
+    }
+
+    @ViewBuilder private var settings: some View {
         if zone.settings.isEmpty { LoadingRows() }
         ForEach(Array(zone.settings.enumerated()), id: \.offset) { _, group in
             GroupCard(group: group, intents: intents)

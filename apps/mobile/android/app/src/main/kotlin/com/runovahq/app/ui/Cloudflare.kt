@@ -117,6 +117,29 @@ data class CloudflareIntents(
     val deleteAccessRule: (String) -> Unit = {},
     val purgeEverything: () -> Unit = {},
     val purgeUrls: (String) -> Unit = {},
+    val gatePrepare: (String) -> Unit = {},
+    val gateSwitch: (String, Boolean) -> Unit = { _, _ -> },
+    val gateEdit: (String) -> Unit = {},
+    val gateClose: () -> Unit = {},
+    val gateAddPeople: (String) -> Unit = {},
+    val gateRemovePerson: (String, Boolean) -> Unit = { _, _ -> },
+    val gateSetSession: (String) -> Unit = {},
+    val gateSave: () -> Unit = {},
+    val gateTurnOff: (String) -> Unit = {},
+    val gateProxy: (String) -> Unit = {},
+    val gateLetThrough: (String) -> Unit = {},
+    val openIpLimit: (String?) -> Unit = {},
+    val closeIpLimit: () -> Unit = {},
+    val ipLimitSetName: (String) -> Unit = {},
+    val ipLimitSetScope: (Boolean) -> Unit = {},
+    val ipLimitSetPath: (String) -> Unit = {},
+    val ipLimitSetPrefix: (Boolean) -> Unit = {},
+    val ipLimitAddAddresses: (String) -> Unit = {},
+    val ipLimitRemoveAddress: (String) -> Unit = {},
+    val ipLimitAddThisComputer: () -> Unit = {},
+    val ipLimitSave: () -> Unit = {},
+    val ipLimitSetEnabled: (String, Boolean) -> Unit = { _, _ -> },
+    val ipLimitDelete: (String) -> Unit = {},
 )
 
 internal fun CloudflareTone.badge() = when (this) {
@@ -136,6 +159,8 @@ fun CloudflareOverlay(view: AppView, intents: CloudflareIntents): Boolean {
     screen.pointDomain?.let { PointDomainScreen(it, intents); return true }
     screen.ruleBuilder?.let { RuleBuilderScreen(it, intents); return true }
     screen.accessRuleForm?.let { AccessRuleScreen(it, intents); return true }
+    screen.emailGateForm?.let { EmailGateScreen(it, intents); return true }
+    screen.ipLimitForm?.let { IpLimitScreen(it, intents); return true }
     ZoneScreen(zone, view.error, intents)
     return true
 }

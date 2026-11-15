@@ -225,7 +225,7 @@ pub(super) fn groups(
     saving: bool,
 ) -> Vec<CloudflareSettingsGroup> {
     match tab {
-        CloudflareTab::Dns => Vec::new(),
+        CloudflareTab::Dns | CloudflareTab::Access => Vec::new(),
         CloudflareTab::Ssl => vec![ssl_group(zone, settings, saving)],
         CloudflareTab::Caching => vec![caching_group(zone, settings, saving)],
         CloudflareTab::Security => {
@@ -573,8 +573,10 @@ impl Runner {
         let Some(zone) = self.view.cloudflare.zone.as_ref() else {
             return;
         };
-        if zone.tab == CloudflareTab::Security {
-            self.load_rules();
+        match zone.tab {
+            CloudflareTab::Security => self.load_rules(),
+            CloudflareTab::Access => self.load_access(),
+            _ => {}
         }
     }
 

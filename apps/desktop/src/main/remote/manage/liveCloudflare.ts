@@ -1,4 +1,5 @@
 import { liveDeployService } from '../../deploy/liveServices';
+import { publicIpAddress } from '../../ipc/ipGeo';
 import type { ManageCloudflareDeps, ManageCloudflareService } from './cloudflareMethods';
 
 /**
@@ -14,8 +15,21 @@ const service = new Proxy({} as ManageCloudflareService, {
       ](...args),
 });
 
+/** The running email code gate, looked up on each call like the service. */
+const emailGate: ManageCloudflareDeps['emailGate'] = {
+  plan: (zoneId) => liveDeployService('cloudflareEmailGate').plan(zoneId),
+  prepare: (input) => liveDeployService('cloudflareEmailGate').prepare(input),
+  save: (input) => liveDeployService('cloudflareEmailGate').save(input),
+  remove: (target) => liveDeployService('cloudflareEmailGate').remove(target),
+  letThisComputerThrough: (target) =>
+    liveDeployService('cloudflareEmailGate').letThisComputerThrough(target),
+  proxy: (target) => liveDeployService('cloudflareEmailGate').proxy(target),
+};
+
 export const liveCloudflare: ManageCloudflareDeps = {
   service,
+  emailGate,
+  publicIp: publicIpAddress,
   servers: async () =>
     (await liveDeployService('deploy').listServers())
       .filter((server) => !server.dev)

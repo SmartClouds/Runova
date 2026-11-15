@@ -72,6 +72,12 @@ function cachedIpGeo(force: boolean): Promise<IpGeoInfo> {
   return inFlight;
 }
 
+/** This machine's public address, from the same cached lookup the status bar uses. */
+export async function publicIpAddress(): Promise<string | null> {
+  const { ip } = await cachedIpGeo(false);
+  return ip || null;
+}
+
 export function registerIpGeoHandlers(): void {
   ipcMain.handle(
     IPC.ipGeo.lookup,

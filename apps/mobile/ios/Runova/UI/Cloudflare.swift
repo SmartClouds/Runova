@@ -51,6 +51,29 @@ struct CloudflareIntents {
     var deleteAccessRule: (String) -> Void = { _ in }
     var purgeEverything: () -> Void = {}
     var purgeUrls: (String) -> Void = { _ in }
+    var gatePrepare: (String) -> Void = { _ in }
+    var gateSwitch: (String, Bool) -> Void = { _, _ in }
+    var gateEdit: (String) -> Void = { _ in }
+    var gateClose: () -> Void = {}
+    var gateAddPeople: (String) -> Void = { _ in }
+    var gateRemovePerson: (String, Bool) -> Void = { _, _ in }
+    var gateSetSession: (String) -> Void = { _ in }
+    var gateSave: () -> Void = {}
+    var gateTurnOff: (String) -> Void = { _ in }
+    var gateProxy: (String) -> Void = { _ in }
+    var gateLetThrough: (String) -> Void = { _ in }
+    var openIpLimit: (String?) -> Void = { _ in }
+    var closeIpLimit: () -> Void = {}
+    var ipLimitSetName: (String) -> Void = { _ in }
+    var ipLimitSetScope: (Bool) -> Void = { _ in }
+    var ipLimitSetPath: (String) -> Void = { _ in }
+    var ipLimitSetPrefix: (Bool) -> Void = { _ in }
+    var ipLimitAddAddresses: (String) -> Void = { _ in }
+    var ipLimitRemoveAddress: (String) -> Void = { _ in }
+    var ipLimitAddThisComputer: () -> Void = {}
+    var ipLimitSave: () -> Void = {}
+    var ipLimitSetEnabled: (String, Bool) -> Void = { _, _ in }
+    var ipLimitDelete: (String) -> Void = { _ in }
 }
 
 extension CloudflareTone {
@@ -130,6 +153,10 @@ struct CloudflareOverlay: View {
                 RuleBuilderScreen(form: builder, intents: intents)
             } else if let access = screen.accessRuleForm {
                 AccessRuleScreen(form: access, intents: intents)
+            } else if let gate = screen.emailGateForm {
+                EmailGateScreen(form: gate, intents: intents)
+            } else if let limit = screen.ipLimitForm {
+                IpLimitScreen(form: limit, intents: intents)
             } else {
                 ZoneScreen(zone: zone, error: view.error, intents: intents)
             }
