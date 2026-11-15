@@ -211,6 +211,47 @@ public sealed class HubCoreDomainTests
         Assert.True((await hub.InvokeAsync<CoreDomainStatus>(nameof(ICoreHub.GetCoreDomain), Cancel)).OriginLocked);
     }
 
+    /// <summary>The tunnel as the core keeps it once on; cloudflared and the firewall are the tunnel tests' business.</summary>
+    private static async Task TunnelAsync(AuthHarness harness)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        db.CloudflareTunnel.Add(new CloudflareTunnelSetting { Enabled = true, TunnelPort = 18080, MetricsPort = 20241 });
+        await db.SaveChangesAsync(Cancel);
+    }
+
+    [Fact]
+    public async Task Through_the_tunnel_it_is_ready_without_a_certificate_and_answers_on_the_tunnel_listener()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+        await TunnelAsync(harness);
+        var nginx = harness.Services.GetRequiredService<SimulatedNginxMachine>();
+
+        var status = await EnableAsync(hub, sources: ["203.0.113.0/24"], mode: CoreDomainMode.Cloudflare);
+        var served = nginx.Text(SiteFile)!;
+
+        Assert.True(status.Ready, status.Error);
+        Assert.True(status.Tunneled);
+        Assert.Null(status.Certificate);
+        Assert.Contains("listen 127.0.0.2:18080;", served, StringComparison.Ordinal);
+        Assert.Contains("cloudflare/tunnel-real-ip.conf;", served, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_tunnel_keeps_direct_mode_off()
+    {
+        await using var harness = await AuthHarness.CreateAsync(CoreRoles.Owner, fakeClock: false);
+        await using var hub = await ConnectAsync(harness, stepUp: true);
+        await WebHubTests.SetUpNginxAsync(harness, hub);
+        await TunnelAsync(harness);
+
+        var refused = await Assert.ThrowsAsync<HubException>(() => EnableAsync(hub));
+
+        Assert.Contains("Cloudflare Tunnel", refused.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Through_cloudflare_it_works_with_the_origin_lock_on_and_an_origin_certificate()
     {

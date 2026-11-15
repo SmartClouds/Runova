@@ -124,7 +124,7 @@ Next to a publicly reachable container port there is a **Make private** button (
 
 ### Cloudflare-only origin
 
-If a server's sites sit behind Cloudflare, the Firewall section also has a **Cloudflare-only origin** card that locks ports 80 and 443 to Cloudflare's address ranges. It is described in [Cloudflare](cloudflare.md). Its changes are normal firewall change sets, so the countdown banner covers them too.
+If a server's sites sit behind Cloudflare, the Firewall section also has a **Cloudflare-only origin** card. It either runs a **Cloudflare Tunnel**, which closes ports 80 and 443 altogether and can limit or close SSH too, or locks the ports to Cloudflare's address ranges. Both are described in [Cloudflare](cloudflare.md). Their changes are normal firewall change sets, so the countdown banner covers them too. A change made with SSH closed is kept over a new connection through the core domain instead of SSH.
 
 ### Open the firewall fix from the checklist
 

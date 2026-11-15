@@ -53,7 +53,7 @@ internal sealed partial class CoreDomainManager(
     /// so sources would be checked against the wrong address.
     /// </summary>
     private const string SourcesNeedLock =
-        "Through Cloudflare, nginx only learns the visitor's address while the Cloudflare origin lock is on. Turn the lock on under Firewall, or clear the allowed sources.";
+        "Through Cloudflare, nginx only learns the visitor's address while the Cloudflare origin lock or the Cloudflare Tunnel is on. Turn one on under Firewall, or clear the allowed sources.";
 
     private static readonly TimeSpan _bindWait = TimeSpan.FromSeconds(5);
 
@@ -142,13 +142,20 @@ internal sealed partial class CoreDomainManager(
             }
 
             var originLocked = await OriginLockedAsync(cancellationToken);
+            var tunneled = await TunneledAsync(cancellationToken);
+            if (!throughCloudflare && tunneled)
+            {
+                throw new CoreDomainRefusedException(
+                    "The Cloudflare Tunnel is on and ports 80 and 443 are closed, so the domain cannot point straight at the server. Choose Through Cloudflare, or turn the tunnel off under Firewall first.");
+            }
+
             if (!throughCloudflare && originLocked)
             {
                 throw new CoreDomainRefusedException(
                     "The Cloudflare origin lock lets only Cloudflare reach ports 80 and 443, so the domain cannot point straight at the server. Choose Through Cloudflare, or turn the origin lock off under Firewall first.");
             }
 
-            if (throughCloudflare && sources.Length > 0 && !originLocked)
+            if (throughCloudflare && sources.Length > 0 && !originLocked && !tunneled)
             {
                 throw new CoreDomainRefusedException(SourcesNeedLock);
             }
@@ -240,16 +247,20 @@ internal sealed partial class CoreDomainManager(
         var site = settings.Enabled ? await sites.GetSiteAsync(CoreDomainSettings.SiteId, cancellationToken) : null;
         var listening = settings.Enabled && binding.IsListening(settings.Port);
         var originLocked = await OriginLockedAsync(cancellationToken);
+        var tunneled = await TunneledAsync(cancellationToken);
         var certificate = site?.Certificate;
         var throughCloudflare = settings.ThroughCloudflare;
 
         // Only Cloudflare trusts its Origin CA, so a certificate from it is good behind the proxy
         // and nowhere else.
-        var usable = certificate is { State: CertificateState.Valid or CertificateState.ExpiringSoon, Staging: false }
-            && (throughCloudflare || certificate.Source != CertificateSource.CloudflareOrigin);
-        var sourcesBlind = settings.Enabled && throughCloudflare && settings.Sources.Length > 0 && !originLocked;
+        // Through the tunnel nginx's listener is plain HTTP on loopback: Cloudflare's edge holds the
+        // certificate the app sees, so none is needed here.
+        var usable = (throughCloudflare && tunneled)
+            || (certificate is { State: CertificateState.Valid or CertificateState.ExpiringSoon, Staging: false }
+                && (throughCloudflare || certificate.Source != CertificateSource.CloudflareOrigin));
+        var sourcesBlind = settings.Enabled && throughCloudflare && settings.Sources.Length > 0 && !originLocked && !tunneled;
         var ready = settings.Enabled && listening && site is { Applied: true } && usable
-            && inspection.Running && (throughCloudflare ? !sourcesBlind : !originLocked);
+            && inspection.Running && (throughCloudflare ? !sourcesBlind : !originLocked && !tunneled);
         var error = settings.Enabled && !listening ? _error ?? "The core's port for nginx is not open yet."
             : sourcesBlind ? _error ?? SourcesNeedLock
             : _error;
@@ -268,7 +279,14 @@ internal sealed partial class CoreDomainManager(
             settings.ChangedAt,
             settings.ChangedBy,
             error,
-            settings.Mode);
+            settings.Mode,
+            tunneled);
+    }
+
+    private async Task<bool> TunneledAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await databases.CreateDbContextAsync(cancellationToken);
+        return await db.CloudflareTunnel.AsNoTracking().AnyAsync(setting => setting.Id == CloudflareTunnelSetting.SingletonId && setting.Enabled, cancellationToken);
     }
 
 

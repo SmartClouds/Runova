@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cloudflareErrorPermission } from '../../../shared/cloudflareErrors';
 import { ALL_GRANTS } from './testing/fakeCloudflare';
-import { connectedService } from './testing/harness';
+import { connectedService, makeService, TOKEN } from './testing/harness';
 import {
   ACCESS_RULE_ID,
   accessRule,
@@ -227,6 +227,31 @@ describe('point domain to this server (T5, AC2)', () => {
       'create AAAA www.example.com',
     ]);
     expect(fake.writes()).toEqual([]);
+  });
+
+  it("points at the server's Cloudflare Tunnel while it has one (E95), and only once", async () => {
+    const harness = makeService({ zones: [{ id: ZONE_ID, name: 'example.com' }] });
+    await harness.service.saveToken({ token: TOKEN });
+    const tunnel = harness.service.withTunnelTarget(
+      async () => '6ff42ae2-765d-4adf-8112-31c55c1551ef.cfargotunnel.com',
+    );
+    harness.fake.requests.length = 0;
+
+    const plan = await tunnel.planPointDomain(INPUT);
+    await tunnel.pointDomain(INPUT);
+    const again = await tunnel.planPointDomain(INPUT);
+
+    expect(plan.tunnel).toBe('6ff42ae2-765d-4adf-8112-31c55c1551ef.cfargotunnel.com');
+    expect(
+      plan.changes.map(
+        (change) => `${change.action} ${change.type} ${change.name} ${change.proxied}`,
+      ),
+    ).toEqual(['create CNAME example.com true', 'create CNAME www.example.com true']);
+    expect(harness.addresses).not.toHaveBeenCalled();
+    expect(again.upToDate).toBe(true);
+    expect(
+      harness.fake.zones.get(ZONE_ID)?.records.map((record) => `${record.type} ${record.name}`),
+    ).toEqual(['CNAME example.com', 'CNAME www.example.com']);
   });
 
   it('applies the plan in one batch, and a second run changes nothing', async () => {

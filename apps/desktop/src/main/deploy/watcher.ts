@@ -69,6 +69,10 @@ function titleOf(alert: AlertInfo, server: string): string {
       return `A backup failed on ${server}`;
     case 'containerCrashLoop':
       return `A container keeps restarting on ${server}`;
+    case 'cloudflareTunnelDown':
+      return `The Cloudflare Tunnel is down on ${server}`;
+    case 'tunnelBreakGlassOpened':
+      return `SSH was opened on ${server} because the tunnel is down`;
     default:
       return `Alert on ${server}`;
   }

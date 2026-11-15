@@ -58,6 +58,18 @@ internal static class NginxValidator
             ValidateStream(stream, upstreams, streamIds, listeners, problems);
         }
 
+        if (configuration.Tunnel is { } tunnel)
+        {
+            if (tunnel.Port is < 1024 or > 65535)
+            {
+                problems.Add(new NginxProblem("tunnel.port", "The tunnel's listener needs a port from 1024 to 65535."));
+            }
+            else if (configuration.Streams.Any(stream => stream.ListenPort == tunnel.Port))
+            {
+                problems.Add(new NginxProblem("tunnel.port", "A TCP or UDP proxy listens on the tunnel's port. Turn the tunnel off and on again to pick another."));
+            }
+        }
+
         if (configuration.OriginLock is { } originLock)
         {
             if (originLock.CloudflareNetworks.Count == 0)

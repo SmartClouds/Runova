@@ -545,6 +545,7 @@ import type { SshHostKeyStatus } from '../shared/sshHostKey';
 import { createAccount, createSync, createTeams } from './account';
 import { createCiAutoFix } from './ciAutoFix';
 import { cloudflareServer } from './cloudflareServer';
+import { cloudflareTunnel } from './cloudflareTunnel';
 import { createDatabase } from './database';
 import { createDeployAssistant, createDeployLogs } from './deployAssistant';
 import { createDeployCoreDomain } from './deployCoreDomain';
@@ -3214,6 +3215,7 @@ const runovaApi = {
   deployRecaptcha,
   cloudflare,
   cloudflareServer,
+  cloudflareTunnel,
   pullRequests,
   tests,
   appNotifications,

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Client, type ConnectConfig } from 'ssh2';
 import type { SshAuthMethod } from '../../shared/apiTypes';
 import { encodeSshError } from '../../shared/sshErrors';
+import { type AccessRoute, openAccessStream } from './cloudflareAccess';
 
 /**
  * How every SSH connection in the app is opened: terminal sessions, and the Deploy section's
@@ -19,6 +20,11 @@ export interface SshEndpoint {
   passphrase?: string;
   /** Previously trusted host key fingerprint (SHA256, hex), if any. */
   storedFingerprint?: string;
+  /**
+   * SSH through the Cloudflare Tunnel (E95): the connection rides a WebSocket to the SSH hostname
+   * behind Cloudflare Access instead of a TCP connection to host and port.
+   */
+  via?: { kind: 'cloudflare' } & AccessRoute;
 }
 
 /** What the handshake learned about the host key. */
@@ -65,8 +71,11 @@ export async function buildConnectConfig(
       ? await readFile(endpoint.privateKeyPath)
       : undefined;
   const verdict: HostKeyVerdict = { trustedFingerprint: null, mismatch: null };
+  const sock =
+    endpoint.via?.kind === 'cloudflare' ? await openAccessStream(endpoint.via) : undefined;
 
   const config: ConnectConfig = {
+    ...(sock ? { sock } : {}),
     host: endpoint.host,
     port: endpoint.port,
     username: endpoint.username,

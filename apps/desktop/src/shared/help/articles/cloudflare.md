@@ -2,8 +2,8 @@
 title: Cloudflare
 category: Deploy
 order: 90
-summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates and the Cloudflare-only origin lock.
-keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key
+summary: Connect your Cloudflare account with an API token, add domains, manage DNS records, zone settings and security rules, get Turnstile captcha keys for your forms, point a domain at a server, and use Cloudflare with your servers for DNS-01 certificates, Origin CA certificates, the Cloudflare-only origin lock and the Cloudflare Tunnel.
+keywords: cloudflare, dns, domain, zone, add domain, new domain, api token, records, proxy, orange cloud, waf, firewall rules, cache purge, ssl mode, dns-01, wildcard certificate, origin ca, origin lock, point domain, nameservers, turnstile, captcha, bot protection, site key, secret key, cloudflare tunnel, cloudflared, closed ports, ssh through cloudflare, cloudflare access, cloudflare mesh, warp, break-glass
 route: /deploy?cloudflare=1
 ---
 
@@ -35,7 +35,7 @@ The permissions the token should have:
 | Zone > Zone WAF > Edit | WAF custom rules |
 | Zone > Firewall Services > Edit | IP access rules |
 
-Five more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > Zone > Edit** (adding a domain to Cloudflare), **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server), **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab) and **Zone > Bot Management > Edit** (the AI bots card and the **Block AI bots** switch). Cloudflare's token page can't fill in the Turnstile permission for you, so add it by hand under Account permissions.
+Five more permissions are asked for only when a feature needs them, so the main token can stay without them: **Zone > Zone > Edit** (adding a domain to Cloudflare), **Zone > SSL and Certificates > Edit** (Origin CA certificates for your servers), **User > API Tokens > Edit** (making a separate DNS token for a server), **Account > Turnstile > Edit** (Turnstile widgets on the Turnstile tab) and **Zone > Bot Management > Edit** (the AI bots card and the **Block AI bots** switch). The Cloudflare Tunnel adds three more account permissions, also asked for only when used: **Account > Cloudflare Tunnel > Edit** (the tunnel itself), **Account > Access: Apps and Policies > Edit** with **Access: Service Tokens > Edit** (SSH through the tunnel) and **Account > Cloudflare One Connectors > Edit** (adding a server to Cloudflare Mesh). Cloudflare's token page can't fill in account permissions for you, so add them by hand under Account permissions.
 
 ### The token card
 
@@ -245,7 +245,53 @@ Besides this page, Cloudflare shows up in a server's own sections:
 
 ### Cloudflare-only origin
 
-In **Deploy**, pick the server, click **Firewall**, and find the **Cloudflare-only origin** card. It stops visitors from going around Cloudflare to the server's own address. It shows one of four states:
+In **Deploy**, pick the server, click **Firewall**, and find the **Cloudflare-only origin** card. It stops visitors from going around Cloudflare to the server's own address, in one of two ways you pick at the top under **How Cloudflare reaches this server**:
+
+- **Cloudflare Tunnel**: the server runs cloudflared, which dials out to Cloudflare. Ports 80 and 443 close to everyone, and there is no address list to keep up to date. You also choose who may still open SSH.
+- **Cloudflare IPs only**: ports 80 and 443 stay open, but only to Cloudflare's published addresses.
+
+Only one is on at a time. The card shows the one that is on, and otherwise the one you looked at last.
+
+### Cloudflare Tunnel
+
+The tunnel needs nginx running on the server (it hands every request to nginx) and, if you use the server core's own domain, that domain set to **Through Cloudflare**. The card shows one of these states:
+
+- **Off: no tunnel on this server**
+- **Setting up: installing cloudflared and connecting**
+- **Connected, but ports 80 and 443 are still open to everyone**: close them next.
+- **Waiting for you to keep the firewall change**
+- **On: no open web ports, everything comes through the tunnel**
+- **On, but the firewall lets someone in again**: the card lists the rules.
+- **Down: the tunnel lost its connection to Cloudflare**: the sites and the core domain do not answer. cloudflared restarts by itself; the server must reach Cloudflare on port 7844.
+
+To set it up:
+
+1. Click **Set up tunnel**.
+2. Pick the Cloudflare account if you have more than one. The dialog lists every name on the server (the sites, and the core domain when it is on) and says whether it will go through the tunnel. A name that is not in that account stops answering once the ports close, so you have to tick that you understand.
+3. Leave **Give SSH a name on the tunnel** on if you may want to close SSH's own port later. Nothing about SSH changes now.
+4. Read the firewall commands, then click **Set up tunnel**. The dialog shows each step: the tunnel is made at Cloudflare and cloudflared is installed, it connects, the names are pointed at it, and only then do ports 80 and 443 close. If a step fails it stops there and says why; nothing in the firewall has changed until the last step. Click **Try again** to carry on from that step.
+5. Keep the firewall change from the countdown banner, as with any firewall change.
+
+**Change SSH access** decides who may open SSH while the tunnel is on:
+
+- **Open as the firewall has it**: SSH works as it does today.
+- **Cloudflare only**: SSH goes through the tunnel behind Cloudflare Access, and only this app holds the service token. Click **Test** first; **Apply** stays off until a test connection got in through the tunnel. From then on every SSH connection the app makes to this server (terminals included) goes through the tunnel. Other SSH tools need cloudflared and a token of their own.
+- **Cloudflare Mesh only**: only your devices on Cloudflare Mesh reach SSH, at the server's Mesh address. Click **Add to Mesh** to make the server a Mesh node, install the Cloudflare One Client on this computer and sign in to your organization, then click **Test**. Apply stays off until SSH got in over Mesh.
+- **Closed to everyone**: no SSH at all, and the app reaches the server through its core domain only. Only an Owner can choose it, and it needs the core domain set to Through Cloudflare, the confirmation phrase and your password. The change is kept over a new connection through the core domain.
+
+Each SSH change is applied over the way in that will remain, so the server's lockout check proves you can still get in that way.
+
+**Reopen SSH if the tunnel stays down** (break-glass, Owners only) is off by default. When on, and SSH is not open, the server opens SSH to everyone by itself after the tunnel has been down for the minutes you pick (30 by default), raises an alert, and closes SSH again once the tunnel has been back for a few minutes. With it off, a tunnel that fails while SSH is closed can only be fixed from your provider's console.
+
+**Turn off** opens SSH to everyone again and either opens ports 80 and 443 to everyone or keeps them closed for the IP lock. cloudflared stops once you keep the change; then the names point straight at the server again (proxied, if you leave that ticked) and the tunnel, SSH's Access application and the Mesh node are removed at Cloudflare. To move to the IP lock without the sites going dark, turn the IP lock on first while the tunnel still runs, then turn the tunnel off and keep the ports closed for the lock.
+
+While the tunnel is on, **Point domain to a server** points a name at the tunnel with a proxied CNAME instead of at the server's addresses.
+
+The tunnel's token never leaves the server once it is sent: the server keeps it encrypted and writes it only for cloudflared, readable by root alone. The account token stays in this app.
+
+### Cloudflare IPs only
+
+With **Cloudflare IPs only** chosen, the card shows one of four states:
 
 - **Off: every address reaches ports 80 and 443**
 - **Waiting for you to keep the firewall change**

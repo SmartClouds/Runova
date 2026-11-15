@@ -9,6 +9,9 @@ internal static class NginxCloudflare
     public const string RealIpFile = "cloudflare/real-ip.conf";
     public const string OriginPullCaFile = "cloudflare/origin-pull-ca.pem";
 
+    /// <summary>The visitor's address on the tunnel's listener, which only cloudflared on loopback reaches (E95).</summary>
+    public const string TunnelRealIpFile = "cloudflare/tunnel-real-ip.conf";
+
     /// <summary>
     /// Cloudflare's origin pull CA (CN=origin-pull.cloudflare.net, valid until 2029-11-01), as
     /// published at developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem. SHA-256

@@ -428,6 +428,8 @@ export const queryKeys = {
   /** A server's Cloudflare origin lock, as its core reports it (E14). */
   cloudflareOriginLock: (serverId: string) =>
     ['deploy', 'cloudflare', serverId, 'origin-lock'] as const,
+  /** The Cloudflare Tunnel on a server (E95). */
+  cloudflareTunnel: (serverId: string) => ['deploy', 'cloudflare', serverId, 'tunnel'] as const,
   /** The zones a server holds a DNS token for (never the tokens). */
   cloudflareDnsTokens: (serverId: string) =>
     ['deploy', 'cloudflare', serverId, 'dns-tokens'] as const,

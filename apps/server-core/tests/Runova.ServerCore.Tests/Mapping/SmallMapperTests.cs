@@ -23,6 +23,62 @@ public sealed class SmallMapperTests
     }
 
     [Fact]
+    public void A_tunnel_shows_its_state_but_never_the_token()
+    {
+        var tunnel = Guid.Parse("c1744f8b-faa1-48a4-9e5c-02ac921467fa");
+        var job = Guid.NewGuid();
+        var change = Guid.NewGuid();
+        var row = new CloudflareTunnelSetting
+        {
+            Enabled = true,
+            TunnelId = tunnel,
+            TunnelName = "runova-devhost",
+            AccountTag = "acc",
+            SshHostname = "ssh.example.com",
+            ProtectedToken = "sealed-token",
+            SshMode = TunnelSshMode.Cloudflare,
+            TunnelPort = 18080,
+            MetricsPort = 20241,
+            BreakGlassEnabled = true,
+            BreakGlassDelayMinutes = 45,
+            BreakGlassOpen = false,
+            SetupJobId = job,
+            ChangeSetId = change,
+            MeshAddress = "100.96.0.9",
+            LastError = "late",
+            LastConnectedAt = 10,
+            DownSince = 20,
+        };
+
+        var status = CloudflareTunnelMapper.ToStatus(
+            row, CloudflareTunnelState.Connected, [80, 443], [22], ["Allow 22/tcp from anywhere"], ["careful"], 4, true, "2025.10.1", FirewallChangeState.Confirmed);
+
+        Assert.Equal(
+            new CloudflareTunnelStatus(
+                true, CloudflareTunnelState.Connected, TunnelSshMode.Cloudflare, [80, 443], [22], ["Allow 22/tcp from anywhere"], ["careful"], 4, true, true, 45, false,
+                "c1744f8b-faa1-48a4-9e5c-02ac921467fa", "runova-devhost", "acc", "ssh.example.com", "2025.10.1", 18080, "100.96.0.9", job, change,
+                FirewallChangeState.Confirmed, "late", 10, 20),
+            status,
+            new TunnelStatusComparer());
+        Assert.DoesNotContain("sealed-token", System.Text.Json.JsonSerializer.Serialize(status), StringComparison.Ordinal);
+        Assert.Null(CloudflareTunnelMapper.ToStatus(new CloudflareTunnelSetting(), CloudflareTunnelState.Off, [], [], [], [], 0, false, null, null).TunnelPort);
+    }
+
+    /// <summary>Records hold arrays, which compare by reference; this compares them by content.</summary>
+    private sealed class TunnelStatusComparer : IEqualityComparer<CloudflareTunnelStatus>
+    {
+        public bool Equals(CloudflareTunnelStatus? x, CloudflareTunnelStatus? y) =>
+            x is not null && y is not null
+            && x.WebPorts.SequenceEqual(y.WebPorts) && x.SshPorts.SequenceEqual(y.SshPorts)
+            && x.OpenRules.SequenceEqual(y.OpenRules) && x.Warnings.SequenceEqual(y.Warnings)
+            && x with { WebPorts = [], SshPorts = [], OpenRules = [], Warnings = [] } is var a
+            && y with { WebPorts = [], SshPorts = [], OpenRules = [], Warnings = [] } is var b
+            && a.ToString() == b.ToString();
+
+        public int GetHashCode(CloudflareTunnelStatus obj) => 0;
+    }
+
+    [Fact]
     public void A_dns_token_shows_everything_but_the_token()
     {
         var row = new DnsCredential

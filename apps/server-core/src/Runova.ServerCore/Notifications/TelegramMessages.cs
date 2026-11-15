@@ -31,6 +31,8 @@ internal static class TelegramMessages
         AlertKind.OriginLockRefreshFailed => "The Cloudflare lock could not be refreshed",
         AlertKind.BackupFailed => "A backup failed",
         AlertKind.ContainerCrashLoop => "A container keeps restarting",
+        AlertKind.CloudflareTunnelDown => "The Cloudflare Tunnel is down",
+        AlertKind.TunnelBreakGlassOpened => "SSH was opened because the tunnel is down",
         _ => "Something needs a look",
     };
 

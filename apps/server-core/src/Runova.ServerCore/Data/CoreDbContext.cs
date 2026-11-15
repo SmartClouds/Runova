@@ -57,6 +57,8 @@ internal sealed class CoreDbContext(DbContextOptions<CoreDbContext> options)
 
     public DbSet<OriginLockSetting> OriginLock => Set<OriginLockSetting>();
 
+    public DbSet<CloudflareTunnelSetting> CloudflareTunnel => Set<CloudflareTunnelSetting>();
+
     // Server backups (E28).
     public DbSet<BackupKeyRingRecord> BackupKeyRing => Set<BackupKeyRingRecord>();
 

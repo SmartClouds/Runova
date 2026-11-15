@@ -1,4 +1,4 @@
-import type { StoredSshServer } from '../../shared/apiTypes';
+import type { SshRoute, StoredSshServer, StoredTunnelSsh } from '../../shared/apiTypes';
 import { orderById } from '../../shared/orderById';
 import { store } from '../store';
 import type { SshEndpoint } from './connectConfig';
@@ -53,6 +53,29 @@ export async function findSavedServer(serverId: string): Promise<StoredSshServer
 /** The endpoint for a saved server with its password or key passphrase decrypted. */
 export async function savedServerEndpoint(serverId: string): Promise<SshEndpoint> {
   const server = await findSavedServer(serverId);
+  return endpointOf(server, server.sshRoute);
+}
+
+/** The endpoint as if SSH took this route: what a test connection over it uses before it is on. */
+export async function routedServerEndpoint(
+  serverId: string,
+  route: SshRoute,
+): Promise<SshEndpoint> {
+  const server = await findSavedServer(serverId);
+  const endpoint = await endpointOf(server, route);
+  if (route === 'cloudflare' && !endpoint.via) {
+    throw new Error('SSH has no name on the tunnel yet. Route the tunnel first.');
+  }
+  if (route === 'mesh' && endpoint.host === server.host) {
+    throw new Error('This server has no Mesh address yet. Add it to Mesh first.');
+  }
+  return endpoint;
+}
+
+async function endpointOf(
+  server: StoredSshServer,
+  route: SshRoute | undefined,
+): Promise<SshEndpoint> {
   let password: string | undefined;
   let passphrase: string | undefined;
   if (server.secretEnvelope) {
@@ -60,7 +83,8 @@ export async function savedServerEndpoint(serverId: string): Promise<SshEndpoint
     if (server.authMethod === 'password') password = secret;
     else passphrase = secret;
   }
-  return {
+  const tunnel = server.cloudflareTunnel;
+  const endpoint: SshEndpoint = {
     host: server.host,
     port: server.port,
     username: server.username,
@@ -70,6 +94,49 @@ export async function savedServerEndpoint(serverId: string): Promise<SshEndpoint
     passphrase,
     storedFingerprint: server.hostKeyFingerprint,
   };
+  // Through the tunnel (E95): the same login and pinned host key, another way to the server.
+  if (route === 'mesh' && tunnel?.meshAddress) {
+    return { ...endpoint, host: tunnel.meshAddress };
+  }
+  if (route === 'cloudflare' && tunnel?.hostname && tunnel.clientId && tunnel.clientSecret) {
+    return {
+      ...endpoint,
+      via: {
+        kind: 'cloudflare',
+        hostname: tunnel.hostname,
+        clientId: tunnel.clientId,
+        clientSecret: await decryptSecret(tunnel.clientSecret),
+      },
+    };
+  }
+  return endpoint;
+}
+
+/**
+ * What the app keeps about a server's tunnel for SSH; empty when nothing, or when the server is
+ * not a saved SSH server at all (the DevHost), which has no SSH to route.
+ */
+export async function readTunnelSsh(serverId: string): Promise<StoredTunnelSsh> {
+  const server = (await store.getSshServers()).find((candidate) => candidate.id === serverId);
+  return server?.cloudflareTunnel ?? {};
+}
+
+/** Changes what the app keeps about a server's tunnel for SSH, and which route SSH takes. */
+export function updateTunnelSsh(
+  serverId: string,
+  change: (current: StoredTunnelSsh) => StoredTunnelSsh | undefined,
+  route?: SshRoute | null,
+): Promise<void> {
+  return updateSshServer(serverId, (server) => {
+    const { cloudflareTunnel: current, sshRoute: currentRoute, ...rest } = server;
+    const tunnel = change(current ?? {});
+    const nextRoute = route === undefined ? currentRoute : (route ?? undefined);
+    return {
+      ...rest,
+      ...(tunnel ? { cloudflareTunnel: tunnel } : {}),
+      ...(nextRoute ? { sshRoute: nextRoute } : {}),
+    };
+  });
 }
 
 /** Where the Deploy connection pool gets its endpoints and records what it learned. */

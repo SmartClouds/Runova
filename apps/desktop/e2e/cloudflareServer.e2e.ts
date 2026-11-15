@@ -12,7 +12,9 @@ import {
  * on loopback stands in for api.cloudflare.com, and the DevHost runs the real core with a pretend
  * firewall. The account token is saved, a zone-scoped DNS token is made and sent to the DevHost
  * (which never shows it back), and the DevHost is locked to Cloudflare's ranges with the
- * firewall's own countdown, kept over a new connection.
+ * firewall's own countdown, kept over a new connection. Then the DevHost goes behind a Cloudflare
+ * Tunnel (E95): made at the fake, connected by the DevHost's pretend cloudflared, its names
+ * routed, its web ports closed with the countdown, and turned off again.
  */
 
 test.skip(!dotnetAvailable(), 'needs the .NET SDK to build the server core DevHost');
@@ -38,6 +40,31 @@ test.afterEach(async () => {
   await launched?.close();
   launched = undefined;
 });
+
+async function saveToken(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /Cloudflare: domains and DNS/ }).click();
+  await page.getByLabel('API token').fill(E2E_CLOUDFLARE_TOKEN);
+  await page.getByRole('button', { name: 'Save and check' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Choose a domain, example.com is open' }),
+  ).toBeVisible({ timeout: 30_000 });
+}
+
+async function openFirewall(page: Page): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'Servers' })
+    .getByRole('button', { name: /DevHost/ })
+    .click();
+  await page
+    .getByRole('navigation', { name: 'Server sections' })
+    .getByRole('button', { name: 'Firewall' })
+    .click();
+}
+
+async function keepChange(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Keep changes' })).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Keep changes' }).click();
+}
 
 async function signIn(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Deploy' }).click();
@@ -83,14 +110,8 @@ test('sends the DevHost a DNS token and locks it to Cloudflare', async () => {
   expect(Object.keys(cloudflare.fake.tokens)).toHaveLength(2);
 
   // The origin lock on the DevHost's firewall, kept from the countdown banner.
-  await page
-    .getByRole('navigation', { name: 'Servers' })
-    .getByRole('button', { name: /DevHost/ })
-    .click();
-  await page
-    .getByRole('navigation', { name: 'Server sections' })
-    .getByRole('button', { name: 'Firewall' })
-    .click();
+  await openFirewall(page);
+  await page.getByRole('radio', { name: 'Cloudflare IPs only' }).click();
   await expect(page.getByText('Off: every address reaches ports 80 and 443')).toBeVisible({
     timeout: 30_000,
   });
@@ -103,4 +124,72 @@ test('sends the DevHost a DNS token and locks it to Cloudflare', async () => {
   await expect(page.getByText('On: only Cloudflare reaches ports 80 and 443')).toBeVisible({
     timeout: 60_000,
   });
+});
+
+test('puts the DevHost behind a Cloudflare Tunnel and turns it off again', async () => {
+  test.setTimeout(240_000);
+  if (!devHost || !cloudflare) throw new Error('DevHost or the Cloudflare fake did not start');
+  launched = await launchApp({
+    settings: {},
+    env: {
+      RUNOVA_DEPLOY_DEV_CORE: String(devHost.port),
+      RUNOVA_E2E_CLOUDFLARE_API: cloudflare.base,
+    },
+  });
+  const { page } = launched;
+  await signIn(page);
+  await saveToken(page);
+  await openFirewall(page);
+
+  // The tunnel hands every request to nginx, so nginx has to be Runova's first.
+  await page
+    .getByRole('navigation', { name: 'Server sections' })
+    .getByRole('button', { name: 'Websites' })
+    .click();
+  const setUpNginx = page.getByRole('button', { name: /Set up nginx for Runova|Install nginx/ });
+  await expect(setUpNginx.or(page.getByText('Managed by Runova'))).toBeVisible({ timeout: 30_000 });
+  if (await setUpNginx.isVisible()) {
+    await setUpNginx.click();
+    const job = page
+      .getByRole('dialog')
+      .filter({ has: page.getByRole('log', { name: 'Job log' }) });
+    await expect(job.getByRole('status')).toHaveText(/Done/, { timeout: 60_000 });
+    await job.getByRole('button', { name: 'Close' }).last().click();
+    await expect(page.getByText('Managed by Runova')).toBeVisible({ timeout: 30_000 });
+  }
+  await page
+    .getByRole('navigation', { name: 'Server sections' })
+    .getByRole('button', { name: 'Firewall' })
+    .click();
+
+  await page.getByRole('radio', { name: 'Cloudflare Tunnel' }).click();
+  await expect(page.getByText('Off: no tunnel on this server')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Set up tunnel' }).click();
+  const setup = page.getByRole('dialog', { name: /behind a Cloudflare Tunnel/ });
+  await expect(setup.getByRole('region', { name: 'Firewall commands' })).toBeVisible({
+    timeout: 30_000,
+  });
+  const lost = setup.getByRole('checkbox', { name: /stops? answering/ });
+  if (await lost.isVisible()) await lost.check();
+  await setup.getByRole('button', { name: 'Set up tunnel' }).click();
+  await keepChange(page);
+  await expect(
+    page.getByText('On: no open web ports, everything comes through the tunnel'),
+  ).toBeVisible({
+    timeout: 60_000,
+  });
+  const tunnel = [...cloudflare.fake.tunnels.values()][0];
+  expect(tunnel?.configSrc).toBe('cloudflare');
+  expect(JSON.stringify(tunnel?.config)).toContain('http://127.0.0.2:');
+
+  // The Firewall section has a Turn off of its own; this one is the tunnel card's.
+  const card = page
+    .getByText('How Cloudflare reaches this server')
+    .locator('xpath=ancestor::*[.//button[normalize-space()="Turn off"]][1]');
+  await card.getByRole('button', { name: 'Turn off' }).click();
+  const off = page.getByRole('dialog', { name: /Turn the tunnel off/ });
+  await off.getByRole('button', { name: 'Turn off' }).click();
+  await keepChange(page);
+  await expect(page.getByText('Off: no tunnel on this server')).toBeVisible({ timeout: 60_000 });
+  await expect.poll(() => tunnel?.deleted, { timeout: 30_000 }).toBe(true);
 });

@@ -19,7 +19,9 @@ const open8080: FirewallChange = {
   rule: { action: 'allow', protocol: 'tcp', port: 8080 },
 };
 
-function setup(options: { fresh?: 'new' | 'same' | 'fails'; roles?: string[] } = {}) {
+function setup(
+  options: { fresh?: 'new' | 'same' | 'fails'; roles?: string[]; coreDomain?: boolean } = {},
+) {
   let clock = 1_700_000_000_000;
   const core = new FakeCore(() => clock);
   if (options.roles) core.roles = options.roles;
@@ -42,6 +44,15 @@ function setup(options: { fresh?: 'new' | 'same' | 'fails'; roles?: string[] } =
         fresh.push(hub);
         return work(hub);
       },
+      ...(options.coreDomain
+        ? {
+            withCoreDomainHub: async <T>(_id: string, work: (hub: ICoreHub) => Promise<T>) => {
+              const hub = core.connect();
+              fresh.push(hub);
+              return work(hub);
+            },
+          }
+        : {}),
     },
     roles: () => core.roles,
     progress: (event) => events.push(event),
@@ -144,6 +155,16 @@ describe('DeployFirewall', () => {
     expect(core.firewall.rules.some((rule) => rule.port === 8080)).toBe(false);
     expect([...core.alerts.values()].map((alert) => alert.kind)).toContain('firewallRolledBack');
     await expect(firewall.status('srv-1')).resolves.not.toHaveProperty('pending');
+  });
+
+  it('keeps a change over a new core domain connection when no SSH connection gets in (E95)', async () => {
+    const { firewall, fresh } = setup({ fresh: 'fails', coreDomain: true });
+    const change = await firewall.apply({ serverId: 'srv-1', changes: [open8080] });
+
+    const kept = await firewall.confirm({ serverId: 'srv-1', changeSetId: change.id });
+
+    expect(kept.state).toBe('confirmed');
+    expect(fresh).toHaveLength(1);
   });
 
   it('reverts a waiting change now', async () => {

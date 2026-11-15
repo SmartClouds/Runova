@@ -80,6 +80,24 @@ export interface FakeCloudflare {
   writes: () => FakeRequest[];
   /** Answers the next request whose path matches with this status and body, once. */
   failNext: (path: RegExp, status: number, body?: unknown) => void;
+  /** Cloudflare Tunnels by id, with their configuration and connection count (E95). */
+  tunnels: Map<string, FakeTunnel>;
+  /** Access applications and service tokens, by id. */
+  accessApps: Map<string, Json>;
+  serviceTokens: Map<string, Json>;
+  /** Mesh nodes (WARP connectors), by id. */
+  meshNodes: Map<string, Json>;
+}
+
+export interface FakeTunnel {
+  id: string;
+  accountId: string;
+  name: string;
+  configSrc: string;
+  config: Json | null;
+  /** Live connections; Cloudflare refuses to delete a tunnel that has any. */
+  connections: number;
+  deleted: boolean;
 }
 
 const API_PREFIX = '/client/v4';
@@ -95,6 +113,9 @@ const PERMISSION_NAMES: Record<CloudflareAnyPermissionId, Record<Access, string>
   turnstile: { read: 'Turnstile Read', edit: 'Turnstile Write' },
   zoneEdit: { read: 'Zone Read', edit: 'Zone Write' },
   botManagement: { read: 'Bot Management Read', edit: 'Bot Management Write' },
+  tunnel: { read: 'Cloudflare Tunnel Read', edit: 'Cloudflare Tunnel Write' },
+  access: { read: 'Access: Apps and Policies Read', edit: 'Access: Apps and Policies Write' },
+  mesh: { read: 'Cloudflare One Connectors Read', edit: 'Cloudflare One Connectors Write' },
 };
 /** The two name servers Cloudflare hands every zone the fake makes. */
 export const NEW_ZONE_NAME_SERVERS = ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'];
@@ -436,6 +457,176 @@ export function createFakeCloudflare(options: {
    * Turnstile widgets under /accounts/:id/challenges/widgets. The account must hold a zone the
    * token can see, the way Cloudflare refuses an account the token has no access to.
    */
+  const tunnels = new Map<string, FakeTunnel>();
+  const accessApps = new Map<string, Json>();
+  const serviceTokens = new Map<string, Json>();
+  const meshNodes = new Map<string, Json>();
+  const uuid = () => {
+    const hex = nextId();
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  };
+  const tokenFor = (accountId: string, id: string) =>
+    btoa(JSON.stringify({ a: accountId, t: id, s: btoa(`secret-${id}`.padEnd(32, 'x')) }));
+  const tunnelJson = (tunnel: FakeTunnel): Json => ({
+    id: tunnel.id,
+    account_tag: tunnel.accountId,
+    name: tunnel.name,
+    status: tunnel.connections > 0 ? 'healthy' : 'inactive',
+    tun_type: 'cfd_tunnel',
+    remote_config: tunnel.configSrc === 'cloudflare',
+    created_at: '2026-11-15T10:00:00Z',
+    deleted_at: tunnel.deleted ? '2026-11-15T11:00:00Z' : null,
+    connections: [],
+  });
+
+  /** Account-level routes of the tunnel (E95): tunnels, Mesh nodes and Access for SSH. */
+  function accountRoutes(
+    token: FakeToken,
+    request: FakeRequest,
+    accountId: string,
+    area: string,
+    rest: string,
+  ) {
+    const { method } = request;
+    const body = (request.body ?? {}) as Json;
+    const known = [...zones.values()].some(
+      (state) => (state.zone.account as Json | undefined)?.id === accountId,
+    );
+    const permission: CloudflareAnyPermissionId =
+      area === 'cfd_tunnel' ? 'tunnel' : area === 'warp_connector' ? 'mesh' : 'access';
+    if (!known || !allowed(token, permission, method === 'GET' ? 'read' : 'edit')) {
+      return { status: 403, body: copy(recorded.permissionDenied) };
+    }
+    if (area === 'cfd_tunnel') {
+      if (rest === '' && method === 'POST') {
+        if (typeof body.name !== 'string' || body.name.length === 0) {
+          return fail(400, 1003, 'Tunnel name is required');
+        }
+        const tunnel: FakeTunnel = {
+          id: uuid(),
+          accountId,
+          name: body.name,
+          configSrc: String(body.config_src ?? 'local'),
+          config: null,
+          connections: 0,
+          deleted: false,
+        };
+        tunnels.set(tunnel.id, tunnel);
+        return ok(tunnelJson(tunnel));
+      }
+      if (rest === '' && method === 'GET') {
+        return page(
+          [...tunnels.values()]
+            .filter((t) => t.accountId === accountId && !t.deleted)
+            .map(tunnelJson),
+          request.query,
+          20,
+        );
+      }
+      const match = rest.match(/^\/([0-9a-f-]{36})(\/[a-z]+)?$/);
+      const tunnel = match ? tunnels.get(match[1]) : undefined;
+      if (!match || !tunnel || tunnel.accountId !== accountId || tunnel.deleted) {
+        return fail(404, 1003, 'Tunnel not found');
+      }
+      const sub = match[2] ?? '';
+      if (sub === '' && method === 'GET') return ok(tunnelJson(tunnel));
+      if (sub === '' && method === 'DELETE') {
+        if (tunnel.connections > 0) {
+          return fail(400, 1022, 'Cannot delete a tunnel with active connections');
+        }
+        tunnel.deleted = true;
+        return ok(tunnelJson(tunnel));
+      }
+      if (sub === '/token' && method === 'GET') return ok(tokenFor(accountId, tunnel.id));
+      if (sub === '/configurations' && method === 'PUT') {
+        tunnel.config = (body.config as Json) ?? null;
+        return ok({
+          tunnel_id: tunnel.id,
+          version: 1,
+          config: tunnel.config,
+          source: 'cloudflare',
+        });
+      }
+      if (sub === '/configurations' && method === 'GET') {
+        return ok({
+          tunnel_id: tunnel.id,
+          version: 1,
+          config: tunnel.config,
+          source: 'cloudflare',
+        });
+      }
+      if (sub === '/connections' && method === 'DELETE') {
+        tunnel.connections = 0;
+        return ok(null);
+      }
+      if (sub === '/connections' && method === 'GET') return ok([]);
+      return fail(404, 7000, 'No route for that URI');
+    }
+    if (area === 'warp_connector') {
+      if (rest === '' && method === 'POST') {
+        const node = {
+          id: uuid(),
+          account_tag: accountId,
+          name: body.name,
+          tun_type: 'warp_connector',
+        };
+        meshNodes.set(String(node.id), node);
+        return ok(node);
+      }
+      const match = rest.match(/^\/([0-9a-f-]{36})(\/token)?$/);
+      const node = match ? meshNodes.get(match[1]) : undefined;
+      if (!match || !node) return fail(404, 1003, 'Connector not found');
+      if (match[2] === '/token' && method === 'GET') return ok(tokenFor(accountId, match[1]));
+      if (!match[2] && method === 'DELETE') {
+        meshNodes.delete(match[1]);
+        return ok(node);
+      }
+      return fail(404, 7000, 'No route for that URI');
+    }
+    if (area === 'access/apps') {
+      if (rest === '' && method === 'POST') {
+        const app = { id: uuid(), aud: nextId(), ...body };
+        accessApps.set(String(app.id), app);
+        return ok(app);
+      }
+      if (rest === '' && method === 'GET') return page([...accessApps.values()], request.query, 50);
+      const policy = rest.match(/^\/([0-9a-f-]{36})\/policies$/);
+      if (policy && method === 'POST') {
+        const app = accessApps.get(policy[1]);
+        if (!app) return fail(404, 12130, 'access.api.error.not_found');
+        app.policies = [...((app.policies as Json[] | undefined) ?? []), { id: uuid(), ...body }];
+        return ok((app.policies as Json[]).at(-1));
+      }
+      const one = rest.match(/^\/([0-9a-f-]{36})$/);
+      if (one && method === 'DELETE') {
+        if (!accessApps.delete(one[1])) return fail(404, 12130, 'access.api.error.not_found');
+        return ok({ id: one[1] });
+      }
+      return fail(404, 7000, 'No route for that URI');
+    }
+    if (rest === '' && method === 'POST') {
+      const id = uuid();
+      const serviceToken = {
+        id,
+        name: body.name,
+        client_id: `${nextId()}.access`,
+        client_secret: `${nextId()}${nextId()}`,
+        duration: body.duration ?? '8760h',
+      };
+      serviceTokens.set(id, serviceToken);
+      return ok(serviceToken);
+    }
+    const one = rest.match(/^\/([0-9a-f-]{36})$/);
+    if (one && method === 'DELETE') {
+      const found = serviceTokens.get(one[1]);
+      if (!found) return fail(404, 12130, 'access.api.error.not_found');
+      serviceTokens.delete(one[1]);
+      const { client_secret: _secret, ...rest } = found;
+      return ok(rest);
+    }
+    return fail(404, 7000, 'No route for that URI');
+  }
+
   function turnstileRoutes(
     token: FakeToken,
     request: FakeRequest,
@@ -590,6 +781,11 @@ export function createFakeCloudflare(options: {
         : [];
       return page(visible, query, 20);
     }
+    const tunnelMatch = path.match(
+      /^\/accounts\/([0-9a-f]{32})\/(cfd_tunnel|warp_connector|access\/apps|access\/service_tokens)(\/.*)?$/,
+    );
+    if (tunnelMatch)
+      return accountRoutes(token, request, tunnelMatch[1], tunnelMatch[2], tunnelMatch[3] ?? '');
     const widgetsMatch = path.match(/^\/accounts\/([0-9a-f]{32})\/challenges\/widgets(\/.*)?$/);
     if (widgetsMatch)
       return turnstileRoutes(token, request, widgetsMatch[1], widgetsMatch[2] ?? '');
@@ -712,5 +908,9 @@ export function createFakeCloudflare(options: {
     failNext: (path, status, body) => {
       failures.push({ path, status, body });
     },
+    tunnels,
+    accessApps,
+    serviceTokens,
+    meshNodes,
   };
 }

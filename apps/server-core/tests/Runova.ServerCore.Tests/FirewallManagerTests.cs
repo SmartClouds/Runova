@@ -513,6 +513,45 @@ public sealed class FirewallManagerTests : IAsyncLifetime
         Assert.Equal("maria", history[0].RequestedBy);
     }
 
+    [Fact]
+    public async Task Break_glass_opens_ssh_to_everyone_with_its_own_rule_and_takes_only_that_rule_away_again()
+    {
+        _firewall.State = Ufw(rules: [Allow(80, "203.0.113.0/24"), Allow(22, "198.51.100.0/24")]);
+
+        var opened = await _manager.ApplyBreakGlassAsync(open: true, "the tunnel watchdog", Cancel);
+        var again = await _manager.ApplyBreakGlassAsync(open: true, "the tunnel watchdog", Cancel);
+        var reachable = FirewallEvaluation.Evaluate(_firewall.State, new Probe(IPAddress.Parse("192.0.2.200"), 22, FirewallProtocol.Tcp)).Allowed;
+        var closed = await _manager.ApplyBreakGlassAsync(open: false, "the tunnel watchdog", Cancel);
+
+        Assert.NotNull(opened);
+        Assert.Equal(FirewallChangeState.Confirmed, opened.State);
+        Assert.Null(again);
+        Assert.True(reachable);
+        Assert.NotNull(closed);
+        Assert.False(FirewallEvaluation.Evaluate(_firewall.State, new Probe(IPAddress.Parse("192.0.2.200"), 22, FirewallProtocol.Tcp)).Allowed);
+        Assert.Contains(_firewall.State.Rules, rule => rule.Source is not null && rule.Ports is { From: 22 });
+        Assert.Contains(_firewall.State.Rules, rule => rule.Ports is { From: 80 });
+    }
+
+    [Fact]
+    public async Task Break_glass_never_removes_a_persons_own_ssh_rule()
+    {
+        _firewall.State = Ufw(rules: [Allow(22)]);
+
+        Assert.Null(await _manager.ApplyBreakGlassAsync(open: false, "the tunnel watchdog", Cancel));
+        Assert.Contains(_firewall.State.Rules, rule => rule.Ports is { From: 22 } && rule.Source is null);
+    }
+
+    [Fact]
+    public async Task Break_glass_waits_while_a_person_s_change_waits_for_its_confirmation()
+    {
+        await AppliedAsync();
+
+        var refused = await Assert.ThrowsAsync<FirewallRefusedException>(() => _manager.ApplyBreakGlassAsync(open: true, "the tunnel watchdog", Cancel));
+
+        Assert.Contains("waiting for its confirmation", refused.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>An in-memory firewall that records what was done to it.</summary>
     private sealed class MemoryFirewall : IFirewallBackend
     {

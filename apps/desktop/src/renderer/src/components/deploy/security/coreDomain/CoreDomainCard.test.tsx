@@ -49,6 +49,7 @@ function domain(fields: Partial<CoreDomainStatus> = {}): CoreDomainStatus {
     ready: false,
     siteId: 'runova-core',
     mode: 'direct',
+    tunneled: false,
     ...fields,
   };
 }

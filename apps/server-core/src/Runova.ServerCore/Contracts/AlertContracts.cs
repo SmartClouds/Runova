@@ -25,6 +25,12 @@ public enum AlertKind
 
     /// <summary>A container keeps exiting and being started again (E30). The resource is the container's name.</summary>
     ContainerCrashLoop,
+
+    /// <summary>The Cloudflare Tunnel lost its connection to Cloudflare (E95): the sites and the core domain do not answer.</summary>
+    CloudflareTunnelDown,
+
+    /// <summary>The tunnel stayed down, so the core opened SSH to everyone as the person asked (E95).</summary>
+    TunnelBreakGlassOpened,
 }
 
 [TranspilationSource]

@@ -2485,6 +2485,28 @@ export interface SshSavedServer {
   hostKeyFingerprint?: string;
   createdAt: number;
   lastConnectedAt: number | null;
+  /**
+   * How SSH reaches the server when it is not straight to host and port (E95): through its
+   * Cloudflare Tunnel behind Cloudflare Access, or over Cloudflare Mesh to its Mesh address.
+   */
+  sshRoute?: SshRoute;
+}
+
+export type SshRoute = 'cloudflare' | 'mesh';
+
+/**
+ * What the app keeps about a server's Cloudflare Tunnel for SSH (E95): the SSH hostname and the
+ * Access service token that may open it (its secret sealed like a login password), the ids to
+ * remove at Cloudflare when the tunnel goes, and the server's Mesh node and address.
+ */
+export interface StoredTunnelSsh {
+  hostname?: string;
+  clientId?: string;
+  clientSecret?: SecretEnvelope;
+  accessAppId?: string;
+  serviceTokenId?: string;
+  meshNodeId?: string;
+  meshAddress?: string;
 }
 
 /**
@@ -2571,6 +2593,8 @@ export type SecretEnvelope = SafeStorageSecretEnvelope | PassphraseSecretEnvelop
  */
 export interface StoredSshServer extends Omit<SshSavedServer, 'hasSecret'> {
   secretEnvelope?: SecretEnvelope;
+  /** Never sent to the renderer: it holds the Access service token's sealed secret. */
+  cloudflareTunnel?: StoredTunnelSsh;
 }
 
 /** Desktop size an RDP session asks for: follow the window, or a fixed resolution. */

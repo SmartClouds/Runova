@@ -69,6 +69,7 @@ export function FirewallPanel({ server }: { server: DeployServer }): React.JSX.E
   });
   const signedIn = access.data?.state === 'signed-in';
   const canAdmin = hasRole(access.data?.user?.roles, 'admin');
+  const canOwn = hasRole(access.data?.user?.roles, 'owner');
   const canOperate = hasRole(access.data?.user?.roles, 'operator');
   const makePrivate = useMakePrivate(serverId);
   const connection = useDeployConnection(serverId, signedIn);
@@ -378,6 +379,7 @@ export function FirewallPanel({ server }: { server: DeployServer }): React.JSX.E
         serverName={server.nickname}
         signedIn={signedIn}
         canAdmin={canAdmin}
+        canOwn={canOwn}
         busy={!!pending || stale}
         onApplied={applied}
       />

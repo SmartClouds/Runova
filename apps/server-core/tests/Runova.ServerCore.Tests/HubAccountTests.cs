@@ -381,8 +381,8 @@ public sealed class HubAccountTests
         ];
         // Compose stacks (E07): the apps, their revisions and the uploaded files (never env values).
         string[] stacks = ["GetStack", "GetStackRevisionFiles", "ListStacks"];
-        // Cloudflare (E14): the origin lock and which zones have a DNS token (never the tokens).
-        string[] cloudflare = ["GetOriginLock", "ListDnsCredentials"];
+        // Cloudflare (E14, E95): the origin lock, the tunnel and which zones have a DNS token (never the tokens).
+        string[] cloudflare = ["GetCloudflareTunnel", "GetOriginLock", "ListDnsCredentials"];
         // Direct TLS (E16): how the listener stands and the pin of its certificate.
         string[] directTls = ["GetDirectTls"];
         // The core domain (E44): its status, never the key.

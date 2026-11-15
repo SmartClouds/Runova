@@ -508,6 +508,95 @@ namespace Runova.ServerCore.Data.Migrations
                     b.ToTable("BackupRunTargets");
                 });
 
+            modelBuilder.Entity("Runova.ServerCore.Data.CloudflareTunnelSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccountTag")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BreakGlassDelayMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("BreakGlassEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("BreakGlassOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChangeKind")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ChangeSetId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("DownSince")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastConnectedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MeshAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MetricsPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("OffForOriginLock")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PendingSshMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedToken")
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SetupJobId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SshHostname")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SshMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TunnelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TunnelName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TunnelPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("WebClosed")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CloudflareTunnel", (string)null);
+                });
+
             modelBuilder.Entity("Runova.ServerCore.Data.CoreRole", b =>
                 {
                     b.Property<Guid>("Id")

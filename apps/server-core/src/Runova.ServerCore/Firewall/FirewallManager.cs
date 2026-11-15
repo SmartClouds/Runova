@@ -338,6 +338,62 @@ internal sealed partial class FirewallManager(
         }
     }
 
+    /// <summary>The comment on the one rule break-glass adds (ufw keeps it; firewalld keeps no comments).</summary>
+    public const string BreakGlassComment = "runova tunnel break-glass";
+
+    /// <summary>
+    /// The Cloudflare Tunnel's break-glass (E95), off unless a person turned it on: with the
+    /// tunnel down for long enough and SSH closed to the outside, the core opens SSH's ports to
+    /// everyone by itself so the person can still get in, and closes them again once the tunnel is
+    /// back. It only ever adds or removes "allow &lt;ssh port&gt;/tcp from anywhere" carrying
+    /// <see cref="BreakGlassComment"/> (on firewalld, which keeps no comments, an unlimited allow
+    /// for an SSH port is taken as its own, since the tunnel removed every such rule before), and
+    /// never a rule a person made. Returns null when there is nothing to change.
+    /// </summary>
+    public async Task<FirewallChangeSetInfo?> ApplyBreakGlassAsync(bool open, string requestedBy, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (await PendingAsync(cancellationToken) is { } pending)
+            {
+                throw new FirewallRefusedException(
+                    $"Another firewall change is waiting for its confirmation (\"{pending.Summary}\"), so the core changes nothing by itself now.");
+            }
+
+            var ssh = await sshd.ReadAsync(cancellationToken);
+            if (ssh.Ports.Length == 0)
+            {
+                throw new FirewallRefusedException("The core cannot tell which port SSH listens on, so it cannot open it.");
+            }
+
+            var backend = backends.Current();
+            var state = await backend.ReadAsync(cancellationToken);
+            bool IsOwn(FirewallRule rule) =>
+                rule is { Action: FirewallAction.Allow, Source: null, SourceNegated: false, Interface: null, Destination: null, PortList: null, Outgoing: false, Routed: false, Unknown: null }
+                && rule.Editable
+                && rule.Ports is { IsSingle: true } single && ssh.Ports.Contains(single.From)
+                && (string.Equals(rule.Comment, BreakGlassComment, StringComparison.Ordinal) || backend.Kind == FirewallBackendKind.Firewalld);
+            var changes = open
+                ? ssh.Ports.Where(port => !state.Rules.Any(rule => IsOwn(rule) && rule.Ports!.Value.From == port))
+                    .Select(port => new FirewallChange(FirewallChangeKind.AddRule, new FirewallRuleSpec(FirewallAction.Allow, FirewallProtocol.Tcp, port, Comment: BreakGlassComment)))
+                    .ToList()
+                : [.. state.Rules.Where(IsOwn).DistinctBy(rule => rule.Id).Select(rule => new FirewallChange(FirewallChangeKind.RemoveRule, RuleId: rule.Id))];
+            if (changes.Count == 0)
+            {
+                return null;
+            }
+
+            var plan = FirewallChangePlanner.Plan(state, changes);
+            var steps = backend.Steps(plan);
+            return steps.Count == 0 ? null : await ApplyNowAsync(backend, plan, steps, changes, requestedBy);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private async Task<FirewallChangeSetInfo> ApplyNowAsync(
         IFirewallBackend backend,
         FirewallChangePlan plan,

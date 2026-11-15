@@ -51,7 +51,9 @@ function detail(change: CloudflarePlannedChange): string {
     return `${change.content}: ${
       change.reason === 'cname-conflict'
         ? 'a CNAME cannot share a name with address records'
-        : 'it points somewhere else'
+        : change.reason === 'tunnel'
+          ? 'the server answers through its tunnel, not its address'
+          : 'it points somewhere else'
     }`;
   }
   if (change.action === 'update' && change.previous !== change.content) {
@@ -286,12 +288,19 @@ export function PointDomainDialog({
 
             {plan && (
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Addresses for {server?.nickname}:{' '}
-                  <span className="font-mono">
-                    {[...plan.addresses.ipv4, ...plan.addresses.ipv6].join(', ')}
-                  </span>
-                </p>
+                {plan.tunnel ? (
+                  <p className="text-xs text-muted-foreground">
+                    {server?.nickname} answers through its Cloudflare Tunnel, so the names point at
+                    the tunnel, proxied: <span className="font-mono">{plan.tunnel}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Addresses for {server?.nickname}:{' '}
+                    <span className="font-mono">
+                      {[...plan.addresses.ipv4, ...plan.addresses.ipv6].join(', ')}
+                    </span>
+                  </p>
+                )}
                 {plan.upToDate ? (
                   <p className="flex items-start gap-2 rounded-xl bg-success/[0.08] p-3 text-sm text-foreground ring-1 ring-inset ring-success/25">
                     <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />

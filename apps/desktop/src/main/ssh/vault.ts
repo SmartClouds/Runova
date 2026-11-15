@@ -155,7 +155,19 @@ async function prepareRewrite(
     );
   }
 
-  const sshServers: StoredSshServer[] = await reencrypt(await store.getSshServers());
+  const sshServers: StoredSshServer[] = await Promise.all(
+    (await reencrypt(await store.getSshServers())).map(async (server) =>
+      server.cloudflareTunnel?.clientSecret
+        ? {
+            ...server,
+            cloudflareTunnel: {
+              ...server.cloudflareTunnel,
+              clientSecret: await moveSecret(server.cloudflareTunnel.clientSecret),
+            },
+          }
+        : server,
+    ),
+  );
   const rdpServers: StoredRdpServer[] = await reencrypt(await store.getRdpServers());
   const environments: StoredProjectEnvironment[] = await Promise.all(
     (await store.getProjectEnvironments()).map(async (environment) => ({

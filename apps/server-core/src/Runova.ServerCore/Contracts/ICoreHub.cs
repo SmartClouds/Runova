@@ -432,6 +432,40 @@ public interface ICoreHub
 
     Task RemoveDnsCredential(string zone);
 
+    // Cloudflare Tunnel (E95). Every role reads it; Admins set it up, close the web ports, choose
+    // who may open SSH and turn it off; closing SSH to everyone and break-glass are the Owner's.
+    // Each firewall step is a change set that waits for ConfirmFirewallChanges like any other.
+
+    /// <summary>The tunnel, cloudflared's connection and how the firewall compares with what the tunnel needs.</summary>
+    Task<CloudflareTunnelStatus> GetCloudflareTunnel();
+
+    /// <summary>Seals the tunnel's token and starts the job that installs cloudflared and connects it. The firewall stays as it is.</summary>
+    Task<JobInfo> StartCloudflareTunnel(CloudflareTunnelSetup request);
+
+    /// <summary>What closing the web ports would change. Changes nothing.</summary>
+    Task<CloudflareTunnelPreview> PreviewCloudflareTunnelPorts(CloudflareTunnelFirewallRequest request);
+
+    /// <summary>Closes 80, 443 and Direct TLS's port to everyone; refused until the tunnel is connected.</summary>
+    Task<CloudflareTunnelResult> CloseCloudflareTunnelPorts(CloudflareTunnelFirewallRequest request);
+
+    /// <summary>What a change of who may open SSH would do. Changes nothing.</summary>
+    Task<CloudflareTunnelPreview> PreviewTunnelSsh(TunnelSshRequest request);
+
+    /// <summary>Who may open SSH while the tunnel is on; applied over the way in that remains.</summary>
+    Task<CloudflareTunnelResult> ApplyTunnelSsh(TunnelSshRequest request);
+
+    /// <summary>What turning the tunnel off would open again. Changes nothing.</summary>
+    Task<CloudflareTunnelPreview> PreviewCloudflareTunnelOff(CloudflareTunnelOffRequest request);
+
+    /// <summary>Opens what the tunnel closed; cloudflared stops once that change is confirmed.</summary>
+    Task<CloudflareTunnelResult> TurnOffCloudflareTunnel(CloudflareTunnelOffRequest request);
+
+    /// <summary>Whether the core opens SSH by itself when the tunnel stays down (off by default).</summary>
+    Task<CloudflareTunnelStatus> SetTunnelBreakGlass(TunnelBreakGlassRequest request);
+
+    /// <summary>Starts the job that makes this server a Cloudflare Mesh node; MeshAddress shows once it is one.</summary>
+    Task<JobInfo> JoinCloudflareMesh(CloudflareMeshJoin request);
+
     // Security center (E15). Admins read the checklist; Owners make its SSH changes, which need a
     // step-up and only run over an SSH connection that signed in with a key. A change rolls itself
     // back after ConfirmWithinSeconds unless ConfirmSshHardening arrives over another new

@@ -941,6 +941,32 @@ export class DeployService {
     );
   }
 
+  /**
+   * A hub call over a brand-new connection through the core domain (E44), never SSH: the way in
+   * that remains with SSH closed behind the Cloudflare Tunnel (E95), and what proves a new
+   * connection through it still gets in after a firewall change made over it.
+   */
+  async withCoreDomainHub<T>(serverId: string, work: (hub: ICoreHub) => Promise<T>): Promise<T> {
+    const domain = this.isDevHost(serverId) ? null : await this.deps.state.coreDomain(serverId);
+    const device = await this.deps.state.device(serverId);
+    if (!domain?.enabled || !device) {
+      throw new Error(
+        'This computer does not reach the server through its core domain. Turn the core domain on under Security, Connection first.',
+      );
+    }
+    const session = await this.openHub(
+      serverId,
+      this.domainTransport(device, domain.domain, domain.mode ?? 'direct'),
+    );
+    try {
+      return await work(session.hub);
+    } catch (error) {
+      throw new Error(hubMessage(error));
+    } finally {
+      await session.stop().catch(() => undefined);
+    }
+  }
+
   /** The address direct TLS connects to: the saved server's host (loopback for the DevHost). */
   async directTlsHost(serverId: string): Promise<string> {
     return this.isDevHost(serverId) ? '127.0.0.1' : (await this.saved(serverId)).host;

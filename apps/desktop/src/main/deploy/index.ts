@@ -31,6 +31,8 @@ import { getMainWindow } from '../mainWindow';
 import { showOsNotification } from '../notifications/osNotification';
 import { detectLatestChatId } from '../notifications/telegramApi';
 import { closeDockerFileSessions } from '../sftp';
+import { SshConnection } from '../ssh/connection';
+import { routedServerEndpoint } from '../ssh/savedServers';
 import { getSshPool } from '../ssh/sharedPool';
 import {
   decryptSecret,
@@ -377,6 +379,19 @@ export function registerDeployIpc(): void {
     onLinkConnection: (serverId, work) => service.onLinkConnection(serverId, work),
     serverName: async (serverId) =>
       (await service.listServers()).find((server) => server.id === serverId)?.nickname ?? serverId,
+    probeSsh: async (serverId, route) => {
+      const connection = await SshConnection.open(await routedServerEndpoint(serverId, route));
+      try {
+        return (await connection.exec('echo "$SSH_CONNECTION"')).stdout.trim();
+      } finally {
+        connection.close();
+      }
+    },
+    resetSsh: (serverId) => {
+      pool.reset(serverId);
+      service.links.reset(serverId);
+    },
+    withCoreDomainHub: (serverId, work) => service.withCoreDomainHub(serverId, work),
   });
   registerDeployAssistantIpc(service, state, stacks, guard);
   registerDeployWordPressIpc({ guard });

@@ -93,6 +93,9 @@ internal sealed class FakeCallerConnections : ICallerConnections
 
     public bool Unplaced { get; set; }
 
+    /// <summary>The address SSH connections come from: this computer, or cloudflared on loopback, or a Mesh address.</summary>
+    public IPAddress Client { get; set; } = App;
+
     public CallerConnection Identify(HttpContext? http, string hubConnectionId, IReadOnlyCollection<int> sshPorts)
     {
         if (Unplaced)
@@ -101,7 +104,7 @@ internal sealed class FakeCallerConnections : ICallerConnections
         }
 
         var port = _ports.GetOrAdd(hubConnectionId, _ => Interlocked.Increment(ref _next));
-        return new CallerConnection(new SshEndpoint(App, port, IPAddress.Parse("192.0.2.10"), 22), $"hub {hubConnectionId}");
+        return new CallerConnection(new SshEndpoint(Client, port, IPAddress.Parse("192.0.2.10"), 22), $"hub {hubConnectionId}");
     }
 }
 

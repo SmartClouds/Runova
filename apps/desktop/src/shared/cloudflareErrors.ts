@@ -27,6 +27,9 @@ const PERMISSIONS: ReadonlySet<string> = new Set<CloudflareAnyPermissionId>([
   'turnstile',
   'zoneEdit',
   'botManagement',
+  'tunnel',
+  'access',
+  'mesh',
 ]);
 const TAG = /\[cloudflare:([a-z-]+)(?::([A-Za-z]+))?\]\s*/;
 

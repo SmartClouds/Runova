@@ -38,3 +38,50 @@ internal sealed class FakeCloudflare : ICloudflareRangeSource, ICloudflareDnsApi
         return Task.CompletedTask;
     }
 }
+
+/// <summary>
+/// cloudflared and the Cloudflare One client as the DevHost sees them (E95): installing, starting
+/// and joining Mesh only remember what happened, and a started tunnel is connected at once, so the
+/// app's whole tunnel flow runs without Cloudflare. Nothing leaves the machine.
+/// </summary>
+internal sealed class FakeCloudflaredMachine : ICloudflared, ICloudflaredHealth, ICloudflareMesh
+{
+    private volatile bool _installed;
+    private volatile bool _running;
+    private int _metricsPort;
+
+    public Task<CloudflaredState> InspectAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new CloudflaredState(_installed, _installed ? "2025.10.1" : null, _running));
+
+    public Task InstallAsync(Jobs.JobContext job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        job.Log(_installed ? "cloudflared is already installed." : "Installed cloudflared (pretend).");
+        _installed = true;
+        return Task.CompletedTask;
+    }
+
+    public Task StartAsync(string token, int metricsPort, CancellationToken cancellationToken)
+    {
+        TunnelToken.Parse(token);
+        (_running, _metricsPort) = (true, metricsPort);
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _running = false;
+        return Task.CompletedTask;
+    }
+
+    public Task<TunnelHealth> ReadAsync(int metricsPort, CancellationToken cancellationToken) =>
+        Task.FromResult(_running && metricsPort == _metricsPort ? new TunnelHealth(true, 4) : new TunnelHealth(false, 0));
+
+    public Task<string> JoinAsync(string token, Jobs.JobContext job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        TunnelToken.Parse(token);
+        job.Log("This server's Mesh address is 100.96.0.12 (pretend).");
+        return Task.FromResult("100.96.0.12");
+    }
+}

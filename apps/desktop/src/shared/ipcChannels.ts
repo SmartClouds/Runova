@@ -1927,6 +1927,22 @@ export const IPC = {
     provisionDnsToken: 'cloudflareServer:provisionDnsToken',
     removeDnsToken: 'cloudflareServer:removeDnsToken',
   },
+  /** The Cloudflare Tunnel on one server (E95). */
+  cloudflareTunnel: {
+    status: 'cloudflareTunnel:status',
+    plan: 'cloudflareTunnel:plan',
+    setUp: 'cloudflareTunnel:setUp',
+    route: 'cloudflareTunnel:route',
+    closePorts: 'cloudflareTunnel:closePorts',
+    previewSsh: 'cloudflareTunnel:previewSsh',
+    probeSsh: 'cloudflareTunnel:probeSsh',
+    applySsh: 'cloudflareTunnel:applySsh',
+    previewOff: 'cloudflareTunnel:previewOff',
+    turnOff: 'cloudflareTunnel:turnOff',
+    cleanUp: 'cloudflareTunnel:cleanUp',
+    joinMesh: 'cloudflareTunnel:joinMesh',
+    breakGlass: 'cloudflareTunnel:breakGlass',
+  },
   /** The workspace Pull request tab: the current branch's PR, its checks, review and merge. */
   pullRequests: {
     status: 'pullRequests:status',

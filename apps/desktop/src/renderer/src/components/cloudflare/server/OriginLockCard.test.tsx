@@ -91,9 +91,33 @@ function render(bridge: Record<string, unknown>, canAdmin = true) {
   return { ...view, onApplied };
 }
 
+/** The tunnel is what the card shows first; these are about the IP lock. */
+async function showIpLock(user: { click: (element: Element) => Promise<void> }) {
+  await user.click(await screen.findByRole('radio', { name: 'Cloudflare IPs only' }));
+}
+
 describe('OriginLockCard', () => {
+  it('shows the tunnel first, and the IP lock once chosen', async () => {
+    const { user } = render({ 'cloudflareServer.originLock': async () => OFF });
+
+    expect(await screen.findByText('Off: no tunnel on this server')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Set up tunnel' })).toBeTruthy();
+    await showIpLock(user);
+    expect(await screen.findByText('Off: every address reaches ports 80 and 443')).toBeTruthy();
+  });
+
+  it('shows the one that is on, whatever was looked at last', async () => {
+    render({ 'cloudflareServer.originLock': async () => ({ ...OFF, enabled: true, state: 'on' }) });
+
+    expect(await screen.findByText('On: only Cloudflare reaches ports 80 and 443')).toBeTruthy();
+    expect(
+      screen.getByRole('radio', { name: 'Cloudflare IPs only' }).getAttribute('aria-checked'),
+    ).toBe('true');
+  });
+
   it('says the lock is off, and Viewers get no buttons', async () => {
-    render({ 'cloudflareServer.originLock': async () => OFF }, false);
+    const { user } = render({ 'cloudflareServer.originLock': async () => OFF }, false);
+    await showIpLock(user);
 
     expect(await screen.findByText('Off: every address reaches ports 80 and 443')).toBeTruthy();
     expect(screen.getByText(/1 IPv4 and 1 IPv6 ranges from Cloudflare/)).toBeTruthy();
@@ -110,6 +134,7 @@ describe('OriginLockCard', () => {
         changeSet: CHANGE,
       }),
     });
+    await showIpLock(user);
 
     await user.click(await screen.findByRole('button', { name: 'Lock to Cloudflare' }));
     const dialog = await screen.findByRole('dialog', { name: 'Lock Production to Cloudflare' });
@@ -161,6 +186,7 @@ describe('OriginLockCard', () => {
         );
       },
     });
+    await showIpLock(user);
 
     await user.click(await screen.findByRole('button', { name: 'Lock to Cloudflare' }));
 

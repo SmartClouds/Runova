@@ -55,6 +55,8 @@ public sealed class DataProtectionTests : IDisposable
     {
         Assert.Equal("runova-core", FrozenIdentifiers.DataProtectionApplicationName);
         Assert.Equal("Runova.Cloudflare.DnsToken.v1", FrozenIdentifiers.CloudflareDnsTokenPurpose);
+        Assert.Equal("Runova.Cloudflare.TunnelToken.v1", FrozenIdentifiers.CloudflareTunnelTokenPurpose);
+        Assert.Equal("Runova.Cloudflare.MeshToken.v1", FrozenIdentifiers.CloudflareMeshTokenPurpose);
         Assert.Equal("Runova.Backups.Destination.v1", FrozenIdentifiers.BackupDestinationPurpose);
         Assert.Equal("Runova.Certificates.PrivateKey.v1", FrozenIdentifiers.CertificatePrivateKeyPurpose);
         Assert.Equal("Runova.Acme.AccountKey.v1", FrozenIdentifiers.AcmeAccountKeyPurpose);

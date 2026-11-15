@@ -84,6 +84,8 @@ describe('TELEGRAM_ALERT_KINDS', () => {
       originLockRefreshFailed: true,
       backupFailed: true,
       containerCrashLoop: true,
+      cloudflareTunnelDown: true,
+      tunnelBreakGlassOpened: true,
     };
 
     expect(TELEGRAM_ALERT_KINDS.map((kind) => kind.value).sort()).toEqual(

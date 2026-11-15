@@ -10,6 +10,15 @@ import { BaseRulesets } from 'cloudflare/resources/rulesets/rulesets';
 import { BaseWidgets } from 'cloudflare/resources/turnstile/widgets';
 import { BasePermissionGroups } from 'cloudflare/resources/user/tokens/permission-groups';
 import { BaseTokens } from 'cloudflare/resources/user/tokens/tokens';
+import { BaseApplications } from 'cloudflare/resources/zero-trust/access/applications/applications';
+import { BasePolicies as BaseAccessPolicies } from 'cloudflare/resources/zero-trust/access/applications/policies';
+import { BaseServiceTokens } from 'cloudflare/resources/zero-trust/access/service-tokens';
+import { BaseCloudflared } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/cloudflared';
+import { BaseConfigurations as BaseTunnelConfigurations } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/configurations';
+import { BaseConnections as BaseTunnelConnections } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/connections';
+import { BaseToken as BaseTunnelToken } from 'cloudflare/resources/zero-trust/tunnels/cloudflared/token';
+import { BaseToken as BaseConnectorToken } from 'cloudflare/resources/zero-trust/tunnels/warp-connector/token';
+import { BaseWARPConnector } from 'cloudflare/resources/zero-trust/tunnels/warp-connector/warp-connector';
 import { BaseActivationCheck } from 'cloudflare/resources/zones/activation-check';
 import { BaseSettings } from 'cloudflare/resources/zones/settings';
 import { BaseZones } from 'cloudflare/resources/zones/zones';
@@ -66,6 +75,16 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
       BaseWidgets,
       BaseAccounts,
       BaseBotManagement,
+      // The Cloudflare Tunnel (E95): the tunnel, its routes and token, Access for SSH, Mesh nodes.
+      BaseCloudflared,
+      BaseTunnelConfigurations,
+      BaseTunnelConnections,
+      BaseTunnelToken,
+      BaseWARPConnector,
+      BaseConnectorToken,
+      BaseApplications,
+      BaseAccessPolicies,
+      BaseServiceTokens,
     ],
     apiToken: token,
     apiKey: null,

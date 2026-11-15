@@ -7,13 +7,16 @@ export type SshErrorCode =
   | 'sudo-password-required'
   | 'sudo-password-rejected'
   /** The Servers vault holds the server's secret and has to be unlocked with its passkey. */
-  | 'vault-locked';
+  | 'vault-locked'
+  /** Cloudflare Access refused the service token for SSH through the Cloudflare Tunnel (E95). */
+  | 'access-refused';
 
 const CODES: ReadonlySet<string> = new Set<SshErrorCode>([
   'host-key-changed',
   'sudo-password-required',
   'sudo-password-rejected',
   'vault-locked',
+  'access-refused',
 ]);
 const CODE = /\[ssh:([a-z-]+)\]\s*/;
 const REMOTE_PREFIX = /^Error invoking remote method '[^']+': (?:\w*Error: )?/;

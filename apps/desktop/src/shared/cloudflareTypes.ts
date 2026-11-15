@@ -1,4 +1,10 @@
-import type { OriginLockPreview } from './deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type {
+  CloudflareTunnelPreview,
+  CloudflareTunnelStatus,
+  CoreDomainMode,
+  OriginLockPreview,
+  TunnelSshMode,
+} from './deploy/protocol/generated/Runova.ServerCore.Contracts';
 
 /**
  * Plain data the Cloudflare dialog passes between the main process and the renderer. The API token
@@ -277,7 +283,7 @@ export interface CloudflarePlannedChange {
   proxied: boolean;
   recordId?: string;
   /** Why a record goes: a CNAME cannot share a name with addresses, or it points elsewhere. */
-  reason?: 'cname-conflict' | 'other-address';
+  reason?: 'cname-conflict' | 'other-address' | 'tunnel';
 }
 
 export interface CloudflarePointDomainPlan {
@@ -288,6 +294,11 @@ export interface CloudflarePointDomainPlan {
   changes: CloudflarePlannedChange[];
   /** Every record already points at the server, so there is nothing to apply. */
   upToDate: boolean;
+  /**
+   * The server's Cloudflare Tunnel (E95), when it has one: the names then point at it with a
+   * proxied CNAME rather than at the server's addresses, which no longer answer.
+   */
+  tunnel?: string;
 }
 
 export interface CloudflarePointDomainResult {
@@ -305,7 +316,10 @@ export type CloudflareExtraPermissionId =
   | 'apiTokens'
   | 'turnstile'
   | 'zoneEdit'
-  | 'botManagement';
+  | 'botManagement'
+  | 'tunnel'
+  | 'access'
+  | 'mesh';
 
 export type CloudflareAnyPermissionId = CloudflarePermissionId | CloudflareExtraPermissionId;
 
@@ -380,4 +394,83 @@ export interface TurnstileWidget extends TurnstileWidgetInput {
 export interface TurnstileWithSecret {
   widget: TurnstileWidget;
   secret: string;
+}
+
+/** How a name on a server stands for its Cloudflare Tunnel (E95). */
+export interface CloudflareTunnelDomain {
+  domain: string;
+  /** A site's domain, the core domain (E44), or the name SSH goes through. */
+  role: 'site' | 'core' | 'ssh';
+  /** The zone of a connected account that holds it, or null when none does. */
+  zoneId: string | null;
+  zoneName: string | null;
+  cloudflareAccountId: string | null;
+  /** Whether it already points at this server's tunnel (a proxied CNAME to it). */
+  routed: boolean;
+}
+
+/** A Cloudflare account the tunnel can live in, with the server's names it holds. */
+export interface CloudflareTunnelAccount {
+  cloudflareAccountId: string;
+  /** The connected account's label in the app. */
+  label: string;
+  domains: string[];
+}
+
+/** Everything the tunnel dialog shows before anything changes. */
+export interface CloudflareTunnelPlan {
+  status: CloudflareTunnelStatus;
+  accounts: CloudflareTunnelAccount[];
+  domains: CloudflareTunnelDomain[];
+  /** The core domain and how the app reaches it; null when it is off. */
+  coreDomain: { domain: string; mode: CoreDomainMode } | null;
+  /** What closing the web ports would change in the firewall. */
+  ports: CloudflareTunnelPreview;
+  /** A name for SSH through the tunnel, in the account's first zone (ssh-<server>.zone). */
+  suggestedSshHostname: string | null;
+  /** What has to happen on the server before the tunnel can be set up; null when nothing. */
+  blocker: string | null;
+}
+
+export interface CloudflareTunnelSetupInput {
+  serverId: string;
+  cloudflareAccountId: string;
+  /** Route SSH through the tunnel under this name (for Cloudflare only SSH); null for none. */
+  sshHostname: string | null;
+}
+
+/** Which names now point at the tunnel, and which were left alone (not in the account). */
+export interface CloudflareTunnelRouteResult {
+  routed: string[];
+  skipped: string[];
+}
+
+export interface CloudflareTunnelSshInput {
+  serverId: string;
+  mode: TunnelSshMode;
+  /** The lockout guard's phrase, needed when no SSH remains (Closed). */
+  overrideConfirmation?: string;
+  /** For the step-up Closed asks for. */
+  password?: string;
+  totpCode?: string;
+}
+
+export interface CloudflareTunnelOffInput {
+  serverId: string;
+  /** False when the origin lock takes over the web ports. */
+  reopenWeb: boolean;
+}
+
+export interface CloudflareTunnelBreakGlassInput {
+  serverId: string;
+  enabled: boolean;
+  delayMinutes: number;
+}
+
+/** Whether SSH answers over a route, and from which address the server saw it. */
+export interface CloudflareSshProbe {
+  ok: boolean;
+  /** The client address in $SSH_CONNECTION, when it got in. */
+  client: string | null;
+  message: string;
 }

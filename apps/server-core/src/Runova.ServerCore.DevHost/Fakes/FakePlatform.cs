@@ -76,6 +76,11 @@ internal static class FakePlatform
         services.AddSingleton<ICloudflareRangeSource>(provider => provider.GetRequiredService<FakeCloudflare>());
         services.AddSingleton<ICloudflareDnsApi>(provider => provider.GetRequiredService<FakeCloudflare>());
         services.AddSingleton(new CloudflareDns01Options(TimeSpan.Zero));
+        // The Cloudflare Tunnel (E95): cloudflared and Mesh pretend, connected as soon as started.
+        services.AddSingleton<FakeCloudflaredMachine>();
+        services.AddSingleton<ICloudflared>(provider => provider.GetRequiredService<FakeCloudflaredMachine>());
+        services.AddSingleton<ICloudflaredHealth>(provider => provider.GetRequiredService<FakeCloudflaredMachine>());
+        services.AddSingleton<ICloudflareMesh>(provider => provider.GetRequiredService<FakeCloudflaredMachine>());
         // The Deploy AI's exec stream and the journal (E09): recorded and answered, never run.
         services.AddSingleton<FakeExecRunner>();
         services.AddSingleton<IExecRunner>(provider => provider.GetRequiredService<FakeExecRunner>());

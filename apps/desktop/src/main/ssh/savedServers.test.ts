@@ -38,6 +38,70 @@ beforeEach(async () => {
   vault = await import('./vault');
 });
 
+describe('savedServerEndpoint through the tunnel (E95)', () => {
+  it('goes through Cloudflare Access with the sealed service token, keeping the login and host key', async () => {
+    userData.writeData('ssh-servers.json', [
+      server({
+        secretEnvelope: await vault.encryptSecret('login pw'),
+        hostKeyFingerprint: 'ab'.repeat(32),
+        sshRoute: 'cloudflare',
+        cloudflareTunnel: {
+          hostname: 'ssh.example.com',
+          clientId: 'id.access',
+          clientSecret: await vault.encryptSecret('access secret'),
+        },
+      }),
+    ]);
+
+    expect(await saved.savedServerEndpoint('srv-1')).toMatchObject({
+      host: 'prod.example',
+      password: 'login pw',
+      storedFingerprint: 'ab'.repeat(32),
+      via: {
+        kind: 'cloudflare',
+        hostname: 'ssh.example.com',
+        clientId: 'id.access',
+        clientSecret: 'access secret',
+      },
+    });
+  });
+
+  it('goes to the Mesh address over Mesh, and straight to the host when no route is on', async () => {
+    userData.writeData('ssh-servers.json', [
+      server({ sshRoute: 'mesh', cloudflareTunnel: { meshAddress: '100.96.0.12' } }),
+      server({ id: 'srv-2', cloudflareTunnel: { meshAddress: '100.96.0.13' } }),
+    ]);
+
+    expect((await saved.savedServerEndpoint('srv-1')).host).toBe('100.96.0.12');
+    expect(await saved.savedServerEndpoint('srv-2')).not.toHaveProperty('via');
+    expect((await saved.savedServerEndpoint('srv-2')).host).toBe('prod.example');
+  });
+
+  it('keeps nothing for a server that is not a saved SSH server', async () => {
+    userData.writeData('ssh-servers.json', [server()]);
+
+    expect(await saved.readTunnelSsh('devhost')).toEqual({});
+  });
+
+  it('sets and clears the route with what the app keeps about the tunnel', async () => {
+    userData.writeData('ssh-servers.json', [server()]);
+
+    await saved.updateTunnelSsh(
+      'srv-1',
+      (current) => ({ ...current, meshAddress: '100.96.0.12' }),
+      'mesh',
+    );
+    const set = stored()[0];
+    await saved.updateTunnelSsh('srv-1', () => undefined, null);
+    const cleared = stored()[0];
+
+    expect(set.sshRoute).toBe('mesh');
+    expect(set.cloudflareTunnel).toEqual({ meshAddress: '100.96.0.12' });
+    expect(cleared.sshRoute).toBeUndefined();
+    expect(cleared.cloudflareTunnel).toBeUndefined();
+  });
+});
+
 describe('savedServerEndpoint', () => {
   it('decrypts a saved login password', async () => {
     userData.writeData('ssh-servers.json', [

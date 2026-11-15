@@ -17,6 +17,9 @@ internal sealed record NginxConfiguration(IReadOnlyList<NginxSite> Sites, IReadO
     /// certificate to ask for, the device proof rides in a header instead.
     /// </summary>
     public bool CoreThroughCloudflare { get; init; }
+
+    /// <summary>Set while the Cloudflare Tunnel is on (E95): every site also answers cloudflared on loopback.</summary>
+    public NginxTunnel? Tunnel { get; init; }
 }
 
 /// <summary>
@@ -207,3 +210,15 @@ internal sealed class NginxConfigurationException(IReadOnlyList<NginxProblem> pr
 /// only completes for a client presenting Cloudflare's origin pull certificate.
 /// </summary>
 internal sealed record NginxOriginLock(IReadOnlyList<string> CloudflareNetworks, bool AuthenticatedOriginPulls = false);
+
+/// <summary>
+/// Sites behind the Cloudflare Tunnel (E95): cloudflared on this machine sends every request to a
+/// plain-HTTP listener on <see cref="Address"/> and this port, which nothing off the machine can
+/// reach. Requests there carry the visitor's address in CF-Connecting-IP and the scheme they used
+/// in X-Forwarded-Proto; the public listeners never trust either.
+/// </summary>
+internal sealed record NginxTunnel(int Port)
+{
+    /// <summary>A loopback address of its own, so the listener never clashes with a service on 127.0.0.1.</summary>
+    public const string Address = "127.0.0.2";
+}

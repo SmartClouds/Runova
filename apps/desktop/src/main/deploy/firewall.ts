@@ -46,6 +46,11 @@ export interface DeployFirewallDeps {
       work: (hub: ICoreHub) => Promise<T>,
       step?: (step: 'signingIn') => void,
     ) => Promise<T>;
+    /**
+     * A new connection through the core domain: the way a change made with SSH closed behind
+     * the Cloudflare Tunnel (E95) is kept, since no SSH connection gets in any more.
+     */
+    withCoreDomainHub?: <T>(serverId: string, work: (hub: ICoreHub) => Promise<T>) => Promise<T>;
   };
   /** The signed-in user's roles on a server, when this run of the app knows them. */
   roles: (serverId: string) => string[] | null;
@@ -163,6 +168,20 @@ export class DeployFirewall {
       report('confirming', 'done', { changeSetId });
       return change;
     } catch (error) {
+      // No SSH connection gets in: a change made over the core domain (SSH closed behind the
+      // Cloudflare Tunnel) is kept over a new connection through it. The core still refuses
+      // that for a change made over SSH, so this never keeps one it should not.
+      if (step !== 'confirming' && this.deps.service.withCoreDomainHub) {
+        try {
+          const change = await this.deps.service.withCoreDomainHub(input.serverId, (hub) =>
+            hub.confirmFirewallChanges(changeSetId),
+          );
+          report('confirming', 'done', { changeSetId });
+          return change;
+        } catch {
+          // Said below as the SSH failure it started with.
+        }
+      }
       const explained = this.explain(input.serverId, error);
       const message =
         step === 'confirming'

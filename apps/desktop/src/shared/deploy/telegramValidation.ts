@@ -64,6 +64,16 @@ export const TELEGRAM_ALERT_KINDS: ReadonlyArray<{
     label: 'Cloudflare lock refresh failed',
     hint: "Cloudflare's address ranges could not be fetched or applied.",
   },
+  {
+    value: 'cloudflareTunnelDown',
+    label: 'Cloudflare Tunnel down',
+    hint: 'The tunnel lost its connection, so the sites and the core domain do not answer.',
+  },
+  {
+    value: 'tunnelBreakGlassOpened',
+    label: 'SSH opened by break-glass',
+    hint: 'The tunnel stayed down, so the server opened SSH to everyone as you asked.',
+  },
 ];
 
 const KNOWN_KINDS: ReadonlySet<string> = new Set(TELEGRAM_ALERT_KINDS.map((kind) => kind.value));

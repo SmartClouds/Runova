@@ -103,3 +103,132 @@ public sealed record DnsCredentialInfo(
 /// <summary>Saved when Problems is empty; otherwise nothing was saved.</summary>
 [TranspilationSource]
 public sealed record DnsCredentialSaveResult(string[] Problems, DnsCredentialInfo? Credential = null);
+
+// Cloudflare Tunnel (E95): cloudflared on the server dials out to Cloudflare, so ports 80 and 443
+// (and Direct TLS) close to everyone and no Cloudflare ranges need to be let in. The sites and the
+// core domain answer through the tunnel only. It and the origin lock are never on together.
+
+/// <summary>
+/// Who may still open SSH while the tunnel is on. Open: everyone the firewall lets in today.
+/// Closed: no one from outside; the app reaches the core through the core domain on the tunnel.
+/// Cloudflare: SSH goes through the tunnel behind a Cloudflare Access service token. Mesh: only
+/// addresses of the account's Cloudflare Mesh (100.96.0.0/12) reach the SSH port.
+/// </summary>
+[TranspilationSource]
+public enum TunnelSshMode
+{
+    Open,
+    Closed,
+    Cloudflare,
+    Mesh,
+}
+
+[TranspilationSource]
+public enum CloudflareTunnelState
+{
+    /// <summary>No tunnel on this server.</summary>
+    Off,
+
+    /// <summary>The setup job installs cloudflared and starts the tunnel.</summary>
+    Installing,
+
+    /// <summary>cloudflared runs but has no connection to Cloudflare yet.</summary>
+    Connecting,
+
+    /// <summary>The tunnel is connected, and the web ports are still open to everyone (close them next).</summary>
+    PortsOpen,
+
+    /// <summary>A firewall change for the tunnel is applied and waits for its confirmation.</summary>
+    Pending,
+
+    /// <summary>Connected, the web ports closed and SSH as chosen.</summary>
+    Connected,
+
+    /// <summary>Connected, but the firewall no longer matches what the tunnel needs (see OpenRules).</summary>
+    Drifted,
+
+    /// <summary>The tunnel was connected and is not now: the sites and the core domain do not answer.</summary>
+    Down,
+
+    /// <summary>The setup job failed; LastError says why.</summary>
+    Failed,
+}
+
+/// <summary>
+/// The Cloudflare Tunnel as the core runs it. WebPorts are the ports it keeps closed (80, 443 and
+/// Direct TLS's when that is on); OpenRules the firewall rules that still let someone in where the
+/// tunnel wants no one, SSH included unless SshMode is Open. TunnelPort is nginx's loopback listener
+/// cloudflared sends every request to. The token is never part of this.
+/// </summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelStatus(
+    bool Enabled,
+    CloudflareTunnelState State,
+    TunnelSshMode SshMode,
+    int[] WebPorts,
+    int[] SshPorts,
+    string[] OpenRules,
+    string[] Warnings,
+    int Connections,
+    bool CloudflaredInstalled,
+    bool BreakGlassEnabled,
+    int BreakGlassDelayMinutes,
+    bool BreakGlassOpen,
+    string? TunnelId = null,
+    string? TunnelName = null,
+    string? AccountTag = null,
+    string? SshHostname = null,
+    string? CloudflaredVersion = null,
+    int? TunnelPort = null,
+    string? MeshAddress = null,
+    Guid? SetupJobId = null,
+    Guid? ChangeSetId = null,
+    FirewallChangeState? ChangeState = null,
+    string? LastError = null,
+    long? LastConnectedAtUnixMs = null,
+    long? DownSinceUnixMs = null);
+
+/// <summary>
+/// Starts the tunnel the app made at Cloudflare. Token is write-only: the core seals it and only
+/// ever writes it to cloudflared's root-only environment file. SshHostname is the name the app
+/// routed to this server's SSH (Cloudflare only SSH), if any. Nothing in the firewall changes yet.
+/// </summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelSetup(string TunnelId, string TunnelName, string Token, string? SshHostname = null);
+
+/// <summary>A firewall change of the tunnel's; SshConnection and OverrideConfirmation as for any firewall change.</summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelFirewallRequest(string? SshConnection = null, string? OverrideConfirmation = null);
+
+/// <summary>Who may open SSH while the tunnel is on (a firewall change set).</summary>
+[TranspilationSource]
+public sealed record TunnelSshRequest(TunnelSshMode Mode, string? SshConnection = null, string? OverrideConfirmation = null);
+
+/// <summary>
+/// Turns the tunnel off: SSH opens to everyone again and, unless the origin lock takes over
+/// (ReopenWeb false), the web ports too. cloudflared stops once that change is confirmed.
+/// </summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelOffRequest(bool ReopenWeb = true, string? SshConnection = null, string? OverrideConfirmation = null);
+
+/// <summary>
+/// Whether the core opens SSH to everyone by itself when the tunnel has been down for DelayMinutes
+/// (5 to 1440), and closes it again once the tunnel is back. Off by default.
+/// </summary>
+[TranspilationSource]
+public sealed record TunnelBreakGlassRequest(bool Enabled, int DelayMinutes = 30);
+
+/// <summary>
+/// Makes this server a Cloudflare Mesh node, for Mesh-only SSH. NodeId is Cloudflare's id for the
+/// node the app made; Token is write-only and only ever handed to warp-cli.
+/// </summary>
+[TranspilationSource]
+public sealed record CloudflareMeshJoin(string NodeId, string Token);
+
+/// <summary>What a tunnel firewall change would do; Firewall is null when the firewall already matches.</summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelPreview(FirewallChange[] Changes, string[] Notes, FirewallChangePreview? Firewall = null);
+
+/// <summary>The tunnel as it now stands, the firewall change waiting for its confirmation (if any), and how nginx took it.</summary>
+[TranspilationSource]
+public sealed record CloudflareTunnelResult(CloudflareTunnelStatus Status, FirewallChangeSetInfo? ChangeSet = null, NginxApplyResult? Nginx = null);

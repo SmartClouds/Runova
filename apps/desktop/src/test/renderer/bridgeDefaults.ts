@@ -237,5 +237,19 @@ export function bridgeDefaults(): Record<string, unknown> {
       staleRules: [],
       warnings: [],
     },
+    'cloudflareTunnel.status': {
+      enabled: false,
+      state: 'off',
+      sshMode: 'open',
+      webPorts: [80, 443],
+      sshPorts: [22],
+      openRules: [],
+      warnings: [],
+      connections: 0,
+      cloudflaredInstalled: false,
+      breakGlassEnabled: false,
+      breakGlassDelayMinutes: 30,
+      breakGlassOpen: false,
+    },
   });
 }

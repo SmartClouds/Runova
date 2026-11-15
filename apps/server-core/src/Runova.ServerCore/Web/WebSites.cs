@@ -385,12 +385,17 @@ internal sealed partial class WebSites(
             // Only an apply renders the core domain's site, and only an apply needs its key.
             CoreKey = withKeys && models.Any(site => site.Upstream is NginxCoreUpstream) ? coreDomain.Read().Key : null,
             CoreThroughCloudflare = coreDomain.Read().ThroughCloudflare,
+            Tunnel = await db.CloudflareTunnel.AsNoTracking()
+                .Where(setting => setting.Id == CloudflareTunnelSetting.SingletonId && setting.Enabled && setting.TunnelPort > 0)
+                .Select(setting => new NginxTunnel(setting.TunnelPort))
+                .FirstOrDefaultAsync(cancellationToken),
         };
         var hash = SiteMapping.Fingerprint([
             .. siteStates.Select(e => $"s:{e.Key}={e.Value}"),
             .. streamStates.Select(e => $"t:{e.Key}={e.Value}"),
             .. configuration.CoreThroughCloudflare && models.Any(site => site.Upstream is NginxCoreUpstream) ? (string[])["c:cloudflare"] : [],
-            .. originLock is null ? [] : new[] { $"o:{originLock.AuthenticatedOriginPulls}:{string.Join(',', originLock.CloudflareNetworks)}" }]);
+            .. originLock is null ? [] : new[] { $"o:{originLock.AuthenticatedOriginPulls}:{string.Join(',', originLock.CloudflareNetworks)}" },
+            .. configuration.Tunnel is { } tunnel ? new[] { $"u:{tunnel.Port}" } : []]);
         var state = new NginxAppliedState(hash, siteStates, streamStates);
         return (new NginxApplyPlan(configuration, files, state), state);
     }

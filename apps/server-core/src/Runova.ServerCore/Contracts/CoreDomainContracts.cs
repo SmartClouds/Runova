@@ -28,7 +28,8 @@ public enum CoreDomainMode
 /// one is issued for the domain (through the usual certificate calls, with SiteId). Ready when all
 /// of it holds and the app can connect through the domain. OriginLocked means the Cloudflare origin
 /// lock is on, which keeps everyone but Cloudflare off ports 80 and 443; it only stops a domain in
-/// Direct mode.
+/// Direct mode. Tunneled means the Cloudflare Tunnel is on (E95): the domain answers through it in
+/// Cloudflare mode, with no certificate needed on this server, and Direct mode is refused.
 /// </summary>
 [TranspilationSource]
 public sealed record CoreDomainStatus(
@@ -46,7 +47,8 @@ public sealed record CoreDomainStatus(
     long? ChangedAtUnixMs = null,
     string? ChangedBy = null,
     string? Error = null,
-    CoreDomainMode Mode = CoreDomainMode.Direct);
+    CoreDomainMode Mode = CoreDomainMode.Direct,
+    bool Tunneled = false);
 
 /// <summary>Turns the core domain on, or changes it (Owner, with a step-up). Sources are addresses or CIDR networks nginx lets in.</summary>
 [TranspilationSource]

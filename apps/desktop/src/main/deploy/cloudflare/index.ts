@@ -1,10 +1,13 @@
 import { lookup } from 'node:dns/promises';
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
+import type { SshRoute } from '../../../shared/apiTypes';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import { registerCloudflareHandlers } from '../../ipc/cloudflare';
 import { registerCloudflareServerHandlers } from '../../ipc/cloudflareServer';
+import { registerCloudflareTunnelHandlers } from '../../ipc/cloudflareTunnel';
 import { getMainWindow } from '../../mainWindow';
+import { readTunnelSsh, updateTunnelSsh } from '../../ssh/savedServers';
 import {
   decryptSecret,
   encryptSecret,
@@ -18,6 +21,7 @@ import { addressesFromCore, addressesOfHost, type ServerAddresses } from './poin
 import { CloudflareServerOps } from './serverOps';
 import { CloudflareService } from './service';
 import { CloudflareState, cloudflareFilePort } from './state';
+import { CloudflareTunnelOps, tunnelTarget } from './tunnel';
 
 /**
  * Wires the Cloudflare dialog into Electron. The token is sealed with the Servers vault, so it moves
@@ -35,6 +39,11 @@ export interface CloudflareCoreAccess {
     work: (sshConnection: string | undefined) => Promise<T>,
   ) => Promise<T>;
   serverName: (serverId: string) => Promise<string>;
+  /** `$SSH_CONNECTION` over a brand-new SSH connection taking this route (E95). */
+  probeSsh: (serverId: string, route: SshRoute) => Promise<string>;
+  /** Drops the server's SSH connections and its link, so new ones take its new route. */
+  resetSsh: (serverId: string) => void;
+  withCoreDomainHub: <T>(serverId: string, work: (hub: ICoreHub) => Promise<T>) => Promise<T>;
 }
 
 /** How long point-domain waits for a core's addresses before using the saved host. */
@@ -73,6 +82,25 @@ async function savedServerAddresses(
   return addressesOfHost(server.host, (host) => lookup(host, { all: true, verbatim: true }));
 }
 
+/** Where a server's Cloudflare Tunnel takes traffic, when it has one that is on (E95). */
+async function tunnelTargetOf(
+  serverId: string,
+  core: CloudflareCoreAccess,
+): Promise<string | null> {
+  try {
+    const status = await Promise.race([
+      core.call(serverId, (hub) => hub.getCloudflareTunnel()),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), CORE_ADDRESS_TIMEOUT_MS),
+      ),
+    ]);
+    return status.enabled && status.tunnelId ? tunnelTarget(status.tunnelId) : null;
+  } catch {
+    // No core, or one from before the tunnel: the server's addresses it is.
+    return null;
+  }
+}
+
 export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
   const state = new CloudflareState(
     cloudflareFilePort(join(app.getPath('userData'), 'data', 'cloudflare.json')),
@@ -85,6 +113,7 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
     unseal: decryptSecret,
     isLocked: isLockedEnvelope,
     addresses: (serverId) => savedServerAddresses(serverId, core),
+    ...(core ? { tunnelTarget: (serverId: string) => tunnelTargetOf(serverId, core) } : {}),
     ...(baseURL ? { baseURL, maxRetries: 0 } : {}),
   });
   const guard = (event: Electron.IpcMainInvokeEvent) => {
@@ -104,6 +133,22 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
         roles: core.roles,
         onLinkConnection: core.onLinkConnection,
         serverName: core.serverName,
+      }),
+      guard,
+    });
+    registerCloudflareTunnelHandlers({
+      ipc: ipcMain,
+      ops: new CloudflareTunnelOps({
+        cloudflare: service,
+        links: { call: core.call },
+        roles: core.roles,
+        onLinkConnection: core.onLinkConnection,
+        serverName: core.serverName,
+        addresses: (serverId) => savedServerAddresses(serverId, core),
+        tunnelSsh: { read: readTunnelSsh, update: updateTunnelSsh, seal: encryptSecret },
+        probeSsh: core.probeSsh,
+        resetSsh: core.resetSsh,
+        withCoreDomainHub: core.withCoreDomainHub,
       }),
       guard,
     });

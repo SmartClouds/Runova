@@ -196,7 +196,7 @@ export class FakeFirewall {
   preview(request: FirewallChangeRequest): FirewallChangePreview {
     this.settle();
     const plan = this.plan(request.changes);
-    const guard = this.guard(plan);
+    const guard = this.guard(plan, request.sshConnection);
     return {
       summary: plan.summary,
       commands: plan.commands,
@@ -219,7 +219,7 @@ export class FakeFirewall {
       );
     }
     const plan = this.plan(request.changes);
-    const guard = this.guard(plan);
+    const guard = this.guard(plan, request.sshConnection);
     if (guard.blocked) {
       const typed = request.overrideConfirmation?.trim();
       if (!typed) {
@@ -397,9 +397,22 @@ export class FakeFirewall {
     return plan;
   }
 
-  private guard(plan: Plan): FirewallGuardVerdict {
+  private guard(plan: Plan, sshConnection?: string): FirewallGuardVerdict {
     const checked = [`SSH on port ${FAKE_SSH_PORT}`];
     if (allowsSsh(plan)) return { blocked: false, reasons: [], checked };
+    // As the real guard sees it: loopback always gets in (SSH through the tunnel's cloudflared),
+    // and a Mesh address does while a rule lets Mesh's range reach SSH.
+    const client = sshConnection?.trim().split(/\s+/)[0] ?? '';
+    if (/^(127\.|::1$)/.test(client)) return { blocked: false, reasons: [], checked };
+    if (
+      /^100\.(9[6-9]|10\d|11[01])\./.test(client) &&
+      plan.rules.some(
+        (rule) =>
+          rule.action === 'allow' && rule.port === FAKE_SSH_PORT && rule.source === '100.96.0.0/12',
+      )
+    ) {
+      return { blocked: false, reasons: [], checked };
+    }
     return {
       blocked: true,
       reasons: [`Nothing would let new connections reach SSH on port ${FAKE_SSH_PORT}.`],

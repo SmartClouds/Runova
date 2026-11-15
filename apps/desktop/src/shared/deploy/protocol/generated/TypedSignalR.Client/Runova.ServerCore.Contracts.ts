@@ -3,7 +3,7 @@
 /* tslint:disable */
 // @ts-nocheck
 import type { IStreamResult, Subject } from '@microsoft/signalr';
-import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
+import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
 
 /**
 * Everything the app can ask the core over the WebSocket. The desktop's typed client is
@@ -743,6 +743,65 @@ export type ICoreHub = {
     * @returns Transpiled from System.Threading.Tasks.Task
     */
     removeDnsCredential(zone: string): Promise<void>;
+    /**
+    * The tunnel, cloudflared's connection and how the firewall compares with what the tunnel needs.
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelStatus>
+    */
+    getCloudflareTunnel(): Promise<CloudflareTunnelStatus>;
+    /**
+    * Seals the tunnel's token and starts the job that installs cloudflared and connects it. The firewall stays as it is.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelSetup
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.JobInfo>
+    */
+    startCloudflareTunnel(request: CloudflareTunnelSetup): Promise<JobInfo>;
+    /**
+    * What closing the web ports would change. Changes nothing.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelFirewallRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelPreview>
+    */
+    previewCloudflareTunnelPorts(request: CloudflareTunnelFirewallRequest): Promise<CloudflareTunnelPreview>;
+    /**
+    * Closes 80, 443 and Direct TLS's port to everyone; refused until the tunnel is connected.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelFirewallRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelResult>
+    */
+    closeCloudflareTunnelPorts(request: CloudflareTunnelFirewallRequest): Promise<CloudflareTunnelResult>;
+    /**
+    * What a change of who may open SSH would do. Changes nothing.
+    * @param request Transpiled from Runova.ServerCore.Contracts.TunnelSshRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelPreview>
+    */
+    previewTunnelSsh(request: TunnelSshRequest): Promise<CloudflareTunnelPreview>;
+    /**
+    * Who may open SSH while the tunnel is on; applied over the way in that remains.
+    * @param request Transpiled from Runova.ServerCore.Contracts.TunnelSshRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelResult>
+    */
+    applyTunnelSsh(request: TunnelSshRequest): Promise<CloudflareTunnelResult>;
+    /**
+    * What turning the tunnel off would open again. Changes nothing.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelOffRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelPreview>
+    */
+    previewCloudflareTunnelOff(request: CloudflareTunnelOffRequest): Promise<CloudflareTunnelPreview>;
+    /**
+    * Opens what the tunnel closed; cloudflared stops once that change is confirmed.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelOffRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelResult>
+    */
+    turnOffCloudflareTunnel(request: CloudflareTunnelOffRequest): Promise<CloudflareTunnelResult>;
+    /**
+    * Whether the core opens SSH by itself when the tunnel stays down (off by default).
+    * @param request Transpiled from Runova.ServerCore.Contracts.TunnelBreakGlassRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.CloudflareTunnelStatus>
+    */
+    setTunnelBreakGlass(request: TunnelBreakGlassRequest): Promise<CloudflareTunnelStatus>;
+    /**
+    * Starts the job that makes this server a Cloudflare Mesh node; MeshAddress shows once it is one.
+    * @param request Transpiled from Runova.ServerCore.Contracts.CloudflareMeshJoin
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.JobInfo>
+    */
+    joinCloudflareMesh(request: CloudflareMeshJoin): Promise<JobInfo>;
     /**
     * How safe the server is, item by item, with a score. Changes nothing.
     * @param request Transpiled from Runova.ServerCore.Contracts.SecurityChecklistRequest

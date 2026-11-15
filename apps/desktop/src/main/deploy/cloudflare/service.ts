@@ -34,6 +34,7 @@ import type {
   CloudflareMinTlsVersion,
   CloudflareNewZoneInput,
   CloudflarePermissionId,
+  CloudflarePlannedChange,
   CloudflarePointDomainInput,
   CloudflarePointDomainPlan,
   CloudflarePointDomainResult,
@@ -62,6 +63,7 @@ import {
 import { planChanges, pointedNames, type ServerAddresses } from './pointDomain';
 import type { CloudflareState } from './state';
 import { checkToken } from './tokenCheck';
+import { planTunnelRecords } from './tunnel';
 
 /**
  * The Cloudflare dialog's main-process side. Any number of accounts can be connected. Each API token
@@ -86,6 +88,8 @@ export interface CloudflareServiceDeps {
   isLocked: (envelope: SecretEnvelope) => boolean;
   /** A saved server's public addresses, for "point domain to this server". */
   addresses: (serverId: string) => Promise<ServerAddresses>;
+  /** Where a server's Cloudflare Tunnel takes traffic (E95), or null when it has none. */
+  tunnelTarget?: (serverId: string) => Promise<string | null>;
   /** The SDK's fetch; tests pass the fake Cloudflare API. */
   fetch?: CloudflareFetch;
   /** The API's base URL; only the e2e run sets it, to reach the recorded fake on loopback. */
@@ -892,8 +896,20 @@ export class CloudflareService {
         'That name cannot be used for a website. Use @ for the domain itself, or a name like app.',
       );
     }
-    const addresses = await this.deps.addresses(input.serverId);
     const existing = await this.recordsAt(api, input.zoneId, names);
+    const tunnel = this.deps.tunnelTarget ? await this.deps.tunnelTarget(input.serverId) : null;
+    if (tunnel) {
+      const changes = tunnelChanges(names, tunnel, existing);
+      return {
+        zoneName: zone.name,
+        names,
+        addresses: { ipv4: [], ipv6: [] },
+        changes,
+        upToDate: changes.every((change) => change.action === 'keep'),
+        tunnel,
+      };
+    }
+    const addresses = await this.deps.addresses(input.serverId);
     const changes = planChanges({ names, addresses, proxied: input.proxied, existing });
     return {
       zoneName: zone.name,
@@ -902,6 +918,11 @@ export class CloudflareService {
       changes,
       upToDate: changes.every((change) => change.action === 'keep'),
     };
+  }
+
+  /** The same service, pointing names at a server's tunnel when it has one (E95). */
+  withTunnelTarget(tunnelTarget: (serverId: string) => Promise<string | null>): CloudflareService {
+    return new CloudflareService({ ...this.deps, tunnelTarget });
   }
 
   private async recordsAt(
@@ -1110,4 +1131,72 @@ export class CloudflareService {
       throw cloudflareFailure(error, token, permission);
     }
   }
+}
+
+/** A proxied CNAME to the tunnel per name, its address records out of the way (E95). */
+function tunnelChanges(
+  names: string[],
+  target: string,
+  existing: CloudflareDnsRecord[],
+): CloudflarePlannedChange[] {
+  const plan = planTunnelRecords(names, target, existing);
+  return names.flatMap((name): CloudflarePlannedChange[] => {
+    const kept = existing.find(
+      (record) =>
+        record.name === name &&
+        record.type === 'CNAME' &&
+        record.content === target &&
+        record.proxied,
+    );
+    const patch = plan.patches.find((record) => record.name === name);
+    return [
+      ...(kept
+        ? [
+            {
+              action: 'keep' as const,
+              type: 'CNAME' as const,
+              name,
+              content: target,
+              proxied: true,
+              recordId: kept.id,
+            },
+          ]
+        : []),
+      ...(patch
+        ? [
+            {
+              action: 'update' as const,
+              type: 'CNAME' as const,
+              name,
+              content: target,
+              previous: patch.content,
+              proxied: true,
+              recordId: patch.id,
+            },
+          ]
+        : []),
+      ...(plan.posts.includes(name)
+        ? [
+            {
+              action: 'create' as const,
+              type: 'CNAME' as const,
+              name,
+              content: target,
+              proxied: true,
+            },
+          ]
+        : []),
+      ...plan.deletes
+        .filter((record) => record.name === name)
+        .map((record) => ({
+          action: 'delete' as const,
+          type: record.type as 'A' | 'AAAA' | 'CNAME',
+          name,
+          content: record.content,
+          proxied: record.proxied,
+          recordId: record.id,
+          reason: 'tunnel' as const,
+        })),
+    ];
+  });
 }

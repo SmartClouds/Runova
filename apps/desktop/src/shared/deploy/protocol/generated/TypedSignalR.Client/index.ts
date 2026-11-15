@@ -4,7 +4,7 @@
 // @ts-nocheck
 import type { HubConnection, IStreamResult, Subject } from '@microsoft/signalr';
 import type { ICoreHub, ICoreHubReceiver } from './Runova.ServerCore.Contracts';
-import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
+import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
 
 
 // components
@@ -610,6 +610,46 @@ class ICoreHub_HubProxy implements ICoreHub {
 
     public readonly removeDnsCredential = async (zone: string): Promise<void> => {
         return await this.connection.invoke("RemoveDnsCredential", zone);
+    }
+
+    public readonly getCloudflareTunnel = async (): Promise<CloudflareTunnelStatus> => {
+        return await this.connection.invoke("GetCloudflareTunnel");
+    }
+
+    public readonly startCloudflareTunnel = async (request: CloudflareTunnelSetup): Promise<JobInfo> => {
+        return await this.connection.invoke("StartCloudflareTunnel", request);
+    }
+
+    public readonly previewCloudflareTunnelPorts = async (request: CloudflareTunnelFirewallRequest): Promise<CloudflareTunnelPreview> => {
+        return await this.connection.invoke("PreviewCloudflareTunnelPorts", request);
+    }
+
+    public readonly closeCloudflareTunnelPorts = async (request: CloudflareTunnelFirewallRequest): Promise<CloudflareTunnelResult> => {
+        return await this.connection.invoke("CloseCloudflareTunnelPorts", request);
+    }
+
+    public readonly previewTunnelSsh = async (request: TunnelSshRequest): Promise<CloudflareTunnelPreview> => {
+        return await this.connection.invoke("PreviewTunnelSsh", request);
+    }
+
+    public readonly applyTunnelSsh = async (request: TunnelSshRequest): Promise<CloudflareTunnelResult> => {
+        return await this.connection.invoke("ApplyTunnelSsh", request);
+    }
+
+    public readonly previewCloudflareTunnelOff = async (request: CloudflareTunnelOffRequest): Promise<CloudflareTunnelPreview> => {
+        return await this.connection.invoke("PreviewCloudflareTunnelOff", request);
+    }
+
+    public readonly turnOffCloudflareTunnel = async (request: CloudflareTunnelOffRequest): Promise<CloudflareTunnelResult> => {
+        return await this.connection.invoke("TurnOffCloudflareTunnel", request);
+    }
+
+    public readonly setTunnelBreakGlass = async (request: TunnelBreakGlassRequest): Promise<CloudflareTunnelStatus> => {
+        return await this.connection.invoke("SetTunnelBreakGlass", request);
+    }
+
+    public readonly joinCloudflareMesh = async (request: CloudflareMeshJoin): Promise<JobInfo> => {
+        return await this.connection.invoke("JoinCloudflareMesh", request);
     }
 
     public readonly getSecurityChecklist = async (request: SecurityChecklistRequest): Promise<SecurityChecklist> => {

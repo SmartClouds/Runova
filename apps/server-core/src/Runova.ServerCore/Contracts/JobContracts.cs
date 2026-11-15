@@ -22,6 +22,8 @@ public enum JobKind
     StackDeploy,
     StackAction,
     StackDelete,
+    CloudflareTunnelSetup,
+    CloudflareMeshSetup,
 }
 
 [TranspilationSource]

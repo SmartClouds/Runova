@@ -21,6 +21,7 @@
     "src/preload/deployDocker.ts",
     "src/preload/deployRegistry.ts",
     "src/preload/cloudflareServer.ts",
+    "src/preload/cloudflareTunnel.ts",
     "src/preload/deployHardening.ts",
     "src/preload/deployServerBackups.ts",
     "src/preload/deployCoreDomain.ts",

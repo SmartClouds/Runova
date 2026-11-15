@@ -187,7 +187,7 @@ export type AuditVerificationInfo = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.AlertKind */
-export type AlertKind = "diskPressure" | "jobFailed" | "rebootRequired" | "firewallRolledBack" | "firewallRollbackFailed" | "certificateRenewalFailed" | "originLockRefreshFailed" | "backupFailed" | "containerCrashLoop";
+export type AlertKind = "diskPressure" | "jobFailed" | "rebootRequired" | "firewallRolledBack" | "firewallRollbackFailed" | "certificateRenewalFailed" | "originLockRefreshFailed" | "backupFailed" | "containerCrashLoop" | "cloudflareTunnelDown" | "tunnelBreakGlassOpened";
 
 /** Transpiled from Runova.ServerCore.Contracts.AlertSeverity */
 export type AlertSeverity = "info" | "warning" | "critical";
@@ -1091,6 +1091,142 @@ export type DnsCredentialSaveResult = {
     credential?: DnsCredentialInfo;
 }
 
+/** Transpiled from Runova.ServerCore.Contracts.TunnelSshMode */
+export type TunnelSshMode = "open" | "closed" | "cloudflare" | "mesh";
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelState */
+export type CloudflareTunnelState = "off" | "installing" | "connecting" | "portsOpen" | "pending" | "connected" | "drifted" | "down" | "failed";
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelStatus */
+export type CloudflareTunnelStatus = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelState */
+    state: CloudflareTunnelState;
+    /** Transpiled from Runova.ServerCore.Contracts.TunnelSshMode */
+    sshMode: TunnelSshMode;
+    /** Transpiled from int[] */
+    webPorts: number[];
+    /** Transpiled from int[] */
+    sshPorts: number[];
+    /** Transpiled from string[] */
+    openRules: string[];
+    /** Transpiled from string[] */
+    warnings: string[];
+    /** Transpiled from int */
+    connections: number;
+    /** Transpiled from bool */
+    cloudflaredInstalled: boolean;
+    /** Transpiled from bool */
+    breakGlassEnabled: boolean;
+    /** Transpiled from int */
+    breakGlassDelayMinutes: number;
+    /** Transpiled from bool */
+    breakGlassOpen: boolean;
+    /** Transpiled from string? */
+    tunnelId?: string;
+    /** Transpiled from string? */
+    tunnelName?: string;
+    /** Transpiled from string? */
+    accountTag?: string;
+    /** Transpiled from string? */
+    sshHostname?: string;
+    /** Transpiled from string? */
+    cloudflaredVersion?: string;
+    /** Transpiled from int */
+    tunnelPort?: number;
+    /** Transpiled from string? */
+    meshAddress?: string;
+    /** Transpiled from System.Guid */
+    setupJobId?: string;
+    /** Transpiled from System.Guid */
+    changeSetId?: string;
+    /** Transpiled from Runova.ServerCore.Contracts.FirewallChangeState */
+    changeState?: FirewallChangeState;
+    /** Transpiled from string? */
+    lastError?: string;
+    /** Transpiled from long */
+    lastConnectedAtUnixMs?: number;
+    /** Transpiled from long */
+    downSinceUnixMs?: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelSetup */
+export type CloudflareTunnelSetup = {
+    /** Transpiled from string */
+    tunnelId: string;
+    /** Transpiled from string */
+    tunnelName: string;
+    /** Transpiled from string */
+    token: string;
+    /** Transpiled from string? */
+    sshHostname?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelFirewallRequest */
+export type CloudflareTunnelFirewallRequest = {
+    /** Transpiled from string? */
+    sshConnection?: string;
+    /** Transpiled from string? */
+    overrideConfirmation?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TunnelSshRequest */
+export type TunnelSshRequest = {
+    /** Transpiled from Runova.ServerCore.Contracts.TunnelSshMode */
+    mode: TunnelSshMode;
+    /** Transpiled from string? */
+    sshConnection?: string;
+    /** Transpiled from string? */
+    overrideConfirmation?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelOffRequest */
+export type CloudflareTunnelOffRequest = {
+    /** Transpiled from bool */
+    reopenWeb: boolean;
+    /** Transpiled from string? */
+    sshConnection?: string;
+    /** Transpiled from string? */
+    overrideConfirmation?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TunnelBreakGlassRequest */
+export type TunnelBreakGlassRequest = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from int */
+    delayMinutes: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareMeshJoin */
+export type CloudflareMeshJoin = {
+    /** Transpiled from string */
+    nodeId: string;
+    /** Transpiled from string */
+    token: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelPreview */
+export type CloudflareTunnelPreview = {
+    /** Transpiled from Runova.ServerCore.Contracts.FirewallChange[] */
+    changes: FirewallChange[];
+    /** Transpiled from string[] */
+    notes: string[];
+    /** Transpiled from Runova.ServerCore.Contracts.FirewallChangePreview? */
+    firewall?: FirewallChangePreview;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelResult */
+export type CloudflareTunnelResult = {
+    /** Transpiled from Runova.ServerCore.Contracts.CloudflareTunnelStatus */
+    status: CloudflareTunnelStatus;
+    /** Transpiled from Runova.ServerCore.Contracts.FirewallChangeSetInfo? */
+    changeSet?: FirewallChangeSetInfo;
+    /** Transpiled from Runova.ServerCore.Contracts.NginxApplyResult? */
+    nginx?: NginxApplyResult;
+}
+
 /** Transpiled from Runova.ServerCore.Contracts.CoreDomainMode */
 export type CoreDomainMode = "direct" | "cloudflare";
 
@@ -1126,6 +1262,8 @@ export type CoreDomainStatus = {
     error?: string;
     /** Transpiled from Runova.ServerCore.Contracts.CoreDomainMode */
     mode: CoreDomainMode;
+    /** Transpiled from bool */
+    tunneled: boolean;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.CoreDomainRequest */
@@ -2168,7 +2306,7 @@ export type PingResponse = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.JobKind */
-export type JobKind = "packagesRefresh" | "packagesUpgrade" | "packagesUpgradeSecurity" | "automaticUpdates" | "reboot" | "serviceRestart" | "dockerInstall" | "imagePull" | "nginxInstall" | "certificateIssue" | "certificateRenew" | "stackDeploy" | "stackAction" | "stackDelete";
+export type JobKind = "packagesRefresh" | "packagesUpgrade" | "packagesUpgradeSecurity" | "automaticUpdates" | "reboot" | "serviceRestart" | "dockerInstall" | "imagePull" | "nginxInstall" | "certificateIssue" | "certificateRenew" | "stackDeploy" | "stackAction" | "stackDelete" | "cloudflareTunnelSetup" | "cloudflareMeshSetup";
 
 /** Transpiled from Runova.ServerCore.Contracts.JobState */
 export type JobState = "running" | "succeeded" | "failed" | "cancelled" | "interrupted";

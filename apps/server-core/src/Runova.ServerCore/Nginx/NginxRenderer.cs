@@ -66,7 +66,7 @@ internal static class NginxRenderer
                 continue;
             }
 
-            files.Add(new NginxReleaseFile(SitePath(site), RenderSite(site, layout, upstreams, directory, configuration.OriginLock)));
+            files.Add(new NginxReleaseFile(SitePath(site), RenderSite(site, layout, upstreams, directory, configuration.OriginLock, configuration.Tunnel)));
 
             if (site.BasicAuth is { } auth)
             {
@@ -85,6 +85,11 @@ internal static class NginxRenderer
         }
 
         files.Add(new NginxReleaseFile(StreamFile, RenderStreams(configuration, layout, upstreams)));
+        if (configuration.Tunnel is not null)
+        {
+            files.Add(new NginxReleaseFile(NginxCloudflare.TunnelRealIpFile, RenderTunnelRealIp()));
+        }
+
         if (configuration.OriginLock is { } originLock)
         {
             files.Add(new NginxReleaseFile(NginxCloudflare.RealIpFile, RenderRealIp(originLock)));
@@ -136,8 +141,71 @@ internal static class NginxRenderer
         ]));
         writer.Close();
 
+        if (configuration.Tunnel is { } tunnel)
+        {
+            writer.Section(
+                "# Through the Cloudflare Tunnel the visitor's scheme comes in X-Forwarded-Proto; cloudflared always sets it.",
+                $"map $http_x_forwarded_proto {TunnelSchemeVariable(layout)} {{",
+                "    default https;",
+                "    http http;",
+                "}",
+                string.Empty,
+                $"map $http_x_forwarded_proto {TunnelPortVariable(layout)} {{",
+                "    default 443;",
+                "    http 80;",
+                "}");
+            writer.Open("server", "# The tunnel's listener: names no site claims get no answer.");
+            writer.Section($"listen {TunnelListen(tunnel)} default_server;", "server_name _;", "return 444;");
+            writer.Close();
+        }
+
         writer.Section(configuration.Sites.Select(site => $"include {directory}/{SitePath(site)};"));
         return writer.ToString();
+    }
+
+    /// <summary>
+    /// The visitor's address from CF-Connecting-IP on the tunnel's listener. Only cloudflared on this
+    /// machine reaches that listener, so loopback is the one peer trusted to name it.
+    /// </summary>
+    private static string RenderTunnelRealIp()
+    {
+        var writer = new ConfigWriter();
+        writer.Section(Header);
+        writer.Section(
+            "# cloudflared on this machine: only it reaches the tunnel's listener.",
+            "set_real_ip_from 127.0.0.0/8;",
+            "real_ip_header CF-Connecting-IP;");
+        return writer.ToString();
+    }
+
+    private static string TunnelSchemeVariable(NginxLayout layout) => "$" + layout.NamePrefix + "_tunnel_scheme";
+
+    /// <summary>The port the visitor used at Cloudflare's edge, not the listener's own.</summary>
+    private static string TunnelPortVariable(NginxLayout layout) => "$" + layout.NamePrefix + "_tunnel_port";
+
+    private static string TunnelListen(NginxTunnel tunnel) => $"{NginxTunnel.Address}:{Number(tunnel.Port)}";
+
+    /// <summary>
+    /// The site as cloudflared reaches it: plain HTTP on loopback (Cloudflare ended TLS at its edge
+    /// and the tunnel itself is encrypted), the visitor's address and scheme from Cloudflare's
+    /// headers, ACME challenges answered so certificates still renew, and visitors who came over
+    /// plain HTTP sent to HTTPS when the site asks for that.
+    /// </summary>
+    private static void WriteTunnelSite(ConfigWriter writer, NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string directory, NginxTunnel tunnel, string domains)
+    {
+        writer.Open("server", "# Through the Cloudflare Tunnel: only cloudflared on this machine reaches this listener.");
+        writer.Section(new[] { $"listen {TunnelListen(tunnel)};", $"server_name {domains};", "server_tokens off;", $"root {layout.SiteFolder(site.Id)};" }.Concat(Logs(site, layout)));
+        writer.Section($"include {directory}/{NginxCloudflare.TunnelRealIpFile};");
+        WriteAcmeLocation(writer, layout);
+        if (site.Certificate is not null && site.RedirectToHttps)
+        {
+            writer.Open($"if ({TunnelSchemeVariable(layout)} = \"http\")");
+            writer.Section("return 301 https://$host$request_uri;");
+            writer.Close();
+        }
+
+        WriteServerBody(writer, site, layout, upstreams, directory, overTls: true, scheme: TunnelSchemeVariable(layout), port: TunnelPortVariable(layout));
+        writer.Close();
     }
 
     /// <summary>
@@ -155,7 +223,7 @@ internal static class NginxRenderer
         return writer.ToString();
     }
 
-    private static string RenderSite(NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string directory, NginxOriginLock? originLock)
+    private static string RenderSite(NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string directory, NginxOriginLock? originLock, NginxTunnel? tunnel)
     {
         var domains = string.Join(' ', site.Domains.Select(d => d.ToLowerInvariant()));
         var writer = new ConfigWriter();
@@ -243,6 +311,11 @@ internal static class NginxRenderer
             writer.Close();
         }
 
+        if (tunnel is not null)
+        {
+            WriteTunnelSite(writer, site, layout, upstreams, directory, tunnel, domains);
+        }
+
         return writer.ToString();
     }
 
@@ -284,6 +357,17 @@ internal static class NginxRenderer
         writer.Close();
         writer.Close();
 
+        if (configuration.Tunnel is { } tunnel)
+        {
+            writer.Open("server", "# Through the Cloudflare Tunnel: only cloudflared on this machine reaches this listener.");
+            writer.Section(new[] { $"listen {TunnelListen(tunnel)};", $"server_name {domain};", "server_tokens off;" }.Concat(Logs(site, layout)));
+            writer.Section($"include {directory}/{NginxCloudflare.TunnelRealIpFile};");
+            writer.Section(IpRuleLines(site));
+
+            WriteCoreLocation(writer, site, core, layout, key!, cloudflare: true);
+            writer.Close();
+        }
+
         if (site.Certificate is not { } certificate)
         {
             return writer.ToString();
@@ -320,14 +404,15 @@ internal static class NginxRenderer
                 "ssl_verify_client optional_no_ca;");
         }
 
-        if (site.IpRules is { } rules)
-        {
-            writer.Section(
-                rules.Deny.Select(network => $"deny {Network(network)};")
-                    .Concat(rules.Allow.Select(network => $"allow {Network(network)};"))
-                    .Concat(rules.Allow.Count > 0 ? ["deny all;"] : []));
-        }
+        writer.Section(IpRuleLines(site));
+        WriteCoreLocation(writer, site, core, layout, key!, cloudflare);
+        writer.Close();
+        return writer.ToString();
+    }
 
+    /// <summary>The core's own location: the key and the device proof go through, nothing the visitor sends replaces them.</summary>
+    private static void WriteCoreLocation(ConfigWriter writer, NginxSite site, NginxCoreUpstream core, NginxLayout layout, string key, bool cloudflare)
+    {
         writer.Section("# Uploads and downloads stream through; the core sets its own limits.", "client_max_body_size 0;");
         writer.Open("location /");
         if (!cloudflare)
@@ -343,7 +428,7 @@ internal static class NginxRenderer
             $"proxy_pass http://127.0.0.1:{Number(core.Port)};",
             "proxy_http_version 1.1;",
             $"proxy_set_header Host {CoreHostName};",
-            $"proxy_set_header {CoreDomain.CoreDomainSettings.KeyHeader} {Quote(key!)};",
+            $"proxy_set_header {CoreDomain.CoreDomainSettings.KeyHeader} {Quote(key)};",
             // Through Cloudflare a client certificate, if any, is Cloudflare's own: never a device's.
             $"proxy_set_header {CoreDomain.CoreDomainSettings.CertificateHeader} {(cloudflare ? "\"\"" : "$ssl_client_escaped_cert")};",
             "proxy_set_header X-Forwarded-For $remote_addr;",
@@ -365,9 +450,14 @@ internal static class NginxRenderer
         }
 
         writer.Close();
-        writer.Close();
-        return writer.ToString();
     }
+
+    private static IEnumerable<string> IpRuleLines(NginxSite site) =>
+        site.IpRules is { } rules
+            ? rules.Deny.Select(network => $"deny {Network(network)};")
+                .Concat(rules.Allow.Select(network => $"allow {Network(network)};"))
+                .Concat(rules.Allow.Count > 0 ? ["deny all;"] : [])
+            : [];
 
     /// <summary>The Host the core answers to; the core domain itself is nginx's business.</summary>
     private static string CoreHostName => Hosting.CoreLayout.HostName;
@@ -388,7 +478,7 @@ internal static class NginxRenderer
         writer.Close();
     }
 
-    private static void WriteServerBody(ConfigWriter writer, NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string directory, bool overTls)
+    private static void WriteServerBody(ConfigWriter writer, NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string directory, bool overTls, string scheme = "$scheme", string port = "$server_port")
     {
         if (site.ClientMaxBodySizeMegabytes is { } bodySize)
         {
@@ -436,7 +526,7 @@ internal static class NginxRenderer
         }
 
         writer.Open("location /");
-        writer.Section(ProxyLines(site, layout, upstreams));
+        writer.Section(ProxyLines(site, layout, upstreams, scheme, port));
 
         if (site.ProxyCache is { } cache)
         {
@@ -500,7 +590,7 @@ internal static class NginxRenderer
         return headers;
     }
 
-    private static List<string> ProxyLines(NginxSite site, NginxLayout layout, UpstreamPolicy upstreams)
+    private static List<string> ProxyLines(NginxSite site, NginxLayout layout, UpstreamPolicy upstreams, string scheme, string port)
     {
         var lines = new List<string>();
         UpstreamUrl? url = null;
@@ -529,9 +619,9 @@ internal static class NginxRenderer
             "proxy_set_header X-Real-IP $remote_addr;",
             "# The visitor's own address replaces any X-Forwarded-For they sent, so it cannot be forged.",
             "proxy_set_header X-Forwarded-For $remote_addr;",
-            "proxy_set_header X-Forwarded-Proto $scheme;",
+            $"proxy_set_header X-Forwarded-Proto {scheme};",
             "proxy_set_header X-Forwarded-Host $host;",
-            "proxy_set_header X-Forwarded-Port $server_port;",
+            $"proxy_set_header X-Forwarded-Port {port};",
         ]);
 
         if (site.Websocket)

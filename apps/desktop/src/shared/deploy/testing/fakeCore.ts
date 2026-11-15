@@ -18,6 +18,7 @@ import type {
 } from '../protocol/generated/Runova.ServerCore.Contracts';
 import { FakeAssistant } from './fakeAssistant';
 import { FakeCloudflareCore } from './fakeCloudflareCore';
+import { FakeCloudflareTunnelCore } from './fakeCloudflareTunnelCore';
 import { FakeCoreConnection } from './fakeCoreConnection';
 import { metricsSample, sampleServices, sampleSystemInfo, sampleUpdates } from './fakeCoreData';
 import { FakeDocker } from './fakeDocker';
@@ -120,6 +121,12 @@ export class FakeCore {
   /** Cloudflare on the server (E14): the origin lock, Origin CA certificates and DNS tokens. */
   readonly cloudflare: FakeCloudflareCore;
 
+  /** The Cloudflare Tunnel (E95): off until an Admin sets it up. */
+  readonly tunnel: FakeCloudflareTunnelCore;
+
+  /** Whether calls come through the core domain (E44), as they do with SSH closed behind the tunnel. */
+  overCoreDomain = false;
+
   /** Direct TLS (E16): off until an Owner turns it on. */
   directTls: DirectTlsStatus = {
     enabled: false,
@@ -146,6 +153,7 @@ export class FakeCore {
     ready: false,
     siteId: 'runova-core',
     mode: 'direct',
+    tunneled: false,
   };
 
   /** Error reporting (E29): where the core sends its warnings and errors. Off until an Owner sets it up. */
@@ -170,6 +178,17 @@ export class FakeCore {
       ),
     );
     this.cloudflare = new FakeCloudflareCore({ now, firewall: this.firewall, nginx: this.nginx });
+    this.tunnel = new FakeCloudflareTunnelCore({
+      now,
+      firewall: this.firewall,
+      nginx: this.nginx,
+      startJob: (kind, title, options) => this.startJob(kind, title, options),
+      log: (jobId, text) => {
+        this.log(jobId, text);
+      },
+      finishJob: (jobId, state, exitCode) => this.finishJob(jobId, state, exitCode),
+      overCoreDomain: () => this.overCoreDomain,
+    });
   }
 
   get openConnections(): FakeCoreConnection[] {

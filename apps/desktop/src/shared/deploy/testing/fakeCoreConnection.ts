@@ -7,6 +7,10 @@ import type {
   CertificateIssueRequest,
   CertificateRemoveRequest,
   CertificateUploadRequest,
+  CloudflareMeshJoin,
+  CloudflareTunnelFirewallRequest,
+  CloudflareTunnelOffRequest,
+  CloudflareTunnelSetup,
   ConsoleInput,
   ConsoleOutput,
   ConsoleRequest,
@@ -72,6 +76,8 @@ import type {
   StepUpRequest,
   StreamProxySettings,
   TelegramNotificationsRequest,
+  TunnelBreakGlassRequest,
+  TunnelSshRequest,
   VolumeInfo,
 } from '../protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
@@ -533,6 +539,38 @@ export class FakeCoreConnection implements ICoreHub {
     );
   removeDnsCredential = async (zone: string) =>
     this.web('RemoveDnsCredential', ADMINS, () => this.core.cloudflare.removeCredential(zone));
+
+  // The Cloudflare Tunnel (E95): every role reads it, Admins change it; closing SSH and
+  // break-glass are the Owner's. Its firewall steps are the fake firewall's change sets.
+
+  getCloudflareTunnel = async () =>
+    this.firewall('GetCloudflareTunnel', false, () => this.core.tunnel.status());
+  startCloudflareTunnel = async (request: CloudflareTunnelSetup) =>
+    this.firewall('StartCloudflareTunnel', true, () => this.core.tunnel.start(request));
+  previewCloudflareTunnelPorts = async (_request: CloudflareTunnelFirewallRequest) =>
+    this.firewall('PreviewCloudflareTunnelPorts', true, () => this.core.tunnel.previewPorts());
+  closeCloudflareTunnelPorts = async (request: CloudflareTunnelFirewallRequest) =>
+    this.firewall('CloseCloudflareTunnelPorts', true, (_fw, caller) =>
+      this.core.tunnel.closePorts(request, caller),
+    );
+  previewTunnelSsh = async (request: TunnelSshRequest) =>
+    this.firewall('PreviewTunnelSsh', true, () => this.core.tunnel.previewSsh(request));
+  applyTunnelSsh = async (request: TunnelSshRequest) => {
+    if (request.mode === 'closed') this.assertRole('ApplyTunnelSsh', OWNERS);
+    return this.firewall('ApplyTunnelSsh', true, (_fw, caller) =>
+      this.core.tunnel.applySsh(request, caller),
+    );
+  };
+  previewCloudflareTunnelOff = async (request: CloudflareTunnelOffRequest) =>
+    this.firewall('PreviewCloudflareTunnelOff', true, () => this.core.tunnel.previewOff(request));
+  turnOffCloudflareTunnel = async (request: CloudflareTunnelOffRequest) =>
+    this.firewall('TurnOffCloudflareTunnel', true, (_fw, caller) =>
+      this.core.tunnel.turnOff(request, caller),
+    );
+  setTunnelBreakGlass = async (request: TunnelBreakGlassRequest) =>
+    this.web('SetTunnelBreakGlass', OWNERS, () => this.core.tunnel.setBreakGlass(request));
+  joinCloudflareMesh = async (request: CloudflareMeshJoin) =>
+    this.firewall('JoinCloudflareMesh', true, () => this.core.tunnel.joinMesh(request));
   // Logs center and Deploy AI (E09), Admins only; the rules are FakeAssistant's.
 
   getAssistantMode = async () => {

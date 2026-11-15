@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Runova.ServerCore.Contracts;
 
 namespace Runova.ServerCore.Data;
 
@@ -71,6 +72,68 @@ internal sealed class OriginLockSetting
     public long UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// The Cloudflare Tunnel (E95): one row, made when the app first starts a tunnel. The token is
+/// sealed with Data Protection and never leaves the core but into cloudflared's environment file.
+/// </summary>
+internal sealed class CloudflareTunnelSetting
+{
+    public const int SingletonId = 1;
+
+    public int Id { get; set; } = SingletonId;
+
+    public bool Enabled { get; set; }
+
+    public Guid? TunnelId { get; set; }
+
+    public string? TunnelName { get; set; }
+
+    public string? AccountTag { get; set; }
+
+    public string? SshHostname { get; set; }
+
+    public string? ProtectedToken { get; set; }
+
+    public TunnelSshMode SshMode { get; set; }
+
+    /// <summary>nginx's loopback listener for cloudflared (on 127.0.0.2), and cloudflared's metrics port (on 127.0.0.1).</summary>
+    public int TunnelPort { get; set; }
+
+    public int MetricsPort { get; set; }
+
+    public bool BreakGlassEnabled { get; set; }
+
+    public int BreakGlassDelayMinutes { get; set; } = 30;
+
+    /// <summary>Whether the core's own break-glass rule is in the firewall now.</summary>
+    public bool BreakGlassOpen { get; set; }
+
+    public Guid? SetupJobId { get; set; }
+
+    /// <summary>The firewall change the tunnel last made, and what it was for ("web", "ssh", "off").</summary>
+    public Guid? ChangeSetId { get; set; }
+
+    public string? ChangeKind { get; set; }
+
+    /// <summary>The SSH mode the pending change set brings (it becomes SshMode once confirmed).</summary>
+    public TunnelSshMode? PendingSshMode { get; set; }
+
+    /// <summary>Whether the pending "off" change set hands the web ports to the origin lock.</summary>
+    public bool OffForOriginLock { get; set; }
+
+    public bool WebClosed { get; set; }
+
+    public string? MeshAddress { get; set; }
+
+    public string? LastError { get; set; }
+
+    public long? LastConnectedAt { get; set; }
+
+    public long? DownSince { get; set; }
+
+    public long UpdatedAt { get; set; }
+}
+
 internal static class CloudflareModel
 {
     public static void Configure(ModelBuilder builder)
@@ -97,6 +160,22 @@ internal static class CloudflareModel
             setting.HasKey(s => s.Id);
             setting.Property(s => s.Id).ValueGeneratedNever();
             setting.Property(s => s.LastRefreshError).HasMaxLength(1000);
+        });
+
+        builder.Entity<CloudflareTunnelSetting>(setting =>
+        {
+            setting.ToTable("CloudflareTunnel");
+            setting.HasKey(s => s.Id);
+            setting.Property(s => s.Id).ValueGeneratedNever();
+            setting.Property(s => s.TunnelName).HasMaxLength(200);
+            setting.Property(s => s.AccountTag).HasMaxLength(64);
+            setting.Property(s => s.SshHostname).HasMaxLength(253);
+            setting.Property(s => s.ProtectedToken).HasMaxLength(16384);
+            setting.Property(s => s.SshMode).HasConversion<string>().HasMaxLength(20);
+            setting.Property(s => s.PendingSshMode).HasConversion<string>().HasMaxLength(20);
+            setting.Property(s => s.ChangeKind).HasMaxLength(10);
+            setting.Property(s => s.MeshAddress).HasMaxLength(64);
+            setting.Property(s => s.LastError).HasMaxLength(1000);
         });
     }
 }

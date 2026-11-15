@@ -110,6 +110,12 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
             services.AddSingleton<ICloudflareRangeSource>(provider => provider.GetRequiredService<FakeCloudflareApi>());
             services.AddSingleton<ICloudflareDnsApi>(provider => provider.GetRequiredService<FakeCloudflareApi>());
             services.AddSingleton(OriginLockOptions.Default with { RunInBackground = false });
+            // The Cloudflare Tunnel (E95): cloudflared only records, and nothing watches it unless a test ticks.
+            services.AddSingleton<FakeCloudflared>();
+            services.AddSingleton<ICloudflared>(provider => provider.GetRequiredService<FakeCloudflared>());
+            services.AddSingleton<ICloudflaredHealth>(provider => provider.GetRequiredService<FakeCloudflared>());
+            services.AddSingleton<ICloudflareMesh>(provider => provider.GetRequiredService<FakeCloudflared>());
+            services.AddSingleton(CloudflareTunnelOptions.Default with { RunInBackground = false });
             services.AddSingleton(new CloudflareDns01Options(TimeSpan.Zero));
             // StreamExec and the journal (E09): recorded and answered, nothing runs.
             services.AddSingleton(provider => new FakeExecRunner(

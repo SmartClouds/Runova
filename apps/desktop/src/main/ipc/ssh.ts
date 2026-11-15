@@ -192,7 +192,7 @@ export async function getSshSessionPassword(sessionId: string): Promise<string |
 }
 
 function toPublicServer(server: StoredSshServer): SshSavedServer {
-  const { secretEnvelope: _secretEnvelope, ...rest } = server;
+  const { secretEnvelope: _secretEnvelope, cloudflareTunnel: _tunnel, ...rest } = server;
   return { ...rest, hasSecret: server.secretEnvelope != null };
 }
 
@@ -233,6 +233,9 @@ export function registerSshHandlers(): void {
         hostKeyFingerprint: hostChanged ? undefined : existing?.hostKeyFingerprint,
         createdAt: existing?.createdAt ?? Date.now(),
         lastConnectedAt: existing?.lastConnectedAt ?? null,
+        // The tunnel's SSH route outlives an edit of the login (E95).
+        ...(existing?.sshRoute ? { sshRoute: existing.sshRoute } : {}),
+        ...(existing?.cloudflareTunnel ? { cloudflareTunnel: existing.cloudflareTunnel } : {}),
       };
 
       const next = [...servers];

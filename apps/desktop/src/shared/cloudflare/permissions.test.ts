@@ -36,12 +36,24 @@ describe('the permission catalog', () => {
       'turnstile',
       'zoneEdit',
       'botManagement',
+      'tunnel',
+      'access',
+      'mesh',
     ]);
     const turnstile = cloudflarePermission('turnstile');
     expect(turnstile.label).toBe('Account > Turnstile > Edit');
     expect(turnstile.apiNames).toContain('Turnstile Write');
     expect(permissionDeniedMessage('turnstile')).toBe(
       'This token is not allowed to manage Turnstile widgets. On Cloudflare, edit the token and add Account > Turnstile > Edit, then check it again here.',
+    );
+  });
+
+  it('asks for the tunnel account permissions only when a tunnel is used (E95)', () => {
+    expect(cloudflarePermission('tunnel').label).toBe('Account > Cloudflare Tunnel > Edit');
+    expect(cloudflarePermission('tunnel').template).toBeUndefined();
+    expect(cloudflarePermission('access').apiNames).toContain('Access: Service Tokens Write');
+    expect(permissionDeniedMessage('mesh')).toBe(
+      'This token is not allowed to add servers to Cloudflare Mesh. On Cloudflare, edit the token and add Account > Cloudflare One Connectors > Edit, then check it again here.',
     );
   });
 

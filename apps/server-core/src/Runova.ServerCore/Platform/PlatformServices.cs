@@ -17,6 +17,9 @@ internal interface ISystemFiles
 
     /// <summary>Replaces the file in one step (a temporary file renamed over it).</summary>
     void WriteText(string path, string content, UnixFileMode mode);
+
+    /// <summary>Removes the file; a file that is already gone is fine.</summary>
+    void Delete(string path);
 }
 
 internal sealed class SystemFiles(string root = "/") : ISystemFiles
@@ -48,6 +51,8 @@ internal sealed class SystemFiles(string root = "/") : ISystemFiles
 
         File.Move(temporary, target, overwrite: true);
     }
+
+    public void Delete(string path) => File.Delete(Map(path));
 
     private string Map(string path)
     {

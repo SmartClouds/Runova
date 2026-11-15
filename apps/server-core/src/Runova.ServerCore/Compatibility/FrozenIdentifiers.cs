@@ -12,6 +12,8 @@ internal static class FrozenIdentifiers
     public const string DataProtectionApplicationName = "runova-core";
 
     public const string CloudflareDnsTokenPurpose = "Runova.Cloudflare.DnsToken.v1";
+    public const string CloudflareTunnelTokenPurpose = "Runova.Cloudflare.TunnelToken.v1";
+    public const string CloudflareMeshTokenPurpose = "Runova.Cloudflare.MeshToken.v1";
     public const string BackupDestinationPurpose = "Runova.Backups.Destination.v1";
     public const string CertificatePrivateKeyPurpose = "Runova.Certificates.PrivateKey.v1";
     public const string AcmeAccountKeyPurpose = "Runova.Acme.AccountKey.v1";
