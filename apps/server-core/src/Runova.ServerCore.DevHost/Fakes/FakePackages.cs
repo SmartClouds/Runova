@@ -36,7 +36,7 @@ internal sealed class FakePackages(FakeServer server, TimeProvider time) : IPack
     {
         ArgumentNullException.ThrowIfNull(job);
         await RefreshIndexAsync(job, cancellationToken);
-        var chosen = server.Packages.Where(package => !securityOnly || package.Security).ToList();
+        var chosen = server.Packages.Where(package => package.Phased != true && (!securityOnly || package.Security)).ToList();
         if (chosen.Count == 0)
         {
             job.Log(securityOnly ? "No security updates are waiting." : "Nothing to upgrade.");
@@ -44,7 +44,13 @@ internal sealed class FakePackages(FakeServer server, TimeProvider time) : IPack
         }
 
         await EmitAsync(job, ["Reading package lists...", "Building dependency tree...", "Reading state information..."], cancellationToken);
-        job.Log($"{chosen.Count} upgraded, 0 newly installed, 0 to remove and 0 not upgraded.", JobLogSource.Out);
+        var deferred = server.Packages.Where(package => package.Phased == true).Select(package => package.Name).ToList();
+        if (!securityOnly && deferred.Count > 0)
+        {
+            await EmitAsync(job, ["The following upgrades have been deferred due to phasing:", $"  {string.Join(' ', deferred)}"], cancellationToken);
+        }
+
+        job.Log($"{chosen.Count} upgraded, 0 newly installed, 0 to remove and {(securityOnly ? 0 : deferred.Count)} not upgraded.", JobLogSource.Out);
         var number = 1;
         foreach (var package in chosen)
         {

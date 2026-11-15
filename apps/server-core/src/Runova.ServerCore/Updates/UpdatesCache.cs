@@ -101,7 +101,7 @@ internal sealed partial class UpdatesCache(IPackageManager packages, TimeProvide
         return new UpdatesInfo(
             packages.Name,
             list,
-            list.Count(package => package.Security),
+            list.Count(package => package.Security && package.Phased != true),
             automatic,
             time.GetUtcNow().ToUnixTimeMilliseconds(),
             reboot.Required,

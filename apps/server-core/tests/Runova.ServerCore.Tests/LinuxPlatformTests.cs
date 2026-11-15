@@ -129,8 +129,53 @@ public sealed class LinuxPlatformTests
 
         Assert.Equal(7, packages.Count);
         Assert.Equal(4, packages.Count(p => p.Security));
-        var call = Assert.Single(processes.Calls);
-        Assert.False(Units.IsUnitRun(call));
+        Assert.All(packages, p => Assert.Null(p.Phased));
+        Assert.Equal(2, processes.Calls.Count);
+        Assert.DoesNotContain(processes.Calls, Units.IsUnitRun);
+    }
+
+    [Fact]
+    public async Task Apt_marks_what_ubuntu_is_still_phasing_in_from_a_dry_run_that_takes_no_lock()
+    {
+        using var root = new TestRoot("ubuntu-24.04");
+        var processes = new FakeProcessRunner();
+        processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/list-upgradable-phased-ubuntu-24.04.txt")));
+        processes.Respond("apt-get", ["-s"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/upgrade-simulate-phased-ubuntu-24.04.txt")));
+
+        var packages = await Apt(root.Files, processes).ListUpgradableAsync(Cancel);
+
+        Assert.Equal(
+            ["snapd", "ubuntu-pro-client", "ubuntu-pro-client-l10n"],
+            packages.Where(p => p.Phased == true).Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(3, packages.Count(p => p.Phased is null));
+        var dryRun = Assert.Single(processes.Calls, call => FakeProcessRunner.Is(call, "apt-get"));
+        Assert.Equal(["-s", "-o", "Debug::NoLocking=true", "--with-new-pkgs", "upgrade"], dryRun.Arguments);
+        Assert.DoesNotContain(processes.Calls, Units.IsUnitRun);
+    }
+
+    [Fact]
+    public async Task A_failed_dry_run_still_lists_every_update_and_marks_none()
+    {
+        using var root = new TestRoot("ubuntu-24.04");
+        var processes = new FakeProcessRunner();
+        processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/list-upgradable-phased-ubuntu-24.04.txt")));
+        processes.Respond("apt-get", ["-s"], _ => FakeProcessRunner.Exit(100, error: "E: The package lists or status file could not be parsed or opened."));
+
+        var packages = await Apt(root.Files, processes).ListUpgradableAsync(Cancel);
+
+        Assert.Equal(6, packages.Count);
+        Assert.All(packages, p => Assert.Null(p.Phased));
+    }
+
+    [Fact]
+    public async Task Apt_with_nothing_listed_skips_the_dry_run()
+    {
+        using var root = new TestRoot("ubuntu-24.04");
+        var processes = new FakeProcessRunner();
+        processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok("Listing...\n"));
+
+        Assert.Empty(await Apt(root.Files, processes).ListUpgradableAsync(Cancel));
+        Assert.Single(processes.Calls);
     }
 
     [Fact]

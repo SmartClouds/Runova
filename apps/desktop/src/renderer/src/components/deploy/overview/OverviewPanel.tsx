@@ -385,7 +385,7 @@ export function OverviewPanel({
           label="Updates waiting"
           value={
             updates.data ? (
-              `${updates.data.packages.length}${updates.data.securityCount > 0 ? `, ${updates.data.securityCount} security` : ''}`
+              `${updates.data.packages.filter((item) => !item.phased).length}${updates.data.securityCount > 0 ? `, ${updates.data.securityCount} security` : ''}`
             ) : updates.isPending ? (
               <Skeleton className="h-7 w-16" />
             ) : (

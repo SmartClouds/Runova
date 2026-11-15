@@ -84,6 +84,17 @@ public sealed class SystemJobsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_phased_update_is_listed_but_not_counted_as_a_security_update_waiting()
+    {
+        _packages.Packages.Add(new("libgnutls30t64", "3.8.3-1.1ubuntu3.4", "noble-updates,noble-security", Security: true, "amd64", "3.8.3-1.1ubuntu3.3", Phased: true));
+
+        var updates = await _updates.RefreshAsync(Cancel);
+
+        Assert.Equal(3, updates.Packages.Length);
+        Assert.Equal(1, updates.SecurityCount);
+    }
+
+    [Fact]
     public async Task A_failed_listing_keeps_the_last_list_and_says_why()
     {
         await _updates.RefreshAsync(Cancel);

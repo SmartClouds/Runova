@@ -1,0 +1,16 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following upgrades have been deferred due to phasing:
+  snapd ubuntu-pro-client
+  ubuntu-pro-client-l10n
+The following packages will be upgraded:
+  base-files libc-bin libc6
+3 upgraded, 0 newly installed, 0 to remove and 3 not upgraded.
+Inst base-files [13ubuntu10.4] (13ubuntu10.5 Ubuntu:24.04/noble-updates [amd64])
+Conf base-files (13ubuntu10.5 Ubuntu:24.04/noble-updates [amd64])
+Inst libc6 [2.39-0ubuntu8.8] (2.39-0ubuntu8.9 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64]) [libc-bin:amd64 ]
+Inst libc-bin [2.39-0ubuntu8.8] (2.39-0ubuntu8.9 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])
+Conf libc6 (2.39-0ubuntu8.9 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])
+Conf libc-bin (2.39-0ubuntu8.9 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [amd64])

@@ -51,6 +51,33 @@ public sealed class PackageOutputTests
         Assert.Empty(AptOutput.ParseUpgradable(Fixtures.Read("apt/list-upgradable-none.txt")));
     }
 
+    [Fact]
+    public void Apt_names_the_upgrades_it_defers_while_ubuntu_phases_them_in()
+    {
+        var deferred = AptOutput.ParseDeferredByPhasing(Fixtures.Read("apt/upgrade-simulate-phased-ubuntu-24.04.txt"));
+
+        Assert.Equal(["snapd", "ubuntu-pro-client", "ubuntu-pro-client-l10n"], deferred.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Apt_that_defers_nothing_names_nothing()
+    {
+        const string Debian = "Reading package lists...\nCalculating upgrade...\nThe following packages will be upgraded:\n  tzdata\n1 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n";
+
+        Assert.Empty(AptOutput.ParseDeferredByPhasing(Debian));
+    }
+
+    [Fact]
+    public void Phased_packages_are_marked_by_name_or_by_name_and_architecture()
+    {
+        var packages = AptOutput.ParseUpgradable(Fixtures.Read("apt/list-upgradable-phased-ubuntu-24.04.txt"));
+
+        var marked = AptOutput.MarkPhased(packages, new HashSet<string>(["snapd", "ubuntu-pro-client:amd64"]));
+
+        Assert.Equal(["snapd", "ubuntu-pro-client"], marked.Where(p => p.Phased == true).Select(p => p.Name));
+        Assert.All(marked.Where(p => p.Phased != true), p => Assert.Null(p.Phased));
+    }
+
     [Theory]
     [InlineData("libssl3t64")]
     [InlineData("linux-image-6.8.0-47-generic")]

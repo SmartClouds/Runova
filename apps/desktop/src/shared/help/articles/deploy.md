@@ -143,6 +143,7 @@ The **Updates** card shows packages that can be updated, with security updates m
 - **Check for updates** asks the package manager for new versions now (Operators and above).
 - **Install security updates** (only shown when there are some) and **Install all** (Operators and above) first open a preview listing exactly which packages change and warn that services using them may restart. Confirm with **Install (n) updates**. A job log opens so you can follow it.
 - **Install all** takes your password again (see below). Installing only the security updates does not.
+- **Rolling out** lists updates Ubuntu is still releasing a few servers at a time (phased updates, snapd is a common one). apt leaves them alone until your server's turn comes, usually within a few days, so they are not counted as waiting and installing does not touch them.
 - **Automatic security updates** is a switch, shown when the server supports it. It says whether the feature is on and which mechanism does it. Only Admins and Owners can change it.
 - While one package job runs, the buttons wait.
 

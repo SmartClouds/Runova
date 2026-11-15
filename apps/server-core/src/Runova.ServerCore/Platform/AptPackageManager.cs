@@ -61,7 +61,34 @@ internal sealed class AptPackageManager(IProcessRunner runner, SystemdRunner uni
             throw new ProcessFailedException($"apt list failed: {FirstLine(result.StandardError) ?? $"exit code {result.ExitCode}"}");
         }
 
-        return AptOutput.ParseUpgradable(result.StandardOutput);
+        var packages = AptOutput.ParseUpgradable(result.StandardOutput);
+        return packages.Count == 0
+            ? packages
+            : AptOutput.MarkPhased(packages, await DeferredByPhasingAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// apt list shows an update Ubuntu is still phasing in, but apt-get upgrade leaves it alone
+    /// until this machine's turn comes, so the list would never empty. A dry run of the same
+    /// upgrade names them. It changes nothing, and as root it would still take the dpkg lock, so it
+    /// is told not to: a check must never hold up unattended-upgrades or an install job. If it
+    /// fails, nothing is marked.
+    /// </summary>
+    private async Task<IReadOnlySet<string>> DeferredByPhasingAsync(CancellationToken cancellationToken)
+    {
+        var result = await runner.RunAsync(
+            new ProcessSpec
+            {
+                Program = "apt-get",
+                Arguments = ["-s", "-o", "Debug::NoLocking=true", "--with-new-pkgs", "upgrade"],
+                Timeout = TimeSpan.FromMinutes(2),
+                MaxOutputBytes = 4 * 1024 * 1024,
+            },
+            onLine: null,
+            cancellationToken);
+        return result.Succeeded
+            ? AptOutput.ParseDeferredByPhasing(result.StandardOutput)
+            : new HashSet<string>(StringComparer.Ordinal);
     }
 
     public Task RefreshIndexAsync(JobContext job, CancellationToken cancellationToken)
@@ -84,7 +111,8 @@ internal sealed class AptPackageManager(IProcessRunner runner, SystemdRunner uni
         }
 
         var security = (await ListUpgradableAsync(cancellationToken))
-            .Where(package => package.Security && PackageNames.IsValid(package.Name))
+            // Naming a phased package would install it ahead of its turn, which upgrade never does.
+            .Where(package => package.Security && package.Phased != true && PackageNames.IsValid(package.Name))
             .Select(package => package.Name)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

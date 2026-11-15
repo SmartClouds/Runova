@@ -3000,6 +3000,8 @@ export type UpgradablePackage = {
     architecture?: string;
     /** Transpiled from string? */
     currentVersion?: string;
+    /** Transpiled from bool */
+    phased?: boolean;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.AutoUpdatesInfo */

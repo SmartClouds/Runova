@@ -3,9 +3,10 @@ using Runova.ServerCore.Contracts;
 namespace Runova.ServerCore.DevHost.Fakes;
 
 /// <summary>
-/// The pretend machine behind the DevHost: an Ubuntu 24.04 server with a few updates waiting,
-/// Docker and nginx running, and a reboot that takes it away for a few seconds. Shared by the fake
-/// platform services, so an upgrade empties the list and a kernel update asks for a reboot.
+/// The pretend machine behind the DevHost: an Ubuntu 24.04 server with a few updates waiting (and
+/// snapd, which Ubuntu is still phasing in and an upgrade leaves alone), Docker and nginx running,
+/// and a reboot that takes it away for a few seconds. Shared by the fake platform services, so an
+/// upgrade empties the list and a kernel update asks for a reboot.
 /// </summary>
 internal sealed class FakeServer(TimeProvider time)
 {
@@ -21,6 +22,7 @@ internal sealed class FakeServer(TimeProvider time)
         new("libssl3t64", "3.0.13-0ubuntu3.16", "noble-updates,noble-security", Security: true, "amd64", "3.0.13-0ubuntu3.15"),
         new("linux-image-generic", "6.8.0-47.47", "noble-updates,noble-security", Security: true, "amd64", "6.8.0-45.45"),
         new("openssl", "3.0.13-0ubuntu3.16", "noble-updates,noble-security", Security: true, "amd64", "3.0.13-0ubuntu3.15"),
+        new("snapd", "2.78+ubuntu24.04", "noble-updates", Security: false, "amd64", "2.77.1+ubuntu24.04", Phased: true),
         new("tzdata", "2026c-0ubuntu0.24.04", "noble-updates", Security: false, "all", "2026b-0ubuntu0.24.04"),
     ];
 

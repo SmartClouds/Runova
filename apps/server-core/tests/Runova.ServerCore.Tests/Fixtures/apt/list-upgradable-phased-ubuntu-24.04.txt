@@ -1,0 +1,7 @@
+Listing...
+base-files/noble-updates 13ubuntu10.5 amd64 [upgradable from: 13ubuntu10.4]
+libc-bin/noble-updates,noble-security 2.39-0ubuntu8.9 amd64 [upgradable from: 2.39-0ubuntu8.8]
+libc6/noble-updates,noble-security 2.39-0ubuntu8.9 amd64 [upgradable from: 2.39-0ubuntu8.8]
+snapd/noble-updates 2.78+ubuntu24.04 amd64 [upgradable from: 2.77.1+ubuntu24.04]
+ubuntu-pro-client-l10n/noble-updates 37.1ubuntu0~24.04 amd64 [upgradable from: 36ubuntu0~24.04]
+ubuntu-pro-client/noble-updates 37.1ubuntu0~24.04 amd64 [upgradable from: 36ubuntu0~24.04]

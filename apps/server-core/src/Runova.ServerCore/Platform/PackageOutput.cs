@@ -17,7 +17,10 @@ internal static partial class PackageNames
     private static partial Regex Pattern();
 }
 
-/// <summary>`apt list --upgradable`: `name/suite[,suite] new-version arch [upgradable from: old]`.</summary>
+/// <summary>
+/// `apt list --upgradable`: `name/suite[,suite] new-version arch [upgradable from: old]`, and the
+/// upgrades `apt-get upgrade` would defer because Ubuntu is still phasing them in.
+/// </summary>
 internal static partial class AptOutput
 {
     public static IReadOnlyList<UpgradablePackage> ParseUpgradable(string text)
@@ -44,6 +47,59 @@ internal static partial class AptOutput
         }
 
         return packages;
+    }
+
+    /// <summary>
+    /// The names under "The following upgrades have been deferred due to phasing:" in what
+    /// `apt-get -s upgrade` prints, indented and several to a line. A foreign architecture's
+    /// package comes as `name:arch`. apt before 2.3 (Ubuntu 20.04, Debian) never prints it.
+    /// </summary>
+    public static IReadOnlySet<string> ParseDeferredByPhasing(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var inside = false;
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.StartsWith("The following upgrades have been deferred due to phasing", StringComparison.Ordinal))
+            {
+                inside = true;
+                continue;
+            }
+
+            if (!inside)
+            {
+                continue;
+            }
+
+            if (line.Length == 0 || !char.IsWhiteSpace(line[0]))
+            {
+                inside = false;
+                continue;
+            }
+
+            foreach (var name in line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (PackageNames.IsValid(name))
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>Marks the packages an upgrade defers for phasing, by name or by `name:arch`.</summary>
+    public static IReadOnlyList<UpgradablePackage> MarkPhased(IReadOnlyList<UpgradablePackage> all, IReadOnlySet<string> deferred)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        ArgumentNullException.ThrowIfNull(deferred);
+        return [.. all.Select(package =>
+            deferred.Contains(package.Name) || deferred.Contains($"{package.Name}:{package.Architecture}")
+                ? package with { Phased = true }
+                : package)];
     }
 
     [GeneratedRegex(

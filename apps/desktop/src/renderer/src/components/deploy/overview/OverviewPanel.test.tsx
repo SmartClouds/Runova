@@ -23,6 +23,16 @@ const toast = vi.hoisted(() =>
 );
 vi.mock('sonner', () => ({ toast }));
 
+/** apt lists it, but an upgrade leaves it until this server's turn in Ubuntu's rollout comes. */
+const SNAPD_PHASED = {
+  name: 'snapd',
+  newVersion: '2.78+ubuntu24.04',
+  currentVersion: '2.77.1+ubuntu24.04',
+  source: 'noble-updates',
+  security: false,
+  phased: true,
+};
+
 const { OverviewPanel } = await import('./OverviewPanel');
 const { useConnectionUpdates } = await import('./hooks');
 
@@ -121,6 +131,17 @@ describe('OverviewPanel states', () => {
     ).toBeInTheDocument();
     expect(await screen.findByText('Everything is up to date.')).toBeInTheDocument();
     expect(screen.getByText('No open alerts.')).toBeInTheDocument();
+  });
+
+  it('lists an update Ubuntu is still phasing in apart, so it is never waiting to be installed', async () => {
+    renderPanel({
+      'deploySystem.updates': sampleUpdates({ packages: [SNAPD_PHASED], securityCount: 0 }),
+    });
+    expect(await screen.findByText('Everything is up to date.')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Rolling out' })).toHaveTextContent('snapd');
+    expect(screen.getByText(/Ubuntu is still rolling out this update/)).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Updates' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Install all/ })).toBeNull();
   });
 
   it('dims what it shows while the connection is tried again', async () => {
@@ -231,6 +252,23 @@ describe('OverviewPanel actions', () => {
     await waitFor(() => expect(third.bridge.$listenerCount('deployJobs.onLog')).toBe(1));
     failed(third.bridge);
     expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an update Ubuntu is still phasing in out of the count and the install', async () => {
+    const waiting = sampleUpdates().packages;
+    const { user } = renderPanel({
+      'deploySystem.updates': sampleUpdates({ packages: [...waiting, SNAPD_PHASED] }),
+    });
+    expect(await screen.findByText('2 updates waiting, 1 for security.')).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Updates' })).not.toHaveTextContent('snapd');
+    expect(screen.getByText(/Ubuntu is still rolling out this update/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Install all/ }));
+    const preview = screen.getByRole('dialog', { name: 'Install every update?' });
+    expect(
+      within(preview).getByRole('list', { name: 'Packages to install' }),
+    ).not.toHaveTextContent('snapd');
+    expect(within(preview).getByRole('button', { name: 'Install 2 updates' })).toBeInTheDocument();
   });
 
   it('asks for the password when every update needs a step-up, and tries again with it', async () => {

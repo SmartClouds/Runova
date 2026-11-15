@@ -5,6 +5,7 @@ import type {
 import { useState } from 'react';
 import {
   CircleCheck,
+  Clock,
   CloudDownload,
   Package,
   RefreshCw,
@@ -32,10 +33,16 @@ import { DeployCard, LIST_WELL } from '../deployKit';
 /**
  * Package updates waiting on the server, security ones marked, with a check and an upgrade
  * (security only, or everything) that first lists exactly what will change. Automatic security
- * updates can be switched by an Admin.
+ * updates can be switched by an Admin. Updates Ubuntu is still phasing in are listed apart: apt
+ * leaves them alone until the server's turn comes, so they are not waiting on anyone.
  */
 
 export type UpgradeKind = 'security' | 'all';
+
+function rollingOutNote(count: number): string {
+  const [these, they] = count === 1 ? ['this update', 'it'] : ['these updates', 'them'];
+  return `Ubuntu is still rolling out ${these} a few servers at a time, so installing leaves ${they} alone for now. This server gets ${they} when its turn comes, usually within a few days.`;
+}
 
 function PackageRow({ item }: { item: UpgradablePackage }) {
   return (
@@ -67,7 +74,9 @@ function PreviewDialog({
   onCancel: () => void;
   onConfirm: (kind: UpgradeKind) => void;
 }): React.JSX.Element {
-  const packages = (updates?.packages ?? []).filter((item) => kind === 'all' || item.security);
+  const packages = (updates?.packages ?? []).filter(
+    (item) => !item.phased && (kind === 'all' || item.security),
+  );
   return (
     <Dialog open={kind !== null} onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-lg">
@@ -130,9 +139,11 @@ export function UpdatesCard({
   onAutomatic: (enabled: boolean) => void;
 }): React.JSX.Element {
   const [preview, setPreview] = useState<UpgradeKind | null>(null);
-  const packages = [...(updates?.packages ?? [])].sort(
+  const sorted = [...(updates?.packages ?? [])].sort(
     (a, b) => Number(b.security) - Number(a.security) || a.name.localeCompare(b.name),
   );
+  const packages = sorted.filter((item) => !item.phased);
+  const rollingOut = sorted.filter((item) => item.phased);
   const security = updates?.securityCount ?? 0;
   const auto = updates?.automaticSecurityUpdates;
 
@@ -207,6 +218,19 @@ export function UpdatesCard({
                 </div>
               )}
             </>
+          )}
+          {rollingOut.length > 0 && (
+            <div className="space-y-2">
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{rollingOutNote(rollingOut.length)}</span>
+              </p>
+              <ul aria-label="Rolling out" className={cn(LIST_WELL, 'max-h-40 overflow-auto')}>
+                {rollingOut.map((item) => (
+                  <PackageRow key={`${item.name}-${item.architecture ?? ''}`} item={item} />
+                ))}
+              </ul>
+            </div>
           )}
           {auto?.supported && (
             <div className="flex items-center justify-between gap-3 rounded-xl bg-foreground/[0.03] px-3 py-2.5 ring-1 ring-inset ring-foreground/[0.07]">
