@@ -371,6 +371,23 @@ describe('ProjectDeploySection, Runova apps', () => {
     expect(screen.getByText('Not deployed with Runova yet.')).toBeTruthy();
   });
 
+  it('centres the unreachable-server message against its buttons', async () => {
+    renderSection(
+      runovaBridge([deployServer()], {
+        'deploy.access': { state: 'unreachable', message: 'The vault is locked.' },
+        'deployStacks.list': [],
+      }),
+    );
+
+    const message = await screen.findByText(/Could not reach Hetzner box: The vault is locked\./);
+    // The message sits in a wrapper inside the notice row, which has to centre its children so a
+    // one-line message is not stuck to the top beside the taller buttons.
+    const row = message.parentElement;
+    expect(row?.className).toContain('items-center');
+    expect(within(row as HTMLElement).getByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(within(row as HTMLElement).getByRole('link', { name: 'Open in Deploy' })).toBeTruthy();
+  });
+
   it('starts a Runova deploy with the project picked on the only server', async () => {
     const { user } = renderSection(runovaBridge([deployServer()], { 'deployStacks.list': [] }));
 

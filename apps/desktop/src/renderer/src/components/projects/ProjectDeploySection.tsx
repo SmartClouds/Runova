@@ -317,6 +317,7 @@ function UncheckedServers({ perServer }: { perServer: ServerApps[] }): React.JSX
     <Notice
       tone={failed.length > 0 ? 'warning' : 'neutral'}
       size="sm"
+      className="items-center"
       action={
         <div className="flex gap-1.5">
           {failed.length > 0 && (
