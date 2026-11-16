@@ -568,6 +568,7 @@ import { createHealth } from './health';
 import { createNews } from './news';
 import { createProjectCleanup } from './projectCleanup';
 import { createRelay } from './relay';
+import { createRunnerCleanup } from './runnerCleanup';
 import { createSftp } from './sftp';
 import {
   createStudio,
@@ -3209,6 +3210,7 @@ const runovaApi = {
   sftp: createSftp(subscribe),
   projectCleanup: createProjectCleanup(subscribe),
   systemCleanup: createSystemCleanup(subscribe),
+  runnerCleanup: createRunnerCleanup(subscribe),
   deployFirewall,
   deploySystem,
   deployJobs,

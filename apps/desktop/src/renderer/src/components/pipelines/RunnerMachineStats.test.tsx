@@ -358,3 +358,44 @@ describe('runner machine stats', () => {
     expect(item.querySelector('[title]')).toBeNull();
   });
 });
+
+describe('freeing disk space on a runner machine', () => {
+  it('offers a cleanup on a linked tile and opens it for that machine', async () => {
+    const scan = vi.fn(async () => ({
+      ok: false,
+      reason: 'unreachable',
+      error: 'Connection refused',
+    }));
+    const { user, bridge } = renderPanel({
+      links: { 'acme/SmartAgent': { kind: 'ssh', serverId: 'srv-vpn' } },
+    });
+    bridge.$set('runnerCleanup.scan', scan);
+
+    const item = await tile('SmartAgent');
+    await user.click(within(item).getByRole('button', { name: 'Free disk space on smartvpn' }));
+
+    expect(await screen.findByRole('heading', { name: 'Clean up smartvpn' })).toBeInTheDocument();
+    await waitFor(() => expect(scan).toHaveBeenCalledWith({ kind: 'ssh', serverId: 'srv-vpn' }));
+  });
+
+  it('puts a Free space button under a disk that is nearly full', async () => {
+    renderPanel({ links: { 'acme/SmartAgent': { kind: 'ssh', serverId: 'srv-vpn' } } });
+    const item = await tile('SmartAgent');
+    expect(await within(item).findByRole('button', { name: /Free space/ })).toBeInTheDocument();
+  });
+
+  it('leaves it out while the disk has room, and on tiles with no machine', async () => {
+    renderPanel({
+      links: { 'acme/SmartAgent': { kind: 'local' } },
+      stats: async () => ({ ok: true, sample: sample({ diskUsedBytes: 100 * GB }) }),
+    });
+    const item = await tile('SmartAgent');
+    await within(item).findByRole('group', { name: 'Disk 20%' });
+    expect(within(item).queryByRole('button', { name: /Free space/ })).toBeNull();
+    expect(
+      within(item).getByRole('button', { name: 'Free disk space on this computer' }),
+    ).toBeInTheDocument();
+    const unlinked = await tile('old-box');
+    expect(within(unlinked).queryByRole('button', { name: /Free disk space/ })).toBeNull();
+  });
+});

@@ -13,6 +13,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   ArrowRight,
+  Broom,
   ChevronDown,
   CircleInfo,
   GitBranch,
@@ -31,6 +32,7 @@ import { useLastGoodData } from '@/hooks/useLastGoodData';
 import { queryKeys } from '@/lib/queryKeys';
 import { timeAgo } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { RunnerCleanupDialog } from './cleanup/RunnerCleanupDialog';
 import { RunnerMachineLinkMenu } from './RunnerMachineLinkMenu';
 import { RunnerMachineStats } from './RunnerMachineStats';
 
@@ -338,21 +340,30 @@ function StatusLine({
   );
 }
 
+/** What a machine is called in the cleanup: the saved server's nickname, or this computer. */
+function machineNameOf(link: RunnerMachineLink, servers: SshSavedServer[]): string {
+  if (link.kind === 'local') return 'this computer';
+  return servers.find((item) => item.id === link.serverId)?.nickname ?? 'the server';
+}
+
 function RunnerTile({
   runner,
   onFocusRun,
   link,
   servers,
   onLinkChange,
+  onCleanup,
 }: {
   runner: GithubRunner;
   onFocusRun: (run: RunnerRunTarget) => void;
   link: RunnerMachineLink | undefined;
   servers: SshSavedServer[];
   onLinkChange: (link: RunnerMachineLink | null) => void;
+  onCleanup: (link: RunnerMachineLink) => void;
 }): React.JSX.Element {
   const platform = platformOf(runner);
   const server = link?.kind === 'ssh' ? servers.find((item) => item.id === link.serverId) : null;
+  const cleanupLabel = link ? `Free disk space on ${machineNameOf(link, servers)}` : '';
   const ScopeIcon = runner.scope.kind === 'org' ? Users : GitBranch;
   return (
     <li
@@ -369,6 +380,19 @@ function RunnerTile({
         <RunnerName name={runner.name} />
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
           {platform ? <span className="text-[11px] text-muted-foreground">{platform}</span> : null}
+          {link ? (
+            <SimpleTooltip label={cleanupLabel}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="-my-1 h-5 w-5 shrink-0"
+                aria-label={cleanupLabel}
+                onClick={() => onCleanup(link)}
+              >
+                <Broom />
+              </Button>
+            </SimpleTooltip>
+          ) : null}
           <RunnerMachineLinkMenu
             runner={runner}
             link={link}
@@ -388,6 +412,7 @@ function RunnerTile({
           serverName={server?.nickname}
           enabled={runner.state !== 'offline'}
           onUnlink={() => onLinkChange(null)}
+          onFreeSpace={() => onCleanup(link)}
         />
       ) : null}
       {runner.customLabels.length > 0 ? (
@@ -445,6 +470,8 @@ export function RunnersPanel({
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [dismissed, setDismissed] = useState(readDismissed);
   const [showAll, setShowAll] = useState(false);
+  /** The machine whose cleanup dialog is open. */
+  const [cleanupLink, setCleanupLink] = useState<RunnerMachineLink | null>(null);
   /** Orgs the user just went to grant access for, whose button now offers to check again. */
   const [granted, setGranted] = useState<string[]>([]);
   /** Read and cleared by the next lookup, so only that one call skips the refusal memory. */
@@ -676,6 +703,7 @@ export function RunnersPanel({
                   link={links[runnerKey(runner)]}
                   servers={servers}
                   onLinkChange={(link) => setLink(runner, link)}
+                  onCleanup={setCleanupLink}
                 />
               ))}
             </ul>
@@ -750,6 +778,16 @@ export function RunnersPanel({
           ))}
         </div>
       )}
+      {cleanupLink ? (
+        <RunnerCleanupDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCleanupLink(null);
+          }}
+          link={cleanupLink}
+          machineName={machineNameOf(cleanupLink, servers)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -2268,4 +2268,22 @@ export const IPC = {
     // main -> renderer: SystemCleanEvent while a clean-up runs
     onCleanEvent: 'systemCleanup:onCleanEvent',
   },
+  // Runner cleanup (E104): what a self-hosted runner's machine holds that can go (old job
+  // checkouts, logs, old runner versions, abandoned runners, Docker leftovers, package caches),
+  // removing it, and a scheduled job on that machine that does it. The window names a machine
+  // link, a scan id and item ids, never a path.
+  runnerCleanup: {
+    // (RunnerMachineLink) -> RunnerCleanupScanResult
+    scan: 'runnerCleanup:scan',
+    // (RunnerCleanupCleanRequest) -> RunnerCleanupCleanResult
+    clean: 'runnerCleanup:clean',
+    // (RunnerMachineLink) -> boolean: stops a scan that is running on that machine
+    cancel: 'runnerCleanup:cancel',
+    // (RunnerMachineLink, RunnerCleanupSchedule) -> RunnerCleanupScheduleResult
+    saveSchedule: 'runnerCleanup:saveSchedule',
+    // (RunnerMachineLink) -> RunnerCleanupScheduleResult
+    removeSchedule: 'runnerCleanup:removeSchedule',
+    // main -> renderer: RunnerCleanupProgress while a scan or a cleanup runs
+    onProgress: 'runnerCleanup:onProgress',
+  },
 } as const;

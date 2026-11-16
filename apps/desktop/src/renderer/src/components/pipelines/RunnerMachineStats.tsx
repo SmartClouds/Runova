@@ -5,7 +5,7 @@ import type {
 } from '@shared/apiTypes';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { CircleInfo, Lock } from '@/components/icons';
+import { Broom, CircleInfo, Lock } from '@/components/icons';
 import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
 import { SshVaultUnlockDialog } from '@/components/remote/SshVaultUnlockDialog';
 import { Button } from '@/components/ui/button';
@@ -118,8 +118,15 @@ function cpuDetail(sample: RunnerMachineSample): string {
   return lines.join('\n');
 }
 
-function Meters({ sample }: { sample: RunnerMachineSample }): React.JSX.Element {
-  return (
+function Meters({
+  sample,
+  onFreeSpace,
+}: {
+  sample: RunnerMachineSample;
+  onFreeSpace?: () => void;
+}): React.JSX.Element {
+  const disk = percentOf(sample.diskUsedBytes, sample.diskTotalBytes);
+  const meters = (
     <div className="flex gap-2.5">
       <Meter label="CPU" percent={sample.cpuPercent} detail={cpuDetail(sample)} />
       <Meter
@@ -132,6 +139,24 @@ function Meters({ sample }: { sample: RunnerMachineSample }): React.JSX.Element 
         percent={percentOf(sample.diskUsedBytes, sample.diskTotalBytes)}
         detail={`${formatBytes(sample.diskUsedBytes)} of ${formatBytes(sample.diskTotalBytes)} used on ${sample.diskMount}`}
       />
+    </div>
+  );
+  if (!onFreeSpace || disk < WARN_AT) return meters;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {meters}
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={onFreeSpace}
+        className={cn(
+          '-mx-1.5 h-6 self-start px-1.5 text-[11px] [&_svg]:size-3',
+          disk >= ALERT_AT ? 'text-destructive' : 'text-warning',
+        )}
+      >
+        <Broom className="h-3 w-3" />
+        {`Disk ${Math.round(disk)}% full. Free space`}
+      </Button>
     </div>
   );
 }
@@ -193,6 +218,7 @@ export function RunnerMachineStats({
   serverName,
   enabled,
   onUnlink,
+  onFreeSpace,
 }: {
   link: RunnerMachineLink;
   /** The saved server's nickname, for the "could not reach" line. */
@@ -200,6 +226,8 @@ export function RunnerMachineStats({
   /** False while the runner is offline: there is nothing to read then. */
   enabled: boolean;
   onUnlink: () => void;
+  /** Opens the runner cleanup for this machine; offered once the disk runs high. */
+  onFreeSpace?: () => void;
 }): React.JSX.Element | null {
   const queryClient = useQueryClient();
   const [unlockOpen, setUnlockOpen] = useState(false);
@@ -208,7 +236,7 @@ export function RunnerMachineStats({
   if (!enabled) return null;
   const result = query.data;
   if (!result) return <MetersSkeleton />;
-  if (result.ok) return <Meters sample={result.sample} />;
+  if (result.ok) return <Meters sample={result.sample} onFreeSpace={onFreeSpace} />;
 
   if (result.reason === 'locked') {
     return (

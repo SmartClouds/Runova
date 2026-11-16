@@ -71,6 +71,7 @@ import { registerRdpAgentHandlers } from './ipc/rdpAgent';
 import { registerRelayHandlers } from './ipc/relay';
 import { registerRemoteHandlers } from './ipc/remote';
 import { registerResourceActivityHandlers } from './ipc/resourceActivity';
+import { registerRunnerCleanupHandlers } from './ipc/runnerCleanup';
 import { registerRunProposalHandlers } from './ipc/runProposals';
 import { registerScheduledTaskHandlers } from './ipc/scheduledTasks';
 import { registerSecurityHandlers } from './ipc/security';
@@ -453,6 +454,15 @@ function registerAllIpcHandlers(): void {
   });
   // Disk Cleanup (E50) permanently removes package caches, so it answers the main window only.
   registerSystemCleanupHandlers({
+    guard: (event) => {
+      const win = getMainWindow();
+      return (
+        !!win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
+      );
+    },
+  });
+  // Runner cleanup (E104) deletes things on runner machines, so it answers the main window only.
+  registerRunnerCleanupHandlers({
     guard: (event) => {
       const win = getMainWindow();
       return (

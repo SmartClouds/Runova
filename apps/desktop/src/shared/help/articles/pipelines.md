@@ -3,7 +3,7 @@ title: Pipelines
 category: Ship
 order: 10
 summary: See every GitHub Actions run across all your projects in one list, stop or copy failures, and watch your self-hosted runners.
-keywords: pipelines, github actions, ci, cd, workflow, runs, build, failed, passed, runner, self-hosted, add runner, install runner, new server, notifications, unread, gh cli, annotations, auto-fix, autofix, fix with ai, agent, commit, push
+keywords: pipelines, github actions, ci, cd, workflow, runs, build, failed, passed, runner, self-hosted, add runner, install runner, new server, runner cleanup, disk space, free space, clean up, cron, scheduled task, docker prune, notifications, unread, gh cli, annotations, auto-fix, autofix, fix with ai, agent, commit, push
 route: /pipelines
 ---
 
@@ -159,6 +159,32 @@ A terminal tab named after the runner opens and the AI works there step by step,
 Runova asks GitHub for the registration token itself, so you need admin rights on the repo. The AI never sees the token. It writes a placeholder, Runova puts the real token in as the command is typed, and the screen, the AI and the task history only ever show the placeholder.
 
 On Windows, installing the service needs a terminal running as administrator. If yours is not, the AI stops and asks what to do.
+
+## Free disk space on a runner machine
+
+Self-hosted runners slowly fill their disk: checkouts from earlier jobs, files jobs left in `_work/_temp`, logs the runner never removes, the old versions a self-update leaves behind, Docker leftovers and package caches. Once a runner tile is linked to its machine (the CPU button on the tile), Runova can find all of that and free it.
+
+Click the broom button on a linked runner tile, or **Free space** under the meters when the disk is 80% full or more. The **Clean up** window opens and scans the machine straight away, over SSH for a saved server or directly on this computer. It looks at every runner on that machine, not just the one you clicked.
+
+### Clean now
+
+The window shows the disk and what it would look like after the cleanup, then everything it found, grouped:
+
+- **Each runner** with its temporary files, runner logs older than 7 days, old runner versions, job checkouts, older tool versions (the newest version of each tool is kept) and downloaded actions. A runner that is busy with a job keeps its work folder until the job ends; those rows are greyed out and say why.
+- **Docker**: stopped containers, dangling images, unused images and the build cache. Volumes are never touched.
+- **Package caches**: npm, pnpm, Yarn, pip, Gradle, Maven, NuGet, Go and Cargo. Runova uses the tool's own clean command when the tool is installed.
+- **Runners that are gone**: folders of runners GitHub no longer lists for their repo or org, or that were never registered. Removing one stops and removes its service and deletes the whole folder. On Linux that needs `sudo` without a password; if it is not there, the row says which command to run on the machine.
+
+The safe picks are made for you. **Downloads again** marks things the next job has to download or build again, which only makes that job slower. Use **Recommended**, **All** or **None**, or tick rows yourself, then **Clean up**. Runova asks once more and lists everything that will go. Each row then shows what it freed, or why it could not. You can close the window while it works; a message says how much was freed when it is done.
+
+### Schedule
+
+The **Schedule** tab leaves a job on the machine itself, so it keeps cleaning up when Runova is closed: a cron job on Linux, a launchd agent on macOS or a Task Scheduler task on Windows. Pick daily, weekly or monthly and a time in the machine's own clock, then what the job removes: temporary files, old runner versions, older tool versions, downloaded actions, logs, checkouts nobody used for a number of days, Docker leftovers older than a number of hours, and package caches. **Save job** sets it up; **Remove job** takes it away again.
+
+The job skips a runner while it runs a job and never removes a whole runner. The tab shows when the job last ran and how much it freed.
+
+> [!NOTE]
+> A Linux server needs the `crontab` command. If it is missing, the tab says how to install it. On Windows, Task Scheduler may only allow the job to run while you are signed in on that machine; the tab tells you when that happens.
 
 ## Notifications and the unread badge
 

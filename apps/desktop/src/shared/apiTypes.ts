@@ -3647,6 +3647,147 @@ export interface InstallRunnerInput {
   effort?: EffortLevel | null;
 }
 
+/** The OS a runner machine answered as (E104). */
+export type RunnerCleanupOs = 'linux' | 'macos' | 'windows';
+
+/**
+ * `safe`: nothing needs it again. `slows`: the next job downloads or builds it again.
+ * `careful`: removes a whole runner, its service included.
+ */
+export type RunnerCleanupRisk = 'safe' | 'slows' | 'careful';
+
+/** One thing the runner cleanup can free. The window only ever sees its id, never a path. */
+export interface RunnerCleanupItem {
+  id: string;
+  label: string;
+  /** One line on what it is and what happens once it is gone. */
+  why: string;
+  /** What it takes now; for Docker, what Docker says it can reclaim. */
+  bytes: number;
+  risk: RunnerCleanupRisk;
+  /** Picked when the scan comes back. */
+  picked: boolean;
+  /** Set when it cannot be picked right now, such as a job running on the runner. */
+  disabledReason?: string;
+}
+
+/**
+ * `busy` and `idle` come from a running job on the machine. `not-on-github`: the runner was removed
+ * from GitHub or registered again under another id. `not-configured`: a runner folder that was never
+ * registered. `unknown`: GitHub could not say.
+ */
+export type RunnerCleanupRunnerStatus =
+  | 'busy'
+  | 'idle'
+  | 'not-on-github'
+  | 'not-configured'
+  | 'unknown';
+
+export interface RunnerCleanupGroup {
+  id: string;
+  kind: 'runner' | 'abandoned' | 'docker' | 'caches';
+  title: string;
+  /** The repo or org of a runner, or its folder. */
+  subtitle?: string;
+  status?: RunnerCleanupRunnerStatus;
+  items: RunnerCleanupItem[];
+}
+
+export type RunnerCleanupFrequency = 'daily' | 'weekly' | 'monthly';
+
+/** What a scheduled cleanup removes on each run. Null turns an age rule off. */
+export interface RunnerCleanupRules {
+  temp: boolean;
+  actions: boolean;
+  oldVersions: boolean;
+  /** Keeps the newest version of each tool in the tool cache. */
+  toolKeepNewest: boolean;
+  logsOlderThanDays: number | null;
+  checkoutsOlderThanDays: number | null;
+  dockerOlderThanHours: number | null;
+  packageCaches: boolean;
+}
+
+export interface RunnerCleanupSchedule {
+  frequency: RunnerCleanupFrequency;
+  /** 0 is Sunday. Used when weekly. */
+  weekday: number;
+  /** 1 to 28. Used when monthly. */
+  dayOfMonth: number;
+  /** `HH:MM` in the machine's own time. */
+  time: string;
+  rules: RunnerCleanupRules;
+}
+
+/** `cron` on Linux, a launchd agent on macOS, a Task Scheduler task on Windows. */
+export type RunnerCleanupJobKind = 'cron' | 'launchd' | 'task';
+
+export interface RunnerCleanupScheduleState {
+  installed: boolean;
+  job: RunnerCleanupJobKind;
+  /** What the job on the machine was saved with, when Runova can read it back. */
+  schedule: RunnerCleanupSchedule | null;
+  lastRun?: { at: string; freedBytes: number; ok: boolean };
+  /** Linux without a `crontab` command cannot take a job. */
+  unavailable?: string;
+}
+
+export interface RunnerCleanupDisk {
+  usedBytes: number;
+  totalBytes: number;
+  mount: string;
+}
+
+export interface RunnerCleanupScan {
+  scanId: string;
+  os: RunnerCleanupOs;
+  /** Unix ms. */
+  scannedAt: number;
+  disk: RunnerCleanupDisk | null;
+  groups: RunnerCleanupGroup[];
+  schedule: RunnerCleanupScheduleState;
+  /** Things the scan could not look at, in words. */
+  notes: string[];
+}
+
+/**
+ * The machine reasons match `RunnerMachineStatsFailure`. `working`: another scan or cleanup is
+ * running on that machine. `refused`: the request named something the scan did not report.
+ * `off`: a test run of the app, which must not touch this computer.
+ */
+export type RunnerCleanupFailure = RunnerMachineStatsFailure | 'working' | 'refused' | 'off';
+
+export type RunnerCleanupScanResult =
+  | { ok: true; scan: RunnerCleanupScan }
+  | { ok: false; reason: RunnerCleanupFailure; error: string };
+
+export interface RunnerCleanupItemOutcome {
+  id: string;
+  /** `skipped`: a job started on the runner, so its folders were left alone. */
+  status: 'done' | 'failed' | 'skipped';
+  freedBytes: number;
+  error?: string;
+}
+
+export type RunnerCleanupCleanResult =
+  | { ok: true; outcomes: RunnerCleanupItemOutcome[]; freedBytes: number }
+  | { ok: false; reason: RunnerCleanupFailure; error: string };
+
+export interface RunnerCleanupCleanRequest {
+  link: RunnerMachineLink;
+  scanId: string;
+  itemIds: string[];
+}
+
+export type RunnerCleanupScheduleResult =
+  | { ok: true; state: RunnerCleanupScheduleState; note?: string }
+  | { ok: false; reason: RunnerCleanupFailure; error: string };
+
+/** Sent while a scan or a cleanup runs, keyed like the stats query (`local`, `ssh:<id>`). */
+export type RunnerCleanupProgress =
+  | { machine: string; phase: 'scan'; step: 'runners' | 'docker' | 'caches' | 'schedule' }
+  | ({ machine: string; phase: 'clean' } & RunnerCleanupItemOutcome);
+
 export interface GithubActionsRunErrorInput {
   repo: string;
   runId: number;
