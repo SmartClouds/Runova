@@ -98,6 +98,8 @@ describe('summaryOf', () => {
       files: 20,
       packageCount: 2,
       reclaimableBytes: 100,
+      // Package a has two versions, so only keeping 1 frees anything.
+      reclaimableByKeep: [100, 0, 0],
       root: '/caches/nuget',
       scannedAt: 5_000,
       clearLabel: null,
@@ -183,6 +185,26 @@ describe('cardModels', () => {
       needsScan: true,
       actions: { review: true, cleanOld: true, clearAll: true },
     });
+  });
+
+  it('moves a remembered figure with the number of versions kept', () => {
+    const remembered = summary('nuget', { reclaimableBytes: 0, reclaimableByKeep: [120, 40, 0] });
+    const at = (keep: number) =>
+      cardModels({ scan: null, progress: IDLE_SCAN, summaries: { nuget: remembered }, keep })
+        .cards[0];
+    expect(at(3)).toMatchObject({ reclaimableBytes: 0, actions: { cleanOld: false } });
+    expect(at(2)).toMatchObject({ reclaimableBytes: 40, actions: { cleanOld: true } });
+    expect(at(1)).toMatchObject({ reclaimableBytes: 120, actions: { cleanOld: true } });
+  });
+
+  it('uses the one figure an older summary has, whatever is kept', () => {
+    const { cards } = cardModels({
+      scan: null,
+      progress: IDLE_SCAN,
+      summaries: { nuget: summary('nuget', { reclaimableBytes: 120 }) },
+      keep: 3,
+    });
+    expect(cards[0]?.reclaimableBytes).toBe(120);
   });
 
   it('prefers what was just read over what was remembered', () => {

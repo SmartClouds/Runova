@@ -158,6 +158,34 @@ describe('CleanupHero, when the scan is done', () => {
     expect(screen.getByRole('button', { name: /scan again/i })).toBeInTheDocument();
   });
 
+  it('still lets the person keep fewer versions when keeping more leaves nothing to free', async () => {
+    const p = hero({ keep: 3, overview: overview({ reclaimableBytes: 0 }) });
+    const { user } = renderWithProviders(<CleanupHero {...p} />);
+    expect(screen.getByText(/everything is tidy/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is older than the newest 3 versions/i)).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: /versions to keep/i });
+    expect(within(group).getByRole('button', { name: '3' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(within(group).getByRole('button', { name: '1' }));
+    expect(p.onKeepChange).toHaveBeenCalledWith(1);
+  });
+
+  it('keeps the choice for 2 versions too, and leaves it out only when 1 is already tidy', () => {
+    const tidy = overview({ reclaimableBytes: 0 });
+    const { rerender } = renderWithProviders(
+      <CleanupHero {...hero({ keep: 2, overview: tidy })} />,
+    );
+    expect(screen.getByRole('group', { name: /versions to keep/i })).toBeInTheDocument();
+    // Keeping more than one can never free more, so with 1 kept and nothing old there is no choice.
+    rerender(<CleanupHero {...hero({ keep: 1, overview: tidy })} />);
+    expect(screen.queryByRole('group', { name: /versions to keep/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/only the newest version of each package is left/i),
+    ).toBeInTheDocument();
+  });
+
   it('says plainly when the figures are from an earlier scan', () => {
     renderWithProviders(
       <CleanupHero

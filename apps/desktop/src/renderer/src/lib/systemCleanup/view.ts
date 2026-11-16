@@ -35,11 +35,19 @@ export interface ProviderSummary {
   packageCount: number;
   /** What removing all but the newest would free, when it was scanned. */
   reclaimableBytes: number;
+  /**
+   * The same for each number of versions that can be kept (keeping 1 first), so changing the
+   * choice moves the figures without reading the cache again. Older summaries do not have it.
+   */
+  reclaimableByKeep?: number[];
   root: string | null;
   scannedAt: number;
   clearLabel: string | null;
   tidyLabel: string | null;
 }
+
+/** Between one and three versions of each package can be kept. */
+export const MOST_TO_KEEP = 3;
 
 function packagesIn(items: readonly ScanItem[]): number {
   return new Set(items.filter((entry) => entry.version !== null).map((entry) => entry.group)).size;
@@ -60,6 +68,9 @@ export function summaryOf(
     files: provider.files,
     packageCount: packagesIn(provider.items),
     reclaimableBytes: providerReclaimable(provider, keep),
+    reclaimableByKeep: Array.from({ length: MOST_TO_KEEP }, (_, index) =>
+      providerReclaimable(provider, index + 1),
+    ),
     root: provider.root,
     scannedAt,
     clearLabel: provider.clearCommand?.label ?? null,
@@ -166,9 +177,10 @@ function liveCard(provider: ProviderScan, keep: number): CardModel {
   };
 }
 
-function rememberedCard(summary: ProviderSummary): CardModel {
+function rememberedCard(summary: ProviderSummary, keep: number): CardModel {
   const versioned = summary.kind === 'versioned';
   const tool = toolAction(summary.tidyLabel, summary.clearLabel);
+  const reclaimable = summary.reclaimableByKeep?.[keep - 1] ?? summary.reclaimableBytes;
   return {
     id: summary.id,
     label: summary.label,
@@ -178,7 +190,7 @@ function rememberedCard(summary: ProviderSummary): CardModel {
     bytes: summary.bytes,
     files: summary.files,
     packageCount: summary.packageCount,
-    reclaimableBytes: summary.reclaimableBytes,
+    reclaimableBytes: reclaimable,
     root: summary.root,
     scannedAt: summary.scannedAt,
     needsScan: true,
@@ -186,7 +198,7 @@ function rememberedCard(summary: ProviderSummary): CardModel {
     actions: versioned
       ? {
           review: summary.bytes > 0,
-          cleanOld: summary.reclaimableBytes > 0,
+          cleanOld: reclaimable > 0,
           clearAll: summary.bytes > 0,
           tool: null,
         }
@@ -259,7 +271,7 @@ export function cardModels(input: CardModelInput): { cards: CardModel[]; absent:
     }
 
     const summary = summaries[id];
-    if (summary) cards.push(rememberedCard(summary));
+    if (summary) cards.push(rememberedCard(summary, keep));
   }
   return { cards, absent };
 }

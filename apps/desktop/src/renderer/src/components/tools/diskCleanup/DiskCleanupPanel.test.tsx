@@ -340,6 +340,23 @@ describe('DiskCleanupPanel, cleaning old versions', () => {
     );
   });
 
+  it('keeps the choice on screen when keeping more leaves nothing to free', async () => {
+    // NuGet has three versions and Bun two, so keeping 3 leaves nothing old anywhere.
+    const view = await scanned();
+    const keep = () => screen.getByRole('group', { name: /versions to keep/i });
+    await view.user.click(within(keep()).getByRole('button', { name: '3' }));
+    expect(await screen.findByText(/everything is tidy/i)).toBeInTheDocument();
+    expect(screen.getByText(/newest 3 versions of each package/i)).toBeInTheDocument();
+    expect(within(keep()).getByRole('button', { name: '3' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await view.user.click(within(keep()).getByRole('button', { name: '1' }));
+    expect(await screen.findByText(/can be freed/i)).toBeInTheDocument();
+    expect(screen.getByText('350 MB')).toBeInTheDocument();
+  });
+
   it('cleans every cache that has something old with one question from the top', async () => {
     const view = await scanned({
       'systemCleanup.clean': async (_request: string, _scan: string, selection: CleanSelection) =>
@@ -581,6 +598,29 @@ function tidyScan(): SystemCleanupScan {
   });
   return tidy;
 }
+
+describe('DiskCleanupPanel, choosing how many versions to keep', () => {
+  it('lets the person go back to fewer from figures remembered with 3 kept', async () => {
+    // Scanned last time with 3 kept, so nothing was old then. Keeping 1 frees 300 MB.
+    useSystemCleanupStore.setState({
+      keep: 3,
+      summaries: {
+        nuget: remembered('nuget', {
+          reclaimableBytes: 0,
+          reclaimableByKeep: [300 * MB, 100 * MB, 0],
+        }),
+      },
+    });
+    const view = page();
+    expect(await screen.findByText(/everything is tidy/i)).toBeInTheDocument();
+    const keep = () => screen.getByRole('group', { name: /versions to keep/i });
+    await view.user.click(within(keep()).getByRole('button', { name: '1' }));
+    expect(await screen.findByText(/can be freed/i)).toBeInTheDocument();
+    expect(screen.getAllByText('300 MB').length).toBeGreaterThan(0);
+    expect(keep()).toBeInTheDocument();
+    expect(useSystemCleanupStore.getState().keep).toBe(1);
+  });
+});
 
 describe('DiskCleanupPanel, when there is nothing to do', () => {
   it('says so, and asks nothing, if the fresh look finds nothing old after all', async () => {

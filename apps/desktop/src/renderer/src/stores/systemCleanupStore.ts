@@ -16,7 +16,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
 import { isCancelled, runClean, runScan } from '@/lib/systemCleanup/runner';
-import { type ProviderSummary, summaryOf } from '@/lib/systemCleanup/view';
+import { MOST_TO_KEEP, type ProviderSummary, summaryOf } from '@/lib/systemCleanup/view';
 
 /**
  * Disk Cleanup's state, kept outside the page on purpose. Reading a large cache takes a minute or
@@ -30,9 +30,6 @@ export interface ItemStatus {
   bytes?: number;
   reason?: string;
 }
-
-/** Between one and three versions of each package can be kept. */
-const MOST_TO_KEEP = 3;
 
 /** What `setState` and the tests can set, apart from the actions. */
 interface SystemCleanupState {

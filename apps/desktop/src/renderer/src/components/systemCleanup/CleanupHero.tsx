@@ -247,6 +247,10 @@ export function CleanupHero(props: CleanupHeroProps): React.JSX.Element {
   const nothing = overview.cachesFound === 0;
   const tidy = !nothing && overview.reclaimableBytes <= 0;
   const keepText = keep === 1 ? 'version' : `${keep} versions`;
+  // What counts as "tidy" depends on how many versions are kept, so the choice has to stay on
+  // screen even when it leaves nothing to free. Otherwise picking 3 can hide the very control that
+  // would bring the figure back.
+  const showKeep = !nothing && (!tidy || keep !== 1);
 
   return (
     <section aria-label="Disk use" className={cn(GLASS_CARD, 'flex flex-col gap-4 p-5')}>
@@ -266,7 +270,10 @@ export function CleanupHero(props: CleanupHeroProps): React.JSX.Element {
                 Everything is tidy
               </p>
               <p className="text-sm text-muted-foreground">
-                Only the newest versions are left. You can still clear a whole cache below.
+                {keep === 1
+                  ? 'Only the newest version of each package is left.'
+                  : `Nothing is older than the newest ${keepText} of each package. Keep fewer to free more.`}{' '}
+                You can still clear a whole cache below.
               </p>
             </>
           ) : (
@@ -292,7 +299,7 @@ export function CleanupHero(props: CleanupHeroProps): React.JSX.Element {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {!nothing && !tidy && (
+          {showKeep && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Keep newest</span>
               <PillTabs
