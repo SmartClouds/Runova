@@ -93,7 +93,13 @@ function detail(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
     runName: 'run-1',
     outputDir: '/home/me/security-audit-skill/shop/run-1',
     phase: 'complete',
-    metadata: { runStatus: 'complete', incompleteReason: null, profile: 'standard', target: null },
+    metadata: {
+      runStatus: 'complete',
+      incompleteReason: null,
+      profile: 'standard',
+      target: null,
+      targetExecution: null,
+    },
     counts: {
       confirmed: 3,
       needsValidation: 1,
@@ -106,6 +112,7 @@ function detail(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
     hasReport: true,
     findings,
     droppedFindings: 0,
+    triage: {},
     report: '# Report',
     ...over,
   };
@@ -114,15 +121,32 @@ function detail(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
 function setup(run = detail()) {
   const onOpenFile = vi.fn();
   const onFixWithAgent = vi.fn();
+  const onSetTriage = vi.fn();
   const view = renderWithProviders(
     <AiAuditReport
       run={run}
       projectName="Shop"
       onOpenFile={onOpenFile}
       onFixWithAgent={onFixWithAgent}
+      onSetTriage={onSetTriage}
     />,
   );
-  return { ...view, onOpenFile, onFixWithAgent };
+  return { ...view, onOpenFile, onFixWithAgent, onSetTriage };
+}
+
+/** The run in the bug report: no sandbox, so nothing confirmed and every lead left to check. */
+function unverifiedRun(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
+  return detail({
+    metadata: {
+      runStatus: 'complete',
+      incompleteReason: null,
+      profile: 'deep',
+      target: null,
+      targetExecution: { available: false, reason: 'No sandbox.' },
+    },
+    findings: findings.filter((f) => f.verdict !== 'confirmed'),
+    ...over,
+  });
 }
 
 describe('AiAuditReport', () => {
@@ -194,21 +218,140 @@ describe('AiAuditReport', () => {
     expect(onFixWithAgent).toHaveBeenCalledWith(expect.stringContaining('SQL injection'));
   });
 
-  it('has nothing to fix when nothing was confirmed', () => {
-    setup(
-      detail({
-        findings: findings.filter((f) => f.verdict !== 'confirmed'),
-        counts: {
-          confirmed: 0,
-          needsValidation: 1,
-          rejected: 1,
-          bySeverity: { critical: 0, high: 0, medium: 0, low: 0, informational: 0 },
+  it('turns to validating when nothing was confirmed, and says why', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const { user, onFixWithAgent } = setup(unverifiedRun());
+
+    expect(screen.getByText(/Nothing confirmed yet: 1 finding needs checking/)).toBeInTheDocument();
+    expect(screen.getByText(/could not run Shop's code in a sandbox/)).toBeInTheDocument();
+    // It opens on the tab with work in it.
+    expect(screen.getByRole('tab', { name: /Needs validation 1/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: /^Fix with agent/ })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Copy validation prompt/ }));
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('Possible SSRF in the image proxy'),
+    );
+
+    await user.click(screen.getAllByRole('button', { name: /Validate and fix with agent/ })[0]);
+    const prompt = onFixWithAgent.mock.calls[0][0] as string;
+    expect(prompt).toMatch(/failing test/);
+    expect(prompt).toContain('/home/me/security-audit-skill/shop/run-1/runova-triage.json');
+    expect(prompt).not.toContain('XSS in the profile view');
+  });
+
+  it('hands one unverified finding to an agent, or copies its prompt', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const { user, onFixWithAgent } = setup(unverifiedRun());
+
+    await user.click(screen.getByRole('button', { name: /Possible SSRF in the image proxy/ }));
+    const card = screen.getByRole('region', { name: 'Possible SSRF in the image proxy' });
+
+    await user.click(within(card).getByRole('button', { name: /Validate and fix with agent/ }));
+    expect(onFixWithAgent).toHaveBeenCalledWith(
+      expect.stringContaining('the finding below unproven'),
+    );
+
+    await user.click(within(card).getByRole('button', { name: /Copy prompt/ }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Fingerprint: ssrf:1'));
+  });
+
+  it('records what is now known about a finding', async () => {
+    const { user, onSetTriage } = setup(unverifiedRun());
+
+    await user.click(screen.getByRole('button', { name: /Possible SSRF in the image proxy/ }));
+    const card = screen.getByRole('region', { name: 'Possible SSRF in the image proxy' });
+    await user.click(within(card).getByRole('button', { name: /Mark confirmed/ }));
+    expect(onSetTriage).toHaveBeenCalledWith('ssrf:1', { status: 'confirmed' });
+
+    await user.click(within(card).getByRole('button', { name: /Not a bug/ }));
+    expect(onSetTriage).toHaveBeenCalledWith('ssrf:1', { status: 'not_a_bug' });
+
+    await user.click(within(card).getByRole('button', { name: /Mark fixed/ }));
+    expect(onSetTriage).toHaveBeenCalledWith('ssrf:1', { status: 'fixed' });
+  });
+
+  it('moves a finding an agent proved real to Confirmed, where it can be fixed', async () => {
+    const { user, onFixWithAgent, onSetTriage } = setup(
+      unverifiedRun({
+        triage: {
+          'ssrf:1': {
+            status: 'confirmed',
+            by: 'agent',
+            note: 'A test fetches 169.254.169.254 through the proxy.',
+            at: '',
+          },
         },
       }),
     );
 
-    expect(screen.getByRole('button', { name: /Fix with agent/ })).toBeDisabled();
-    expect(screen.getByText(/No confirmed findings/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Confirmed 1/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: /Needs validation 0/ })).toBeInTheDocument();
+    expect(screen.getByText(/1 confirmed vulnerability to fix/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Possible SSRF in the image proxy/ }));
+    const card = screen.getByRole('region', { name: 'Possible SSRF in the image proxy' });
+    expect(within(card).getByText(/Marked confirmed by an agent/)).toBeInTheDocument();
+    expect(within(card).getByText(/169.254.169.254 through the proxy/)).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: /^Fix with agent/ })[0]);
+    expect(onFixWithAgent).toHaveBeenCalledWith(
+      expect.stringContaining('[Confirmed after the audit] Possible SSRF'),
+    );
+
+    await user.click(within(card).getByRole('button', { name: /Back to unverified/ }));
+    expect(onSetTriage).toHaveBeenCalledWith('ssrf:1', null);
+  });
+
+  it('lists fixed findings on their own tab and leaves them out of the fix prompt', async () => {
+    const { user, onFixWithAgent } = setup(
+      detail({
+        triage: {
+          'rce:1': { status: 'fixed', by: 'you', note: '', at: '2026-11-16T03:00:00Z' },
+          'hdr:1': { status: 'not_a_bug', by: 'you', note: 'Set by the proxy.', at: '' },
+        },
+      }),
+    );
+
+    expect(screen.getByRole('tab', { name: /Confirmed 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Fixed 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Rejected 2/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Fix with agent/ }));
+    const prompt = onFixWithAgent.mock.calls[0][0] as string;
+    expect(prompt).toContain('SQL injection');
+    expect(prompt).not.toContain('Command injection');
+    expect(prompt).not.toContain('Missing security headers');
+
+    await user.click(screen.getByRole('tab', { name: /Fixed/ }));
+    expect(screen.getByText('Command injection in admin runner')).toBeInTheDocument();
+  });
+
+  it('offers to validate the rest while there are still confirmed findings to fix', async () => {
+    const { user, onFixWithAgent } = setup();
+
+    await user.click(screen.getByRole('tab', { name: /Needs validation/ }));
+    await user.click(screen.getByRole('button', { name: /Validate and fix with agent/ }));
+    expect(onFixWithAgent).toHaveBeenCalledWith(
+      expect.stringContaining('Possible SSRF in the image proxy'),
+    );
+  });
+
+  it('has nothing to do once everything is settled', () => {
+    setup(
+      unverifiedRun({
+        triage: { 'ssrf:1': { status: 'fixed', by: 'agent', note: '', at: '' } },
+      }),
+    );
+
+    expect(screen.getByText('Nothing left to fix')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /with agent/ })).toBeNull();
   });
 
   it('says why a run stopped early', () => {
@@ -220,6 +363,7 @@ describe('AiAuditReport', () => {
           incompleteReason: 'validation_budget_exhausted',
           profile: 'standard',
           target: null,
+          targetExecution: null,
         },
       }),
     );

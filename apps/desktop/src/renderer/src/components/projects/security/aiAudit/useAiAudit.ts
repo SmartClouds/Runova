@@ -1,4 +1,10 @@
-import type { AiAuditPhase, AiAuditProfile, AiAuditRunDetail, Project } from '@runova/core';
+import type {
+  AiAuditPhase,
+  AiAuditProfile,
+  AiAuditRunDetail,
+  AiAuditTriageStatus,
+  Project,
+} from '@runova/core';
 import {
   buildSecurityAuditInstallCommand,
   buildSecurityAuditPrompt,
@@ -23,6 +29,8 @@ import { useWorkspaceStore } from '@/stores/workspaceStore';
 const QUIET = { meta: { silentLoading: true } } as const;
 /** How often a running audit is re-read. The agent writes a file every few minutes at most. */
 const LIVE_POLL_MS = 4_000;
+/** How often a finished run is re-read while an agent sent from its report may record outcomes. */
+const FIX_POLL_MS = 5_000;
 /** How often the install status is re-read while the install tab is working. */
 const INSTALL_POLL_MS = 2_000;
 
@@ -70,6 +78,15 @@ export function useAiAudit(project: Project) {
     'security.audit.agentTabs',
     {},
   );
+  // The tab of the last agent sent from a report to fix or validate findings. It records what it
+  // settles in the run folder, so the report keeps re-reading the run while that tab is open.
+  const [fixTab, setFixTab] = useProjectUiState<{ runName: string; tabId: string } | null>(
+    'security.audit.fixTab',
+    null,
+  );
+  const fixTabOpen = useWorkspaceStore((s) =>
+    fixTab ? Boolean(s.workspaces[projectId]?.tabs[fixTab.tabId]) : false,
+  );
 
   const statusQuery = useQuery({
     queryKey: queryKeys.aiAuditStatus(projectId),
@@ -102,7 +119,9 @@ export function useAiAudit(project: Project) {
       !dismissed.includes(selectedRunName) &&
       isLivePhase(query.state.data?.phase ?? selectedSummary?.phase)
         ? LIVE_POLL_MS
-        : false,
+        : fixTabOpen && fixTab?.runName === selectedRunName
+          ? FIX_POLL_MS
+          : false,
     ...QUIET,
   });
   const run = runQuery.data?.runName === selectedRunName ? runQuery.data : null;
@@ -254,6 +273,40 @@ export function useAiAudit(project: Project) {
     [setDismissed],
   );
 
+  /** Records what was decided about one finding, or clears it back to the audit's verdict. */
+  const setTriage = useCallback(
+    async (
+      runName: string,
+      fingerprint: string,
+      change: { status: AiAuditTriageStatus; note?: string } | null,
+    ): Promise<boolean> => {
+      try {
+        const triage = await window.runova.securityAudit.setTriage(
+          projectId,
+          runName,
+          fingerprint,
+          change,
+        );
+        queryClient.setQueryData<AiAuditRunDetail>(
+          queryKeys.aiAuditRun(projectId, runName),
+          (current) => (current ? { ...current, triage } : current),
+        );
+        return true;
+      } catch (error) {
+        toast.error('Could not save that', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    },
+    [projectId, queryClient],
+  );
+
+  const trackFixTab = useCallback(
+    (runName: string, tabId: string) => setFixTab({ runName, tabId }),
+    [setFixTab],
+  );
+
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.aiAuditStatus(projectId) }),
@@ -293,6 +346,8 @@ export function useAiAudit(project: Project) {
     installSkill,
     cancelInstall,
     startAudit,
+    setTriage,
+    trackFixTab,
     refresh,
   };
 }

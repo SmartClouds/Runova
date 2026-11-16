@@ -1,4 +1,9 @@
-import type { AiAuditRunDetail, AiAuditRunSummary, AiAuditStatus } from '@runova/core';
+import type {
+  AiAuditRunDetail,
+  AiAuditRunSummary,
+  AiAuditStatus,
+  AiAuditTriage,
+} from '@runova/core';
 import { ipcMain, shell } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
 import {
@@ -7,6 +12,7 @@ import {
   getAuditStatus,
   listAuditRuns,
   prepareAuditRun,
+  setAuditTriage,
 } from '../security/aiAudit';
 
 /**
@@ -34,6 +40,17 @@ export function registerSecurityAuditHandlers(): void {
     IPC.securityAudit.prepareRun,
     (_event, projectId: string): Promise<{ runName: string; outputDir: string }> =>
       prepareAuditRun(projectId),
+  );
+
+  ipcMain.handle(
+    IPC.securityAudit.setTriage,
+    (
+      _event,
+      projectId: string,
+      runName: string,
+      fingerprint: unknown,
+      change: unknown,
+    ): Promise<AiAuditTriage> => setAuditTriage(projectId, runName, fingerprint, change),
   );
 
   ipcMain.handle(

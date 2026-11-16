@@ -19,6 +19,7 @@ function run(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {
       incompleteReason: null,
       profile: 'standard',
       target: null,
+      targetExecution: null,
     },
     counts: null,
     ledger: { total: 10, settled: 4, byStatus: { covered: 4, planned: 6 } },

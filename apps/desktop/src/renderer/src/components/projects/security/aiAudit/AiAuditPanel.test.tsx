@@ -57,7 +57,13 @@ function summary(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {
     runName: 'run-2',
     outputDir: '/home/me/security-audit-skill/shop/run-2',
     phase: 'complete',
-    metadata: { runStatus: 'complete', incompleteReason: null, profile: 'standard', target: null },
+    metadata: {
+      runStatus: 'complete',
+      incompleteReason: null,
+      profile: 'standard',
+      target: null,
+      targetExecution: null,
+    },
     counts: {
       confirmed: 1,
       needsValidation: 0,
@@ -93,7 +99,14 @@ const sqli = {
 };
 
 function detail(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
-  return { ...summary(), findings: [sqli], droppedFindings: 0, report: '# Report', ...over };
+  return {
+    ...summary(),
+    findings: [sqli],
+    droppedFindings: 0,
+    triage: {},
+    report: '# Report',
+    ...over,
+  };
 }
 
 function setup(bridge: Record<string, unknown>) {

@@ -1,4 +1,4 @@
-import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTempUserData } from '../../test/main/ipcHarness';
@@ -205,6 +205,62 @@ describe('getAuditRun', () => {
   it('says so when the run is gone', async () => {
     const { getAuditRun } = await load();
     await expect(getAuditRun('p1', 'run-9')).rejects.toThrow(/no longer there/i);
+  });
+});
+
+describe('setAuditTriage', () => {
+  it('records a decision next to the run, keeps what an agent wrote, and reads back', async () => {
+    write(join(runsRoot, 'run-1', 'run-metadata.json'), { run_status: 'complete' });
+    write(join(runsRoot, 'run-1', 'findings.json'), [confirmed]);
+    write(join(runsRoot, 'run-1', 'runova-triage.json'), {
+      findings: { 'ssrf:b.ts:2': { status: 'fixed', note: 'Allow list added.' } },
+    });
+    const { setAuditTriage, getAuditRun } = await load();
+
+    const triage = await setAuditTriage('p1', 'run-1', 'sqli:a.ts:1', {
+      status: 'not_a_bug',
+      note: 'Input is an enum.',
+    });
+
+    expect(triage['sqli:a.ts:1']).toMatchObject({
+      status: 'not_a_bug',
+      by: 'you',
+      note: 'Input is an enum.',
+    });
+    expect(triage['ssrf:b.ts:2']).toMatchObject({ status: 'fixed', by: 'agent' });
+    const onDisk = JSON.parse(readFileSync(join(runsRoot, 'run-1', 'runova-triage.json'), 'utf-8'));
+    expect(Object.keys(onDisk.findings)).toEqual(['ssrf:b.ts:2', 'sqli:a.ts:1']);
+    expect((await getAuditRun('p1', 'run-1')).triage).toEqual(triage);
+
+    expect(await setAuditTriage('p1', 'run-1', 'sqli:a.ts:1', null)).not.toHaveProperty(
+      'sqli:a.ts:1',
+    );
+  });
+
+  it('does not count a triage write as the audit still working', async () => {
+    write(join(runsRoot, 'run-1', 'run-metadata.json'), { run_status: 'complete' });
+    const old = new Date('2026-11-01T10:00:00Z');
+    utimesSync(join(runsRoot, 'run-1', 'run-metadata.json'), old, old);
+    utimesSync(join(runsRoot, 'run-1'), old, old);
+    const { setAuditTriage, listAuditRuns } = await load();
+
+    await setAuditTriage('p1', 'run-1', 'sqli:a.ts:1', { status: 'fixed' });
+    utimesSync(join(runsRoot, 'run-1'), old, old);
+
+    expect((await listAuditRuns('p1'))[0].lastActivityAt).toBe(old.toISOString());
+  });
+
+  it('refuses a bad run, fingerprint, status or change, and a run that is gone', async () => {
+    write(join(runsRoot, 'run-1', 'run-metadata.json'), {});
+    const { setAuditTriage } = await load();
+
+    await expect(setAuditTriage('p1', '../x', 'a:1', null)).rejects.toThrow(/run name/i);
+    await expect(setAuditTriage('p1', 'run-1', '../../a', null)).rejects.toThrow(/fingerprint/);
+    await expect(setAuditTriage('p1', 'run-1', 'a:1', { status: 'gone' })).rejects.toThrow(
+      /status/,
+    );
+    await expect(setAuditTriage('p1', 'run-1', 'a:1', 'fixed')).rejects.toThrow(/change/);
+    await expect(setAuditTriage('p1', 'run-7', 'a:1', null)).rejects.toThrow(/no longer there/);
   });
 });
 

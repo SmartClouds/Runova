@@ -208,7 +208,19 @@ export function parseRunMetadata(raw: unknown): AiAuditRunMetadata | null {
     incompleteReason: text(raw.incomplete_reason) || null,
     profile: PROFILES.has(profile) ? profile : null,
     target: text(raw.target) || null,
+    targetExecution:
+      isObject(raw.target_execution) && typeof raw.target_execution.available === 'boolean'
+        ? {
+            available: raw.target_execution.available,
+            reason: text(raw.target_execution.reason) || null,
+          }
+        : null,
   };
+}
+
+/** A fingerprint as the skill writes them, safe to use as a key in Runova's own files. */
+export function isAuditFingerprint(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 512 && FINGERPRINT.test(value);
 }
 
 /** coverage-ledger.json is a bare array of units, each with a `status`. */

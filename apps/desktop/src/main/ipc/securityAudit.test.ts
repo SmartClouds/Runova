@@ -19,6 +19,7 @@ const service = vi.hoisted(() => ({
   getAuditRun: vi.fn(async () => ({ runName: 'run-1' })),
   prepareAuditRun: vi.fn(async () => ({ runName: 'run-2', outputDir: '/home/x/run-2' })),
   auditRunPath: vi.fn(async () => '/home/x/run-1/REPORT.md'),
+  setAuditTriage: vi.fn(async () => ({})),
 }));
 vi.mock('../security/aiAudit', () => service);
 
@@ -51,6 +52,14 @@ describe('securityAudit IPC', () => {
     await expect(invoke(IPC.securityAudit.prepareRun, 'p1')).resolves.toEqual({
       runName: 'run-2',
       outputDir: '/home/x/run-2',
+    });
+  });
+
+  it('records a triage decision for one finding', async () => {
+    await invoke(IPC.securityAudit.setTriage, 'p1', 'run-1', 'sqli:1', { status: 'fixed' });
+
+    expect(service.setAuditTriage).toHaveBeenCalledWith('p1', 'run-1', 'sqli:1', {
+      status: 'fixed',
     });
   });
 

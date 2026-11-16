@@ -4,6 +4,8 @@ import type {
   AiAuditRunDetail,
   AiAuditRunSummary,
   AiAuditStatus,
+  AiAuditTriage,
+  AiAuditTriageStatus,
   AndroidActionResult,
   AndroidCapture,
   AndroidEvent,
@@ -1076,6 +1078,14 @@ const securityAudit = {
     ipcRenderer.invoke(IPC.securityAudit.getRun, projectId, runName),
   prepareRun: (projectId: string): Promise<{ runName: string; outputDir: string }> =>
     ipcRenderer.invoke(IPC.securityAudit.prepareRun, projectId),
+  /** Records what was decided about one finding since the run, or clears it with `null`. */
+  setTriage: (
+    projectId: string,
+    runName: string,
+    fingerprint: string,
+    change: { status: AiAuditTriageStatus; note?: string } | null,
+  ): Promise<AiAuditTriage> =>
+    ipcRenderer.invoke(IPC.securityAudit.setTriage, projectId, runName, fingerprint, change),
   openPath: (projectId: string, runName: string, target: 'folder' | 'report'): Promise<void> =>
     ipcRenderer.invoke(IPC.securityAudit.openPath, projectId, runName, target),
 };

@@ -98,10 +98,13 @@ export function AiAuditPanel({ project }: { project: Project }): React.JSX.Eleme
       });
       return;
     }
-    if (!launchPromptTab(project, { cliId, prompt })) return;
+    const tabId = launchPromptTab(project, { cliId, prompt });
+    if (!tabId) return;
+    if (run) audit.trackFixTab(run.runName, tabId);
     navigate(`/workspace/${project.id}`);
     toast.success(`Starting ${getCliDefinition(cliId)?.label ?? 'the agent'}`, {
-      description: 'The fix prompt goes in once it is ready. Read it over and press Enter.',
+      description:
+        'The prompt goes in once it is ready. Read it over and press Enter. What the agent settles shows up in the report.',
     });
   }
 
@@ -331,6 +334,7 @@ export function AiAuditPanel({ project }: { project: Project }): React.JSX.Eleme
           projectName={project.name}
           onOpenFile={openFile}
           onFixWithAgent={fixWithAgent}
+          onSetTriage={(fingerprint, change) => audit.setTriage(run.runName, fingerprint, change)}
         />
       ) : (
         <div className="space-y-3">

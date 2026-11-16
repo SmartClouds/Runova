@@ -109,7 +109,32 @@ export interface AiAuditRunMetadata {
   incompleteReason: string | null;
   profile: AiAuditProfile | null;
   target: string | null;
+  /**
+   * Whether the audit could run the project's code in a sandbox. Without one the skill cannot
+   * reproduce anything, so nothing reaches `confirmed` and every lead is left to validate.
+   */
+  targetExecution: { available: boolean; reason: string | null } | null;
 }
+
+/**
+ * What happened to a finding after the audit ended. The skill's verdict is fixed once findings.json
+ * is written, so Runova keeps these next to it in their own file: a lead someone proved real, one
+ * that turned out not to apply, or one that has been fixed.
+ */
+export type AiAuditTriageStatus = 'confirmed' | 'not_a_bug' | 'fixed';
+
+export interface AiAuditTriageEntry {
+  status: AiAuditTriageStatus;
+  /** Set from the report by the user, or written by an agent following a Runova prompt. */
+  by: 'you' | 'agent';
+  /** What was found: the test that reproduces it, why it does not apply, what the fix changed. */
+  note: string;
+  /** ISO time, or empty when an agent left it out. */
+  at: string;
+}
+
+/** Keyed by finding fingerprint. */
+export type AiAuditTriage = Record<string, AiAuditTriageEntry>;
 
 export interface AiAuditLedgerSummary {
   total: number;
@@ -156,6 +181,8 @@ export interface AiAuditRunDetail extends AiAuditRunSummary {
   findings: AiAuditFinding[];
   /** Records in findings.json that did not match the schema and were left out. */
   droppedFindings: number;
+  /** What has been decided about each finding since the run ended (runova-triage.json). */
+  triage: AiAuditTriage;
   /** REPORT.md, when the run wrote one (size capped). */
   report: string | null;
 }

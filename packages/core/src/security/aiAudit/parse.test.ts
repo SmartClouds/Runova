@@ -99,6 +99,7 @@ describe('parseRunMetadata', () => {
       incompleteReason: 'critic_budget_exhausted',
       profile: 'deep',
       target: 'shop',
+      targetExecution: null,
     });
   });
 
@@ -108,8 +109,23 @@ describe('parseRunMetadata', () => {
       incompleteReason: null,
       profile: null,
       target: null,
+      targetExecution: null,
     });
     expect(parseRunMetadata('nope')).toBeNull();
+  });
+
+  it('reads whether the audit could run the code, and why not', () => {
+    expect(
+      parseRunMetadata({
+        run_status: 'complete',
+        target_execution: { available: false, reason: 'No sandbox on this host.' },
+      })?.targetExecution,
+    ).toEqual({ available: false, reason: 'No sandbox on this host.' });
+    expect(parseRunMetadata({ target_execution: { available: true } })?.targetExecution).toEqual({
+      available: true,
+      reason: null,
+    });
+    expect(parseRunMetadata({ target_execution: { reason: 'x' } })?.targetExecution).toBeNull();
   });
 });
 

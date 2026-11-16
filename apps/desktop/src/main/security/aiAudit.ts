@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type {
   AiAuditFinding,
@@ -7,8 +7,11 @@ import type {
   AiAuditRunMetadata,
   AiAuditRunSummary,
   AiAuditStatus,
+  AiAuditTriage,
 } from '@runova/core';
 import {
+  AI_AUDIT_TRIAGE_FILE,
+  applyAuditTriage,
   auditRunNumber,
   countAuditFindings,
   inferAuditPhase,
@@ -17,9 +20,11 @@ import {
   nextAuditRunName,
   nodeMeetsAuditMinimum,
   parseAuditFindings,
+  parseAuditTriage,
   parseRunMetadata,
   SECURITY_AUDIT_RUNS_FOLDER,
   SECURITY_AUDIT_SKILL_NAME,
+  serializeAuditTriage,
   summarizeLedger,
 } from '@runova/core';
 import { app } from 'electron';
@@ -39,6 +44,7 @@ import { probe } from './exec';
 /** findings.json past this is not something a person reads in a list anyway. */
 const MAX_FINDINGS_BYTES = 25 * 1024 * 1024;
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
+const MAX_TRIAGE_BYTES = 2 * 1024 * 1024;
 
 async function getProject(projectId: string): Promise<{ folderPath: string; name: string }> {
   const project = (await store.getProjects()).find((p) => p.id === projectId);
@@ -135,6 +141,8 @@ async function readRunFiles(dir: string): Promise<RunFiles> {
   // work the agents churn through, so the folder's own time covers those well enough.
   let lastActivity = dirStats.mtimeMs;
   for (const name of files) {
+    // Triage is written after the run, by Runova or a fixing agent; it is not the audit working.
+    if (name === AI_AUDIT_TRIAGE_FILE) continue;
     const fileStats = await stat(join(dir, name)).catch(() => null);
     if (fileStats && fileStats.mtimeMs > lastActivity) lastActivity = fileStats.mtimeMs;
   }
@@ -198,10 +206,47 @@ export async function getAuditRun(projectId: string, runName: string): Promise<A
     ...summarize(runName, dir, files),
     findings: files.findings,
     droppedFindings: files.droppedFindings,
+    triage: files.files.includes(AI_AUDIT_TRIAGE_FILE)
+      ? parseAuditTriage(await readJson(join(dir, AI_AUDIT_TRIAGE_FILE), MAX_TRIAGE_BYTES))
+      : {},
     report: files.files.includes('REPORT.md')
       ? await readText(join(dir, 'REPORT.md'), MAX_REPORT_BYTES)
       : null,
   };
+}
+
+/**
+ * Records what the user decided about one finding (or clears it with `null`) in the run's
+ * runova-triage.json, keeping every other entry, including ones an agent wrote. The write goes
+ * through a temporary file so a reader never sees half of it.
+ */
+export async function setAuditTriage(
+  projectId: string,
+  runName: string,
+  fingerprint: unknown,
+  change: unknown,
+): Promise<AiAuditTriage> {
+  checkRunName(runName);
+  if (change !== null && (typeof change !== 'object' || Array.isArray(change))) {
+    throw new Error('Not a triage change.');
+  }
+  const dir = join(runsRootFor(await getProject(projectId)), runName);
+  const dirStats = await stat(dir).catch(() => null);
+  if (!dirStats?.isDirectory()) {
+    throw new Error(`${runName} is no longer there. It may have been moved or deleted.`);
+  }
+  const path = join(dir, AI_AUDIT_TRIAGE_FILE);
+  const current = parseAuditTriage(await readJson(path, MAX_TRIAGE_BYTES));
+  const next = applyAuditTriage(
+    current,
+    fingerprint,
+    change as { status: unknown; note?: unknown } | null,
+    new Date().toISOString(),
+  );
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, serializeAuditTriage(next), 'utf-8');
+  await rename(temporary, path);
+  return next;
 }
 
 /**

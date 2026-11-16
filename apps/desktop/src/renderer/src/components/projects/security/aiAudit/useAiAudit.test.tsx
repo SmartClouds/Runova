@@ -40,7 +40,13 @@ function summary(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {
     runName: 'run-1',
     outputDir: '/home/me/security-audit-skill/shop/run-1',
     phase: 'complete',
-    metadata: { runStatus: 'complete', incompleteReason: null, profile: 'standard', target: null },
+    metadata: {
+      runStatus: 'complete',
+      incompleteReason: null,
+      profile: 'standard',
+      target: null,
+      targetExecution: null,
+    },
     counts: {
       confirmed: 1,
       needsValidation: 0,
@@ -56,7 +62,14 @@ function summary(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {
 }
 
 function detail(over: Partial<AiAuditRunDetail> = {}): AiAuditRunDetail {
-  return { ...summary(), findings: [], droppedFindings: 0, report: '# Report', ...over };
+  return {
+    ...summary(),
+    findings: [],
+    droppedFindings: 0,
+    triage: {},
+    report: '# Report',
+    ...over,
+  };
 }
 
 const live = { phase: 'hunting' as const, metadata: null, counts: null, hasReport: false };
@@ -90,6 +103,70 @@ afterEach(() => {
 });
 
 describe('useAiAudit', () => {
+  it('records a triage decision and shows it without re-reading the run', async () => {
+    const triage = { 'ssrf:1': { status: 'fixed', by: 'you', note: '', at: 'now' } };
+    const { result, bridge } = setup({
+      'securityAudit.listRuns': [summary()],
+      'securityAudit.getRun': detail(),
+      'securityAudit.setTriage': triage,
+    });
+    await waitFor(() => expect(result.current.run).not.toBeNull());
+
+    let saved = false;
+    await act(async () => {
+      saved = await result.current.setTriage('run-1', 'ssrf:1', { status: 'fixed' });
+    });
+
+    expect(saved).toBe(true);
+    expect(bridge.$fn('securityAudit.setTriage')).toHaveBeenCalledWith('p1', 'run-1', 'ssrf:1', {
+      status: 'fixed',
+    });
+    await waitFor(() => expect(result.current.run?.triage).toEqual(triage));
+  });
+
+  it('says so when a triage decision cannot be saved', async () => {
+    const { result } = setup({
+      'securityAudit.listRuns': [summary()],
+      'securityAudit.getRun': detail(),
+      'securityAudit.setTriage': async () => {
+        throw new Error('run-1 is no longer there.');
+      },
+    });
+    await waitFor(() => expect(result.current.run).not.toBeNull());
+
+    let saved = true;
+    await act(async () => {
+      saved = await result.current.setTriage('run-1', 'ssrf:1', null);
+    });
+
+    expect(saved).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith('Could not save that', {
+      description: 'run-1 is no longer there.',
+    });
+  });
+
+  it('re-reads a finished run while an agent sent from its report is open', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result, bridge } = setup({
+      'securityAudit.listRuns': [summary()],
+      'securityAudit.getRun': detail(),
+    });
+    await waitFor(() => expect(result.current.run).not.toBeNull());
+    const idle = bridge.$fn('securityAudit.getRun').mock.calls.length;
+    await act(() => vi.advanceTimersByTimeAsync(6_000));
+    expect(bridge.$fn('securityAudit.getRun').mock.calls.length).toBe(idle);
+
+    const tabId = openSetupTab();
+    act(() => result.current.trackFixTab('run-1', tabId));
+    await act(() => vi.advanceTimersByTimeAsync(6_000));
+    const polled = bridge.$fn('securityAudit.getRun').mock.calls.length;
+    expect(polled).toBeGreaterThan(idle);
+
+    act(() => useWorkspaceStore.getState().closeTab('p1', tabId));
+    await act(() => vi.advanceTimersByTimeAsync(12_000));
+    expect(bridge.$fn('securityAudit.getRun').mock.calls.length).toBeLessThanOrEqual(polled + 1);
+  });
+
   it('opens the newest run and reads it', async () => {
     const { result, bridge } = setup({
       'securityAudit.listRuns': [summary({ runName: 'run-2' }), summary({ runName: 'run-1' })],

@@ -12,6 +12,7 @@ const running: AiAuditRunMetadata = {
   incompleteReason: null,
   profile: 'standard',
   target: null,
+  targetExecution: null,
 };
 
 function ledger(total: number, settled: number): AiAuditLedgerSummary {

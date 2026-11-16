@@ -89,6 +89,7 @@ export * from './security/aiAudit/parse.js';
 export * from './security/aiAudit/phase.js';
 export * from './security/aiAudit/prompt.js';
 export * from './security/aiAudit/runDirs.js';
+export * from './security/aiAudit/triage.js';
 export * from './security/aiAudit/types.js';
 export * from './security/codeql.js';
 export * from './security/redact.js';
