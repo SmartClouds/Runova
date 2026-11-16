@@ -21,7 +21,7 @@ internal sealed class FakeSendGrid
     /// <summary>One request as it reached SendGrid. The body is read while the request is alive.</summary>
     internal sealed record Seen(HttpMethod Method, Uri? Uri, AuthenticationHeaderValue? Authorization, string? ContentType, string Body)
     {
-        public JsonElement Json => JsonDocument.Parse(Body).RootElement;
+        public JsonElement Json => JsonElement.Parse(Body);
     }
 
     /// <summary>A reply with this status and SendGrid's error shape around <paramref name="message"/>.</summary>

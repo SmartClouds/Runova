@@ -11,7 +11,7 @@ namespace Runova.RemoteAgent.Tests;
 /// </summary>
 public class VectorsTests
 {
-    private static readonly JsonElement _vectors = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Vectors", "anywhere-v1.json"))).RootElement;
+    private static readonly JsonElement _vectors = JsonElement.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Vectors", "anywhere-v1.json")));
 
     private static byte[] Hex(string value) => Convert.FromHexString(value);
 

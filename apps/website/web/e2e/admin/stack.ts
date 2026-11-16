@@ -20,7 +20,7 @@ import { FAKE_STRIPE, OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.
 const web = resolve(import.meta.dirname, '../..');
 const api = resolve(web, '../api');
 const project = join(api, 'src/Runova.Website.Api/Runova.Website.Api.csproj');
-const dll = join(api, 'src/Runova.Website.Api/bin/Release/net10.0/Runova.Website.Api.dll');
+const dll = join(api, 'src/Runova.Website.Api/bin/Release/net11.0/Runova.Website.Api.dll');
 const scratch = mkdtempSync(join(tmpdir(), 'runova-admin-e2e-'));
 const certificate = join(scratch, 'localhost.pfx');
 const media = join(scratch, 'media');

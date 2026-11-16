@@ -299,7 +299,7 @@ public sealed class DockerEngineTests
         Assert.Contains("POST /networks/shop_default/connect", daemon.Requests);
         Assert.Contains("POST /networks/bridge/disconnect", daemon.Requests);
         Assert.Equal(["shop_default", "bridge"], daemon.NetworkBodies.Select(b => b.Network));
-        Assert.All(daemon.NetworkBodies, b => Assert.Equal("toolbox", JsonDocument.Parse(b.Body).RootElement.GetProperty("Container").GetString()));
+        Assert.All(daemon.NetworkBodies, b => Assert.Equal("toolbox", JsonElement.Parse(b.Body).GetProperty("Container").GetString()));
         Assert.Contains("nowhere", missing.Message, StringComparison.Ordinal);
     }
 
@@ -395,7 +395,7 @@ public sealed class DockerEngineTests
     private static JsonElement CliStats(string payload)
     {
         var line = FakeDockerDaemon.Read("docker-stats-cli.txt").Split('\n').Single(l => l.StartsWith(payload + " ", StringComparison.Ordinal));
-        return JsonDocument.Parse(line[(payload.Length + 1)..]).RootElement.Clone();
+        return JsonElement.Parse(line[(payload.Length + 1)..]);
     }
 
     // go-units, as the Docker CLI formats sizes: three significant digits in powers of 1000 for IO,

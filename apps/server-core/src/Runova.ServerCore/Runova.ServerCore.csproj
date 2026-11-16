@@ -26,10 +26,10 @@
   </PropertyGroup>
   <!-- The SDK picks that ILLink tasks version from its own runtime patch, so a new SDK patch on a
        runner (global.json rolls forward to the latest) would change the lock file and fail every
-       locked restore. Pinned here, it moves only with the other 10.0.x packages. -->
+       locked restore. Pinned here, it moves only with the other 11.0.x packages. -->
   <ItemGroup>
     <KnownILLinkPack Remove="Microsoft.NET.ILLink.Tasks" />
-    <KnownILLinkPack Include="Microsoft.NET.ILLink.Tasks" TargetFramework="net10.0" ILLinkPackVersion="10.0.14" />
+    <KnownILLinkPack Include="Microsoft.NET.ILLink.Tasks" TargetFramework="net11.0" ILLinkPackVersion="11.0.0" />
   </ItemGroup>
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
     <SelfContained>true</SelfContained>
@@ -52,6 +52,15 @@
       <ResolvedFileToPublish Condition="$([System.String]::Copy('%(Filename)').StartsWith('Hangfire.'))">
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+  <!-- sqlite-net-pcl (under Hangfire's storage) brings SourceGear.sqlite3, whose Linux assets
+       include a static libe_sqlite3.a for linking into native apps. Nothing loads it at run time
+       (the shared libe_sqlite3.so beside the binary is what SQLitePCLRaw opens), so it stays out
+       of the release. -->
+  <Target Name="LeaveStaticLibrariesOut" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.a'" />
     </ItemGroup>
   </Target>
 

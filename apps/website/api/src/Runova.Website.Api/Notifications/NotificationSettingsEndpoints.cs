@@ -110,7 +110,7 @@ internal static partial class NotificationSettingsEndpoints
         var now = time.GetUtcNow();
         // A token someone else's sign-in held on this phone is this phone's now.
         await db.PushDevices.Where(d => d.PushToken == request.PushToken && d.SessionId != sessionId).ExecuteDeleteAsync();
-        await db.Database.ExecuteSqlInterpolatedAsync(
+        await db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO "PushDevices" ("UserId", "SessionId", "Platform", "PushToken", "SealKeyId", "UpdatedAt")
             VALUES ({userId}, {sessionId}, {request.Platform}, {request.PushToken}, {request.SealKeyId}, {now})

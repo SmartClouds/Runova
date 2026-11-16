@@ -39,7 +39,7 @@ internal sealed class JwsReader
 
     public JsonElement? Jwk => Header.TryGetProperty("jwk", out var jwk) ? jwk : null;
 
-    public JsonElement PayloadJson => JsonDocument.Parse(Payload).RootElement.Clone();
+    public JsonElement PayloadJson => JsonElement.Parse(Payload);
 
     public static JwsReader Parse(ReadOnlySpan<byte> body)
     {

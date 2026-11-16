@@ -10,12 +10,12 @@
     <PackageVersion Include="libsodium" Version="1.0.20.1" />
   </ItemGroup>
   <ItemGroup Label="Agent">
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="11.0.0" />
     <!-- Seals the agent's key and secret to the machine (DPAPI) on Windows. -->
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
     <!-- JPEG encoding of screen tiles on Windows. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />

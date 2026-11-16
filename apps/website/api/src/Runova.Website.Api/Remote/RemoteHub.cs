@@ -34,6 +34,11 @@ public interface IRemoteClient
 /// never sees a screen, a keystroke or a password: everything after signaling is encrypted between
 /// the two computers, and the signaling itself is passed on without being logged or stored.
 /// </summary>
+/// <remarks>
+/// The class attribute guards the connection. Each method carries the policy again because SignalR
+/// checks a call against the method's own attributes only, and since .NET 11 a method with
+/// attributes but no policy (any async method) is held to the fallback policy, which is staff.
+/// </remarks>
 [Authorize(Policies.Account)]
 internal sealed partial class RemoteHub(
     AppDbContext db,
@@ -54,6 +59,7 @@ internal sealed partial class RemoteHub(
     private long? AgentOf => RemoteAgentTokens.AgentDevice(Context.User);
 
     /// <summary>This connection is now how one of the account's computers is reached.</summary>
+    [Authorize(Policies.Account)]
     public async Task GoOnline(long deviceId)
     {
         var me = Me;
@@ -80,6 +86,7 @@ internal sealed partial class RemoteHub(
         }
     }
 
+    [Authorize(Policies.Account)]
     public async Task<ConnectResultDto> RequestConnect(ConnectRequestDto request)
     {
         if (AgentOf is not null)
@@ -157,6 +164,7 @@ internal sealed partial class RemoteHub(
     }
 
     /// <summary>The computer accepts or declines a ringing request.</summary>
+    [Authorize(Policies.Account)]
     public async Task Respond(string sessionId, bool accept)
     {
         if (sessions.Get(sessionId) is not { State: RemoteSessionState.Ringing } session || session.Parties.HostConnectionId != Context.ConnectionId)
@@ -180,6 +188,7 @@ internal sealed partial class RemoteHub(
     }
 
     /// <summary>Passes a signaling message to the other side of an accepted session.</summary>
+    [Authorize(Policies.Account)]
     public async Task Signal(string sessionId, string payload)
     {
         if (payload.Length > RemoteLimits.MaxSignalLength)
@@ -204,6 +213,7 @@ internal sealed partial class RemoteHub(
     /// The computer says the two are connected, after the encrypted handshake succeeded, and how.
     /// Only now is the session recorded, so a wrong password leaves no record behind.
     /// </summary>
+    [Authorize(Policies.Account)]
     public async Task Connected(string sessionId, string transport)
     {
         if (sessions.Get(sessionId) is not { State: RemoteSessionState.Accepted } session
@@ -238,6 +248,7 @@ internal sealed partial class RemoteHub(
     /// A one-time ticket for this side of an accepted session to meet the other side on the relay
     /// (E62), when the two can not reach each other directly.
     /// </summary>
+    [Authorize(Policies.Account)]
     public RelayTicketDto CreateRelayTicket(string sessionId)
     {
         if (sessions.Get(sessionId) is not { State: RemoteSessionState.Accepted } session || !session.Has(Context.ConnectionId))
@@ -250,6 +261,7 @@ internal sealed partial class RemoteHub(
     }
 
     /// <summary>Either side ends a session, ringing or live.</summary>
+    [Authorize(Policies.Account)]
     public async Task End(string sessionId)
     {
         if (sessions.OtherSide(sessionId, Context.ConnectionId) is not { } other || sessions.Remove(sessionId) is not { } session)

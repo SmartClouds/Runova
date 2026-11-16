@@ -18,10 +18,10 @@
 
   <!-- The SDK picks the ILLink tasks version from its own runtime patch, so a new SDK patch on a
        runner would change the lock file and fail every locked restore. Pinned here, it moves only
-       with the other 10.0.x packages. -->
+       with the other 11.0.x packages. -->
   <ItemGroup>
     <KnownILLinkPack Remove="Microsoft.NET.ILLink.Tasks" />
-    <KnownILLinkPack Include="Microsoft.NET.ILLink.Tasks" TargetFramework="net10.0" ILLinkPackVersion="10.0.14" />
+    <KnownILLinkPack Include="Microsoft.NET.ILLink.Tasks" TargetFramework="net11.0" ILLinkPackVersion="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>

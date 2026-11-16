@@ -5,13 +5,13 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup Label="Hosting">
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup Label="Data and identity">
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0" />
     <!-- Design-time only (migrations), referenced by the DevHost so it never ships. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup Label="Contracts">
     <PackageVersion Include="Tapper.Attributes" Version="1.14.0" />
@@ -31,6 +31,12 @@
     <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
     <!-- RaisedApp's storage (github.com/raisedapp), not the abandoned Hangfire.SQLite. -->
     <PackageVersion Include="Hangfire.Storage.SQLite" Version="0.4.3" />
+    <!-- EF Core 11 moved to SQLitePCLRaw 3, while Hangfire.Storage.SQLite still asks for
+         sqlite-net-pcl 1.9 and SQLitePCLRaw.bundle_green 2.1.11. Pinned transitively: sqlite-net-pcl
+         1.11 is built against SQLitePCLRaw 3, and lib.e_sqlite3 2.1.11 has a known high severity
+         vulnerability (GHSA-2m69-gcr7-jv3q covers 2.1.11 and earlier). -->
+    <PackageVersion Include="sqlite-net-pcl" Version="1.11.285" />
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
     <!-- The cron parser Hangfire's own team publishes, for the next runs a plan screen shows. -->
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <!-- Backup destinations: FTP and FTPS, and SFTP. -->
@@ -50,9 +56,9 @@
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
   <ItemGroup Label="Tests">
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
     <!-- Writes the TRX results file dotnet test asks for, at the platform version xunit.v3 brings. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />

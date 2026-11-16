@@ -22,7 +22,7 @@ internal sealed class NotificationPreferenceStore(AppDbContext db)
 
     /// <summary>Saves one choice; two taps racing each other end with the last one.</summary>
     public Task SetAsync(long userId, string category, bool enabled, CancellationToken cancellationToken = default) =>
-        db.Database.ExecuteSqlInterpolatedAsync(
+        db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO "NotificationPreferences" ("UserId", "Category", "Enabled") VALUES ({userId}, {category}, {enabled})
             ON CONFLICT ("UserId", "Category") DO UPDATE SET "Enabled" = {enabled}

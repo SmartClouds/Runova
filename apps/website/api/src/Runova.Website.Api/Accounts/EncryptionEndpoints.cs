@@ -96,7 +96,7 @@ internal sealed class EncryptionPreferences(AppDbContext db, Entitlements entitl
     public Task SetAsync(long userId, string item, bool enabled, CancellationToken cancellationToken = default)
     {
         var now = time.GetUtcNow();
-        return db.Database.ExecuteSqlInterpolatedAsync(
+        return db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO "UserEncryptionPreferences" ("UserId", "Item", "Enabled", "UpdatedAt") VALUES ({userId}, {item}, {enabled}, {now})
             ON CONFLICT ("UserId", "Item") DO UPDATE SET "Enabled" = {enabled}, "UpdatedAt" = {now}

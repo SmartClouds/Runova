@@ -98,7 +98,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
           cache: true
           cache-dependency-path: apps/server-core/**/packages.lock.json
 
@@ -251,7 +251,7 @@ jobs:
       - name: Setup .NET for the Anywhere agent
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
 
       - name: Publish the Anywhere agent
         run: node scripts/remote-agent.mjs publish ${{ runner.os == 'Windows' && 'win-x64' || runner.os == 'Linux' && 'linux-x64' || matrix.mac_arch == 'arm64' && 'osx-arm64' || 'osx-x64' }}

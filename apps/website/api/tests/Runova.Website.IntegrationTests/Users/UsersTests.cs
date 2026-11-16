@@ -280,7 +280,7 @@ public sealed class UsersTests : IDisposable
         var user = await TestUsers.CreateAsync(_factory.Services);
         var path = $"{Users}/{user.Id}";
 
-        var response = await admin.SendAsync(HttpMethod.Patch, path, JsonDocument.Parse(json).RootElement, ifMatch: await ETagAsync(admin, user.Id));
+        var response = await admin.SendAsync(HttpMethod.Patch, path, JsonElement.Parse(json), ifMatch: await ETagAsync(admin, user.Id));
 
         var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), path);
         Assert.True(problem.GetProperty("errors").TryGetProperty(field, out _));

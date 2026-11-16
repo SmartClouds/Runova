@@ -38,7 +38,7 @@ internal static class BridgeCommand
                 socketPath = path;
                 break;
             default:
-                await error.WriteLineAsync(Usage);
+                await error.WriteLineAsync(Usage, cancellationToken);
                 return 2;
         }
 
@@ -50,7 +50,8 @@ internal static class BridgeCommand
         catch (SocketException exception)
         {
             await error.WriteLineAsync(
-                $"Cannot reach the Runova core at {socketPath} ({exception.SocketErrorCode}): is the service running?");
+                $"Cannot reach the Runova core at {socketPath} ({exception.SocketErrorCode}): is the service running?",
+                cancellationToken);
             return 3;
         }
 

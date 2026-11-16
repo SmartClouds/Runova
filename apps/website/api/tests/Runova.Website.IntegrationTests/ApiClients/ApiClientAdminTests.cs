@@ -69,7 +69,7 @@ public sealed class ApiClientAdminTests(PostgresFixture postgres) : IAsyncLifeti
         Assert.Equal($"\"{client.GetProperty("version").GetString()}\"", read.Headers.ETag?.ToString());
         Assert.DoesNotContain(secret, body, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", body, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(client.ToString(), JsonDocument.Parse(body).RootElement.ToString());
+        Assert.Equal(client.ToString(), JsonElement.Parse(body).ToString());
 
         var list = await admin.GetAsync(Clients);
         Assert.DoesNotContain(secret, await list.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);

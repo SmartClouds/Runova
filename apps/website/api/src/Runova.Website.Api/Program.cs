@@ -60,6 +60,7 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
     options.AddSchemaTransformer(JsonSetup.DescribeTimes);
+    options.AddOperationTransformer(ProblemDetailsSetup.DescribeEmptyErrors);
 });
 
 var app = builder.Build();

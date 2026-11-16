@@ -69,7 +69,7 @@ public sealed class LastAdminTests(PostgresFixture postgres) : IAsyncLifetime
     private static async Task<HttpResponseMessage> SendAsync(ApiClient client, string method, string path, string? patch)
     {
         var etag = (await client.GetAsync(path)).Headers.ETag!.ToString();
-        var body = patch is null ? null : (object)System.Text.Json.JsonDocument.Parse(patch).RootElement;
+        var body = patch is null ? null : (object)System.Text.Json.JsonElement.Parse(patch);
         return await client.SendAsync(new HttpMethod(method), path, body, ifMatch: etag);
     }
 }

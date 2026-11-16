@@ -496,7 +496,7 @@ internal static partial class SyncEndpoints
         }
 
         http.Response.Headers.CacheControl = HttpCaching.Private;
-        return TypedResults.Ok(new KeyEnvelopeDto(version, JsonDocument.Parse(envelope).RootElement.Clone(), found.Scope.KeySetAt));
+        return TypedResults.Ok(new KeyEnvelopeDto(version, JsonElement.Parse(envelope), found.Scope.KeySetAt));
     }
 
     /// <summary>

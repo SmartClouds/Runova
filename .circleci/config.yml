@@ -36,7 +36,7 @@ commands:
             echo "export PATH=\"$HOME/node/bin:\$PATH\"" >> "$BASH_ENV"
             "$HOME/node/bin/node" --version
 
-  # The 10.0.4xx band that apps/website/api/global.json names (its rollForward is latestPatch), the
+  # The 11.0.1xx band that apps/website/api/global.json names (its rollForward is latestPatch), the
   # latest release in it, which is what the GitHub job's setup-dotnet takes too. A fresh machine
   # fetches from the internet, so the download and the installer retry.
   install-dotnet:
@@ -47,7 +47,7 @@ commands:
             curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
               https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
             for attempt in 1 2 3; do
-              bash /tmp/dotnet-install.sh --channel 10.0.4xx --install-dir "$HOME/.dotnet" && break
+              bash /tmp/dotnet-install.sh --channel 11.0.1xx --install-dir "$HOME/.dotnet" && break
               if [ "$attempt" = 3 ]; then exit 1; fi
               sleep $((attempt * 5))
             done

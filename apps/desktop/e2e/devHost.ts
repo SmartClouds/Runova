@@ -16,7 +16,7 @@ import { APP_ROOT, E2E_OUT_DIR } from './paths';
  */
 
 const PROJECT = join(APP_ROOT, '..', 'server-core', 'src', 'Runova.ServerCore.DevHost');
-const DLL = join(PROJECT, 'bin', 'Debug', 'net10.0', 'Runova.ServerCore.DevHost.dll');
+const DLL = join(PROJECT, 'bin', 'Debug', 'net11.0', 'Runova.ServerCore.DevHost.dll');
 const READY_TIMEOUT_MS = 60_000;
 const BUILD_LOCK = join(E2E_OUT_DIR, 'devhost-build.lock');
 const BUILD_MARKER = join(E2E_OUT_DIR, 'devhost-built');

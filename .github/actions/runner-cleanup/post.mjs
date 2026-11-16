@@ -309,10 +309,10 @@ function toolCacheVersions() {
   const minor = ({ parts }) => `${parts[0]}.${parts[1]}`;
 
   // Our own .NET folder (DOTNET_INSTALL_DIR in the workflows). setup-dotnet adds each new patch of
-  // the 10.0.4xx band next to the old ones, and global.json rolls forward to the newest.
+  // the 11.0.1xx band next to the old ones, and global.json rolls forward to the newest.
   const dotnet = join(toolCache, 'dotnet');
   if (existsSync(dotnet)) {
-    // The SDK by feature band (10.0.4xx), the rest by runtime version (10.0).
+    // The SDK by feature band (11.0.1xx), the rest by runtime version (11.0).
     const band = ({ parts }) => `${parts[0]}.${parts[1]}.${Math.floor(parts[2] / 100)}`;
     let removed = keepNewest(join(dotnet, 'sdk'), band);
     removed += keepNewest(join(dotnet, 'host', 'fxr'), minor);

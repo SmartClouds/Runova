@@ -152,7 +152,7 @@ public sealed class NodeCertificateAuthority(AppDbContext db, IDataProtectionPro
         // Two first enrollments at once: one insert wins and both use its key.
         try
         {
-            await db.Database.ExecuteSqlInterpolatedAsync(
+            await db.Database.ExecuteSqlAsync(
                 $"""INSERT INTO "NodeAuthorities" ("Id", "Certificate", "SealedPrivateKey", "CreatedAt") VALUES ({NodeAuthority.SingletonId}, {row.Certificate}, {row.SealedPrivateKey}, {row.CreatedAt}) ON CONFLICT ("Id") DO NOTHING""",
                 ct);
         }

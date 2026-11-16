@@ -93,7 +93,7 @@ public sealed class WebHubTests
 
         Assert.Null(first.Site!.Settings.BasicAuth!.Users[0].Password);
         Assert.StartsWith("{\"ana\":\"$6$", hash, StringComparison.Ordinal);
-        Assert.True(Sha512Crypt.Verify("a long secret phrase", System.Text.Json.JsonDocument.Parse(hash!).RootElement.GetProperty("ana").GetString()!));
+        Assert.True(Sha512Crypt.Verify("a long secret phrase", System.Text.Json.JsonElement.Parse(hash!).GetProperty("ana").GetString()!));
         Assert.Empty(again.Problems);
         Assert.Equal(hash, await HashesAsync(harness));
         Assert.Equal("sites[blog].basicAuth.users[0].password", Assert.Single(stranger.Problems).Field);

@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('../../../../../../', import.meta.url));
 const PROJECT = join(REPO, 'apps', 'server-core', 'src', 'Runova.ServerCore.DevHost');
-const DLL = join(PROJECT, 'bin', 'Debug', 'net10.0', 'Runova.ServerCore.DevHost.dll');
+const DLL = join(PROJECT, 'bin', 'Debug', 'net11.0', 'Runova.ServerCore.DevHost.dll');
 const READY_TIMEOUT_MS = 60_000;
 
 export interface DevHostCore {

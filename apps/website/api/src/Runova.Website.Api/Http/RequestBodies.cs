@@ -65,8 +65,6 @@ internal static partial class RequestBodies
     /// Runs the built-in validation (data annotations, then <see cref="IValidatableObject"/>) on
     /// a type marked <c>[ValidatableType]</c>, with errors keyed by camelCase JSON paths.
     /// </summary>
-    // .NET 10 marks the API for running the validation by hand as experimental.
-#pragma warning disable ASP0029
     public static async Task<Dictionary<string, string[]>> ValidateAsync<T>(T value, HttpContext http)
         where T : notnull
     {
@@ -78,13 +76,14 @@ internal static partial class RequestBodies
 
         var context = new ValidateContext
         {
-            ValidationContext = new ValidationContext(value, http.RequestServices, null),
+            ServiceProvider = http.RequestServices,
             ValidationOptions = options,
         };
         await info.ValidateAsync(value, context, http.RequestAborted);
-        return context.ValidationErrors?.ToDictionary(e => ToCamelCase(e.Key), e => e.Value) ?? [];
+        return context.ValidationErrors?.ToDictionary(
+            e => ToCamelCase(e.Key),
+            e => e.Value.Select(error => error.ErrorMessage).ToArray()) ?? [];
     }
-#pragma warning restore ASP0029
 
     // System.Text.Json writes "$.technologies[0].versionRange"; the root itself is the body.
     private static string ToKey(string? path) =>

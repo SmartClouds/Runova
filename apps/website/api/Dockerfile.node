@@ -4,7 +4,7 @@
 # manager, a non-root user, nothing listening. Build from this folder:
 #   docker build -f Dockerfile.node -t runova-website-monitoring-node apps/website/api
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 ARG VERSION=4.0.0
 ARG SOURCE_REVISION=
@@ -25,7 +25,7 @@ RUN dotnet publish src/Runova.Monitoring.Node/Runova.Monitoring.Node.csproj --no
 # so a new volume mounted there starts with that owner. The chiseled image has no shell to make it in.
 RUN mkdir -p /data
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:11.0-resolute-chiseled AS runtime
 ARG VERSION=4.0.0
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /data /data

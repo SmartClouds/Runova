@@ -3,7 +3,7 @@
 # Core runtime: no shell, no package manager, no SDK, and a non-root user. Build from this folder:
 #   docker build -t runova-website-api apps/website/api
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 ARG VERSION=4.0.0
 # The commit CD builds, which the healthcheck reports as its releaseId. Empty leaves it out.
@@ -37,7 +37,7 @@ RUN if [ -n "$SYSTEM_PROTOC" ]; then export PROTOBUF_PROTOC=/usr/bin/protoc; fi 
 # there starts with that owner. The chiseled image has no shell to make it in.
 RUN mkdir -p /data/media
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled AS runtime
 ARG VERSION=4.0.0
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /data /var/lib/runova

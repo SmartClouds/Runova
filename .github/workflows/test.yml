@@ -449,7 +449,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
           cache: ${{ inputs.github-hosted }}
           cache-dependency-path: apps/server-core/**/packages.lock.json
 
@@ -540,7 +540,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
           cache: ${{ inputs.github-hosted }}
           cache-dependency-path: apps/remote-agent/**/packages.lock.json
 
@@ -634,7 +634,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
           cache: ${{ inputs.github-hosted }}
           cache-dependency-path: apps/server-core/**/packages.lock.json
 
@@ -1103,7 +1103,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
-          dotnet-version: 10.0.4xx
+          dotnet-version: 11.0.1xx
           cache: ${{ inputs.github-hosted }}
           cache-dependency-path: apps/server-core/**/packages.lock.json
 

@@ -98,7 +98,7 @@ public sealed class MonitoringNodesTests(PostgresFixture postgres) : IAsyncLifet
     {
         var admin = await AdminAsync();
 
-        var response = await admin.SendAsync(HttpMethod.Post, Path, JsonDocument.Parse(json).RootElement);
+        var response = await admin.SendAsync(HttpMethod.Post, Path, JsonElement.Parse(json));
 
         var problem = await ApiClient.ReadJsonAsync(response, HttpStatusCode.BadRequest);
         Assert.True(problem.GetProperty("errors").TryGetProperty(field, out _));

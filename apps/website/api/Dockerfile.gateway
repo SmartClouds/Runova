@@ -4,7 +4,7 @@
 # manager, a non-root user. Build from this folder:
 #   docker build -f Dockerfile.gateway -t runova-website-monitoring-gateway apps/website/api
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 ARG VERSION=4.0.0
 ARG SOURCE_REVISION=
@@ -19,7 +19,7 @@ COPY src/Runova.Monitoring.Gateway/ src/Runova.Monitoring.Gateway/
 RUN dotnet publish src/Runova.Monitoring.Gateway/Runova.Monitoring.Gateway.csproj --no-restore --configuration Release \
     --output /app -p:UseAppHost=false -p:Version=${VERSION} -p:SourceRevisionId=${SOURCE_REVISION}
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled AS runtime
 ARG VERSION=4.0.0
 WORKDIR /app
 COPY --from=build /app ./

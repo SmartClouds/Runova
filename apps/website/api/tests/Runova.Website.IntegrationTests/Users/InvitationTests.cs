@@ -144,7 +144,7 @@ public sealed class InvitationTests : IDisposable
     {
         var admin = await AdminClientAsync();
 
-        var response = await admin.SendAsync(HttpMethod.Post, Users, JsonDocument.Parse(json).RootElement);
+        var response = await admin.SendAsync(HttpMethod.Post, Users, JsonElement.Parse(json));
 
         var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), Users);
         Assert.True(problem.GetProperty("errors").TryGetProperty(field, out _));

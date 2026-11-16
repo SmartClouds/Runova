@@ -1,12 +1,12 @@
 {
-  "openapi": "3.1.1",
+  "openapi": "3.2.0",
   "info": {
     "title": "Runova Website API",
     "version": "v1"
   },
   "servers": [
     {
-      "url": "http://localhost/"
+      "url": "http://localhost"
     }
   ],
   "paths": {
@@ -74,6 +74,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -101,6 +111,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -307,6 +327,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -369,6 +399,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -401,6 +441,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -415,6 +465,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccountDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -452,6 +512,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -575,6 +645,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -630,6 +710,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -691,6 +781,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -719,6 +819,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QrSignInStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -763,6 +873,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1672,6 +1792,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1691,6 +1821,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1705,6 +1845,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TwoFactorSetupDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1745,6 +1895,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1772,6 +1932,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1804,6 +1974,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1843,6 +2023,16 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -3417,6 +3607,9 @@
               }
             }
           },
+          "304": {
+            "description": "Not Modified"
+          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -3426,9 +3619,6 @@
                 }
               }
             }
-          },
-          "304": {
-            "description": "Not Modified"
           }
         }
       },
@@ -3731,6 +3921,9 @@
               }
             }
           },
+          "304": {
+            "description": "Not Modified"
+          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -3740,9 +3933,6 @@
                 }
               }
             }
-          },
-          "304": {
-            "description": "Not Modified"
           }
         }
       },
@@ -4300,6 +4490,9 @@
               }
             }
           },
+          "304": {
+            "description": "Not Modified"
+          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -4309,9 +4502,6 @@
                 }
               }
             }
-          },
-          "304": {
-            "description": "Not Modified"
           }
         }
       }
@@ -4388,8 +4578,8 @@
           "required": true
         },
         "responses": {
-          "201": {
-            "description": "Created",
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -4398,8 +4588,8 @@
               }
             }
           },
-          "200": {
-            "description": "OK",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -6061,8 +6251,8 @@
           "required": true
         },
         "responses": {
-          "201": {
-            "description": "Created",
+          "200": {
+            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -6071,8 +6261,8 @@
               }
             }
           },
-          "200": {
-            "description": "OK",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -11217,6 +11407,45 @@
         },
         "additionalProperties": false
       },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ProjectFindingsDto": {
         "required": [
           "inventoryId",
@@ -13943,91 +14172,52 @@
   },
   "tags": [
     {
-      "name": "SessionEndpoints"
+      "name": "AccountEndpoints"
     },
     {
       "name": "AccountSessionEndpoints"
     },
     {
-      "name": "PasswordSetupEndpoints"
-    },
-    {
-      "name": "AccountEndpoints"
-    },
-    {
-      "name": "ExternalSignInEndpoints"
-    },
-    {
-      "name": "AnalyticsSettingsEndpoints"
-    },
-    {
-      "name": "DeviceTokenEndpoints"
-    },
-    {
-      "name": "QrSignInEndpoints"
-    },
-    {
-      "name": "TechnologyEndpoints"
-    },
-    {
-      "name": "PostEndpoints"
-    },
-    {
-      "name": "MediaEndpoints"
-    },
-    {
-      "name": "AuditEntryEndpoints"
-    },
-    {
-      "name": "ReportEndpoints"
+      "name": "AccountTypeEndpoints"
     },
     {
       "name": "AlertSettingsEndpoints"
     },
     {
-      "name": "NotificationEndpoints"
+      "name": "AnalyticsSettingsEndpoints"
     },
     {
-      "name": "NotificationSettingsEndpoints"
+      "name": "ApiClientEndpoints"
     },
     {
-      "name": "TelegramEndpoints"
-    },
-    {
-      "name": "PaymentSettingsEndpoints"
+      "name": "AuditEntryEndpoints"
     },
     {
       "name": "CheckoutEndpoints"
     },
     {
-      "name": "SubscriptionEndpoints"
+      "name": "CloudMonitorEndpoints"
     },
     {
-      "name": "MonitoringNodeEndpoints"
-    },
-    {
-      "name": "RemoteEndpoints"
-    },
-    {
-      "name": "RemoteAgentEndpoints"
-    },
-    {
-      "name": "MeEndpoints"
-    },
-    {
-      "name": "UserEndpoints"
-    },
-    {
-      "name": "SignInSettingsEndpoints"
-    },
-    {
-      "name": "SyncEndpoints"
+      "name": "DeviceTokenEndpoints"
     },
     {
       "name": "EncryptionEndpoints"
     },
     {
-      "name": "TeamEndpoints"
+      "name": "ExternalSignInEndpoints"
+    },
+    {
+      "name": "InventoryEndpoints"
+    },
+    {
+      "name": "MeEndpoints"
+    },
+    {
+      "name": "MediaEndpoints"
+    },
+    {
+      "name": "MonitoringNodeEndpoints"
     },
     {
       "name": "NewsEndpoints"
@@ -14036,22 +14226,61 @@
       "name": "NewsWriteEndpoints"
     },
     {
+      "name": "NotificationEndpoints"
+    },
+    {
+      "name": "NotificationSettingsEndpoints"
+    },
+    {
+      "name": "PasswordSetupEndpoints"
+    },
+    {
+      "name": "PaymentSettingsEndpoints"
+    },
+    {
+      "name": "PostEndpoints"
+    },
+    {
       "name": "PostWriteEndpoints"
     },
     {
-      "name": "ApiClientEndpoints"
+      "name": "QrSignInEndpoints"
     },
     {
       "name": "ReleaseEndpoints"
     },
     {
-      "name": "InventoryEndpoints"
+      "name": "RemoteAgentEndpoints"
     },
     {
-      "name": "AccountTypeEndpoints"
+      "name": "RemoteEndpoints"
     },
     {
-      "name": "CloudMonitorEndpoints"
+      "name": "ReportEndpoints"
+    },
+    {
+      "name": "SessionEndpoints"
+    },
+    {
+      "name": "SignInSettingsEndpoints"
+    },
+    {
+      "name": "SubscriptionEndpoints"
+    },
+    {
+      "name": "SyncEndpoints"
+    },
+    {
+      "name": "TeamEndpoints"
+    },
+    {
+      "name": "TechnologyEndpoints"
+    },
+    {
+      "name": "TelegramEndpoints"
+    },
+    {
+      "name": "UserEndpoints"
     }
   ]
 }
