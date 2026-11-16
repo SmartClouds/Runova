@@ -14,8 +14,8 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup Label="Contracts">
-    <PackageVersion Include="Tapper.Attributes" Version="1.14.0" />
-    <PackageVersion Include="TypedSignalR.Client.TypeScript.Attributes" Version="1.17.0" />
+    <PackageVersion Include="Tapper.Attributes" Version="1.15.1" />
+    <PackageVersion Include="TypedSignalR.Client.TypeScript.Attributes" Version="1.18.0" />
   </ItemGroup>
   <ItemGroup Label="Mapping">
     <!-- A source generator: mappers are plain code at build time, no reflection at run time. -->
@@ -23,7 +23,7 @@
   </ItemGroup>
   <ItemGroup Label="Docker">
     <!-- The Testcontainers fork of Docker.DotNet (Engine API 29), over the Unix socket. -->
-    <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
+    <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.4.1" />
   </ItemGroup>
   <ItemGroup Label="Backups">
     <!-- Server backups (E28): Hangfire runs the schedules and uploads, stored in its own SQLite file. -->
@@ -41,15 +41,15 @@
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <!-- Backup destinations: FTP and FTPS, and SFTP. -->
     <PackageVersion Include="FluentFTP" Version="55.1.0" />
-    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <PackageVersion Include="SSH.NET" Version="2026.0.1" />
     <!-- A Telegram user account over MTProto (Wiz0u, MIT), for backups sent in parts. -->
     <PackageVersion Include="WTelegramClient" Version="4.4.10" />
   </ItemGroup>
   <ItemGroup Label="Error reporting">
     <!-- Error reporting (E29): the core sends its warnings and errors to a Sentry project as OpenTelemetry
          logs over OTLP/HTTP. Sentry takes OTLP directly, so no Sentry SDK is needed. -->
-    <PackageVersion Include="OpenTelemetry" Version="1.20.1" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
   </ItemGroup>
   <ItemGroup Label="DevHost">
     <!-- Reads compose files for the DevHost's simulated docker compose. Never in the release. -->
@@ -60,7 +60,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
     <!-- Writes the TRX results file dotnet test asks for, at the platform version xunit.v3 brings. -->
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
-    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.3" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 </Project>

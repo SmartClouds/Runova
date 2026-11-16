@@ -319,7 +319,7 @@ internal static partial class DockerMapping
 
     private static bool IsBuiltIn(string name) => name is "bridge" or "host" or "none";
 
-    private static string[] Subnets(IPAM? ipam) => [.. (ipam?.Config ?? []).Select(config => config.Subnet).Where(subnet => !string.IsNullOrEmpty(subnet))];
+    private static string[] Subnets(IPAM? ipam) => [.. (ipam?.Config ?? []).Select(config => Blank(config.Subnet)).OfType<string>()];
 
     private static int? CgroupVersion(string? version) =>
         int.TryParse(version, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cgroup) ? cgroup : null;
