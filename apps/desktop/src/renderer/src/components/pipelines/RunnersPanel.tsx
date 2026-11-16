@@ -17,6 +17,7 @@ import {
   CircleInfo,
   GitBranch,
   Key,
+  Plus,
   RefreshCw,
   Server,
   TriangleAlert,
@@ -426,6 +427,7 @@ export function RunnersPanel({
   refreshCount = 0,
   onFocusRun,
   onGrantAccess,
+  onAddRunner,
 }: {
   /** The activity list, newest first. */
   runs: GithubActionsHistoryItem[];
@@ -436,6 +438,8 @@ export function RunnersPanel({
   refreshCount?: number;
   onFocusRun: (run: RunnerRunTarget) => void;
   onGrantAccess: (org: string) => void;
+  /** Opens the Add runner dialog. Without it the header has no add button. */
+  onAddRunner?: () => void;
 }): React.JSX.Element | null {
   const bodyId = useId();
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -615,11 +619,24 @@ export function RunnersPanel({
             />
           ) : null}
         </div>
+        {onAddRunner ? (
+          <SimpleTooltip label="Add another runner">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto shrink-0"
+              aria-label="Add another runner"
+              onClick={onAddRunner}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </SimpleTooltip>
+        ) : null}
         <SimpleTooltip label={collapsed ? 'Show runners' : 'Hide runners'}>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="ml-auto shrink-0"
+            className={cn('shrink-0', !onAddRunner && 'ml-auto')}
             aria-label={collapsed ? 'Show runners' : 'Hide runners'}
             aria-expanded={!collapsed}
             aria-controls={collapsed ? undefined : bodyId}

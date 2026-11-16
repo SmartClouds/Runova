@@ -3,7 +3,7 @@ title: Pipelines
 category: Ship
 order: 10
 summary: See every GitHub Actions run across all your projects in one list, stop or copy failures, and watch your self-hosted runners.
-keywords: pipelines, github actions, ci, cd, workflow, runs, build, failed, passed, runner, self-hosted, notifications, unread, gh cli, annotations, auto-fix, autofix, fix with ai, agent, commit, push
+keywords: pipelines, github actions, ci, cd, workflow, runs, build, failed, passed, runner, self-hosted, add runner, install runner, new server, notifications, unread, gh cli, annotations, auto-fix, autofix, fix with ai, agent, commit, push
 route: /pipelines
 ---
 
@@ -137,6 +137,28 @@ For organization runners, the panel can show "Live status for (org) runners need
 1. Click **Grant access**. A terminal titled "GitHub org access" opens with `gh auth refresh -h github.com -s admin:org` typed in. Press `Enter` and approve the new scope in your browser. You also need to be an admin of the org.
 2. Back in Runova, click **Check again** to ask GitHub for the runner list again.
 3. Click the X on the hint to hide it for that org.
+
+## Add a self-hosted runner with AI
+
+Click **Add runner** above the run list (or the **+** on the runners panel) to have the AI install a new GitHub Actions runner, on this computer or on a saved server.
+
+1. Pick **This computer** or **A saved server**. With more than one server saved, choose which one.
+2. Check the **Runner name**. It starts as this computer's name or the server's nickname, and it is the only thing you need to look at. Runova tells you when GitHub would refuse a name or a runner on the repo already has it.
+3. Click **Install with AI** (or press `Enter`).
+
+Everything else comes from the machine and your projects. Open **Details** to change any of it:
+
+- **Repository.** The repo you are filtering by, or the one with the newest run.
+- **AI.** The CLI you used last for an AI terminal task, or the AI provider from Settings.
+- **Approvals.** Whether you approve each command, only risky ones, or none.
+
+The runner keeps GitHub's default labels (self-hosted, the OS and the CPU), uses the newest runner release and is installed as a service, so it starts again after a reboot. It goes in `actions-runner/<name>` in your home folder.
+
+A terminal tab named after the runner opens and the AI works there step by step, the same way **Ask AI** does in any terminal. When it finishes, the runner shows up in the panel, linked to the machine it runs on.
+
+Runova asks GitHub for the registration token itself, so you need admin rights on the repo. The AI never sees the token. It writes a placeholder, Runova puts the real token in as the command is typed, and the screen, the AI and the task history only ever show the placeholder.
+
+On Windows, installing the service needs a terminal running as administrator. If yours is not, the AI stops and asks what to do.
 
 ## Notifications and the unread badge
 

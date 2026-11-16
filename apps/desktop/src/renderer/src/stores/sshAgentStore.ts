@@ -1,5 +1,6 @@
 import type { EffortLevel } from '@runova/core';
 import type {
+  InstallRunnerInput,
   SshAgentHistoryRun,
   SshAgentMode,
   SshAgentPhase,
@@ -87,7 +88,11 @@ export function isSshAgentWaitingOnUser(state: SshAgentSessionState | undefined)
   );
 }
 
-export async function startSshAgentTask(input: StartSshAgentTaskInput): Promise<void> {
+/** Shows the tab's task as starting and keeps the choices for next time, then asks main. */
+async function beginTask(
+  input: StartSshAgentTaskInput | InstallRunnerInput,
+  start: () => Promise<void>,
+): Promise<void> {
   const { sessionId, mode } = input;
   useSshAgentStore.setState((state) => ({
     lastMode: mode,
@@ -99,11 +104,20 @@ export async function startSshAgentTask(input: StartSshAgentTaskInput): Promise<
     sessions: { ...state.sessions, [sessionId]: { mode, phase: 'thinking', step: 0 } },
   }));
   try {
-    await window.runova.sshAgent.start(input);
+    await start();
   } catch (error) {
     useSshAgentStore.getState().clear(sessionId);
     throw error;
   }
+}
+
+export function startSshAgentTask(input: StartSshAgentTaskInput): Promise<void> {
+  return beginTask(input, () => window.runova.sshAgent.start(input));
+}
+
+/** Has the AI install a self-hosted runner in the tab (E103), shown like any terminal task. */
+export function startRunnerInstall(input: InstallRunnerInput): Promise<void> {
+  return beginTask(input, () => window.runova.sshAgent.installRunner(input));
 }
 
 /**

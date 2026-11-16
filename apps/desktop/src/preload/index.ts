@@ -239,6 +239,7 @@ import type {
   InstalledMcpServerRecord,
   InstalledSkillRecord,
   InstallFromSkillsShInput,
+  InstallRunnerInput,
   IpGeoInfo,
   KeepAwakeStatus,
   KillProcessResult,
@@ -291,6 +292,7 @@ import type {
   RemoveWorktreeInput,
   RenameBranchInput,
   ResolveConflictWithAiResult,
+  RunnerInstallDefaults,
   RunnerMachineLink,
   RunnerMachineStatsResult,
   RunProposal,
@@ -779,6 +781,12 @@ const sshAgent = {
   /** Raises a system notification for a run that is waiting on the user. */
   notifyWaiting: (sessionId: string, tabTitle: string): Promise<void> =>
     ipcRenderer.invoke(IPC.sshAgent.notifyWaiting, sessionId, tabTitle),
+  /**
+   * Has the AI install a self-hosted runner in a tab that was just opened. Main gets the token,
+   * waits for the tab to be live and starts the task; progress comes through onProgress.
+   */
+  installRunner: (input: InstallRunnerInput): Promise<void> =>
+    ipcRenderer.invoke(IPC.sshAgent.installRunner, input),
   onProgress: (callback: (progress: SshAgentProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SshAgentProgress): void =>
       callback(progress);
@@ -1905,6 +1913,9 @@ const pipelines = {
   /** CPU, memory and disk of the machine a runner was linked to. */
   runnerMachineStats: (link: RunnerMachineLink): Promise<RunnerMachineStatsResult> =>
     ipcRenderer.invoke(IPC.pipelines.runnerMachineStats, link),
+  /** This computer's runner name, OS and CPU, and the repos a new runner can go on. */
+  runnerDefaults: (): Promise<RunnerInstallDefaults> =>
+    ipcRenderer.invoke(IPC.pipelines.runnerDefaults),
 };
 
 /** The Deploy section: saved servers with their server core, installing it, and its health. */

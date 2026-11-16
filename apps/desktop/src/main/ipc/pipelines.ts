@@ -19,6 +19,7 @@ import type {
   GithubWorkflowDispatchRequest,
   GithubWorkflowRefsResult,
   ProjectPipelineStatus,
+  RunnerInstallDefaults,
   RunnerMachineLink,
   RunnerMachineStatsResult,
 } from '../../shared/apiTypes';
@@ -36,6 +37,7 @@ import {
   setProjectMutedActions,
 } from '../pipelines/githubActions';
 import { fetchRunnerStatus } from '../pipelines/githubRunners';
+import { runnerInstallDefaults } from '../pipelines/runnerInstall';
 import { readRunnerMachineStats } from '../pipelines/runnerMachineStats';
 import {
   forgetWatchedWorkflows,
@@ -145,6 +147,11 @@ export function registerPipelineHandlers(): void {
         fresh: input?.fresh === true,
       });
     },
+  );
+
+  ipcMain.handle(
+    IPC.pipelines.runnerDefaults,
+    (): Promise<RunnerInstallDefaults> => runnerInstallDefaults(),
   );
 
   ipcMain.handle(

@@ -120,11 +120,17 @@ const full = ok({ runners: [offline, idleB, seen, busy, idleA] });
 function renderPanel(answer: unknown, runs: GithubActionsHistoryItem[] = RUNS) {
   const onFocusRun = vi.fn();
   const onGrantAccess = vi.fn();
+  const onAddRunner = vi.fn();
   const view = renderWithProviders(
-    <RunnersPanel runs={runs} onFocusRun={onFocusRun} onGrantAccess={onGrantAccess} />,
+    <RunnersPanel
+      runs={runs}
+      onFocusRun={onFocusRun}
+      onGrantAccess={onGrantAccess}
+      onAddRunner={onAddRunner}
+    />,
     { bridge: { 'pipelines.runners': typeof answer === 'function' ? answer : async () => answer } },
   );
-  return { ...view, onFocusRun, onGrantAccess };
+  return { ...view, onFocusRun, onGrantAccess, onAddRunner };
 }
 
 function panel(): HTMLElement {
@@ -220,6 +226,13 @@ describe('RunnersPanel tiles', () => {
     expect(within(region).getByText('1 busy')).toBeInTheDocument();
     expect(within(region).getByText('1 offline')).toBeInTheDocument();
     expect(within(region).getByText('1 seen')).toBeInTheDocument();
+  });
+
+  it('offers to add another runner from the header', async () => {
+    const view = await renderLoaded(full);
+    const button = within(panel()).getByRole('button', { name: 'Add another runner' });
+    await view.user.click(button);
+    expect(view.onAddRunner).toHaveBeenCalledTimes(1);
   });
 
   it('leaves out every count that is zero', async () => {

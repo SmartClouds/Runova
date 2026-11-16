@@ -216,18 +216,44 @@ function previousBlock(run: RunState): string {
   return `\n\n${run.previousContext}\nThat is background. The task above is what to do now.`;
 }
 
+/** The run's guide as a block for the end of the task, or nothing. */
+function guideBlock(run: RunState): string {
+  return run.guide ? `\n\n${run.guide}` : '';
+}
+
+/** `text` with every secret value swapped back to its placeholder. */
+function maskSecrets(run: RunState, text: string): string {
+  let masked = text;
+  for (const [placeholder, value] of run.secrets) masked = masked.split(value).join(placeholder);
+  return masked;
+}
+
+/** `command` with every placeholder swapped for its value, just before it is typed. */
+function revealSecrets(run: RunState, command: string): string {
+  let revealed = command;
+  for (const [placeholder, value] of run.secrets) {
+    revealed = revealed.split(placeholder).join(value);
+  }
+  return revealed;
+}
+
 function buildPrompt(run: RunState): string {
   const tail = transcriptTail(run.transcript);
   if (run.buildPrompt) {
     return run.buildPrompt({
-      task: run.prompt + run.attachments.text + previousBlock(run) + followUpBlock(run),
+      task:
+        run.prompt +
+        run.attachments.text +
+        guideBlock(run) +
+        previousBlock(run) +
+        followUpBlock(run),
       transcript: tail,
       viaCli: run.cliId !== null,
     });
   }
   return `${run.cliId ? cliPreamble(run.target) : ''}You are operating ${run.target.description}, on behalf of a user who is watching every command execute live in their terminal.
 
-User's task: "${run.prompt}"${run.attachments.text}${previousBlock(run)}${followUpBlock(run)}
+User's task: "${run.prompt}"${run.attachments.text}${guideBlock(run)}${previousBlock(run)}${followUpBlock(run)}
 
 Reply with EXACTLY one of these three forms, and nothing else:
 RUN: <a single shell command>
@@ -319,6 +345,13 @@ interface RunState {
   stepLimit: number;
   /** FINISHED may span several lines, so the AI can answer a question in full. */
   longAnswers: boolean;
+  /**
+   * Placeholder and value pairs. The AI only ever writes and reads the placeholder; the value is
+   * put in as a command is typed and taken back out of everything the AI, the bar or history see.
+   */
+  secrets: readonly (readonly [string, string])[];
+  /** Instructions that follow the task in every prompt but stay out of the history. */
+  guide: string;
   history: SshAgentHistoryRun;
   /** What the run last reported, so a notification can say what it is waiting for. */
   lastProgress: SshAgentProgress | null;
@@ -630,7 +663,9 @@ function runCommand(run: RunState, target: ShellTarget, command: string): Promis
     const id = randomUUID().replace(/-/g, '');
     const marked = target.commandLine(command, id);
     const { start } = marked;
-    const display = start ? new CommandDisplay(target, command, { ...marked, start }, id) : null;
+    // The screen shows the command as the AI wrote it, so a secret typed into it stays hidden.
+    const shown = maskSecrets(run, command);
+    const display = start ? new CommandDisplay(target, shown, { ...marked, start }, id) : null;
     let buffer = '';
     let settled = false;
     /** Output before this index has already been checked for a password prompt. */
@@ -668,7 +703,7 @@ function runCommand(run: RunState, target: ShellTarget, command: string): Promis
       promptScanFrom = buffer.length;
       // Waiting on the user isn't the command hanging, so the timeout starts over afterwards.
       clearTimeout(timer);
-      void handlePasswordPrompt(run, target, command).finally(() => {
+      void handlePasswordPrompt(run, target, shown).finally(() => {
         askingForPassword = false;
         promptScanFrom = buffer.length;
         if (!settled) timer = startTimer();
@@ -703,7 +738,7 @@ function runCommand(run: RunState, target: ShellTarget, command: string): Promis
 
 function appendCompletedCommand(run: RunState, command: string, result: CommandResult): void {
   // Aliases like `grep --color=auto` color the output, and the AI only needs the plain text.
-  const text = stripAnsi(result.output).replace(/\r\n?/g, '\n');
+  const text = maskSecrets(run, stripAnsi(result.output).replace(/\r\n?/g, '\n'));
   const output = result.timedOut
     ? `${text}\n[No output captured within the timeout; the command may still be running]`
     : text;
@@ -891,7 +926,11 @@ async function runLoop(run: RunState): Promise<void> {
       emit(run, 'running', { command });
       let result: CommandResult;
       try {
-        result = await run.executor({ signal: run.controller.signal }, command, approved);
+        result = await run.executor(
+          { signal: run.controller.signal },
+          revealSecrets(run, command),
+          approved,
+        );
       } catch (error) {
         if (!(error instanceof ApprovalRequiredError) || run.aborted) throw error;
         // The target would not run it unattended: the user decides, as in any approval.
@@ -900,7 +939,11 @@ async function runLoop(run: RunState): Promise<void> {
           continue;
         }
         emit(run, 'running', { command });
-        result = await run.executor({ signal: run.controller.signal }, command, true);
+        result = await run.executor(
+          { signal: run.controller.signal },
+          revealSecrets(run, command),
+          true,
+        );
       }
       if (run.aborted) return;
       appendCompletedCommand(run, command, result);
@@ -908,6 +951,11 @@ async function runLoop(run: RunState): Promise<void> {
   } finally {
     cleanupRun(run);
   }
+}
+
+/** Whether a tab is live enough for a task: its SSH session connected, or its shell attached. */
+export function isShellSessionReady(sessionId: string, target: 'ssh' | 'local'): boolean {
+  return target === 'local' ? hasAttachedTerminalSession(sessionId) : hasSshSession(sessionId);
 }
 
 /** True while an AI task is actively running in this terminal session. */
@@ -920,9 +968,18 @@ export function cliRunArgs(input: StartSshAgentTaskInput): string[] {
   return runArgsFor(input.cliId, input.modelId, input.effort);
 }
 
+/** What a feature that starts a terminal task can add to it (E103's runner install). */
+export interface ShellTaskExtras {
+  /** Placeholder to value. See `RunState.secrets`. */
+  secrets?: Record<string, string>;
+  /** Instructions for every prompt that the history leaves out. */
+  guide?: string;
+}
+
 export function startSshTask(
   input: StartSshAgentTaskInput,
   listener: (progress: SshAgentProgress) => void,
+  extras: ShellTaskExtras = {},
 ): void {
   const { sessionId } = input;
   if (runs.has(sessionId)) throw new Error('An AI task is already running in this session.');
@@ -957,6 +1014,7 @@ export function startSshTask(
       },
       cliId: input.cliId ?? null,
       runArgs: cliRunArgs(input),
+      ...extras,
     },
     listener,
   );
@@ -999,6 +1057,10 @@ export interface AgentTaskSpec {
   previousContext?: string;
   /** FINISHED may span several lines (Markdown), for a run that answers questions. */
   longAnswers?: boolean;
+  /** Placeholder to value, for a secret the AI must never see. See `RunState.secrets`. */
+  secrets?: Record<string, string>;
+  /** Instructions for every prompt that the history leaves out. */
+  guide?: string;
   /** Where a run that is not a terminal's is kept: saved under this server, in its own scope. */
   history?: { serverId: string; scope: 'deploy'; app?: SshAgentHistoryRun['app'] };
 }
@@ -1052,6 +1114,9 @@ export function startAgentTask(
     pendingContinue: null,
     stepLimit: MAX_STEPS,
     longAnswers: spec.longAnswers ?? false,
+    // A short value would turn up inside ordinary output and mask the wrong text.
+    secrets: Object.entries(spec.secrets ?? {}).filter(([, value]) => value.length >= 8),
+    guide: spec.guide?.trim() ?? '',
     // Read now: the session forgets its server as soon as the tab closes.
     history: startHistory(
       sessionId,

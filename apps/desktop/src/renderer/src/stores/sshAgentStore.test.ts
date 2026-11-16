@@ -5,6 +5,7 @@ import {
   continueSshAgentTaskFrom,
   initSshAgentStatus,
   sendSshAgentMessage,
+  startRunnerInstall,
   useSshAgentStore,
 } from './sshAgentStore';
 
@@ -108,5 +109,35 @@ describe('continueSshAgentTaskFrom', () => {
     expect(bridge.$fn('sshAgent.start')).toHaveBeenCalledWith(
       expect.objectContaining({ target: 'local', mode: 'approve-risky', cliId: null }),
     );
+  });
+});
+
+describe('startRunnerInstall', () => {
+  const input = {
+    sessionId: 't1',
+    target: 'local' as const,
+    name: 'build-box',
+    repo: 'acme/web',
+    mode: 'approve-risky' as const,
+    cliId: 'claude-code',
+    modelId: 'opus',
+    effort: null,
+  };
+
+  it('shows the tab as thinking, remembers the AI choice and asks main to install', async () => {
+    await startRunnerInstall(input);
+    expect(bridge.$fn('sshAgent.installRunner')).toHaveBeenCalledWith(input);
+    const state = useSshAgentStore.getState();
+    expect(state.sessions.t1).toMatchObject({ phase: 'thinking', mode: 'approve-risky' });
+    expect(state.lastMode).toBe('approve-risky');
+    expect(state.lastAi).toEqual({ cliId: 'claude-code', modelId: 'opus', effort: null });
+  });
+
+  it('clears the tab again when main refuses, and lets the error through', async () => {
+    bridge.$set('sshAgent.installRunner', async () => {
+      throw new Error('no admin rights');
+    });
+    await expect(startRunnerInstall(input)).rejects.toThrow('no admin rights');
+    expect(useSshAgentStore.getState().sessions.t1).toBeUndefined();
   });
 });

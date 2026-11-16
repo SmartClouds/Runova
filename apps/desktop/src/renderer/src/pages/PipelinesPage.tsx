@@ -17,10 +17,12 @@ import {
   Play,
   RefreshCw,
   Search,
+  Server,
   TriangleAlert,
   X,
 } from '@/components/icons';
 import { Chip, type ChipTone, SECTION_HEADING } from '@/components/pageKit';
+import { AddRunnerDialog } from '@/components/pipelines/AddRunnerDialog';
 import { AutoFixControl } from '@/components/pipelines/autoFix/AutoFixControl';
 import { isAutoFixActive } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
@@ -479,6 +481,7 @@ export default function PipelinesPage(): React.JSX.Element {
   const focusedRunId = focus?.runId ?? null;
   /** Bumped by the Refresh button, which tells the runner panel to look again too. */
   const [runnersRefresh, setRunnersRefresh] = useState(0);
+  const [addRunnerOpen, setAddRunnerOpen] = useState(false);
   const rowNodes = useRef(new Map<number, HTMLLIElement>());
   const [sidebarWidth, setSidebarWidth] = usePanelWidth('pipelinesFilters');
   const reduceMotion = useReducedMotion();
@@ -737,6 +740,16 @@ export default function PipelinesPage(): React.JSX.Element {
         </Chip>
       ) : null}
       <div className="ml-auto flex items-center gap-1">
+        {connected ? (
+          <SimpleTooltip
+            label="Have the AI install a self-hosted runner on this computer or a saved server"
+            className="max-w-xs"
+          >
+            <Button variant="soft" size="sm" onClick={() => setAddRunnerOpen(true)}>
+              <Server className="h-3.5 w-3.5" /> Add runner
+            </Button>
+          </SimpleTooltip>
+        ) : null}
         {unreadCount > 0 ? (
           <Button
             variant="soft"
@@ -837,8 +850,15 @@ export default function PipelinesPage(): React.JSX.Element {
           refreshCount={runnersRefresh}
           onFocusRun={focusRun}
           onGrantAccess={handleGrantAccess}
+          onAddRunner={() => setAddRunnerOpen(true)}
         />
       ) : null}
+      <AddRunnerDialog
+        open={addRunnerOpen}
+        onOpenChange={setAddRunnerOpen}
+        // The repo being looked at, or the one with the newest run.
+        preferredRepo={repo || runs[0]?.repo}
+      />
 
       <div className="flex min-h-0 flex-1">
         {showFilters ? (

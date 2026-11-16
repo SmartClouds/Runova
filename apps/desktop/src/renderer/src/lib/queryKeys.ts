@@ -165,6 +165,8 @@ export const queryKeys = {
   githubRunners: ['github-runners'] as const,
   /** CPU, memory and disk of a runner's machine: `local`, or `ssh:<server id>`. */
   runnerMachineStats: (machine: string) => ['runner-machine-stats', machine] as const,
+  /** What a new runner gets from this computer and the projects (E103). */
+  runnerInstallDefaults: ['runner-install-defaults'] as const,
   /** Annotations one finished Actions run left behind. */
   runAnnotations: (repo: string, runId: number, attempt?: number) =>
     ['run-annotations', repo, runId, attempt] as const,

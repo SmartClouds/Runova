@@ -227,11 +227,41 @@ describe('PipelinesPage when there is nothing to show', () => {
 
     await screen.findByRole('button', { name: 'gh auth login' });
     expect(screen.queryByRole('region', { name: 'Self-hosted runners' })).toBeNull();
+    // Adding a runner needs GitHub too, so the button waits for it.
+    expect(screen.queryByRole('button', { name: /Add runner/ })).toBeNull();
   });
 });
 
 describe('PipelinesPage run list', () => {
   const withRuns = { 'pipelines.dashboardActivity': async () => activity() };
+
+  it('opens the Add runner dialog on the repo of the newest run, even with no runners yet', async () => {
+    const { user } = renderPage({
+      ...withRuns,
+      'pipelines.runners': async () => ({ ok: true, runners: [], waiting: [], hiddenOrgs: [] }),
+      'pipelines.runnerDefaults': {
+        name: 'desktop-42',
+        osLabel: 'Linux',
+        arch: 'x64',
+        repos: [
+          { owner: 'acme', repo: 'borealis', projectName: 'Borealis' },
+          { owner: 'acme', repo: 'aurora', projectName: 'Aurora' },
+        ],
+      },
+    });
+    await screen.findByText('Tighten the retry loop');
+    expect(screen.queryByRole('region', { name: 'Self-hosted runners' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Add runner/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Add a self-hosted runner' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('textbox', { name: 'Runner name' })).toHaveValue(
+        'desktop-42',
+      ),
+    );
+    expect(within(dialog).getByText(/acme\/aurora/)).toBeTruthy();
+  });
 
   it('lists every run with its repo, workflow, branch and outcome', async () => {
     renderPage(withRuns);

@@ -3618,6 +3618,35 @@ export type RunnerMachineStatsResult =
 
 export type { RunnerMachineLink };
 
+/** What the Add runner dialog starts from (E103). Nothing in it is secret. */
+export interface RunnerInstallDefaults {
+  /** This computer's host name, turned into a runner name. */
+  name: string;
+  /** `Windows`, `macOS` or `Linux`. */
+  osLabel: string;
+  /** `x64`, `arm64` and so on. */
+  arch: string;
+  /** The projects' GitHub repos, any of which can get the runner. */
+  repos: { owner: string; repo: string; projectName: string }[];
+}
+
+/**
+ * Has the terminal AI install and register a self-hosted runner in a tab that was just opened
+ * (E103). Main gets the registration token itself; it never travels over IPC.
+ */
+export interface InstallRunnerInput {
+  /** The terminal tab the AI works in: a local shell or an SSH session. */
+  sessionId: string;
+  target: 'ssh' | 'local';
+  name: string;
+  /** `owner/name`. */
+  repo: string;
+  mode: SshAgentMode;
+  cliId?: string | null;
+  modelId?: string | null;
+  effort?: EffortLevel | null;
+}
+
 export interface GithubActionsRunErrorInput {
   repo: string;
   runId: number;

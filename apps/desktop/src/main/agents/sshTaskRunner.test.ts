@@ -648,3 +648,68 @@ describe('AI task in a local terminal', () => {
     ).not.toContain('local-3');
   });
 });
+
+describe('a task that carries a secret', () => {
+  const TOKEN = 'tok-REAL-123';
+  const PLACEHOLDER = '{{RUNOVA_RUNNER_TOKEN}}';
+
+  function startWithSecret(sessionId: string, replies: string[]): SshAgentProgress[] {
+    fake.aiReplies.push(...replies);
+    const progress: SshAgentProgress[] = [];
+    startSshTask(
+      { sessionId, prompt: 'install a runner', mode: 'autonomous', target: 'ssh' },
+      (p) => progress.push(p),
+      { secrets: { [PLACEHOLDER]: TOKEN }, guide: 'Write the placeholder where the token goes.' },
+    );
+    return progress;
+  }
+
+  it('types the real value into the shell, but the screen shows the placeholder', async () => {
+    const { sessionId, screen } = await openSshTab();
+    fake.handlers[`./config.sh --token ${TOKEN}`] = ({ print }) => {
+      print('Runner successfully added\r\n');
+      return 0;
+    };
+    const progress = startWithSecret(sessionId, [
+      `RUN: ./config.sh --token ${PLACEHOLDER}`,
+      'FINISHED: done',
+    ]);
+    await waitForPhase(progress, 'finished');
+
+    expect(fake.shells.get(sessionId)?.ran).toContain(`./config.sh --token ${TOKEN}`);
+    const text = await screen.text();
+    expect(text).toContain(`${PROMPT}./config.sh --token ${PLACEHOLDER}`);
+    expect(text).not.toContain(TOKEN);
+  });
+
+  it('keeps the value out of every prompt, progress event and the history', async () => {
+    const { sessionId } = await openSshTab();
+    fake.handlers[`./config.sh --token ${TOKEN}`] = ({ print }) => {
+      print(`Using token ${TOKEN}\r\n`);
+      return 0;
+    };
+    const progress = startWithSecret(sessionId, [
+      `RUN: ./config.sh --token ${PLACEHOLDER}`,
+      'FINISHED: done',
+    ]);
+    await waitForPhase(progress, 'finished');
+
+    expect(fake.aiPrompts.join('\n')).not.toContain(TOKEN);
+    expect(fake.aiPrompts[1]).toContain(`Using token ${PLACEHOLDER}`);
+    expect(JSON.stringify(progress)).not.toContain(TOKEN);
+    expect(JSON.stringify(getSshTaskHistory(sessionId))).not.toContain(TOKEN);
+  });
+
+  it('puts the guide in every prompt but keeps the history to the task', async () => {
+    const { sessionId } = await openSshTab();
+    const progress = startWithSecret(sessionId, ['RUN: cat /etc/os-release', 'FINISHED: done']);
+    await waitForPhase(progress, 'finished');
+
+    expect(fake.aiPrompts).toHaveLength(2);
+    for (const prompt of fake.aiPrompts) {
+      expect(prompt).toContain('Write the placeholder where the token goes.');
+    }
+    const [run] = getSshTaskHistory(sessionId);
+    expect(run.prompt).toBe('install a runner');
+  });
+});

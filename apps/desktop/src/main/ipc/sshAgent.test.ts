@@ -34,6 +34,13 @@ const runner = vi.hoisted(() => ({
 
 vi.mock('../agents/sshTaskRunner', () => runner);
 
+const runnerInstall = vi.hoisted(() => ({
+  startRunnerInstall: vi.fn(
+    async (_input: unknown, _listener: (progress: SshAgentProgress) => void) => undefined,
+  ),
+}));
+vi.mock('../pipelines/runnerInstallTask', () => runnerInstall);
+
 useTempUserData({ home: false });
 expectChannelsCovered(IPC.sshAgent, [
   // Main to renderer push, with no handler of its own.
@@ -42,6 +49,7 @@ expectChannelsCovered(IPC.sshAgent, [
 
 beforeEach(async () => {
   for (const fn of Object.values(runner)) fn.mockClear();
+  runnerInstall.startRunnerInstall.mockClear();
   await loadIpc(
     () => import('./sshAgent'),
     (module) => module.registerSshAgentHandlers(),
@@ -182,5 +190,36 @@ describe('messaging a running task', () => {
   it('returns false when the task is already over, so the window keeps the text', async () => {
     runner.sendSshTaskMessage.mockReturnValueOnce(false);
     expect(await invoke(IPC.sshAgent.sendMessage, 'ssh-1', 'too late')).toBe(false);
+  });
+});
+
+describe('installing a runner', () => {
+  const installInput = {
+    sessionId: 'tab-9',
+    target: 'local' as const,
+    name: 'build-box',
+    repo: 'acme/web',
+    mode: 'approve-risky' as const,
+  };
+
+  it('hands the request to the runner install and sends its progress to the window', async () => {
+    const owner = fakeWebContents();
+    await invokeFrom(owner, IPC.sshAgent.installRunner, installInput);
+    expect(runnerInstall.startRunnerInstall).toHaveBeenCalledWith(
+      installInput,
+      expect.any(Function),
+    );
+
+    const report = runnerInstall.startRunnerInstall.mock.calls.at(-1)?.[1];
+    report?.({ sessionId: 'tab-9', phase: 'thinking', step: 1 });
+    expect(owner.sentOn(IPC.sshAgent.onProgress)).toHaveLength(1);
+  });
+
+  it('passes a refusal back and forgets the window', async () => {
+    runnerInstall.startRunnerInstall.mockRejectedValueOnce(new Error('no admin rights'));
+    const owner = fakeWebContents();
+    await expect(invokeFrom(owner, IPC.sshAgent.installRunner, installInput)).rejects.toThrow(
+      'no admin rights',
+    );
   });
 });

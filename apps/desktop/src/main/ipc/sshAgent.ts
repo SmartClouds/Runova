@@ -1,5 +1,6 @@
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from 'electron';
 import type {
+  InstallRunnerInput,
   SshAgentHistoryRun,
   SshAgentProgress,
   StartSshAgentTaskInput,
@@ -20,6 +21,7 @@ import {
   startSshTask,
   stopSshTask,
 } from '../agents/sshTaskRunner';
+import { startRunnerInstall } from '../pipelines/runnerInstallTask';
 import { sendToContents } from './send';
 import { onSshServerRemoved } from './ssh';
 
@@ -46,6 +48,19 @@ export function registerSshAgentHandlers(): void {
       if (input.continueFromRunId) await ensureSshHistoryRestored();
       owners.set(input.sessionId, event.sender);
       startSshTask(input, forwardProgress);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.sshAgent.installRunner,
+    async (event: IpcMainInvokeEvent, input: InstallRunnerInput): Promise<void> => {
+      owners.set(input.sessionId, event.sender);
+      try {
+        await startRunnerInstall(input, forwardProgress);
+      } catch (error) {
+        owners.delete(input.sessionId);
+        throw error;
+      }
     },
   );
 

@@ -266,6 +266,8 @@ export const IPC = {
     serverHistory: 'sshAgent:serverHistory',
     clearServerHistory: 'sshAgent:clearServerHistory',
     notifyWaiting: 'sshAgent:notifyWaiting',
+    /** (InstallRunnerInput) -> void: the AI installs a self-hosted runner in a new tab (E103). */
+    installRunner: 'sshAgent:installRunner',
     // main -> renderer: the task's status changed (thinking, proposed a command, running it, ...)
     onProgress: 'sshAgent:onProgress',
   },
@@ -1347,6 +1349,8 @@ export const IPC = {
     runners: 'pipelines:runners',
     /** (RunnerMachineLink) -> RunnerMachineStatsResult: CPU, memory and disk of a runner's machine. */
     runnerMachineStats: 'pipelines:runnerMachineStats',
+    /** () -> RunnerInstallDefaults: what the Add runner dialog starts from (E103). */
+    runnerDefaults: 'pipelines:runnerDefaults',
   },
   /** CI auto-fix: an agent fixes a failed run, Runova commits, pushes and follows the next run. */
   ciAutoFix: {
