@@ -19,7 +19,7 @@ android {
     defaultConfig {
         applicationId = "com.runovahq.app"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = (findProperty("appVersionCode") as String?)?.toInt() ?: 1
         versionName = (findProperty("appVersionName") as String?) ?: "4.0.0"
 
@@ -88,23 +88,23 @@ dependencies {
     implementation(composeBom)
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.camera:camera-camera2:1.5.0")
-    implementation("androidx.camera:camera-lifecycle:1.5.0")
-    implementation("androidx.camera:camera-view:1.5.0")
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("com.google.firebase:firebase-messaging:24.1.0")
-    implementation("net.java.dev.jna:jna:5.17.0@aar")
+    implementation("androidx.camera:camera-camera2:1.6.2")
+    implementation("androidx.camera:camera-lifecycle:1.6.2")
+    implementation("androidx.camera:camera-view:1.6.2")
+    implementation("com.google.zxing:core:3.5.4")
+    implementation("com.google.firebase:firebase-messaging:26.0.2")
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
 
     testImplementation(composeBom)
-    testImplementation("net.java.dev.jna:jna:5.17.0")
+    testImplementation("net.java.dev.jna:jna:5.19.1")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.test.ext:junit:1.3.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
-    testImplementation("org.robolectric:robolectric:4.16")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.78.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.78.0")
+    testImplementation("org.robolectric:robolectric:4.18")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.79.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.79.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 

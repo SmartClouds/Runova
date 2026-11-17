@@ -108,6 +108,8 @@ Work is test-first: every epic starts with failing tests.
 
 - The old app's offline LAN mode is gone. QR pairing is dropped, so the phone needs internet for
   signaling even on the same network as the computer. ICE still picks the direct LAN path for data.
+  From Android 17 that path needs the local network permission, which the app asks for on connect.
+  Without it the phone uses the relay.
 - Device features need the computer online with Runova running. Agent-only computers offer the
   remote screen only.
 - No TURN, by design. Many mobile networks land on the relay, which is fine for RPC and terminals;

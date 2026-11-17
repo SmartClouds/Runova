@@ -1,6 +1,7 @@
 package com.runovahq.app
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +9,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +68,11 @@ class MainActivity : FragmentActivity(), ViewListener {
     private lateinit var core: RunovaCore
     private lateinit var engine: Engine
     private var lastBiometric = 0uL
+    private var pendingConnect: Long? = null
+    private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        pendingConnect?.let { core.connect(it) }
+        pendingConnect = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,7 +86,7 @@ class MainActivity : FragmentActivity(), ViewListener {
         val intents = AppIntents(
             signIn = ::openSignIn,
             refresh = { core.refresh() },
-            connect = { core.connect(it) },
+            connect = ::connect,
             disconnect = { core.disconnect() },
             signOut = { core.signOut() },
             openSection = { core.openSection(it) },
@@ -423,6 +430,21 @@ class MainActivity : FragmentActivity(), ViewListener {
         super.onNewIntent(intent)
         handleCallback(intent)
         handlePushTap(intent)
+    }
+
+    /**
+     * Android 17 blocks traffic to the local network until the user allows it. Without it ICE
+     * still connects, only never over the direct LAN path, so the answer doesn't stop the connect.
+     */
+    private fun connect(systemId: Long) {
+        if (Build.VERSION.SDK_INT < 37 ||
+            checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
+        ) {
+            core.connect(systemId)
+            return
+        }
+        pendingConnect = systemId
+        askLocalNetwork.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
     }
 
     /** Asks the OS for a push token. Does nothing until the app is built with a Firebase project. */
