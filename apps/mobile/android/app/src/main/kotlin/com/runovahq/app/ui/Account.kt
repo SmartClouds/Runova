@@ -114,6 +114,10 @@ fun StepUpOverlay(stepUp: StepUpView, intents: AccountIntents) {
 fun AccountTab(view: AppView, intents: AppIntents) {
     val account = view.account
     val team = account.team
+    if (view.passcode.open) {
+        PasscodeSettings(view.passcode, intents.passcode)
+        return
+    }
     if (team != null) {
         TeamScreen(team, intents.account)
         return
@@ -123,7 +127,7 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         if (profile == null) {
             LoadingRows()
         } else {
-            AccountList(profile, account, view.encryption, intents)
+            AccountList(profile, account, view.encryption, view.lock.enabled, intents)
         }
     }
 }
@@ -151,9 +155,27 @@ private fun EncryptionCard(screen: EncryptionScreen, intents: AccountIntents) {
 }
 
 @Composable
-private fun AccountList(profile: ProfileView, account: AccountScreen, encryption: EncryptionScreen?, intents: AppIntents) {
+private fun AccountList(
+    profile: ProfileView,
+    account: AccountScreen,
+    encryption: EncryptionScreen?,
+    lockEnabled: Boolean,
+    intents: AppIntents,
+) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item(key = "profile") { ProfileCard(profile) }
+        heading("Security")
+        item(key = "passcode") {
+            RunovaListRow(
+                title = "Passcode lock",
+                detail = "Ask for a passcode when Runova opens",
+                icon = RunovaIcons.Lock,
+                onClick = intents.passcode.open,
+                trailing = {
+                    if (lockEnabled) RunovaBadge("On", BadgeTone.Success, dot = true) else RunovaBadge("Off")
+                },
+            )
+        }
         if (encryption != null) {
             heading("End-to-end encryption")
             item(key = "encryption") { EncryptionCard(encryption, intents.account) }

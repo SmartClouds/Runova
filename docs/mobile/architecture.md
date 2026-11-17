@@ -88,6 +88,12 @@ The identity seed is wrapped by Android Keystore or iOS Keychain. TLS only, no c
 screens block screenshots and hide in the app switcher. Vault reveal needs biometrics on the phone
 and is audited on the computer. The host's audit log is visible on the desktop.
 
+An optional app lock (E106) covers the whole app with a passcode or password, kept as an scrypt
+hash in the secure store. Biometrics can open it instead, with biometrics only (never the phone's
+PIN), and stop being trusted when a face or finger is added. Wrong codes earn growing waits that
+survive a restart. While a passcode is set the app hides in the app switcher, and while locked
+nothing behind the lock is drawn.
+
 ## Tests
 
 Work is test-first: every epic starts with failing tests.

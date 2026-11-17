@@ -4,6 +4,14 @@ import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.AutoFixSessionView
+import uniffi.runova_ffi.AutoLock
+import uniffi.runova_ffi.AutoLockChoice
+import uniffi.runova_ffi.BiometricKind
+import uniffi.runova_ffi.LockScreen
+import uniffi.runova_ffi.PasscodeEntryView
+import uniffi.runova_ffi.PasscodeKind
+import uniffi.runova_ffi.PasscodeSettingsScreen
+import uniffi.runova_ffi.PasscodeStep
 import uniffi.runova_ffi.PromptsScreen
 import uniffi.runova_ffi.ConfirmView
 import uniffi.runova_ffi.ConnectionView
@@ -40,6 +48,68 @@ val emptyPipelines = PipelinesScreen(null, false, null, null, null)
 val emptyAccount = AccountScreen(null, false, emptyList(), emptyList(), emptyList(), emptyList(), null, null)
 val emptyNotifications = NotificationsScreen(emptyList(), 0u, false, emptyList(), false, null)
 val emptyVault = VaultScreen(VaultLockState.UNKNOWN, false, false, false, null, emptyList(), null, null, null)
+
+/** The keypad as the core sends it: `filled` of `kind`'s dots, and what to say above them. */
+fun entry(
+    kind: PasscodeKind = PasscodeKind.PIN4,
+    filled: Int = 0,
+    title: String = "Enter your passcode",
+    error: String? = null,
+    shake: Long = 0,
+    waitSeconds: Int = 0,
+) = PasscodeEntryView(
+    kind = kind,
+    length = when (kind) {
+        PasscodeKind.PIN4 -> 4u
+        PasscodeKind.PIN6 -> 6u
+        PasscodeKind.PASSWORD -> 0u
+    },
+    filled = filled.toUByte(),
+    title = title,
+    error = error,
+    shake = shake.toULong(),
+    busy = false,
+    waitSeconds = waitSeconds.toUInt(),
+)
+
+val noLock = LockScreen(false, false, entry(), null, BiometricKind.NONE, null, false)
+
+fun locked(
+    entry: PasscodeEntryView = entry(),
+    biometricLabel: String? = null,
+    biometricKind: BiometricKind = BiometricKind.NONE,
+    confirmForgot: Boolean = false,
+) = LockScreen(true, true, entry, biometricLabel, biometricKind, null, confirmForgot)
+
+private val autoLockLabels = listOf(
+    AutoLock.IMMEDIATELY to "Right away",
+    AutoLock.ONE_MINUTE to "After 1 minute",
+    AutoLock.FIVE_MINUTES to "After 5 minutes",
+    AutoLock.ONE_HOUR to "After 1 hour",
+    AutoLock.FIVE_HOURS to "After 5 hours",
+)
+
+fun passcodeScreen(
+    open: Boolean = true,
+    step: PasscodeStep = PasscodeStep.OFF,
+    entry: PasscodeEntryView = entry(title = ""),
+    autoLock: AutoLock = AutoLock.ONE_MINUTE,
+    biometricLabel: String? = null,
+    biometricKind: BiometricKind = BiometricKind.NONE,
+    biometricOn: Boolean = false,
+) = PasscodeSettingsScreen(
+    open = open,
+    step = step,
+    entry = entry,
+    autoLock = autoLock,
+    autoLockLabel = autoLockLabels.first { it.first == autoLock }.second,
+    autoLockChoices = autoLockLabels.map { AutoLockChoice(it.first, it.second) },
+    biometricLabel = biometricLabel,
+    biometricKind = biometricKind,
+    biometricOn = biometricOn,
+)
+
+val noPasscode = passcodeScreen(open = false)
 
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
@@ -78,6 +148,8 @@ fun appView(
     gitMore: GitMoreScreen = GitMoreScreen(null, null),
     encryption: EncryptionScreen? = null,
     qrSignIn: QrSignInView? = null,
+    lock: LockScreen = noLock,
+    passcode: PasscodeSettingsScreen = noPasscode,
 ) = AppView(
     auth,
     true,
@@ -117,4 +189,6 @@ fun appView(
     gitMore,
     encryption,
     qrSignIn,
+    lock,
+    passcode,
 )

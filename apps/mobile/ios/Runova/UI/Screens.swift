@@ -34,6 +34,8 @@ struct AppIntents {
     var remote = RemoteIntents()
     var studio = StudioIntents()
     var prompts = PromptIntents()
+    var lock = LockIntents()
+    var passcode = PasscodeIntents()
 }
 
 let appTabs = [
@@ -65,6 +67,15 @@ struct AppRoot: View {
     }
 
     var body: some View {
+        if view.lock.locked {
+            // Only the lock is drawn, so nothing behind it reaches the screen or VoiceOver.
+            AppLockScreen(lock: view.lock, intents: intents.lock)
+        } else {
+            app
+        }
+    }
+
+    private var app: some View {
         ZStack {
             // The chrome: what the desktop's title bar and menu are drawn on.
             palette.card.ignoresSafeArea()

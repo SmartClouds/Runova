@@ -1,6 +1,9 @@
 package com.runovahq.app.ui
 
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
@@ -256,6 +259,8 @@ class AccountTest {
         var signedOut = false
         show(account(), app = AppIntents(signOut = { signedOut = true }))
 
+        // It sits at the end of the list, below the fold.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Sign out"))
         compose.onNodeWithText("Sign out").performClick()
 
         assertTrue(signedOut)

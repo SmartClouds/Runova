@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
 import java.io.File
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
@@ -38,6 +39,8 @@ import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.CloudflareIntents
 import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
+import com.runovahq.app.ui.LockIntents
+import com.runovahq.app.ui.PasscodeIntents
 import com.runovahq.app.ui.NotificationIntents
 import com.runovahq.app.ui.tabFor
 import com.google.firebase.messaging.FirebaseMessaging
@@ -68,6 +71,7 @@ class MainActivity : FragmentActivity(), ViewListener {
     private lateinit var core: RunovaCore
     private lateinit var engine: Engine
     private var lastBiometric = 0uL
+    private var lastUnlockPrompt = 0uL
     private var pendingConnect: Long? = null
     private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         pendingConnect?.let { core.connect(it) }
@@ -311,6 +315,26 @@ class MainActivity : FragmentActivity(), ViewListener {
                 declineInvitation = { engine.accountDeclineInvitation(it) },
             ),
             forgetThisPhone = { engine.forgetThisPhone() },
+            lock = LockIntents(
+                key = { engine.lockKey(it.toUByte()) },
+                backspace = { engine.lockBackspace() },
+                submit = { engine.lockSubmit(it) },
+                useBiometric = { engine.lockUseBiometric() },
+                forgot = { engine.lockForgot() },
+                forgotConfirm = { engine.lockForgotConfirm(it) },
+            ),
+            passcode = PasscodeIntents(
+                open = { engine.passcodeOpen() },
+                close = { engine.passcodeClose() },
+                start = { engine.passcodeStart(it) },
+                key = { engine.passcodeKey(it.toUByte()) },
+                backspace = { engine.passcodeBackspace() },
+                submit = { engine.passcodeSubmit(it) },
+                off = { engine.passcodeOff() },
+                setAutoLock = { engine.setAutoLock(it) },
+                setBiometric = { engine.setBiometricUnlock(it) },
+                lockNow = { engine.lockNow() },
+            ),
             notifications = NotificationIntents(
                 open = { engine.notificationOpen(it) },
                 dismissBanner = { engine.notificationDismissBanner() },
@@ -466,6 +490,9 @@ class MainActivity : FragmentActivity(), ViewListener {
 
     override fun onStart() {
         super.onStart()
+        // A finger or face may have been added while away, so the core hears this before it locks.
+        val capability = BiometricEnrollment.capability(this)
+        engine.setBiometricCapability(capability.kind, capability.name, capability.enrollment)
         core.lifecycle(AppLifecycle.Foregrounded)
     }
 
@@ -479,13 +506,45 @@ class MainActivity : FragmentActivity(), ViewListener {
         main.post {
             this.view = view
             guardVault(view)
+            guardLock(view)
         }
+    }
+
+    /** Hides the app in Recents while a passcode is set, and runs the lock's own biometric check. */
+    private fun guardLock(view: AppView) {
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!view.lock.enabled)
+        val request = view.lock.biometric ?: return
+        if (request.id == lastUnlockPrompt) return
+        lastUnlockPrompt = request.id
+        // Biometrics only: the phone's own PIN must not open what the app's passcode guards.
+        if (BiometricManager.from(this).canAuthenticate(BIOMETRIC_STRONG) != BiometricManager.BIOMETRIC_SUCCESS) {
+            engine.biometricResult(request.id, false)
+            return
+        }
+        val callback = object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                engine.biometricResult(request.id, true)
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                engine.biometricResult(request.id, false)
+            }
+        }
+        val prompt = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Runova")
+            .setNegativeButtonText(if (view.lock.entry.length > 0u) "Use passcode" else "Use password")
+            .setAllowedAuthenticators(BIOMETRIC_STRONG)
+            .setConfirmationRequired(false)
+            .build()
+        BiometricPrompt(this, mainExecutor, callback).authenticate(prompt)
     }
 
     /** Keeps the Vault out of screenshots and the app switcher, and runs the phone's own check. */
     private fun guardVault(view: AppView) {
         // A Cloudflare secret on show is kept out of screenshots the same way.
-        if (view.vault.onShow || view.cloudflare.revealedSecret != null) {
+        // Before Android 13 the only way to keep a locked app out of Recents is FLAG_SECURE.
+        val hideLocked = view.lock.enabled && Build.VERSION.SDK_INT < 33
+        if (view.vault.onShow || view.cloudflare.revealedSecret != null || hideLocked) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

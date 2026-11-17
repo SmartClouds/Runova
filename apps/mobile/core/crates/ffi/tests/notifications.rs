@@ -156,6 +156,10 @@ async fn a_category_can_be_switched() {
     let view = world
         .until(|v| v.notifications.preferences[1].enabled, "on")
         .await;
+    // The switch moves at once and the PUT goes out after, so wait for the PUT itself.
+    world
+        .until(|_| !world.backend.sent().is_empty(), "sent")
+        .await;
 
     assert!(view.notifications.preferences[1].enabled);
     assert_eq!(

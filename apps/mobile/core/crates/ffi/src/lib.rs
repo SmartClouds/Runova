@@ -6,6 +6,8 @@ use thiserror::Error;
 
 pub mod account;
 pub mod agents;
+pub mod app_lock;
+pub(crate) mod app_lock_view;
 pub mod backend;
 pub mod cloudflare;
 pub(crate) mod cloudflare_view;

@@ -299,6 +299,9 @@ const ICONS = {
   qrCode: 'faQrcode',
   code: 'faCode',
   eraser: 'faEraser',
+  fingerprint: 'faFingerprint',
+  face: 'faFaceSmile',
+  backspace: 'faDeleteLeft',
 };
 
 function collect(repo) {

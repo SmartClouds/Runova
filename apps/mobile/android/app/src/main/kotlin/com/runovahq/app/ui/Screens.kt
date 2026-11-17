@@ -85,6 +85,8 @@ data class AppIntents(
     val remote: RemoteIntents = RemoteIntents(),
     val studio: StudioIntents = StudioIntents(),
     val prompts: PromptIntents = PromptIntents(),
+    val lock: LockIntents = LockIntents(),
+    val passcode: PasscodeIntents = PasscodeIntents(),
 )
 
 val AppTabs = listOf(
@@ -100,6 +102,11 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
     var aboutOpen by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
     val intents = remember(appIntents) { appIntents.copy(openAbout = { aboutOpen = true }) }
+    if (view.lock.locked) {
+        // Only the lock is composed, so nothing behind it reaches the screen or a screen reader.
+        AppLockScreen(view.lock, intents.lock)
+        return
+    }
     // The chrome: what the desktop's title bar and menu are drawn on.
     CompositionLocalProvider(LocalGitTools provides view.gitTools) {
     Box(Modifier.fillMaxSize().background(colors.card)) {

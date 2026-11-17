@@ -113,6 +113,8 @@ pub(crate) enum Done {
         attempt: u64,
         task: Task,
     },
+    /// Work for the phone itself, such as the app lock, that no connection change makes stale.
+    Local(Task),
 }
 
 pub(crate) struct Booted {
@@ -310,6 +312,7 @@ pub(crate) struct Runner {
     pub(crate) qr_task: Option<JoinHandle<()>>,
     pub(crate) qr_generation: u64,
     pub(crate) cloudflare: crate::cloudflare::CloudflareState,
+    pub(crate) app_lock: crate::app_lock::LockState,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -386,6 +389,7 @@ impl Runner {
             qr_task: None,
             qr_generation: 0,
             cloudflare: Default::default(),
+            app_lock: Default::default(),
         }
     }
 
@@ -410,6 +414,7 @@ impl Runner {
         for key in ["identity-seed", "device-id"] {
             self.deps.secure.remove(key.to_owned());
         }
+        self.remove_app_lock();
     }
 
     /// Puts the question on screen and runs `task` only if the answer is yes.
@@ -901,6 +906,7 @@ impl Runner {
             Done::Apply { attempt, apply } if attempt == self.attempt => apply(&mut self.view),
             Done::Tick { attempt } if attempt == self.attempt => self.refresh_section(),
             Done::Run { attempt, task } if attempt == self.attempt => task(self),
+            Done::Local(task) => task(self),
             _ => {}
         }
     }
@@ -961,10 +967,12 @@ impl Runner {
                 self.forget_secret();
                 self.view.vault.in_background = true;
                 self.let_go_at = Some(Instant::now() + Duration::from_millis(grace_ms));
+                self.app_lock_backgrounded();
             }
             Command::Lifecycle(AppLifecycle::Foregrounded) => {
                 self.view.vault.in_background = false;
                 self.let_go_at = None;
+                self.app_lock_foregrounded();
                 if self.view.auth == AuthState::SignedIn && self.hub.is_none() {
                     self.boot();
                 }
@@ -981,6 +989,7 @@ impl Runner {
         let mut done = self.done_rx.take().expect("runs once");
         self.view.show_intro = self.deps.secure.get(INTRO_SEEN.to_owned()).is_none();
         self.view.app_version = self.deps.app_version.clone();
+        self.load_app_lock();
         if self.deps.session.is_signed_in().await {
             self.view.auth = AuthState::SignedIn;
             self.boot();

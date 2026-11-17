@@ -660,6 +660,11 @@ pub async fn signed_in_to_unattended() -> World {
 }
 
 async fn signed_in_to(unattended: bool) -> World {
+    start_signed_in(signed_in_store(), unattended).await
+}
+
+/// A store holding a signed-in phone, for tests that add to it before the app starts.
+pub fn signed_in_store() -> Arc<MemoryStore> {
     let store = Arc::new(MemoryStore::default());
     store.set(
         "identity-seed".to_owned(),
@@ -675,6 +680,11 @@ async fn signed_in_to(unattended: bool) -> World {
         })
         .to_string(),
     );
+    store
+}
+
+/// Starts the app over `store`, as a cold start would, and waits for the computers.
+pub async fn start_signed_in(store: Arc<MemoryStore>, unattended: bool) -> World {
     let views = Arc::new(Views::default());
     let computer = Arc::new(Computer::default());
     let backend = Arc::new(FakeBackend::default());

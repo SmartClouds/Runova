@@ -469,6 +469,13 @@ async fn going_back_lets_go_of_the_video() {
     world.engine.studio_close_video();
 
     world.until(|v| v.studio.video.is_none(), "closed").await;
+    // The screen closes at once and the call goes out after, so wait for the call itself.
+    world
+        .until(
+            |_| !world.computer.params_of("studio.leave").is_empty(),
+            "the leave call",
+        )
+        .await;
     let left = world.computer.params_of("studio.leave");
     assert_eq!(left, vec![Some(json!({"videoId": "v1"}))]);
 }

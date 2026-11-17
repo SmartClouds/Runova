@@ -81,5 +81,8 @@
   "mobile": "F3CF",
   "qrCode": "F029",
   "code": "F121",
-  "eraser": "F12D"
+  "eraser": "F12D",
+  "fingerprint": "F577",
+  "face": "F118",
+  "backspace": "F55A"
 }

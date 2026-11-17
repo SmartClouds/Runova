@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -347,6 +349,8 @@ fun RunovaTextField(
     icon: String? = null,
     /** What the field is, for screen readers, when the placeholder is an example rather than a name. */
     label: String? = null,
+    /** Runs on the keyboard's Done key, which only shows when this is set. */
+    onDone: (() -> Unit)? = null,
 ) {
     val colors = RunovaTheme.colors
     var focused by remember { mutableStateOf(false) }
@@ -373,7 +377,11 @@ fun RunovaTextField(
             onValueChange = onValueChange,
             singleLine = true,
             visualTransformation = if (hidden) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = if (secure) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (secure) KeyboardType.Password else KeyboardType.Text,
+                imeAction = if (onDone != null) ImeAction.Done else ImeAction.Default,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
             textStyle = RunovaType.body.copy(color = colors.foreground),
             cursorBrush = SolidColor(colors.primary),
             modifier = Modifier

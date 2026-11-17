@@ -239,4 +239,7 @@ enum RunovaIcons {
     static let qrCode = "\u{F029}"
     static let code = "\u{F121}"
     static let eraser = "\u{F12D}"
+    static let fingerprint = "\u{F577}"
+    static let face = "\u{F118}"
+    static let backspace = "\u{F55A}"
 }

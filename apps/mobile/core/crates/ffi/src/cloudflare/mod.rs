@@ -1193,6 +1193,12 @@ impl Runner {
         }));
     }
 
+    /// Drops a check that is waiting, so nothing behind the app lock asks for biometrics.
+    pub(crate) fn drop_cloudflare_check(&mut self) {
+        self.view.cloudflare.biometric = None;
+        self.cloudflare.pending = None;
+    }
+
     /// Asks for the phone's own check before `pending` goes ahead.
     fn ask_biometric(&mut self, reason: String, pending: Pending) {
         self.biometric_serial = self.biometric_serial.wrapping_add(1);

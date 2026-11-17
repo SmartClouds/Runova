@@ -2,4 +2,5 @@
 
 pub mod cipher;
 pub mod handshake;
+pub mod passcode;
 pub mod sealed;

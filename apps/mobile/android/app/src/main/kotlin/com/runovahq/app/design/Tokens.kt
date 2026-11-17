@@ -232,4 +232,7 @@ object RunovaIcons {
     const val QrCode = "\uF029"
     const val Code = "\uF121"
     const val Eraser = "\uF12D"
+    const val Fingerprint = "\uF577"
+    const val Face = "\uF118"
+    const val Backspace = "\uF55A"
 }

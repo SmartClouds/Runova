@@ -316,6 +316,9 @@ impl Runner {
     }
 
     fn biometric_result(&mut self, id: u64, confirmed: bool) {
+        if self.app_lock_biometric_result(id, confirmed) {
+            return;
+        }
         if self.view.vault.biometric.as_ref().map(|b| b.id) != Some(id) {
             // The same check guards a token pasted for Cloudflare (E98).
             self.cloudflare_biometric_result(id, confirmed);

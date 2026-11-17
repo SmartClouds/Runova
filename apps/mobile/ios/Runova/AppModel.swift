@@ -158,6 +158,24 @@ final class AppModel: NSObject, ObservableObject {
                 declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) },
                 setEncryption: { [weak self] in self?.engine?.setEncryption(item: $0, enabled: $1) }),
             forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() },
+            lock: LockIntents(
+                key: { [weak self] in self?.engine?.lockKey(digit: $0) },
+                backspace: { [weak self] in self?.engine?.lockBackspace() },
+                submit: { [weak self] in self?.engine?.lockSubmit(text: $0) },
+                useBiometric: { [weak self] in self?.engine?.lockUseBiometric() },
+                forgot: { [weak self] in self?.engine?.lockForgot() },
+                forgotConfirm: { [weak self] in self?.engine?.lockForgotConfirm(signOut: $0) }),
+            passcode: PasscodeIntents(
+                open: { [weak self] in self?.engine?.passcodeOpen() },
+                close: { [weak self] in self?.engine?.passcodeClose() },
+                start: { [weak self] in self?.engine?.passcodeStart(kind: $0) },
+                key: { [weak self] in self?.engine?.passcodeKey(digit: $0) },
+                backspace: { [weak self] in self?.engine?.passcodeBackspace() },
+                submit: { [weak self] in self?.engine?.passcodeSubmit(text: $0) },
+                off: { [weak self] in self?.engine?.passcodeOff() },
+                setAutoLock: { [weak self] in self?.engine?.setAutoLock(choice: $0) },
+                setBiometric: { [weak self] in self?.engine?.setBiometricUnlock(on: $0) },
+                lockNow: { [weak self] in self?.engine?.lockNow() }),
             notifications: NotificationIntents(
                 open: { [weak self] in self?.engine?.notificationOpen(id: $0) },
                 dismissBanner: { [weak self] in self?.engine?.notificationDismissBanner() },
@@ -290,6 +308,42 @@ final class AppModel: NSObject, ObservableObject {
         tab = tabFor(notificationDestination(category: category), connected: view?.connection != nil)
     }
     private var lastBiometric: UInt64 = 0
+    private var lastUnlockPrompt: UInt64 = 0
+
+    /// Tells the core what the phone can check. A face or finger added while away changes the
+    /// domain state, so the app lock stops trusting biometrics until the passcode is entered.
+    private func reportBiometrics() {
+        let context = LAContext()
+        var problem: NSError?
+        let ready = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &problem)
+        let enrollment = context.evaluatedPolicyDomainState?.base64EncodedString()
+        switch (ready, context.biometryType) {
+        case (true, .faceID): engine?.setBiometricCapability(kind: .face, name: "Face ID", enrollment: enrollment)
+        case (true, .touchID):
+            engine?.setBiometricCapability(kind: .fingerprint, name: "Touch ID", enrollment: enrollment)
+        case (true, _): engine?.setBiometricCapability(kind: .face, name: "Optic ID", enrollment: enrollment)
+        default: engine?.setBiometricCapability(kind: .none, name: "", enrollment: nil)
+        }
+    }
+
+    /// The app lock's own check: biometrics only, so the phone's passcode can't stand in for the app's.
+    func unlockIfAsked(_ view: AppView) {
+        guard let request = view.lock.biometric, request.id != lastUnlockPrompt else { return }
+        lastUnlockPrompt = request.id
+        let id = request.id
+        let context = LAContext()
+        context.localizedFallbackTitle = ""
+        context.localizedCancelTitle = view.lock.entry.length > 0 ? "Use passcode" : "Use password"
+        var problem: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &problem) else {
+            engine?.biometricResult(id: id, confirmed: false)
+            return
+        }
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: request.reason) {
+            [weak self] ok, _ in
+            Task { @MainActor in self?.engine?.biometricResult(id: id, confirmed: ok) }
+        }
+    }
 
     /// Runs the phone's own check. The core only asks for the value if this says yes.
     func confirmIdentityIfAsked(_ view: AppView) {
@@ -464,7 +518,9 @@ final class AppModel: NSObject, ObservableObject {
 
     func scene(_ phase: ScenePhase) {
         switch phase {
-        case .active: core?.lifecycle(change: .foregrounded)
+        case .active:
+            reportBiometrics()
+            core?.lifecycle(change: .foregrounded)
         case .background: core?.lifecycle(change: .backgrounded(graceMs: backgroundGraceMs))
         default: break
         }
@@ -504,6 +560,7 @@ private final class Listener: ViewListener {
         Task { @MainActor [weak model] in
             model?.view = view
             model?.confirmIdentityIfAsked(view)
+            model?.unlockIfAsked(view)
         }
     }
 }

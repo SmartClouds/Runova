@@ -281,7 +281,9 @@ func fixtureView(
     studioTools: StudioToolsScreen = StudioToolsScreen(voice: nil, narration: nil, timeline: nil, download: nil),
     gitMore: GitMoreScreen = GitMoreScreen(pr: nil, version: nil),
     encryption: EncryptionScreen? = nil,
-    qrSignIn: QrSignInView? = nil
+    qrSignIn: QrSignInView? = nil,
+    lock: LockScreen = noLock,
+    passcode: PasscodeSettingsScreen = noPasscode
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -290,7 +292,8 @@ func fixtureView(
         cloudflare: cloudflare, monitoring: monitoring, errors: errors, pipelines: pipelines, account: account,
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
-        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn)
+        busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
+        lock: lock, passcode: passcode)
 }
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.

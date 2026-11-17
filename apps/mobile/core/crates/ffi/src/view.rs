@@ -1388,6 +1388,10 @@ pub struct AppView {
     pub encryption: Option<EncryptionScreen>,
     /// A scanned QR sign-in on its way. None the rest of the time.
     pub qr_sign_in: Option<QrSignInView>,
+    /// The app lock (E106). While `lock.locked`, nothing else is drawn.
+    pub lock: LockScreen,
+    /// Settings for the app lock, from the Account tab.
+    pub passcode: PasscodeSettingsScreen,
 }
 
 impl AppView {
@@ -1431,10 +1435,13 @@ impl AppView {
             git_more: GitMoreScreen::default(),
             encryption: None,
             qr_sign_in: None,
+            lock: LockScreen::default(),
+            passcode: PasscodeSettingsScreen::default(),
         }
     }
 }
 
+pub use crate::app_lock_view::*;
 pub use crate::cloudflare_view::*;
 
 #[uniffi::export(with_foreign)]
