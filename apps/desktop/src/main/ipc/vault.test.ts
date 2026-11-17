@@ -90,7 +90,12 @@ beforeEach(async () => {
   service = new VaultService({
     files: new MemoryVaultFiles(),
     cost: { N: 1024, r: 8, p: 1 },
-    clipboard: { readText: () => clipboardText, writeText: (t) => (clipboardText = t) },
+    clipboard: {
+      readText: async () => clipboardText,
+      writeText: async (t) => {
+        clipboardText = t;
+      },
+    },
     events: { stateChanged: vi.fn(), entriesChanged: vi.fn(), clipboardSettled: vi.fn() },
     env: {},
     isPackaged: false,

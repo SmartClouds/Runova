@@ -128,12 +128,12 @@ describe('a Runova Anywhere peer on the host', () => {
     expect(injector.apply).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores clipboard text from a session without the clipboard, and sends it none', () => {
+  it('ignores clipboard text from a session without the clipboard, and sends it none', async () => {
     const { manager, socket } = admit({ ...ALL, clipboard: false });
     electronState.clipboardText = 'my secret';
 
     socket.receive({ t: 'clipboard', text: 'pasted' });
-    manager.sendClipboard();
+    await manager.sendClipboard();
 
     expect(electronState.clipboardText).toBe('my secret');
     expect(socket.last('clipboard')).toBeUndefined();

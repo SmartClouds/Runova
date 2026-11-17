@@ -3,12 +3,11 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import { commonJsShimPlugin } from './src/main/bundling/commonJsShim';
 
-// electron-vite externalizes dependencies on its own (build.externalizeDeps
-// defaults to true), but that alone has been unreliable at keeping `electron`
-// itself external on this Vite/electron-vite version (it got inlined,
-// which breaks `app`/`BrowserWindow` since they resolve to the npm
-// install-shim instead of Electron's native runtime hook). Force node
-// built-ins, electron, and native modules external explicitly as a backstop.
+// The only modules main leaves to node_modules at runtime. Everything else is bundled: main's
+// own build turns electron-vite's externalizeDeps off, because an ES module importing a
+// CommonJS package by name (`import { autoUpdater } from 'electron-updater'`) fails at startup,
+// and the packaged app only ships the node_modules it needs. Node built-ins, electron and the
+// native modules have to stay external, and so do the packages listed with their reasons below.
 const forcedExternals = [
   'electron',
   'node-pty',
@@ -63,12 +62,17 @@ export default defineConfig({
       },
     },
     build: {
-      // Bundled rather than resolved at runtime: the terminal host can run from a copy
-      // outside the install folder that only carries node-pty alongside it.
-      externalizeDeps: { exclude: ['@xterm/headless', '@xterm/addon-serialize'] },
+      // Dependencies are bundled rather than resolved at runtime (see forcedExternals). The
+      // terminal host, for one, can run from a copy outside the install folder that only
+      // carries node-pty alongside it.
+      externalizeDeps: false,
       rollupOptions: {
         external: forcedExternals,
         checks,
+        // ES modules, as `.mjs` files: the app's entry, the bundles started by path and the
+        // CommonJS shim plugin all expect them. electron-vite would otherwise pick CommonJS,
+        // since package.json has no "type": "module".
+        output: { format: 'es' },
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           // Separate entry: local-log usage scanning runs in a worker thread so

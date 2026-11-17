@@ -56,7 +56,7 @@
     "wordpress-connector:build": "node scripts/wordpress-connector.mjs build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.4",
+    "@biomejs/biome": "^2.6.8",
     "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@12.21.0"

@@ -188,9 +188,9 @@ export async function launchRelayLeg(request: LegLaunchRequest): Promise<LegLaun
     void deliverWhenReady(prompt, {
       subscribe: (listener) => subscribeTerminalOutput(tabId, listener),
       write: (data) => writeToShell(tabId, data),
-    }).then((delivered) => {
+    }).then(async (delivered) => {
       if (delivered) return;
-      clipboard.writeText(prompt);
+      await clipboard.writeText(prompt);
       forwardNotification({
         category: 'relay',
         status: 'attention',

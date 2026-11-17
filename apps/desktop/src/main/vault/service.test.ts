@@ -44,8 +44,8 @@ function setup(
 ) {
   let clipboardText = '';
   const clipboard: ClipboardPort = {
-    readText: () => clipboardText,
-    writeText: (text) => {
+    readText: async () => clipboardText,
+    writeText: async (text) => {
       clipboardText = text;
     },
   };
@@ -229,7 +229,7 @@ describe('VaultService entries', () => {
     expect(events.entriesChanged).toHaveBeenCalled();
 
     const now = Date.now();
-    expect(service.copy(entry.id, 'password')).toEqual({ clearsAt: now + 30_000 });
+    expect(await service.copy(entry.id, 'password')).toEqual({ clearsAt: now + 30_000 });
     expect(clipboard()).toBe('S3NT1NEL-password');
     expect(service.list()[0].lastUsedAt).toBe(now);
 
@@ -242,7 +242,7 @@ describe('VaultService entries', () => {
     const { service, clipboard, setClipboard, events } = setup();
     await service.create(PASSWORD);
     const entry = await service.save(loginInput());
-    service.copy(entry.id, 'password');
+    await service.copy(entry.id, 'password');
     setClipboard('mine');
     await vi.advanceTimersByTimeAsync(30_000);
     expect(clipboard()).toBe('mine');
@@ -253,7 +253,7 @@ describe('VaultService entries', () => {
     const { service } = setup({ settings: { vaultClipboardClearSeconds: 0 } });
     await service.create(PASSWORD);
     const entry = await service.save(loginInput());
-    expect(service.copy(entry.id, 'username')).toEqual({ clearsAt: null });
+    expect(await service.copy(entry.id, 'username')).toEqual({ clearsAt: null });
   });
 
   it('announces entry changes for remove, patch and duplicate', async () => {

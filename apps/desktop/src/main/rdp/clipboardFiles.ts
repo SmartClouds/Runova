@@ -1,8 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { clipboard } from 'electron';
 import type { RdpClipboardFiles, RdpFileEntry } from '../../shared/apiTypes';
-import { osClipboardPaths } from '../clipboardPaths';
+import { type CopiedFiles, copiedFiles, copiedPaths } from '../clipboardPaths';
 
 /**
  * Files copied in Explorer, Finder, or a Linux file manager, expanded into the flat list the
@@ -25,19 +24,13 @@ export interface ClipboardFileSet {
  * A cheap marker of what's copied, so the full listing only runs when it changes. Empty when
  * the clipboard holds no files.
  */
-export function rawSignature(): string {
-  try {
-    switch (process.platform) {
-      case 'win32':
-        return clipboard.readBuffer('FileNameW').toString('hex');
-      case 'darwin':
-        return clipboard.read('NSFilenamesPboardType') || clipboard.read('public.file-url');
-      default:
-        return clipboard.read('text/uri-list') || clipboard.read('x-special/gnome-copied-files');
-    }
-  } catch {
-    return '';
-  }
+export async function rawSignature(): Promise<string> {
+  const copied = await copiedFiles();
+  return copied ? signatureOf(copied) : '';
+}
+
+function signatureOf(copied: CopiedFiles): string {
+  return `${copied.format}|${copied.text}`;
 }
 
 /**
@@ -47,8 +40,9 @@ export function rawSignature(): string {
 export async function readClipboardFiles(
   previousSignature: string | null,
 ): Promise<ClipboardFileSet | 'unchanged' | null> {
-  const signature = rawSignature();
-  if (!signature) return null;
+  const copied = await copiedFiles();
+  if (!copied) return null;
+  const signature = signatureOf(copied);
   if (signature === previousSignature) return 'unchanged';
 
   const entries: RdpFileEntry[] = [];
@@ -86,7 +80,7 @@ export async function readClipboardFiles(
     }
   }
 
-  for (const path of await osClipboardPaths()) await add(path, undefined, 0);
+  for (const path of copiedPaths(copied)) await add(path, undefined, 0);
   if (entries.length === 0) return null;
 
   return {

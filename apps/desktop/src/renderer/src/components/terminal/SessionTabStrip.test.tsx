@@ -163,11 +163,11 @@ describe('SessionTabStrip reordering', () => {
     expect(tabs[1].className).not.toContain('bg-popover');
     fireEvent.pointerMove(tabs[1], { clientX: -60, clientY: 0, pointerId: 1 });
 
-    expect(tabs[1].style.transform).toBe('translate(-60px, 0px)');
+    expect(tabs[1].style.transform).toBe('translate(-60px)');
     expect(tabs[1].className).toContain('bg-popover');
     expect(tabs[1].className).toContain('transition-none');
     // PowerShell makes room for the 130px tab and the 2px gap.
-    expect(tabs[0].style.transform).toBe('translate(132px, 0px)');
+    expect(tabs[0].style.transform).toBe('translate(132px)');
     expect(tabs[0].className).toContain('duration-200');
 
     fireEvent.pointerUp(tabs[1], { pointerId: 1 });
@@ -181,8 +181,8 @@ describe('SessionTabStrip reordering', () => {
     // Dragged right as far as it goes: the 90px tab passes both, and each steps left by 92.
     fireEvent.pointerDown(tabs[0], { button: 0, clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerMove(tabs[0], { clientX: 400, clientY: 0, pointerId: 1 });
-    expect(tabs[1].style.transform).toBe('translate(-92px, 0px)');
-    expect(tabs[2].style.transform).toBe('translate(-92px, 0px)');
+    expect(tabs[1].style.transform).toBe('translate(-92px)');
+    expect(tabs[2].style.transform).toBe('translate(-92px)');
     fireEvent.pointerUp(tabs[0], { pointerId: 1 });
     expect(onMove.mock.calls).toEqual([[0, 2]]);
   });

@@ -22,7 +22,7 @@ beforeEach(async () => {
   service = new VaultService({
     files: new MemoryVaultFiles(),
     cost: { N: 1024, r: 8, p: 1 },
-    clipboard: { readText: () => '', writeText: () => undefined },
+    clipboard: { readText: async () => '', writeText: async () => undefined },
     events: {
       stateChanged: vi.fn(),
       entriesChanged: vi.fn(),

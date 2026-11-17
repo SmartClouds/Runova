@@ -24,7 +24,12 @@ async function unlockedService() {
   const service = new VaultService({
     files: new MemoryVaultFiles(),
     cost: FAST,
-    clipboard: { readText: () => clipboardText, writeText: (t) => (clipboardText = t) },
+    clipboard: {
+      readText: async () => clipboardText,
+      writeText: async (t) => {
+        clipboardText = t;
+      },
+    },
     events: { stateChanged: vi.fn(), entriesChanged: vi.fn(), clipboardSettled: vi.fn() },
     env: {},
     isPackaged: false,

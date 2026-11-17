@@ -581,7 +581,7 @@ describe('ProjectsPage drag to reorder', () => {
     fireEvent.pointerDown(grip, { button: 0, clientX: 0, clientY: 0, pointerId: 1 });
     fireEvent.pointerMove(grip, { clientX: 300, clientY: 0, pointerId: 1 });
     // Hermes steps back into the cell Apollo is being held over.
-    expect(itemOf(container, 'p2').style.transform).toBe('translate(-300px, 0px)');
+    expect(itemOf(container, 'p2').style.transform).toBe('translate(-300px)');
     fireEvent.pointerUp(grip, { pointerId: 1 });
 
     await waitFor(() =>

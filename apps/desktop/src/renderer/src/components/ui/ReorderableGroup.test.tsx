@@ -407,8 +407,8 @@ describe('ReorderableGroup', () => {
     press('a', 0, 0);
     moveTo('a', 300, 0);
 
-    expect(itemFor(container, 'a').style.transform).toBe('translate(300px, 0px)');
-    expect(itemFor(container, 'b').style.transform).toBe('translate(-300px, 0px)');
+    expect(itemFor(container, 'a').style.transform).toBe('translate(300px)');
+    expect(itemFor(container, 'b').style.transform).toBe('translate(-300px)');
     expect(itemFor(container, 'c').style.transform).toBe('');
 
     release('a');
@@ -427,15 +427,15 @@ describe('ReorderableGroup', () => {
 
       // Alpha's middle is now at 130, nearest Bravo's. Bravo steps left by Alpha's 100 and the gap,
       // not by its own 60, which is what leaves the strip packed once Alpha lands.
-      expect(itemFor(container, 'a').style.transform).toBe('translate(80px, 0px)');
-      expect(itemFor(container, 'b').style.transform).toBe('translate(-102px, 0px)');
+      expect(itemFor(container, 'a').style.transform).toBe('translate(80px)');
+      expect(itemFor(container, 'b').style.transform).toBe('translate(-102px)');
       expect(itemFor(container, 'c').style.transform).toBe('');
 
       // Far past the end, the item stops at the last tab's edge, and both tabs have made way.
       moveTo('a', 400, 0);
-      expect(itemFor(container, 'a').style.transform).toBe('translate(144px, 0px)');
-      expect(itemFor(container, 'b').style.transform).toBe('translate(-102px, 0px)');
-      expect(itemFor(container, 'c').style.transform).toBe('translate(-102px, 0px)');
+      expect(itemFor(container, 'a').style.transform).toBe('translate(144px)');
+      expect(itemFor(container, 'b').style.transform).toBe('translate(-102px)');
+      expect(itemFor(container, 'c').style.transform).toBe('translate(-102px)');
 
       release('a');
       expect(onMove).toHaveBeenCalledWith(0, 2);
@@ -448,8 +448,8 @@ describe('ReorderableGroup', () => {
       moveTo('c', -400, 0);
 
       // Charlie is 80 wide, so Alpha and Bravo each step right by 80 and the gap.
-      expect(itemFor(container, 'a').style.transform).toBe('translate(82px, 0px)');
-      expect(itemFor(container, 'b').style.transform).toBe('translate(82px, 0px)');
+      expect(itemFor(container, 'a').style.transform).toBe('translate(82px)');
+      expect(itemFor(container, 'b').style.transform).toBe('translate(82px)');
 
       release('c');
       expect(onMove).toHaveBeenCalledWith(2, 0);
@@ -481,7 +481,7 @@ describe('ReorderableGroup', () => {
 
     expect(itemFor(container, 'a').style.transform).toBe('translate(0px, 200px)');
     // b steps left into a's old cell, and c steps from the first column of row two into b's.
-    expect(itemFor(container, 'b').style.transform).toBe('translate(-300px, 0px)');
+    expect(itemFor(container, 'b').style.transform).toBe('translate(-300px)');
     expect(itemFor(container, 'c').style.transform).toBe('translate(300px, -200px)');
     expect(itemFor(container, 'd').style.transform).toBe('');
 

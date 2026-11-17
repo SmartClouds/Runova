@@ -170,7 +170,7 @@ export class VaultService {
   async lock(reason: VaultLockReason): Promise<void> {
     const wasUnlocked = this.session.isUnlocked();
     this.idle.stop();
-    this.clipboardGuard.clearIfOurs();
+    await this.clipboardGuard.clearIfOurs();
     // Pending imports hold the parsed file, passwords included.
     this.pendingImports.clear();
     for (const stop of [...this.fills]) stop();
@@ -190,7 +190,7 @@ export class VaultService {
 
   async reset(): Promise<void> {
     this.idle.stop();
-    this.clipboardGuard.clearIfOurs();
+    await this.clipboardGuard.clearIfOurs();
     this.pendingImports.clear();
     await this.session.reset();
     this.limiter.reset();
@@ -219,7 +219,7 @@ export class VaultService {
     return value;
   }
 
-  copy(id: string, ref: VaultFieldRef): VaultCopyResult {
+  copy(id: string, ref: VaultFieldRef): Promise<VaultCopyResult> {
     const value = this.session.reveal(id, ref);
     this.idle.touch();
     this.session.markUsed(id);
@@ -298,7 +298,7 @@ export class VaultService {
     this.session.markUsed(id);
     if (target === 'system') {
       const copied = entry.password
-        ? this.clipboardGuard.copy(entry.password, this.timers.clipboardClearMs)
+        ? await this.clipboardGuard.copy(entry.password, this.timers.clipboardClearMs)
         : null;
       await login.openExternal(url);
       return { ok: true, clearsAt: copied?.clearsAt ?? null };

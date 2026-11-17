@@ -127,9 +127,9 @@ export async function launchAutoFixAgent(
   void deliverWhenReady(request.prompt, {
     subscribe: (listener) => subscribeTerminalOutput(tabId, listener),
     write: (data) => writeToShell(tabId, data),
-  }).then((delivered) => {
+  }).then(async (delivered) => {
     if (delivered) return;
-    clipboard.writeText(request.prompt);
+    await clipboard.writeText(request.prompt);
     showOsNotification({
       title: `${cli.name} did not come up for auto-fix`,
       body: 'The prompt is on your clipboard. Paste it in the tab once the CLI is running.',

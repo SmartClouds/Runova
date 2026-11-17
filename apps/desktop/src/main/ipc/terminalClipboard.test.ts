@@ -17,9 +17,10 @@ import {
  * where the bytes land: a pasted screenshot is written under the app's own userData folder and
  * nowhere else, however the renderer names it.
  *
- * The clipboard and the image decoder are the OS boundary here. The electron stand-in has no
- * pictures in it, so each test replaces those two functions on the very copy of the stand-in the
- * handler module imported, which is the copy this test also gets from `import('electron')`.
+ * The clipboard and the image decoder are the OS boundary here. Clipboard contents are set
+ * through the electron stand-in's state. The stand-in's image decoder has no pictures in it, so
+ * each test replaces it on the very copy of the stand-in the handler module imported, which is
+ * the copy this test also gets from `import('electron')`.
  */
 
 interface FakeImage {
@@ -32,9 +33,7 @@ interface FakeImage {
 
 interface ClipboardStandIn {
   clipboard: {
-    readText: () => string;
-    readImage: () => FakeImage;
-    readBuffer?: (format: string) => Buffer;
+    readText: () => Promise<string>;
   };
   nativeImage: { createFromPath: (path: string) => FakeImage };
 }
@@ -181,7 +180,7 @@ describe('terminalClipboard:previewImage', () => {
 describe('terminalClipboard:read', () => {
   it('prefers the text, which is what a copy from a web page means', async () => {
     electronState.clipboardText = 'npm run dev';
-    electron.clipboard.readImage = () => fakeImage();
+    electronState.clipboardFormats = { 'image/png': PNG_BYTES };
     expect(await invoke<TerminalClipboardPaste | null>(IPC.terminalClipboard.read)).toEqual({
       kind: 'text',
       text: 'npm run dev',
@@ -190,7 +189,7 @@ describe('terminalClipboard:read', () => {
 
   it('saves a copied screenshot into the app data folder and pastes its path', async () => {
     electronState.clipboardText = '';
-    electron.clipboard.readImage = () => fakeImage();
+    electronState.clipboardFormats = { 'image/png': PNG_BYTES };
 
     const paste = await invoke<TerminalClipboardPaste | null>(IPC.terminalClipboard.read);
     expect(paste?.kind).toBe('files');
@@ -204,20 +203,24 @@ describe('terminalClipboard:read', () => {
     expect(await invoke(IPC.terminalClipboard.read)).toBeNull();
   });
 
-  it('pastes the path of a single file copied in Explorer, ahead of any text', async () => {
+  it('pastes the paths of files copied in Explorer, ahead of any text', async () => {
     electronState.clipboardText = 'some stale text';
-    electron.clipboard.readBuffer = (format: string) =>
-      format === 'FileNameW' ? Buffer.from('C:\\shots\\screen.png\0', 'utf16le') : Buffer.alloc(0);
+    electronState.clipboardFormats = {
+      'text/uri-list': 'file:///C:/shots/screen.png\r\nfile:///C:/shots/my%20notes.txt',
+    };
 
     const paste = await withPlatform('win32', () =>
       invoke<TerminalClipboardPaste | null>(IPC.terminalClipboard.read),
     );
-    expect(paste).toEqual({ kind: 'files', paths: ['C:\\shots\\screen.png'] });
+    expect(paste).toEqual({
+      kind: 'files',
+      paths: ['C:\\shots\\screen.png', 'C:\\shots\\my notes.txt'],
+    });
   });
 
-  it('ignores the Explorer clipboard format away from Windows', async () => {
+  it('pastes copied files as text away from Windows', async () => {
     electronState.clipboardText = 'plain text';
-    electron.clipboard.readBuffer = () => Buffer.from('/tmp/screen.png\0', 'utf16le');
+    electronState.clipboardFormats = { 'text/uri-list': 'file:///tmp/screen.png' };
 
     expect(
       await withPlatform('darwin', () =>

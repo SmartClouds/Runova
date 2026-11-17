@@ -3,6 +3,8 @@ import { extname } from 'node:path';
 import { clipboard, ipcMain, nativeImage } from 'electron';
 import type { TerminalClipboardPaste } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { readClipboardData } from '../clipboardData';
+import { osClipboardPaths } from '../clipboardPaths';
 import { savePastedImage as saveImage } from '../pastedImages';
 
 /**
@@ -61,14 +63,17 @@ async function previewImage(path: string, fullSize: boolean): Promise<string | n
   return bytes ? `data:${mime};base64,${bytes.toString('base64')}` : null;
 }
 
-/** A file path Windows Explorer put on the clipboard, if it copied exactly one file. */
-function copiedFilePath(): string | null {
-  if (process.platform !== 'win32') return null;
+/** The paths of files copied in Windows Explorer. Empty on other systems or with no files. */
+async function copiedFilePaths(): Promise<string[]> {
+  if (process.platform !== 'win32') return [];
+  return osClipboardPaths();
+}
+
+/** A copied screenshot or picture, as PNG bytes, or null when the clipboard holds none. */
+async function copiedImage(): Promise<Buffer | null> {
   try {
-    const raw = clipboard.readBuffer('FileNameW');
-    if (raw.length === 0) return null;
-    const path = raw.toString('utf16le').replace(/\0+$/, '').trim();
-    return path || null;
+    const data = await readClipboardData(['image/png']);
+    return data && data.bytes.length > 0 ? data.bytes : null;
   } catch {
     return null;
   }
@@ -97,15 +102,13 @@ export function registerTerminalClipboardHandlers(): void {
   // pasting a screenshot with Ctrl+V used to do nothing and Ctrl+V right after the window
   // regained focus (Win+V's flyout, alt-tab) could silently fail.
   ipcMain.handle(IPC.terminalClipboard.read, async (): Promise<TerminalClipboardPaste | null> => {
-    const file = copiedFilePath();
-    if (file) return { kind: 'files', paths: [file] };
+    const files = await copiedFilePaths();
+    if (files.length > 0) return { kind: 'files', paths: files };
     // Text copied from a web page can come with an image of itself; the text is what was meant.
-    const text = clipboard.readText();
+    const text = await clipboard.readText();
     if (text) return { kind: 'text', text };
-    const image = clipboard.readImage();
-    if (!image.isEmpty()) {
-      return { kind: 'files', paths: [await saveImage(image.toPNG(), 'png')] };
-    }
+    const image = await copiedImage();
+    if (image) return { kind: 'files', paths: [await saveImage(image, 'png')] };
     return null;
   });
 }

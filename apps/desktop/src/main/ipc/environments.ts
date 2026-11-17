@@ -59,7 +59,7 @@ export function registerEnvironmentHandlers(): void {
   ipcMain.handle(
     IPC.environments.copyFile,
     async (_event, environmentId: string, fileId: string): Promise<void> => {
-      clipboard.writeText(await readEnvFile(environmentId, fileId));
+      await clipboard.writeText(await readEnvFile(environmentId, fileId));
     },
   );
   ipcMain.handle(IPC.environments.fileHistory, (_event, environmentId: string, fileId: string) =>
@@ -91,7 +91,7 @@ export function registerEnvironmentHandlers(): void {
   ipcMain.handle(
     IPC.environments.copyCredentialSecret,
     async (_event, environmentId: string, credentialId: string): Promise<void> => {
-      clipboard.writeText(await envCredentialSecret(environmentId, credentialId));
+      await clipboard.writeText(await envCredentialSecret(environmentId, credentialId));
     },
   );
   ipcMain.handle(IPC.environments.scanFolder, (_event, projectId: string) =>

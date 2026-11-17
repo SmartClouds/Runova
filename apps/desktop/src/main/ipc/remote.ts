@@ -84,9 +84,7 @@ export function registerRemoteHandlers(): void {
 
   ipcMain.handle(
     IPC.remote.sendClipboard,
-    signedInOnly(() => {
-      remoteManager.sendClipboard();
-    }),
+    signedInOnly(() => remoteManager.sendClipboard()),
   );
 
   ipcMain.handle(

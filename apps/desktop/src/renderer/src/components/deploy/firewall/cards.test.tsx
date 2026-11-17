@@ -115,7 +115,8 @@ describe('CountdownBanner', () => {
   it('burns the fuse down with the time left and turns urgent in the last 10 seconds', () => {
     const view = banner();
     expect(screen.getByRole('timer').textContent).toBe('0:40');
-    expect(screen.getByTestId('fuse').style.transform).toBe('scaleX(0.6666666666666666)');
+    // Serialized the way a browser does it, rounded to six digits.
+    expect(screen.getByTestId('fuse').style.transform).toBe('scaleX(0.666667)');
     view.unmount();
 
     banner({ now: 90_000 });

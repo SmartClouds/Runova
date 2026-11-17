@@ -439,8 +439,7 @@ export class RemoteManager {
         break;
       case 'clipboard':
         if (peer.authed && peer.permissions.clipboard) {
-          clipboard.writeText(msg.text);
-          this.log('info', 'Clipboard received from controller.');
+          this.receiveClipboard(msg.text, 'controller');
         }
         break;
       case 'ping':
@@ -981,8 +980,7 @@ export class RemoteManager {
         this.emitState();
         break;
       case 'clipboard':
-        clipboard.writeText(msg.text);
-        this.log('info', 'Clipboard received from host.');
+        this.receiveClipboard(msg.text, 'host');
         break;
       case 'pong':
         break;
@@ -1001,9 +999,21 @@ export class RemoteManager {
 
   // --- Shared: clipboard, files, binary ---------------------------------------
 
+  /** Puts clipboard text a peer sent on this machine's clipboard. */
+  private receiveClipboard(text: string, from: 'controller' | 'host'): void {
+    clipboard.writeText(text).then(
+      () => this.log('info', `Clipboard received from ${from}.`),
+      (error: unknown) =>
+        this.log(
+          'error',
+          `Could not set the clipboard: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+    );
+  }
+
   /** Send this machine's clipboard text to whichever peer(s) are connected. */
-  sendClipboard(): void {
-    const text = clipboard.readText();
+  async sendClipboard(): Promise<void> {
+    const text = await clipboard.readText();
     if (!text) return;
     if (this.client && this.connection.status === 'connected') {
       this.sendControl(this.client, { t: 'clipboard', text });

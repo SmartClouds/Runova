@@ -104,8 +104,8 @@ describe('IdleTimer', () => {
 describe('ClipboardGuard', () => {
   let clipboardText = '';
   const clipboard: ClipboardPort = {
-    readText: () => clipboardText,
-    writeText: (text) => {
+    readText: async () => clipboardText,
+    writeText: async (text) => {
       clipboardText = text;
     },
   };
@@ -118,65 +118,84 @@ describe('ClipboardGuard', () => {
     vi.useRealTimers();
   });
 
-  it('copies, reports when it will clear, and clears on time', () => {
+  it('copies, reports when it will clear, and clears on time', async () => {
     const onSettled = vi.fn();
     const guard = new ClipboardGuard(clipboard, onSettled);
-    expect(guard.copy('S3CRET', 30_000)).toEqual({ clearsAt: 1_030_000 });
+    expect(await guard.copy('S3CRET', 30_000)).toEqual({ clearsAt: 1_030_000 });
     expect(clipboardText).toBe('S3CRET');
-    vi.advanceTimersByTime(29_999);
+    await vi.advanceTimersByTimeAsync(29_999);
     expect(clipboardText).toBe('S3CRET');
-    vi.advanceTimersByTime(1);
+    await vi.advanceTimersByTimeAsync(1);
     expect(clipboardText).toBe('');
     expect(onSettled).toHaveBeenCalledExactlyOnceWith({ cleared: true });
   });
 
-  it('leaves the clipboard alone when something else was copied since', () => {
+  it('leaves the clipboard alone when something else was copied since', async () => {
     const onSettled = vi.fn();
     const guard = new ClipboardGuard(clipboard, onSettled);
-    guard.copy('S3CRET', 1000);
+    await guard.copy('S3CRET', 1000);
     clipboardText = 'my own note';
-    vi.advanceTimersByTime(1000);
+    await vi.advanceTimersByTimeAsync(1000);
     expect(clipboardText).toBe('my own note');
     expect(onSettled).toHaveBeenCalledExactlyOnceWith({ cleared: false });
   });
 
-  it('restarts the timer for a second copy', () => {
+  it('restarts the timer for a second copy', async () => {
     const onSettled = vi.fn();
     const guard = new ClipboardGuard(clipboard, onSettled);
-    guard.copy('first', 1000);
-    vi.advanceTimersByTime(900);
-    guard.copy('second', 1000);
-    vi.advanceTimersByTime(900);
+    await guard.copy('first', 1000);
+    await vi.advanceTimersByTimeAsync(900);
+    await guard.copy('second', 1000);
+    await vi.advanceTimersByTimeAsync(900);
     expect(clipboardText).toBe('second');
-    vi.advanceTimersByTime(100);
+    await vi.advanceTimersByTimeAsync(100);
     expect(clipboardText).toBe('');
     expect(onSettled).toHaveBeenCalledTimes(1);
   });
 
-  it('never clears when the delay is null', () => {
+  it('never clears when the delay is null', async () => {
     const onSettled = vi.fn();
     const guard = new ClipboardGuard(clipboard, onSettled);
-    expect(guard.copy('keep', null)).toEqual({ clearsAt: null });
-    vi.advanceTimersByTime(10 ** 9);
+    expect(await guard.copy('keep', null)).toEqual({ clearsAt: null });
+    await vi.advanceTimersByTimeAsync(10 ** 9);
     expect(clipboardText).toBe('keep');
     expect(onSettled).not.toHaveBeenCalled();
   });
 
-  it('clears right away on request, only if the text is still ours', () => {
+  it('clears right away on request, only if the text is still ours', async () => {
     const onSettled = vi.fn();
     const guard = new ClipboardGuard(clipboard, onSettled);
-    expect(guard.clearIfOurs()).toBe(false);
-    guard.copy('S3CRET', 60_000);
-    expect(guard.clearIfOurs()).toBe(true);
+    expect(await guard.clearIfOurs()).toBe(false);
+    await guard.copy('S3CRET', 60_000);
+    expect(await guard.clearIfOurs()).toBe(true);
     expect(clipboardText).toBe('');
     expect(onSettled).toHaveBeenCalledExactlyOnceWith({ cleared: true });
-    vi.advanceTimersByTime(60_000);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(onSettled).toHaveBeenCalledTimes(1);
   });
 
-  it('does not keep the copied text around in memory', () => {
+  it('clears a secret asked to go before its write had even landed', async () => {
+    // A slow clipboard: the write only lands on a later turn. Clearing straight after the copy
+    // must wait for it rather than read the old text, call the secret gone, and leave it there.
+    const slow: ClipboardPort = {
+      readText: clipboard.readText,
+      writeText: async (text) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        clipboardText = text;
+      },
+    };
+    const guard = new ClipboardGuard(slow, vi.fn());
+    const copied = guard.copy('S3CRET', 60_000);
+    const cleared = guard.clearIfOurs();
+    await vi.advanceTimersByTimeAsync(20);
+    await copied;
+    expect(await cleared).toBe(true);
+    expect(clipboardText).toBe('');
+  });
+
+  it('does not keep the copied text around in memory', async () => {
     const guard = new ClipboardGuard(clipboard, vi.fn());
-    guard.copy('S3CRET-in-memory', 60_000);
+    await guard.copy('S3CRET-in-memory', 60_000);
     expect(JSON.stringify(guard)).not.toContain('S3CRET');
   });
 });

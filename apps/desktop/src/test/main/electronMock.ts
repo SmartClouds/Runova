@@ -70,6 +70,12 @@ export interface ElectronState {
   shortcuts: Map<string, Electron.ShortcutDetails>;
   encryptionAvailable: boolean;
   clipboardText: string;
+  /**
+   * Other formats on the clipboard beside its text, by MIME type (raw platform formats under
+   * Electron's `electron application/osclipboard;format="..."` type), as `clipboard.read()`
+   * lists them.
+   */
+  clipboardFormats: Record<string, string | Buffer>;
   powerBlockers: { id: number; type: string; stopped: boolean }[];
   tempRoot: string | null;
 }
@@ -103,6 +109,7 @@ function freshState(): ElectronState {
     shortcuts: new Map(),
     encryptionAvailable: true,
     clipboardText: '',
+    clipboardFormats: {},
     powerBlockers: [],
     tempRoot: null,
   };
@@ -470,15 +477,32 @@ export const safeStorage = {
   },
 };
 
+/** Electron 45's clipboard: one item holding the text and any other formats set in the state. */
+function clipboardItem() {
+  const data: Record<string, string | Buffer> = { ...electronState.clipboardFormats };
+  if (electronState.clipboardText) data['text/plain'] = electronState.clipboardText;
+  return {
+    types: Object.keys(data),
+    getType: async (type: string): Promise<Blob> => {
+      const value = data[type];
+      if (value === undefined)
+        throw new Error(`The type '${type}' was not found in the ClipboardItem`);
+      return new Blob([typeof value === 'string' ? value : new Uint8Array(value)]);
+    },
+  };
+}
+
 export const clipboard = {
-  readText: (): string => electronState.clipboardText,
-  writeText: (value: string): void => {
+  readText: async (): Promise<string> => electronState.clipboardText,
+  writeText: async (value: string): Promise<void> => {
     electronState.clipboardText = value;
+    electronState.clipboardFormats = {};
   },
-  readImage: () => nativeImage.createEmpty(),
-  writeImage: (): void => undefined,
+  read: async () => [clipboardItem()],
+  has: async (type: string): Promise<boolean> => clipboardItem().types.includes(type),
   clear: (): void => {
     electronState.clipboardText = '';
+    electronState.clipboardFormats = {};
   },
 };
 
@@ -670,6 +694,7 @@ export function resetElectronMock(): void {
   electronState.shortcuts = new Map();
   electronState.encryptionAvailable = true;
   electronState.clipboardText = '';
+  electronState.clipboardFormats = {};
   electronState.powerBlockers = [];
   electronState.isPackaged = false;
   electronState.tempRoot = null;

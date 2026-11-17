@@ -493,7 +493,7 @@ export function registerRdpHandlers(): void {
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
-      return { ok: true, count: present.length, signature: rawSignature() };
+      return { ok: true, count: present.length, signature: await rawSignature() };
     },
   );
 

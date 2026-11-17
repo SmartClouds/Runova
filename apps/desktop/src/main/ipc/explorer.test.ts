@@ -407,11 +407,7 @@ describe('explorer:pasteExternal', () => {
 
 describe('explorer:osClipboardPaths', () => {
   it('returns the paths the OS clipboard currently holds', async () => {
-    const electron = (await import('electron')) as unknown as {
-      clipboard: { read: (format: string) => string };
-    };
-    electron.clipboard.read = (format) =>
-      format === 'text/uri-list' ? 'file:///tmp/copied.txt' : '';
+    electronState.clipboardFormats = { 'text/uri-list': 'file:///tmp/copied.txt' };
 
     const paths = await withPlatform('linux', () =>
       invoke<string[]>(IPC.explorer.osClipboardPaths),
@@ -420,10 +416,7 @@ describe('explorer:osClipboardPaths', () => {
   });
 
   it('returns an empty list when the OS clipboard holds no files', async () => {
-    const electron = (await import('electron')) as unknown as {
-      clipboard: { read: (format: string) => string };
-    };
-    electron.clipboard.read = () => '';
+    electronState.clipboardText = '/tmp/copied.txt';
 
     const paths = await withPlatform('linux', () =>
       invoke<string[]>(IPC.explorer.osClipboardPaths),
