@@ -259,3 +259,40 @@ describe('buildContextTarball', () => {
     },
   );
 });
+
+describe('buildContextTarball with only (E105)', () => {
+  it('packs just the files and folders the compose file reads, whatever .dockerignore says', async () => {
+    const { root, output } = project({
+      '.dockerignore': 'nginx.conf\nstatic\n',
+      'nginx.conf': 'events {}\n',
+      'static/index.html': '<h1>shop</h1>\n',
+      'static/css/site.css': 'body {}\n',
+      'src/server.js': '// source never goes\n',
+      '.env': 'SECRET=never-goes\n',
+      Dockerfile: 'FROM scratch\n',
+    });
+
+    const result = await buildContextTarball({ root, output, only: ['nginx.conf', 'static'] });
+
+    const paths = (await listed(output)).map((entry) => entry.path.replace(/\/$/, '')).sort();
+    expect(paths).toEqual([
+      'nginx.conf',
+      'static',
+      'static/css',
+      'static/css/site.css',
+      'static/index.html',
+    ]);
+    expect(result.contentBytes).toBe(
+      'events {}\n'.length + '<h1>shop</h1>\n'.length + 'body {}\n'.length,
+    );
+  });
+
+  it('brings the folders above a nested file and skips a path that is not there', async () => {
+    const { root, output } = project({ 'secrets/key.txt': 'k\n', 'other.txt': 'no\n' });
+
+    await buildContextTarball({ root, output, only: ['secrets/key.txt', 'missing.env'] });
+
+    const paths = (await listed(output)).map((entry) => entry.path.replace(/\/$/, '')).sort();
+    expect(paths).toEqual(['secrets', 'secrets/key.txt']);
+  });
+});

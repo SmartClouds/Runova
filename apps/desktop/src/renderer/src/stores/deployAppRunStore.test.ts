@@ -33,6 +33,8 @@ const INPUT: AppDeployInput = {
   envFileIds: null,
   proxiedServices: ['web'],
   acknowledgedRisks: [],
+  imageSource: 'registry',
+  release: null,
 };
 
 const picks = () => useDeployAppEnvFilesStore.getState().picks;
@@ -89,6 +91,7 @@ describe('deployAppRunStore', () => {
       environmentId: 'env-1',
       proxiedServices: ['web'],
       acknowledgedRisks: [],
+      imageSource: 'registry',
     });
 
     bridge.$emit('deployStacks.onUploadProgress', {
@@ -227,5 +230,86 @@ describe('deployAppRunStore', () => {
     store().open(KEY, emptyDraft());
     store().reset(KEY);
     expect(wizard()).toBeUndefined();
+  });
+
+  it('packs a local folder first and sends nothing until the user approves it (E105)', async () => {
+    const plan = {
+      approvalId: 'a1',
+      archiveBytes: 2_500_000,
+      contentBytes: 9_000_000,
+      entries: 40,
+      largest: [],
+    };
+    const fake = installRunovaBridge({
+      'deployStacks.prepareLocal': plan,
+      'deployStacks.create': uploadResult(),
+      'deployStacks.deploy': sampleJob(),
+    });
+    store().open(KEY, emptyDraft());
+
+    await store().startDeploy(KEY, { ...INPUT, imageSource: 'local' });
+
+    expect(wizard().run).toEqual({
+      phase: 'approve',
+      plan,
+      input: { ...INPUT, imageSource: 'local' },
+    });
+    expect(fake.$fn('deployStacks.prepareLocal')).toHaveBeenCalledWith({
+      serverId: SERVER.id,
+      projectId: 'proj-1',
+      composePath: 'compose.yaml',
+      environmentId: 'env-1',
+      imageSource: 'local',
+    });
+
+    await store().approveLocal(KEY);
+
+    expect(fake.$fn('deployStacks.create')).toHaveBeenCalledWith(
+      expect.objectContaining({ imageSource: 'local', approvalId: 'a1' }),
+    );
+    expect(fake.$fn('deployStacks.deploy')).toHaveBeenCalled();
+  });
+
+  it('drops the packed folder and goes back to the review when the user does not approve', async () => {
+    const plan = { approvalId: 'a2', archiveBytes: 1, contentBytes: 1, entries: 1, largest: [] };
+    const fake = installRunovaBridge({
+      'deployStacks.prepareLocal': plan,
+      'deployStacks.cancelLocal': () => undefined,
+    });
+    store().open(KEY, emptyDraft());
+    await store().startDeploy(KEY, { ...INPUT, imageSource: 'local' });
+
+    await store().declineLocal(KEY);
+
+    expect(fake.$fn('deployStacks.cancelLocal')).toHaveBeenCalledWith('a2');
+    expect(wizard().run).toEqual({ phase: 'idle' });
+    expect(wizard().draft.step).toBe('review');
+  });
+
+  it('sends the release image only with a GitHub Release deploy', async () => {
+    const release = {
+      repository: 'acme/shop',
+      tag: 'v1',
+      assetId: 7,
+      assetName: 'shop.tar.gz',
+      size: 9,
+      sha256: 'a'.repeat(64),
+    };
+    const fake = installRunovaBridge({
+      'deployStacks.create': uploadResult(),
+      'deployStacks.deploy': sampleJob(),
+    });
+    store().open(KEY, emptyDraft());
+
+    await store().startDeploy(KEY, { ...INPUT, imageSource: 'release', release });
+    store().reset(KEY);
+    store().open(KEY, emptyDraft());
+    await store().startDeploy(KEY, { ...INPUT, imageSource: 'registry', release });
+
+    expect(fake.$fn('deployStacks.create')).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ imageSource: 'release', release }),
+    );
+    expect(fake.$fn('deployStacks.create').mock.calls[1][0]).not.toHaveProperty('release');
   });
 });

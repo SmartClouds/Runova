@@ -109,5 +109,30 @@ public sealed class StackMapperTests
         var joined = Assert.Single(info.Networks!);
         Assert.Equal("web", joined.Service);
         Assert.Equal(["shop_default", "shared"], joined.Networks);
+        Assert.Null(info.ImageSource);
+        Assert.Null(info.ReleaseImage);
+    }
+
+    [Fact]
+    public void A_revision_from_a_release_reads_its_source_and_the_image_it_loaded()
+    {
+        var image = new StackReleaseImage("acme/shop", "v1.4.0", 77, "shop-image.tar.gz", 1234, new string('a', 64), ["acme/shop:1.4.0"]);
+        var row = new StackRevisionRecord
+        {
+            StackId = Guid.NewGuid(),
+            Number = 2,
+            State = nameof(StackRevisionState.AwaitingImage),
+            ComposeSha256 = "sha",
+            ImageSource = nameof(StackImageSource.GithubRelease),
+            ReleaseImage = StackOperations.Write(image),
+        };
+
+        var info = StackMapper.ToInfo(row);
+
+        Assert.Equal(StackRevisionState.AwaitingImage, info.State);
+        Assert.Equal(StackImageSource.GithubRelease, info.ImageSource);
+        Assert.Equal(image.Repository, info.ReleaseImage!.Repository);
+        Assert.Equal(image.Sha256, info.ReleaseImage.Sha256);
+        Assert.Equal(["acme/shop:1.4.0"], info.ReleaseImage.Images);
     }
 }

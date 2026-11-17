@@ -259,6 +259,23 @@ public sealed class DockerEngineTests
     }
 
     [Fact]
+    public async Task A_load_streams_the_archive_and_answers_the_images_it_loaded()
+    {
+        await using var daemon = await FakeDockerDaemon.StartAsync();
+        using var engine = Engine(daemon);
+        using var archive = new MemoryStream(new byte[4096]);
+        using var empty = new MemoryStream();
+
+        var loaded = await engine.LoadImageAsync(archive, Cancel);
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => engine.LoadImageAsync(empty, Cancel));
+
+        Assert.Equal(["acme/shop:1.4.0"], loaded);
+        Assert.Contains(daemon.Requests, r => r.StartsWith("POST /images/load", StringComparison.Ordinal));
+        Assert.IsType<DockerRequestException>(failure);
+        Assert.Contains("unexpected EOF", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Images_volumes_networks_and_disk_usage_come_with_who_uses_them()
     {
         await using var daemon = await FakeDockerDaemon.StartAsync();

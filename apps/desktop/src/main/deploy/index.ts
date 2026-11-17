@@ -73,6 +73,7 @@ import { JournalSubscriptions } from './logs/journal';
 import { registerRecaptchaIpc } from './recaptcha';
 import { createDeployRegistries, registerDeployRegistryIpc } from './registry';
 import type { DeployRegistries } from './registry/service';
+import { createDeployReleases } from './releases';
 import { DeploySecurity } from './security';
 import { ServerRestores } from './serverBackups/restore';
 import { ServerBackups } from './serverBackups/service';
@@ -278,6 +279,13 @@ export function registerDeployIpc(): void {
 
   // Private registries (E08): this computer's sign-ins go with each deploy that pulls from them.
   const registries = createDeployRegistries();
+  // GitHub Release images (E105): releases through the gh sign-in, signed links for the server.
+  const githubReleases = createDeployReleases({
+    links: service.links,
+    roles: (id) => service.roles(id),
+    projectFolder: async (projectId) =>
+      (await store.getProjects()).find((item) => item.id === projectId)?.folderPath ?? null,
+  });
   const stacks = new DeployStacks({
     links: service.links,
     roles: (id) => service.roles(id),
@@ -294,8 +302,9 @@ export function registerDeployIpc(): void {
     pack: buildContextTarball,
     progress: (event) => sendToWindow(getMainWindow(), IPC.deployStacks.onUploadProgress, event),
     registryAuths: (serverId, stackId, hosts) => registries.authsFor(serverId, stackId, hosts),
+    releaseLink: (repository, assetId) => githubReleases.signedLink(repository, assetId),
   });
-  registerDeployStacksHandlers({ ipc: ipcMain, stacks, guard });
+  registerDeployStacksHandlers({ ipc: ipcMain, stacks, releases: githubReleases, guard });
   // The Docker page's Hub view reads the same Docker Hub sign-in deploys send.
   registerDockerHubHandlers({
     ipc: ipcMain,

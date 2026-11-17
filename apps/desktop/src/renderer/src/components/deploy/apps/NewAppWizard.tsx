@@ -5,7 +5,11 @@ import type {
   StackDetails,
   StackRevisionInfo,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import type { DeployStackUploadProgress, DeployStackUploadResult } from '@shared/deployStacksTypes';
+import type {
+  DeployImageSource,
+  DeployStackUploadProgress,
+  DeployStackUploadResult,
+} from '@shared/deployStacksTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
 import { Problem } from '@/components/cloudflare/fields';
@@ -33,9 +37,12 @@ import { DeployTimeline } from './DeployTimeline';
 import { type AppsAccess, useStack, useStacks } from './hooks';
 import { ConfigureStep } from './wizard/ConfigureStep';
 import { ExposeStep, PortConflicts } from './wizard/ExposeStep';
+import { IMAGE_SOURCE_LABEL } from './wizard/ImageSourcePicker';
+import { LocalApproval } from './wizard/LocalApproval';
 import { RiskList } from './wizard/RiskList';
 import { SourceStep } from './wizard/SourceStep';
 import { WIZARD_STEPS, type WizardSource, type WizardStep } from './wizard/types';
+import { WhatGoesCard } from './wizard/WhatGoesCard';
 
 /**
  * The New App wizard (E07 T7): a project and its compose file and environment, what it runs,
@@ -50,8 +57,24 @@ const UPLOAD_TEXT: Record<DeployStackUploadProgress['phase'], string> = {
   packing: 'Packing the project folder',
   'uploading-files': 'Sending the files to the server',
   'uploading-context': 'Sending the project folder to the server',
+  'loading-release': 'The server is downloading the release image from GitHub and checking it',
   done: 'The server is checking the files',
 };
+
+/** The source an app deployed from last, for deploying it again (E105). */
+function imageSourceOf(revision: StackRevisionInfo | undefined): DeployImageSource {
+  switch (revision?.imageSource) {
+    case 'githubRelease':
+      return 'release';
+    case 'localFolder':
+      return 'local';
+    case 'registry':
+      return 'registry';
+    default:
+      // An app from before E105 built on the server whenever it sent its folder.
+      return revision?.hasBuildContext ? 'local' : 'registry';
+  }
+}
 
 function describeBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -72,6 +95,9 @@ export function initialSource(serverId: string, existing: StackDetails | undefin
     environmentName: source?.environmentName ?? null,
     envFileIds: existing ? rememberedEnvFiles(serverId, existing.stack.id, environmentId) : null,
     name: existing?.stack.name ?? '',
+    imageSource: imageSourceOf(existing?.revisions[0]),
+    releaseRepository: existing?.revisions[0]?.releaseImage?.repository ?? '',
+    release: null,
   };
 }
 
@@ -272,6 +298,8 @@ export function NewAppWizard({
     data?.risks.some((risk) => risk.id === id),
   );
   const allAccepted = requires.every((id) => acknowledged.has(id));
+  // A compose file the picked source cannot deploy, with why (E105).
+  const blocked = data ? (data.blocking ?? data.sourceBlocking[source.imageSource]) : null;
 
   function change(next: Partial<WizardSource>, touchedName = false): void {
     update((current) => {
@@ -315,6 +343,8 @@ export function NewAppWizard({
         envFileIds,
         proxiedServices: proxied ?? data?.proxiedServices ?? [],
         acknowledgedRisks: requires.filter((id) => acknowledged.has(id)),
+        imageSource: source.imageSource,
+        release: source.release,
       },
       settled,
     );
@@ -336,6 +366,8 @@ export function NewAppWizard({
   if (step === 'source') {
     body = (
       <SourceStep
+        serverId={serverId}
+        canAdmin={access.canAdmin}
         source={source}
         nameProblem={nameProblem}
         nameLocked={existing !== undefined}
@@ -343,7 +375,15 @@ export function NewAppWizard({
       />
     );
     next = (
-      <Button disabled={!ready || !nameCheck.ok || taken !== null} onClick={() => go('configure')}>
+      <Button
+        disabled={
+          !ready ||
+          !nameCheck.ok ||
+          taken !== null ||
+          (source.imageSource === 'release' && source.release === null)
+        }
+        onClick={() => go('configure')}
+      >
         Next <ArrowRight className="h-3.5 w-3.5" />
       </Button>
     );
@@ -361,9 +401,23 @@ export function NewAppWizard({
       </div>
     );
   } else if (step === 'configure' && data) {
-    body = <ConfigureStep preview={data} />;
+    body = (
+      <div className="space-y-4">
+        {blocked && data.blocking === null && (
+          <div className="space-y-2">
+            <Problem
+              message={`${IMAGE_SOURCE_LABEL[source.imageSource]} cannot deploy this compose file: ${blocked}`}
+            />
+            <Button size="sm" variant="soft" onClick={() => setStep('source')}>
+              <ArrowLeft className="h-3.5 w-3.5" /> Pick another source
+            </Button>
+          </div>
+        )}
+        <ConfigureStep preview={data} />
+      </div>
+    );
     next = (
-      <Button disabled={data.blocking !== null} onClick={() => go('expose')}>
+      <Button disabled={blocked !== null} onClick={() => go('expose')}>
         Next <ArrowRight className="h-3.5 w-3.5" />
       </Button>
     );
@@ -387,7 +441,7 @@ export function NewAppWizard({
       />
     );
     next = (
-      <Button disabled={preview.isFetching || data.blocking !== null} onClick={() => go('review')}>
+      <Button disabled={preview.isFetching || blocked !== null} onClick={() => go('review')}>
         Next <ArrowRight className="h-3.5 w-3.5" />
       </Button>
     );
@@ -422,12 +476,17 @@ export function NewAppWizard({
               : `${left} findings still need accepting.`}
           </p>
         )}
+        <WhatGoesCard source={source} preview={data} />
         <RegistryPlanCard
           input={{
             serverId,
             stackId: existing?.stack.id ?? null,
+            // With a registry, a service that builds is pulled by its image instead (E105).
             images: data.services
-              .filter((service) => !service.builds && service.image)
+              .filter(
+                (service) =>
+                  service.image && (!service.builds || source.imageSource === 'registry'),
+              )
               .map((service) => service.image as string),
           }}
           stackId={null}
@@ -436,7 +495,7 @@ export function NewAppWizard({
     );
     next = (
       <Button
-        disabled={!allAccepted || !access.canOperate || data.blocking !== null}
+        disabled={!allAccepted || !access.canOperate || blocked !== null}
         onClick={startDeploy}
       >
         <Rocket className="h-3.5 w-3.5" /> Deploy {source.name}
@@ -461,6 +520,8 @@ export function NewAppWizard({
           setStep('review');
         }}
         onSettled={settled}
+        onApproveLocal={() => void useDeployAppRunStore.getState().approveLocal(key, settled)}
+        onDeclineLocal={() => void useDeployAppRunStore.getState().declineLocal(key)}
       />
     );
     const stackId =
@@ -531,6 +592,8 @@ function DeployStepBody({
   onRetry,
   onBack,
   onSettled,
+  onApproveLocal,
+  onDeclineLocal,
 }: {
   serverId: string;
   access: AppsAccess;
@@ -542,9 +605,27 @@ function DeployStepBody({
   onRetry: () => void;
   onBack: () => void;
   onSettled: () => void;
+  onApproveLocal: () => void;
+  onDeclineLocal: () => void;
 }): React.JSX.Element {
+  if (run.phase === 'packing') {
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-foreground">
+        <Spinner className="h-4 w-4 motion-safe:animate-spin" /> Packing the project folder to show
+        what would be sent…
+      </p>
+    );
+  }
+  if (run.phase === 'approve') {
+    return <LocalApproval plan={run.plan} onApprove={onApproveLocal} onDecline={onDeclineLocal} />;
+  }
   if (run.phase === 'idle' || run.phase === 'uploading' || run.phase === 'starting') {
     const sending = progress?.phase === 'uploading-context' && progress.totalBytes;
+    // Every byte is out: what is left is the server unpacking and checking them.
+    const arrived =
+      progress?.phase === 'uploading-context' &&
+      progress.totalBytes !== undefined &&
+      (progress.sentBytes ?? 0) >= progress.totalBytes;
     const percent = sending
       ? Math.min(100, Math.round(((progress.sentBytes ?? 0) / (progress.totalBytes ?? 1)) * 100))
       : null;
@@ -558,9 +639,11 @@ function DeployStepBody({
           )}
           {run.phase === 'starting'
             ? 'Starting the deploy'
-            : progress
-              ? UPLOAD_TEXT[progress.phase]
-              : 'Getting the files ready'}
+            : arrived
+              ? UPLOAD_TEXT.done
+              : progress
+                ? UPLOAD_TEXT[progress.phase]
+                : 'Getting the files ready'}
           …
         </p>
         {percent !== null && progress && (

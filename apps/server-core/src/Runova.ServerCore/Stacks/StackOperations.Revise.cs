@@ -98,6 +98,8 @@ internal sealed partial class StackOperations
                 Bindings = source.Bindings,
                 Builds = source.Builds,
                 HasBuildContext = source.HasBuildContext,
+                ImageSource = source.ImageSource,
+                ReleaseImage = source.ReleaseImage,
                 ProjectId = source.ProjectId,
                 ProjectName = source.ProjectName,
                 ComposePath = source.ComposePath,

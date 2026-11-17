@@ -277,7 +277,7 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
             }
 
             var converted = (JsonObject)Convert(root, environment)!;
-            merged = merged is null ? converted : Merge(merged, converted);
+            merged = Merge(merged ?? [], converted);
         }
 
         var model = merged ?? [];
@@ -294,13 +294,17 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
         return model;
     }
 
-    /// <summary>Maps merge, lists add up, `!override` (kept as a marker) replaces.</summary>
+    /// <summary>Maps merge, lists add up, `!override` (kept as a marker) replaces, `!reset` (a marker too) removes.</summary>
     private static JsonObject Merge(JsonObject into, JsonObject from)
     {
         foreach (var (key, value) in from.ToList())
         {
             from.Remove(key);
-            if (value is JsonObject marker && marker.ContainsKey(OverrideMarker))
+            if (value is JsonObject reset && reset.ContainsKey(ResetMarker))
+            {
+                into.Remove(key);
+            }
+            else if (value is JsonObject marker && marker.ContainsKey(OverrideMarker))
             {
                 into[key] = marker[OverrideMarker]!.DeepClone();
             }
@@ -327,6 +331,8 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
 
     private const string OverrideMarker = "\u0000override";
 
+    private const string ResetMarker = "\u0000reset";
+
     private static JsonNode? Convert(YamlNode node, Dictionary<string, string> environment)
     {
         JsonNode? converted = node switch
@@ -346,6 +352,7 @@ internal sealed partial class SimulatedCompose(InMemoryDockerEngine engine, Time
         {
             if (!value.Tag.IsEmpty && value.Tag.Value == "!reset")
             {
+                result[((YamlScalarNode)key).Value!] = new JsonObject { [ResetMarker] = true };
                 continue;
             }
 

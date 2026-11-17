@@ -50,6 +50,9 @@ internal sealed class CoreDbContext(DbContextOptions<CoreDbContext> options)
     // Private registries (E08).
     public DbSet<RegistryCredentialRecord> RegistryCredentials => Set<RegistryCredentialRecord>();
 
+    // GitHub Release images (E105).
+    public DbSet<ReleaseTokenRecord> ReleaseTokens => Set<ReleaseTokenRecord>();
+
     // Cloudflare (E14).
     public DbSet<DnsCredential> DnsCredentials => Set<DnsCredential>();
 
@@ -161,6 +164,7 @@ internal sealed class CoreDbContext(DbContextOptions<CoreDbContext> options)
         WebModel.Configure(builder);
         StackModel.Configure(builder);
         RegistryModel.Configure(builder);
+        ReleaseModel.Configure(builder);
         CloudflareModel.Configure(builder);
         BackupModel.Configure(builder);
     }

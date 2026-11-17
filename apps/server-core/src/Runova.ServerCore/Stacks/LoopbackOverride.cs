@@ -24,7 +24,8 @@ internal static class LoopbackOverride
     private const string Header =
         "# Written by Runova: services behind the proxy publish their ports on 127.0.0.1 only,\n"
         + "# and services with resource caps or networks they join get them here.\n"
-        + "# !override replaces their ports rather than adding to them (Docker Compose 2.24.4 or later).\n";
+        + "# !override replaces their ports rather than adding to them (Docker Compose 2.24.4 or later).\n"
+        + "# For images from a registry or a GitHub Release, !reset drops every build section: nothing builds here.\n";
 
     public sealed record Result(string? Text, IReadOnlyList<StackPortBinding> Bindings);
 
@@ -33,15 +34,18 @@ internal static class LoopbackOverride
         && (hostIp.StartsWith("127.", StringComparison.Ordinal) || hostIp == "::1" || hostIp.StartsWith("::ffff:127.", StringComparison.Ordinal));
 
     /// <summary>
-    /// The override text (null when no proxied service publishes a port, nothing is capped and
-    /// nothing joins another network) and every binding once it applies. The caps and networks
-    /// were checked against the services already.
+    /// The override text (null when no proxied service publishes a port, nothing is capped,
+    /// nothing joins another network and no build is reset) and every binding once it applies.
+    /// The caps and networks were checked against the services already. With
+    /// <paramref name="resetBuilds"/> every service that builds gets `build: !reset null`, so its
+    /// image is pulled (or was loaded from a release) and never built on the server (E105).
     /// </summary>
     public static Result Render(
         ComposeConfig config,
         IReadOnlyCollection<string> proxiedServices,
         IReadOnlyCollection<StackServiceLimits>? limits = null,
-        IReadOnlyCollection<StackServiceNetworks>? networks = null)
+        IReadOnlyCollection<StackServiceNetworks>? networks = null,
+        bool resetBuilds = false)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(proxiedServices);
@@ -60,6 +64,11 @@ internal static class LoopbackOverride
         foreach (var service in config.Services)
         {
             var entry = new StringBuilder();
+            if (resetBuilds && service.Builds)
+            {
+                entry.Append("    build: !reset null\n");
+            }
+
             var proxied = proxiedServices.Contains(service.Name);
             if (!proxied)
             {

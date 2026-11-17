@@ -15,6 +15,17 @@ internal static class StackServices
         services.AddSingleton<IComposeRunner>(provider => new DockerComposeRunner(
             provider.GetRequiredService<IProcessRunner>(),
             provider.GetRequiredService<SystemdRunner>()));
+        services.AddSingleton<Releases.ReleaseTokens>();
+        services.AddSingleton<Releases.ReleaseDownloads>();
+        // GitHub Release images (E105): redirects are followed by hand, only to GitHub's asset
+        // hosts, and the client logs nothing, so a signed link never reaches a log.
+        services.AddHttpClient(Releases.ReleaseDownloads.HttpClientName, client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(30);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd($"Runova-Core/{CoreVersion.Current}");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
+            .RemoveAllLoggers();
         services.AddSingleton<StackOperations>();
         services.AddHostedService<StackRecovery>();
         return services;

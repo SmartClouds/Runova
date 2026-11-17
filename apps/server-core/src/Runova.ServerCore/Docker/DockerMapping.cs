@@ -16,6 +16,17 @@ namespace Runova.ServerCore.Docker;
 internal static partial class DockerMapping
 {
     /// <summary>
+    /// The image names in docker load's stream lines ("Loaded image: name:tag"). An untagged image
+    /// ("Loaded image ID: sha256:...") has no name to deploy by, so it adds none.
+    /// </summary>
+    public static IEnumerable<string> LoadedImages(string? stream) =>
+        (stream ?? string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.StartsWith("Loaded image: ", StringComparison.Ordinal))
+            .Select(line => line["Loaded image: ".Length..].Trim())
+            .Where(name => name.Length > 0);
+
+    /// <summary>
     /// Go's os.FileMode (what the archive API's stat header carries) as a POSIX st_mode: the
     /// type from Go's high bits, then setuid, setgid, sticky and the permission bits.
     /// </summary>

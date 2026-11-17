@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { coreErrorCode } from '../../../shared/coreErrors';
 import type {
   StackInfo,
+  StackReleaseImageRequest,
   StackRevisionInfo,
   StackRevisionUpload,
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
@@ -93,14 +94,19 @@ function folderWith(files: Record<string, string>): string {
 }
 
 interface Calls {
-  posts: Array<{ path: string; body: StackRevisionUpload; token?: string }>;
+  posts: Array<{
+    path: string;
+    body: StackRevisionUpload & Partial<StackReleaseImageRequest>;
+    token?: string;
+  }>;
   puts: Array<{ path: string; body: string; headers?: Record<string, string>; length: number }>;
 }
 
 function harness(
   files: Record<string, string>,
   hub: Partial<Record<keyof ICoreHub, (...args: never[]) => unknown>> = {},
-  http: { post?: () => unknown; put?: () => unknown } = {},
+  http: { post?: (path: string) => unknown; put?: () => unknown } = {},
+  releaseLink: (repository: string, assetId: number) => Promise<string | null> = async () => SIGNED,
 ) {
   const folder = folderWith(files);
   const calls: Calls = { posts: [], puts: [] };
@@ -119,7 +125,20 @@ function harness(
   const client = {
     post: vi.fn(async (path: string, body: StackRevisionUpload, options: { token?: string }) => {
       calls.posts.push({ path, body, token: options.token });
-      return http.post ? http.post() : { ...REVISION, hasBuildContext: body.buildContext };
+      if (http.post) return http.post(path);
+      if (path.endsWith('/release-image')) {
+        return { ...REVISION, imageSource: 'githubRelease', state: 'ready' };
+      }
+      return {
+        ...REVISION,
+        hasBuildContext: body.buildContext,
+        imageSource: body.imageSource,
+        state: body.buildContext
+          ? 'awaitingContext'
+          : body.imageSource === 'githubRelease'
+            ? 'awaitingImage'
+            : 'ready',
+      };
     }),
     putStream: vi.fn(
       async (
@@ -141,7 +160,9 @@ function harness(
           headers: options.headers,
           length: options.contentLength,
         });
-        return http.put ? http.put() : { ...REVISION, hasBuildContext: true };
+        return http.put
+          ? http.put()
+          : { ...REVISION, hasBuildContext: true, imageSource: calls.posts[0]?.body.imageSource };
       },
     ),
   } as unknown as CoreHttpClient;
@@ -154,6 +175,7 @@ function harness(
       archiveBytes: 14,
       sha256: 'f00d',
       skipped: [],
+      largest: [{ path: 'api', bytes: 10 }],
     };
   });
   const stacks = new DeployStacks({
@@ -177,6 +199,7 @@ function harness(
     pack,
     progress: (event) => progress.push(event),
     tempRoot: () => contextRoot,
+    releaseLink,
   });
   return { stacks, hub: fakeHub, client, calls, progress, pack, folder, contextRoot };
 }
@@ -187,6 +210,37 @@ const ENV_FILES: Record<
 > = {
   f1: { fileName: '.env', entries: [{ key: 'DB_PASSWORD', value: SECRET, line: 1 }] },
   f2: { fileName: '.env.local', entries: [{ key: 'LOCAL_ONLY', value: 'yes', line: 1 }] },
+};
+
+const SIGNED =
+  'https://release-assets.githubusercontent.com/github-production-release-asset/1/77?sig=very-secret';
+
+const BUILDS_NAMED = `services:
+  api:
+    build: ./api
+    image: ghcr.io/acme/api:1.4.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+`;
+
+const MOUNTS = `services:
+  web:
+    image: ghcr.io/acme/web:1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+`;
+
+const RELEASE = {
+  repository: 'acme/shop',
+  tag: 'v1.4.0',
+  assetId: 77,
+  assetName: 'shop-image.tar.gz',
+  size: 1234,
+  sha256: 'a'.repeat(64),
 };
 
 const CREATE = {
@@ -233,18 +287,32 @@ describe('DeployStacks.create', () => {
     expect(progress.map((event) => event.phase)).toEqual(['reading', 'uploading-files', 'done']);
   });
 
-  it('packs the compose folder first and streams it after the files when a service builds', async () => {
+  it('packs the compose folder for a local deploy only after the user approved what goes', async () => {
     const { stacks, calls, pack, progress, folder, contextRoot } = harness({
       'compose.yaml': BUILDS,
       'api/Dockerfile': 'FROM scratch\n',
     });
+    const local = { ...CREATE, proxiedServices: [], imageSource: 'local' as const };
 
-    const result = await stacks.create({ ...CREATE, proxiedServices: [] });
+    await expect(stacks.create(local)).rejects.toThrow('approve');
+    expect(calls.posts).toEqual([]);
 
+    const plan = await stacks.prepareLocal(local);
     expect(pack).toHaveBeenCalledWith(
       expect.objectContaining({ root: folder, alwaysInclude: ['api/Dockerfile'] }),
     );
-    expect(calls.posts[0].body.buildContext).toBe(true);
+    expect(plan).toMatchObject({
+      archiveBytes: 14,
+      contentBytes: 10,
+      entries: 2,
+      largest: [{ path: 'api', bytes: 10 }],
+    });
+    progress.length = 0;
+
+    const result = await stacks.create({ ...local, approvalId: plan.approvalId });
+
+    expect(pack).toHaveBeenCalledTimes(1);
+    expect(calls.posts[0].body).toMatchObject({ buildContext: true, imageSource: 'localFolder' });
     expect(calls.puts).toEqual([
       {
         path: `/api/v1/stacks/${STACK}/revisions/1/context`,
@@ -256,17 +324,164 @@ describe('DeployStacks.create', () => {
     expect(result.revision.hasBuildContext).toBe(true);
     expect(progress.map((event) => event.phase)).toEqual([
       'reading',
-      'packing',
       'uploading-files',
       'uploading-context',
       'uploading-context',
       'done',
     ]);
-    expect(progress[4]).toMatchObject({ sentBytes: 14, totalBytes: 14 });
-    // The packed context does not stay on this computer.
+    expect(progress[3]).toMatchObject({ sentBytes: 14, totalBytes: 14 });
+    // The approved archive goes once and does not stay on this computer.
     const packedAt = pack.mock.calls[0][0].output;
     expect(packedAt.startsWith(contextRoot)).toBe(true);
     expect(existsSync(packedAt)).toBe(false);
+    await expect(stacks.create({ ...local, approvalId: plan.approvalId })).rejects.toThrow(
+      'approve',
+    );
+  });
+
+  it('keeps an approval to the compose file it was made for, and drops a cancelled one', async () => {
+    const { stacks, calls } = harness({
+      'compose.yaml': BUILDS,
+      'other/compose.yaml': BUILDS,
+      'api/Dockerfile': 'FROM scratch\n',
+    });
+    const local = { ...CREATE, proxiedServices: [], imageSource: 'local' as const };
+    const plan = await stacks.prepareLocal(local);
+    const cancelled = await stacks.prepareLocal(local);
+    await stacks.cancelLocal(cancelled.approvalId);
+
+    await expect(
+      stacks.create({ ...local, composePath: 'other/compose.yaml', approvalId: plan.approvalId }),
+    ).rejects.toThrow('approve');
+    await expect(stacks.create({ ...local, approvalId: cancelled.approvalId })).rejects.toThrow(
+      'approve',
+    );
+    expect(calls.posts).toEqual([]);
+  });
+
+  it('sends a registry deploy as the compose file and .env alone, even when a service builds', async () => {
+    const { stacks, calls, pack } = harness({
+      'compose.yaml': BUILDS_NAMED,
+      'api/Dockerfile': 'FROM scratch\n',
+    });
+
+    await stacks.create({ ...CREATE, proxiedServices: [] });
+
+    expect(pack).not.toHaveBeenCalled();
+    expect(calls.posts[0].body).toMatchObject({ buildContext: false, imageSource: 'registry' });
+    expect(calls.puts).toEqual([]);
+  });
+
+  it('refuses a registry deploy of a service that builds and names no image, before the server hears of it', async () => {
+    const { stacks, hub, calls } = harness({ 'compose.yaml': BUILDS });
+
+    await expect(stacks.create({ ...CREATE, proxiedServices: [] })).rejects.toThrow(
+      'api builds from source and names no image',
+    );
+    expect(hub.createStack).not.toHaveBeenCalled();
+    expect(calls.posts).toEqual([]);
+  });
+
+  it('sends only the files the compose file reads with a registry deploy, without asking', async () => {
+    const { stacks, calls, pack, folder } = harness({
+      'compose.yaml': MOUNTS,
+      'nginx.conf': 'events {}\n',
+      'src/secret.ts': 'never goes',
+    });
+
+    await stacks.create({ ...CREATE, proxiedServices: [] });
+
+    expect(pack).toHaveBeenCalledWith(
+      expect.objectContaining({ root: folder, only: ['nginx.conf'] }),
+    );
+    expect(calls.posts[0].body).toMatchObject({ buildContext: true, imageSource: 'registry' });
+    expect(calls.puts).toHaveLength(1);
+  });
+
+  it('refuses project files that add up to more than configuration, pointing at a local deploy', async () => {
+    const { stacks, pack, calls } = harness({ 'compose.yaml': MOUNTS, 'nginx.conf': 'x' });
+    pack.mockImplementationOnce(async (options: BuildContextOptions) => {
+      writeFileSync(options.output, 'big');
+      return {
+        path: options.output,
+        entries: 1,
+        contentBytes: 50 * 1024 * 1024,
+        archiveBytes: 3,
+        sha256: 'f00d',
+        skipped: [],
+        largest: [{ path: 'nginx.conf', bytes: 50 * 1024 * 1024 }],
+      };
+    });
+
+    await expect(stacks.create({ ...CREATE, proxiedServices: [] })).rejects.toThrow('local folder');
+    expect(calls.posts).toEqual([]);
+  });
+
+  it('has the server load a release image with the signed link this computer got, once', async () => {
+    const releaseLink = vi.fn(async () => SIGNED);
+    const { stacks, calls, progress, pack } = harness(
+      { 'compose.yaml': BUILDS_NAMED },
+      {},
+      {},
+      releaseLink,
+    );
+
+    const result = await stacks.create({
+      ...CREATE,
+      proxiedServices: [],
+      imageSource: 'release',
+      release: RELEASE,
+    });
+
+    expect(pack).not.toHaveBeenCalled();
+    expect(releaseLink).toHaveBeenCalledWith('acme/shop', 77);
+    expect(calls.posts.map((post) => post.path)).toEqual([
+      `/api/v1/stacks/${STACK}/revisions`,
+      `/api/v1/stacks/${STACK}/revisions/1/release-image`,
+    ]);
+    expect(calls.posts[0].body).toMatchObject({
+      buildContext: false,
+      imageSource: 'githubRelease',
+    });
+    expect(calls.posts[1].body).toEqual({ ...RELEASE, downloadUrl: SIGNED });
+    expect(result.revision.state).toBe('ready');
+    expect(progress.map((event) => event.phase)).toContain('loading-release');
+    expect(JSON.stringify(progress)).not.toContain('very-secret');
+  });
+
+  it('lets the server use its own access when this computer has no GitHub sign-in', async () => {
+    const { stacks, calls } = harness({ 'compose.yaml': BUILDS_NAMED }, {}, {}, async () => null);
+
+    await stacks.create({
+      ...CREATE,
+      proxiedServices: [],
+      imageSource: 'release',
+      release: RELEASE,
+    });
+
+    expect(calls.posts[1].body).toEqual(RELEASE);
+  });
+
+  it('asks for the release image before anything goes for a release deploy', async () => {
+    const { stacks, calls } = harness({ 'compose.yaml': BUILDS_NAMED });
+
+    await expect(
+      stacks.create({ ...CREATE, proxiedServices: [], imageSource: 'release' }),
+    ).rejects.toThrow('Pick the release image');
+    expect(calls.posts).toEqual([]);
+  });
+
+  it('says to update a core that does not know image sources rather than deploying a build it cannot do', async () => {
+    const { stacks, calls } = harness(
+      { 'compose.yaml': BUILDS_NAMED },
+      {},
+      { post: () => ({ ...REVISION }) },
+    );
+
+    await expect(
+      stacks.create({ ...CREATE, proxiedServices: [], imageSource: 'release', release: RELEASE }),
+    ).rejects.toThrow("Update this server's Runova core");
+    expect(calls.posts).toHaveLength(1);
   });
 
   it('refuses before the server hears anything while a risk waits for its acknowledgment', async () => {

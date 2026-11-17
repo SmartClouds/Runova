@@ -1,6 +1,12 @@
 import { coreErrorMessage } from '@shared/coreErrors';
 import type { JobInfo } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import type { DeployStackUploadProgress, DeployStackUploadResult } from '@shared/deployStacksTypes';
+import type {
+  DeployImageSource,
+  DeployLocalUploadPlan,
+  DeployReleaseAssetPick,
+  DeployStackUploadProgress,
+  DeployStackUploadResult,
+} from '@shared/deployStacksTypes';
 import { create } from 'zustand';
 import type { WizardSource, WizardStep } from '@/components/deploy/apps/wizard/types';
 import { useDeployAppEnvFilesStore } from './deployAppEnvFilesStore';
@@ -13,6 +19,10 @@ import { useDeployAppEnvFilesStore } from './deployAppEnvFilesStore';
 
 export type AppRun =
   | { phase: 'idle' }
+  /** A local folder is being packed, to show what would be sent (E105). */
+  | { phase: 'packing' }
+  /** The packed folder waits for the user to approve sending it. */
+  | { phase: 'approve'; plan: DeployLocalUploadPlan; input: AppDeployInput }
   | { phase: 'uploading' }
   | { phase: 'invalid'; result: DeployStackUploadResult }
   | { phase: 'confirm'; result: DeployStackUploadResult }
@@ -55,6 +65,12 @@ export interface AppDeployInput {
   envFileIds: string[] | null;
   proxiedServices: string[];
   acknowledgedRisks: string[];
+  /** Where the images come from (E105). */
+  imageSource: DeployImageSource;
+  /** The release image, for a GitHub Release deploy. */
+  release: DeployReleaseAssetPick | null;
+  /** The packed local folder the user approved, for a Local Folder deploy. */
+  approvalId?: string;
 }
 
 export function wizardKey(serverId: string, existingStackId: string | null): string {
@@ -74,6 +90,9 @@ export function emptyDraft(overrides: Partial<AppWizardDraft> = {}): AppWizardDr
       environmentName: null,
       envFileIds: null,
       name: '',
+      imageSource: 'registry',
+      releaseRepository: '',
+      release: null,
     },
     nameTouched: false,
     proxied: undefined,
@@ -85,7 +104,7 @@ export function emptyDraft(overrides: Partial<AppWizardDraft> = {}): AppWizardDr
 
 /** True while the wizard's deploy is on its way and nothing waits for the user. */
 export function isAppRunBusy(run: AppRun): boolean {
-  return run.phase === 'uploading' || run.phase === 'starting';
+  return run.phase === 'uploading' || run.phase === 'starting' || run.phase === 'packing';
 }
 
 interface DeployAppRunState {
@@ -94,8 +113,15 @@ interface DeployAppRunState {
   open: (key: string, draft: AppWizardDraft) => void;
   setDraft: (key: string, change: Partial<AppWizardDraft>) => void;
   setRun: (key: string, run: AppRun) => void;
-  /** Sends the files, then deploys, unless the server turns them down or finds more to accept. */
+  /**
+   * Sends the files, then deploys, unless the server turns them down or finds more to accept. A
+   * Local Folder deploy first packs the folder and waits in `approve` for the user's say-so.
+   */
   startDeploy: (key: string, input: AppDeployInput, onSettled?: () => void) => Promise<void>;
+  /** The user approved the packed folder: it goes, then the deploy. */
+  approveLocal: (key: string, onSettled?: () => void) => Promise<void>;
+  /** The user did not approve: the packed folder goes, nothing was sent. */
+  declineLocal: (key: string) => Promise<void>;
   /** Accepts what the server found, if anything, and deploys a revision already uploaded. */
   launch: (
     key: string,
@@ -139,6 +165,29 @@ export const useDeployAppRunStore = create<DeployAppRunState>((set, get) => {
     startDeploy: async (key, input, onSettled) => {
       const current = get().wizards[key];
       if (!current || isAppRunBusy(current.run)) return;
+      if (input.imageSource === 'local' && !input.approvalId) {
+        patch(key, (wizard) => ({
+          run: { phase: 'packing' },
+          progress: null,
+          name: input.name,
+          serverId: input.serverId,
+          draft: { ...wizard.draft, step: 'deploy', reached: Math.max(wizard.draft.reached, 4) },
+        }));
+        try {
+          const plan = await window.runova.deployStacks.prepareLocal({
+            serverId: input.serverId,
+            projectId: input.projectId,
+            composePath: input.composePath,
+            environmentId: input.environmentId,
+            ...(input.envFileIds ? { envFileIds: input.envFileIds } : {}),
+            imageSource: 'local',
+          });
+          patch(key, () => ({ run: { phase: 'approve', plan, input } }));
+        } catch (error) {
+          patch(key, () => ({ run: { phase: 'error', message: coreErrorMessage(error) } }));
+        }
+        return;
+      }
       patch(key, (wizard) => ({
         run: { phase: 'uploading' },
         progress: null,
@@ -150,9 +199,14 @@ export const useDeployAppRunStore = create<DeployAppRunState>((set, get) => {
       const stop = window.runova.deployStacks.onUploadProgress((event) => {
         if (event.serverId === input.serverId) patch(key, () => ({ progress: event }));
       });
-      const { existingStackId, name, envFileIds, ...rest } = input;
-      // Left out when every file applies, the way the main process reads it.
-      const common = envFileIds ? { ...rest, envFileIds } : rest;
+      const { existingStackId, name, envFileIds, release, approvalId, ...rest } = input;
+      // Left out when not set, the way the main process reads them.
+      const common = {
+        ...rest,
+        ...(envFileIds ? { envFileIds } : {}),
+        ...(release && input.imageSource === 'release' ? { release } : {}),
+        ...(approvalId ? { approvalId } : {}),
+      };
       let result: DeployStackUploadResult;
       try {
         result = existingStackId
@@ -177,6 +231,25 @@ export const useDeployAppRunStore = create<DeployAppRunState>((set, get) => {
         }));
       } else {
         await get().launch(key, result, [], onSettled);
+      }
+    },
+    approveLocal: async (key, onSettled) => {
+      const run = get().wizards[key]?.run;
+      if (run?.phase !== 'approve') return;
+      patch(key, () => ({ run: { phase: 'idle' } }));
+      await get().startDeploy(key, { ...run.input, approvalId: run.plan.approvalId }, onSettled);
+    },
+    declineLocal: async (key) => {
+      const run = get().wizards[key]?.run;
+      if (run?.phase !== 'approve') return;
+      patch(key, (wizard) => ({
+        run: { phase: 'idle' },
+        draft: { ...wizard.draft, step: 'review' },
+      }));
+      try {
+        await window.runova.deployStacks.cancelLocal(run.plan.approvalId);
+      } catch {
+        // It expires on its own in the main process.
       }
     },
     launch: async (key, result, accept = [], onSettled) => {

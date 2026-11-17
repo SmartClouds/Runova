@@ -54,6 +54,12 @@ export interface BuildContextOptions {
    * with another name or in another folder. The Dockerfile and the ignore file always do.
    */
   alwaysInclude?: readonly string[];
+  /**
+   * Pack only these files and folders (relative to `root`) and the folders above them, and
+   * nothing else, .dockerignore aside: the files a compose file reads for a registry or release
+   * deploy (E105), which builds nothing. A path that is not there is left out.
+   */
+  only?: readonly string[];
   maxBytes?: number;
   maxEntries?: number;
   /**
@@ -76,6 +82,8 @@ export interface BuildContextResult {
   sha256: string;
   /** Sockets, pipes and devices that were left out. */
   skipped: string[];
+  /** The biggest top-level files and folders packed, largest first (at most five). */
+  largest: Array<{ path: string; bytes: number }>;
 }
 
 function describeBytes(bytes: number): string {
@@ -121,11 +129,15 @@ interface Walked {
   sizeByTop: Map<string, number>;
 }
 
+/** Which paths a walk takes: `skip` drops one and everything under it, `descend` only goes through. */
+type Keep = (path: string) => 'keep' | 'skip' | 'descend';
+
 async function walk(
   root: string,
   matcher: DockerignoreMatcher | null,
   forced: ReadonlySet<string>,
   maxEntries: number,
+  keep: Keep | null = null,
 ): Promise<Walked> {
   const walked: Walked = { paths: [], bytes: 0, skipped: [], sizeByTop: new Map() };
   const forcedInside = (folder: string) =>
@@ -146,6 +158,14 @@ async function walk(
     for (const child of children) {
       const path = prefix ? `${prefix}/${child.name}` : child.name;
       const absolute = join(folder, child.name);
+      const decision = keep?.(path) ?? 'keep';
+      if (decision === 'skip') continue;
+      if (decision === 'descend') {
+        if (!child.isDirectory()) continue;
+        add(path);
+        await visit(absolute, path);
+        continue;
+      }
       const excluded = !forced.has(path) && (matcher?.excludes(path) ?? false);
       if (child.isDirectory()) {
         if (excluded && matcher?.canSkipFolder(path) && !forcedInside(path)) continue;
@@ -221,13 +241,24 @@ export async function buildContextTarball(
     );
   }
 
-  const matcher = await readMatcher(root, ignoreFile);
+  const only = options.only?.map((path) => dockerCleanPath(path.replaceAll('\\', '/')));
+  const matcher = only ? null : await readMatcher(root, ignoreFile);
   const forced = new Set(
-    ['Dockerfile', ignoreFile, ...(options.alwaysInclude ?? [])].map((path) =>
-      dockerCleanPath(path.replaceAll('\\', '/')),
-    ),
+    only
+      ? []
+      : ['Dockerfile', ignoreFile, ...(options.alwaysInclude ?? [])].map((path) =>
+          dockerCleanPath(path.replaceAll('\\', '/')),
+        ),
   );
-  const walked = await walk(root, matcher, forced, maxEntries);
+  const keep: Keep | null = only
+    ? (path) =>
+        only.some((wanted) => path === wanted || path.startsWith(`${wanted}/`))
+          ? 'keep'
+          : only.some((wanted) => wanted.startsWith(`${path}/`))
+            ? 'descend'
+            : 'skip'
+    : null;
+  const walked = await walk(root, matcher, forced, maxEntries, keep);
 
   if (walked.bytes > maxBytes) {
     const largest = [...walked.sizeByTop.entries()]
@@ -266,5 +297,9 @@ export async function buildContextTarball(
     archiveBytes: (await stat(output)).size,
     sha256: await sha256Of(output),
     skipped: walked.skipped,
+    largest: [...walked.sizeByTop.entries()]
+      .map(([path, bytes]) => ({ path, bytes }))
+      .sort((a, b) => b.bytes - a.bytes)
+      .slice(0, 5),
   };
 }

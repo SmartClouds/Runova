@@ -41,6 +41,8 @@ internal sealed partial class CoreHub(
     WebServices web,
     StackOperations stacks,
     RegistryCredentials registries,
+    Releases.ReleaseTokens releaseTokens,
+    Releases.ReleaseDownloads releaseDownloads,
     CloudflareServices cloudflare,
     SecurityCenterServices security,
     Backups.BackupCenter backupCenter,

@@ -40,6 +40,9 @@ public enum StackRevisionState
     /// <summary>The files are in; the build context the upload announced has not arrived.</summary>
     AwaitingContext,
 
+    /// <summary>The files are in; the GitHub Release image it deploys has not been loaded yet (E105).</summary>
+    AwaitingImage,
+
     /// <summary>Checked with docker compose config and ready to deploy.</summary>
     Ready,
 
@@ -97,6 +100,30 @@ public enum StackAction
     /// <summary>docker compose down: the containers and networks go, volumes stay.</summary>
     Down,
 }
+
+/// <summary>
+/// Where a revision's images come from (E105). Registry and GithubRelease revisions never build on
+/// the server: the core resets every service's build section, and only the compose file, the .env
+/// and the project files the compose file reads arrive. LocalFolder builds from the compose folder
+/// the user approved sending. A revision without one (an app from before E105) works as it always
+/// did: it builds when the compose file builds.
+/// </summary>
+[TranspilationSource]
+public enum StackImageSource
+{
+    Registry,
+    GithubRelease,
+    LocalFolder,
+}
+
+/// <summary>
+/// The GitHub Release asset a revision deploys (E105), as the core downloaded and checked it, and
+/// the image names docker load reported from it.
+/// </summary>
+/// <param name="Repository">owner/name on github.com.</param>
+/// <param name="Sha256">The asset's SHA-256 in lowercase hex, as GitHub reports it and as it arrived.</param>
+[TranspilationSource]
+public sealed record StackReleaseImage(string Repository, string Tag, long AssetId, string AssetName, long Size, string Sha256, string[] Images);
 
 /// <summary>Where the app took the files from, so it can deploy again from the same place.</summary>
 [TranspilationSource]
@@ -168,7 +195,9 @@ public sealed record StackRevisionInfo(
     string? Error = null,
     StackSource? Source = null,
     StackServiceLimits[]? Limits = null,
-    StackServiceNetworks[]? Networks = null);
+    StackServiceNetworks[]? Networks = null,
+    StackImageSource? ImageSource = null,
+    StackReleaseImage? ReleaseImage = null);
 
 /// <summary>
 /// Resource caps on one service of an app; a field left null is no cap. Cores and share are kept
@@ -215,7 +244,9 @@ public sealed record StackActionRequest(Guid StackId, StackAction Action);
 /// <summary>
 /// The body of POST /api/v1/stacks/{id}/revisions. Env is the rendered .env text (stored 0600,
 /// never shown again); ProxiedServices publish on 127.0.0.1 only. BuildContext announces a
-/// .tar.gz that follows with PUT .../revisions/{n}/context.
+/// .tar.gz that follows with PUT .../revisions/{n}/context: the compose folder for a LocalFolder
+/// revision, only the files the compose file reads for the others. A GithubRelease revision then
+/// waits for POST .../revisions/{n}/release-image.
 /// </summary>
 [TranspilationSource]
 public sealed record StackRevisionUpload(
@@ -225,7 +256,8 @@ public sealed record StackRevisionUpload(
     string[] AcknowledgedRisks,
     bool BuildContext = false,
     StackSource? Source = null,
-    StackServiceLimits[]? Limits = null);
+    StackServiceLimits[]? Limits = null,
+    StackImageSource? ImageSource = null);
 
 /// <summary>Why a revision was made from another one on the server, for the audit trail.</summary>
 [TranspilationSource]

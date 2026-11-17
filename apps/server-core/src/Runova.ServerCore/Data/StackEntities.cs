@@ -81,6 +81,12 @@ internal sealed class StackRevisionRecord
 
     public bool HasBuildContext { get; set; }
 
+    /// <summary>A StackImageSource name (E105); null for a revision from before it, which builds when the compose file builds.</summary>
+    public string? ImageSource { get; set; }
+
+    /// <summary>The GitHub Release image (StackReleaseImage) a GithubRelease revision loaded, as JSON.</summary>
+    public string? ReleaseImage { get; set; }
+
     public Guid? JobId { get; set; }
 
     public long? DeployedAt { get; set; }

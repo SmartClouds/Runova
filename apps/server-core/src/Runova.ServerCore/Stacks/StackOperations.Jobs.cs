@@ -174,6 +174,8 @@ internal sealed partial class StackOperations
                 Bindings = source.Bindings,
                 Builds = source.Builds,
                 HasBuildContext = source.HasBuildContext,
+                ImageSource = source.ImageSource,
+                ReleaseImage = source.ReleaseImage,
                 RollbackOf = number,
                 ProjectId = source.ProjectId,
                 ProjectName = source.ProjectName,
@@ -326,7 +328,7 @@ internal sealed partial class StackOperations
                 steps[current] = steps[current] with { State = StackStepState.Running, StartedAtUnixMs = Now, FirstLogSeq = job.LogLines + 1 };
                 await SaveStepsAsync(stack.Id, row.Number, steps);
                 job.Log($"Step: {Describe(kind)}.");
-                var detail = await RunStepAsync(kind, stack, folder, project, new(proxied, limits, networks), acknowledged, signIns, job, token);
+                var detail = await RunStepAsync(kind, stack, row, folder, project, new(proxied, limits, networks, NeverBuilds(row.ImageSource)), acknowledged, signIns, job, token);
                 steps[current] = steps[current] with { State = StackStepState.Succeeded, FinishedAtUnixMs = Now, LastLogSeq = job.LogLines, Detail = detail };
                 await SaveStepsAsync(stack.Id, row.Number, steps);
             }
@@ -375,6 +377,7 @@ internal sealed partial class StackOperations
     private async Task<string?> RunStepAsync(
         StackStepKind kind,
         StackRecord stack,
+        StackRevisionRecord row,
         string folder,
         ComposeProject project,
         RevisionShape shape,
@@ -401,6 +404,19 @@ internal sealed partial class StackOperations
                 await SignInAsync(signIns, checkedConfig, job, token);
                 return $"{checkedConfig.Services.Length} services";
             case StackStepKind.Pull:
+                if (await ServicesToPullAsync(row, project, token) is { } services)
+                {
+                    if (services.Length == 0)
+                    {
+                        job.Log("Every image comes from the GitHub Release, so there is nothing to pull.");
+                        return "from the release";
+                    }
+
+                    job.Log($"From the GitHub Release: {string.Join(", ", Read<StackReleaseImage>(row.ReleaseImage!).Images)}. Pulling the rest.");
+                    await ComposeStepAsync(job, project, ["pull", .. services], PullTimeout, "stackpull", token, signIns.Environment);
+                    return null;
+                }
+
                 await ComposeStepAsync(job, project, ["pull", "--ignore-buildable"], PullTimeout, "stackpull", token, signIns.Environment);
                 return null;
             case StackStepKind.Build:

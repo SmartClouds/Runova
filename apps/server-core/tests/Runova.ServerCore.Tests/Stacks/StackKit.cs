@@ -36,9 +36,9 @@ internal sealed class StackKit(AuthHarness harness, HubConnection hub, string to
 
     public static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
-    public static async Task<StackKit> CreateAsync(string role)
+    public static async Task<StackKit> CreateAsync(string role, Action<IServiceCollection, Microsoft.Extensions.Time.Testing.FakeTimeProvider?>? services = null)
     {
-        var harness = await AuthHarness.CreateAsync(role, fakeClock: false);
+        var harness = await AuthHarness.CreateAsync(role, fakeClock: false, services);
         var signedIn = await harness.SignInAsync();
         var hub = harness.Hub(signedIn.AccessToken);
         await hub.StartAsync(Cancel);
@@ -81,6 +81,15 @@ internal sealed class StackKit(AuthHarness harness, HubConnection hub, string to
             request.Headers.Add(StackEndpointsHeader, sha);
         }
 
+        return await SendAsync(request);
+    }
+
+    public async Task<HttpResponseMessage> PostReleaseImageAsync(Guid stackId, int number, StackReleaseImageRequest body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/stacks/{stackId}/revisions/{number}/release-image")
+        {
+            Content = JsonContent.Create(body, options: CoreJson.Options),
+        };
         return await SendAsync(request);
     }
 

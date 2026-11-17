@@ -2490,6 +2490,63 @@ export type SaveRegistryCredentialRequest = {
     secret: string;
 }
 
+/** Transpiled from Runova.ServerCore.Contracts.StackReleaseImageRequest */
+export type StackReleaseImageRequest = {
+    /** Transpiled from string */
+    repository: string;
+    /** Transpiled from string */
+    tag: string;
+    /** Transpiled from long */
+    assetId: number;
+    /** Transpiled from string */
+    assetName: string;
+    /** Transpiled from long */
+    size: number;
+    /** Transpiled from string */
+    sha256: string;
+    /** Transpiled from string? */
+    downloadUrl?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.ReleaseTokenInfo */
+export type ReleaseTokenInfo = {
+    /** Transpiled from System.Guid */
+    id: string;
+    /** Transpiled from string */
+    repository: string;
+    /** Transpiled from long */
+    createdAtUnixMs: number;
+    /** Transpiled from long */
+    updatedAtUnixMs: number;
+    /** Transpiled from string? */
+    createdBy?: string;
+    /** Transpiled from long */
+    lastUsedAtUnixMs?: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.SaveReleaseTokenRequest */
+export type SaveReleaseTokenRequest = {
+    /** Transpiled from string */
+    repository: string;
+    /** Transpiled from string */
+    token: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.ReleaseAccess */
+export type ReleaseAccess = "public" | "storedToken" | "none";
+
+/** Transpiled from Runova.ServerCore.Contracts.ReleaseAccessCheck */
+export type ReleaseAccessCheck = {
+    /** Transpiled from string */
+    repository: string;
+    /** Transpiled from Runova.ServerCore.Contracts.ReleaseAccess */
+    access: ReleaseAccess;
+    /** Transpiled from string */
+    message: string;
+    /** Transpiled from Runova.ServerCore.Contracts.ReleaseTokenInfo? */
+    token?: ReleaseTokenInfo;
+}
+
 /** Transpiled from Runova.ServerCore.Contracts.SshPolicyInfo */
 export type SshPolicyInfo = {
     /** Transpiled from bool */
@@ -2621,7 +2678,7 @@ export type SecurityChecklistRequest = {
 export type StackStatus = "new" | "busy" | "running" | "degraded" | "stopped" | "down" | "failed";
 
 /** Transpiled from Runova.ServerCore.Contracts.StackRevisionState */
-export type StackRevisionState = "awaitingContext" | "ready" | "invalid" | "deploying" | "live" | "failed" | "superseded";
+export type StackRevisionState = "awaitingContext" | "awaitingImage" | "ready" | "invalid" | "deploying" | "live" | "failed" | "superseded";
 
 /** Transpiled from Runova.ServerCore.Contracts.StackStepKind */
 export type StackStepKind = "validate" | "pull" | "build" | "up" | "health";
@@ -2634,6 +2691,27 @@ export type StackRiskSeverity = "critical" | "high" | "medium" | "low";
 
 /** Transpiled from Runova.ServerCore.Contracts.StackAction */
 export type StackAction = "start" | "stop" | "restart" | "down";
+
+/** Transpiled from Runova.ServerCore.Contracts.StackImageSource */
+export type StackImageSource = "registry" | "githubRelease" | "localFolder";
+
+/** Transpiled from Runova.ServerCore.Contracts.StackReleaseImage */
+export type StackReleaseImage = {
+    /** Transpiled from string */
+    repository: string;
+    /** Transpiled from string */
+    tag: string;
+    /** Transpiled from long */
+    assetId: number;
+    /** Transpiled from string */
+    assetName: string;
+    /** Transpiled from long */
+    size: number;
+    /** Transpiled from string */
+    sha256: string;
+    /** Transpiled from string[] */
+    images: string[];
+}
 
 /** Transpiled from Runova.ServerCore.Contracts.StackSource */
 export type StackSource = {
@@ -2771,6 +2849,10 @@ export type StackRevisionInfo = {
     limits?: StackServiceLimits[];
     /** Transpiled from Runova.ServerCore.Contracts.StackServiceNetworks[]? */
     networks?: StackServiceNetworks[];
+    /** Transpiled from Runova.ServerCore.Contracts.StackImageSource */
+    imageSource?: StackImageSource;
+    /** Transpiled from Runova.ServerCore.Contracts.StackReleaseImage? */
+    releaseImage?: StackReleaseImage;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits */
@@ -2881,6 +2963,8 @@ export type StackRevisionUpload = {
     source?: StackSource;
     /** Transpiled from Runova.ServerCore.Contracts.StackServiceLimits[]? */
     limits?: StackServiceLimits[];
+    /** Transpiled from Runova.ServerCore.Contracts.StackImageSource */
+    imageSource?: StackImageSource;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.StackRevisionPurpose */

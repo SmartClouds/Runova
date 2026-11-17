@@ -35,6 +35,7 @@ export const STATUS_TONE: Record<StackStatus, Tone> = {
 
 export const REVISION_TEXT: Record<StackRevisionState, string> = {
   awaitingContext: 'Waiting for files',
+  awaitingImage: 'Waiting for the release image',
   ready: 'Ready',
   invalid: 'Invalid',
   deploying: 'Deploying',
@@ -45,6 +46,7 @@ export const REVISION_TEXT: Record<StackRevisionState, string> = {
 
 export const REVISION_TONE: Record<StackRevisionState, Tone> = {
   awaitingContext: 'muted',
+  awaitingImage: 'muted',
   ready: 'muted',
   invalid: 'danger',
   deploying: 'busy',

@@ -80,7 +80,9 @@ internal sealed partial class StackOperations
             {
                 StackId = stackId,
                 Number = number,
-                State = upload.BuildContext ? nameof(StackRevisionState.AwaitingContext) : nameof(StackRevisionState.Ready),
+                State = upload.BuildContext
+                    ? nameof(StackRevisionState.AwaitingContext)
+                    : upload.ImageSource == StackImageSource.GithubRelease ? nameof(StackRevisionState.AwaitingImage) : nameof(StackRevisionState.Ready),
                 CreatedAt = Now,
                 CreatedBy = caller.UserName,
                 ComposeSha256 = Convert.ToHexStringLower(SHA256.HashData(composeBytes)),
@@ -89,6 +91,7 @@ internal sealed partial class StackOperations
                 Limits = Write(ResourceLimits.Kept(upload.Limits)),
                 AcknowledgedRisks = Write(acknowledged),
                 HasBuildContext = upload.BuildContext,
+                ImageSource = upload.ImageSource?.ToString(),
                 ProjectId = upload.Source?.ProjectId,
                 ProjectName = upload.Source?.ProjectName,
                 ComposePath = upload.Source?.ComposePath,
@@ -111,6 +114,7 @@ internal sealed partial class StackOperations
                     ["revision"] = number.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["sha256"] = row.ComposeSha256,
                     ["buildContext"] = upload.BuildContext ? "true" : "false",
+                    ["imageSource"] = upload.ImageSource?.ToString(),
                 },
                 cancellationToken);
             foreach (var id in acknowledged)
@@ -123,7 +127,7 @@ internal sealed partial class StackOperations
             _gate.Release();
         }
 
-        return upload.BuildContext ? StackMapper.ToInfo(row) : await ValidateAsync(stack, row.Number, cancellationToken);
+        return row.State == nameof(StackRevisionState.Ready) ? await ValidateAsync(stack, row.Number, cancellationToken) : StackMapper.ToInfo(row);
     }
 
     /// <summary>
@@ -186,7 +190,21 @@ internal sealed partial class StackOperations
             throw new StackRefusedException("This revision already has its build context.", StatusCodes.Status409Conflict);
         }
 
+        if (row.ImageSource == nameof(StackImageSource.GithubRelease) && row.ReleaseImage is null)
+        {
+            await SetStateAsync(stack.Id, number, nameof(StackRevisionState.AwaitingImage), cancellationToken);
+            return StackMapper.ToInfo(await RevisionAsync(stack.Id, number, cancellationToken));
+        }
+
         return await ValidateAsync(stack, number, cancellationToken);
+    }
+
+    private async Task SetStateAsync(Guid stackId, int number, string state, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        await db.StackRevisions
+            .Where(r => r.StackId == stackId && r.Number == number)
+            .ExecuteUpdateAsync(update => update.SetProperty(r => r.State, state), cancellationToken);
     }
 
     /// <summary>
@@ -197,7 +215,7 @@ internal sealed partial class StackOperations
     {
         var folder = RevisionFolder(stack.Id, number);
         var row = await RevisionAsync(stack.Id, number, cancellationToken);
-        var shape = new RevisionShape(Read<string[]>(row.ProxiedServices), Read<StackServiceLimits[]>(row.Limits), Read<StackServiceNetworks[]>(row.Networks));
+        var shape = ShapeOf(row);
         var seeded = redactor.With(await EnvValuesAsync(folder, cancellationToken));
         string state;
         string? error = null;
@@ -237,10 +255,19 @@ internal sealed partial class StackOperations
     internal sealed record CheckedConfig(string[] Services, bool Builds, List<StackRisk> Findings, IReadOnlyList<StackPortBinding> Bindings, string[] Registries);
 
     /// <summary>What a revision asks of its services beyond the compose file: loopback ports, caps and joined networks.</summary>
+    /// <param name="NeverBuilds">The images come from a registry or a GitHub Release (E105): the override resets every build section.</param>
     internal sealed record RevisionShape(
         IReadOnlyCollection<string> Proxied,
         IReadOnlyCollection<StackServiceLimits> Limits,
-        IReadOnlyCollection<StackServiceNetworks> Networks);
+        IReadOnlyCollection<StackServiceNetworks> Networks,
+        bool NeverBuilds = false);
+
+    internal static RevisionShape ShapeOf(StackRevisionRecord row) =>
+        new(Read<string[]>(row.ProxiedServices), Read<StackServiceLimits[]>(row.Limits), Read<StackServiceNetworks[]>(row.Networks), NeverBuilds(row.ImageSource));
+
+    /// <summary>A Registry or GithubRelease revision; one from before E105 or from a local folder builds when its compose file does.</summary>
+    internal static bool NeverBuilds(string? imageSource) =>
+        imageSource is nameof(StackImageSource.Registry) or nameof(StackImageSource.GithubRelease);
 
     /// <summary>
     /// docker compose config on the revision, the override written from it (proxied ports on
@@ -256,7 +283,7 @@ internal sealed partial class StackOperations
         Action<string>? note,
         CancellationToken cancellationToken)
     {
-        var (proxied, limits, networks) = shape;
+        var (proxied, limits, networks, neverBuilds) = shape;
         var version = DockerRepository.ParseComposeVersion(await compose.VersionAsync(cancellationToken));
         if (version is null)
         {
@@ -290,7 +317,13 @@ internal sealed partial class StackOperations
             JoinedNetworks.Check(networks, config, plain.Name, await ServerNetworksAsync(cancellationToken));
         }
 
-        var rendered = LoopbackOverride.Render(config, proxied, limits, networks);
+        if (neverBuilds && config.Services.FirstOrDefault(s => s.Builds && s.Image is not { Length: > 0 }) is { } unnamed)
+        {
+            throw new ComposeConfigException(
+                $"{unnamed.Name} builds from source and names no image:, so there is nothing to pull. Add the image your pipeline publishes as image: to it, or deploy from a local folder to build it on the server.");
+        }
+
+        var rendered = LoopbackOverride.Render(config, proxied, limits, networks, resetBuilds: neverBuilds);
         if (rendered.Text is null)
         {
             var findings = ComposeConfigLint.Lint(config, proxied, plain.ProjectDirectory, directories.Data);
@@ -426,6 +459,16 @@ internal sealed partial class StackOperations
         if (Encoding.UTF8.GetByteCount(upload.Compose) > MaxComposeBytes || upload.Compose.Contains('\0', StringComparison.Ordinal))
         {
             return "The compose file is larger than 1 MB, or is not text.";
+        }
+
+        if (upload.ImageSource is { } source && !Enum.IsDefined(source))
+        {
+            return "The image source is not one the core knows.";
+        }
+
+        if (upload.ImageSource == StackImageSource.LocalFolder && !upload.BuildContext)
+        {
+            return "A deploy from a local folder brings the folder: send its build context.";
         }
 
         if (upload.ProxiedServices.Length > StackRules.MaxServices || !upload.ProxiedServices.All(StackRules.IsServiceName))

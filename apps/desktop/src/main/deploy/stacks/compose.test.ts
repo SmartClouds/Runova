@@ -11,8 +11,10 @@ import {
   isComposeFileName,
   previewFromSource,
   previewStack,
+  projectFilesOf,
   readStackSource,
   type StackSourceDeps,
+  sourceBlocking,
 } from './compose';
 
 /**
@@ -360,5 +362,70 @@ describe('buildContextReason and dockerfilesOf', () => {
       ].join('\n'),
     );
     expect(dockerfilesOf(project)).toEqual(['api/Dockerfile', 'web/docker/Prod.Dockerfile']);
+  });
+});
+
+describe('projectFilesOf and sourceBlocking (E105)', () => {
+  async function parsed(text: string) {
+    const folder = folderWith({ 'compose.yaml': text });
+    const source = await readStackSource(deps(folder), {
+      projectId: 'p1',
+      composePath: 'compose.yaml',
+      environmentId: null,
+    });
+    const project = previewFromSource(source, undefined, false).project;
+    if (!project) throw new Error('did not parse');
+    return project;
+  }
+
+  it('lists the files the compose file reads from its folder, once each, without the ones on the server', async () => {
+    const project = await parsed(
+      [
+        'services:',
+        '  web:',
+        '    image: ghcr.io/acme/web:1.0',
+        '    env_file: [./web.env, /etc/shared.env]',
+        '    volumes:',
+        '      - ./nginx.conf:/etc/nginx/nginx.conf:ro',
+        '      - ./nginx.conf:/etc/nginx/again.conf:ro',
+        '      - type: bind',
+        '        source: ./static',
+        '        target: /srv',
+        '      - data:/data',
+        '      - /var/log:/logs',
+        'secrets:',
+        '  key:',
+        '    file: ./secrets/key.txt',
+        'volumes:',
+        '  data: {}',
+        '',
+      ].join('\n'),
+    );
+
+    expect(projectFilesOf(project)).toEqual(['nginx.conf', 'secrets/key.txt', 'static', 'web.env']);
+  });
+
+  it('lets a registry or release deploy pull what it builds only when it names an image', async () => {
+    const named = await parsed(
+      'services:\n  api:\n    build: ./api\n    image: ghcr.io/acme/api:1.4\n',
+    );
+    const unnamed = await parsed('services:\n  api:\n    build: ./api\n');
+
+    expect(sourceBlocking(named)).toEqual({ registry: null, release: null, local: null });
+    const blocked = sourceBlocking(unnamed);
+    expect(blocked.registry).toContain('api builds from source and names no image');
+    expect(blocked.release).toContain('api builds from source and names no image');
+    expect(blocked.local).toBeNull();
+  });
+
+  it('refuses a registry or release deploy that would need files from outside the compose folder', async () => {
+    const project = await parsed(
+      'services:\n  web:\n    image: nginx:1.29\n    volumes:\n      - ../shared:/srv\n',
+    );
+
+    const blocked = sourceBlocking(project);
+    expect(blocked.registry).toContain('../shared');
+    expect(blocked.release).toContain('../shared');
+    expect(blocked.local).toBeNull();
   });
 });

@@ -1622,6 +1622,20 @@ export const IPC = {
     setLimits: 'deployStacks:setLimits',
     /** (DeployStackNetworksInput) -> DeployRevisionResult: the live revision with other joined networks. */
     setNetworks: 'deployStacks:setNetworks',
+    /** (DeployLocalUploadInput) -> DeployLocalUploadPlan: a compose folder packed, waiting for approval (E105). */
+    prepareLocal: 'deployStacks:prepareLocal',
+    /** (approvalId) -> void: the packed folder the user did not approve goes. */
+    cancelLocal: 'deployStacks:cancelLocal',
+    /** (DeployReleaseListInput) -> DeployReleaseList: GitHub releases with image assets (E105). */
+    releases: 'deployStacks:releases',
+    /** ({ serverId, repository }) -> ReleaseAccessCheck: how the server reads them on its own. */
+    releaseAccess: 'deployStacks:releaseAccess',
+    /** (serverId) -> ReleaseTokenInfo[]: the release tokens the server stores, never the tokens. */
+    releaseTokens: 'deployStacks:releaseTokens',
+    /** (DeployReleaseTokenInput) -> ReleaseTokenInfo: stores a token on the server (Admin, step-up). */
+    saveReleaseToken: 'deployStacks:saveReleaseToken',
+    /** (DeployReleaseTokenRemoveInput) -> void (Admin, step-up). */
+    removeReleaseToken: 'deployStacks:removeReleaseToken',
     /** main -> renderer: DeployStackUploadProgress while files go up. */
     onUploadProgress: 'deployStacks:onUploadProgress',
   },

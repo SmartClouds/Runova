@@ -61,6 +61,7 @@ public sealed class DataProtectionTests : IDisposable
         Assert.Equal("Runova.Certificates.PrivateKey.v1", FrozenIdentifiers.CertificatePrivateKeyPurpose);
         Assert.Equal("Runova.Acme.AccountKey.v1", FrozenIdentifiers.AcmeAccountKeyPurpose);
         Assert.Equal("Runova.Registries.Credential.v1", FrozenIdentifiers.RegistryCredentialPurpose);
+        Assert.Equal("Runova.Releases.Token.v1", FrozenIdentifiers.ReleaseTokenPurpose);
         Assert.Equal("Runova.Notifications.Telegram.Token.v1", FrozenIdentifiers.TelegramTokenPurpose);
         Assert.Equal("Runova.ErrorReporting.Dsn.v1", FrozenIdentifiers.ErrorReportingDsnPurpose);
         Assert.Equal("runova-core.identity.second-factor", FrozenIdentifiers.SecondFactorPurpose);

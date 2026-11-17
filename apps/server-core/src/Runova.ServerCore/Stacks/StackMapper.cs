@@ -35,6 +35,8 @@ internal static partial class StackMapper
     [MapPropertyFromSource(nameof(StackRevisionInfo.Source), Use = nameof(RevisionSourceOf))]
     [MapProperty(nameof(StackRevisionRecord.Limits), nameof(StackRevisionInfo.Limits), Use = nameof(ReadLimits))]
     [MapProperty(nameof(StackRevisionRecord.Networks), nameof(StackRevisionInfo.Networks), Use = nameof(ReadNetworks))]
+    [MapProperty(nameof(StackRevisionRecord.ImageSource), nameof(StackRevisionInfo.ImageSource), Use = nameof(ImageSourceOf))]
+    [MapProperty(nameof(StackRevisionRecord.ReleaseImage), nameof(StackRevisionInfo.ReleaseImage), Use = nameof(ReadReleaseImage))]
     public static partial StackRevisionInfo ToInfo(StackRevisionRecord row);
 
     private static StackSource? StackSourceOf(StackRecord stack) =>
@@ -49,6 +51,10 @@ internal static partial class StackMapper
             : new StackSource(projectId, projectName, composePath, environmentId, environmentName);
 
     private static StackRevisionState StateOf(string state) => Enum.Parse<StackRevisionState>(state);
+
+    private static StackImageSource? ImageSourceOf(string? source) => source is null ? null : Enum.Parse<StackImageSource>(source);
+
+    private static StackReleaseImage? ReadReleaseImage(string? json) => json is null ? null : StackOperations.Read<StackReleaseImage>(json);
 
     private static string[] ReadNames(string json) => StackOperations.Read<string[]>(json);
 

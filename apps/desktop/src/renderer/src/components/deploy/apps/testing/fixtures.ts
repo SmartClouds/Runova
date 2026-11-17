@@ -233,6 +233,8 @@ export function samplePreview(extra: Partial<DeployStackPreview> = {}): DeploySt
     ],
     requiresAcknowledgment: ['privileged:db'],
     buildContext: null,
+    projectFiles: [],
+    sourceBlocking: { registry: null, release: null, local: null },
     blocking: null,
     ...extra,
   };

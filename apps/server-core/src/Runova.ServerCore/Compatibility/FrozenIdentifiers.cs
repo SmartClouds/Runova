@@ -18,6 +18,7 @@ internal static class FrozenIdentifiers
     public const string CertificatePrivateKeyPurpose = "Runova.Certificates.PrivateKey.v1";
     public const string AcmeAccountKeyPurpose = "Runova.Acme.AccountKey.v1";
     public const string RegistryCredentialPurpose = "Runova.Registries.Credential.v1";
+    public const string ReleaseTokenPurpose = "Runova.Releases.Token.v1";
     public const string TelegramTokenPurpose = "Runova.Notifications.Telegram.Token.v1";
     public const string ErrorReportingDsnPurpose = "Runova.ErrorReporting.Dsn.v1";
     public const string SecondFactorPurpose = "runova-core.identity.second-factor";

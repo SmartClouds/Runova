@@ -26,11 +26,15 @@ internal static class StackEndpoints
 
     public const string ShaHeader = "X-Content-Sha256";
 
+    /// <summary>A GitHub Release image request (E105): names, a digest and a signed link.</summary>
+    public const long MaxReleaseImageBytes = 16L * 1024;
+
     public static IEndpointRouteBuilder MapStackEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var stacks = endpoints.MapGroup(Prefix).RequireAuthorization(CorePolicies.Operator);
         stacks.MapPost("/{stackId:guid}/revisions", UploadRevisionAsync);
         stacks.MapPut("/{stackId:guid}/revisions/{number:int}/context", UploadContextAsync);
+        stacks.MapPost("/{stackId:guid}/revisions/{number:int}/release-image", LoadReleaseImageAsync);
         return endpoints;
     }
 
@@ -58,6 +62,36 @@ internal static class StackEndpoints
         }
 
         return await RunAsync(() => operations.UploadAsync(stackId, upload, CallerOf(context), context.RequestAborted));
+    }
+
+    /// <summary>
+    /// The GitHub Release image of a revision that waits for one (E105): the core downloads it from
+    /// GitHub, checks it and loads it, then validates the revision. Answers once that is done.
+    /// </summary>
+    private static async Task<IResult> LoadReleaseImageAsync(Guid stackId, int number, HttpContext context, StackOperations operations)
+    {
+        LimitBody(context, MaxReleaseImageBytes);
+        if (context.Request.ContentLength > MaxReleaseImageBytes)
+        {
+            return Refuse("The request is larger than a release image request.", StatusCodes.Status413PayloadTooLarge);
+        }
+
+        StackReleaseImageRequest? request;
+        try
+        {
+            await using var body = new CappedStream(context.Request.Body, MaxReleaseImageBytes);
+            request = await JsonSerializer.DeserializeAsync<StackReleaseImageRequest>(body, CoreJson.Options, context.RequestAborted);
+        }
+        catch (BodyTooLargeException)
+        {
+            return Refuse("The request is larger than a release image request.", StatusCodes.Status413PayloadTooLarge);
+        }
+        catch (JsonException)
+        {
+            return Refuse("The request is not the JSON the core expects.", StatusCodes.Status400BadRequest);
+        }
+
+        return await RunAsync(() => operations.LoadReleaseImageAsync(stackId, number, request, CallerOf(context), context.RequestAborted));
     }
 
     private static async Task<IResult> UploadContextAsync(Guid stackId, int number, HttpContext context, StackOperations operations)

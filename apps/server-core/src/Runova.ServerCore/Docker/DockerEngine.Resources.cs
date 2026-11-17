@@ -55,6 +55,33 @@ internal sealed partial class DockerEngine
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<string>> LoadImageAsync(Stream archive, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+        var client = await ClientAsync(cancellationToken);
+        string? failure = null;
+        var loaded = new List<string>();
+        try
+        {
+            // The transfers client has no request timeout: a large image takes minutes to load.
+            await (Volatile.Read(ref _transfers) ?? client).Images.LoadImageAsync(
+                new ImageLoadParameters { Quiet = true },
+                archive,
+                new Reporter<JSONMessage>(message =>
+                {
+                    failure ??= message.Error?.Message;
+                    loaded.AddRange(DockerMapping.LoadedImages(message.Stream));
+                }),
+                cancellationToken);
+        }
+        catch (Exception error) when (Translate(error, cancellationToken) is var translated && !ReferenceEquals(translated, error))
+        {
+            throw translated;
+        }
+
+        return failure is null ? loaded : throw new DockerRequestException(failure);
+    }
+
     public Task RemoveImageAsync(string image, bool force, CancellationToken cancellationToken) =>
         CallAsync(client => client.Images.DeleteImageAsync(image, new ImageDeleteParameters { Force = force }, cancellationToken), cancellationToken);
 

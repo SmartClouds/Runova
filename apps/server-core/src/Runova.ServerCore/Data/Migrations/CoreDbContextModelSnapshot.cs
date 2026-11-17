@@ -1180,6 +1180,42 @@ namespace Runova.ServerCore.Data.Migrations
                     b.ToTable("RegistryCredentials");
                 });
 
+            modelBuilder.Entity("Runova.ServerCore.Data.ReleaseTokenRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastUsedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Repository")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SealedToken")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Repository")
+                        .IsUnique();
+
+                    b.ToTable("ReleaseTokens");
+                });
+
             modelBuilder.Entity("Runova.ServerCore.Data.Site", b =>
                 {
                     b.Property<string>("Id")
@@ -1445,6 +1481,9 @@ namespace Runova.ServerCore.Data.Migrations
                     b.Property<bool>("HasBuildContext")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ImageSource")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("JobId")
                         .HasColumnType("TEXT");
 
@@ -1466,6 +1505,9 @@ namespace Runova.ServerCore.Data.Migrations
 
                     b.Property<string>("ProxiedServices")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReleaseImage")
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("RollbackOf")

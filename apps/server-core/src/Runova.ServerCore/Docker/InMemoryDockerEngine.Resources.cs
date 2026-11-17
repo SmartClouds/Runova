@@ -19,6 +19,39 @@ internal sealed partial class InMemoryDockerEngine
         }
     }
 
+    /// <summary>docker load on the pretend engine: the archive's manifest names the images, which then exist here (E105).</summary>
+    public async Task<IReadOnlyList<string>> LoadImageAsync(Stream archive, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+        EnsureRunning();
+        using var copy = new MemoryStream();
+        await archive.CopyToAsync(copy, cancellationToken);
+        copy.Position = 0;
+        string[] tags;
+        try
+        {
+            tags = await Releases.ReleaseArchive.ReadTagsAsync(copy, cancellationToken);
+        }
+        catch (InvalidDataException)
+        {
+            throw new DockerRequestException("open /var/lib/docker/tmp/docker-import/manifest.json: no such file or directory");
+        }
+
+        lock (_gate)
+        {
+            foreach (var tag in tags)
+            {
+                Changes.Enqueue($"load {tag}");
+                var id = "sha256:" + IdOf("loaded:" + tag);
+                _images.RemoveAll(existing => existing.Id == id || existing.Tags.Contains(tag));
+                _images.Insert(0, new ImageInfo(id, [tag], [], NowMs, copy.Length, 0));
+                Raise(new EngineEvent("image", "load", tag, NextEventNano(), new Dictionary<string, string>(StringComparer.Ordinal) { ["name"] = tag }));
+            }
+        }
+
+        return tags;
+    }
+
     public async Task PullImageAsync(ImageReference image, Action<PullProgress> progress, CancellationToken cancellationToken, RegistryLogin? login = null)
     {
         ArgumentNullException.ThrowIfNull(image);

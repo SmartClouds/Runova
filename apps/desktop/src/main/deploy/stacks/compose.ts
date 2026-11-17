@@ -18,6 +18,7 @@ import type { ExplorerFileIndex } from '../../../shared/apiTypes';
 import type {
   DeployComposeDiscovery,
   DeployComposeFile,
+  DeployImageSource,
   DeployStackPreview,
   DeployStackPreviewInput,
   DeployStackServicePreview,
@@ -201,6 +202,86 @@ export function buildContextReason(project: ComposeProject): string | null {
   return null;
 }
 
+/** A path on this computer the compose file reads, as written: not absolute, not a home path. */
+const projectPath = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value !== '' &&
+  !value.startsWith('/') &&
+  !value.startsWith('~') &&
+  !/^[A-Za-z]:[\\/]/.test(value);
+
+/** Every path the compose file reads relative to its folder, as written (E105). */
+function projectReferences(project: ComposeProject): string[] {
+  const found: string[] = [];
+  for (const { definition } of project.services) {
+    const envFiles = Array.isArray(definition.env_file)
+      ? definition.env_file
+      : definition.env_file === undefined
+        ? []
+        : [definition.env_file];
+    for (const entry of envFiles) {
+      const path = typeof entry === 'string' ? entry : isRecord(entry) ? entry.path : undefined;
+      if (projectPath(path)) found.push(path);
+    }
+    for (const entry of Array.isArray(definition.volumes) ? definition.volumes : []) {
+      const source =
+        typeof entry === 'string' ? entry.split(':')[0] : isRecord(entry) ? entry.source : null;
+      if (relativeSource(source) && (typeof entry === 'string' || entry.type === 'bind')) {
+        found.push(source as string);
+      }
+    }
+  }
+  for (const kind of ['configs', 'secrets'] as const) {
+    const section = project.data[kind];
+    if (!isRecord(section)) continue;
+    for (const item of Object.values(section)) {
+      if (isRecord(item) && projectPath(item.file)) found.push(item.file);
+    }
+  }
+  return found;
+}
+
+const cleaned = (path: string): string => dockerCleanPath(path.replaceAll('\\', '/'));
+
+const outside = (path: string): boolean => path === '..' || path.startsWith('../');
+
+/**
+ * The files and folders the compose file reads from its own folder, relative to it, sorted:
+ * what a registry or release deploy sends besides the compose file and the .env (E105).
+ */
+export function projectFilesOf(project: ComposeProject): string[] {
+  const paths = projectReferences(project)
+    .map(cleaned)
+    .filter((path) => path !== '.' && path !== '' && !outside(path));
+  return [...new Set(paths)].sort();
+}
+
+/**
+ * Why each image source cannot deploy a compose file, or null when it can (E105). A registry or
+ * release deploy builds nothing, so a service that builds has to name the image to pull or load
+ * instead, and it sends only files from the compose folder.
+ */
+export function sourceBlocking(project: ComposeProject): Record<DeployImageSource, string | null> {
+  const unnamed = project.services.find(
+    ({ definition }) =>
+      definition.build !== undefined &&
+      (typeof definition.image !== 'string' || definition.image === ''),
+  );
+  const climbing = projectReferences(project).find((path) => outside(cleaned(path)));
+  const away = climbing
+    ? `The compose file reads ${climbing}, outside its own folder, so it cannot go with the compose file. Move it into the compose folder.`
+    : null;
+  return {
+    registry: unnamed
+      ? `${unnamed.name} builds from source and names no image:, so there is nothing to pull. Add the image your pipeline publishes as image:, or deploy from a local folder to build it on the server.`
+      : away,
+    release: unnamed
+      ? `${unnamed.name} builds from source and names no image:, so the release image cannot stand in for it. Set image: to the name your pipeline saves, or deploy from a local folder.`
+      : away,
+    local: null,
+  };
+}
+
 /**
  * Dockerfiles inside the compose folder, relative to it, that must go into the context even when
  * .dockerignore leaves them out (Docker always sends a build's own Dockerfile).
@@ -284,6 +365,8 @@ export function previewFromSource(
     risks: [],
     requiresAcknowledgment: [],
     buildContext: null,
+    projectFiles: [],
+    sourceBlocking: { registry: null, release: null, local: null },
     envText: null,
     project: null,
   };
@@ -339,6 +422,8 @@ export function previewFromSource(
     risks,
     requiresAcknowledgment: needsAcknowledgment(risks),
     buildContext: buildContextReason(project),
+    projectFiles: projectFilesOf(project),
+    sourceBlocking: sourceBlocking(project),
     blocking: override.ok ? null : override.reason,
     envText: env.text,
     project,

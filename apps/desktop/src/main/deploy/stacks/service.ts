@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,9 @@ import type {
   ReviseStackRequest,
   StackAction,
   StackDetails,
+  StackImageSource,
   StackInfo,
+  StackReleaseImageRequest,
   StackRevisionFiles,
   StackRevisionInfo,
   StackRevisionUpload,
@@ -26,6 +29,9 @@ import type {
 } from '../../../shared/deployAppStoreTypes';
 import type {
   DeployComposeDiscovery,
+  DeployImageSource,
+  DeployLocalUploadInput,
+  DeployLocalUploadPlan,
   DeployStackCreateInput,
   DeployStackPreview,
   DeployStackPreviewInput,
@@ -59,6 +65,34 @@ import {
 /** A build context over SSH can take a while; the core caps it at 256 MB unpacked. */
 const CONTEXT_TIMEOUT_MS = 30 * 60_000;
 const FILES_TIMEOUT_MS = 2 * 60_000;
+/** The server downloads a release image of up to 8 GB, checks and loads it before it answers. */
+const RELEASE_TIMEOUT_MS = 45 * 60_000;
+/** How long a packed local folder waits for the user's approval. */
+const APPROVAL_TTL_MS = 15 * 60_000;
+/** Configuration files a registry or release deploy sends; more is data or a build. */
+const PROJECT_FILES_LIMIT = 5 * 1024 * 1024;
+
+const CORE_IMAGE_SOURCE: Record<DeployImageSource, StackImageSource> = {
+  registry: 'registry',
+  release: 'githubRelease',
+  local: 'localFolder',
+};
+
+/** What an approval was made for: the same server, project, compose file and environment. */
+function approvalKey(input: DeployLocalUploadInput): string {
+  return JSON.stringify([input.serverId, input.projectId, input.composePath, input.environmentId]);
+}
+
+function megabytes(bytes: number): string {
+  return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
+}
+
+interface LocalApproval {
+  key: string;
+  folder: string;
+  packed: BuildContextResult;
+  expiresAt: number;
+}
 
 export interface DeployStacksDeps {
   links: Pick<CoreLinks, 'call'>;
@@ -72,6 +106,11 @@ export interface DeployStacksDeps {
   /** Packs the build context (buildContext.ts). */
   pack: (options: BuildContextOptions) => Promise<BuildContextResult>;
   progress?: (event: DeployStackUploadProgress) => void;
+  /**
+   * The signed link GitHub hands this computer's sign-in for a release asset (E105), or null
+   * without one. It goes to the server in the release image request and nowhere else.
+   */
+  releaseLink?: (repository: string, assetId: number) => Promise<string | null>;
   /** Where packed contexts wait for their upload. */
   tempRoot?: () => string;
   /**
@@ -92,6 +131,9 @@ function unique(values: readonly string[]): string[] {
 }
 
 export class DeployStacks {
+  /** Local folders packed and waiting for the user's approval, by approval id. */
+  private readonly approvals = new Map<string, LocalApproval>();
+
   constructor(private readonly deps: DeployStacksDeps) {}
 
   discover(projectId: string): Promise<DeployComposeDiscovery> {
@@ -348,13 +390,73 @@ export class DeployStacks {
     );
   }
 
+  /**
+   * Packs the compose folder for a Local Folder deploy and holds it until the user approves
+   * sending it (E105): nothing goes to the server here. The plan says how much would go and
+   * which top-level files and folders make it big.
+   */
+  async prepareLocal(input: DeployLocalUploadInput): Promise<DeployLocalUploadPlan> {
+    this.dropExpiredApprovals();
+    const source = await readStackSource(this.deps.source, input);
+    const preview = previewFromSource(source, undefined, false);
+    if (preview.blocking || !preview.project) {
+      throw new Error(preview.blocking ?? 'The compose file could not be read.');
+    }
+    this.progress(input.serverId, 'packing');
+    const folder = await mkdtemp(join(this.deps.tempRoot?.() ?? tmpdir(), 'runova-context-'));
+    let packed: BuildContextResult;
+    try {
+      packed = await this.deps.pack({
+        root: source.composeDir,
+        output: join(folder, 'context.tar.gz'),
+        alwaysInclude: dockerfilesOf(preview.project),
+      });
+    } catch (error) {
+      await rm(folder, { recursive: true, force: true });
+      throw error;
+    }
+    const approvalId = randomUUID();
+    this.approvals.set(approvalId, {
+      key: approvalKey(input),
+      folder,
+      packed,
+      expiresAt: Date.now() + APPROVAL_TTL_MS,
+    });
+    return {
+      approvalId,
+      archiveBytes: packed.archiveBytes,
+      contentBytes: packed.contentBytes,
+      entries: packed.entries,
+      largest: packed.largest,
+    };
+  }
+
+  /** The user said no to a plan: its archive goes. */
+  async cancelLocal(approvalId: string): Promise<void> {
+    const approval = this.approvals.get(approvalId);
+    this.approvals.delete(approvalId);
+    if (approval) await rm(approval.folder, { recursive: true, force: true });
+  }
+
+  private dropExpiredApprovals(): void {
+    const now = Date.now();
+    for (const [id, approval] of this.approvals) {
+      if (approval.expiresAt <= now) {
+        this.approvals.delete(id);
+        void rm(approval.folder, { recursive: true, force: true });
+      }
+    }
+  }
+
   /** Reads and checks everything an upload sends, before anything reaches the server. */
   private async prepare(input: DeployStackRevisionInput | DeployStackCreateInput) {
+    const imageSource = input.imageSource ?? 'registry';
     this.progress(input.serverId, 'reading');
     const source = await readStackSource(this.deps.source, input);
     const preview = previewFromSource(source, input.proxiedServices, false);
-    if (preview.blocking || preview.envText === null || !preview.project) {
-      throw new Error(preview.blocking ?? 'The compose file could not be read.');
+    const blocking = preview.blocking ?? preview.sourceBlocking[imageSource];
+    if (blocking || preview.envText === null || !preview.project) {
+      throw new Error(blocking ?? 'The compose file could not be read.');
     }
     const acknowledged = new Set(input.acknowledgedRisks);
     const waiting = preview.requiresAcknowledgment.filter((id) => !acknowledged.has(id));
@@ -362,6 +464,9 @@ export class DeployStacks {
       throw new Error(
         `Acknowledge every risk before deploying. Still waiting: ${waiting.join(', ')}.`,
       );
+    }
+    if (imageSource === 'release' && !input.release) {
+      throw new Error('Pick the release image to deploy first.');
     }
     const stackSource: StackSource = {
       projectId: source.project.id,
@@ -371,19 +476,66 @@ export class DeployStacks {
         ? { environmentId: source.environment.id, environmentName: source.environment.name }
         : {}),
     };
+
+    // What goes besides the files, decided (and packed) before the server hears of the app.
+    let archive: { folder: string; packed: BuildContextResult } | null = null;
+    if (imageSource === 'local') {
+      const approval = input.approvalId ? this.approvals.get(input.approvalId) : undefined;
+      if (!approval || approval.key !== approvalKey(input) || approval.expiresAt <= Date.now()) {
+        throw new Error(
+          'Look at what the local folder sends and approve it first. Nothing was sent.',
+        );
+      }
+      this.approvals.delete(input.approvalId as string);
+      archive = approval;
+    } else if (preview.projectFiles.length > 0) {
+      archive = await this.packProjectFiles(
+        input.serverId,
+        source.composeDir,
+        preview.projectFiles,
+      );
+    }
+
     return {
       source: stackSource,
-      composeDir: source.composeDir,
+      imageSource,
+      release: input.release ?? null,
+      archive,
       upload: {
         compose: source.composeText,
         env: preview.envText,
         proxiedServices: preview.proxiedServices,
         acknowledgedRisks: unique(input.acknowledgedRisks),
-        buildContext: preview.buildContext !== null,
+        buildContext: archive !== null,
         source: stackSource,
+        imageSource: CORE_IMAGE_SOURCE[imageSource],
       } satisfies StackRevisionUpload,
-      dockerfiles: dockerfilesOf(preview.project),
     };
+  }
+
+  /**
+   * The files a compose file reads, packed alone for a registry or release deploy. Configuration
+   * is small; more than PROJECT_FILES_LIMIT is data or a build, which a local deploy shows first.
+   */
+  private async packProjectFiles(serverId: string, root: string, files: string[]) {
+    this.progress(serverId, 'packing');
+    const folder = await mkdtemp(join(this.deps.tempRoot?.() ?? tmpdir(), 'runova-context-'));
+    try {
+      const packed = await this.deps.pack({
+        root,
+        output: join(folder, 'context.tar.gz'),
+        only: files,
+      });
+      if (packed.contentBytes > PROJECT_FILES_LIMIT) {
+        throw new Error(
+          `The files the compose file reads (${files.join(', ')}) add up to ${megabytes(packed.contentBytes)}, more than configuration. Deploy from a local folder to see and approve what goes.`,
+        );
+      }
+      return { folder, packed };
+    } catch (error) {
+      await rm(folder, { recursive: true, force: true });
+      throw error;
+    }
   }
 
   private async send(
@@ -392,20 +544,7 @@ export class DeployStacks {
     prepared: Awaited<ReturnType<DeployStacks['prepare']>>,
   ): Promise<DeployStackUploadResult> {
     const base = `/api/v1/stacks/${encodeURIComponent(stackId)}/revisions`;
-    const folder = prepared.upload.buildContext
-      ? await mkdtemp(join(this.deps.tempRoot?.() ?? tmpdir(), 'runova-context-'))
-      : null;
     try {
-      // Packed first: a context that is too large is refused before the server gets anything.
-      let packed: BuildContextResult | null = null;
-      if (folder) {
-        this.progress(serverId, 'packing');
-        packed = await this.deps.pack({
-          root: prepared.composeDir,
-          output: join(folder, 'context.tar.gz'),
-          alwaysInclude: prepared.dockerfiles,
-        });
-      }
       this.progress(serverId, 'uploading-files');
       let revision = await this.rest(serverId, (client, token) =>
         client.post<StackRevisionInfo>(base, prepared.upload, {
@@ -413,8 +552,14 @@ export class DeployStacks {
           timeoutMs: FILES_TIMEOUT_MS,
         }),
       );
-      if (packed) {
-        const archive = packed;
+      // A core from before E105 drops the source and would build what it is told not to.
+      if (prepared.imageSource !== 'local' && revision.imageSource === undefined) {
+        throw new Error(
+          "Update this server's Runova core to deploy from a registry or a GitHub Release without building there. Nothing was deployed.",
+        );
+      }
+      if (prepared.archive) {
+        const archive = prepared.archive.packed;
         this.progress(serverId, 'uploading-context', 0, archive.archiveBytes);
         revision = await this.rest(serverId, (client, token) =>
           client.putStream<StackRevisionInfo>(
@@ -432,11 +577,28 @@ export class DeployStacks {
           ),
         );
       }
+      if (prepared.imageSource === 'release' && prepared.release) {
+        const release = prepared.release;
+        // Asked for only now: GitHub's link lasts minutes, and it goes to the server alone.
+        const link = await this.deps.releaseLink?.(release.repository, release.assetId);
+        const body: StackReleaseImageRequest = {
+          ...release,
+          ...(link ? { downloadUrl: link } : {}),
+        };
+        this.progress(serverId, 'loading-release');
+        const number = revision.number;
+        revision = await this.rest(serverId, (client, token) =>
+          client.post<StackRevisionInfo>(`${base}/${number}/release-image`, body, {
+            token,
+            timeoutMs: RELEASE_TIMEOUT_MS,
+          }),
+        );
+      }
       this.progress(serverId, 'done');
       const details = await this.get(serverId, stackId);
       return { stack: details.stack, revision };
     } finally {
-      if (folder) await rm(folder, { recursive: true, force: true });
+      if (prepared.archive) await rm(prepared.archive.folder, { recursive: true, force: true });
     }
   }
 

@@ -648,6 +648,11 @@ export class FakeCoreConnection implements ICoreHub {
   listRegistryCredentials = () => this.unused('ListRegistryCredentials');
   saveRegistryCredential = () => this.unused('SaveRegistryCredential');
   deleteRegistryCredential = () => this.unused('DeleteRegistryCredential');
+  // GitHub Release images (E105): their tests use hub stubs of their own.
+  listReleaseTokens = () => this.unused('ListReleaseTokens');
+  saveReleaseToken = () => this.unused('SaveReleaseToken');
+  deleteReleaseToken = () => this.unused('DeleteReleaseToken');
+  checkReleaseAccess = () => this.unused('CheckReleaseAccess');
 
   // The Security center (E15): its tests use hub stubs of their own.
 

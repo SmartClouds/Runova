@@ -52,6 +52,12 @@ internal interface IDockerEngine
     /// </summary>
     Task PullImageAsync(ImageReference image, Action<PullProgress> progress, CancellationToken cancellationToken, RegistryLogin? login = null);
 
+    /// <summary>
+    /// docker load from a `docker save` archive, plain or compressed (E105, a GitHub Release
+    /// image), streamed to the engine. Answers the image names it loaded.
+    /// </summary>
+    Task<IReadOnlyList<string>> LoadImageAsync(Stream archive, CancellationToken cancellationToken);
+
     Task RemoveImageAsync(string image, bool force, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<VolumeInfo>> ListVolumesAsync(CancellationToken cancellationToken);

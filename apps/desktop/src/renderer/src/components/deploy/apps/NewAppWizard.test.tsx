@@ -507,6 +507,7 @@ describe('NewAppWizard review and deploy', () => {
       environmentId: 'env-1',
       proxiedServices: ['web'],
       acknowledgedRisks: ['privileged:db'],
+      imageSource: 'registry',
     });
     await waitFor(() =>
       expect(bridge.$fn('deployStacks.deploy')).toHaveBeenCalledWith({

@@ -192,6 +192,9 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
             case ("POST", ["images", "create"]):
                 await PullAsync(context, query["fromImage"], query["tag"]);
                 return;
+            case ("POST", ["images", "load"]):
+                await LoadAsync(context);
+                return;
             case ("DELETE", ["images", ..]):
                 await JsonAsync(context, """[{"Untagged":"busybox:1.37"}]""");
                 return;
@@ -351,6 +354,21 @@ internal sealed partial class FakeDockerDaemon : IAsyncDisposable
         {
             context.Response.StatusCode = 204;
         }
+    }
+
+    /// <summary>Bytes of the last docker load body, so a test can prove the archive was streamed whole.</summary>
+    public long LoadedBytes { get; private set; }
+
+    /// <summary>docker load: an empty body fails as the engine fails, anything else loads acme/shop:1.4.0.</summary>
+    private async Task LoadAsync(HttpContext context)
+    {
+        using var body = new MemoryStream();
+        await context.Request.Body.CopyToAsync(body);
+        LoadedBytes = body.Length;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(body.Length == 0
+            ? "{\"errorDetail\":{\"message\":\"unexpected EOF\"},\"error\":\"unexpected EOF\"}\n"
+            : "{\"stream\":\"Loaded image: acme/shop:1.4.0\\n\"}\n");
     }
 
     private static async Task PullAsync(HttpContext context, string? image, string? tag)

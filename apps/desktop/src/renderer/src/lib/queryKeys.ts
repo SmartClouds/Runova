@@ -350,6 +350,12 @@ export const queryKeys = {
   deployComposeFiles: (projectId: string) => ['deploy', 'compose-files', projectId] as const,
   /** The wizard's look at a compose file with an environment and its exposure choices. */
   deployAppPreview: (input: object) => ['deploy', 'app-preview', input] as const,
+  /** GitHub releases with image assets, of a typed repository or a project's remote (E105). */
+  deployReleases: (projectId: string, repository: string) =>
+    ['deploy', 'releases', projectId, repository] as const,
+  /** How a server reads a repository's releases on its own (E105). */
+  deployReleaseAccess: (serverId: string, repository: string) =>
+    ['deploy', 'release-access', serverId, repository] as const,
   /** Private registries (E08): everything below is dropped at once after a change. */
   deployRegistries: ['deploy', 'registries'] as const,
   /** The registry sign-ins kept on this computer (never their secrets). */

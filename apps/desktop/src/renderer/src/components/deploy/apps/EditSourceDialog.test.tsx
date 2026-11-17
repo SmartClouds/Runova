@@ -109,6 +109,9 @@ describe('EditSourceDialog', () => {
       environmentName: 'Staging',
       envFileIds: null,
       name: 'shop',
+      imageSource: 'registry',
+      releaseRepository: '',
+      release: null,
     });
     // Nothing goes to the server from here.
     expect(() => bridge.$fn('deployStacks.upload')).toThrow(/has not been touched/);

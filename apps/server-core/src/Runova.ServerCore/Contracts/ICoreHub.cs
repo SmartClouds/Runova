@@ -373,6 +373,23 @@ public interface ICoreHub
 
     /// <summary>Admin and a step-up.</summary>
     Task DeleteRegistryCredential(Guid credentialId);
+
+    // GitHub Release images (E105). The app downloads nothing: it passes a signed link with the
+    // release image upload, or the core uses a read-only token stored for the repository. Stored
+    // tokens are write-only; saving or removing one is for Admins with a recent step-up.
+
+    /// <summary>The release tokens stored on this server, without the tokens. Operator.</summary>
+    Task<ReleaseTokenInfo[]> ListReleaseTokens();
+
+    /// <summary>Stores or replaces the token for a repository once GitHub confirms it reads the releases. Admin and a step-up.</summary>
+    Task<ReleaseTokenInfo> SaveReleaseToken(SaveReleaseTokenRequest request);
+
+    /// <summary>Admin and a step-up.</summary>
+    Task DeleteReleaseToken(Guid tokenId);
+
+    /// <summary>How the server reads a repository's releases on its own: public, with its stored token, or not at all. Operator.</summary>
+    Task<ReleaseAccessCheck> CheckReleaseAccess(string repository);
+
     // Logs center and Deploy AI (E09), Admin. See AssistantContracts.cs for what runs unattended.
 
     Task<AssistantModeInfo> GetAssistantMode();

@@ -37,7 +37,8 @@ internal sealed partial class StackOperations(
     TimeProvider time,
     ILogger<StackOperations> logger,
     RegistryCredentials registries,
-    RegistryAuthFolders registryFolders) : IDisposable
+    RegistryAuthFolders registryFolders,
+    Releases.ReleaseDownloads releases) : IDisposable
 {
     public const string ComposeFileName = "compose.yaml";
 

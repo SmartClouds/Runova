@@ -1,6 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
 import { IPC } from '../../shared/ipcChannels';
+import type { DeployReleases } from '../deploy/releases/service';
 import type { DeployStacks } from '../deploy/stacks/service';
 import { registerDeployStacksHandlers } from './deployStacks';
 
@@ -34,11 +35,20 @@ function harness(trusted = true) {
       'makePrivate',
       'setLimits',
       'setNetworks',
+      'prepareLocal',
+      'cancelLocal',
     ].map((name) => [name, vi.fn(async () => ({ ok: name }))]),
+  ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
+  const releases = Object.fromEntries(
+    ['list', 'checkAccess', 'serverTokens', 'saveServerToken', 'removeServerToken'].map((name) => [
+      name,
+      vi.fn(async () => ({ ok: name })),
+    ]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   registerDeployStacksHandlers({
     ipc: { handle: (channel, listener) => handlers.set(channel, listener) },
     stacks: stacks as unknown as DeployStacks,
+    releases: releases as unknown as DeployReleases,
     guard: () => trusted,
   });
   const call = (channel: string, ...args: unknown[]) => {
@@ -46,8 +56,18 @@ function harness(trusted = true) {
     if (!handler) throw new Error(`No handler for ${channel}`);
     return handler({} as IpcMainInvokeEvent, ...args);
   };
-  return { handlers, stacks, call };
+  return { handlers, stacks, releases, call };
 }
+
+const RELEASE = {
+  repository: 'acme/shop',
+  tag: 'v1.4.0',
+  assetId: 77,
+  assetName: 'shop-image.tar.gz',
+  size: 1234,
+  sha256: 'a'.repeat(64),
+};
+const APPROVAL = '6f9619ff-8b86-4d01-b42d-00cf4fc964ff';
 
 describe('registerDeployStacksHandlers', () => {
   it('handles every invoke channel of the group', () => {
@@ -291,5 +311,118 @@ describe('registerDeployStacksHandlers', () => {
       await expect(call(channel, value), channel).rejects.toThrow(message);
     }
     for (const method of Object.values(stacks)) expect(method).not.toHaveBeenCalled();
+  });
+
+  it('passes the image source, the release asset and the approval through (E105)', async () => {
+    const { call, stacks } = harness();
+    const create = {
+      ...SOURCE,
+      serverId: SERVER,
+      name: 'shop',
+      proxiedServices: [],
+      acknowledgedRisks: [],
+    };
+
+    await call(IPC.deployStacks.create, { ...create, imageSource: 'release', release: RELEASE });
+    await call(IPC.deployStacks.upload, {
+      ...create,
+      stackId: STACK,
+      imageSource: 'local',
+      approvalId: APPROVAL,
+    });
+    await call(IPC.deployStacks.preview, { ...SOURCE, imageSource: 'registry' });
+    await call(IPC.deployStacks.prepareLocal, {
+      ...SOURCE,
+      serverId: SERVER,
+      imageSource: 'local',
+    });
+    await call(IPC.deployStacks.cancelLocal, APPROVAL);
+
+    expect(stacks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ imageSource: 'release', release: RELEASE }),
+    );
+    expect(stacks.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ imageSource: 'local', approvalId: APPROVAL }),
+    );
+    expect(stacks.preview).toHaveBeenCalledWith(
+      expect.objectContaining({ imageSource: 'registry' }),
+    );
+    expect(stacks.prepareLocal).toHaveBeenCalledWith(
+      expect.objectContaining({ serverId: SERVER, composePath: 'compose.yaml' }),
+    );
+    expect(stacks.cancelLocal).toHaveBeenCalledWith(APPROVAL);
+  });
+
+  it('refuses an image source, release asset or approval the core would not take', async () => {
+    const { call, stacks } = harness();
+    const create = {
+      ...SOURCE,
+      serverId: SERVER,
+      name: 'shop',
+      proxiedServices: [],
+      acknowledgedRisks: [],
+    };
+
+    await expect(call(IPC.deployStacks.create, { ...create, imageSource: 'ftp' })).rejects.toThrow(
+      'image source',
+    );
+    await expect(
+      call(IPC.deployStacks.create, { ...create, release: { ...RELEASE, sha256: 'nope' } }),
+    ).rejects.toThrow('release image');
+    await expect(
+      call(IPC.deployStacks.create, { ...create, release: { ...RELEASE, repository: 'a/b/c' } }),
+    ).rejects.toThrow('release image');
+    await expect(
+      call(IPC.deployStacks.create, { ...create, approvalId: '../etc' }),
+    ).rejects.toThrow('approval');
+    await expect(call(IPC.deployStacks.cancelLocal, 42)).rejects.toThrow('approval');
+    expect(stacks.create).not.toHaveBeenCalled();
+    expect(stacks.cancelLocal).not.toHaveBeenCalled();
+  });
+
+  it('lists releases and handles the server release tokens through checked arguments', async () => {
+    const { call, releases } = harness();
+
+    await call(IPC.deployStacks.releases, { projectId: 'p1' });
+    await call(IPC.deployStacks.releases, { repository: 'acme/site' });
+    await call(IPC.deployStacks.releaseAccess, { serverId: SERVER, repository: 'acme/shop' });
+    await call(IPC.deployStacks.releaseTokens, SERVER);
+    await call(IPC.deployStacks.saveReleaseToken, {
+      serverId: SERVER,
+      repository: 'acme/shop',
+      token: 'github_pat_x',
+      password: 'pw',
+    });
+    await call(IPC.deployStacks.removeReleaseToken, {
+      serverId: SERVER,
+      tokenId: STACK,
+      totpCode: '123456',
+    });
+
+    expect(releases.list).toHaveBeenNthCalledWith(1, { projectId: 'p1' });
+    expect(releases.list).toHaveBeenNthCalledWith(2, { repository: 'acme/site' });
+    expect(releases.checkAccess).toHaveBeenCalledWith(SERVER, 'acme/shop');
+    expect(releases.serverTokens).toHaveBeenCalledWith(SERVER);
+    expect(releases.saveServerToken).toHaveBeenCalledWith({
+      serverId: SERVER,
+      repository: 'acme/shop',
+      token: 'github_pat_x',
+      password: 'pw',
+    });
+    expect(releases.removeServerToken).toHaveBeenCalledWith({
+      serverId: SERVER,
+      tokenId: STACK,
+      totpCode: '123456',
+    });
+    await expect(
+      call(IPC.deployStacks.saveReleaseToken, {
+        serverId: SERVER,
+        repository: 'acme/shop',
+        token: 5,
+      }),
+    ).rejects.toThrow('token');
+    await expect(
+      call(IPC.deployStacks.removeReleaseToken, { serverId: SERVER, tokenId: 'x' }),
+    ).rejects.toThrow('token');
   });
 });

@@ -432,6 +432,8 @@ import type {
   NginxApplyResult,
   NginxStatus,
   RecoveryCodes,
+  ReleaseAccessCheck,
+  ReleaseTokenInfo,
   ServiceInfo,
   SessionInfo,
   SiteInfo,
@@ -503,6 +505,12 @@ import type {
 } from '../shared/deploySitesTypes';
 import type {
   DeployComposeDiscovery,
+  DeployLocalUploadInput,
+  DeployLocalUploadPlan,
+  DeployReleaseList,
+  DeployReleaseListInput,
+  DeployReleaseTokenInput,
+  DeployReleaseTokenRemoveInput,
   DeployStackAcknowledgeInput,
   DeployStackActionInput,
   DeployStackCreateInput,
@@ -2107,6 +2115,20 @@ const deployStacks = {
   /** Other networks for the app's services to join: the live revision copied with them and deployed. */
   setNetworks: (input: DeployStackNetworksInput): Promise<DeployRevisionResult> =>
     ipcRenderer.invoke(IPC.deployStacks.setNetworks, input),
+  prepareLocal: (input: DeployLocalUploadInput): Promise<DeployLocalUploadPlan> =>
+    ipcRenderer.invoke(IPC.deployStacks.prepareLocal, input),
+  cancelLocal: (approvalId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.deployStacks.cancelLocal, approvalId),
+  releases: (input: DeployReleaseListInput): Promise<DeployReleaseList> =>
+    ipcRenderer.invoke(IPC.deployStacks.releases, input),
+  releaseAccess: (input: { serverId: string; repository: string }): Promise<ReleaseAccessCheck> =>
+    ipcRenderer.invoke(IPC.deployStacks.releaseAccess, input),
+  releaseTokens: (serverId: string): Promise<ReleaseTokenInfo[]> =>
+    ipcRenderer.invoke(IPC.deployStacks.releaseTokens, serverId),
+  saveReleaseToken: (input: DeployReleaseTokenInput): Promise<ReleaseTokenInfo> =>
+    ipcRenderer.invoke(IPC.deployStacks.saveReleaseToken, input),
+  removeReleaseToken: (input: DeployReleaseTokenRemoveInput): Promise<void> =>
+    ipcRenderer.invoke(IPC.deployStacks.removeReleaseToken, input),
   onUploadProgress: (cb: (event: DeployStackUploadProgress) => void): (() => void) =>
     subscribe(IPC.deployStacks.onUploadProgress, cb),
 };
