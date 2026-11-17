@@ -36,8 +36,8 @@ fn nonce_bytes(counter: u64) -> [u8; 12] {
 impl FrameCipher {
     pub fn new(send_key: [u8; 32], receive_key: [u8; 32]) -> Self {
         Self {
-            send: Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&send_key)),
-            receive: Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&receive_key)),
+            send: Aes256Gcm::new(&Key::<Aes256Gcm>::from(send_key)),
+            receive: Aes256Gcm::new(&Key::<Aes256Gcm>::from(receive_key)),
             sent: 0,
             expected: 0,
         }
@@ -49,7 +49,7 @@ impl FrameCipher {
         let nonce = nonce_bytes(counter);
         let sealed = self
             .send
-            .encrypt(Nonce::from_slice(&nonce), frame)
+            .encrypt(&Nonce::from(nonce), frame)
             .map_err(|_| CipherError::Forged)?;
         let mut output = Vec::with_capacity(COUNTER_BYTES + sealed.len());
         output.extend_from_slice(&counter.to_be_bytes());
@@ -73,7 +73,7 @@ impl FrameCipher {
         let nonce = nonce_bytes(counter);
         let plain = self
             .receive
-            .decrypt(Nonce::from_slice(&nonce), body)
+            .decrypt(&Nonce::from(nonce), body)
             .map_err(|_| CipherError::Forged)?;
         self.expected = counter.checked_add(1).ok_or(CipherError::Exhausted)?;
         Ok(plain)

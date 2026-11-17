@@ -9,7 +9,7 @@ use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use runova_protocol::handshake::HandshakeMessage;
 use sha2::{Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
@@ -102,14 +102,14 @@ impl Identity {
 /// A fresh random seed for a new identity, from the OS generator.
 pub fn new_identity_seed() -> Result<[u8; 32], HandshakeError> {
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).map_err(|_| HandshakeError::Protocol)?;
+    getrandom::fill(&mut seed).map_err(|_| HandshakeError::Protocol)?;
     Ok(seed)
 }
 
 /// Random bytes from the OS generator, in the form the handshake takes them.
 pub fn os_random(length: usize) -> Vec<u8> {
     let mut bytes = vec![0u8; length];
-    getrandom::getrandom(&mut bytes).expect("the OS random generator");
+    getrandom::fill(&mut bytes).expect("the OS random generator");
     bytes
 }
 
@@ -119,7 +119,7 @@ pub fn derive_password_secret(
     host_identity_key: &str,
 ) -> Result<[u8; 32], HandshakeError> {
     let normalized: String = password.nfkc().collect();
-    let params = scrypt::Params::new(15, 8, 1, 32).map_err(|_| HandshakeError::Protocol)?;
+    let params = scrypt::Params::new(15, 8, 1).map_err(|_| HandshakeError::Protocol)?;
     let salt = format!("runova-anywhere-prs-v1|{host_identity_key}");
     let mut secret = [0u8; 32];
     scrypt::scrypt(normalized.as_bytes(), salt.as_bytes(), &params, &mut secret)
@@ -244,7 +244,8 @@ fn transcript(parts: &TranscriptParts<'_>) -> [u8; 32] {
 }
 
 fn confirm_tag(key: &[u8; 32], role: &str, transcript: &[u8; 32]) -> [u8; 32] {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC takes any key length");
+    let mut mac =
+        <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC takes any key length");
     mac.update(role.as_bytes());
     mac.update(transcript);
     mac.finalize().into_bytes().into()

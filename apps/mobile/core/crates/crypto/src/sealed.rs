@@ -92,9 +92,9 @@ impl SealKey {
             return Err(SealedError::NotForThisKey);
         }
         let key = item_key(shared.as_bytes(), &sender, &self.public);
-        Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()))
+        Aes256Gcm::new(<&Key<Aes256Gcm>>::from(&*key))
             .decrypt(
-                Nonce::from_slice(&sealed[33..45]),
+                <&Nonce<_>>::try_from(&sealed[33..45]).expect("12 bytes"),
                 Payload {
                     msg: &sealed[HEADER..],
                     aad: context.as_bytes(),
@@ -116,9 +116,9 @@ pub fn seal_with(
     let sender = PublicKey::from(&secret).to_bytes();
     let shared = secret.diffie_hellman(&PublicKey::from(*recipient));
     let key = item_key(shared.as_bytes(), &sender, recipient);
-    let body = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()))
+    let body = Aes256Gcm::new(<&Key<Aes256Gcm>>::from(&*key))
         .encrypt(
-            Nonce::from_slice(&nonce),
+            &Nonce::from(nonce),
             Payload {
                 msg: plaintext,
                 aad: context.as_bytes(),
