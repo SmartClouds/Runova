@@ -234,6 +234,17 @@ describe('teams, new projects and keys', () => {
     );
     expect(error.kind).toBe('forbidden');
     expect(error.scope).toBe('project:write');
+    expect(error.detail).toBe('You do not have permission to perform this action.');
+  });
+
+  it("keeps Sentry's reason when members cannot create projects", async () => {
+    const fake = await sentry({ scopes: ['org:read', 'project:write'] });
+    fake.state.membersCannotCreateProjects = true;
+    const error = await failure(
+      client(fake.url).createProject('acme', 'platform', { name: 'Checkout' }),
+    );
+    expect(error.kind).toBe('forbidden');
+    expect(error.detail).toBe('Your organization has disabled this feature for members.');
   });
 
   it("shows Sentry's own reason when the slug is taken", async () => {

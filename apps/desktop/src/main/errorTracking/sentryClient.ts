@@ -44,13 +44,22 @@ export class SentryApiError extends Error {
   readonly status: number | null;
   /** For `forbidden`: the scope the call needed. */
   readonly scope: string | null;
+  /** For `forbidden`: Sentry's own reason, when it gave one. */
+  readonly detail: string | null;
 
-  constructor(kind: SentryErrorKind, message: string, status: number | null, scope: string | null) {
+  constructor(
+    kind: SentryErrorKind,
+    message: string,
+    status: number | null,
+    scope: string | null,
+    detail: string | null = null,
+  ) {
     super(message);
     this.name = 'SentryApiError';
     this.kind = kind;
     this.status = status;
     this.scope = scope;
+    this.detail = detail;
   }
 }
 
@@ -236,6 +245,7 @@ function statusError(
       `Sentry refused this because the token lacks the ${scope} scope. Create a token that has it.`,
       status,
       scope,
+      detailOf(body),
     );
   }
   if (status === 404) {
@@ -291,6 +301,7 @@ export function createSentryClient(options: SentryClientOptions) {
       redactHealthText(error.message, [options.token]),
       error.status,
       error.scope,
+      error.detail === null ? null : redactHealthText(error.detail, [options.token]),
     );
 
   async function call(

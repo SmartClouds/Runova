@@ -99,6 +99,7 @@ describe('ErrorsBoard, first run', () => {
     expect(steps).toHaveTextContent('event:read');
     expect(steps).toHaveTextContent('event:write');
     expect(steps).toHaveTextContent('project:write');
+    expect(steps).toHaveTextContent('org:write');
     expect(within(steps).getByRole('link', { name: /token page/ })).toHaveAttribute(
       'href',
       'https://sentry.io/settings/account/api/auth-tokens/',
@@ -106,7 +107,7 @@ describe('ErrorsBoard, first run', () => {
 
     await user.click(within(steps).getByRole('button', { name: 'Copy scopes' }));
     expect(await navigator.clipboard.readText()).toBe(
-      'org:read, project:read, event:read, event:write, project:write',
+      'org:read, project:read, event:read, event:write, project:write, org:write',
     );
 
     await user.click(screen.getByRole('button', { name: 'Connect Sentry' }));

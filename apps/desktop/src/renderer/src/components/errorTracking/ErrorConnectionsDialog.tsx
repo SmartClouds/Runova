@@ -224,8 +224,10 @@ function AddConnectionForm({
           placeholder="sntryu_…"
         />
         <p className="text-[11px] text-muted-foreground">
-          A personal token with {SCOPE_LIST_TEXT}. The last two are optional: event:write lets you
-          resolve and ignore issues from here, and project:write lets you create Sentry projects.
+          A personal token with {SCOPE_LIST_TEXT}. The last three are optional: event:write lets you
+          resolve and ignore issues from here, and project:write with org:write lets you create
+          Sentry projects (org:write is needed when the organization does not let members create
+          them).
         </p>
       </div>
 

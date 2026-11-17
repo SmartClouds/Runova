@@ -92,6 +92,7 @@ describe('ErrorConnectionsDialog, adding a connection', () => {
       expect.stringMatching(/event:read.*Granted/),
       expect.stringMatching(/event:write.*needed for Resolve and Ignore/),
       expect.stringMatching(/project:write.*needed to create projects/),
+      expect.stringMatching(/org:write.*needed to create projects when members cannot/),
     ]);
 
     await user.click(within(view).getByRole('combobox', { name: 'Organization' }));
@@ -138,7 +139,7 @@ describe('ErrorConnectionsDialog, adding a connection', () => {
     await user.type(await within(view).findByLabelText('Auth token'), 'sntrys_org');
     await user.click(within(view).getByRole('button', { name: 'Check token' }));
     const scopes = await within(view).findByRole('list', { name: 'Token scopes' });
-    expect(within(scopes).getAllByText('Missing')).toHaveLength(5);
+    expect(within(scopes).getAllByText('Missing')).toHaveLength(6);
     expect(view).toHaveTextContent('This is an organization token');
     expect(view).toHaveTextContent('needs org:read, project:read and event:read');
     expect(within(view).getByRole('button', { name: 'Save connection' })).toBeDisabled();

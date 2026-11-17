@@ -3,6 +3,7 @@ import {
   type ErrorLevel,
   type ErrorPeriod,
   type Project,
+  SENTRY_CREATE_ORG_SCOPE,
   SENTRY_CREATE_SCOPE,
   SENTRY_READ_SCOPES,
   SENTRY_WRITE_SCOPE,
@@ -207,6 +208,7 @@ export const SCOPE_LIST_TEXT = [
   ...SENTRY_READ_SCOPES,
   SENTRY_WRITE_SCOPE,
   SENTRY_CREATE_SCOPE,
+  SENTRY_CREATE_ORG_SCOPE,
 ].join(', ');
 
 export interface ScopeRow {
@@ -251,5 +253,15 @@ export function scopeChecklist(check: ErrorTokenCheck): ScopeRow[] {
     optional: true,
     note: 'optional, needed to create projects',
   };
-  return [...read, write, create];
+  const createOrg: ScopeRow = {
+    scope: SENTRY_CREATE_ORG_SCOPE,
+    state: !known
+      ? 'unknown'
+      : check.scopes?.some((one) => one === SENTRY_CREATE_ORG_SCOPE || one === 'org:admin')
+        ? 'granted'
+        : 'missing',
+    optional: true,
+    note: 'optional, needed to create projects when members cannot',
+  };
+  return [...read, write, create, createOrg];
 }

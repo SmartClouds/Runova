@@ -94,7 +94,7 @@ The **Errors** tab shows the issues Sentry recorded for your projects: what brok
 
 ### Connect Sentry
 
-1. In Sentry, create a personal auth token (User Settings, then Personal Tokens). Give it the scopes `org:read`, `project:read` and `event:read`. Add `event:write` too if you want to resolve and ignore issues from Runova, and `project:write` to create Sentry projects from Runova. Sentry cannot add a scope to a token later, so pick them now. The first-use screen has a **Copy scopes** button and a link to the token page.
+1. In Sentry, create a personal auth token (User Settings, then Personal Tokens). Give it the scopes `org:read`, `project:read` and `event:read`. Add `event:write` too if you want to resolve and ignore issues from Runova, and `project:write` with `org:write` to create Sentry projects from Runova. Sentry cannot add a scope to a token later, so pick them now. The first-use screen has a **Copy scopes** button and a link to the token page.
 2. Click **Connect Sentry** (or **Connections** in the toolbar). Choose where your Sentry is: **Sentry.io (US)**, **Sentry.io (EU)**, or **Self-hosted or GlitchTip** with its server URL. Paste the token and click **Check token**.
 3. Runova shows which scopes the token has and which organizations it sees. An organization token (the kind made for uploading releases) cannot read issues, and the dialog says so. Pick the organization and click **Save connection**.
 
@@ -112,7 +112,7 @@ A new app needs a Sentry project and its DSN, the address the app sends its erro
 2. Pick the team, give it a name, and pick the platform if you know it. **Link to** chooses the Runova project whose errors it holds; the name follows the project you pick until you type your own. On a project's own Monitoring tab, that project is picked for you.
 3. Click **Create project**. The dialog shows the DSN with **Copy DSN** and **Copy as env var**, then the install command and the init code for your platform with the DSN already in place, and a link to Sentry's full guide. Switch the platform to see another snippet.
 
-Creating a project needs the `project:write` scope, and your Sentry organization must let members create projects. When the token lacks the scope, the dialog says so and offers **Copy scopes** and **Replace token**.
+Creating a project needs the `project:write` scope. When the token lacks it, the dialog says so and offers **Copy scopes** and **Replace token**. If your organization has **Let Members Create Projects** turned off (Settings, General Settings, Membership), Sentry also wants `org:write` on the token. It checks the token's scopes there, not your role, so this applies to owners too. Turn the setting on, or use a token that has `org:write`.
 
 To see the DSN of a project that is already linked, click **Get DSN** on a project's Monitoring tab, or the key button next to a linked project in **Connections**. Runova reads the keys from Sentry each time and never stores them. A DSN is public by design, so it is fine in client code.
 

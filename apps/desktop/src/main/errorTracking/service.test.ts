@@ -919,9 +919,16 @@ describe('new projects and their keys', () => {
     await expect(
       service.createProject({ connectionId: connection.id, teamSlug: 'platform', name: 'X' }),
     ).rejects.toThrow(
-      'Sentry refused to create the project. The token needs the project:write scope, and the organization must let members create projects. Replace the token with one that has it, or ask an owner.',
+      "Sentry refused to create the project (You do not have permission to perform this action). The token needs the project:write scope. When the organization does not let members create projects, it also needs org:write, even for an owner. Turn on Let Members Create Projects in the organization's settings, or replace the token with one that has both.",
     );
     fake.state.scopes = CREATE_SCOPES;
+    fake.state.membersCannotCreateProjects = true;
+    await expect(
+      service.createProject({ connectionId: connection.id, teamSlug: 'platform', name: 'X' }),
+    ).rejects.toThrow(
+      /^Sentry refused to create the project \(Your organization has disabled this feature for members\)\. .*needs org:write/,
+    );
+    fake.state.scopes = [...CREATE_SCOPES, 'org:write'];
     await expect(
       service.createProject({
         connectionId: connection.id,

@@ -147,6 +147,12 @@ describe('scopeChecklist', () => {
         optional: true,
         note: 'optional, needed to create projects',
       },
+      {
+        scope: 'org:write',
+        state: 'missing',
+        optional: true,
+        note: 'optional, needed to create projects when members cannot',
+      },
     ]);
   });
 
@@ -157,8 +163,17 @@ describe('scopeChecklist', () => {
     expect(list.find((one) => one.scope === 'project:write')?.state).toBe('granted');
   });
 
+  it('grants org:write from org:write or org:admin', () => {
+    for (const scope of ['org:write', 'org:admin']) {
+      const list = scopeChecklist(tokenCheck({ scopes: ['org:read', scope] }));
+      expect(list.find((one) => one.scope === 'org:write')?.state).toBe('granted');
+    }
+  });
+
   it('lists every scope to copy, the optional ones last', () => {
-    expect(SCOPE_LIST_TEXT).toBe('org:read, project:read, event:read, event:write, project:write');
+    expect(SCOPE_LIST_TEXT).toBe(
+      'org:read, project:read, event:read, event:write, project:write, org:write',
+    );
   });
 
   it('says unknown when the provider would not list the scopes', () => {

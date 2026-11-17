@@ -227,6 +227,8 @@ export interface FakeSentryState extends Required<FakeSentryOptions> {
   events: Record<string, unknown>;
   /** The Link header sent with an issue list, when set. */
   issueLink: string | null;
+  /** "Let Members Create Projects" turned off: creating then also wants org:write on the token. */
+  membersCannotCreateProjects: boolean;
   /** Answers a request before the routes do; return true when it did. */
   override:
     | ((request: IncomingMessage, response: ServerResponse, url: URL) => boolean | undefined)
@@ -267,6 +269,7 @@ export async function startFakeSentry(options: FakeSentryOptions = {}): Promise<
     ),
     events: { '4501': fakeEvent() },
     issueLink: null,
+    membersCannotCreateProjects: false,
     override: null,
   };
 
@@ -287,6 +290,13 @@ export async function startFakeSentry(options: FakeSentryOptions = {}): Promise<
   const createProject = (response: ServerResponse, teamSlug: string, body: string) => {
     if (state.scopes && !state.scopes.some((s) => s === 'project:write' || s === 'project:admin')) {
       json(response, { detail: 'You do not have permission to perform this action.' }, 403);
+      return;
+    }
+    if (
+      state.membersCannotCreateProjects &&
+      !state.scopes?.some((s) => s === 'org:write' || s === 'org:admin')
+    ) {
+      json(response, { detail: 'Your organization has disabled this feature for members.' }, 403);
       return;
     }
     if (!state.teams.some((team) => team.slug === teamSlug)) return notFound(response);

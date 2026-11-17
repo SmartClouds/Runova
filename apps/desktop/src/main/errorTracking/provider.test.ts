@@ -9,6 +9,7 @@ import {
 import { json } from '../../test/main/fixtures';
 import {
   createSentryProvider,
+  errorDetail,
   errorKind,
   SENTRY_SORT,
   sentryIssueQuery,
@@ -65,6 +66,13 @@ describe('filters in Sentry terms', () => {
     expect(errorKind(new Error('x'))).toBeNull();
     expect(errorKind('x')).toBeNull();
   });
+
+  it("reads the provider's own reason, and nothing from anything else", () => {
+    expect(errorDetail(Object.assign(new Error('x'), { detail: 'Nope.' }))).toBe('Nope.');
+    expect(errorDetail(Object.assign(new Error('x'), { detail: null }))).toBeNull();
+    expect(errorDetail(new Error('x'))).toBeNull();
+    expect(errorDetail(null)).toBeNull();
+  });
 });
 
 describe('createSentryProvider', () => {
@@ -74,6 +82,7 @@ describe('createSentryProvider', () => {
     expect(provider.readScopes).toEqual(['org:read', 'project:read', 'event:read']);
     expect(provider.writeScope).toBe('event:write');
     expect(provider.createScope).toBe('project:write');
+    expect(provider.createOrgScope).toBe('org:write');
     expect(provider.normalizeHost('acme.sentry.io')).toEqual({
       baseUrl: 'https://sentry.io',
       orgSlugHint: 'acme',

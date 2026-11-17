@@ -100,8 +100,8 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     body: (
       <>
         A personal token with the scopes below. Add event:write to resolve and ignore issues from
-        here, and project:write to create Sentry projects. Sentry cannot add scopes to a token
-        later.
+        here, and project:write with org:write to create Sentry projects. Sentry cannot add scopes
+        to a token later.
       </>
     ),
   },
@@ -152,6 +152,9 @@ function FirstRun({ onConnect }: { onConnect: () => void }): React.JSX.Element {
                         </Chip>
                         <Chip tone="primary" className="font-mono">
                           project:write, optional
+                        </Chip>
+                        <Chip tone="primary" className="font-mono">
+                          org:write, optional
                         </Chip>
                         <Button
                           size="xs"

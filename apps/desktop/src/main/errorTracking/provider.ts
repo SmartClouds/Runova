@@ -18,6 +18,7 @@ import {
   type RemoteProject,
   type RemoteProjectKey,
   type RemoteTeam,
+  SENTRY_CREATE_ORG_SCOPE,
   SENTRY_CREATE_SCOPE,
   SENTRY_READ_SCOPES,
   SENTRY_WRITE_SCOPE,
@@ -73,6 +74,8 @@ export interface ErrorProvider {
   readonly writeScope: string;
   /** The scope creating a project needs. */
   readonly createScope: string;
+  /** The extra scope creating a project needs when members may not create projects. */
+  readonly createOrgScope: string;
   /** Cleans up a typed host; throws a message for the user when it is not usable. */
   normalizeHost(input: string): { baseUrl: string; orgSlugHint: string | null };
   /** A hint when the token is of a kind that cannot do the job, else null. */
@@ -120,6 +123,12 @@ export interface ErrorProvider {
 export function errorKind(error: unknown): string | null {
   const kind = (error as { kind?: unknown } | null)?.kind;
   return typeof kind === 'string' ? kind : null;
+}
+
+/** The provider's own reason a failure carries, or null when it gave none. */
+export function errorDetail(error: unknown): string | null {
+  const detail = (error as { detail?: unknown } | null)?.detail;
+  return typeof detail === 'string' && detail ? detail : null;
 }
 
 export const SENTRY_SORT: Record<ErrorIssueSort, string> = {
@@ -175,6 +184,7 @@ export function createSentryProvider(deps: SentryProviderDeps): ErrorProvider {
     readScopes: SENTRY_READ_SCOPES,
     writeScope: SENTRY_WRITE_SCOPE,
     createScope: SENTRY_CREATE_SCOPE,
+    createOrgScope: SENTRY_CREATE_ORG_SCOPE,
     normalizeHost: (input) => normalizeSentryHost(input),
     tokenWarning: (token) => (token.trim().startsWith('sntrys_') ? ORG_TOKEN_WARNING : null),
 

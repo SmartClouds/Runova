@@ -225,7 +225,7 @@ export const errorTrackingTools = [
     area: 'errorTracking',
     title: 'Create a Sentry project',
     description:
-      'Makes a new project in a connected Sentry organization and hands back its DSN with the install command and init code for the platform. It is linked to the project the agent works on unless link is false. Leave teamSlug out when the organization has one team. Needs a token with project:write; errors_connections says which can.',
+      'Makes a new project in a connected Sentry organization and hands back its DSN with the install command and init code for the platform. It is linked to the project the agent works on unless link is false. Leave teamSlug out when the organization has one team. Needs a token with project:write; errors_connections says which can. When the organization does not let members create projects, Sentry also wants org:write on the token, even for an owner.',
     risk: 'write',
     input: z.object({
       connectionId: create.connectionId.describe('From errors_connections.'),

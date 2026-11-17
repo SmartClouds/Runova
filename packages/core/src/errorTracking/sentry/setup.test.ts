@@ -23,6 +23,7 @@ describe('the module index', () => {
   it('exports the setup helpers', () => {
     expect(errorTracking.buildSentrySetup).toBe(buildSentrySetup);
     expect(errorTracking.SENTRY_CREATE_SCOPE).toBe('project:write');
+    expect(errorTracking.SENTRY_CREATE_ORG_SCOPE).toBe('org:write');
   });
 });
 

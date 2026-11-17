@@ -7,6 +7,13 @@
 /** The scope that lets a token create projects. `project:admin` covers it too. */
 export const SENTRY_CREATE_SCOPE = 'project:write';
 
+/**
+ * The scope Sentry also wants when an organization turns off "Let Members Create Projects".
+ * Sentry checks the token's scopes there, not the person's role, so even an owner's token is
+ * refused without it.
+ */
+export const SENTRY_CREATE_ORG_SCOPE = 'org:write';
+
 /** Sentry's limit on a project name. */
 export const SENTRY_PROJECT_NAME_MAX = 50;
 

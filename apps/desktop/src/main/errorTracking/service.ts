@@ -43,6 +43,7 @@ import {
   createSentryProvider,
   type ErrorProvider,
   type ErrorProviderAccess,
+  errorDetail,
   errorKind,
 } from './provider';
 import type { SentryTransport } from './sentryClient';
@@ -473,8 +474,9 @@ export function createErrorTrackingService(
         );
       } catch (error) {
         if (errorKind(error) !== 'forbidden') throw error;
+        const detail = errorDetail(error);
         throw new Error(
-          `Sentry refused to create the project. The token needs the ${provider.createScope} scope, and the organization must let members create projects. Replace the token with one that has it, or ask an owner.`,
+          `Sentry refused to create the project${detail ? ` (${detail.replace(/\.$/, '')})` : ''}. The token needs the ${provider.createScope} scope. When the organization does not let members create projects, it also needs ${provider.createOrgScope}, even for an owner. Turn on Let Members Create Projects in the organization's settings, or replace the token with one that has both.`,
         );
       }
 
