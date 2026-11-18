@@ -1,5 +1,10 @@
-import { type AppNotification, isPipelineNotification } from '@runova/core';
-import type { GithubActionsActivity, GithubActionsHistoryItem } from '@shared/apiTypes';
+import { type AppNotification, isPipelineNotification, type Project } from '@runova/core';
+import type {
+  DurationEstimate,
+  GithubActionsActivity,
+  GithubActionsHistoryItem,
+} from '@shared/apiTypes';
+import { liveEta } from '@shared/pipelineEstimates';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +13,7 @@ import { toast } from 'sonner';
 import {
   Ban,
   Check,
+  ChevronRight,
   CircleCheck,
   Clock,
   ExternalLink,
@@ -27,13 +33,17 @@ import { AutoFixControl } from '@/components/pipelines/autoFix/AutoFixControl';
 import { isAutoFixActive } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
 import { CopyRunErrorButton } from '@/components/pipelines/CopyRunErrorButton';
+import { EtaBar, EtaText } from '@/components/pipelines/EstimateBits';
+import { estimateFromHistory } from '@/components/pipelines/estimateView';
 import {
   RunAnnotations,
   useRunAnnotations,
   useSeenOnce,
 } from '@/components/pipelines/RunAnnotations';
+import { RunDetailsDialog } from '@/components/pipelines/RunDetailsDialog';
 import { type RunnerRunTarget, RunnersPanel } from '@/components/pipelines/RunnersPanel';
 import {
+  isLiveRun,
   type RunOutcome,
   type RunTone,
   runDuration,
@@ -41,6 +51,7 @@ import {
   withWarnings,
 } from '@/components/pipelines/runStatus';
 import { StopRunButton } from '@/components/pipelines/StopRunButton';
+import { useNow } from '@/components/pipelines/useNow';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { RefreshFailureBell, refreshTooltip } from '@/components/ui/refresh-failure-bell';
@@ -238,6 +249,8 @@ function SetupHint({
 
 function RunRow({
   item,
+  usual,
+  opensDetails,
   unread,
   focused,
   rowRef,
@@ -245,6 +258,10 @@ function RunRow({
   onOpenProject,
 }: {
   item: GithubActionsHistoryItem;
+  /** What this pipeline's runs usually take, for a run that is still going. */
+  usual: DurationEstimate | null;
+  /** Clicking opens the run's details here, rather than on GitHub. */
+  opensDetails: boolean;
   unread: boolean;
   /** The run someone arrived here to see, e.g. from the desktop pet. */
   focused: boolean;
@@ -259,6 +276,11 @@ function RunRow({
   const colours = toneColours(tone);
   const failed = tone.outcome === 'failed';
   const duration = runDuration(item);
+  const counting = usual !== null && isLiveRun(item);
+  const now = useNow(counting);
+  const elapsed = Math.max(now - Date.parse(item.createdAt), 0);
+  const eta = usual && counting ? liveEta(elapsed, usual.ms - elapsed, usual.ms) : null;
+  const label = item.displayTitle || item.workflowName;
 
   return (
     <li
@@ -280,16 +302,14 @@ function RunRow({
       <div className="flex items-start gap-1 py-1.5 pl-1.5 pr-1.5">
         <button
           type="button"
-          disabled={!item.htmlUrl}
+          disabled={!item.htmlUrl && !opensDetails}
           onClick={onOpen}
           className="group/run flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-foreground/[0.05] focus:outline-none focus-visible:bg-foreground/[0.06] disabled:cursor-default disabled:hover:bg-transparent"
         >
           <RunGlyph tone={tone} />
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-0.5 text-[13px] font-medium leading-snug">
-                {item.displayTitle || item.workflowName}
-              </span>
+              <span className="mr-0.5 text-[13px] font-medium leading-snug">{label}</span>
               <Chip tone={colours.chip}>{tone.label}</Chip>
               {unread ? <Chip tone="destructive">New</Chip> : null}
             </span>
@@ -314,11 +334,28 @@ function RunRow({
                   <span className="tabular-nums">{duration}</span>
                 </>
               ) : null}
+              {usual && eta ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <EtaText eta={eta} estimate={usual} />
+                </>
+              ) : null}
               <span aria-hidden>·</span>
               <span className="tabular-nums">{timeAgo(item.updatedAt)}</span>
             </span>
+            {usual && eta ? (
+              <EtaBar
+                eta={eta}
+                estimate={usual}
+                label={label}
+                size="sm"
+                className="mt-2 max-w-sm"
+              />
+            ) : null}
           </span>
-          {item.htmlUrl ? (
+          {opensDetails ? (
+            <ChevronRight className="mt-2 h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/run:text-muted-foreground" />
+          ) : item.htmlUrl ? (
             <ExternalLink className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover/run:text-muted-foreground" />
           ) : null}
         </button>
@@ -567,6 +604,23 @@ export default function PipelinesPage(): React.JSX.Element {
 
   const activity = lastGood.data;
   const runs = useMemo(() => activity?.runs ?? [], [activity]);
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => window.runova.projects.list(),
+  });
+  const projectsById = useMemo(
+    () => new Map((projectsQuery.data ?? []).map((project) => [project.id, project])),
+    [projectsQuery.data],
+  );
+  // The run whose details are open. The row it came from may refresh or drop off while it is.
+  const [details, setDetails] = useState<{
+    item: GithubActionsHistoryItem & { workflowId: number };
+    project: Project;
+  } | null>(null);
+  const detailsItem = details
+    ? (runs.find((run) => run.id === details.item.id && run.repo === details.item.repo) ??
+      details.item)
+    : null;
   // Only CI results belong here. Server alerts and monitors going down have their own pages and
   // show up in Recent messages, so they are neither listed nor counted on this page.
   const notifications: AppNotification[] = useMemo(
@@ -718,9 +772,21 @@ export default function PipelinesPage(): React.JSX.Element {
     toast.info('Press Enter in the terminal, then approve the new scope in your browser.');
   }
 
+  /** The project a run can be opened in, which needs both the project and the pipeline. */
+  function detailsTarget(item: GithubActionsHistoryItem): Project | null {
+    if (!item.workflowId || !item.projectId) return null;
+    return projectsById.get(item.projectId) ?? null;
+  }
+
+  /** Opens the run's jobs and steps here, or on GitHub when Runova cannot tell where it is from. */
   function handleOpenRun(item: GithubActionsHistoryItem): void {
     const notificationId = item.htmlUrl ? unreadByUrl.get(item.htmlUrl) : undefined;
     if (notificationId) markRead.mutate(notificationId);
+    const project = detailsTarget(item);
+    if (project && item.workflowId) {
+      setDetails({ item: { ...item, workflowId: item.workflowId }, project });
+      return;
+    }
     if (item.htmlUrl) void window.runova.shell.openExternal(item.htmlUrl);
   }
 
@@ -813,6 +879,8 @@ export default function PipelinesPage(): React.JSX.Element {
           <RunRow
             key={`${item.repo}-${item.id}`}
             item={item}
+            usual={isLiveRun(item) ? estimateFromHistory(runs, item) : null}
+            opensDetails={detailsTarget(item) !== null}
             unread={item.htmlUrl ? unreadByUrl.has(item.htmlUrl) : false}
             focused={focusedRunId === item.id}
             rowRef={bindRow(item.id)}
@@ -859,6 +927,16 @@ export default function PipelinesPage(): React.JSX.Element {
         // The repo being looked at, or the one with the newest run.
         preferredRepo={repo || runs[0]?.repo}
       />
+      {details && detailsItem ? (
+        <RunDetailsDialog
+          item={{ ...detailsItem, workflowId: details.item.workflowId }}
+          project={details.project}
+          open
+          onOpenChange={(open) => {
+            if (!open) setDetails(null);
+          }}
+        />
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         {showFilters ? (

@@ -341,14 +341,17 @@ export async function fetchDashboardActionsActivity(): Promise<GithubActionsActi
   }
 }
 
+/** A workflow's latest runs, newest first. `status` narrows them, e.g. to `success`. */
 export async function listWorkflowRuns(
   owner: string,
   repo: string,
   workflowId: number,
   perPage = 5,
+  status?: 'success' | 'completed',
 ): Promise<GithubWorkflowRunInfo[]> {
+  const filter = status ? `&status=${status}` : '';
   const payload = await ghApi<{ workflow_runs?: GhRun[] }>(
-    `repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?per_page=${perPage}`,
+    `repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?per_page=${perPage}${filter}`,
   );
   return (payload.workflow_runs ?? []).map(toWorkflowRun);
 }
@@ -524,7 +527,8 @@ function isFailedConclusion(value: string | null | undefined): boolean {
   return value === 'failure' || value === 'timed_out';
 }
 
-function parseOwnerRepo(repo: string): { owner: string; repo: string } | null {
+/** `owner/name` split in two, or null for anything that is not a plain repo name. */
+export function parseOwnerRepo(repo: string): { owner: string; repo: string } | null {
   const parts = repo.trim().split('/');
   if (parts.length !== 2) return null;
   const [owner, name] = parts;

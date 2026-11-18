@@ -1,16 +1,21 @@
 import type { Project } from '@runova/core';
 import type {
+  DurationEstimate,
   GithubActionsRunErrorInput,
   GithubWorkflowInfo,
   GithubWorkflowRunInfo,
+  RunEstimates,
 } from '@shared/apiTypes';
-import { useEffect, useState } from 'react';
+import { type LiveEta, spanMs } from '@shared/pipelineEstimates';
+import { useState } from 'react';
 import { ChevronRight, Copy, ExternalLink, GitBranch, GitCommit } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
 import { AutoFixControl } from '@/components/pipelines/autoFix/AutoFixControl';
 import { AutoFixPanel } from '@/components/pipelines/autoFix/AutoFixPanel';
 import { sessionForRun } from '@/components/pipelines/autoFix/autoFixView';
 import { useAutoFixSessions } from '@/components/pipelines/autoFix/useAutoFix';
+import { DeltaChip, EtaBar, EtaText } from '@/components/pipelines/EstimateBits';
+import { runLiveEta } from '@/components/pipelines/estimateView';
 import { InlineProblem } from '@/components/pipelines/InlineProblem';
 import { RerunRunButton } from '@/components/pipelines/RerunRunButton';
 import { copyText, RunAnnotations, useRunAnnotations } from '@/components/pipelines/RunAnnotations';
@@ -22,7 +27,9 @@ import {
   spanDuration,
 } from '@/components/pipelines/runStatus';
 import { StopRunButton } from '@/components/pipelines/StopRunButton';
+import { useNow } from '@/components/pipelines/useNow';
 import { useRunDetails } from '@/components/pipelines/useRunDetails';
+import { useRunEstimates } from '@/components/pipelines/useRunEstimates';
 import { useRunFailure } from '@/components/pipelines/useRunFailure';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,17 +53,8 @@ function eventLabel(event: string): string {
   return EVENT_LABEL[event] ?? event.replace(/_/g, ' ');
 }
 
-/** The current time, ticking every second while `active`, so a running job's clock keeps moving. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [active]);
-  return now;
-}
+/** The pipeline a run belongs to, as much of it as the details need. */
+export type RunWorkflow = Pick<GithubWorkflowInfo, 'id' | 'name' | 'htmlUrl'>;
 
 function JobsSection({
   project,
@@ -64,14 +62,17 @@ function JobsSection({
   workflow,
   run,
   now,
+  details,
+  estimates,
 }: {
   project: Project;
   repo: string;
-  workflow: GithubWorkflowInfo;
+  workflow: RunWorkflow;
   run: GithubWorkflowRunInfo;
   now: number;
+  details: ReturnType<typeof useRunDetails>;
+  estimates: RunEstimates | undefined;
 }): React.JSX.Element {
-  const details = useRunDetails(repo, run, true);
   const jobs = details.data;
 
   return (
@@ -102,6 +103,7 @@ function JobsSection({
         <RunJobs
           jobs={jobs}
           now={now}
+          estimates={estimates}
           repo={repo}
           project={project}
           run={{
@@ -122,7 +124,7 @@ function AnnotationsSection({
   run,
 }: {
   repo: string;
-  workflow: GithubWorkflowInfo;
+  workflow: RunWorkflow;
   run: GithubWorkflowRunInfo;
 }): React.JSX.Element | null {
   const item = {
@@ -206,12 +208,28 @@ function FailureOutput({ input }: { input: GithubActionsRunErrorInput }): React.
   );
 }
 
-function RunFacts({ run, now }: { run: GithubWorkflowRunInfo; now: number }): React.JSX.Element {
+function RunFacts({
+  run,
+  now,
+  label,
+  usual,
+  eta,
+}: {
+  run: GithubWorkflowRunInfo;
+  now: number;
+  /** What the progress bar is named after: the pipeline. */
+  label: string;
+  /** What the pipeline's runs usually take, when earlier runs say. */
+  usual: DurationEstimate | null | undefined;
+  eta: LiveEta | null;
+}): React.JSX.Element {
   const live = isLiveRun(run);
   const span = live ? spanDuration(run.createdAt, null, now) : runDuration(run);
   const timing = `Started ${timeAgo(run.createdAt)}${
     span ? ` · ${live ? 'running for' : 'took'} ${span}` : ''
   }`;
+  // Only a passing run is held up to the usual time: a failed one stopped early.
+  const tookMs = run.conclusion === 'success' ? spanMs(run.createdAt, run.updatedAt) : null;
 
   return (
     <div className="space-y-1">
@@ -235,9 +253,23 @@ function RunFacts({ run, now }: { run: GithubWorkflowRunInfo; now: number }): Re
           </li>
         ) : null}
       </ul>
-      <SimpleTooltip label={new Date(run.createdAt).toLocaleString()} side="bottom" align="start">
-        <p className="w-fit text-[11px] text-muted-foreground">{timing}</p>
-      </SimpleTooltip>
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <SimpleTooltip label={new Date(run.createdAt).toLocaleString()} side="bottom" align="start">
+          <p className="w-fit text-[11px] text-muted-foreground">{timing}</p>
+        </SimpleTooltip>
+        {usual && eta ? (
+          <>
+            <span aria-hidden className="text-[11px] text-muted-foreground">
+              ·
+            </span>
+            <EtaText eta={eta} estimate={usual} />
+          </>
+        ) : null}
+        {usual && tookMs !== null ? <DeltaChip actualMs={tookMs} estimate={usual} /> : null}
+      </div>
+      {usual && eta ? (
+        <EtaBar eta={eta} estimate={usual} label={label} className="mt-1.5 max-w-md" />
+      ) : null}
     </div>
   );
 }
@@ -254,11 +286,14 @@ export function RunDetails({
 }: {
   project: Project;
   repo: string;
-  workflow: GithubWorkflowInfo;
+  workflow: RunWorkflow;
   run: GithubWorkflowRunInfo | null;
 }): React.JSX.Element {
   const live = run ? isLiveRun(run) : false;
   const now = useNow(live);
+  // Read here rather than in the jobs section, so the header's estimate can follow the jobs too.
+  const details = useRunDetails(repo, run, run !== null);
+  const estimates = useRunEstimates(repo, workflow.id, run?.id, run !== null).data;
   const { sessions } = useAutoFixSessions();
   const autoFix = run ? sessionForRun(sessions, repo, run.id) : null;
 
@@ -311,7 +346,13 @@ export function RunDetails({
               <p className="break-words text-sm text-foreground/90">{run.displayTitle}</p>
             </div>
           </div>
-          <RunFacts run={run} now={now} />
+          <RunFacts
+            run={run}
+            now={now}
+            label={workflow.name}
+            usual={estimates?.run}
+            eta={runLiveEta(run, details.data, estimates, now)}
+          />
           <div className="flex flex-wrap items-center gap-1.5">
             {tone.outcome === 'failed' ? (
               <FailedRunActions project={project} run={failureInput} className="p-0" />
@@ -369,7 +410,15 @@ export function RunDetails({
             className="rounded-xl bg-primary/[0.04] p-3.5 ring-1 ring-inset ring-primary/15"
           />
         ) : null}
-        <JobsSection project={project} repo={repo} workflow={workflow} run={run} now={now} />
+        <JobsSection
+          project={project}
+          repo={repo}
+          workflow={workflow}
+          run={run}
+          now={now}
+          details={details}
+          estimates={estimates}
+        />
         <AnnotationsSection repo={repo} workflow={workflow} run={run} />
         {tone.outcome === 'failed' ? <FailureOutput input={failureInput} /> : null}
       </div>

@@ -177,6 +177,9 @@ export const queryKeys = {
   /** `live` is part of the key so a run that just finished is read once more, not left half done. */
   runDetails: (repo: string, runId: number, attempt: number, live: boolean) =>
     ['run-details', repo, runId, attempt, live] as const,
+  /** How long a pipeline's runs, jobs and steps usually take, without the run on screen. */
+  runEstimates: (repo: string, workflowId: number, excludeRunId: number) =>
+    ['run-estimates', repo, workflowId, excludeRunId] as const,
   /** Every job log, for the Pipelines refresh. */
   jobLogAll: ['job-log'] as const,
   /** One finished job's log, split by step. */

@@ -13,6 +13,8 @@ import type {
   GithubRunCancelRequest,
   GithubRunDetailsInput,
   GithubRunDetailsResult,
+  GithubRunEstimatesInput,
+  GithubRunEstimatesResult,
   GithubRunnersInput,
   GithubRunnersResult,
   GithubRunRerunRequest,
@@ -37,6 +39,7 @@ import {
   setProjectMutedActions,
 } from '../pipelines/githubActions';
 import { fetchRunnerStatus } from '../pipelines/githubRunners';
+import { fetchRunEstimates } from '../pipelines/runEstimates';
 import { runnerInstallDefaults } from '../pipelines/runnerInstall';
 import { readRunnerMachineStats } from '../pipelines/runnerMachineStats';
 import {
@@ -96,6 +99,13 @@ export function registerPipelineHandlers(): void {
     IPC.pipelines.runDetails,
     (_event, input: GithubRunDetailsInput): Promise<GithubRunDetailsResult> => {
       return fetchRunDetails(input);
+    },
+  );
+
+  ipcMain.handle(
+    IPC.pipelines.runEstimates,
+    (_event, input: GithubRunEstimatesInput): Promise<GithubRunEstimatesResult> => {
+      return fetchRunEstimates(input);
     },
   );
 

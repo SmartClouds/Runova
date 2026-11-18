@@ -1,9 +1,11 @@
 import type { Project } from '@runova/core';
 import type {
+  DurationEstimate,
   GithubRunAnnotation,
   GithubRunJob,
   GithubWorkflowInfo,
   GithubWorkflowRunInfo,
+  RunEstimates,
 } from '@shared/apiTypes';
 import { useQuery } from '@tanstack/react-query';
 import { act, screen, waitFor, within } from '@testing-library/react';
@@ -500,6 +502,107 @@ describe('RunDetails jobs', () => {
     });
 
     expect(screen.getByRole('button', { name: /^deploy/ }).textContent).not.toBe(before);
+  });
+});
+
+describe('RunDetails estimates', () => {
+  const runEstimates = vi.fn();
+
+  function usual(ms: number): DurationEstimate {
+    return { ms, lowMs: ms, highMs: ms, samples: 6, confidence: 'high' };
+  }
+
+  function estimates(runMs: number, jobs: RunEstimates['jobs'] = {}) {
+    return { ok: true, estimates: { runs: 6, run: usual(runMs), jobs } satisfies RunEstimates };
+  }
+
+  /** A run that started two minutes ago. */
+  function freshLiveRun(): GithubWorkflowRunInfo {
+    return { ...LIVE_RUN, id: 103, createdAt: new Date(Date.now() - 120_000).toISOString() };
+  }
+
+  it('asks how long this pipeline usually takes, leaving the run itself out', async () => {
+    runEstimates.mockResolvedValue(estimates(300_000));
+    renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
+
+    await waitFor(() =>
+      expect(runEstimates).toHaveBeenCalledWith({
+        repo: 'acme/app',
+        workflowId: 1,
+        excludeRunId: 103,
+      }),
+    );
+  });
+
+  it('counts a live run down with a progress bar', async () => {
+    runDetails.mockResolvedValue({ ok: true, jobs: [] });
+    runEstimates.mockResolvedValue(estimates(300_000));
+    renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
+
+    const bar = await screen.findByRole('progressbar', { name: 'CD progress' });
+    expect(bar).toHaveAttribute('aria-valuenow', '40');
+    expect(screen.getByText('~3m left')).toBeInTheDocument();
+  });
+
+  it('moves the bar along as the run goes on', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    runDetails.mockResolvedValue({ ok: true, jobs: [] });
+    runEstimates.mockResolvedValue(estimates(300_000));
+    renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
+    const bar = await screen.findByRole('progressbar', { name: 'CD progress' });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(Number(bar.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(50);
+  });
+
+  it('counts down the jobs too', async () => {
+    runDetails.mockResolvedValue({
+      ok: true,
+      jobs: [
+        job({
+          status: 'in_progress',
+          conclusion: null,
+          startedAt: new Date(Date.now() - 60_000).toISOString(),
+          completedAt: null,
+          steps: [],
+        }),
+      ],
+    });
+    runEstimates.mockResolvedValue(
+      estimates(300_000, { deploy: { estimate: usual(240_000), steps: {} } }),
+    );
+    renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
+
+    expect(await screen.findByRole('progressbar', { name: 'deploy progress' })).toBeInTheDocument();
+  });
+
+  it('says when a passed run took clearly longer than usual', async () => {
+    runEstimates.mockResolvedValue(estimates(180_000));
+    renderDetails(PASSED_RUN, { 'pipelines.runEstimates': runEstimates });
+
+    // 4m 12s against the usual 3m.
+    expect(await screen.findByLabelText('1m 12s slower than usual')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('does not hold a failed run up to the usual time, since it stopped early', async () => {
+    runEstimates.mockResolvedValue(estimates(60_000));
+    renderDetails(FAILED_RUN, { 'pipelines.runEstimates': runEstimates });
+
+    await waitFor(() => expect(runEstimates).toHaveBeenCalled());
+    expect(screen.queryByText(/slower|faster/)).not.toBeInTheDocument();
+  });
+
+  it('carries on without estimates when GitHub cannot give them', async () => {
+    runEstimates.mockResolvedValue({ ok: false, error: 'HTTP 403' });
+    renderDetails(freshLiveRun(), { 'pipelines.runEstimates': runEstimates });
+
+    await waitFor(() => expect(runEstimates).toHaveBeenCalled());
+    expect(screen.getByText(/Started/)).toHaveTextContent(/running for/);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 });
 

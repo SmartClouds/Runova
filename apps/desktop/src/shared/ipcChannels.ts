@@ -1340,6 +1340,8 @@ export const IPC = {
     runError: 'pipelines:runError',
     runAnnotations: 'pipelines:runAnnotations',
     runDetails: 'pipelines:runDetails',
+    /** (GithubRunEstimatesInput) -> GithubRunEstimatesResult: how long a pipeline's runs, jobs and steps usually take. */
+    runEstimates: 'pipelines:runEstimates',
     /** (GithubJobLogInput) -> GithubJobLogResult: one finished job's log, split by step. */
     jobLog: 'pipelines:jobLog',
     refs: 'pipelines:refs',

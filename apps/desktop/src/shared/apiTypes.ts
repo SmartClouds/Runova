@@ -3454,6 +3454,46 @@ export type GithubRunDetailsResult =
     }
   | { ok: false; error: string };
 
+/** How sure an estimate is: how many earlier runs it rests on, and how much they agreed. */
+export type EstimateConfidence = 'high' | 'medium' | 'low';
+
+/** How long something usually takes, going by the pipeline's earlier passing runs. */
+export interface DurationEstimate {
+  /** The usual time, leaning towards the newest runs. */
+  ms: number;
+  /** The usual range: most runs took between these two. */
+  lowMs: number;
+  highMs: number;
+  /** How many earlier runs it was worked out from, once outliers were left out. */
+  samples: number;
+  confidence: EstimateConfidence;
+}
+
+export interface JobEstimate {
+  estimate: DurationEstimate;
+  /** Keyed by step name, with `#2`, `#3` on the repeats of a name within the job. */
+  steps: Record<string, DurationEstimate>;
+}
+
+/** What a pipeline's runs, jobs (by name) and steps usually take. */
+export interface RunEstimates {
+  /** How many earlier passing runs were read. */
+  runs: number;
+  run: DurationEstimate | null;
+  jobs: Record<string, JobEstimate>;
+}
+
+export interface GithubRunEstimatesInput {
+  repo: string;
+  workflowId: number;
+  /** The run being looked at, which must not count towards its own estimate. */
+  excludeRunId?: number;
+}
+
+export type GithubRunEstimatesResult =
+  | { ok: true; estimates: RunEstimates }
+  | { ok: false; error: string };
+
 /** The steps go along so the log can be cut up by when each step ran. */
 export interface GithubJobLogInput {
   repo: string;

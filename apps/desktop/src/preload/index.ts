@@ -219,6 +219,8 @@ import type {
   GithubRunCancelRequest,
   GithubRunDetailsInput,
   GithubRunDetailsResult,
+  GithubRunEstimatesInput,
+  GithubRunEstimatesResult,
   GithubRunnersInput,
   GithubRunnersResult,
   GithubRunRerunRequest,
@@ -1911,6 +1913,9 @@ const pipelines = {
   /** The jobs of one run with each step's status and timing. */
   runDetails: (input: GithubRunDetailsInput): Promise<GithubRunDetailsResult> =>
     ipcRenderer.invoke(IPC.pipelines.runDetails, input),
+  /** How long the pipeline's runs, jobs and steps usually take, from its earlier passing runs. */
+  runEstimates: (input: GithubRunEstimatesInput): Promise<GithubRunEstimatesResult> =>
+    ipcRenderer.invoke(IPC.pipelines.runEstimates, input),
   /** One finished job's log, split by step, with each line's kind. */
   jobLog: (input: GithubJobLogInput): Promise<GithubJobLogResult> =>
     ipcRenderer.invoke(IPC.pipelines.jobLog, input),

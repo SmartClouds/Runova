@@ -1826,6 +1826,41 @@ button.search-pill:hover {
   }
 }
 
+/* The fill of a pipeline estimate's progress bar: a soft light sweeps along it while the
+   item runs, and a rough guess (few earlier runs) is striped so it does not look certain. */
+@keyframes eta-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.eta-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.45), transparent);
+  animation: eta-sheen 1.8s ease-in-out infinite;
+}
+
+.eta-rough {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    hsl(0 0% 100% / 0.22) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eta-sheen::after {
+    animation: none;
+    display: none;
+  }
+}
+
 /* Windows 11 caption glyphs (minimize / maximize / restore / close) use the
    system's Segoe icon fonts so the buttons look native. */
 .caption-glyph {

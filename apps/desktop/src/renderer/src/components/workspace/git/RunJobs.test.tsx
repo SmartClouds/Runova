@@ -1,10 +1,12 @@
 import type { Project } from '@runova/core';
 import type {
+  DurationEstimate,
   GithubJobLogInput,
   GithubLogLine,
   GithubRunJob,
   GithubRunStep,
   GithubStepLog,
+  RunEstimates,
 } from '@shared/apiTypes';
 import { screen, within } from '@testing-library/react';
 import { useState } from 'react';
@@ -288,6 +290,140 @@ describe('summarizeJobs', () => {
     const skipped = job({ id: 6, name: 's', conclusion: 'skipped' });
     const cancelled = job({ id: 7, name: 'c', conclusion: 'cancelled' });
     expect(summarizeJobs([skipped, cancelled])).toBe('1 cancelled · 1 skipped');
+  });
+});
+
+describe('RunJobs estimates', () => {
+  function usual(ms: number, overrides: Partial<DurationEstimate> = {}): DurationEstimate {
+    return { ms, lowMs: ms, highMs: ms, samples: 6, confidence: 'high', ...overrides };
+  }
+
+  const ESTIMATES: RunEstimates = {
+    runs: 6,
+    run: usual(400_000),
+    jobs: {
+      deploy: {
+        estimate: usual(300_000),
+        steps: { 'Set up job': usual(2_000), Deploy: usual(120_000), 'Smoke test': usual(40_000) },
+      },
+      build: {
+        estimate: usual(180_000),
+        steps: { 'Set up job': usual(2_000), 'Run build': usual(1_000) },
+      },
+      lint: { estimate: usual(60_000), steps: {} },
+    },
+  };
+
+  // Running for 3m (since 09:07), its Deploy step for 1m 30s of its usual 2m.
+  const DEPLOYING = job({
+    id: 3,
+    name: 'deploy',
+    status: 'in_progress',
+    conclusion: null,
+    startedAt: '2026-03-15T09:07:00Z',
+    completedAt: null,
+    steps: [
+      step({ number: 1, name: 'Set up job' }),
+      step({
+        number: 2,
+        name: 'Deploy',
+        status: 'in_progress',
+        conclusion: null,
+        startedAt: '2026-03-15T09:08:30Z',
+        completedAt: null,
+      }),
+      step({
+        number: 3,
+        name: 'Smoke test',
+        status: 'queued',
+        conclusion: null,
+        startedAt: null,
+        completedAt: null,
+      }),
+    ],
+  });
+  const LINT_QUEUED = job({
+    id: 4,
+    name: 'lint',
+    status: 'queued',
+    conclusion: null,
+    startedAt: null,
+    completedAt: null,
+    steps: [],
+  });
+
+  function renderWithEstimates(jobs: GithubRunJob[], estimates: RunEstimates | undefined) {
+    return renderWithProviders(<RunJobs jobs={jobs} now={NOW} estimates={estimates} />);
+  }
+
+  it("counts a running job down from its steps' usual times", () => {
+    renderWithEstimates([DEPLOYING], ESTIMATES);
+
+    // 30s left of Deploy, then Smoke test's usual 40s.
+    const deploy = toggle('deploy');
+    expect(within(deploy).getByText('~1m 10s left')).toBeInTheDocument();
+    expect(deploy).toHaveAccessibleName('deploy, Running, 3m 0s, ~1m 10s left');
+    const bar = screen.getByRole('progressbar', { name: 'deploy progress' });
+    expect(bar).toHaveAttribute('aria-valuenow', '72');
+  });
+
+  it('counts the running step down and shows what the steps still to come usually take', () => {
+    renderWithEstimates([DEPLOYING], ESTIMATES);
+
+    const steps = within(screen.getByRole('list', { name: 'deploy steps' })).getAllByRole(
+      'listitem',
+    );
+    expect(within(steps[1] as HTMLElement).getByText('~30s left')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Deploy progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '75',
+    );
+    expect(within(steps[2] as HTMLElement).getByLabelText('Usually about 40s')).toBeInTheDocument();
+  });
+
+  it('shows what a queued job usually takes', () => {
+    renderWithEstimates([LINT_QUEUED, PASSED], ESTIMATES);
+
+    expect(within(toggle('lint')).getByLabelText('Usually about 1m')).toBeInTheDocument();
+  });
+
+  it('calls out a job that passed much slower than usual', () => {
+    renderWithEstimates([PASSED], ESTIMATES);
+
+    // 4m 35s against the usual 3m.
+    expect(within(toggle('build')).getByText('1m 35s slower')).toBeInTheDocument();
+  });
+
+  it('does not compare a failed job, which stopped early', () => {
+    renderWithEstimates([{ ...FAILED, name: 'build' }], ESTIMATES);
+
+    expect(screen.queryByText(/slower|faster/)).not.toBeInTheDocument();
+  });
+
+  it('flags a step that ran much slower than usual, and leaves fast ones alone', () => {
+    const slowStep = job({
+      id: 5,
+      name: 'build',
+      steps: [
+        step({ number: 1, name: 'Set up job', completedAt: '2026-03-15T09:00:01Z' }),
+        step({ number: 2, name: 'Run build', completedAt: '2026-03-15T09:00:30Z' }),
+      ],
+    });
+    renderWithEstimates([slowStep], ESTIMATES);
+
+    const steps = within(screen.getByRole('list', { name: 'build steps' })).getAllByRole(
+      'listitem',
+    );
+    expect(within(steps[1] as HTMLElement).getByText('29s slower')).toBeInTheDocument();
+    expect(steps[0]).not.toHaveTextContent(/faster/);
+  });
+
+  it('shows the jobs as before when there are no estimates', () => {
+    renderWithEstimates([DEPLOYING, LINT_QUEUED], undefined);
+
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Usually about/)).not.toBeInTheDocument();
   });
 });
 

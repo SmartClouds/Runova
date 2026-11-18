@@ -217,6 +217,8 @@ export function bridgeDefaults(): Record<string, unknown> {
       counts: { failure: 0, warning: 0, notice: 0 },
     },
     'pipelines.jobLog': { ok: true, steps: [] },
+    // No earlier passing runs, so the pipeline views show no estimates unless a test gives some.
+    'pipelines.runEstimates': { ok: true, estimates: { runs: 0, run: null, jobs: {} } },
     'ciAutoFix.list': [],
     'deploySystem.services': [],
     'deployRegistry.plan': { sendSignIns: false, entries: [] },

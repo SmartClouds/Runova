@@ -396,6 +396,28 @@ describe('listWorkflowRuns', () => {
     scenario.api['repos/acme/demo/actions/workflows/100/runs?per_page=5'] = { workflow_runs: [] };
     await expect(actions.listWorkflowRuns('acme', 'demo', 100)).resolves.toEqual([]);
   });
+
+  it('can ask only for runs that ended a certain way', async () => {
+    scenario.api['repos/acme/demo/actions/workflows/100/runs?per_page=15&status=success'] = {
+      workflow_runs: [ghRun()],
+    };
+
+    const runs = await actions.listWorkflowRuns('acme', 'demo', 100, 15, 'success');
+
+    expect(runs.map((run) => run.id)).toEqual([5001]);
+  });
+});
+
+describe('parseOwnerRepo', () => {
+  it('splits an owner/name pair', () => {
+    expect(actions.parseOwnerRepo(' acme/demo ')).toEqual({ owner: 'acme', repo: 'demo' });
+  });
+
+  it('turns down anything else', () => {
+    expect(actions.parseOwnerRepo('acme')).toBeNull();
+    expect(actions.parseOwnerRepo('acme/../x')).toBeNull();
+    expect(actions.parseOwnerRepo('/demo')).toBeNull();
+  });
 });
 
 describe('fetchWorkflowRun', () => {

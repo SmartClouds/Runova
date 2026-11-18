@@ -367,7 +367,7 @@ describe('PipelinesPage run list', () => {
     expect(screen.getByRole('button', { name: 'Refresh runs' })).toBeTruthy();
   });
 
-  it('opens a run in the browser when its row is clicked', async () => {
+  it('opens a run in the browser when it belongs to no project Runova knows', async () => {
     const { bridge, user } = renderPage(withRuns);
     await screen.findByText('Break the build');
 
@@ -376,6 +376,93 @@ describe('PipelinesPage run list', () => {
     expect(bridge.$fn('shell.openExternal')).toHaveBeenCalledWith(
       'https://github.com/acme/borealis/actions/runs/2',
     );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  describe('run details', () => {
+    const borealis = { id: 'p2', name: 'Borealis', folderPath: 'C:\work\borealis' };
+    const withProject = {
+      ...withRuns,
+      'projects.list': [borealis],
+      'pipelines.runDetails': { ok: true, jobs: [] },
+    };
+
+    it("opens a run's jobs and steps in a dialog when its row is clicked", async () => {
+      const { bridge, user } = renderPage({
+        ...withProject,
+        'pipelines.dashboardActivity': async () =>
+          activity({ runs: [passed, { ...failed, workflowId: 9 }, running] }),
+      });
+      await screen.findByText('Break the build');
+
+      await user.click(screen.getByText('Break the build'));
+
+      const dialog = await screen.findByRole('dialog', { name: 'CI #42' });
+      expect(within(dialog).getByRole('region', { name: 'CI details' })).toBeTruthy();
+      expect(bridge.$fn('pipelines.runDetails')).toHaveBeenCalledWith(
+        expect.objectContaining({ repo: 'acme/borealis', runId: 2 }),
+      );
+      await waitFor(() =>
+        expect(bridge.$fn('pipelines.runEstimates')).toHaveBeenCalledWith({
+          repo: 'acme/borealis',
+          workflowId: 9,
+          excludeRunId: 2,
+        }),
+      );
+      expect(() => bridge.$fn('shell.openExternal')).toThrow(/not been touched/);
+
+      await user.click(within(dialog).getByRole('button', { name: 'Open run on GitHub' }));
+      expect(bridge.$fn('shell.openExternal')).toHaveBeenCalledWith(
+        'https://github.com/acme/borealis/actions/runs/2',
+      );
+    });
+
+    it('still opens on GitHub when it cannot tell which pipeline the run is from', async () => {
+      const { bridge, user } = renderPage(withProject);
+      await screen.findByText('Break the build');
+
+      await user.click(screen.getByText('Break the build'));
+
+      expect(bridge.$fn('shell.openExternal')).toHaveBeenCalledWith(
+        'https://github.com/acme/borealis/actions/runs/2',
+      );
+    });
+
+    it('counts a running run down from the earlier runs of its pipeline', async () => {
+      const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+      const live = run({
+        id: 30,
+        workflowId: 5,
+        status: 'in_progress',
+        conclusion: null,
+        displayTitle: 'Ship it',
+        createdAt: ago(60),
+        updatedAt: ago(30),
+      });
+      const earlier = [1, 2, 3].map((n) =>
+        run({
+          id: 30 - n,
+          workflowId: 5,
+          displayTitle: `Earlier ${n}`,
+          createdAt: ago(n * 3600),
+          updatedAt: ago(n * 3600 - 240),
+        }),
+      );
+      renderPage({
+        'pipelines.dashboardActivity': async () => activity({ runs: [live, ...earlier] }),
+      });
+
+      const row = (await screen.findByText('Ship it')).closest('li') as HTMLElement;
+      // Running 1m of its usual 4m.
+      expect(within(row).getByText('~3m left')).toBeTruthy();
+      expect(within(row).getByRole('progressbar', { name: 'Ship it progress' })).toHaveAttribute(
+        'aria-valuenow',
+        '25',
+      );
+      // A finished run has nothing to count down.
+      const done = (await screen.findByText('Earlier 1')).closest('li') as HTMLElement;
+      expect(within(done).queryByRole('progressbar')).toBeNull();
+    });
   });
 
   it('opens the project a run belongs to, on its git tab', async () => {

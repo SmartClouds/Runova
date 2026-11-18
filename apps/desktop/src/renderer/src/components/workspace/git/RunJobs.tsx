@@ -1,5 +1,13 @@
 import type { Project } from '@runova/core';
-import type { GithubRunJob, GithubRunStep, GithubStepLog } from '@shared/apiTypes';
+import type {
+  DurationEstimate,
+  GithubRunJob,
+  GithubRunStep,
+  GithubStepLog,
+  JobEstimate,
+  RunEstimates,
+} from '@shared/apiTypes';
+import { spanMs, stepKeys } from '@shared/pipelineEstimates';
 import { useId, useState } from 'react';
 import {
   ChevronRight,
@@ -11,6 +19,8 @@ import {
   Spinner,
   TriangleAlert,
 } from '@/components/icons';
+import { DeltaChip, EtaBar, EtaText, UsualHint } from '@/components/pipelines/EstimateBits';
+import { etaText, jobLiveEta, stepLiveEta } from '@/components/pipelines/estimateView';
 import {
   RunStatusIcon,
   type RunTone,
@@ -85,6 +95,18 @@ function elapsed(
   );
 }
 
+/** How long a finished item that passed took, the only kind worth holding up to its usual time. */
+function passedMs(
+  item: Pick<GithubRunStep, 'conclusion' | 'startedAt' | 'completedAt'>,
+): number | null {
+  return item.conclusion === 'success' ? spanMs(item.startedAt, item.completedAt) : null;
+}
+
+/** Not started yet, and not going to be skipped as far as anyone knows. */
+function waitingToStart(item: Pick<GithubRunStep, 'status' | 'startedAt'>): boolean {
+  return item.startedAt === null && item.status !== 'completed';
+}
+
 /** A step that never started (queued, or skipped) has no log to open. */
 function hasLog(step: GithubRunStep): boolean {
   return step.startedAt !== null && step.conclusion !== 'skipped';
@@ -129,12 +151,15 @@ interface StepLogSource {
 function StepRow({
   step,
   now,
+  estimate,
   log,
   open,
   onToggle,
 }: {
   step: GithubRunStep;
   now: number;
+  /** What this step usually takes, when earlier runs say. */
+  estimate?: DurationEstimate;
   /** Only for a step that can be opened onto its log. */
   log?: StepLogSource;
   open: boolean;
@@ -146,6 +171,8 @@ function StepRow({
   const failed = tone.outcome === 'failed';
   const muted = tone.outcome === 'cancelled' || tone.label === 'Skipped';
   const duration = elapsed(step, now);
+  const eta = stepLiveEta(step, estimate, now);
+  const tookMs = passedMs(step);
   const stepLog = log?.state.kind === 'ready' ? log.state.log : undefined;
   const counts = stepLog
     ? [
@@ -162,6 +189,11 @@ function StepRow({
       </span>
       <span className="min-w-0 flex-1 break-words">{step.name}</span>
       <LogCounts log={stepLog} />
+      {estimate && eta ? <EtaText eta={eta} estimate={estimate} /> : null}
+      {estimate && tookMs !== null ? (
+        <DeltaChip actualMs={tookMs} estimate={estimate} only="slower" />
+      ) : null}
+      {estimate && waitingToStart(step) ? <UsualHint estimate={estimate} /> : null}
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{duration}</span>
       {log ? (
         <ChevronRight
@@ -193,7 +225,13 @@ function StepRow({
           aria-expanded={open}
           aria-controls={open ? logId : undefined}
           // One clear name instead of the glyph, number, name and time as run-together fragments.
-          aria-label={[`Step ${step.number}: ${step.name}`, tone.label, ...counts, duration]
+          aria-label={[
+            `Step ${step.number}: ${step.name}`,
+            tone.label,
+            ...counts,
+            duration,
+            eta ? etaText(eta) : '',
+          ]
             .filter(Boolean)
             .join(', ')}
           onClick={onToggle}
@@ -208,6 +246,12 @@ function StepRow({
       ) : (
         <div className={row}>{content}</div>
       )}
+      {estimate && eta ? (
+        // Lined up under the step's name, past its glyph and number.
+        <div className="pb-1.5 pl-[3.25rem] pr-6">
+          <EtaBar eta={eta} estimate={estimate} label={step.name} size="sm" />
+        </div>
+      ) : null}
       {log && open ? (
         <StepLog
           id={logId}
@@ -237,6 +281,7 @@ function JobCard({
   open,
   onToggle,
   now,
+  usual,
   repo,
   project,
   run,
@@ -247,6 +292,8 @@ function JobCard({
   open: boolean;
   onToggle: () => void;
   now: number;
+  /** What this job and its steps usually take, when earlier runs say. */
+  usual?: JobEstimate;
   repo?: string;
   project?: Project;
   run?: RunFacts;
@@ -256,6 +303,9 @@ function JobCard({
   const stepsId = useId();
   const tone = runTone(job);
   const duration = elapsed(job, now);
+  const eta = jobLiveEta(job, usual, now);
+  const tookMs = passedMs(job);
+  const keys = stepKeys(job.steps);
   // Read as soon as the job is open, so its steps show their error and warning counts.
   const jobLog = useJobLog(repo ?? '', job, open && Boolean(repo));
 
@@ -312,7 +362,9 @@ function JobCard({
           aria-expanded={open}
           aria-controls={stepsId}
           // One clear name instead of the glyph, name and time read as run-together fragments.
-          aria-label={`${job.name}, ${tone.label}${duration ? `, ${duration}` : ''}`}
+          aria-label={[job.name, tone.label, duration, eta ? etaText(eta) : '']
+            .filter(Boolean)
+            .join(', ')}
           onClick={onToggle}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-left outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring/60"
         >
@@ -325,6 +377,11 @@ function JobCard({
           <RunStatusIcon tone={tone} className="h-6 w-6 rounded-md" />
           <span className="sr-only">{tone.label}</span>
           <span className="min-w-0 flex-1 break-words text-[13px] font-medium">{job.name}</span>
+          {usual && eta ? <EtaText eta={eta} estimate={usual.estimate} /> : null}
+          {usual && tookMs !== null ? (
+            <DeltaChip actualMs={tookMs} estimate={usual.estimate} />
+          ) : null}
+          {usual && waitingToStart(job) ? <UsualHint estimate={usual.estimate} /> : null}
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {duration}
           </span>
@@ -343,19 +400,26 @@ function JobCard({
           </SimpleTooltip>
         ) : null}
       </div>
+      {usual && eta ? (
+        // Under the job's name, past the chevron and status icon.
+        <div className="pb-2.5 pl-[3.75rem] pr-4">
+          <EtaBar eta={eta} estimate={usual.estimate} label={job.name} />
+        </div>
+      ) : null}
       {open ? (
         <div id={stepsId} className="px-2 pb-2">
           {job.steps.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">No steps yet.</p>
           ) : (
             <ol aria-label={`${job.name} steps`} className="space-y-px">
-              {job.steps.map((step) => {
+              {job.steps.map((step, index) => {
                 const stepOpen = isStepOpen(step);
                 return (
                   <StepRow
                     key={step.number}
                     step={step}
                     now={now}
+                    estimate={usual?.steps[keys[index] as string]}
                     log={logSource(step)}
                     open={stepOpen}
                     onToggle={() => onToggleStep(step, !stepOpen)}
@@ -380,16 +444,22 @@ const JOB_ORDER: Record<string, number> = { failed: 0, running: 1, queued: 2 };
  *
  * Given the repo, each step that ran also opens onto its own log, and a job's first failed step
  * starts open on it. Given the project too, a step that failed or warned can be fixed with AI.
+ *
+ * Given the pipeline's estimates, a running job and step count down with a progress bar, what has
+ * not started shows its usual time, and a passed job (or a much slower step) says how it compared.
  */
 export function RunJobs({
   jobs,
   now,
+  estimates,
   repo,
   project,
   run,
 }: {
   jobs: GithubRunJob[];
   now?: number;
+  /** What the pipeline's jobs and steps usually take. Without it, no estimates are shown. */
+  estimates?: RunEstimates;
   repo?: string;
   project?: Project;
   run?: RunFacts;
@@ -417,6 +487,7 @@ export function RunJobs({
             job={job}
             open={open}
             now={clock}
+            usual={estimates?.jobs[job.name]}
             onToggle={() => setChosen((current) => ({ ...current, [job.id]: !open }))}
             repo={repo}
             project={project}

@@ -116,12 +116,36 @@ export function spanDuration(
   const started = Date.parse(start);
   const ended = end ? Date.parse(end) : now;
   if (ended === undefined || !Number.isFinite(started) || !Number.isFinite(ended)) return '';
-  const seconds = Math.round((ended - started) / 1000);
-  if (seconds < 0) return '';
+  return formatMs(ended - started);
+}
+
+/** A length of time as `45s`, `1m 5s` or `2h 2m`. Empty when it makes no sense. */
+export function formatMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/**
+ * A length of time as an estimate reads it, rounded so it does not look more exact than it is:
+ * to five seconds under a minute, ten seconds under ten minutes, then minutes, and five minutes
+ * once it runs to hours.
+ */
+export function approxDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 57.5) return `${Math.max(5, Math.round(seconds / 5) * 5)}s`;
+  if (seconds < 595) {
+    const total = Math.round(seconds / 10) * 10;
+    const rest = total % 60;
+    return rest ? `${Math.floor(total / 60)}m ${rest}s` : `${total / 60}m`;
+  }
+  if (seconds < 3570) return `${Math.round(seconds / 60)}m`;
+  const minutes = Math.round(seconds / 300) * 5;
+  const rest = minutes % 60;
+  return rest ? `${Math.floor(minutes / 60)}h ${rest}m` : `${minutes / 60}h`;
 }
 
 /** How long a run took, or how long it has been going. Empty when the timestamps make no sense. */
