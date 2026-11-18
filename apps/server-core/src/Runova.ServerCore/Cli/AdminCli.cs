@@ -375,12 +375,15 @@ internal static class AdminCli
             return Exit.Refused;
         }
 
-        var passphrase = await context.Input.ReadLineAsync();
-        if (string.IsNullOrEmpty(passphrase))
+        var typed = await context.Input.ReadLineAsync();
+        if (string.IsNullOrEmpty(typed))
         {
             await context.Error.WriteLineAsync("The passphrase must come on stdin, followed by a newline.");
             return Exit.Refused;
         }
+
+        // A recovery phrase (E107) opens the backup however its words were spaced or capitalised.
+        var passphrase = RecoveryPhrase.Canonicalize(typed);
 
         var payload = into + ".payload";
         try

@@ -29,6 +29,11 @@
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Recovery phrase vectors (E107), shared with the desktop and the phone core. -->
+  <ItemGroup>
+    <None Include="..\..\..\..\packages\protocol\test-vectors\recovery-phrase-v1.json" Link="Vectors\recovery-phrase-v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The DevHost's pretend CA, so the fake the UI is built against is tested too. -->
   <ItemGroup>
     <Compile Include="..\..\src\Runova.ServerCore.DevHost\Fakes\FakeCertificates.cs" Link="DevHost\FakeCertificates.cs" />

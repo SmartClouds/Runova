@@ -87,6 +87,7 @@
   <!-- Passwords long enough to pass the length rule but too common to allow (see its README). -->
   <ItemGroup>
     <EmbeddedResource Include="Security\CommonPasswords\common-passwords.txt" LogicalName="Runova.ServerCore.CommonPasswords" />
+    <EmbeddedResource Include="Security\RecoveryPhrase\english.txt" LogicalName="Runova.ServerCore.RecoveryPhraseWords" />
   </ItemGroup>
 
   <ItemGroup>

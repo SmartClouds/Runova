@@ -55,7 +55,8 @@ everywhere.
 - [x] T3 Every channel that sets one of the secrets above takes `{ phraseId }`, with tests.
 - [x] T4 Renderer: phrase card, check, word boxes, the new and existing secret fields, with tests.
 - [x] T5 The sync key dialog, the Vault setup, lock and change screens, the backup dialogs, the servers passkey and the settings backup use them.
-- [ ] T6 Server core: the admin CLI restore reads a typed phrase in its canonical form.
+- [x] T6 Server core: the admin CLI restore reads a typed phrase in its canonical form
+  (`Security/RecoveryPhrase`, tested against the same vectors).
 
 ## Acceptance criteria
 
