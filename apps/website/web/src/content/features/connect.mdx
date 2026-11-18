@@ -1,17 +1,20 @@
 ---
 title: Connect
-description: Control another Runova on your network, work on servers over SSH and SFTP, open Remote Desktop sessions, and keep every password in an encrypted vault.
+description: Control another Runova, send files to your computers and phone, work on servers over SSH and SFTP, open Remote Desktop and keep passwords in a vault.
 summary: Reach other machines from one place. Control another Runova on your network, open SSH and Remote Desktop sessions, and keep their passwords in an encrypted vault.
 group: connect
 order: 10
 cover: ssh
 covers:
   - Remote
+  - Send files
   - SSH
   - RDP
   - Vault
 help:
   - remote
+  - remote-send-files
+  - phone
   - remote-files
   - ssh-files
   - remote-desktop
@@ -21,6 +24,12 @@ help:
 ## Remote
 
 Control another computer running Runova over your local network. One computer hosts and gives out a pairing code, the other connects with it, and the two talk over WebSockets. A remote file manager moves files between them, and transfers pick up where they stopped if the connection drops.
+
+## Send files
+
+Send files and whole folders to your other computers and your teammates, straight from one computer to the other and encrypted the whole way. The other side sees who is sending what, with every file's size, and accepts or declines. A dropped connection picks up where it stopped, and the website only passes the sealed data on and keeps nothing.
+
+The [phone apps](/help/phone) send to your computers too, take shares from other Android apps, and receive files from your own computers while they are open.
 
 ## SSH
 

@@ -7,15 +7,15 @@ keywords: remote, ssh, remote control, host, pairing code, qr code, servers, sav
 route: /remote
 ---
 
-The Remote page is where you reach other computers. It has five tabs: **Anywhere** (connect to any computer by its Runova ID, see [Runova Anywhere](remote-anywhere.md)), **Host** (let another Runova control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
+The Remote page is where you reach other computers. It has six tabs: **Anywhere** (connect to any computer by its Runova ID, see [Runova Anywhere](remote-anywhere.md)), **Send files** (send files to your other computers, your phone or a teammate, see [Send files](remote-send-files.md)), **Host** (let another Runova control this computer), **Connect** (control another Runova), **SSH** (saved servers you open in a terminal tab) and **Remote Desktop** (saved Windows machines you open in their own window).
 
 Two sets of tools live here. The first is a remote control that works between Runova installs on the same network. The second is a saved server list for SSH and Remote Desktop.
 
-**Anywhere**, **Host** and **Connect** need you to be signed in to your Runova account. Signed out, those tabs show a sign-in button instead, and signing out stops hosting and ends any session you started. **SSH** and **Remote Desktop** work without an account.
+**Anywhere**, **Send files**, **Host** and **Connect** need you to be signed in to your Runova account. Signed out, those tabs show a sign-in button instead, and signing out stops hosting and ends any session you started. **SSH** and **Remote Desktop** work without an account.
 
 ## Where to find it
 
-Click **Remote** in the sidebar under **Connect**, or open the command palette and type Remote. Pick a tab at the top: **Anywhere**, **Host**, **Connect**, **SSH** or **Remote Desktop**. The page remembers the tab you used last and opens on it next time. The first time, it opens on **Anywhere**.
+Click **Remote** in the sidebar under **Connect**, or open the command palette and type Remote. Pick a tab at the top: **Anywhere**, **Send files**, **Host**, **Connect**, **SSH** or **Remote Desktop**. The page remembers the tab you used last and opens on it next time. The first time, it opens on **Anywhere**.
 
 Below the tabs, two shared cards can appear on any tab: **File transfers** (progress of files being sent or received, shown once a transfer starts) and **Activity** (a running log of what happened, such as pairing attempts and connections, with timestamps).
 

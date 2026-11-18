@@ -92,7 +92,7 @@ A tab can be an agent or shell terminal, a browser page, a file, or a diff. Tab 
 - Click a tab to show it. Middle-click it, or click its small **x**, to close it.
 - Drag a tab left or right to reorder it. When tabs do not fit, scroll the strip with the mouse wheel.
 - Double-click a terminal tab, or right-click it and choose **Rename**, to give it your own name. Press `Enter` to save and `Escape` to cancel.
-- Hover a tab for details: its full name, the folder, and for agents the model and effort it runs on and its status.
+- Hover a tab for details: its full name, the folder, and for agents the model and effort it runs on and its status. A Claude Code tab also shows how full its context window is (see [Terminals and agents](workspace-terminals-agents.md)).
 - Files and diffs you open with a single click open as a preview tab, shown in italics. The next file you open replaces it. Double-click the tab, edit the file, or click **Keep this tab open** in a diff to keep it.
 - A tab whose shell has ended shows its name struck through.
 - Closing an agent that is busy (working, or waiting on a question) asks **Close {name}?** first and says the agent will be stopped. An idle or finished agent closes straight away.

@@ -57,7 +57,7 @@ The app is organised around a menu with a few pages at the top and four headed g
 
 | Page | What it is for |
 | --- | --- |
-| **Remote** | SSH servers, remote desktop and remote files. See [Remote](remote.md). |
+| **Remote** | Your other computers anywhere, sending files, SSH servers, remote desktop and remote files. See [Remote](remote.md) and [Send files](remote-send-files.md). |
 | **Vault** | A password manager for logins and API keys. See [Vault](vault.md). |
 
 **Settings** sits apart from the groups: at the bottom of the sidebar, or at the right end of the top bar. See [Settings](settings.md).

@@ -78,6 +78,8 @@ An agent tab shows the CLI's logo. While an agent works on a task, the tab keeps
 
 Hover an agent tab to see its name, the CLI, the model and effort it is running on, its status and its folder. Agents that report back live (Claude Code) keep the model line current when you switch mid-session; every other agent shows the model it started with.
 
+A Claude Code tab's card ends with a **Context window** row: how full the session's context is, as a percent next to a small ring. It turns amber from 60% and red from 85%, which is the time to wrap up or compact before Claude Code does it for you. Click the row to open it and see a bar with the tokens used and the tokens left. Open or closed is one choice for every tab, and Runova remembers it after a restart. The row says **Appears once Claude replies** until the session's first answer.
+
 ### Model and effort in the chat view
 
 When an agent tab is shown as a **Chat**, its header shows the model and effort it runs on, and the same appears as a small button next to **Send**. For Claude Code, click it to pick another model or effort level. Runova types `/model` or `/effort` into the CLI for you, exactly as if you had typed it, so the change applies to this conversation from the next message on. Effort levels the chosen model can't use are left out. The button is greyed out while the agent is working or waiting on you; switch once it is ready. Other CLIs only show what they run on, since their own model pickers can't be driven from the chat.

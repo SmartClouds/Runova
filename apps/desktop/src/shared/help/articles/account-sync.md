@@ -45,6 +45,8 @@ On each other computer, the same card says **Locked on this computer**. Click **
 
 Under **Also seal** you can seal more than the secrets: **Server connections**, **Environments**, or **Everything**.
 
+On Go, Pro and Ultra, the **End-to-end encryption** card above it has a switch for each of two more things. **Notifications** seals what your computers tell your phone: the server still sees that something happened and when, but not what it says. **Sync** seals every record in your own sync, not only passwords and keys, and the website then shows only counts. Remote sessions and secrets in sync are end to end encrypted on every plan. If your plan ends, the switches go back to off and what is already sealed stays sealed.
+
 > [!WARNING]
 > Nobody can recover a lost passphrase and recovery key, Runova included. If you lose both, you can reset the key on runovahq.com (Sync, Reset the key). Everything sealed with it is deleted from the cloud, and each computer sends what it still has again once you set a new key.
 

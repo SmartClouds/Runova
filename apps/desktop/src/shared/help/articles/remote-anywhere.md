@@ -21,7 +21,7 @@ Click **Remote** in the sidebar, then the **Anywhere** tab. The top card, **This
 2. Click **Connect** for the screen, mouse and keyboard, or **Files** to only send and receive files.
 3. A window shows each step: finding the computer, someone accepting (when it asks), securing the connection, and connected.
 
-Your own computers and the computers your teammates show to your teams are listed below the field with whether they are online. Click **Connect** on one instead of typing its ID. Computers you connected to recently are listed under **Recent**; a key next to one means its password is saved.
+Your own computers and the computers your teammates show to your teams are listed below the field with whether they are online. Click **Connect** on one instead of typing its ID. Click the paper plane on a row, or drop files on it, to send that computer files (see [Send files](remote-send-files.md)). Computers you connected to recently are listed under **Recent**; a key next to one means its password is saved.
 
 ### When it asks for a password
 

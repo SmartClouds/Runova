@@ -185,13 +185,31 @@ Studio has no README bullet; its copy comes from `studio.md` in the help article
 | `build` | Build | Blueprint; Prompt Builder; Prompt History; Scheduled prompts; Writing check; Ask AI; API Client | `blueprint`, `prompt-builder`, `api-client` |
 | `agents` | Agents | AI CLIs; CLI arguments and launch defaults; Skill Marketplace; Skill Security; MCP Marketplace; Dev Tools | `cli-manager`, `skills`, `skill-security`, `mcp`, `agent-tools` |
 | `ship` | Ship | Pipelines; Deploy; Monitoring; Docker; Android | `pipelines`, `deploy-overview`, `deploy-containers`, `deploy-app-store`, `deploy-websites`, `deploy-firewall`, `deploy-backups`, `monitoring-uptime`, `monitoring-errors`, `docker` |
-| `connect` | Connect | Remote; SSH; RDP; Vault | `ssh`, `remote-desktop`, `vault` |
+| `connect` | Connect | Remote; Send files; SSH; RDP; Vault | `ssh`, `remote-desktop`, `vault` |
 | `studio` | Studio | (none, from the Studio help article) | `studio` |
 | `more` | Everything else | Dashboard; Status bar; Notifications; Help center; AI Pet; Settings; Proxy; Also in the app | `dashboard`, `help`, `ai-pet`, `settings` |
 
 The Remote copy describes controlling another Runova computer over the local network and the
-remote file manager, and nothing else from that README bullet. The Android copy describes emulators,
+remote file manager, and nothing else from that README bullet. The Send files copy covers sending
+to your other computers, your teammates and the phone apps. The Android copy describes emulators,
 virtual devices and connected devices for testing the visitor's own apps.
+
+## Phone screenshots
+
+The home page's phone screens are copies of the Android app's Roborazzi snapshots
+(`apps/mobile/android/app/src/test/snapshots/`, recorded by the app's own snapshot tests from the
+same made-up data, 1170x2532, dark). They live in `apps/website/web/src/assets/phone/` with a
+`manifest.json` of `{ "name", "source", "alt" }`, where `source` is the snapshot file it was copied
+from. `tests/phoneShots.test.ts` checks the size, the alt text and that each source still exists.
+To refresh them, copy the named snapshots again after `gradlew :app:testDebugUnitTest -Precord`.
+There are no iOS screens yet: those need a Mac or the Mobile iOS CI job.
+
+| Name | Snapshot | Screen |
+|---|---|---|
+| `systems` | `systems-dark.png` | The Systems tab with three computers |
+| `terminal` | `terminal.png` | A Claude terminal read live, with the key row |
+| `traffic` | `traffic.png` | A server's website traffic for 7 days |
+| `send-files` | `send-progress.png` | Sending three files to a computer |
 
 ## Help articles on the site
 
@@ -206,39 +224,31 @@ Deploy App Store article and the Android emulator example in `projects.md` stay 
 
 ## Forbidden phrases
 
-Runova's mobile version is not mentioned anywhere on the site: not in copy, alt text, help pages,
-metadata, JSON-LD, feeds or screenshots. The block below is what the tests read: the phrases are
-its lines up to the first line that starts with `#` (one phrase per line, matched
-case-insensitively against visible text and attributes), and the help filter rules follow that
-line. The Deploy "App Store" and the Android features (emulators, virtual devices, connected
-devices, `adb`) are allowed and must not be filtered.
+Since 2026-11-19 the site describes the phone apps for Android and iOS: the home page has a phone
+section with screenshots, the download page and the menus name both, and help articles may talk
+about the phone. The apps are not in the stores yet, so every store badge says "Coming soon" and
+links nowhere until `PHONE_STORES` in `src/lib/download/phone.ts` gets real addresses.
+
+The block below is what the tests read: the phrases are its lines up to the first line that starts
+with `#` (one phrase per line, matched case-insensitively against visible text and attributes), and
+the help filter rules follow that line. These are the things that are still wrong to say: a name the
+product does not use, how the apps are not built, a beta channel that is not public, and a store
+claim while the apps are not published. Remove the store lines in the change that fills in
+`PHONE_STORES`.
 
 ```forbidden
-Runova mobile
-Runova for iPhone
-Runova for Android
-Runova app for iPhone
-mobile version of Runova
-mobile companion
+Runova Mobile
 companion app
-companion mobile app
-the mobile app control
-from the mobile app
-or the mobile app
-scan the QR with the Runova mobile app
-pair the Runova mobile app
-pair your phone
-pair it again
-iPhone
-iPad
-iOS app
-TestFlight
-Google Play
-Play Store
 React Native
+TestFlight
+Play Store
+get it on Google Play
+available on Google Play
+download on the App Store
+available on the App Store
 
 # Help filter (T016), applied to the article source before rendering
-No rules at the moment: E66 took the mobile section out of the remote article itself.
+No rules at the moment.
 ```
 
 The filter is written as data the loader applies (match a heading or an exact phrase, then drop or
@@ -246,12 +256,9 @@ replace), so a new article with a mobile mention fails the scan instead of slipp
 
 ## Privacy policy
 
-`/privacy` is the one page that may say the phone apps exist. The App Store and Google Play both ask
-for a public privacy policy address, and a policy that left the phone apps out would not be true, so
-the page covers the website, the desktop app and the apps for Android and iOS (permissions,
-notifications, what they never collect). It still stays off the forbidden list above: it says "the
-apps for Android and iOS" and "the phone apps", never "iOS app", "iPhone", "Google Play" or the other
-phrases, so the scan needs no exception. The rest of the site stays silent about the phone apps.
+The App Store and Google Play both ask for a public privacy policy address, so `/privacy` covers
+the website, the desktop app and the apps for Android and iOS (permissions, notifications, what they
+never collect).
 
 - Text and sections: `src/pages/privacy.astro`, with the section list, the effective date and the
   contact address in `src/lib/privacy.ts`. Change `PRIVACY_EFFECTIVE` whenever the text changes.
@@ -280,7 +287,8 @@ Every task in this epic and in E41 and E42 follows these:
   message when it is not obvious.
 - **No em dash** in any copy, doc, comment or commit message. Use a comma, a period or parentheses.
   The site's text scan (T014) fails on it.
-- **No mobile version of Runova** anywhere on the site (see the forbidden list).
+- **Phone apps** are described as they are: native apps for Android and iOS, coming to the
+  stores (see the forbidden list).
 - **Skills.** A session that lacks a skill it needs (for example an Astro or .NET skill) may find one
   from a trustworthy source, read it in full, install it into `.claude/skills/<name>/` and record it
   in `skills-lock.json` at the repo root (name, source URL, commit or version, SHA-256 of the
@@ -298,5 +306,4 @@ the repository gates, updates the docs and merges.
 
 ## Out of scope
 
-User accounts for visitors, comments, newsletters, analytics beyond Sentry, translations, and any
-page for a mobile version of Runova.
+User accounts for visitors, comments, newsletters, analytics beyond Sentry and translations.

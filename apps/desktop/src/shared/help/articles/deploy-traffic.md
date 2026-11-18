@@ -57,6 +57,16 @@ Admins and Owners change these in **Settings**, **Statistics**:
 
 A site whose custom snippet turns `access_log off` is named in the settings: that traffic cannot be counted.
 
+## On your phone
+
+The Runova app on your phone shows the same report, read through your computer, so the numbers match. Open a server and tap **Traffic**. It has three tabs:
+
+- **Overview**: the tiles, the chart (touch it for a readout) and the breakdowns, for **Today**, **7 days**, **30 days**, **90 days** or **12 months**, for one site or all of them. **See all** pages through every value. The busiest hours chart stays on the computer.
+- **Attacks**: what [attack detection](deploy-attacks.md) found, with **Block** for Admins and Owners.
+- **Blocked**: the blocked addresses, with **Unblock**.
+
+The settings sheet changes statistics, countries, how long figures are kept and detection. Turning on automatic blocking and deleting statistics stay on the computer, since both ask for your password there. The report refreshes once a minute.
+
 ## When something goes wrong
 
 - **No visits yet**: statistics count from when they were turned on. Visits show up within a minute.

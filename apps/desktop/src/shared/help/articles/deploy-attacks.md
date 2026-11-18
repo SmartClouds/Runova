@@ -22,7 +22,7 @@ Addresses on the server's own network, loopback, Cloudflare's addresses and your
 
 ## Alerts
 
-Each kind opens one alert per site, naming the busiest addresses with their country. It goes to the app's notifications, to the phone, and to [Telegram](deploy-telegram-notifications.md) when that is set up. Ten quiet minutes close it. Clicking the notification opens the site's **Traffic** section at its **Security** card.
+Each kind opens one alert per site, naming the busiest addresses with their country. It goes to the app's notifications, to the phone, and to [Telegram](deploy-telegram-notifications.md) when that is set up. Ten quiet minutes close it. Clicking the notification opens the site's **Traffic** section at its **Security** card. On the phone, tapping the alert opens that site's **Attacks** tab, where an Admin or Owner can block the address (see [Traffic on your phone](deploy-traffic.md#on-your-phone)).
 
 ## The Security card
 
