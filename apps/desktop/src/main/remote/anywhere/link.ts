@@ -83,6 +83,24 @@ export class SecureLink implements PeerSocket {
     return this.transport.bufferedAmount();
   }
 
+  /**
+   * Resolves once no more than `threshold` bytes wait to go out, or the link closed. `send` hands
+   * frames to the transport at once, so a sender that does not wait here can queue far more than
+   * a slow link carries, and a data channel past its limit throws.
+   */
+  drain(threshold: number, pollMs = 25): Promise<void> {
+    return new Promise((resolve) => {
+      const check = (): void => {
+        if (this.state === 'closed' || this.transport.bufferedAmount() <= threshold) {
+          resolve();
+          return;
+        }
+        setTimeout(check, pollMs);
+      };
+      check();
+    });
+  }
+
   async runAsController(options: ControllerOptions): Promise<SessionKeys> {
     const handshake = controllerHandshake(options);
     this.sendHandshake(handshake.hello);

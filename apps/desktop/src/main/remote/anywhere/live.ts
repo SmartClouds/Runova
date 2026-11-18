@@ -6,6 +6,7 @@ import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { app, safeStorage, systemPreferences } from 'electron';
 import type { AnywherePlatform, AnywhereState } from '../../../shared/anywhere';
+import type { FileSendState } from '../../../shared/fileSend';
 import { IPC } from '../../../shared/ipcChannels';
 import type { AccountRuntime } from '../../account/runtime';
 import { aiAccessActivity } from '../../aiAccess/audit';
@@ -18,6 +19,8 @@ import { liveManageDeps } from '../manage/liveDeps';
 import { createManageMethods } from '../manage/methods';
 import { createManageSession, type ManageAudit } from '../manage/session';
 import { remoteManager } from '../manager';
+import { createLiveSendService, type LiveSendService } from '../send/live';
+import type { SendService } from '../send/service';
 import { createAgentInstaller } from './agentInstaller';
 import { createAnywhereApi } from './api';
 import { websiteAnywhereHub } from './hub';
@@ -65,6 +68,8 @@ let service: AnywhereService | null = null;
 const injectorCheck = new InputInjector();
 let links: RtcLinkOpener | null = null;
 let lastState: AnywhereState | null = null;
+/** Sending files (E112), made right after the Anywhere service it dials through. */
+let sending: LiveSendService | null = null;
 
 /** Every window that shows Anywhere: the main one, the request window and the host bar. */
 function broadcast(channel: string, payload: unknown): void {
@@ -168,6 +173,12 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
           audit: recordPhoneActivity,
         }),
     },
+    send: {
+      attachIncoming: (link, from) => {
+        if (sending) sending.service.attachIncoming(link, from);
+        else link.close();
+      },
+    },
     passwords: saved,
     account: async () => {
       const status = await runtime.status();
@@ -183,6 +194,7 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
       lastState = state;
       broadcast(IPC.anywhere.onState, state);
       syncRequestWindow(state.incoming.length);
+      sending?.anywhereChanged(state.settings.saveFolder);
     },
     showIncoming: () => undefined,
     hostedChanged: (hosted) => syncHostBar(hosted.length),
@@ -232,7 +244,19 @@ export function getAnywhere(runtime: AccountRuntime): AnywhereService {
       return { controlUnavailable: injectorCheck.unsupportedReason(), needs };
     },
   });
+  sending = createLiveSendService(service, log);
   return service;
+}
+
+/** The app's one send service (E112), made with the Anywhere service on first use. */
+export function getFileSend(runtime: AccountRuntime): SendService {
+  getAnywhere(runtime);
+  if (!sending) throw new Error('Sending files is not set up.');
+  return sending.service;
+}
+
+export function fileSendState(): FileSendState | null {
+  return sending ? (sending.lastState() ?? sending.service.state()) : null;
 }
 
 /** The link opener, for the renderer's WebRTC peer to report back to. */

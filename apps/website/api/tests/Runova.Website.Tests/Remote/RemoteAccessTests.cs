@@ -38,6 +38,26 @@ public class RemoteAccessTests
         Assert.Equal(reveals, RemoteAccess.MayLearnOnline(relation, unattendedEnabled));
     }
 
+    [Theory]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, RemoteDeviceKinds.App, true)]
+    [InlineData(RemoteRelation.Teammate, RemoteAccessModes.Ask, RemoteDeviceKinds.App, true)]
+    [InlineData(RemoteRelation.Other, RemoteAccessModes.Ask, RemoteDeviceKinds.App, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Password, RemoteDeviceKinds.App, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, RemoteDeviceKinds.Phone, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, null, false)]
+    public void Files_go_only_by_asking_from_an_app_of_the_owner_or_a_teammate(RemoteRelation relation, string mode, string? fromKind, bool allowed)
+    {
+        Assert.Equal(allowed, RemoteAccess.MaySend(relation, mode, fromKind));
+    }
+
+    [Fact]
+    public void Only_known_features_are_kept_once_each()
+    {
+        Assert.Equal([RemoteFeatures.ReceiveFiles], RemoteFeatures.Known(["teleport", RemoteFeatures.ReceiveFiles, RemoteFeatures.ReceiveFiles]));
+        Assert.Empty(RemoteFeatures.Known(null));
+        Assert.Empty(RemoteFeatures.Known([]));
+    }
+
     [Fact]
     public void The_relation_has_a_wire_name()
     {

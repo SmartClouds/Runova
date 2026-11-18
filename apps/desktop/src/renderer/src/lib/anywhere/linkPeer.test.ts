@@ -190,6 +190,27 @@ describe('the Anywhere WebRTC link peer', () => {
     expect(peer.closed).toBe(true);
   });
 
+  it('closes the link when the data channel refuses a frame', async () => {
+    const bridge = currentBridge();
+    bridge.$emit('anywhere.onLinkStart', { sessionId: 's7', role: 'controller', iceServers: [] });
+    await flush();
+    const peer = FakePeer.all[0];
+    peer.channel?.open();
+    if (peer.channel) {
+      peer.channel.send = () => {
+        throw new Error('RTCDataChannel send queue is full');
+      };
+    }
+
+    bridge.$emit('anywhere.onLinkFrame', { sessionId: 's7', frame: new Uint8Array([1]) });
+
+    expect(bridge.$fn('anywhere.linkClosed')).toHaveBeenCalledWith(
+      's7',
+      expect.stringMatching(/full|could not send/i),
+    );
+    expect(peer.closed).toBe(true);
+  });
+
   it('tells main when the connection fails before the channel opens', async () => {
     const bridge = currentBridge();
     bridge.$emit('anywhere.onLinkStart', { sessionId: 's6', role: 'controller', iceServers: [] });

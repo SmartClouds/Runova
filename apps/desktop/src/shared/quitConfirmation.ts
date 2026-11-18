@@ -4,7 +4,7 @@ export const QUIT_CONFIRM_TITLE = 'Close Runova?';
 export const QUIT_CONFIRM_LABEL = 'Close app';
 
 export function hasOpenSessions(summary: OpenSessionSummary): boolean {
-  return summary.clis + summary.ssh + summary.rdp > 0;
+  return summary.clis + summary.ssh + summary.rdp + summary.fileSends > 0;
 }
 
 function plural(count: number, singular: string, pluralForm: string): string {
@@ -24,8 +24,17 @@ export function describeOpenSessions(summary: OpenSessionSummary): string {
   if (summary.rdp > 0) {
     open.push(plural(summary.rdp, 'Remote Desktop session', 'Remote Desktop sessions'));
   }
+  if (summary.fileSends > 0) {
+    open.push(plural(summary.fileSends, 'file transfer', 'file transfers'));
+  }
 
   const lines = [`You still have ${joinList(open)} open.`];
+  if (summary.clis + summary.ssh + summary.rdp === 0) {
+    lines.push(
+      `Closing the app stops ${summary.fileSends === 1 ? 'it' : 'them'}, and the other side is told.`,
+    );
+    return lines.join('\n');
+  }
   const servers = summary.ssh + summary.rdp;
   const them = summary.clis + servers === 1 ? 'it' : 'them';
   if (summary.clis > 0 && summary.clisKeepRunning) {
@@ -41,5 +50,6 @@ export function describeOpenSessions(summary: OpenSessionSummary): string {
   } else {
     lines.push(`Closing the app disconnects ${them}.`);
   }
+  if (summary.fileSends > 0) lines.push('File transfers stop, and the other side is told.');
   return lines.join('\n');
 }

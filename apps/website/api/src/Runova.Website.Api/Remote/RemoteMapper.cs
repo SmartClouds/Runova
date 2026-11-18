@@ -32,7 +32,8 @@ internal static partial class RemoteMapper
     /// <summary>The teams the computer is shown to and whether it is online come from elsewhere.</summary>
     public static partial RemoteDeviceDto ToDto(RemoteDevice device, IReadOnlyList<long> teamIds, bool online);
 
-    public static partial RemoteDirectoryEntryDto ToEntry(RemoteDevice device, RemoteOwnerDto owner, IReadOnlyList<RemoteTeamDto> teams, bool online);
+    /// <summary>Its owner, teams, presence and what its app can do while online come from elsewhere.</summary>
+    public static partial RemoteDirectoryEntryDto ToEntry(RemoteDevice device, RemoteOwnerDto owner, IReadOnlyList<RemoteTeamDto> teams, bool online, IReadOnlyList<string> features);
 
     [MapProperty(nameof(AppUser.Id), nameof(RemoteOwnerDto.UserId))]
     [MapProperty(nameof(AppUser.Email), nameof(RemoteOwnerDto.Email), Use = nameof(OrEmpty))]

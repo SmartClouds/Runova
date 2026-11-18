@@ -12069,7 +12069,8 @@
           "online",
           "lastSeenAt",
           "owner",
-          "teams"
+          "teams",
+          "features"
         ],
         "type": "object",
         "properties": {
@@ -12113,6 +12114,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RemoteTeamDto"
+            }
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         },

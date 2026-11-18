@@ -8,6 +8,7 @@ import {
 } from '@shared/anywhere';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Folder,
   Globe,
@@ -18,6 +19,7 @@ import {
   Monitor,
   Power,
   Route,
+  Send,
   SettingsIcon,
   ShieldSolid,
   SignIn,
@@ -30,6 +32,7 @@ import { SimpleTooltip } from '@/components/ui/tooltip';
 import { relativeTime } from '@/hooks/useAccount';
 import { cn } from '@/lib/utils';
 import { useAnywhere } from '@/stores/anywhereStore';
+import { useFileSendStore } from '@/stores/fileSendStore';
 import { REMOTE_CARD, RemoteCardHeader } from '../remoteCard';
 import { AccessSettingsDialog } from './AccessSettingsDialog';
 import { ConnectionSheet } from './ConnectionSheet';
@@ -350,6 +353,11 @@ function ConnectCard({ state }: { state: AnywhereState }): React.JSX.Element {
   );
 }
 
+/** True while the drag carries files, so dragging text over a row does nothing. */
+function carriesFiles(event: React.DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files');
+}
+
 function DeviceList({
   title,
   entries,
@@ -359,6 +367,15 @@ function DeviceList({
   entries: AnywhereDirectoryEntry[];
   teammates?: boolean;
 }): React.JSX.Element {
+  const navigate = useNavigate();
+  const [dropOn, setDropOn] = useState<string | null>(null);
+
+  /** Opens the Send files tab with this device picked (E112). */
+  const sendTo = (entry: AnywhereDirectoryEntry) => {
+    useFileSendStore.getState().pick(entry.remoteId);
+    navigate(`/remote?tab=send&to=${entry.remoteId}`);
+  };
+
   return (
     <div>
       <h3 className={cn(SECTION_HEADING, 'px-3 pb-1')}>{title}</h3>
@@ -366,7 +383,31 @@ function DeviceList({
         {entries.map((entry) => (
           <li
             key={entry.id}
-            className="group flex items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-foreground/[0.04]"
+            className={cn(
+              'group relative flex items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-foreground/[0.04]',
+              dropOn === entry.remoteId &&
+                'bg-primary/10 outline-1 -outline-offset-1 outline-dashed outline-primary/60',
+            )}
+            onDragOver={(event) => {
+              if (!carriesFiles(event) || !entry.online) return;
+              event.preventDefault();
+              setDropOn(entry.remoteId);
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              setDropOn(null);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDropOn(null);
+              if (!carriesFiles(event) || !entry.online) return;
+              const paths = Array.from(event.dataTransfer?.files ?? [])
+                .map((file) => window.runova.shell.pathForFile(file))
+                .filter(Boolean);
+              if (paths.length === 0) return;
+              void window.runova.fileSend.stagePaths(paths).catch(() => undefined);
+              sendTo(entry);
+            }}
           >
             <span
               className={cn(
@@ -381,9 +422,11 @@ function DeviceList({
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium">{entry.name}</div>
               <div className="truncate text-xs text-muted-foreground">
-                {teammates
-                  ? `${entry.owner.displayName} · ${entry.teams.map((t) => t.name).join(', ')}`
-                  : formatRemoteId(entry.remoteId)}
+                {dropOn === entry.remoteId
+                  ? `Drop to send to ${entry.name}`
+                  : teammates
+                    ? `${entry.owner.displayName} · ${entry.teams.map((t) => t.name).join(', ')}`
+                    : formatRemoteId(entry.remoteId)}
               </div>
             </div>
             {entry.online ? (
@@ -394,6 +437,18 @@ function DeviceList({
               <Chip tone="neutral">Offline</Chip>
             )}
             <div className="flex items-center gap-1">
+              <SimpleTooltip label="Send files">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  shape="pill"
+                  aria-label={`Send files to ${entry.name}`}
+                  disabled={!entry.online}
+                  onClick={() => sendTo(entry)}
+                >
+                  <Send />
+                </Button>
+              </SimpleTooltip>
               <SimpleTooltip label="Files only">
                 <Button
                   size="icon-sm"

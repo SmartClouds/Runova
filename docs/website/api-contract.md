@@ -998,7 +998,10 @@ bool, "teamIds": number[], "online": bool, "agentIdentityKey": string | null, "c
 "lastSeenAt": time }`.
 `RemoteDirectoryEntryDto`: `{ "id", "remoteId", "name", "platform", "kind", "identityKey",
 "unattendedEnabled", "online", "lastSeenAt", "owner": { "userId": number, "displayName": string,
-"email": string }, "teams": [{ "id": number, "name": string }] }`; a teammate's computer is listed
+"email": string }, "teams": [{ "id": number, "name": string }], "features": string[] }`; `features` is what the
+computer's app said it can do when it went online (`receive-files`: it takes files sent to it,
+E112), empty while it is offline; the hub keeps it in memory with the presence and stores it
+nowhere. A teammate's computer is listed
 while it is shown to a team both accounts are in. `RemoteSessionDto`: `{ "id": number, "role":
 "host" | "controller", "mode": "ask" | "password", "transport": "direct" | "relay" | null,
 "hostRemoteId": string, "hostName": string, "hostOwnerName": string, "controllerName": string,
@@ -1019,13 +1022,22 @@ the notifications hub, including the `access_token` query value on the hub path)
 
 - `GoOnline(deviceId)`: this connection now reaches one of the account's computers; it replaces any
   earlier connection for it. A computer that is not the account's is an error.
+- `GoOnlineWithFeatures(deviceId, features)` (E112): the same, saying too what the app can do.
+  Only `receive-files` is known; other names are dropped, and a background agent's are ignored.
+  The features live with the presence in memory, go when the connection does, and are passed on
+  in `PresenceChanged` as `features`.
 - `RequestConnect({ "remoteId", "mode": "ask" | "password", "controllerDeviceId"?, "intent":
-  "control" | "files" })` returns `{ "status", "sessionId"?, "relation"?, "host"? }`. `status` is
+  "control" | "files" | "manage" | "send" })` returns `{ "status", "sessionId"?, "relation"?, "host"? }`. `status` is
   `ringing`, `offline`, `unavailable` (no such ID, or the computer does not take this request; the
   two are the same answer on purpose), `rate-limited` or `self`. `relation` is `own`, `teammate`
   or `other`; `host` is `{ "remoteId", "name" (empty for `other`), "platform", "kind",
   "identityKey" }`. An account makes 20 requests a minute; a computer takes 30 password requests
-  in 10 minutes from everyone together; a connection has 8 sessions open at most.
+  in 10 minutes from everyone together; a connection has 8 sessions open at most. `send` (E112)
+  rings only by asking, from an app (`controllerDeviceId` of kind `app`) of the owner or a
+  teammate, to a computer whose app went online with `receive-files`; when only its background
+  agent is online the answer is `offline`. The files, their names and sizes go over the encrypted
+  link and never pass the hub, and a send leaves no session record: `Connected` records nothing
+  for it.
 - `Respond(sessionId, accept)`: the computer accepts or declines a ringing request. Unanswered
   requests stop ringing after 60 seconds.
 - `Signal(sessionId, payload)`: a WebRTC signaling message (up to 64 KiB, 600 a minute) to the
@@ -1042,7 +1054,7 @@ The hub calls `IncomingRequest({ "sessionId", "mode", "relation", "intent", "con
 "teams": string[] })` on the computer, `RequestResolved({ "sessionId", "accepted", "reason":
 "declined" | "timeout" | null })` on the controller, `Signal(sessionId, payload)` on either,
 `SessionEnded({ "sessionId", "reason": "ended" | "cancelled" | "left" | "timeout" })` on the other
-side, and `PresenceChanged({ "deviceId", "remoteId", "online" })` on the owner and everyone the
+side, and `PresenceChanged({ "deviceId", "remoteId", "online", "features" })` on the owner and everyone the
 computer is shown to.
 
 When the two computers can not reach each other directly, both open a WebSocket to the relay at

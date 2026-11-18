@@ -160,9 +160,20 @@ export function initAnywhereLinks(
       });
     }),
     api.onLinkFrame(({ sessionId, frame }) => {
-      const channel = sessions.get(sessionId)?.channel;
-      // IPC hands over a plain Uint8Array; the channel wants one backed by an ArrayBuffer.
-      if (channel?.readyState === 'open') channel.send(frame as Uint8Array<ArrayBuffer>);
+      const session = sessions.get(sessionId);
+      const channel = session?.channel;
+      if (!session || channel?.readyState !== 'open') return;
+      try {
+        // IPC hands over a plain Uint8Array; the channel wants one backed by an ArrayBuffer.
+        channel.send(frame as Uint8Array<ArrayBuffer>);
+      } catch (error) {
+        // A channel past its send limit throws; a link that lost a frame can not go on.
+        closed(
+          sessionId,
+          session,
+          `the channel could not send: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }),
     api.onLinkStop(({ sessionId }) => {
       const session = sessions.get(sessionId);

@@ -30,6 +30,12 @@ export interface AnywhereSettings {
   alwaysRelay: boolean;
   /** What a new session may do, unless the person changes it when accepting. */
   defaultPermissions: AnywherePermissions;
+  /** Who may send files to this computer (E112): my devices and teammates, my devices, or no one. */
+  receiveFrom: 'everyone' | 'own' | 'nobody';
+  /** Files from my own devices go straight in, without asking. */
+  autoAcceptOwn: boolean;
+  /** Where received files go; null means Downloads. */
+  saveFolder: string | null;
 }
 
 export const DEFAULT_ANYWHERE_SETTINGS: AnywhereSettings = {
@@ -39,6 +45,9 @@ export const DEFAULT_ANYWHERE_SETTINGS: AnywhereSettings = {
   alwaysAllow: [],
   alwaysRelay: false,
   defaultPermissions: { control: true, clipboard: true, files: false },
+  receiveFrom: 'everyone',
+  autoAcceptOwn: false,
+  saveFolder: null,
 };
 
 export interface AnywhereRecent {
@@ -302,5 +311,12 @@ function normalize(value: Partial<AnywhereSettings> | undefined): AnywhereSettin
       clipboard: perm('clipboard'),
       files: perm('files'),
     },
+    receiveFrom:
+      v.receiveFrom === 'own' || v.receiveFrom === 'nobody' || v.receiveFrom === 'everyone'
+        ? v.receiveFrom
+        : DEFAULT_ANYWHERE_SETTINGS.receiveFrom,
+    autoAcceptOwn: bool('autoAcceptOwn', DEFAULT_ANYWHERE_SETTINGS.autoAcceptOwn),
+    saveFolder:
+      typeof v.saveFolder === 'string' && v.saveFolder.trim() !== '' ? v.saveFolder : null,
   };
 }

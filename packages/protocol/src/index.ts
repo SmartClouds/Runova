@@ -430,3 +430,4 @@ export * from './link.js';
 export * from './manage.js';
 export * from './phrase/phrase.js';
 export * from './secure/handshake.js';
+export * from './send.js';

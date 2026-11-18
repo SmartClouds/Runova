@@ -19,9 +19,9 @@ public enum PresenceChange
 /// </summary>
 internal sealed class RemotePresence
 {
-    public sealed record Entry(long DeviceId, long UserId, string Kind);
+    public sealed record Entry(long DeviceId, long UserId, string Kind, IReadOnlyList<string> Features);
 
-    public sealed record Endpoint(string ConnectionId, string Kind);
+    public sealed record Endpoint(string ConnectionId, string Kind, IReadOnlyList<string> Features);
 
     public sealed record Gone(Entry? Entry, PresenceChange Change);
 
@@ -29,8 +29,11 @@ internal sealed class RemotePresence
     private readonly Dictionary<string, Entry> _byConnection = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
-    /// <summary>The device is online through this connection, which replaces any earlier one of the same kind.</summary>
-    public void Online(long deviceId, long userId, string connectionId, string kind = RemoteDeviceKinds.App)
+    /// <summary>
+    /// The device is online through this connection, which replaces any earlier one of the same
+    /// kind, with what the app there can do (E112). Only memory holds it.
+    /// </summary>
+    public void Online(long deviceId, long userId, string connectionId, string kind = RemoteDeviceKinds.App, IReadOnlyList<string>? features = null)
     {
         lock (_gate)
         {
@@ -46,7 +49,7 @@ internal sealed class RemotePresence
             }
 
             endpoints[kind] = connectionId;
-            _byConnection[connectionId] = new Entry(deviceId, userId, kind);
+            _byConnection[connectionId] = new Entry(deviceId, userId, kind, features ?? []);
         }
     }
 
@@ -135,11 +138,15 @@ internal sealed class RemotePresence
                 return null;
             }
 
-            return endpoints.TryGetValue(RemoteDeviceKinds.App, out var app) ? new Endpoint(app, RemoteDeviceKinds.App)
-                : endpoints.TryGetValue(RemoteDeviceKinds.Agent, out var agent) ? new Endpoint(agent, RemoteDeviceKinds.Agent)
+            return endpoints.TryGetValue(RemoteDeviceKinds.App, out var app) ? new Endpoint(app, RemoteDeviceKinds.App, _byConnection[app].Features)
+                : endpoints.TryGetValue(RemoteDeviceKinds.Agent, out var agent) ? new Endpoint(agent, RemoteDeviceKinds.Agent, [])
                 : null;
         }
     }
+
+    /// <summary>What the device's app can do while it is online; nothing when it is not.</summary>
+    public IReadOnlyList<string> FeaturesOf(long deviceId) =>
+        EndpointOf(deviceId) is { Kind: RemoteDeviceKinds.App } endpoint ? endpoint.Features : [];
 
     public Entry? DeviceOf(string connectionId)
     {

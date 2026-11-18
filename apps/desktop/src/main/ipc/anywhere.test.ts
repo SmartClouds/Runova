@@ -101,3 +101,15 @@ describe('Anywhere handlers signed in', () => {
     expect(service[method]).toHaveBeenCalledWith(...args);
   });
 });
+
+describe('Anywhere settings from a screen (E112)', () => {
+  beforeEach(() => account.status.mockResolvedValue(SIGNED_IN));
+
+  it('never takes a save folder from a screen, only going back to Downloads', async () => {
+    await invoke(IPC.anywhere.updateSettings, { receiveFrom: 'own', saveFolder: '/etc' });
+    expect(service.updateSettings).toHaveBeenLastCalledWith({ receiveFrom: 'own' });
+
+    await invoke(IPC.anywhere.updateSettings, { saveFolder: null });
+    expect(service.updateSettings).toHaveBeenLastCalledWith({ saveFolder: null });
+  });
+});

@@ -48,7 +48,7 @@ public class RemoteMapperTests
     public void A_directory_entry_carries_its_owner_and_teams()
     {
         var owner = RemoteMapper.ToOwner(_sam);
-        var entry = RemoteMapper.ToEntry(Device(), owner, [new RemoteTeamDto(2, "Ops")], online: false);
+        var entry = RemoteMapper.ToEntry(Device(), owner, [new RemoteTeamDto(2, "Ops")], online: false, features: [RemoteFeatures.ReceiveFiles]);
 
         Assert.Equal(new RemoteOwnerDto(3, "Sam", "sam@example.com"), owner);
         Assert.Equal(7, entry.Id);
@@ -62,6 +62,7 @@ public class RemoteMapperTests
         Assert.Equal(_at.AddHours(1), entry.LastSeenAt);
         Assert.Equal(owner, entry.Owner);
         Assert.Equal([new RemoteTeamDto(2, "Ops")], entry.Teams);
+        Assert.Equal([RemoteFeatures.ReceiveFiles], entry.Features);
     }
 
     [Fact]

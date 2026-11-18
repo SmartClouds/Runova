@@ -145,6 +145,8 @@ export default defineConfig({
         'src/main/deploy/wordpress/index.ts',
         'src/main/deploy/files/index.ts',
         'src/main/sftp/index.ts',
+        // Sending files (E112): wiring the service to the windows and the keep-awake.
+        'src/main/remote/send/live.ts',
         // Deploy hands itself to the file manager at start-up (E27), between the two entry points above.
         'src/main/deploy/dockerFiles/backend.ts',
         // FTP and SFTP sites (E23): the contract suite and the in-memory server only serve the tests.
@@ -196,6 +198,14 @@ export default defineConfig({
             'src/main/phrase/**': { lines: 95, branches: 90 },
             'src/main/ipc/phrase.ts': { lines: 95, branches: 85 },
             'src/renderer/src/components/phrase/**': { lines: 90, functions: 85, branches: 80 },
+            // Sending files (E112): the manifest, the batches both ways, the service and its screens.
+            'src/main/remote/send/**': { lines: 85, branches: 70 },
+            'src/main/ipc/fileSend.ts': { lines: 90, branches: 70 },
+            'src/renderer/src/components/remote/send/**': {
+              lines: 85,
+              functions: 75,
+              branches: 75,
+            },
             'src/main/backup/envelope.ts': { lines: 85, branches: 75 },
             'src/main/pathGuard.ts': { lines: 95, branches: 90 },
             'src/main/ptyHost/protocol.ts': { lines: 90, branches: 80 },

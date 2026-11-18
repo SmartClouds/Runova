@@ -37,6 +37,34 @@ export function decideIncoming(facts: IncomingFacts, settings: AnywhereSettings)
 }
 
 /**
+ * Someone asking to send files here (E112). The hub ring carries no file names, so a yes here only
+ * opens the encrypted link; the person is asked once the list of files comes over it, unless they
+ * chose to take files from their own devices without asking. A stranger, a teammate no longer in a
+ * team the computer is shown to, a password request, or no key to check, is declined whatever the
+ * server let through.
+ */
+export function decideSend(
+  facts: {
+    relation: IncomingFacts['relation'];
+    mode: IncomingFacts['mode'];
+    teams: string[];
+    hasKey: boolean;
+  },
+  settings: Pick<AnywhereSettings, 'receiveFrom'>,
+): 'accept' | 'decline' {
+  if (!facts.hasKey || facts.mode !== 'ask' || settings.receiveFrom === 'nobody') return 'decline';
+  if (facts.relation === 'own') return 'accept';
+  if (
+    facts.relation === 'teammate' &&
+    facts.teams.length > 0 &&
+    settings.receiveFrom === 'everyone'
+  ) {
+    return 'accept';
+  }
+  return 'decline';
+}
+
+/**
  * A phone asking to manage this computer (E71). Only the owner's own phone can, only without a
  * password, and only a key approved at this computer gets in without someone saying yes here.
  * `allowOwnDevices` does not count: a phone can run commands and open the Vault.

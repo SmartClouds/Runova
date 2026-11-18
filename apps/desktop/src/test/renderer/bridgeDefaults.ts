@@ -9,6 +9,7 @@
  */
 
 import { DEFAULT_SETTINGS } from '@shared/defaultSettings';
+import { EMPTY_FILE_SEND_STATE } from '@shared/fileSend';
 
 type RunovaApi = Window['runova'];
 
@@ -54,6 +55,7 @@ export function bridgeDefaults(): Record<string, unknown> {
     'account.status': { state: 'signed-out', deviceId: 'test-device' },
     'account.encryption': { entitled: false, planName: 'Free', items: [] },
     'rdp.listServers': [],
+    'fileSend.getState': structuredClone(EMPTY_FILE_SEND_STATE),
     'deploy.listServers': [],
     'security.getConfig': {},
     'docker.list': [],

@@ -46,6 +46,7 @@ import { registerDockerHandlers } from './ipc/docker';
 import { registerEnvironmentHandlers } from './ipc/environments';
 import { registerErrorTrackingHandlers } from './ipc/errorTracking';
 import { registerExplorerHandlers } from './ipc/explorer';
+import { registerFileSendHandlers } from './ipc/fileSend';
 import { registerFileSystemHandlers } from './ipc/fileSystem';
 import { registerGitHandlers } from './ipc/git';
 import { registerGrammarHandlers } from './ipc/grammar';
@@ -126,6 +127,7 @@ import { allowQuit, guardQuit, registerQuitGuardHandlers } from './quitGuard';
 import { pruneOrphanRelays } from './relay/store';
 import { startRelayService } from './relay/wiring';
 import { remoteManager } from './remote/manager';
+import { stopFileSendsForQuit } from './remote/send/active';
 import {
   startResourceActivityTracker,
   stopResourceActivityTracker,
@@ -404,6 +406,7 @@ function registerAllIpcHandlers(): void {
   registerDependencyAlertHandlers();
   registerRemoteHandlers();
   registerAnywhereHandlers();
+  registerFileSendHandlers();
   registerUsageHandlers();
   registerBackupHandlers();
   registerBlueprintHandlers();
@@ -664,6 +667,8 @@ app.on('before-quit', (event) => {
   stopCiAutoFix();
   stopToolUpdateWatcher();
   stopNews();
+  // Sends and receives still going stop here, and the other side is told, before Anywhere goes.
+  stopFileSendsForQuit();
   stopAccount();
   stopHealthScheduler();
   stopScheduledTaskRunner();

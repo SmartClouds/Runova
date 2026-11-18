@@ -7,6 +7,7 @@ import {
   type IdentityKeyPair,
   type ManageScope,
   newIdentity,
+  RECEIVE_FILES_FEATURE,
 } from '@runova/protocol';
 import {
   type AnywhereConnectRequest,
@@ -31,7 +32,7 @@ import { passwordProblem } from '../../../shared/anywherePassword';
 import { forwardNotification } from '../../notifications/forward';
 import type { ManagePhone } from '../manage/session';
 import type { AttachableSocket, PeerPermissions } from '../manager';
-import { decideIncoming, decideManage, PasswordLockout } from './accessPolicy';
+import { decideIncoming, decideManage, decideSend, PasswordLockout } from './accessPolicy';
 import type { AgentInstaller } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import { keyFingerprint } from './fingerprint';
@@ -65,6 +66,59 @@ export interface ManagePort {
   attach(link: SecureLink, phone: ManagePhone): void;
 }
 
+/** Who is sending files to this computer, as the hub named them and the handshake proved (E112). */
+export interface SendSender {
+  sessionId: string;
+  userId: number;
+  displayName: string;
+  email: string;
+  deviceName: string | null;
+  platform: string | null;
+  remoteId: string | null;
+  /** The sending device's identity key, checked by the handshake. */
+  identityKey: string;
+  relation: 'own' | 'teammate';
+  teams: string[];
+}
+
+/** Takes the secured link of someone sending files here (E112). */
+export interface SendPort {
+  attachIncoming(link: SecureLink, from: SendSender): void;
+}
+
+/** A secured link opened to send files to another device. */
+export interface DialedLink {
+  link: SecureLink;
+  sessionId: string;
+  transport: 'direct' | 'relay';
+  host: { remoteId: string; name: string; platform: AnywherePlatform; kind: string };
+}
+
+export type DialProblem =
+  | 'not-ready'
+  | 'unavailable'
+  | 'offline'
+  | 'rate-limited'
+  | 'self'
+  | 'declined'
+  | 'timeout'
+  | 'key-changed'
+  | 'failed';
+
+/** Why a link for a send could not be opened, with a sentence for the person. */
+export class DialError extends Error {
+  constructor(
+    readonly reason: DialProblem,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'DialError';
+  }
+}
+
+/** How many people may be sending files to this computer at the same time. */
+const MAX_HOSTED_SENDS = 4;
+
 /** Password secrets saved for other computers, sealed in the Servers vault. */
 export interface SavedPasswords {
   get(remoteId: string, hostKey: string): Promise<Uint8Array | null>;
@@ -80,6 +134,8 @@ export interface AnywhereServiceDeps {
   links: LinkOpener;
   manager: AnywhereManagerPort;
   manage?: ManagePort;
+  /** Receives files sent here (E112). Without it this computer neither says it takes files nor does. */
+  send?: SendPort;
   passwords: SavedPasswords;
   /** The signed-in account and this install's device id, or null when signed out. */
   account(): Promise<{ deviceId: string; displayName: string; email: string } | null>;
@@ -163,12 +219,25 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   let phones: TrustedPhone[] = [];
   /** Answers that came before this side knew the session id. */
   const earlyResolved = new Map<string, { accepted: boolean; reason: string | null }>();
+  /** Sends dialing out that wait for the other computer's answer, by session. */
+  const dialWaiters = new Map<
+    string,
+    (answer: { accepted: boolean; reason: string | null }) => void
+  >();
+  /** Live send links, both ways, by session: each its own hub session, apart from `outgoing`. */
+  const sendLinks = new Map<string, SecureLink>();
+  const hostedSends = new Map<string, SecureLink>();
   let inputPaused = false;
   let retry: NodeJS.Timeout | null = null;
   let running = false;
   let agentInstalled = false;
   /** Goes up with every start and stop, so work a sign-out overtook can tell. */
   let generation = 0;
+
+  /** What this app tells the hub it can do while online (E112); the hub keeps it in memory only. */
+  function features(): string[] {
+    return deps.send ? [RECEIVE_FILES_FEATURE] : [];
+  }
 
   function state(): AnywhereState {
     return {
@@ -230,12 +299,20 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     ended: (ended) => onEnded(ended.sessionId, ended.reason),
     presence: (presence) => {
       const flip = (list: AnywhereDirectoryEntry[]) =>
-        list.map((e) => (e.id === presence.deviceId ? { ...e, online: presence.online } : e));
+        list.map((e) =>
+          e.id === presence.deviceId
+            ? {
+                ...e,
+                online: presence.online,
+                ...(presence.features ? { features: presence.features } : {}),
+              }
+            : e,
+        );
       directory = { mine: flip(directory.mine), teammates: flip(directory.teammates) };
       announce();
     },
     reconnected: () => {
-      if (device) void deps.hub.goOnline(device.id).catch(() => undefined);
+      if (device) void deps.hub.goOnline(device.id, features()).catch(() => undefined);
       status = 'online';
       announce();
     },
@@ -304,7 +381,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         return;
       }
       if (!device) return;
-      await deps.hub.goOnline(device.id);
+      await deps.hub.goOnline(device.id, features());
       if (overtaken(run)) return;
       status = 'online';
       error = null;
@@ -326,6 +403,9 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     disconnect();
     for (const sessionId of [...hosted.keys()]) endHosted(sessionId);
     endAllPhoneSessions();
+    for (const waiter of dialWaiters.values()) waiter({ accepted: false, reason: 'ended' });
+    dialWaiters.clear();
+    for (const link of [...sendLinks.values(), ...hostedSends.values()]) link.close();
     for (const p of pending.values()) clearTimeout(p.timer);
     pending.clear();
     status = 'signed-out';
@@ -578,6 +658,12 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   }
 
   function onResolved(sessionId: string, accepted: boolean, reason: string | null): void {
+    const waiter = dialWaiters.get(sessionId);
+    if (waiter) {
+      dialWaiters.delete(sessionId);
+      waiter({ accepted, reason });
+      return;
+    }
     if (!outgoing || outgoing.sessionId !== sessionId) {
       earlyResolved.set(sessionId, { accepted, reason });
       return;
@@ -643,7 +729,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
           announce();
         }
       });
-      if (current.view.intent === 'manage') return;
+      // Sends never come this way: each opens its own link through `dial`.
+      if (current.view.intent === 'manage' || current.view.intent === 'send') return;
       deps.manager.attachClient(link, {
         deviceName: hostName || formatRemoteId(remoteId),
         intent: current.view.intent,
@@ -696,11 +783,162 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     announce();
   }
 
+  // --- Sending files (E112) ---------------------------------------------------------
+
+  /**
+   * Opens a secured link to another device to send it files. It rings the hub with intent `send`,
+   * checks the device's key against the one pinned for it, and runs the same handshake as a
+   * control session, apart from the single `outgoing` slot: any number of sends can run, while a
+   * control session is live too. The hub session ends whenever the link does.
+   */
+  async function dial(remoteIdTyped: string, intent: 'send'): Promise<DialedLink> {
+    const remoteId = parseRemoteId(remoteIdTyped);
+    const me = device;
+    const keys = identity;
+    if (!me || !keys || status !== 'online') {
+      throw new DialError(
+        'not-ready',
+        'Runova Anywhere is not connected to the website right now.',
+      );
+    }
+    if (!remoteId) throw new DialError('unavailable', 'That is not a Runova ID.');
+    if (remoteId === me.remoteId) throw new DialError('self', 'That is this computer.');
+    let result: HubConnectResult;
+    try {
+      result = await deps.hub.requestConnect({
+        remoteId,
+        mode: 'ask',
+        controllerDeviceId: me.id,
+        intent,
+      });
+    } catch {
+      throw new DialError(
+        'not-ready',
+        'Runova Anywhere is not connected to the website right now.',
+      );
+    }
+    if (result.status !== 'ringing' || !result.sessionId || !result.host) {
+      throw dialProblem(result.status);
+    }
+    const sessionId = result.sessionId;
+    const host = result.host;
+    const name = host.name || formatRemoteId(remoteId);
+    try {
+      const pinKey = host.kind === 'agent' ? `${remoteId}#agent` : remoteId;
+      const pinned = await deps.store.pin(pinKey);
+      if (pinned && pinned !== host.identityKey) {
+        throw new DialError(
+          'key-changed',
+          `${name} has a new key since you last connected. Connect to it once from the Anywhere tab to check it, then send again.`,
+        );
+      }
+      const answer = await answerFor(sessionId);
+      if (!answer.accepted) {
+        throw answer.reason === 'timeout'
+          ? new DialError('timeout', 'No one answered in time.')
+          : new DialError('declined', `${name} is not taking files from you right now.`);
+      }
+      const opened = await deps.links.open({
+        sessionId,
+        role: 'controller',
+        relayOnly: settings?.alwaysRelay ?? false,
+        signal: (payload) => void deps.hub.signal(sessionId, payload).catch(() => undefined),
+      });
+      const link = new SecureLink(opened.transport, opened.cipher ? { cipher: opened.cipher } : {});
+      await link.runAsController({
+        sessionId,
+        mode: 'ask',
+        identity: keys,
+        expectedHostKey: fromB64u(host.identityKey),
+        localFingerprint: opened.localFingerprint,
+        remoteFingerprint: opened.remoteFingerprint,
+      });
+      await deps.store.setPin(pinKey, host.identityKey);
+      sendLinks.set(sessionId, link);
+      link.onClose(() => {
+        if (sendLinks.get(sessionId) === link) sendLinks.delete(sessionId);
+        void deps.hub.end(sessionId).catch(() => undefined);
+      });
+      return {
+        link,
+        sessionId,
+        transport: opened.kind,
+        host: { remoteId, name: host.name, platform: host.platform, kind: host.kind },
+      };
+    } catch (error) {
+      dialWaiters.delete(sessionId);
+      void deps.hub.end(sessionId).catch(() => undefined);
+      deps.links.cancel(sessionId);
+      if (error instanceof DialError) throw error;
+      throw new DialError('failed', connectionFailure(error));
+    }
+  }
+
+  /** The other computer's answer to a ringing send, whenever it comes. */
+  function answerFor(sessionId: string): Promise<{ accepted: boolean; reason: string | null }> {
+    const early = earlyResolved.get(sessionId);
+    if (early) {
+      earlyResolved.delete(sessionId);
+      return Promise.resolve(early);
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        if (dialWaiters.delete(sessionId)) resolve({ accepted: false, reason: 'timeout' });
+      }, ringMs + 5_000);
+      dialWaiters.set(sessionId, (answer) => {
+        clearTimeout(timer);
+        resolve(answer);
+      });
+    });
+  }
+
+  /** Hands a sender's secured link to the send service. No bar and no notice: nobody controls anything. */
+  function serveSend(sessionId: string, request: HubIncomingRequest, link: SecureLink): void {
+    const key = request.controller.identityKey;
+    if (!deps.send || !key || (request.relation !== 'own' && request.relation !== 'teammate')) {
+      link.close();
+      return;
+    }
+    hostedSends.set(sessionId, link);
+    link.onClose(() => {
+      if (hostedSends.get(sessionId) === link) hostedSends.delete(sessionId);
+      void deps.hub.end(sessionId).catch(() => undefined);
+    });
+    deps.send.attachIncoming(link, {
+      sessionId,
+      userId: request.controller.userId,
+      displayName: request.controller.displayName,
+      email: request.controller.email,
+      deviceName: request.controller.deviceName,
+      platform: request.controller.platform,
+      remoteId: request.controller.remoteId,
+      identityKey: key,
+      relation: request.relation,
+      teams: request.teams,
+    });
+  }
+
   // --- Requests coming in ----------------------------------------------------------
 
   async function onIncoming(request: HubIncomingRequest): Promise<void> {
     const current = settings ?? (await deps.store.settings());
     const key = request.controller.identityKey;
+    if (request.intent === 'send') {
+      const take =
+        deps.send &&
+        hostedSends.size < MAX_HOSTED_SENDS &&
+        decideSend(
+          { relation: request.relation, mode: request.mode, teams: request.teams, hasKey: !!key },
+          current,
+        ) === 'accept';
+      if (!take) {
+        await deps.hub.respond(request.sessionId, false).catch(() => undefined);
+        return;
+      }
+      await deps.hub.respond(request.sessionId, true);
+      void serve(request, current.defaultPermissions);
+      return;
+    }
     const decision = !key
       ? 'decline'
       : request.intent === 'manage'
@@ -831,9 +1069,16 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         remoteFingerprint: opened.remoteFingerprint,
       });
       if (request.mode === 'password') lockout.succeeded();
-      await deps.hub.connected(sessionId, opened.kind).catch(() => undefined);
+      // A send leaves no record on the website, so it is not reported as a session.
+      if (request.intent !== 'send') {
+        await deps.hub.connected(sessionId, opened.kind).catch(() => undefined);
+      }
       if (request.intent === 'manage') {
         await serveManage(sessionId, request.controller.identityKey, link);
+        return;
+      }
+      if (request.intent === 'send') {
+        serveSend(sessionId, request, link);
         return;
       }
       const name = request.controller.displayName || request.controller.email || 'Someone';
@@ -954,6 +1199,14 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       pending.delete(sessionId);
       announce();
     }
+    const dialing = dialWaiters.get(sessionId);
+    if (dialing) {
+      dialWaiters.delete(sessionId);
+      dialing({ accepted: false, reason: reason === 'timeout' ? 'timeout' : reason });
+    }
+    // A live send link is peer to peer by now. The hub forgetting its session (its own reconnect,
+    // say) does not end it; the link's keepalive tells when it is really gone.
+    if (sendLinks.has(sessionId) || hostedSends.has(sessionId)) return;
     deps.links.cancel(sessionId);
     if (outgoing?.sessionId === sessionId && outgoing.view.phase !== 'connected') {
       const attempt = outgoing.attempt;
@@ -995,6 +1248,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   }
 
   return {
+    dial,
     forgetPhone,
     setPhoneSealKey,
     sealKeys,
@@ -1045,6 +1299,28 @@ function messageFor(status: HubConnectResult['status'], mode: AnywhereMode): str
       return mode === 'password'
         ? 'There is no computer with that ID, or it does not take password connections.'
         : 'There is no computer with that ID, or it does not take requests from you. Try its password instead.';
+  }
+}
+
+function dialProblem(status: HubConnectResult['status']): DialError {
+  switch (status) {
+    case 'offline':
+      return new DialError(
+        'offline',
+        'That device is offline. It needs Runova open and signed in.',
+      );
+    case 'rate-limited':
+      return new DialError(
+        'rate-limited',
+        'Too many tries in a short time. Wait a minute and try again.',
+      );
+    case 'self':
+      return new DialError('self', 'That is this computer.');
+    default:
+      return new DialError(
+        'unavailable',
+        'That device does not take files from you, or it needs a newer Runova.',
+      );
   }
 }
 

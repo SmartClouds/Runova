@@ -411,8 +411,11 @@ public sealed class RemoteHubTests(PostgresFixture postgres) : IAsyncLifetime
         await pair.HostApp.Hub.StopAsync(TestContext.Current.CancellationToken);
         var offline = await RemoteApp.NextAsync(pair.ControllerApp.Presence);
 
-        Assert.Equal(new PresenceChangedDto(pair.Host.GetProperty("id").GetInt64(), pair.HostRemoteId, true), online);
-        Assert.Equal(new PresenceChangedDto(pair.Host.GetProperty("id").GetInt64(), pair.HostRemoteId, false), offline);
+        // Records compare lists by reference, so the features are checked on their own.
+        Assert.Equal((pair.Host.GetProperty("id").GetInt64(), pair.HostRemoteId, true), (online.DeviceId, online.RemoteId, online.Online));
+        Assert.Equal((pair.Host.GetProperty("id").GetInt64(), pair.HostRemoteId, false), (offline.DeviceId, offline.RemoteId, offline.Online));
+        Assert.Empty(online.Features);
+        Assert.Empty(offline.Features);
     }
 
     [Fact]

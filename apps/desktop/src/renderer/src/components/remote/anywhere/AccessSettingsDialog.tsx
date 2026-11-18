@@ -69,6 +69,22 @@ export function AccessSettingsDialog({
             />
           </Section>
 
+          <Section title="Files sent to this computer">
+            <ToggleRow
+              label="Let people send files here"
+              description="Your own devices, and teammates in a team below. You are asked about every send."
+              checked={settings.receiveFrom !== 'nobody'}
+              onChange={(on) => update({ receiveFrom: on ? 'everyone' : 'nobody' })}
+            />
+            <ToggleRow
+              label="Files from my own devices go straight in"
+              description="Where they go, and who else may send, is on the Send files tab."
+              checked={settings.autoAcceptOwn}
+              disabled={settings.receiveFrom === 'nobody'}
+              onChange={(autoAcceptOwn) => update({ autoAcceptOwn })}
+            />
+          </Section>
+
           <Section title="Teammates who can ask" icon={Users}>
             {state.teams.length === 0 ? (
               <p className="text-xs text-muted-foreground">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideIncoming, type IncomingFacts, PasswordLockout } from './accessPolicy';
+import { decideIncoming, decideSend, type IncomingFacts, PasswordLockout } from './accessPolicy';
 import { DEFAULT_ANYWHERE_SETTINGS } from './settings';
 
 const teammate: IncomingFacts = {
@@ -146,5 +146,41 @@ describe('PasswordLockout', () => {
     expect(lockout.locked()).toBe(true);
     now += 1_000;
     expect(lockout.locked()).toBe(false);
+  });
+});
+
+describe('decideSend', () => {
+  const own = { relation: 'own' as const, mode: 'ask' as const, teams: [], hasKey: true };
+  const mate = {
+    relation: 'teammate' as const,
+    mode: 'ask' as const,
+    teams: ['Ops'],
+    hasKey: true,
+  };
+
+  it('opens the link for my devices and teammates; the person is asked once the list arrives', () => {
+    expect(decideSend(own, DEFAULT_ANYWHERE_SETTINGS)).toBe('accept');
+    expect(decideSend(mate, DEFAULT_ANYWHERE_SETTINGS)).toBe('accept');
+  });
+
+  it('takes only my own devices when told to', () => {
+    const settings = { ...DEFAULT_ANYWHERE_SETTINGS, receiveFrom: 'own' as const };
+
+    expect(decideSend(own, settings)).toBe('accept');
+    expect(decideSend(mate, settings)).toBe('decline');
+  });
+
+  it('takes nothing from anyone when told to', () => {
+    const settings = { ...DEFAULT_ANYWHERE_SETTINGS, receiveFrom: 'nobody' as const };
+
+    expect(decideSend(own, settings)).toBe('decline');
+    expect(decideSend(mate, settings)).toBe('decline');
+  });
+
+  it('declines whatever the server said for a stranger, a teammate with no shared team, a password or no key', () => {
+    expect(decideSend({ ...mate, relation: 'other' }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
+    expect(decideSend({ ...mate, teams: [] }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
+    expect(decideSend({ ...own, mode: 'password' }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
+    expect(decideSend({ ...own, hasKey: false }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
   });
 });

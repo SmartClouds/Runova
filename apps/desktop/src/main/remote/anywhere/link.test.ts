@@ -272,3 +272,60 @@ describe('SecureLink', () => {
     expect(Buffer.from(ct.sent.at(-1) ?? []).toString()).not.toContain('secret');
   });
 });
+
+describe('waiting for a link to drain', () => {
+  function queued(): LinkTransport & { amount: number; shut(reason: string): void } {
+    const closeListeners: ((reason: string) => void)[] = [];
+    const transport = {
+      amount: 0,
+      send: () => undefined,
+      bufferedAmount: () => transport.amount,
+      close: (reason: string) => transport.shut(reason),
+      onFrame: () => undefined,
+      onClose: (listener: (reason: string) => void) => closeListeners.push(listener),
+      shut: (reason: string) => {
+        for (const listener of closeListeners) listener(reason);
+      },
+    };
+    return transport;
+  }
+
+  it('waits while more than the threshold is queued, then goes on', async () => {
+    vi.useFakeTimers();
+    const transport = queued();
+    const link = new SecureLink(transport);
+    transport.amount = 5_000_000;
+    let drained = false;
+    void link.drain(2_000_000).then(() => {
+      drained = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(drained).toBe(false);
+
+    transport.amount = 1_000;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(drained).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('goes on straight away when little is queued', async () => {
+    const link = new SecureLink(queued());
+
+    await expect(link.drain(2_000_000)).resolves.toBeUndefined();
+  });
+
+  it('stops waiting when the link closes', async () => {
+    vi.useFakeTimers();
+    const transport = queued();
+    const link = new SecureLink(transport);
+    transport.amount = 5_000_000;
+    const waiting = link.drain(2_000_000);
+
+    transport.shut('gone');
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(waiting).resolves.toBeUndefined();
+    vi.useRealTimers();
+  });
+});

@@ -40,7 +40,8 @@ public sealed record RemoteDirectoryEntryDto(
     bool Online,
     DateTimeOffset LastSeenAt,
     RemoteOwnerDto Owner,
-    IReadOnlyList<RemoteTeamDto> Teams);
+    IReadOnlyList<RemoteTeamDto> Teams,
+    IReadOnlyList<string> Features);
 
 public sealed record RemoteDirectoryDto(IReadOnlyList<RemoteDirectoryEntryDto> Mine, IReadOnlyList<RemoteDirectoryEntryDto> Teammates);
 
@@ -88,7 +89,8 @@ public sealed record RequestResolvedDto(string SessionId, bool Accepted, string?
 
 public sealed record SessionEndedDto(string SessionId, string Reason);
 
-public sealed record PresenceChangedDto(long DeviceId, string RemoteId, bool Online);
+/// <summary>A computer came online or went offline, with what its app can do while it is online (E112).</summary>
+public sealed record PresenceChangedDto(long DeviceId, string RemoteId, bool Online, IReadOnlyList<string> Features);
 
 public static class RemoteConnectStatuses
 {
@@ -99,6 +101,22 @@ public static class RemoteConnectStatuses
     public const string Self = "self";
 }
 
+/// <summary>
+/// What an app can do beyond connecting, which it says when it goes online (E112). Kept in memory
+/// with its presence and gone when it disconnects: nothing of it is stored.
+/// </summary>
+public static class RemoteFeatures
+{
+    /// <summary>It takes files sent to it.</summary>
+    public const string ReceiveFiles = "receive-files";
+
+    public static readonly IReadOnlyList<string> All = [ReceiveFiles];
+
+    /// <summary>The features named that this server knows, each once, in the order named.</summary>
+    public static string[] Known(IEnumerable<string>? named) =>
+        named is null ? [] : [.. named.Where(All.Contains).Distinct(StringComparer.Ordinal)];
+}
+
 public static class RemoteIntents
 {
     public const string Control = "control";
@@ -107,5 +125,8 @@ public static class RemoteIntents
     /// <summary>A phone working with its owner's computer: projects, terminals, git and the rest.</summary>
     public const string Manage = "manage";
 
-    public static readonly IReadOnlyList<string> All = [Control, Files, Manage];
+    /// <summary>Sending files to a computer that takes them (E112). The files never pass the hub.</summary>
+    public const string Send = "send";
+
+    public static readonly IReadOnlyList<string> All = [Control, Files, Manage, Send];
 }

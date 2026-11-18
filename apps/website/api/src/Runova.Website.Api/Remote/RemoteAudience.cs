@@ -25,7 +25,7 @@ internal sealed class RemoteAudience(AppDbContext db, IHubContext<RemoteHub, IRe
                select team).AsNoTracking().ToListAsync();
 
     /// <summary>Tells everyone who may see the computer that it came online or went offline.</summary>
-    public async Task PresenceAsync(RemoteDevice device, bool online)
+    public async Task PresenceAsync(RemoteDevice device, bool online, IReadOnlyList<string>? features = null)
     {
         var members = await (from link in db.RemoteDeviceTeams
                              join member in db.TeamMembers on link.TeamId equals member.TeamId
@@ -33,6 +33,6 @@ internal sealed class RemoteAudience(AppDbContext db, IHubContext<RemoteHub, IRe
                                  && db.TeamMembers.Any(m => m.TeamId == link.TeamId && m.UserId == device.UserId)
                              select member.UserId).Distinct().ToListAsync();
         var users = members.Append(device.UserId).Distinct().Select(id => id.ToString(CultureInfo.InvariantCulture)).ToList();
-        await hub.Clients.Users(users).PresenceChanged(new PresenceChangedDto(device.Id, device.RemoteId, online));
+        await hub.Clients.Users(users).PresenceChanged(new PresenceChangedDto(device.Id, device.RemoteId, online, online ? features ?? [] : []));
     }
 }

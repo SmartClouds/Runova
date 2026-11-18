@@ -1,0 +1,311 @@
+{
+  "version": 1,
+  "feature": "receive-files",
+  "partBytes": 4194304,
+  "limits": {
+    "maxFiles": 10000,
+    "maxOfferBytes": 4194304,
+    "maxNoteChars": 500,
+    "maxPathChars": 1024,
+    "maxSegments": 32,
+    "maxSegmentBytes": 255,
+    "minPartSize": 65536,
+    "maxPartSize": 8388608
+  },
+  "messages": [
+    {
+      "text": "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"report.pdf\",\"size\":2048},{\"transferId\":\"c4e8a2b6-1f3d-4a5c-8e7b-6d9f0a1b2c3e\",\"path\":\"Holiday 2026/تصویر.jpg\",\"size\":0}]}",
+      "value": {
+        "t": "send-offer",
+        "v": 1,
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "files": [
+          {
+            "transferId": "0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81",
+            "path": "report.pdf",
+            "size": 2048
+          },
+          {
+            "transferId": "c4e8a2b6-1f3d-4a5c-8e7b-6d9f0a1b2c3e",
+            "path": "Holiday 2026/تصویر.jpg",
+            "size": 0
+          }
+        ]
+      }
+    },
+    {
+      "text": "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a.txt\",\"size\":5}],\"note\":\"For the review 👋\"}",
+      "value": {
+        "t": "send-offer",
+        "v": 1,
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "files": [
+          {
+            "transferId": "0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81",
+            "path": "a.txt",
+            "size": 5
+          }
+        ],
+        "note": "For the review 👋"
+      }
+    },
+    {
+      "text": "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":true}",
+      "value": {
+        "t": "send-answer",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "accept": true
+      }
+    },
+    {
+      "text": "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":false,\"reason\":\"declined\"}",
+      "value": {
+        "t": "send-answer",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "accept": false,
+        "reason": "declined"
+      }
+    },
+    {
+      "text": "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":true,\"resumed\":true,\"finished\":[\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\"]}",
+      "value": {
+        "t": "send-answer",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "accept": true,
+        "resumed": true,
+        "finished": [
+          "0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81"
+        ]
+      }
+    },
+    {
+      "text": "{\"t\":\"send-cancel\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\"}",
+      "value": {
+        "t": "send-cancel",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a"
+      }
+    },
+    {
+      "text": "{\"t\":\"send-cancel\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"reason\":\"The sender quit Runova.\"}",
+      "value": {
+        "t": "send-cancel",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+        "reason": "The sender quit Runova."
+      }
+    },
+    {
+      "text": "{\"t\":\"send-ping\"}",
+      "value": {
+        "t": "send-ping"
+      }
+    },
+    {
+      "text": "{\"t\":\"send-complete\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\"}",
+      "value": {
+        "t": "send-complete",
+        "batchId": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a"
+      }
+    }
+  ],
+  "rejected": [
+    "not json",
+    "[]",
+    "{\"t\":\"send-nope\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\"}",
+    "{\"t\":\"send-offer\",\"v\":2,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"has space\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":-1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1.5}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":\"1\"}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"../etc/passwd\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"/etc/passwd\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"C:/Windows/win.ini\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\\b\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1},{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"b\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"Notes.txt\",\"size\":1},{\"transferId\":\"c4e8a2b6-1f3d-4a5c-8e7b-6d9f0a1b2c3e\",\"path\":\"notes.TXT\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a:b\",\"size\":1},{\"transferId\":\"c4e8a2b6-1f3d-4a5c-8e7b-6d9f0a1b2c3e\",\"path\":\"a_b\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"f-562789\",\"path\":\"a\",\"size\":1},{\"transferId\":\"f-779192\",\"path\":\"b\",\"size\":1}]}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}],\"note\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+    "{\"t\":\"send-offer\",\"v\":1,\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"files\":[{\"transferId\":\"0b6c1f3e-8d2a-4e5f-b1c7-9a0d2e4f6a81\",\"path\":\"a\",\"size\":1}],\"note\":7}",
+    "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":\"yes\"}",
+    "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":false,\"reason\":\"because\"}",
+    "{\"t\":\"send-answer\",\"batchId\":\"7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a\",\"accept\":true,\"finished\":[\"ok\",3]}",
+    "{\"t\":\"send-cancel\"}",
+    "{\"t\":\"send-complete\",\"batchId\":4}"
+  ],
+  "paths": [
+    {
+      "in": "photo.jpg",
+      "out": "photo.jpg"
+    },
+    {
+      "in": "Holiday 2026/photo.jpg",
+      "out": "Holiday 2026/photo.jpg"
+    },
+    {
+      "in": "a/b/c.txt",
+      "out": "a/b/c.txt"
+    },
+    {
+      "in": "تصویر/عکس.png",
+      "out": "تصویر/عکس.png"
+    },
+    {
+      "in": ".hidden",
+      "out": ".hidden"
+    },
+    {
+      "in": "",
+      "out": null
+    },
+    {
+      "in": ".",
+      "out": null
+    },
+    {
+      "in": "..",
+      "out": null
+    },
+    {
+      "in": "../x",
+      "out": null
+    },
+    {
+      "in": "a/../x",
+      "out": null
+    },
+    {
+      "in": "./a",
+      "out": null
+    },
+    {
+      "in": "a//b",
+      "out": null
+    },
+    {
+      "in": "a/",
+      "out": null
+    },
+    {
+      "in": "/a",
+      "out": null
+    },
+    {
+      "in": "C:/x",
+      "out": null
+    },
+    {
+      "in": "c:x",
+      "out": null
+    },
+    {
+      "in": "a\b",
+      "out": null
+    },
+    {
+      "in": "a\u0001b",
+      "out": null
+    },
+    {
+      "in": "ab",
+      "out": null
+    },
+    {
+      "in": "con",
+      "out": "con_"
+    },
+    {
+      "in": "CON.txt",
+      "out": "CON_.txt"
+    },
+    {
+      "in": "lpt9.log",
+      "out": "lpt9_.log"
+    },
+    {
+      "in": "aux/readme",
+      "out": "aux_/readme"
+    },
+    {
+      "in": "COM10",
+      "out": "COM10"
+    },
+    {
+      "in": "console.log",
+      "out": "console.log"
+    },
+    {
+      "in": "report.",
+      "out": "report"
+    },
+    {
+      "in": "name . ",
+      "out": "name"
+    },
+    {
+      "in": "...",
+      "out": "_"
+    },
+    {
+      "in": "a<b>c:d\"e|f?g*h.txt",
+      "out": "a_b_c_d_e_f_g_h.txt"
+    },
+    {
+      "in": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "out": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "in": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "out": null
+    },
+    {
+      "in": "a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a",
+      "out": "a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a"
+    },
+    {
+      "in": "a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a",
+      "out": null
+    },
+    {
+      "in": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "out": null
+    }
+  ],
+  "transferKeys": [
+    {
+      "id": "7f3c2a10-5b4e-4c1d-9a8e-2f6b1c0d3e4a",
+      "key": 3859638826
+    },
+    {
+      "id": "b2",
+      "key": 2402036085
+    },
+    {
+      "id": "تصویر",
+      "key": 179533599
+    },
+    {
+      "id": "😀x",
+      "key": 2673392192
+    },
+    {
+      "id": "f-562789",
+      "key": 563722827
+    },
+    {
+      "id": "f-779192",
+      "key": 563722827
+    }
+  ],
+  "chunks": [
+    {
+      "transferKey": 3859638826,
+      "partIndex": 2,
+      "seq": 5,
+      "bytes": "68656c6c6f",
+      "frame": "02e60d6a2a000000020000000568656c6c6f"
+    }
+  ]
+}

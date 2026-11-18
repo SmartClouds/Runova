@@ -94,6 +94,28 @@ describe('WebRTC links', () => {
     expect(transport.bufferedAmount()).toBe(70_000);
   });
 
+  it('counts what it sent since the renderer last reported as still queued', async () => {
+    const { bridge } = fakeBridge();
+    const links = createRtcLinkOpener(bridge);
+    const opening = links.open({
+      sessionId: 's1',
+      role: 'host',
+      relayOnly: false,
+      signal: () => undefined,
+    });
+    links.rendererOpened('s1', { local: '', remote: '' });
+    const { transport } = await opening;
+    links.rendererBuffered('s1', 1_000);
+
+    // The renderer reports every 200 ms; a fast sender must not see an empty queue in between.
+    transport.send(new Uint8Array(60_000));
+    transport.send(new Uint8Array(60_000));
+    expect(transport.bufferedAmount()).toBe(121_000);
+
+    links.rendererBuffered('s1', 500);
+    expect(transport.bufferedAmount()).toBe(500);
+  });
+
   it('sends the renderer signals to the hub, and the hub signals to the renderer, even early ones', async () => {
     const { bridge, calls } = fakeBridge();
     const links = createRtcLinkOpener(bridge);

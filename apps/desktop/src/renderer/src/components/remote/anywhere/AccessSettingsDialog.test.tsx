@@ -179,3 +179,31 @@ describe('AccessSettingsDialog', () => {
     ).toBeDisabled();
   });
 });
+
+describe('AccessSettingsDialog files sent here (E112)', () => {
+  it('stops and starts taking files from anyone', async () => {
+    const { bridge } = open(state());
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Let people send files here' }));
+
+    expect(bridge.$fn('anywhere.updateSettings')).toHaveBeenCalledWith({ receiveFrom: 'nobody' });
+  });
+
+  it('takes files from my own devices without asking', async () => {
+    const { bridge } = open(state());
+
+    await userEvent.click(
+      screen.getByRole('switch', { name: 'Files from my own devices go straight in' }),
+    );
+
+    expect(bridge.$fn('anywhere.updateSettings')).toHaveBeenCalledWith({ autoAcceptOwn: true });
+  });
+
+  it('can not let own devices straight in while no one may send', () => {
+    open(state({ receiveFrom: 'nobody' }));
+
+    expect(
+      screen.getByRole('switch', { name: 'Files from my own devices go straight in' }),
+    ).toBeDisabled();
+  });
+});

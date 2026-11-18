@@ -7,7 +7,8 @@ import type { ManageScope } from '@runova/protocol';
 
 export type AnywherePlatform = 'windows' | 'macos' | 'linux';
 export type AnywhereMode = 'ask' | 'password';
-export type AnywhereIntent = 'control' | 'files' | 'manage';
+/** `send` (E112) opens a link only for files offered by the one dialing. */
+export type AnywhereIntent = 'control' | 'files' | 'manage' | 'send';
 export type AnywhereTransport = 'direct' | 'relay';
 export type AnywhereRelation = 'own' | 'teammate' | 'other';
 
@@ -38,6 +39,11 @@ export interface AnywhereDirectoryEntry {
   lastSeenAt: string;
   owner: { userId: number; displayName: string; email: string };
   teams: { id: number; name: string }[];
+  /**
+   * What the app on that computer can do beyond connecting (E112), such as `receive-files`.
+   * Missing altogether when the website is older than that.
+   */
+  features?: string[];
 }
 
 export interface AnywhereRecentEntry {
@@ -62,6 +68,12 @@ export interface AnywhereSettingsView {
   canKeepSecrets: boolean;
   /** The background service that keeps this computer reachable while no one is signed in (E64). */
   agent: { installed: boolean; unavailableReason: string | null };
+  /** Who may send files here (E112). */
+  receiveFrom: 'everyone' | 'own' | 'nobody';
+  /** Files from my own devices go straight in. */
+  autoAcceptOwn: boolean;
+  /** Where received files go; null for Downloads. */
+  saveFolder: string | null;
 }
 
 export type OutgoingPhase =
@@ -190,6 +202,10 @@ export interface AnywhereSettingsPatch {
   defaultPermissions?: AnywherePermissions;
   /** Stop letting these teammates in without asking. */
   removeAlwaysAllow?: number[];
+  receiveFrom?: 'everyone' | 'own' | 'nobody';
+  autoAcceptOwn?: boolean;
+  /** Null goes back to Downloads. */
+  saveFolder?: string | null;
 }
 
 export interface AnywhereSessionRecord {
@@ -241,6 +257,9 @@ export const EMPTY_ANYWHERE_STATE: AnywhereState = {
     passwordSet: false,
     canKeepSecrets: true,
     agent: { installed: false, unavailableReason: null },
+    receiveFrom: 'everyone',
+    autoAcceptOwn: false,
+    saveFolder: null,
   },
   directory: { mine: [], teammates: [] },
   recent: [],

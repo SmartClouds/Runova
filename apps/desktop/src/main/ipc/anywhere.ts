@@ -15,6 +15,15 @@ import { signedInOnly } from './remoteSignIn';
 
 const anywhere = () => getAnywhere(getAccountRuntime());
 
+/**
+ * A screen may change any setting but the folder received files go to: that one is set only
+ * through the folder picker (E112), so a screen can only send it back to Downloads.
+ */
+function screenPatch(patch: AnywhereSettingsPatch): AnywhereSettingsPatch {
+  const { saveFolder, ...rest } = patch ?? {};
+  return saveFolder === null ? { ...rest, saveFolder: null } : rest;
+}
+
 /** Runova Anywhere (E61): the screens' calls, and the main window's WebRTC peer reporting back. */
 export function registerAnywhereHandlers(): void {
   ipcMain.handle(
@@ -46,7 +55,7 @@ export function registerAnywhereHandlers(): void {
   ipcMain.handle(IPC.anywhere.pauseInput, (_e, paused: boolean) => anywhere().pauseInput(paused));
   ipcMain.handle(
     IPC.anywhere.updateSettings,
-    signedInOnly((patch: AnywhereSettingsPatch) => anywhere().updateSettings(patch)),
+    signedInOnly((patch: AnywhereSettingsPatch) => anywhere().updateSettings(screenPatch(patch))),
   );
   ipcMain.handle(
     IPC.anywhere.setPassword,

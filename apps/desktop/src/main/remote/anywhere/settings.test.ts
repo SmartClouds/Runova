@@ -57,6 +57,36 @@ describe('anywhere settings', () => {
   });
 });
 
+describe('receiving files', () => {
+  it('takes files from my devices and teammates, asks first and saves to Downloads, out of the box', async () => {
+    const settings = await createAnywhereStore(memoryIo()).settings();
+
+    expect(settings.receiveFrom).toBe('everyone');
+    expect(settings.autoAcceptOwn).toBe(false);
+    expect(settings.saveFolder).toBeNull();
+  });
+
+  it('keeps the receive settings, and drops a value of the wrong shape', async () => {
+    const io = memoryIo();
+    await createAnywhereStore(io).updateSettings({
+      receiveFrom: 'own',
+      autoAcceptOwn: true,
+      saveFolder: '/home/sam/Inbox',
+    });
+    expect(await createAnywhereStore(io).settings()).toMatchObject({
+      receiveFrom: 'own',
+      autoAcceptOwn: true,
+      saveFolder: '/home/sam/Inbox',
+    });
+
+    io.setFile({ version: 1, settings: { receiveFrom: 'strangers', saveFolder: 7 } });
+    expect(await createAnywhereStore(io).settings()).toMatchObject({
+      receiveFrom: 'everyone',
+      saveFolder: null,
+    });
+  });
+});
+
 describe('anywhere identity', () => {
   it('makes one identity key, keeps it sealed, and gives the same one back', async () => {
     const io = memoryIo();

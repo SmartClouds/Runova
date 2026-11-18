@@ -41,7 +41,13 @@ export interface AnywhereHubHandlers {
   resolved(resolved: { sessionId: string; accepted: boolean; reason: string | null }): void;
   signal(sessionId: string, payload: string): void;
   ended(ended: { sessionId: string; reason: string }): void;
-  presence(presence: { deviceId: number; remoteId: string; online: boolean }): void;
+  /** `features` is what the app there can do while online (E112); an older website leaves it out. */
+  presence(presence: {
+    deviceId: number;
+    remoteId: string;
+    online: boolean;
+    features?: string[];
+  }): void;
   /** The connection came back after a drop: go online again. */
   reconnected(): void;
   /** The connection is down; it keeps trying on its own. */
@@ -52,7 +58,11 @@ export interface AnywhereHubHandlers {
 export interface AnywhereHub {
   start(handlers: AnywhereHubHandlers): Promise<void>;
   stop(): Promise<void>;
-  goOnline(deviceId: number): Promise<void>;
+  /**
+   * This connection reaches the computer, and its app can do `features` (E112), which the hub
+   * keeps in memory with the presence and stores nowhere.
+   */
+  goOnline(deviceId: number, features?: string[]): Promise<void>;
   requestConnect(request: {
     remoteId: string;
     mode: AnywhereMode;
@@ -134,7 +144,18 @@ export function websiteAnywhereHub(input: {
       if (retry) clearTimeout(retry);
       await connection.stop();
     },
-    goOnline: (deviceId) => connection.invoke('GoOnline', deviceId),
+    goOnline: async (deviceId, features) => {
+      if (!features || features.length === 0) {
+        await connection.invoke('GoOnline', deviceId);
+        return;
+      }
+      try {
+        await connection.invoke('GoOnlineWithFeatures', deviceId, features);
+      } catch {
+        // A website from before E112 has no such method: go online as an older app does.
+        await connection.invoke('GoOnline', deviceId);
+      }
+    },
     requestConnect: (request) => connection.invoke<HubConnectResult>('RequestConnect', request),
     respond: (sessionId, accept) => connection.invoke('Respond', sessionId, accept),
     signal: (sessionId, payload) => connection.invoke('Signal', sessionId, payload),

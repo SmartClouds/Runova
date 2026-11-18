@@ -94,6 +94,9 @@ internal sealed class RemoteApp : IAsyncDisposable
 
     public Task GoOnlineAsync(long deviceId) => Hub.InvokeAsync(nameof(RemoteHub.GoOnline), deviceId, TestContext.Current.CancellationToken);
 
+    public Task GoOnlineWithFeaturesAsync(long deviceId, string[] features) =>
+        Hub.InvokeAsync(nameof(RemoteHub.GoOnlineWithFeatures), deviceId, features, TestContext.Current.CancellationToken);
+
     public Task<ConnectResultDto> RequestAsync(string remoteId, string mode = "ask", long? fromDeviceId = null, string intent = "control") =>
         Hub.InvokeAsync<ConnectResultDto>(nameof(RemoteHub.RequestConnect), new ConnectRequestDto(remoteId, mode, fromDeviceId, intent), TestContext.Current.CancellationToken);
 

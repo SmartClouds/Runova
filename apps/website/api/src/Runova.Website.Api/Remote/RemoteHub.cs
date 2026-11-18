@@ -60,7 +60,17 @@ internal sealed partial class RemoteHub(
 
     /// <summary>This connection is now how one of the account's computers is reached.</summary>
     [Authorize(Policies.Account)]
-    public async Task GoOnline(long deviceId)
+    public Task GoOnline(long deviceId) => OnlineAsync(deviceId, []);
+
+    /// <summary>
+    /// As <see cref="GoOnline"/>, saying too what the app can do (E112), such as take files. The
+    /// hub keeps that with the presence, in memory, until this connection goes.
+    /// </summary>
+    [Authorize(Policies.Account)]
+    public Task GoOnlineWithFeatures(long deviceId, IReadOnlyList<string> features) =>
+        OnlineAsync(deviceId, RemoteFeatures.Known(features));
+
+    private async Task OnlineAsync(long deviceId, string[] features)
     {
         var me = Me;
         var agentOf = AgentOf;
@@ -77,12 +87,15 @@ internal sealed partial class RemoteHub(
         }
 
         var wasOnline = presence.IsOnline(device.Id);
-        presence.Online(device.Id, me, Context.ConnectionId, agentOf is null ? RemoteDeviceKinds.App : RemoteDeviceKinds.Agent);
+        var before = presence.FeaturesOf(device.Id);
+        // The background agent only shows the screen; it never takes files.
+        presence.Online(device.Id, me, Context.ConnectionId, agentOf is null ? RemoteDeviceKinds.App : RemoteDeviceKinds.Agent, agentOf is null ? features : []);
         device.LastSeenAt = time.GetUtcNow();
         await db.SaveChangesAsync();
-        if (!wasOnline)
+        var now = presence.FeaturesOf(device.Id);
+        if (!wasOnline || !before.SequenceEqual(now))
         {
-            await audience.PresenceAsync(device, online: true);
+            await audience.PresenceAsync(device, online: true, now);
         }
     }
 
@@ -119,8 +132,10 @@ internal sealed partial class RemoteHub(
         var teams = target.UserId == me ? [] : await audience.SharedTeamsAsync(target, me);
         var relation = RemoteAccess.RelationOf(me, target.UserId, teams.Count > 0);
         var manages = request.Intent == RemoteIntents.Manage;
+        var sends = request.Intent == RemoteIntents.Send;
         if (!RemoteAccess.MayRequest(relation, request.Mode, target.UnattendedEnabled)
-            || (manages && (relation != RemoteRelation.Own || from?.Kind != RemoteDeviceKinds.Phone)))
+            || (manages && (relation != RemoteRelation.Own || from?.Kind != RemoteDeviceKinds.Phone))
+            || (sends && !RemoteAccess.MaySend(relation, request.Mode, from?.Kind)))
         {
             return Result(RemoteConnectStatuses.Unavailable);
         }
@@ -131,10 +146,16 @@ internal sealed partial class RemoteHub(
             return Result(RemoteConnectStatuses.RateLimited);
         }
 
-        // Managing needs the desktop app itself; the background agent only shows the screen.
-        if (presence.EndpointOf(target.Id) is not { } endpoint || (manages && endpoint.Kind == RemoteDeviceKinds.Agent))
+        // Managing and taking files need the desktop app itself; the background agent only shows the screen.
+        if (presence.EndpointOf(target.Id) is not { } endpoint || ((manages || sends) && endpoint.Kind == RemoteDeviceKinds.Agent))
         {
             return Result(RemoteConnectStatuses.Offline);
+        }
+
+        // An app that did not say it takes files (an older one) is never rung for a send.
+        if (sends && !endpoint.Features.Contains(RemoteFeatures.ReceiveFiles))
+        {
+            return Result(RemoteConnectStatuses.Unavailable);
         }
 
         var hostConnection = endpoint.ConnectionId;
@@ -145,7 +166,7 @@ internal sealed partial class RemoteHub(
             return Result(RemoteConnectStatuses.RateLimited);
         }
 
-        var session = sessions.Open(new RemoteSessionParties(target.Id, target.UserId, hostConnection, me, from?.Id, Context.ConnectionId, request.Mode));
+        var session = sessions.Open(new RemoteSessionParties(target.Id, target.UserId, hostConnection, me, from?.Id, Context.ConnectionId, request.Mode, request.Intent));
         var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == me);
         var controller = RemoteMapper.ToPeer(new RemotePeerRow { User = user, Device = from });
         var relationName = RemoteAccess.WireName(relation);
@@ -221,6 +242,12 @@ internal sealed partial class RemoteHub(
             || !RemoteTransports.All.Contains(transport))
         {
             throw new HubException("There is no such session.");
+        }
+
+        // A send leaves nothing behind on the server (E112): the hub only passes it on.
+        if (session.Parties.Intent == RemoteIntents.Send)
+        {
+            return;
         }
 
         if (session.RecordId is { } recordId)

@@ -611,6 +611,32 @@ export const IPC = {
     onLinkFrame: 'anywhere:onLinkFrame',
     onLinkStop: 'anywhere:onLinkStop',
   },
+  /** Sending files to your other devices and to teammates (E112). */
+  fileSend: {
+    getState: 'fileSend:getState',
+    stagePaths: 'fileSend:stagePaths',
+    pickFiles: 'fileSend:pickFiles',
+    pickFolder: 'fileSend:pickFolder',
+    unstage: 'fileSend:unstage',
+    send: 'fileSend:send',
+    cancel: 'fileSend:cancel',
+    cancelFile: 'fileSend:cancelFile',
+    retry: 'fileSend:retry',
+    dismiss: 'fileSend:dismiss',
+    clearFinished: 'fileSend:clearFinished',
+    respond: 'fileSend:respond',
+    /** Another folder for one offer; main keeps it for that offer's answer. */
+    chooseFolder: 'fileSend:chooseFolder',
+    /** The folder received files go to from now on. */
+    chooseSaveFolder: 'fileSend:chooseSaveFolder',
+    updateSettings: 'fileSend:updateSettings',
+    showInFolder: 'fileSend:showInFolder',
+    openFile: 'fileSend:openFile',
+    /** Opens the main window on the Send files tab, from the incoming files window. */
+    openApp: 'fileSend:openApp',
+    // main -> renderer
+    onState: 'fileSend:onState',
+  },
   remote: {
     getState: 'remote:getState',
     listInterfaces: 'remote:listInterfaces',

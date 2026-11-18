@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import type { AccountStatus } from '@shared/accountTypes';
 import type { RemoteSavedServer, RemoteState } from '@shared/apiTypes';
-import { screen, waitFor, within } from '@testing-library/react';
+import { EMPTY_FILE_SEND_STATE, type SendBatchView } from '@shared/fileSend';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useFileSendStore } from '@/stores/fileSendStore';
 import { useRemoteStore } from '@/stores/remoteStore';
 import { renderWithProviders } from '../../../test/renderer/renderWithProviders';
 
@@ -453,5 +455,77 @@ describe('RemotePage activity', () => {
     expect(await screen.findByText('File transfers')).toBeInTheDocument();
     expect(screen.getByText(/build\.zip/)).toBeInTheDocument();
     expect(screen.getByText('500.0 KB / 1000.0 KB')).toBeInTheDocument();
+  });
+});
+
+describe('RemotePage sending files (E112)', () => {
+  const sent: SendBatchView = {
+    id: 'b1',
+    direction: 'out',
+    peer: {
+      name: 'Ali Rezaei',
+      email: '',
+      deviceName: 'Office PC',
+      platform: 'windows',
+      kind: 'computer',
+      relation: 'teammate',
+      remoteId: '482193775',
+    },
+    phase: 'done',
+    reason: null,
+    note: null,
+    fileCount: 3,
+    files: [],
+    moreFiles: 0,
+    totalBytes: 10,
+    transferredBytes: 10,
+    doneFiles: 3,
+    failedFiles: 0,
+    bytesPerSecond: null,
+    secondsLeft: null,
+    startedAt: 0,
+    finishedAt: 1,
+    answerBy: null,
+    folder: null,
+    transport: 'direct',
+  };
+
+  it('opens the Send files view by name, and asks a signed-out person to sign in', async () => {
+    renderWithProviders(<RemotePage />, { route: '/remote?tab=send' });
+
+    expect(within(viewSwitcher()).getByRole('button', { name: 'Send files' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to send files' }),
+    ).toBeInTheDocument();
+  });
+
+  it('picks the device a link names', async () => {
+    renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=send&to=482193775',
+      bridge: SIGNED_IN,
+    });
+
+    await waitFor(() => expect(useFileSendStore.getState().picked).toBe('482193775'));
+  });
+
+  it('lists what was sent and received beside any view, and clears what finished', async () => {
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=ssh',
+      bridge: SIGNED_IN,
+    });
+    act(() =>
+      useFileSendStore
+        .getState()
+        .set({ ...EMPTY_FILE_SEND_STATE, available: true, batches: [sent] }),
+    );
+
+    const card = screen.getByRole('region', { name: 'Sent and received' });
+    expect(within(card).getByText('To Office PC')).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Clear finished' }));
+
+    expect(bridge.$fn('fileSend.clearFinished')).toHaveBeenCalled();
   });
 });

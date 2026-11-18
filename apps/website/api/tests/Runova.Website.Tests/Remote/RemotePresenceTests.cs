@@ -5,6 +5,26 @@ namespace Runova.Website.Tests.Remote;
 
 public class RemotePresenceTests
 {
+    /// <summary>Records compare lists by reference, so the parts that matter are compared instead.</summary>
+    private static (string?, string?) Of(RemotePresence.Endpoint? endpoint) => (endpoint?.ConnectionId, endpoint?.Kind);
+
+    private static (long, long, string?) Of(RemotePresence.Entry? entry) => (entry?.DeviceId ?? -1, entry?.UserId ?? -1, entry?.Kind);
+
+    [Fact]
+    public void What_an_app_can_do_is_kept_while_it_is_online_and_forgotten_when_it_goes()
+    {
+        var presence = new RemotePresence();
+        presence.Online(7, 3, "app", features: [RemoteFeatures.ReceiveFiles]);
+        presence.Online(7, 3, "agent", RemoteDeviceKinds.Agent);
+
+        Assert.Equal([RemoteFeatures.ReceiveFiles], presence.FeaturesOf(7));
+
+        presence.Offline("app");
+        Assert.Empty(presence.FeaturesOf(7));
+        presence.Offline("agent");
+        Assert.Empty(presence.FeaturesOf(7));
+    }
+
     [Fact]
     public void A_device_is_online_through_its_newest_connection()
     {
@@ -14,8 +34,8 @@ public class RemotePresenceTests
         presence.Online(7, 3, "c2");
 
         Assert.True(presence.IsOnline(7));
-        Assert.Equal(new RemotePresence.Endpoint("c2", RemoteDeviceKinds.App), presence.EndpointOf(7));
-        Assert.Equal(new RemotePresence.Entry(7, 3, RemoteDeviceKinds.App), presence.DeviceOf("c2"));
+        Assert.Equal(("c2", RemoteDeviceKinds.App), Of(presence.EndpointOf(7)));
+        Assert.Equal((7L, 3L, RemoteDeviceKinds.App), Of(presence.DeviceOf("c2")));
     }
 
     [Fact]
@@ -37,7 +57,7 @@ public class RemotePresenceTests
 
         var gone = presence.Offline("c1");
 
-        Assert.Equal(new RemotePresence.Entry(7, 3, RemoteDeviceKinds.App), gone.Entry);
+        Assert.Equal((7L, 3L, RemoteDeviceKinds.App), Of(gone.Entry));
         Assert.Equal(PresenceChange.WentOffline, gone.Change);
         Assert.False(presence.IsOnline(7));
         Assert.Null(presence.EndpointOf(7));
@@ -49,13 +69,13 @@ public class RemotePresenceTests
     {
         var presence = new RemotePresence();
         presence.Online(7, 3, "agent", RemoteDeviceKinds.Agent);
-        Assert.Equal(new RemotePresence.Endpoint("agent", RemoteDeviceKinds.Agent), presence.EndpointOf(7));
+        Assert.Equal(("agent", RemoteDeviceKinds.Agent), Of(presence.EndpointOf(7)));
 
         presence.Online(7, 3, "app");
-        Assert.Equal(new RemotePresence.Endpoint("app", RemoteDeviceKinds.App), presence.EndpointOf(7));
+        Assert.Equal(("app", RemoteDeviceKinds.App), Of(presence.EndpointOf(7)));
 
         Assert.Equal(PresenceChange.None, presence.Offline("app").Change);
-        Assert.Equal(new RemotePresence.Endpoint("agent", RemoteDeviceKinds.Agent), presence.EndpointOf(7));
+        Assert.Equal(("agent", RemoteDeviceKinds.Agent), Of(presence.EndpointOf(7)));
         Assert.True(presence.IsOnline(7));
     }
 
@@ -80,6 +100,6 @@ public class RemotePresenceTests
         presence.Online(7, 3, "a1", RemoteDeviceKinds.Agent);
 
         Assert.Equal("a1", presence.RemoveAgent(7));
-        Assert.Equal(new RemotePresence.Endpoint("c1", RemoteDeviceKinds.App), presence.EndpointOf(7));
+        Assert.Equal(("c1", RemoteDeviceKinds.App), Of(presence.EndpointOf(7)));
     }
 }

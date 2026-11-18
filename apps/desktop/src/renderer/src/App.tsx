@@ -26,6 +26,8 @@ import { HostBarRoute } from './components/remote/anywhere/HostBarRoute';
 import { IncomingRequestRoute } from './components/remote/anywhere/IncomingRequestRoute';
 import { HostKeyChangedDialogHost } from './components/remote/HostKeyChangedDialog';
 import RemoteSessionRoute from './components/remote/RemoteSessionRoute';
+import { FileSendToasts } from './components/remote/send/FileSendToasts';
+import { IncomingFilesRoute } from './components/remote/send/IncomingFilesRoute';
 import { ImageViewerHost } from './components/terminal/ImageViewerHost';
 import { AI_CLIS_ROUTE } from './components/tools/aiClis/route';
 import { DISK_CLEANUP_ROUTE } from './components/tools/diskCleanup/route';
@@ -59,6 +61,7 @@ import { queryClient } from './queryClient';
 import { initAnywhere } from './stores/anywhereStore';
 import { initDefaultCli } from './stores/cliStore';
 import { initDashboardLayout } from './stores/dashboardLayoutStore';
+import { initFileSend } from './stores/fileSendStore';
 import { initPingTargets } from './stores/pingTargetsStore';
 import { initRemote } from './stores/remoteStore';
 import { initTerminalAppearance } from './stores/terminalAppearanceStore';
@@ -116,6 +119,7 @@ function isStandalonePath(pathname: string): boolean {
     pathname === '/remote-session' ||
     pathname === '/anywhere-request' ||
     pathname === '/anywhere-bar' ||
+    pathname === '/incoming-files' ||
     pathname === '/rdp-session' ||
     pathname === '/sftp-window'
   );
@@ -142,6 +146,7 @@ function AppChrome(): React.JSX.Element | null {
       <StopContainersDialogHost />
       <HostKeyChangedDialogHost />
       <QuitConfirmation />
+      <FileSendToasts />
       <ImageViewerHost />
       <UpdateManager />
     </>
@@ -160,6 +165,8 @@ export default function App(): React.JSX.Element {
     // to carry a link, since main sends link events to that window alone.
     const stopAnywhere = initAnywhere();
     const stopAnywhereLinks = initAnywhereLinks();
+    // Sending files (E112): the main window and the incoming files window follow the same state.
+    const stopFileSend = initFileSend();
     // Usage threshold alerts prefer an OS notification; main only falls back
     // to this event when the platform has none to show. The OS notification's own
     // click already opens Usage there, so this toast gets the same shortcut.
@@ -182,6 +189,7 @@ export default function App(): React.JSX.Element {
       unsubscribeUpdateStatus();
       stopAnywhere();
       stopAnywhereLinks();
+      stopFileSend();
     };
   }, []);
 
@@ -200,6 +208,7 @@ export default function App(): React.JSX.Element {
               <Route path="remote-session" element={<RemoteSessionRoute />} />
               <Route path="anywhere-request" element={<IncomingRequestRoute />} />
               <Route path="anywhere-bar" element={<HostBarRoute />} />
+              <Route path="incoming-files" element={<IncomingFilesRoute />} />
               <Route
                 path="rdp-session"
                 element={

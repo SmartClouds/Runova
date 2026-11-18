@@ -235,13 +235,14 @@ internal static class RemoteEndpoints
                 g.First().Device,
                 owners[g.First().Device.UserId],
                 [.. g.Select(s => new RemoteTeamDto(s.Team.Id, s.Team.Name)).OrderBy(t => t.Name, StringComparer.Ordinal)],
-                presence.IsOnline(g.Key)))
+                presence.IsOnline(g.Key),
+                presence.FeaturesOf(g.Key)))
             .OrderBy(e => e.Owner.DisplayName, StringComparer.Ordinal).ThenBy(e => e.Name, StringComparer.Ordinal)
             .ToList();
 
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new RemoteDirectoryDto(
-            [.. mine.Select(d => RemoteMapper.ToEntry(d, self, [], presence.IsOnline(d.Id)))],
+            [.. mine.Select(d => RemoteMapper.ToEntry(d, self, [], presence.IsOnline(d.Id), presence.FeaturesOf(d.Id)))],
             teammates));
     }
 

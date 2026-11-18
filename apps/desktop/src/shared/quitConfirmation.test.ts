@@ -14,7 +14,7 @@ import {
  */
 
 function summary(over: Partial<OpenSessionSummary> = {}): OpenSessionSummary {
-  return { clis: 0, ssh: 0, rdp: 0, clisKeepRunning: false, ...over };
+  return { clis: 0, ssh: 0, rdp: 0, fileSends: 0, clisKeepRunning: false, ...over };
 }
 
 describe('hasOpenSessions', () => {
@@ -29,6 +29,7 @@ describe('hasOpenSessions', () => {
     expect(hasOpenSessions(summary({ clis: 1 }))).toBe(true);
     expect(hasOpenSessions(summary({ ssh: 1 }))).toBe(true);
     expect(hasOpenSessions(summary({ rdp: 1 }))).toBe(true);
+    expect(hasOpenSessions(summary({ fileSends: 1 }))).toBe(true);
   });
 });
 
@@ -120,5 +121,21 @@ describe('describeOpenSessions', () => {
     // The e2e suite clicks the button by this label.
     expect(QUIT_CONFIRM_TITLE).toBe('Close Runova?');
     expect(QUIT_CONFIRM_LABEL).toBe('Close app');
+  });
+});
+
+describe('files on their way (E112)', () => {
+  it('counts sends and receives that are still going', () => {
+    expect(describeOpenSessions(summary({ fileSends: 1 }))).toBe(
+      'You still have 1 file transfer open.\nClosing the app stops it, and the other side is told.',
+    );
+    expect(describeOpenSessions(summary({ fileSends: 2 }))).toContain('2 file transfers open');
+  });
+
+  it('adds a line for them next to other sessions', () => {
+    const text = describeOpenSessions(summary({ ssh: 1, fileSends: 2 }));
+
+    expect(text).toContain('1 SSH connection and 2 file transfers open');
+    expect(text).toContain('File transfers stop, and the other side is told.');
   });
 });

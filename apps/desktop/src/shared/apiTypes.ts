@@ -98,6 +98,8 @@ export interface OpenSessionSummary {
   clis: number;
   ssh: number;
   rdp: number;
+  /** Files still being sent or received (E112). */
+  fileSends: number;
   /** True when the CLIs carry on in the background terminal host after the app closes. */
   clisKeepRunning: boolean;
 }

@@ -41,6 +41,8 @@ interface Session {
   reject: (error: Error) => void;
   timer: NodeJS.Timeout | null;
   buffered: number;
+  /** Bytes handed to the renderer since it last said how much the channel holds. */
+  sentSinceReport: number;
   frameListeners: ((frame: Uint8Array) => void)[];
   closeListeners: ((reason: string) => void)[];
   closed: boolean;
@@ -102,9 +104,11 @@ export function createRtcLinkOpener(
   function transportFor(sessionId: string, session: Session): LinkTransport {
     return {
       send: (frame) => {
-        if (!session.closed) bridge.sendFrame(sessionId, frame);
+        if (session.closed) return;
+        session.sentSinceReport += frame.byteLength;
+        bridge.sendFrame(sessionId, frame);
       },
-      bufferedAmount: () => session.buffered,
+      bufferedAmount: () => session.buffered + session.sentSinceReport,
       close: (reason) => {
         if (session.closed) return;
         session.closed = true;
@@ -129,6 +133,7 @@ export function createRtcLinkOpener(
           reject,
           timer: null,
           buffered: 0,
+          sentSinceReport: 0,
           frameListeners: [],
           closeListeners: [],
           closed: false,
@@ -206,7 +211,9 @@ export function createRtcLinkOpener(
 
     rendererBuffered(sessionId: string, amount: number): void {
       const session = sessions.get(sessionId);
-      if (session) session.buffered = amount;
+      if (!session) return;
+      session.buffered = amount;
+      session.sentSinceReport = 0;
     },
 
     /** The channel closed, or the peer failed before it opened. */

@@ -3,10 +3,11 @@ import {
   type AnywhereState,
   EMPTY_ANYWHERE_STATE,
 } from '@shared/anywhere';
-import { act, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useAnywhereStore } from '@/stores/anywhereStore';
+import { useFileSendStore } from '@/stores/fileSendStore';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { AnywherePanel } from './AnywherePanel';
 
@@ -273,5 +274,51 @@ describe('AnywherePanel signed in', () => {
     });
 
     expect(screen.getByRole('dialog', { name: 'Connecting to 111 222 333' })).toBeInTheDocument();
+  });
+});
+
+describe('AnywherePanel sending files (E112)', () => {
+  const withKim: AnywhereState = {
+    ...online,
+    directory: { mine: [], teammates: [entry({ features: ['receive-files'] })] },
+  };
+
+  it('opens the Send files tab with a device picked, from its row', async () => {
+    const view = renderWithProviders(<AnywherePanel />);
+    act(() => useAnywhereStore.getState().set(withKim));
+
+    await view.user.click(screen.getByRole('button', { name: "Send files to Kim's laptop" }));
+
+    expect(useFileSendStore.getState().picked).toBe('111222333');
+  });
+
+  it('stages files dropped on a row and picks that device', async () => {
+    const view = renderWithProviders(<AnywherePanel />, {
+      bridge: { 'shell.pathForFile': (file: File) => `/picked/${file.name}` },
+    });
+    act(() => useAnywhereStore.getState().set(withKim));
+    const row = screen.getByRole('button', { name: "Send files to Kim's laptop" }).closest('li');
+    if (!row) throw new Error('no row');
+
+    fireEvent.dragOver(row, { dataTransfer: { types: ['Files'] } });
+    expect(within(row).getByText("Drop to send to Kim's laptop")).toBeInTheDocument();
+    fireEvent.drop(row, { dataTransfer: { files: [new File(['x'], 'a.txt')], types: ['Files'] } });
+
+    await vi.waitFor(() =>
+      expect(view.bridge.$fn('fileSend.stagePaths')).toHaveBeenCalledWith(['/picked/a.txt']),
+    );
+    expect(useFileSendStore.getState().picked).toBe('111222333');
+  });
+
+  it('can not send to a device that is offline', () => {
+    renderWithProviders(<AnywherePanel />);
+    act(() =>
+      useAnywhereStore.getState().set({
+        ...online,
+        directory: { mine: [], teammates: [entry({ online: false, features: ['receive-files'] })] },
+      }),
+    );
+
+    expect(screen.getByRole('button', { name: "Send files to Kim's laptop" })).toBeDisabled();
   });
 });

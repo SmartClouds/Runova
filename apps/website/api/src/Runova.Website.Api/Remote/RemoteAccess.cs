@@ -33,6 +33,16 @@ internal static class RemoteAccess
         _ => false,
     };
 
+    /// <summary>
+    /// Files are sent by asking, never by password, to a computer of the owner or a teammate, and
+    /// only from an app: a phone does not send yet. Whether the computer takes files is what its
+    /// app said when it went online.
+    /// </summary>
+    public static bool MaySend(RemoteRelation relation, string mode, string? fromKind) =>
+        mode == RemoteAccessModes.Ask
+        && relation is RemoteRelation.Own or RemoteRelation.Teammate
+        && fromKind == RemoteDeviceKinds.App;
+
     /// <summary>Whether the caller may learn that the computer exists and is online.</summary>
     public static bool MayLearnOnline(RemoteRelation relation, bool unattendedEnabled) =>
         relation is RemoteRelation.Own or RemoteRelation.Teammate || unattendedEnabled;

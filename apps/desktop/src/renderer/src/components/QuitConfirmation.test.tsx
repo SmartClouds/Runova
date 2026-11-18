@@ -13,7 +13,7 @@ import { QuitConfirmation } from './QuitConfirmation';
  */
 
 function summary(overrides: Partial<OpenSessionSummary> = {}): OpenSessionSummary {
-  return { clis: 2, ssh: 0, rdp: 0, clisKeepRunning: false, ...overrides };
+  return { clis: 2, ssh: 0, rdp: 0, fileSends: 0, clisKeepRunning: false, ...overrides };
 }
 
 /** The component renders nothing of its own; the question goes through the shared modal. */

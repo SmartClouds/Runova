@@ -577,6 +577,7 @@ import { createDeployTelegram } from './deployTelegram';
 import { createDeployTraffic } from './deployTraffic';
 import { createDeployWordPress } from './deployWordPress';
 import { createErrorTracking } from './errorTracking';
+import { createFileSend } from './fileSend';
 import { createHealth } from './health';
 import { createNews } from './news';
 import { createPhrase } from './phrase';
@@ -3244,6 +3245,7 @@ const runovaApi = {
   deployWordPress,
   deployFiles,
   sftp: createSftp(subscribe),
+  fileSend: createFileSend(subscribe),
   projectCleanup: createProjectCleanup(subscribe),
   systemCleanup: createSystemCleanup(subscribe),
   runnerCleanup: createRunnerCleanup(subscribe),

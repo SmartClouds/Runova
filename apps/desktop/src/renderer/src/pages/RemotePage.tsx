@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Broadcast, Globe, Link, Monitor, Server } from '@/components/icons';
+import { Broadcast, Globe, Link, Monitor, Send, Server } from '@/components/icons';
 import { Chip, PillTabs, SECTION_HEADING } from '@/components/pageKit';
 import { AnywherePanel } from '@/components/remote/anywhere/AnywherePanel';
 import { ControllerPanel } from '@/components/remote/ControllerPanel';
@@ -9,15 +9,18 @@ import { RdpServersPanel } from '@/components/remote/RdpServersPanel';
 import { RequireRemoteSignIn } from '@/components/remote/RequireRemoteSignIn';
 import { REMOTE_CARD } from '@/components/remote/remoteCard';
 import { SshServersPanel } from '@/components/remote/SshServersPanel';
+import { SendPanel } from '@/components/remote/send/SendPanel';
+import { SendTransfersCard } from '@/components/remote/send/SendTransfersCard';
 import { TransfersCard } from '@/components/remote/TransfersCard';
 import { cn } from '@/lib/utils';
+import { useFileSendStore } from '@/stores/fileSendStore';
 import { usePageHeader } from '@/stores/pageHeaderStore';
 import { useRemoteStore } from '@/stores/remoteStore';
 
-type RemoteTab = 'anywhere' | 'host' | 'connect' | 'ssh' | 'rdp';
+type RemoteTab = 'anywhere' | 'send' | 'host' | 'connect' | 'ssh' | 'rdp';
 
 const TAB_STORAGE_KEY = 'runova.remote.tab';
-const REMOTE_TABS: readonly RemoteTab[] = ['anywhere', 'host', 'connect', 'ssh', 'rdp'];
+const REMOTE_TABS: readonly RemoteTab[] = ['anywhere', 'send', 'host', 'connect', 'ssh', 'rdp'];
 
 function readStoredTab(): RemoteTab {
   try {
@@ -56,6 +59,12 @@ export default function RemotePage(): React.JSX.Element {
     if (asked) setActiveTab(asked);
   }, [asked]);
 
+  // A device row on the Anywhere tab, or a link, can name who to send files to.
+  const sendTo = params.get('to');
+  useEffect(() => {
+    if (sendTo) useFileSendStore.getState().pick(sendTo);
+  }, [sendTo]);
+
   usePageHeader('Remote', 'Control another computer from anywhere, or over your local network.');
 
   const connected = connection?.status === 'connected';
@@ -82,6 +91,7 @@ export default function RemotePage(): React.JSX.Element {
           onChange={openTab}
           items={[
             { value: 'anywhere', label: 'Anywhere', icon: <Globe /> },
+            { value: 'send', label: 'Send files', icon: <Send /> },
             { value: 'host', label: 'Host', icon: <Broadcast /> },
             { value: 'connect', label: 'Connect', icon: <Link /> },
             { value: 'ssh', label: 'SSH', icon: <Server /> },
@@ -108,6 +118,7 @@ export default function RemotePage(): React.JSX.Element {
       <div className="grid items-start gap-2 @4xl/remote:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
           {activeTab === 'anywhere' && <AnywherePanel />}
+          {activeTab === 'send' && <SendPanel />}
           {activeTab === 'host' && (
             <RequireRemoteSignIn
               title="Sign in to host this computer"
@@ -129,6 +140,7 @@ export default function RemotePage(): React.JSX.Element {
         </div>
 
         <div className="flex min-w-0 flex-col gap-2 @4xl/remote:sticky @4xl/remote:top-2">
+          <SendTransfersCard className="max-h-[26rem]" />
           {transfers.length > 0 && (
             <TransfersCard
               title="File transfers"

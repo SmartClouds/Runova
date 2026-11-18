@@ -12,11 +12,12 @@ import { sendToWindow } from './ipc/send';
 import { openSshSessionCount } from './ipc/ssh';
 import { openCliSessionCount, terminalsKeepRunningAfterQuit } from './ipc/terminal';
 import { getMainWindow } from './mainWindow';
+import { activeFileSends } from './remote/send/active';
 import { keepWindowsHidden } from './testMode';
 
 /**
- * Closing the app while an agent CLI, an SSH connection or a Remote Desktop session is open
- * asks first. Once the user says yes (or nothing is open, or the quit is a restart the app
+ * Closing the app while an agent CLI, an SSH connection, a Remote Desktop session or a file
+ * transfer (E112) is open asks first. Once the user says yes (or nothing is open, or the quit is a restart the app
  * starts itself), every later close and quit in this run goes straight through.
  */
 
@@ -35,12 +36,16 @@ async function openSessionSummary(): Promise<OpenSessionSummary> {
     clis,
     ssh: openSshSessionCount(),
     rdp: openRdpSessionCount(),
+    fileSends: activeFileSends(),
     clisKeepRunning: clis > 0 && (await terminalsKeepRunningAfterQuit()),
   };
 }
 
 function nothingToAsk(): boolean {
-  return allowed || openCliSessionCount() + openSshSessionCount() + openRdpSessionCount() === 0;
+  return (
+    allowed ||
+    openCliSessionCount() + openSshSessionCount() + openRdpSessionCount() + activeFileSends() === 0
+  );
 }
 
 async function askNatively(summary: OpenSessionSummary): Promise<boolean> {

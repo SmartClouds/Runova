@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { type FileHandle, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +23,12 @@ import {
 } from '../../shared/remoteProtocol';
 import { setElectronPath } from '../../test/main/electronMock';
 import { tempDir } from '../../test/main/fixtures';
-import { FileTransferManager } from './fileTransfer';
+import {
+  cleanStalePartFiles,
+  type FileTransferCallbacks,
+  FileTransferManager,
+  type FileTransferOptions,
+} from './fileTransfer';
 
 /** Every file handle opened while a test runs, so a test can check one was closed. */
 const opened = vi.hoisted(() => [] as FileHandle[]);
@@ -59,25 +72,32 @@ interface Recorder {
 /** Every manager a test made, so a download it left half-received is closed before the next test. */
 const managers: FileTransferManager[] = [];
 
-function recorder(): Recorder {
+function recorder(
+  options: FileTransferOptions = {},
+  extra: Partial<Pick<FileTransferCallbacks, 'flushed'>> = {},
+): Recorder {
   const control: RemoteControlMessage[] = [];
   const binary: Uint8Array[] = [];
   const logs: { level: RemoteLogLevel; message: string }[] = [];
   const progress: RemoteFileProgress[] = [];
-  const manager = new FileTransferManager({
-    sendControl: (_ws: WebSocket, msg: RemoteControlMessage) => {
-      control.push(msg);
+  const manager = new FileTransferManager(
+    {
+      sendControl: (_ws: WebSocket, msg: RemoteControlMessage) => {
+        control.push(msg);
+      },
+      sendBinary: async (_ws: WebSocket, data: Uint8Array) => {
+        binary.push(data);
+      },
+      log: (level: RemoteLogLevel, message: string) => {
+        logs.push({ level, message });
+      },
+      emitProgress: (value: RemoteFileProgress) => {
+        progress.push(value);
+      },
+      ...extra,
     },
-    sendBinary: async (_ws: WebSocket, data: Uint8Array) => {
-      binary.push(data);
-    },
-    log: (level: RemoteLogLevel, message: string) => {
-      logs.push({ level, message });
-    },
-    emitProgress: (value: RemoteFileProgress) => {
-      progress.push(value);
-    },
-  });
+    options,
+  );
   managers.push(manager);
   return { manager, control, binary, logs, progress };
 }
@@ -645,8 +665,10 @@ describe('sending a file', () => {
     await vi.waitFor(() => expect(allOf(rec.control, 'file-part-done')).toHaveLength(1));
     rec.manager.handleControl(ws, { t: 'file-part-ack', transferId, partIndex: 0, ok: true });
 
-    // The end-to-end hash is recomputed from the acked parts, not read off the file again.
-    expect(lastOf(rec.control, 'file-complete')).toMatchObject({ hash: sha256(bytes) });
+    // The end-to-end hash is read off the file again, so a resume can never leave a part out of it.
+    await vi.waitFor(() =>
+      expect(lastOf(rec.control, 'file-complete')).toMatchObject({ hash: sha256(bytes) }),
+    );
   });
 
   it('ignores a stale ack for a part it is no longer waiting on', async () => {
@@ -1086,5 +1108,423 @@ describe('cleanup', () => {
 
     // A silently dropped ack should cost one part, not the whole transfer.
     expect(rec.progress[rec.progress.length - 1].currentPartRetry).toBe(1);
+  });
+});
+
+// --- What a send asks of the engine (E112) ---------------------------------------
+
+describe('a manager that only sends', () => {
+  it('turns an offer away, since a sender takes no files', async () => {
+    const rec = recorder({ role: 'sender' });
+    const ws = fakeSocket();
+
+    const claimed = rec.manager.handleControl(ws, {
+      t: 'file-offer',
+      transferId: 'sneaky',
+      name: 'payload.exe',
+      size: 4,
+      partSize: 4,
+      partCount: 1,
+    });
+
+    expect(claimed).toBe(true);
+    await vi.waitFor(() => expect(lastOf(rec.control, 'file-error').transferId).toBe('sneaky'));
+    expect(allOf(rec.control, 'file-resume')).toHaveLength(0);
+    expect(existsSync(join(downloads, '.runova-tmp'))).toBe(false);
+  });
+
+  it('serves no file the peer asks for', async () => {
+    const rec = recorder({ role: 'sender' });
+    const source = join(work, 'secret.txt');
+    writeFileSync(source, 'mine');
+
+    rec.manager.handleControl(fakeSocket(), { t: 'file-request', reqId: 'r1', path: source });
+
+    await vi.waitFor(() => expect(lastOf(rec.control, 'file-request-ack').ok).toBe(false));
+    expect(allOf(rec.control, 'file-offer')).toHaveLength(0);
+  });
+});
+
+describe('a manager that only receives', () => {
+  it('serves no file the peer asks for', async () => {
+    const rec = recorder({ role: 'receiver' });
+    const source = join(work, 'secret.txt');
+    writeFileSync(source, 'mine');
+
+    rec.manager.handleControl(fakeSocket(), { t: 'file-request', reqId: 'r2', path: source });
+
+    await vi.waitFor(() =>
+      expect(lastOf(rec.control, 'file-request-ack')).toMatchObject({ ok: false }),
+    );
+    expect(allOf(rec.control, 'file-offer')).toHaveLength(0);
+  });
+});
+
+describe('deciding where an offered file goes', () => {
+  it('saves where the hook says, ignoring the folder the sender named', async () => {
+    const inbox = join(work, 'Inbox');
+    const dest = join(inbox, 'Holiday');
+    const acceptOffer = vi.fn(async () => ({
+      destDir: dest,
+      partDir: join(inbox, '.runova-partial'),
+    }));
+    const rec = recorder({ role: 'receiver', acceptOffer });
+    const bytes = payload(20);
+    const elsewhere = join(work, 'Elsewhere');
+    mkdirSync(elsewhere);
+
+    const done = await receiveWhole(rec, fakeSocket(), {
+      transferId: 'hooked-1',
+      size: 20,
+      partSize: 16,
+      bytes,
+      destDir: elsewhere,
+    });
+
+    expect(acceptOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ transferId: 'hooked-1', name: 'report.bin', size: 20 }),
+    );
+    expect(done).toMatchObject({ verified: true, savedPath: join(dest, 'report.bin') });
+    expect(readFileSync(join(dest, 'report.bin'))).toEqual(bytes);
+    expect(readdirSync(elsewhere)).toEqual([]);
+  });
+
+  it('saves under the name the hook gives', async () => {
+    const inbox = join(work, 'Inbox');
+    const rec = recorder({
+      role: 'receiver',
+      acceptOffer: async () => ({ destDir: inbox, name: 'CON_.txt' }),
+    });
+
+    const done = await receiveWhole(rec, fakeSocket(), {
+      transferId: 'named-1',
+      name: 'CON.txt',
+      size: 8,
+      partSize: 8,
+      bytes: payload(8),
+    });
+
+    // Windows keeps CON for a device; only the receiver's own rule mends it.
+    expect(done.savedPath).toBe(join(inbox, 'CON_.txt'));
+  });
+
+  it('keeps the part file beside the target, not in Downloads', async () => {
+    const inbox = join(work, 'Inbox');
+    const partDir = join(inbox, '.runova-partial');
+    const rec = recorder({
+      role: 'receiver',
+      acceptOffer: async () => ({ destDir: inbox, partDir }),
+    });
+
+    await offer(rec, fakeSocket(), { transferId: 'beside-1', size: 40, partSize: 16 });
+
+    expect(readdirSync(partDir)).toEqual(['beside-1.part']);
+    expect(existsSync(join(downloads, '.runova-tmp'))).toBe(false);
+  });
+
+  it('turns an offer away when the hook says no', async () => {
+    const rec = recorder({
+      role: 'receiver',
+      acceptOffer: async () => ({ refuse: 'That file is not in the list you accepted.' }),
+    });
+
+    rec.manager.handleControl(fakeSocket(), {
+      t: 'file-offer',
+      transferId: 'unlisted',
+      name: 'extra.bin',
+      size: 4,
+      partSize: 4,
+      partCount: 1,
+    });
+
+    await vi.waitFor(() =>
+      expect(lastOf(rec.control, 'file-error')).toMatchObject({
+        transferId: 'unlisted',
+        message: 'That file is not in the list you accepted.',
+      }),
+    );
+    expect(allOf(rec.control, 'file-resume')).toHaveLength(0);
+  });
+
+  it('turns away an offer whose part count does not fit its size', async () => {
+    const rec = recorder();
+
+    rec.manager.handleControl(fakeSocket(), {
+      t: 'file-offer',
+      transferId: 'lying',
+      name: 'big.bin',
+      size: 40,
+      partSize: 16,
+      partCount: 1_000_000,
+    });
+
+    await vi.waitFor(() => expect(lastOf(rec.control, 'file-error').transferId).toBe('lying'));
+    expect(allOf(rec.control, 'file-resume')).toHaveLength(0);
+  });
+
+  it('fails the file, and tells the sender, when it can not be moved into place', async () => {
+    const inbox = join(work, 'Inbox');
+    const dest = join(inbox, 'Holiday');
+    const rec = recorder({
+      role: 'receiver',
+      acceptOffer: async () => ({ destDir: dest, partDir: join(inbox, '.runova-partial') }),
+    });
+    const ws = fakeSocket();
+    const bytes = payload(16);
+    const { transferId, key } = await offer(rec, ws, {
+      transferId: 'blocked-1',
+      size: 16,
+      partSize: 16,
+    });
+    await streamPart(rec, key, 0, bytes);
+    rec.manager.handleControl(ws, {
+      t: 'file-part-done',
+      transferId,
+      partIndex: 0,
+      hash: sha256(bytes),
+      size: 16,
+    });
+    // Someone puts a file where the folder was, so the move has nowhere to go.
+    rmSync(dest, { recursive: true, force: true });
+    writeFileSync(dest, 'in the way');
+
+    rec.manager.handleControl(ws, { t: 'file-complete', transferId, hash: sha256(bytes) });
+
+    await vi.waitFor(() =>
+      expect(lastOf(rec.control, 'file-error').message).toMatch(/could not save/i),
+    );
+    expect(allOf(rec.control, 'file-done')).toHaveLength(0);
+    expect(rec.progress[rec.progress.length - 1]).toMatchObject({ done: true, verified: false });
+  });
+});
+
+describe('a file offered again', () => {
+  it('rebinds only when the offer is for the same file', async () => {
+    const rec = recorder();
+    const ws = fakeSocket();
+    await offer(rec, ws, { transferId: 'same-1', size: 40, partSize: 16 });
+
+    rec.manager.handleControl(ws, {
+      t: 'file-offer',
+      transferId: 'same-1',
+      name: 'report.bin',
+      size: 41,
+      partSize: 16,
+      partCount: 3,
+    });
+
+    await vi.waitFor(() =>
+      expect(lastOf(rec.control, 'file-error').message).toMatch(/does not match/i),
+    );
+    expect(allOf(rec.control, 'file-resume')).toHaveLength(1);
+  });
+
+  it('answers a file it already saved with the same receipt instead of saving it twice', async () => {
+    const rec = recorder({ forgetAfterMs: 0 });
+    const ws = fakeSocket();
+    const first = await receiveWhole(rec, ws, {
+      transferId: 'twice-1',
+      size: 20,
+      partSize: 16,
+      bytes: payload(20),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    rec.manager.handleControl(ws, {
+      t: 'file-offer',
+      transferId: 'twice-1',
+      name: 'report.bin',
+      size: 20,
+      partSize: 16,
+      partCount: 2,
+    });
+
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-done')).toHaveLength(2));
+    expect(lastOf(rec.control, 'file-done')).toEqual(first);
+    expect(readdirSync(downloads).filter((name) => name.endsWith('.bin'))).toEqual(['report.bin']);
+  });
+});
+
+describe('sending under a given id and part size', () => {
+  it('offers the file with the id, name and part size it is given', async () => {
+    const rec = recorder({ role: 'sender', partBytes: 64 * 1024 });
+    const source = join(work, 'payload.bin');
+    writeFileSync(source, payload(100_000));
+
+    await rec.manager.startUpload(fakeSocket(), source, undefined, {
+      transferId: 'send-1',
+      name: 'Renamed.bin',
+    });
+
+    expect(lastOf(rec.control, 'file-offer')).toMatchObject({
+      transferId: 'send-1',
+      name: 'Renamed.bin',
+      partSize: 64 * 1024,
+      partCount: 2,
+    });
+  });
+
+  it('refuses an id it is already using', async () => {
+    const rec = recorder({ role: 'sender' });
+    const source = join(work, 'payload.bin');
+    writeFileSync(source, payload(10));
+    await rec.manager.startUpload(fakeSocket(), source, undefined, { transferId: 'dup' });
+
+    await expect(
+      rec.manager.startUpload(fakeSocket(), source, undefined, { transferId: 'dup' }),
+    ).rejects.toThrow(/already/i);
+  });
+});
+
+describe('the whole-file hash', () => {
+  it('stays right when the link drops with an ack on the way', async () => {
+    const rec = recorder({ partBytes: 64 * 1024 });
+    const bytes = payload(64 * 1024 * 2 + 10);
+    const source = join(work, 'payload.bin');
+    writeFileSync(source, bytes);
+    const first = fakeSocket();
+    await rec.manager.startUpload(first, source);
+    const transferId = lastOf(rec.control, 'file-offer').transferId;
+    rec.manager.handleControl(first, { t: 'file-resume', transferId, missingParts: [0, 1, 2] });
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-part-done')).toHaveLength(1));
+
+    // The receiver acked part 0, but the link went before the ack got here.
+    rec.manager.onConnectionLost(first);
+    const second = fakeSocket();
+    rec.manager.resumeAfterReconnect(second);
+    rec.manager.handleControl(second, { t: 'file-resume', transferId, missingParts: [1, 2] });
+    for (const part of [1, 2]) {
+      await vi.waitFor(() => expect(lastOf(rec.control, 'file-part-done').partIndex).toBe(part));
+      rec.manager.handleControl(second, {
+        t: 'file-part-ack',
+        transferId,
+        partIndex: part,
+        ok: true,
+      });
+    }
+
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-complete')).toHaveLength(1));
+    expect(lastOf(rec.control, 'file-complete').hash).toBe(sha256(bytes));
+  });
+});
+
+describe('waiting for the link to drain', () => {
+  it('starts the ack clock only once the part has left', async () => {
+    vi.useFakeTimers();
+    let release: () => void = () => undefined;
+    const flushed = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const rec = recorder({}, { flushed });
+    const ws = fakeSocket();
+    const source = join(work, 'payload.bin');
+    writeFileSync(source, payload(64));
+    await rec.manager.startUpload(ws, source);
+    const transferId = lastOf(rec.control, 'file-offer').transferId;
+    rec.manager.handleControl(ws, { t: 'file-resume', transferId, missingParts: [0] });
+    await vi.waitFor(() => expect(flushed).toHaveBeenCalled());
+
+    // A slow link still holds the part: no answer is overdue yet, however long that takes.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(allOf(rec.control, 'file-part-done')).toHaveLength(1);
+
+    release();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-part-done')).toHaveLength(2));
+  });
+});
+
+describe('waiting for a reconnect', () => {
+  it('waits as long as it is told to before giving up', async () => {
+    vi.useFakeTimers();
+    const rec = recorder({ reconnectAbandonMs: 7 * 60_000 });
+    const ws = fakeSocket();
+    await offer(rec, ws, { size: 16, partSize: 16 });
+    rec.manager.onConnectionLost(ws);
+
+    await vi.advanceTimersByTimeAsync(6 * 60_000);
+    expect(rec.manager.hasActiveTransfers()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(rec.progress[rec.progress.length - 1].error).toMatch(/Gave up waiting/);
+  });
+});
+
+describe('closing down', () => {
+  it('stops its sweep and closes half-received files when disposed', async () => {
+    const clear = vi.spyOn(globalThis, 'clearInterval');
+    const rec = recorder();
+    await offer(rec, fakeSocket(), { size: 40, partSize: 16 });
+
+    await rec.manager.dispose();
+
+    expect(clear).toHaveBeenCalled();
+    expect(lastOpened().fd).toBe(-1);
+    expect(rec.manager.hasActiveTransfers()).toBe(false);
+    clear.mockRestore();
+  });
+});
+
+describe('part files a crash left behind', () => {
+  it('removes those older than the age it is given and keeps the rest', async () => {
+    const dir = join(work, '.runova-partial');
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'old.part'), 'x');
+    writeFileSync(join(dir, 'fresh.part'), 'x');
+    writeFileSync(join(dir, 'notes.txt'), 'x');
+    const twoDaysAgo = (Date.now() - 2 * 24 * 3600_000) / 1000;
+    utimesSync(join(dir, 'old.part'), twoDaysAgo, twoDaysAgo);
+
+    await cleanStalePartFiles(dir, 24 * 3600_000);
+
+    expect(readdirSync(dir).sort()).toEqual(['fresh.part', 'notes.txt']);
+  });
+
+  it('does nothing for a folder that is not there', async () => {
+    await expect(cleanStalePartFiles(join(work, 'missing'), 1)).resolves.toBeUndefined();
+  });
+});
+
+describe('frames that arrive back to back', () => {
+  it('lands each at its own offset, so the part checks out without waiting between frames', async () => {
+    const rec = recorder();
+    const ws = fakeSocket();
+    const bytes = payload(FILE_CHUNK_BYTES * 3 + 500);
+    const { transferId, key } = await offer(rec, ws, {
+      transferId: 'burst-1',
+      size: bytes.length,
+      partSize: bytes.length,
+    });
+
+    // A fast link hands over every frame of a part before the first write is done.
+    let seq = 0;
+    for (let at = 0; at < bytes.length; at += FILE_CHUNK_BYTES) {
+      rec.manager.handleBinary(
+        encodeFileChunk({
+          transferKey: key,
+          partIndex: 0,
+          seq: seq++,
+          bytes: bytes.subarray(at, at + FILE_CHUNK_BYTES),
+        }),
+      );
+    }
+    rec.manager.handleControl(ws, {
+      t: 'file-part-done',
+      transferId,
+      partIndex: 0,
+      hash: sha256(bytes),
+      size: bytes.length,
+    });
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-part-ack')).toHaveLength(1));
+    rec.manager.handleControl(ws, { t: 'file-complete', transferId, hash: sha256(bytes) });
+    await vi.waitFor(() => expect(allOf(rec.control, 'file-done')).toHaveLength(1));
+
+    expect(lastOf(rec.control, 'file-part-ack').ok).toBe(true);
+    const done = lastOf(rec.control, 'file-done');
+    expect(done.verified).toBe(true);
+    expect(readFileSync(done.savedPath)).toEqual(bytes);
   });
 });

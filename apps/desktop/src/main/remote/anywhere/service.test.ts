@@ -11,8 +11,11 @@ import type { LinkOpener, OpenedLink } from './links';
 import {
   type AnywhereManagerPort,
   createAnywhereService,
+  DialError,
   type ManagePort,
   type SavedPasswords,
+  type SendPort,
+  type SendSender,
 } from './service';
 import { type AnywhereStoreIo, createAnywhereStore } from './settings';
 
@@ -57,6 +60,9 @@ class FakeServer {
     string,
     { host: AnywhereHubHandlers; controller: AnywhereHubHandlers; accepted: boolean }
   >();
+  readonly ends: string[] = [];
+  /** What each online app said it can do, in memory as the real hub keeps it. */
+  readonly featuresOf = new Map<number, string[]>();
   readonly connected: { sessionId: string; transport: string }[] = [];
   readonly requests: { remoteId: string; mode: string }[] = [];
   readonly agents = new Map<number, string>();
@@ -103,6 +109,7 @@ class FakeServer {
       unattendedEnabled: d.unattendedEnabled,
       online: this.online.has(d.id),
       lastSeenAt: '2026-11-08T09:00:00Z',
+      features: this.online.has(d.id) ? (this.featuresOf.get(d.id) ?? []) : [],
       owner: {
         userId: d.userId,
         displayName: this.users.get(d.userId)?.displayName ?? '',
@@ -175,10 +182,16 @@ class FakeServer {
         handlers = h;
       },
       stop: async () => {
-        for (const [id, h] of server.online) if (h === handlers) server.online.delete(id);
+        for (const [id, h] of server.online) {
+          if (h !== handlers) continue;
+          server.online.delete(id);
+          server.featuresOf.delete(id);
+        }
       },
-      goOnline: async (deviceId) => {
-        if (handlers) server.online.set(deviceId, handlers);
+      goOnline: async (deviceId, features) => {
+        if (!handlers) return;
+        server.online.set(deviceId, handlers);
+        server.featuresOf.set(deviceId, features ?? []);
       },
       requestConnect: async ({
         remoteId,
@@ -199,8 +212,18 @@ class FakeServer {
         const relation = target.userId === userId ? 'own' : teams.length > 0 ? 'teammate' : 'other';
         const allowed = mode === 'ask' ? relation !== 'other' : target.unattendedEnabled;
         if (!allowed) return none;
+        const fromDevice = server.devices.find(
+          (d) => d.id === controllerDeviceId && d.userId === userId,
+        );
+        if (intent === 'send' && (mode !== 'ask' || !fromDevice)) return none;
         const host = server.online.get(target.id);
         if (!host) return { status: 'offline', sessionId: null, relation: null, host: null };
+        if (
+          intent === 'send' &&
+          !(server.featuresOf.get(target.id) ?? []).includes('receive-files')
+        ) {
+          return none;
+        }
         const sessionId = `s${server.nextSession++}`;
         server.sessions.set(sessionId, { host, controller: handlers, accepted: false });
         const from = server.devices.find((d) => d.id === controllerDeviceId && d.userId === userId);
@@ -257,6 +280,7 @@ class FakeServer {
       },
       relayTicket: async (sessionId) => ({ path: `/relay/remote/${sessionId}`, ticket: 't' }),
       end: async (sessionId) => {
+        server.ends.push(sessionId);
         const session = server.sessions.get(sessionId);
         if (!session) return;
         server.sessions.delete(sessionId);
@@ -273,11 +297,14 @@ class FakeServer {
 
 class FakeLinks {
   private readonly waiting = new Map<string, (link: OpenedLink) => void>();
+  readonly opened: { sessionId: string; role: string; relayOnly: boolean }[] = [];
+  readonly cancelled: string[] = [];
 
   opener(): LinkOpener {
     return {
-      open: ({ sessionId }) =>
+      open: ({ sessionId, role, relayOnly }) =>
         new Promise<OpenedLink>((resolve) => {
+          this.opened.push({ sessionId, role, relayOnly });
           const other = this.waiting.get(sessionId);
           if (!other) {
             this.waiting.set(sessionId, resolve);
@@ -289,7 +316,10 @@ class FakeLinks {
           resolve({ transport: b, kind: 'direct', localFingerprint: '', remoteFingerprint: '' });
         }),
       deliverSignal: () => undefined,
-      cancel: (sessionId) => this.waiting.delete(sessionId),
+      cancel: (sessionId) => {
+        this.cancelled.push(sessionId);
+        this.waiting.delete(sessionId);
+      },
     };
   }
 }
@@ -435,6 +465,7 @@ function computer(
     installer?: ReturnType<typeof fakeInstaller>;
     registerGate?: Promise<void>;
     checkAccount?: () => void;
+    send?: SendPort;
   } = {},
 ) {
   const manager = fakeManager();
@@ -446,6 +477,7 @@ function computer(
   let state: AnywhereState | null = null;
   const hub = server.hub(userId);
   const api = server.api(userId);
+  const store = createAnywhereStore(memoryIo());
   const service = createAnywhereService({
     api: options.registerGate
       ? {
@@ -457,7 +489,7 @@ function computer(
         }
       : api,
     hub,
-    store: createAnywhereStore(memoryIo()),
+    store,
     links: links.opener(),
     manager: manager as unknown as AnywhereManagerPort,
     manage: manage as unknown as ManagePort,
@@ -478,9 +510,11 @@ function computer(
     siteUrl: 'https://runovahq.test',
     agent: installer,
     ...(options.checkAccount ? { checkAccount: options.checkAccount } : {}),
+    ...(options.send ? { send: options.send } : {}),
   });
   return {
     service,
+    store,
     installer,
     manager,
     manage,
@@ -504,21 +538,37 @@ async function until(check: () => boolean, label = 'condition'): Promise<void> {
 }
 
 /** Sam (1) owns the host and is in Ops with Kim (2); Lee (3) is a stranger. */
-async function world(options: { ringMs?: number } = {}) {
+async function world(options: { ringMs?: number; send?: boolean } = {}) {
   const server = new FakeServer();
   server.user(1, 'Sam');
   server.user(2, 'Kim');
   server.user(3, 'Lee');
   server.team(10, 'Ops', [1, 2]);
   const links = new FakeLinks();
-  const sam = computer(server, links, 1, "Sam's desk", options);
-  const kim = computer(server, links, 2, "Kim's laptop", options);
-  const lee = computer(server, links, 3, "Lee's PC", options);
+  const ports = { sam: fakeSendPort(), kim: fakeSendPort(), lee: fakeSendPort() };
+  const withSend = (port: SendPort) => ({
+    ringMs: options.ringMs,
+    ...(options.send ? { send: port } : {}),
+  });
+  const sam = computer(server, links, 1, "Sam's desk", withSend(ports.sam));
+  const kim = computer(server, links, 2, "Kim's laptop", withSend(ports.kim));
+  const lee = computer(server, links, 3, "Lee's PC", withSend(ports.lee));
   await sam.service.start();
   await kim.service.start();
   await lee.service.start();
   const samId = sam.state().device?.remoteId ?? '';
-  return { server, links, sam, kim, lee, samId };
+  return { server, links, sam, kim, lee, samId, ports };
+}
+
+/** What a computer's send service is handed: the secured links of people sending it files. */
+function fakeSendPort() {
+  const port = {
+    incoming: [] as { link: { readyState: number; close(): void }; from: SendSender }[],
+    attachIncoming: vi.fn((link: { readyState: number; close(): void }, from: SendSender) => {
+      port.incoming.push({ link, from });
+    }),
+  };
+  return port;
 }
 
 describe('Runova Anywhere service: starting', () => {
@@ -1205,5 +1255,196 @@ describe('Runova Anywhere service: a phone asks to manage this computer', () => 
     await until(() => sam.incoming.length === 2, 'asked about the new key');
 
     expect(sam.manage.sessions).toHaveLength(1);
+  });
+});
+
+// --- Sending files (E112) ----------------------------------------------------------
+
+/** Sam shows his desk to Ops, so Kim may send files to it. */
+async function sendingWorld() {
+  const w = await world({ send: true });
+  await w.sam.service.updateSettings({ teamIds: [10] });
+  await w.kim.service.refresh();
+  return w;
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+describe('Runova Anywhere service: sending files', () => {
+  it('tells the hub, and only the hub, that this computer takes files', async () => {
+    const { server } = await world({ send: true });
+
+    expect([...server.featuresOf.values()]).toEqual([
+      ['receive-files'],
+      ['receive-files'],
+      ['receive-files'],
+    ]);
+    expect(server.devices.every((d) => !('features' in d))).toBe(true);
+  });
+
+  it('says nothing about files without a send service', async () => {
+    const { server } = await world();
+
+    expect([...server.featuresOf.values()]).toEqual([[], [], []]);
+  });
+
+  it('never reports a send to the website as a session', async () => {
+    const w = await sendingWorld();
+
+    const dialed = await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+
+    expect(w.server.connected.map((c) => c.sessionId)).not.toContain(dialed.sessionId);
+  });
+
+  it('learns when a teammate computer comes online ready for files', async () => {
+    const w = await sendingWorld();
+    const samsDesk = w.kim.state().directory.teammates[0];
+
+    w.kim.hub.handlers?.presence({
+      deviceId: samsDesk.id,
+      remoteId: samsDesk.remoteId,
+      online: true,
+      features: [],
+    });
+
+    expect(w.kim.state().directory.teammates[0].features).toEqual([]);
+  });
+
+  it('opens a send next to a live control session, and hands the other side its link', async () => {
+    const w = await sendingWorld();
+    void w.kim.service.connect({ remoteId: w.samId, intent: 'control' });
+    await until(() => w.sam.incoming.length === 1, 'the control request');
+    await w.sam.service.respondIncoming(w.sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: false,
+    });
+    await until(() => w.kim.state().outgoing?.phase === 'connected', 'the control session');
+
+    const dialed = await w.kim.service.dial(w.samId, 'send');
+
+    expect(dialed.link.readyState).toBe(1);
+    expect(dialed.host).toMatchObject({ remoteId: w.samId, name: "Sam's desk", kind: 'app' });
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+    expect(w.ports.sam.incoming[0].from).toMatchObject({
+      displayName: 'Kim',
+      deviceName: "Kim's laptop",
+      relation: 'teammate',
+      teams: ['Ops'],
+    });
+    expect(w.kim.state().outgoing?.phase).toBe('connected');
+    // Nobody is asked at the hub for a send: the list of files comes over the link first.
+    expect(w.sam.incoming).toHaveLength(1);
+  });
+
+  it('carries two sends at once', async () => {
+    const w = await sendingWorld();
+
+    const [first, second] = await Promise.all([
+      w.kim.service.dial(w.samId, 'send'),
+      w.kim.service.dial(w.samId, 'send'),
+    ]);
+
+    expect(first.sessionId).not.toBe(second.sessionId);
+    await until(() => w.ports.sam.incoming.length === 2, 'both hosted sends');
+  });
+
+  it('is turned away by a computer that takes files only from its own devices', async () => {
+    const w = await sendingWorld();
+    await w.sam.service.updateSettings({ receiveFrom: 'own' });
+
+    await expect(w.kim.service.dial(w.samId, 'send')).rejects.toMatchObject({
+      reason: 'declined',
+    });
+    expect(w.ports.sam.incoming).toHaveLength(0);
+  });
+
+  it('takes no more than four sends at a time', async () => {
+    const w = await sendingWorld();
+    for (let i = 0; i < 4; i++) await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 4, 'four hosted sends');
+
+    const fifth = w.kim.service.dial(w.samId, 'send');
+
+    await expect(fifth).rejects.toBeInstanceOf(DialError);
+    await expect(fifth).rejects.toMatchObject({ reason: 'declined' });
+  });
+
+  it('says when the other computer is offline', async () => {
+    const w = await sendingWorld();
+    await w.sam.service.stop();
+
+    await expect(w.kim.service.dial(w.samId, 'send')).rejects.toMatchObject({ reason: 'offline' });
+  });
+
+  it('stops before sending anything when the other computer has a new key', async () => {
+    const w = await sendingWorld();
+    await w.kim.store.setPin(w.samId, 'a-key-from-before');
+
+    await expect(w.kim.service.dial(w.samId, 'send')).rejects.toMatchObject({
+      reason: 'key-changed',
+    });
+    expect(w.ports.sam.incoming).toHaveLength(0);
+  });
+
+  it('ends the hub session once a send link closes, so sessions never pile up', async () => {
+    const w = await sendingWorld();
+    const dialed = await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+
+    dialed.link.close();
+
+    await until(() => w.server.ends.includes(dialed.sessionId), 'the session ending');
+    expect(w.server.sessions.has(dialed.sessionId)).toBe(false);
+  });
+
+  it('keeps a live send link when the hub forgets its session', async () => {
+    const w = await sendingWorld();
+    const dialed = await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+    const hosted = w.ports.sam.incoming[0].link;
+
+    // The other side's hub connection blinked, and the hub ended every session it had.
+    w.sam.hub.handlers?.ended({ sessionId: dialed.sessionId, reason: 'left' });
+    w.kim.hub.handlers?.ended({ sessionId: dialed.sessionId, reason: 'left' });
+    await tick();
+
+    expect(dialed.link.readyState).toBe(1);
+    expect(hosted.readyState).toBe(1);
+    expect(w.links.cancelled).not.toContain(dialed.sessionId);
+  });
+
+  it('goes through the relay only when this computer always uses it', async () => {
+    const w = await sendingWorld();
+    await w.kim.service.updateSettings({ alwaysRelay: true });
+
+    const dialed = await w.kim.service.dial(w.samId, 'send');
+
+    expect(
+      w.links.opened.find((o) => o.sessionId === dialed.sessionId && o.role === 'controller'),
+    ).toMatchObject({ relayOnly: true });
+  });
+
+  it('closes its send links when it signs out', async () => {
+    const w = await sendingWorld();
+    await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+    const hosted = w.ports.sam.incoming[0].link;
+
+    await w.kim.service.stop();
+
+    await until(() => hosted.readyState !== 1, 'the hosted link closing');
+  });
+
+  it('never shows a send as someone connected to this computer', async () => {
+    const w = await sendingWorld();
+
+    await w.kim.service.dial(w.samId, 'send');
+    await until(() => w.ports.sam.incoming.length === 1, 'the hosted send');
+
+    expect(w.sam.state().hosted).toEqual([]);
+    expect(w.sam.manager.hostPeers).toEqual([]);
+    expect(w.sam.notices).toEqual([]);
   });
 });

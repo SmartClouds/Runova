@@ -17,7 +17,8 @@ internal sealed record RemoteSessionParties(
     long ControllerUserId,
     long? ControllerDeviceId,
     string ControllerConnectionId,
-    string Mode);
+    string Mode,
+    string Intent);
 
 /// <summary>A request between two computers, from ringing until either side leaves.</summary>
 internal sealed class RemoteSession(string id, RemoteSessionParties parties, DateTimeOffset createdAt)

@@ -58,6 +58,7 @@ import { useShortcutLabel } from '@/stores/shortcutStore';
 import { useTerminalStore } from '@/stores/terminalStore';
 import { terminalTabLabel, useWorkspaceStore } from '@/stores/workspaceStore';
 import { AccountSyncSegment } from './AccountSyncSegment';
+import { FileSendSegment } from './FileSendSegment';
 import { GithubAccountSegment } from './GithubAccountSegment';
 import { NetworkSegment } from './NetworkSegment';
 import { SftpTransfersSegment } from './SftpTransfersSegment';
@@ -854,6 +855,7 @@ const BUSY_LABEL: Record<string, string> = {
   terminals: 'a command in a terminal',
   ssh: 'an SSH session',
   sftp: 'file transfers',
+  send: 'files being sent or received',
 };
 
 /** Whether the machine may sleep while Runova runs, and what is holding it awake. */
@@ -1312,6 +1314,7 @@ export function StatusBar(): React.JSX.Element {
         <RelayPlanStatusSegment />
         <RunSegments />
         <SftpTransfersSegment />
+        <FileSendSegment />
         <TerminalsSegment />
         <UsageLimitSegments />
         <AccountSyncSegment />

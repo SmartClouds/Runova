@@ -15,7 +15,8 @@ public class RemoteSessionRegistryTests
             ControllerUserId: 4,
             ControllerDeviceId: 9,
             ControllerConnectionId: controller,
-            Mode: RemoteAccessModes.Ask));
+            Mode: RemoteAccessModes.Ask,
+            Intent: RemoteIntents.Control));
 
     [Fact]
     public void A_session_has_an_unguessable_id_and_starts_ringing()
