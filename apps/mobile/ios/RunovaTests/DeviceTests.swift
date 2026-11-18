@@ -283,7 +283,8 @@ func fixtureView(
     encryption: EncryptionScreen? = nil,
     qrSignIn: QrSignInView? = nil,
     lock: LockScreen = noLock,
-    passcode: PasscodeSettingsScreen = noPasscode
+    passcode: PasscodeSettingsScreen = noPasscode,
+    recoveryPhrases: RecoveryPhrasesScreen = noPhrases
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -293,8 +294,12 @@ func fixtureView(
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
-        lock: lock, passcode: passcode)
+        lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases)
 }
+
+/// The recovery phrases screen with nothing scanned (E108).
+let noPhrases = RecoveryPhrasesScreen(
+    items: [], revealed: nil, biometric: nil, confirmDelete: nil, notice: nil, error: nil)
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.
 @MainActor

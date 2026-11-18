@@ -21,6 +21,7 @@ struct RunovaApp: App {
                     // A Cloudflare secret on show hides the same way, and so does the whole app with a passcode set.
                     if phase != .active
                         && (model.view?.vault.onShow == true || model.view?.cloudflare.revealedSecret != nil
+                            || model.view?.recoveryPhrases.revealed != nil
                             || model.view?.lock.enabled == true)
                     {
                         RunovaTokens.dark.background.ignoresSafeArea()

@@ -237,7 +237,7 @@ impl Runner {
         self.view.vault = VaultScreen::default();
     }
 
-    fn vault_unlock(&mut self, password: String) {
+    pub(crate) fn vault_unlock(&mut self, password: String) {
         let Some(client) = self.client() else {
             return;
         };
@@ -316,7 +316,9 @@ impl Runner {
     }
 
     fn biometric_result(&mut self, id: u64, confirmed: bool) {
-        if self.app_lock_biometric_result(id, confirmed) {
+        if self.app_lock_biometric_result(id, confirmed)
+            || self.phrase_biometric_result(id, confirmed)
+        {
             return;
         }
         if self.view.vault.biometric.as_ref().map(|b| b.id) != Some(id) {

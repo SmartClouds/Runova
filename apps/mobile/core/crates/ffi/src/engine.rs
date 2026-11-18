@@ -313,6 +313,7 @@ pub(crate) struct Runner {
     pub(crate) qr_generation: u64,
     pub(crate) cloudflare: crate::cloudflare::CloudflareState,
     pub(crate) app_lock: crate::app_lock::LockState,
+    pub(crate) pending_phrase: Option<crate::recovery_phrases::PendingPhraseReveal>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -390,6 +391,7 @@ impl Runner {
             qr_generation: 0,
             cloudflare: Default::default(),
             app_lock: Default::default(),
+            pending_phrase: None,
         }
     }
 
@@ -415,6 +417,7 @@ impl Runner {
             self.deps.secure.remove(key.to_owned());
         }
         self.remove_app_lock();
+        self.remove_recovery_phrases();
     }
 
     /// Puts the question on screen and runs `task` only if the answer is yes.
@@ -611,8 +614,15 @@ impl Runner {
         if self.published.as_ref() != Some(&self.view) {
             if let Some(old) = self.published.take() {
                 let AppView {
-                    vault, cloudflare, ..
+                    vault,
+                    cloudflare,
+                    recovery_phrases,
+                    ..
                 } = old;
+                if let Some(mut shown) = recovery_phrases.revealed {
+                    shown.words.iter_mut().for_each(Zeroize::zeroize);
+                    shown.qr_payload.zeroize();
+                }
                 if let Some(mut secret) = vault.revealed {
                     secret.value.zeroize();
                 }
@@ -968,6 +978,7 @@ impl Runner {
                 self.view.vault.in_background = true;
                 self.let_go_at = Some(Instant::now() + Duration::from_millis(grace_ms));
                 self.app_lock_backgrounded();
+                self.phrase_hide();
             }
             Command::Lifecycle(AppLifecycle::Foregrounded) => {
                 self.view.vault.in_background = false;
@@ -990,6 +1001,7 @@ impl Runner {
         self.view.show_intro = self.deps.secure.get(INTRO_SEEN.to_owned()).is_none();
         self.view.app_version = self.deps.app_version.clone();
         self.load_app_lock();
+        self.load_recovery_phrases();
         if self.deps.session.is_signed_in().await {
             self.view.auth = AuthState::SignedIn;
             self.boot();

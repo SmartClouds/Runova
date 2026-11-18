@@ -36,6 +36,7 @@ struct AppIntents {
     var prompts = PromptIntents()
     var lock = LockIntents()
     var passcode = PasscodeIntents()
+    var phrases = PhraseIntents()
 }
 
 let appTabs = [

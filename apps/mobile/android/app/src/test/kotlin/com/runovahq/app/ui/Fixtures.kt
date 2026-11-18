@@ -27,6 +27,7 @@ import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.QrSignInView
+import uniffi.runova_ffi.RecoveryPhrasesScreen
 import uniffi.runova_ffi.RemoteView
 import uniffi.runova_ffi.StatusScreen
 import uniffi.runova_ffi.StudioScreen
@@ -111,6 +112,9 @@ fun passcodeScreen(
 
 val noPasscode = passcodeScreen(open = false)
 
+/** The recovery phrases screen with nothing scanned (E108). */
+val noPhrases = RecoveryPhrasesScreen(emptyList(), null, null, null, null, null)
+
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
     auth: AuthState = AuthState.SIGNED_IN,
@@ -150,6 +154,7 @@ fun appView(
     qrSignIn: QrSignInView? = null,
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
+    recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
 ) = AppView(
     auth,
     true,
@@ -191,4 +196,5 @@ fun appView(
     qrSignIn,
     lock,
     passcode,
+    recoveryPhrases,
 )

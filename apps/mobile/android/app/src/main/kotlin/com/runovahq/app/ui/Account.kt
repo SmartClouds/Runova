@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,6 +119,11 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         PasscodeSettings(view.passcode, intents.passcode)
         return
     }
+    var phrasesOpen by rememberSaveable { mutableStateOf(false) }
+    if (phrasesOpen) {
+        RecoveryPhrasesView(view.recoveryPhrases, intents.phrases) { phrasesOpen = false }
+        return
+    }
     if (team != null) {
         TeamScreen(team, intents.account)
         return
@@ -127,7 +133,9 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         if (profile == null) {
             LoadingRows()
         } else {
-            AccountList(profile, account, view.encryption, view.lock.enabled, intents)
+            AccountList(profile, account, view.encryption, view.lock.enabled, view.recoveryPhrases.items.size, intents) {
+                phrasesOpen = true
+            }
         }
     }
 }
@@ -160,7 +168,9 @@ private fun AccountList(
     account: AccountScreen,
     encryption: EncryptionScreen?,
     lockEnabled: Boolean,
+    phraseCount: Int,
     intents: AppIntents,
+    openPhrases: () -> Unit,
 ) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
         item(key = "profile") { ProfileCard(profile) }
@@ -173,6 +183,18 @@ private fun AccountList(
                 onClick = intents.passcode.open,
                 trailing = {
                     if (lockEnabled) RunovaBadge("On", BadgeTone.Success, dot = true) else RunovaBadge("Off")
+                },
+            )
+        }
+        item(key = "phrases") {
+            RunovaListRow(
+                title = "Recovery phrases",
+                detail = "Scanned from a computer, kept locked",
+                icon = RunovaIcons.Key,
+                onClick = openPhrases,
+                trailing = {
+                    val (text, tone) = phraseBadge(phraseCount)
+                    RunovaBadge(text, tone)
                 },
             )
         }

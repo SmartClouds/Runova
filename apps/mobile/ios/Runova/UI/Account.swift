@@ -70,9 +70,13 @@ struct AccountTab: View {
     let view: AppView
     let intents: AppIntents
 
+    @State private var phrasesOpen = false
+
     var body: some View {
         if view.passcode.open {
             PasscodeSettings(screen: view.passcode, intents: intents.passcode)
+        } else if phrasesOpen {
+            RecoveryPhrasesView(screen: view.recoveryPhrases, intents: intents.phrases) { phrasesOpen = false }
         } else if let team = view.account.team {
             TeamScreen(team: team, intents: intents.account)
         } else {
@@ -80,7 +84,8 @@ struct AccountTab: View {
                 if let profile = view.account.profile {
                     AccountList(
                         profile: profile, account: view.account, encryption: view.encryption,
-                        lockEnabled: view.lock.enabled, intents: intents)
+                        lockEnabled: view.lock.enabled, phraseCount: view.recoveryPhrases.items.count,
+                        intents: intents, openPhrases: { phrasesOpen = true })
                 } else {
                     LoadingRows()
                 }
@@ -130,7 +135,9 @@ private struct AccountList: View {
     let account: AccountScreen
     let encryption: EncryptionScreen?
     let lockEnabled: Bool
+    let phraseCount: Int
     let intents: AppIntents
+    let openPhrases: () -> Void
 
     @Environment(\.palette) private var palette
 
@@ -163,6 +170,18 @@ private struct AccountList: View {
                     .rowCard()
                 }
                 .buttonStyle(.plain)
+                Button(action: openPhrases) {
+                    HStack(spacing: 8) {
+                        RunovaListRow(
+                            title: "Recovery phrases", detail: "Scanned from a computer, kept locked",
+                            icon: RunovaIcons.key, flat: true)
+                        RunovaBadge(text: phraseCount == 0 ? "None" : "\(phraseCount)", tone: phraseCount == 0 ? .neutral : .primary)
+                    }
+                    .padding(.trailing, 12)
+                    .rowCard()
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
                 if let encryption {
                     Heading(text: "End-to-end encryption")
                     EncryptionCard(screen: encryption, intents: intents.account)

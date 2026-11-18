@@ -3,4 +3,5 @@
 pub mod cipher;
 pub mod handshake;
 pub mod passcode;
+pub mod phrase;
 pub mod sealed;

@@ -1392,6 +1392,8 @@ pub struct AppView {
     pub lock: LockScreen,
     /// Settings for the app lock, from the Account tab.
     pub passcode: PasscodeSettingsScreen,
+    /// Recovery phrases scanned from a computer (E108).
+    pub recovery_phrases: RecoveryPhrasesScreen,
 }
 
 impl AppView {
@@ -1437,12 +1439,14 @@ impl AppView {
             qr_sign_in: None,
             lock: LockScreen::default(),
             passcode: PasscodeSettingsScreen::default(),
+            recovery_phrases: RecoveryPhrasesScreen::default(),
         }
     }
 }
 
 pub use crate::app_lock_view::*;
 pub use crate::cloudflare_view::*;
+pub use crate::recovery_phrases_view::*;
 
 #[uniffi::export(with_foreign)]
 pub trait ViewListener: Send + Sync {

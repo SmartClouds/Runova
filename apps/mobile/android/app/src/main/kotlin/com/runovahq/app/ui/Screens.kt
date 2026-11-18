@@ -87,6 +87,7 @@ data class AppIntents(
     val prompts: PromptIntents = PromptIntents(),
     val lock: LockIntents = LockIntents(),
     val passcode: PasscodeIntents = PasscodeIntents(),
+    val phrases: PhraseIntents = PhraseIntents(),
 )
 
 val AppTabs = listOf(

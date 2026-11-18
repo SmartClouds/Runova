@@ -312,8 +312,11 @@ async fn each_server_says_whether_it_holds_a_dns_token_for_the_domain() {
         servers[0].detail,
         "Holds a token Runova made for example.com, for wildcard certificates."
     );
+    // Both servers are asked at once, so the calls can land in either order.
+    let mut asked = world.computer.params_of("cloudflare.dnsTokens");
+    asked.sort_by_key(|p| p.as_ref().map(|p| p["serverId"].to_string()));
     assert_eq!(
-        world.computer.params_of("cloudflare.dnsTokens"),
+        asked,
         vec![
             Some(json!({"serverId": "srv-1"})),
             Some(json!({"serverId": "srv-2"}))

@@ -25,6 +25,8 @@ pub mod notifications;
 pub mod ops;
 pub mod palette;
 pub mod qr;
+pub mod recovery_phrases;
+pub(crate) mod recovery_phrases_view;
 pub mod remote;
 pub mod secure;
 pub mod status;

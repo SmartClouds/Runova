@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Security
 import LocalAuthentication
+import UniformTypeIdentifiers
 import UserNotifications
 import SwiftUI
 
@@ -176,6 +177,15 @@ final class AppModel: NSObject, ObservableObject {
                 setAutoLock: { [weak self] in self?.engine?.setAutoLock(choice: $0) },
                 setBiometric: { [weak self] in self?.engine?.setBiometricUnlock(on: $0) },
                 lockNow: { [weak self] in self?.engine?.lockNow() }),
+            phrases: PhraseIntents(
+                scan: { [weak self] in self?.engine?.phraseScan(text: $0) },
+                reveal: { [weak self] in self?.engine?.phraseReveal(id: $0) },
+                hide: { [weak self] in self?.engine?.phraseHide() },
+                delete: { [weak self] in self?.engine?.phraseDelete(id: $0) },
+                deleteAnswer: { [weak self] in self?.engine?.phraseDeleteAnswer(yes: $0) },
+                unlockVault: { [weak self] in self?.engine?.phraseUnlockVault(id: $0) },
+                copy: { Self.copySensitive($0) },
+                save: { Self.savePhrase(fileName: $0, text: $1) }),
             notifications: NotificationIntents(
                 open: { [weak self] in self?.engine?.notificationOpen(id: $0) },
                 dismissBanner: { [weak self] in self?.engine?.notificationDismissBanner() },
@@ -211,6 +221,25 @@ final class AppModel: NSObject, ObservableObject {
             .appendingPathComponent("Videos", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder.path
+    }
+
+    /// A recovery phrase on the pasteboard (E108): this device only, never Handoff, gone after a minute.
+    private static func copySensitive(_ text: String) {
+        UIPasteboard.general.setItems(
+            [[UTType.plainText.identifier: text]],
+            options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(60)])
+    }
+
+    /// Offers the phrase as a text file through the share sheet, which includes Save to Files. The
+    /// file is written with complete protection and removed once the sheet closes.
+    private static func savePhrase(fileName: String, text: String) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        guard (try? Data(text.utf8).write(to: url, options: [.atomic, .completeFileProtection])) != nil else { return }
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.excludedActivityTypes = [.postToFacebook, .postToTwitter, .postToWeibo, .assignToContact, .addToReadingList]
+        sheet.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: url) }
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        scene?.keyWindow?.rootViewController?.present(sheet, animated: true)
     }
 
     private static func share(_ path: String) {
@@ -348,7 +377,9 @@ final class AppModel: NSObject, ObservableObject {
     /// Runs the phone's own check. The core only asks for the value if this says yes.
     func confirmIdentityIfAsked(_ view: AppView) {
         // The same check guards a Cloudflare token pasted on the phone.
-        guard let request = view.vault.biometric ?? view.cloudflare.biometric, request.id != lastBiometric else { return }
+        guard let request = view.vault.biometric ?? view.cloudflare.biometric ?? view.recoveryPhrases.biometric,
+            request.id != lastBiometric
+        else { return }
         lastBiometric = request.id
         let id = request.id
         let context = LAContext()

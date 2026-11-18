@@ -27,6 +27,9 @@ import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import android.content.ClipData
+import android.content.ClipDescription
+import android.os.PersistableBundle
+import android.widget.Toast
 import android.content.ClipboardManager
 import android.content.Context
 import android.view.WindowManager
@@ -41,6 +44,7 @@ import com.runovahq.app.ui.DeployIntents
 import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.LockIntents
 import com.runovahq.app.ui.PasscodeIntents
+import com.runovahq.app.ui.PhraseIntents
 import com.runovahq.app.ui.NotificationIntents
 import com.runovahq.app.ui.tabFor
 import com.google.firebase.messaging.FirebaseMessaging
@@ -323,6 +327,16 @@ class MainActivity : FragmentActivity(), ViewListener {
                 forgot = { engine.lockForgot() },
                 forgotConfirm = { engine.lockForgotConfirm(it) },
             ),
+            phrases = PhraseIntents(
+                scan = { engine.phraseScan(it) },
+                reveal = { engine.phraseReveal(it) },
+                hide = { engine.phraseHide() },
+                delete = { engine.phraseDelete(it) },
+                deleteAnswer = { engine.phraseDeleteAnswer(it) },
+                unlockVault = { engine.phraseUnlockVault(it) },
+                copy = { copySensitive(it) },
+                save = { name, text -> savePhrase(name, text) },
+            ),
             passcode = PasscodeIntents(
                 open = { engine.passcodeOpen() },
                 close = { engine.passcodeClose() },
@@ -437,6 +451,39 @@ class MainActivity : FragmentActivity(), ViewListener {
 
     private fun clipboard() = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
+    /**
+     * A recovery phrase on the clipboard (E108): marked sensitive so the keyboard and the clipboard
+     * preview do not show it, and cleared after a minute if it is still the phrase.
+     */
+    private fun copySensitive(text: String) {
+        val clip = ClipData.newPlainText("Recovery phrase", text)
+        clip.description.extras = PersistableBundle().apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        }
+        clipboard().setPrimaryClip(clip)
+        window.decorView.postDelayed({
+            val now = clipboard().primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+            if (now == text) clipboard().clearPrimaryClip()
+        }, 60_000)
+        Toast.makeText(this, "Copied. The clipboard clears in a minute.", Toast.LENGTH_SHORT).show()
+    }
+
+    private var pendingPhraseFile: String? = null
+
+    private val createPhraseFile = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        val text = pendingPhraseFile
+        pendingPhraseFile = null
+        if (uri == null || text == null) return@registerForActivityResult
+        contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
+        Toast.makeText(this, "Saved the recovery phrase.", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Asks where to save the phrase with the system's file picker, then writes it there. */
+    private fun savePhrase(fileName: String, text: String) {
+        pendingPhraseFile = text
+        createPhraseFile.launch(fileName)
+    }
+
     /** The app's own folder for videos, which needs no storage permission. */
     private fun videosFolder(): String =
         (getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: filesDir).absolutePath
@@ -544,13 +591,14 @@ class MainActivity : FragmentActivity(), ViewListener {
         // A Cloudflare secret on show is kept out of screenshots the same way.
         // Before Android 13 the only way to keep a locked app out of Recents is FLAG_SECURE.
         val hideLocked = view.lock.enabled && Build.VERSION.SDK_INT < 33
-        if (view.vault.onShow || view.cloudflare.revealedSecret != null || hideLocked) {
+        val phraseShown = view.recoveryPhrases.revealed != null
+        if (view.vault.onShow || view.cloudflare.revealedSecret != null || phraseShown || hideLocked) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         // The same check guards a Cloudflare token pasted on the phone.
-        val request = view.vault.biometric ?: view.cloudflare.biometric ?: return
+        val request = view.vault.biometric ?: view.cloudflare.biometric ?: view.recoveryPhrases.biometric ?: return
         if (request.id != lastBiometric) {
             lastBiometric = request.id
             confirmIdentity(request)
