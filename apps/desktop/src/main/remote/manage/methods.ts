@@ -17,6 +17,7 @@ import {
 import { ManageError, type ManageMethods } from './session';
 import { type ManageStatusDeps, statusMethods } from './statusMethods';
 import { type ManageStudioDeps, studioDownloads, studioMethods } from './studioMethods';
+import { type ManageTrafficDeps, trafficMethods } from './trafficMethods';
 import { type ManageVaultDeps, vaultMethods } from './vaultMethods';
 
 export interface TerminalSnapshot {
@@ -41,6 +42,8 @@ export interface ManageMethodDeps {
   status: ManageStatusDeps;
   vault: ManageVaultDeps;
   deploy: ManageDeployDeps;
+  /** Website traffic and attacks of a Deploy server (E111). */
+  traffic: ManageTrafficDeps;
   cloudflare: ManageCloudflareDeps;
   cloudflareOrigin: ManageCloudflareOriginDeps;
   /** Takes a phone off this computer's trusted list. */
@@ -118,6 +121,7 @@ export function createManageMethods(deps: ManageMethodDeps): ManageMethods {
       ...statusMethods(deps.status),
       ...vaultMethods(deps.vault),
       ...deployMethods(deps.deploy),
+      ...trafficMethods(deps.traffic),
       ...cloudflareMethods(deps.cloudflare),
       ...cloudflareOriginMethods(deps.cloudflareOrigin),
       ...opsMethods(deps.monitoring, deps.pipelines, deps.errorTracking),

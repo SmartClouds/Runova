@@ -144,6 +144,8 @@ pub enum NotificationDestination {
     Inbox,
     Monitors,
     Account,
+    /// A Deploy server, or for an attack that site's attacks (E111).
+    Deploy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -154,6 +156,8 @@ pub struct NotificationItemView {
     pub category: String,
     pub destination: NotificationDestination,
     pub read: bool,
+    /// What it is about, as the computer named it: a server, or `<server>:<site>` for an attack.
+    pub item_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -551,12 +555,14 @@ pub struct ContainerLogsView {
     pub lines: Vec<LogLineView>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+#[derive(Debug, Clone, Default, PartialEq, uniffi::Record)]
 pub struct DeployScreen {
     pub servers: Vec<DeployServerView>,
     pub loading: bool,
     pub server: Option<ServerDetailView>,
     pub logs: Option<ContainerLogsView>,
+    /// The open server's website traffic and attacks (E111).
+    pub traffic: Option<TrafficScreen>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Enum)]
@@ -1447,6 +1453,7 @@ impl AppView {
 pub use crate::app_lock_view::*;
 pub use crate::cloudflare_view::*;
 pub use crate::recovery_phrases_view::*;
+pub use crate::traffic_view::*;
 
 #[uniffi::export(with_foreign)]
 pub trait ViewListener: Send + Sync {

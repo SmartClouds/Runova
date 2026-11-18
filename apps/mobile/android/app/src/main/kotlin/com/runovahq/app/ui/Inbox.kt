@@ -56,6 +56,7 @@ fun tabFor(destination: NotificationDestination, connected: Boolean): String = w
     NotificationDestination.MONITORS -> if (connected) "monitoring" else "monitors"
     NotificationDestination.ACCOUNT -> if (connected) "notifications" else "account"
     NotificationDestination.INBOX -> if (connected) "notifications" else "inbox"
+    NotificationDestination.DEPLOY -> if (connected) "deploy" else "inbox"
 }
 
 private fun isConnected(view: AppView) = view.connection != null

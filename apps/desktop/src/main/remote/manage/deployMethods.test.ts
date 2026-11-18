@@ -239,7 +239,10 @@ describe('deploy methods', () => {
   });
 
   it('runs every method the protocol names for deploy', () => {
-    const named = Object.keys(MANAGE_METHODS).filter((name) => name.startsWith('deploy.'));
+    // Website traffic (E111) has its own group, in trafficMethods.
+    const named = Object.keys(MANAGE_METHODS).filter(
+      (name) => name.startsWith('deploy.') && !name.startsWith('deploy.traffic'),
+    );
 
     expect(Object.keys(deployMethods(deps())).sort()).toEqual(named.sort());
   });

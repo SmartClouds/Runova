@@ -242,6 +242,10 @@ fn each_category_opens_the_screen_it_is_about() {
     );
     assert_eq!(
         notification_destination("deploys".into()),
+        NotificationDestination::Deploy
+    );
+    assert_eq!(
+        notification_destination("agent-needs-input".into()),
         NotificationDestination::Inbox
     );
 }

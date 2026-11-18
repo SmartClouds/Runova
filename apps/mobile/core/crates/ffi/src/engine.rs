@@ -312,6 +312,7 @@ pub(crate) struct Runner {
     pub(crate) qr_task: Option<JoinHandle<()>>,
     pub(crate) qr_generation: u64,
     pub(crate) cloudflare: crate::cloudflare::CloudflareState,
+    pub(crate) traffic: crate::traffic::TrafficState,
     pub(crate) app_lock: crate::app_lock::LockState,
     pub(crate) pending_phrase: Option<crate::recovery_phrases::PendingPhraseReveal>,
 }
@@ -390,6 +391,7 @@ impl Runner {
             qr_task: None,
             qr_generation: 0,
             cloudflare: Default::default(),
+            traffic: Default::default(),
             app_lock: Default::default(),
             pending_phrase: None,
         }
@@ -594,6 +596,8 @@ impl Runner {
         self.view.status = StatusScreen::default();
         self.clear_vault();
         self.view.deploy = DeployScreen::default();
+        // Where a tapped notification asked to go waits for the computer it is connecting to.
+        self.traffic = crate::traffic::TrafficState::keeping_target(&mut self.traffic);
         self.clear_cloudflare();
         self.view.pipelines = PipelinesScreen::default();
         self.view.monitoring.local.clear();

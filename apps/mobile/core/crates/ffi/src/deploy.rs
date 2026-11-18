@@ -3,7 +3,7 @@
 use crate::engine::{Engine, Runner};
 use crate::view::{
     AppView, BackupView, ConfirmView, ContainerLogsView, ContainerView, DeployServerView,
-    LogLineView, ProblemSeverity, ProblemView, ServerDetailView, StackView,
+    LogLineView, ProblemSeverity, ProblemView, ServerDetailView, StackView, TrafficTab,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -151,6 +151,20 @@ fn apply_overview(server: &mut ServerDetailView, dto: OverviewDto) {
     });
 }
 
+fn server_views(items: Vec<ServerDto>) -> Vec<DeployServerView> {
+    items
+        .into_iter()
+        .map(|s| DeployServerView {
+            online: s.state == "online",
+            state_label: state_label(&s.state),
+            id: s.id,
+            name: s.name,
+            host: s.host,
+            problem: s.problem,
+        })
+        .collect()
+}
+
 fn asking(title: &str, detail: String, action: &str) -> ConfirmView {
     ConfirmView {
         title: title.to_owned(),
@@ -162,6 +176,13 @@ fn asking(title: &str, detail: String, action: &str) -> ConfirmView {
 
 impl Runner {
     pub(crate) fn refresh_deploy(&mut self) {
+        if let Some((server, site)) = self.traffic.pending.take() {
+            self.reach_server(server, site);
+        }
+        if self.view.deploy.traffic.is_some() {
+            self.refresh_traffic();
+            return;
+        }
         let overview_due = self.ticks.is_multiple_of(OVERVIEW_EVERY_TICKS);
         self.ticks = self.ticks.wrapping_add(1);
         if overview_due {
@@ -178,20 +199,74 @@ impl Runner {
             None,
             |view: &mut AppView, items: Vec<ServerDto>| {
                 view.deploy.loading = false;
-                view.deploy.servers = items
-                    .into_iter()
-                    .map(|s| DeployServerView {
-                        online: s.state == "online",
-                        state_label: state_label(&s.state),
-                        id: s.id,
-                        name: s.name,
-                        host: s.host,
-                        problem: s.problem,
-                    })
-                    .collect();
+                view.deploy.servers = server_views(items);
             },
             |view| view.deploy.loading = false,
         );
+    }
+
+    pub(crate) fn open_server(&mut self, id: String) {
+        let name = self
+            .view
+            .deploy
+            .servers
+            .iter()
+            .find(|s| s.id == id)
+            .map_or_else(String::new, |s| s.name.clone());
+        self.view.deploy.traffic = None;
+        self.view.deploy.server = Some(ServerDetailView {
+            id,
+            name,
+            loading: true,
+            unreachable: None,
+            containers: Vec::new(),
+            stacks: Vec::new(),
+            problems: Vec::new(),
+            backup: None,
+        });
+        self.load_overview();
+    }
+
+    /// What a Deploy notification is about (E111): `<server>`, or `<server>:<site>` for an attack,
+    /// which opens that site's attacks. Anything that is not a saved server opens only the list.
+    pub(crate) fn open_deploy_target(&mut self, target: String) {
+        let (server, site) = match target.split_once(':') {
+            Some((server, site)) => (server.to_owned(), Some(site.to_owned())),
+            None => (target, None),
+        };
+        self.reach_server(server, site);
+    }
+
+    fn reach_server(&mut self, server: String, site: Option<String>) {
+        if self.session.is_none() {
+            self.traffic.pending = Some((server, site));
+            return;
+        }
+        if !self.view.deploy.servers.is_empty() {
+            self.go_to_server(server, site);
+            return;
+        }
+        self.cf(
+            "deploy.servers",
+            None,
+            move |r, result: Result<Vec<ServerDto>, String>| {
+                if let Ok(items) = result {
+                    r.view.deploy.servers = server_views(items);
+                    r.go_to_server(server, site);
+                }
+            },
+        );
+    }
+
+    fn go_to_server(&mut self, server: String, site: Option<String>) {
+        if !self.view.deploy.servers.iter().any(|s| s.id == server) {
+            return;
+        }
+        self.view.deploy.logs = None;
+        self.open_server(server);
+        if let Some(site) = site {
+            self.open_traffic(Some(site), TrafficTab::Attacks);
+        }
     }
 
     fn server_id(&self) -> Option<String> {
@@ -288,31 +363,18 @@ impl Runner {
 #[uniffi::export]
 impl Engine {
     pub fn deploy_open_server(&self, id: String) {
-        self.run(move |r| {
-            let name = r
-                .view
-                .deploy
-                .servers
-                .iter()
-                .find(|s| s.id == id)
-                .map_or_else(String::new, |s| s.name.clone());
-            r.view.deploy.server = Some(ServerDetailView {
-                id,
-                name,
-                loading: true,
-                unreachable: None,
-                containers: Vec::new(),
-                stacks: Vec::new(),
-                problems: Vec::new(),
-                backup: None,
-            });
-            r.load_overview();
-        });
+        self.run(move |r| r.open_server(id));
+    }
+
+    /// Opens what a Deploy notification is about: its server, or an attacked site's attacks.
+    pub fn deploy_open_target(&self, target: String) {
+        self.run(move |r| r.open_deploy_target(target));
     }
 
     pub fn deploy_close_server(&self) {
         self.run(|r| {
             r.view.deploy.logs = None;
+            r.view.deploy.traffic = None;
             r.view.deploy.server = None;
         });
     }

@@ -37,7 +37,7 @@ import { getAllUsage } from '../../usage';
 import { getVaultService } from '../../vault';
 import { liveAgents } from './liveAgents';
 import { liveCloudflare, liveCloudflareOrigin } from './liveCloudflare';
-import { liveDeploy } from './liveDeploy';
+import { liveDeploy, liveTraffic } from './liveDeploy';
 import { liveGit } from './liveGit';
 import type { ManageMethodDeps } from './methods';
 import { statusFeed } from './statusFeed';
@@ -128,6 +128,7 @@ export const liveManageDeps: Omit<ManageMethodDeps, 'forgetPhone' | 'setPhoneSea
     remove: (id) => getVaultService().remove([id]),
   },
   deploy: liveDeploy,
+  traffic: liveTraffic,
   cloudflare: liveCloudflare,
   cloudflareOrigin: liveCloudflareOrigin,
   monitoring: {

@@ -666,7 +666,7 @@ impl Runner {
 
     /// Calls the computer and hands the answer, or the refusal in words, to `done`. Work from a
     /// connection that has since ended is dropped.
-    fn cf<T, F>(&mut self, method: &'static str, params: Option<Value>, done: F)
+    pub(crate) fn cf<T, F>(&mut self, method: &'static str, params: Option<Value>, done: F)
     where
         T: DeserializeOwned + Send + 'static,
         F: FnOnce(&mut Runner, Result<T, String>) + Send + 'static,

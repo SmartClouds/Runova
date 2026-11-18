@@ -33,6 +33,8 @@ pub mod status;
 pub mod studio;
 pub mod studio_tools;
 pub(crate) mod terminals;
+pub mod traffic;
+pub(crate) mod traffic_view;
 pub mod vault;
 pub mod view;
 

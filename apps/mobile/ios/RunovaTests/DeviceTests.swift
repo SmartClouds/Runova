@@ -164,7 +164,7 @@ final class DeviceTests: XCTestCase {
                     id: "srv1", name: "Prod", host: "10.0.0.1", stateLabel: "Online", online: true, problem: nil),
                 DeployServerView(
                     id: "srv2", name: "Lab", host: "10.0.0.2", stateLabel: "Needs sign-in", online: false, problem: nil),
-            ], loading: false, server: nil, logs: nil)
+            ], loading: false, server: nil, logs: nil, traffic: nil)
         try renderSnapshot(fixtureView(connection: connected, deploy: deploy), "deploy", tab: "deploy")
     }
 
@@ -233,7 +233,7 @@ final class DeviceTests: XCTestCase {
             items: [
                 NotificationItemView(
                     id: 1, title: "Deploy failed on prod", body: "", category: "deploys", destination: .inbox,
-                    read: false)
+                    read: false, itemId: nil)
             ],
             unread: 1, loading: false, preferences: [], settingsOpen: false, banner: nil)
         try renderSnapshot(fixtureView(notifications: screen), "inbox", tab: "inbox")
@@ -256,7 +256,7 @@ func fixtureView(
     vault: VaultScreen = VaultScreen(
         state: .unknown, loading: false, onShow: false, inBackground: false, unlockError: nil, entries: [], openEntry: nil, biometric: nil,
         revealed: nil),
-    deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil),
+    deploy: DeployScreen = DeployScreen(servers: [], loading: false, server: nil, logs: nil, traffic: nil),
     cloudflare: CloudflareScreen = CloudflareScreen(
         loading: false, configured: false, problem: nil, accounts: [], zone: nil, tokenForm: nil, addDomain: nil,
         recordForm: nil, pointDomain: nil, ruleBuilder: nil, accessRuleForm: nil, emailGateForm: nil,

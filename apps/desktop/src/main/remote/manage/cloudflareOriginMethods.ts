@@ -72,7 +72,7 @@ async function settle<T>(work: () => Promise<T>): Promise<[T | null, string | nu
 }
 
 /** The highest role the signed-in account holds on the server. */
-function roleOf(access: DeployAccess): (typeof ROLES)[number] | null {
+export function roleOf(access: DeployAccess): (typeof ROLES)[number] | null {
   const held = new Set((access.user?.roles ?? []).map((role) => role.toLowerCase()));
   return ROLES.find((role) => held.has(role)) ?? null;
 }

@@ -15,6 +15,7 @@ func tabFor(_ destination: NotificationDestination, connected: Bool) -> String {
     case .monitors: return connected ? "monitoring" : "monitors"
     case .account: return connected ? "notifications" : "account"
     case .inbox: return connected ? "notifications" : "inbox"
+    case .deploy: return connected ? "deploy" : "inbox"
     }
 }
 

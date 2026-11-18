@@ -8,6 +8,7 @@ struct DeployIntents {
     var containerAction: (String, String) -> Void = { _, _ in }
     var stackAction: (String, String) -> Void = { _, _ in }
     var redeploy: (String) -> Void = { _ in }
+    var traffic = TrafficIntents()
 }
 
 struct DeployTab: View {
@@ -78,6 +79,7 @@ struct ServerScreen: View {
                             Heading(text: "Problems")
                             ForEach(server.problems, id: \.id) { ProblemRow(problem: $0) }
                         }
+                        TrafficEntry(onOpen: intents.traffic.open)
                         Heading(text: "Containers")
                         ForEach(server.containers, id: \.id) { ContainerRow(container: $0, intents: intents) }
                         Heading(text: "Apps")

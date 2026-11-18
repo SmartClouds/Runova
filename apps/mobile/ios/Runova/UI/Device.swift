@@ -98,6 +98,8 @@ struct DeviceShell: View {
                 VaultEntryScreen(entry: entry, revealed: view.vault.revealed, intents: intents.vault)
             } else if let logs = view.deploy.logs {
                 LogsScreen(logs: logs, intents: intents.deploy)
+            } else if let traffic = view.deploy.traffic {
+                TrafficOverlay(traffic: traffic, error: view.error, intents: intents.deploy.traffic)
             } else if let server = view.deploy.server {
                 ServerScreen(server: server, error: view.error, intents: intents.deploy)
             } else if section == "cloudflare", CloudflareOverlay.shows(view) {

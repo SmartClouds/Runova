@@ -41,7 +41,7 @@ import uniffi.runova_ffi.VaultScreen
 
 val emptyGit = GitScreen(null, false, null, false, emptyList(), emptyList())
 val emptyStatus = StatusScreen(null, false, emptyList(), emptyList(), null, emptyList())
-val emptyDeploy = DeployScreen(emptyList(), false, null, null)
+val emptyDeploy = DeployScreen(emptyList(), false, null, null, null)
 val emptyCloudflare = CloudflareScreen(false, false, null, emptyList(), null, null, null, null, null, null, null, null, null, null, emptyList(), null, null, null, null)
 val emptyMonitoring = MonitoringScreen(emptyList(), emptyList(), false, null, null)
 val emptyErrors = ErrorsScreen(false, false, emptyList(), null, emptyList(), null, null)

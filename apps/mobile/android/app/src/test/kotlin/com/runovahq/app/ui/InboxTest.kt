@@ -28,8 +28,8 @@ private val SCREENSHOTS = RoborazziOptions(
     compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
 )
 
-private val deploy = NotificationItemView(1, "Deploy failed on prod", "", "deploys", NotificationDestination.INBOX, false)
-private val monitor = NotificationItemView(2, "Shop is down", "", "monitors", NotificationDestination.MONITORS, true)
+private val deploy = NotificationItemView(1, "Deploy failed on prod", "", "deploys", NotificationDestination.INBOX, false, null)
+private val monitor = NotificationItemView(2, "Shop is down", "", "monitors", NotificationDestination.MONITORS, true, null)
 private val preferences = listOf(
     NotificationPreferenceView("deploys", "Deploys", true),
     NotificationPreferenceView("monitors", "Monitors", false),

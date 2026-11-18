@@ -50,6 +50,7 @@ data class DeployIntents(
     val containerAction: (String, String) -> Unit = { _, _ -> },
     val stackAction: (String, String) -> Unit = { _, _ -> },
     val redeploy: (String) -> Unit = {},
+    val traffic: TrafficIntents = TrafficIntents(),
 )
 
 /** A server or its logs take over the whole device screen. */
@@ -60,6 +61,7 @@ fun DeployOverlay(view: AppView, intents: DeployIntents): Boolean {
         LogsScreen(logs, intents)
         return true
     }
+    if (TrafficOverlay(view.deploy.traffic, view.error, intents.traffic)) return true
     val server = view.deploy.server ?: return false
     ServerScreen(server, view.error, intents)
     return true
@@ -111,6 +113,7 @@ private fun ServerScreen(server: ServerDetailView, error: String?, intents: Depl
                     heading("Problems")
                     items(server.problems, key = { "p/${it.id}" }) { ProblemRow(it) }
                 }
+                item(key = "traffic") { TrafficEntry(intents.traffic.open) }
                 heading("Containers")
                 items(server.containers, key = { "c/${it.id}" }) { ContainerRow(it, intents) }
                 heading("Apps")

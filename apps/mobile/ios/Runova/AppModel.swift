@@ -110,7 +110,27 @@ final class AppModel: NSObject, ObservableObject {
                 closeLogs: { [weak self] in self?.engine?.deployCloseLogs() },
                 containerAction: { [weak self] in self?.engine?.deployContainerAction(containerId: $0, action: $1) },
                 stackAction: { [weak self] in self?.engine?.deployStackAction(stack: $0, action: $1) },
-                redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) }),
+                redeploy: { [weak self] in self?.engine?.deployStackRedeploy(stack: $0) },
+                traffic: TrafficIntents(
+                    open: { [weak self] in self?.engine?.deployOpenTraffic() },
+                    close: { [weak self] in self?.engine?.trafficClose() },
+                    setTab: { [weak self] in self?.engine?.trafficSetTab(tab: $0) },
+                    setRange: { [weak self] in self?.engine?.trafficSetRange(range: $0) },
+                    setSite: { [weak self] in self?.engine?.trafficSetSite(siteId: $0) },
+                    setGranularity: { [weak self] in self?.engine?.trafficSetGranularity(value: $0) },
+                    block: { [weak self] in self?.engine?.trafficBlock(eventId: $0) },
+                    unblock: { [weak self] in self?.engine?.trafficUnblock(blockId: $0) },
+                    openSettings: { [weak self] in self?.engine?.trafficOpenSettings() },
+                    closeSettings: { [weak self] in self?.engine?.trafficCloseSettings() },
+                    setStatistics: { [weak self] in self?.engine?.trafficSettingsStatistics(on: $0) },
+                    setCountries: { [weak self] in self?.engine?.trafficSettingsCountries(on: $0) },
+                    setHourly: { [weak self] in self?.engine?.trafficSettingsHourly(days: $0) },
+                    setDaily: { [weak self] in self?.engine?.trafficSettingsDaily(days: $0) },
+                    setDetection: { [weak self] in self?.engine?.trafficSettingsDetection(on: $0) },
+                    saveSettings: { [weak self] in self?.engine?.trafficSettingsSave() },
+                    openDimension: { [weak self] in self?.engine?.trafficOpenDimension(dimension: $0) },
+                    moreDimension: { [weak self] in self?.engine?.trafficDimensionMore() },
+                    closeDimension: { [weak self] in self?.engine?.trafficCloseDimension() })),
             cloudflare: cloudflareIntents,
             monitoring: MonitoringIntents(
                 open: { [weak self] in self?.engine?.monitorOpen(id: $0) },
@@ -332,8 +352,9 @@ final class AppModel: NSObject, ObservableObject {
     }
 
     /// A tapped push, with what the server put next to its alert.
-    func openPush(category: String, notificationId: Int64?) {
-        if let notificationId { engine?.notificationOpen(id: notificationId) }
+    func openPush(category: String, notificationId: Int64?, itemId: String? = nil) {
+        // An attack's push names its server and site, and opens that site's attacks (E111).
+        engine?.notificationTapped(id: notificationId, category: category, itemId: itemId)
         tab = tabFor(notificationDestination(category: category), connected: view?.connection != nil)
     }
     private var lastBiometric: UInt64 = 0

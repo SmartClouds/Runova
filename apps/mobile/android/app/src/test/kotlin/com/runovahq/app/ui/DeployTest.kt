@@ -58,8 +58,8 @@ private fun server(unreachable: String? = null) = ServerDetailView(
 
 private fun view(screen: DeployScreen) = appView(connection = connected, deploy = screen)
 
-private fun list() = DeployScreen(servers, false, null, null)
-private fun detail(unreachable: String? = null) = DeployScreen(servers, false, server(unreachable), null)
+private fun list() = DeployScreen(servers, false, null, null, null)
+private fun detail(unreachable: String? = null) = DeployScreen(servers, false, server(unreachable), null, null)
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -96,7 +96,7 @@ class DeployTest {
 
     @Test
     fun noServersSaysSo() {
-        show(view(DeployScreen(emptyList(), false, null, null)))
+        show(view(DeployScreen(emptyList(), false, null, null, null)))
 
         compose.onNodeWithText("No servers yet").assertExists()
     }
@@ -173,7 +173,7 @@ class DeployTest {
     fun logsAreShownAndClose() {
         var closed = false
         val logs = ContainerLogsView("c1", "web", false, listOf(LogLineView("started", false), LogLineView("oops", true)))
-        show(view(DeployScreen(servers, false, server(), logs)), DeployIntents(closeLogs = { closed = true }))
+        show(view(DeployScreen(servers, false, server(), logs, null)), DeployIntents(closeLogs = { closed = true }))
 
         compose.onNodeWithText("oops").assertExists()
         snapshot("deploy-logs")

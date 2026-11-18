@@ -104,6 +104,16 @@ export const MANAGE_METHODS: Record<string, ManageMethod> = {
   'deploy.containerAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackAction': { scope: 'deploy', risk: 'danger' },
   'deploy.stackRedeploy': { scope: 'deploy', risk: 'danger' },
+  // Website traffic and attacks (E111). Blocking makes nginx refuse an address on every site.
+  // Auto-block and deleting statistics take a step-up, so they stay on the computer.
+  'deploy.traffic': { scope: 'deploy', risk: 'read' },
+  'deploy.trafficDimension': { scope: 'deploy', risk: 'read' },
+  'deploy.trafficStatus': { scope: 'deploy', risk: 'read' },
+  'deploy.trafficSaveSettings': { scope: 'deploy', risk: 'write' },
+  'deploy.trafficAttacks': { scope: 'deploy', risk: 'read' },
+  'deploy.trafficBlocked': { scope: 'deploy', risk: 'read' },
+  'deploy.trafficBlock': { scope: 'deploy', risk: 'danger' },
+  'deploy.trafficUnblock': { scope: 'deploy', risk: 'danger' },
   // Cloudflare (E98 to E101): the desktop's own Cloudflare service and saved tokens.
   'cloudflare.status': { scope: 'cloudflare', risk: 'read' },
   'cloudflare.checkToken': { scope: 'cloudflare', risk: 'read' },

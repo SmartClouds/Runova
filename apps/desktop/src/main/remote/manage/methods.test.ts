@@ -28,6 +28,7 @@ function deps(change: Partial<ManageMethodDeps> = {}): ManageMethodDeps {
     status: {} as ManageStatusDeps,
     vault: {} as ManageVaultDeps,
     deploy: {} as ManageDeployDeps,
+    traffic: {} as never,
     cloudflare: {
       service: {} as never,
       servers: async () => [],

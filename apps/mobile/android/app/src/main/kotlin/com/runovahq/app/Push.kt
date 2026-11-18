@@ -80,6 +80,7 @@ class PushService : FirebaseMessagingService() {
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra("category", data["category"])
             .putExtra("notificationId", data["notificationId"])
+            .putExtra("itemId", data["itemId"])
         val tap = PendingIntent.getActivity(this, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         manager.notify(
             id,

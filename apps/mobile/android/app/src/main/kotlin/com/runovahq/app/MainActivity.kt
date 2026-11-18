@@ -41,6 +41,7 @@ import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.CloudflareIntents
 import com.runovahq.app.ui.DeployIntents
+import com.runovahq.app.ui.TrafficIntents
 import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.LockIntents
 import com.runovahq.app.ui.PasscodeIntents
@@ -176,6 +177,27 @@ class MainActivity : FragmentActivity(), ViewListener {
                 containerAction = { id, action -> engine.deployContainerAction(id, action) },
                 stackAction = { stack, action -> engine.deployStackAction(stack, action) },
                 redeploy = { engine.deployStackRedeploy(it) },
+                traffic = TrafficIntents(
+                    open = { engine.deployOpenTraffic() },
+                    close = { engine.trafficClose() },
+                    setTab = { engine.trafficSetTab(it) },
+                    setRange = { engine.trafficSetRange(it) },
+                    setSite = { engine.trafficSetSite(it) },
+                    setGranularity = { engine.trafficSetGranularity(it) },
+                    block = { engine.trafficBlock(it) },
+                    unblock = { engine.trafficUnblock(it) },
+                    openSettings = { engine.trafficOpenSettings() },
+                    closeSettings = { engine.trafficCloseSettings() },
+                    setStatistics = { engine.trafficSettingsStatistics(it) },
+                    setCountries = { engine.trafficSettingsCountries(it) },
+                    setHourly = { engine.trafficSettingsHourly(it) },
+                    setDaily = { engine.trafficSettingsDaily(it) },
+                    setDetection = { engine.trafficSettingsDetection(it) },
+                    saveSettings = { engine.trafficSettingsSave() },
+                    openDimension = { engine.trafficOpenDimension(it) },
+                    moreDimension = { engine.trafficDimensionMore() },
+                    closeDimension = { engine.trafficCloseDimension() },
+                ),
             ),
             cloudflare = CloudflareIntents(
                 openZone = { engine.cloudflareOpenZone(it) },
@@ -531,7 +553,9 @@ class MainActivity : FragmentActivity(), ViewListener {
     /** A tapped push arrives as this activity's extras, with what the server put in `data`. */
     private fun handlePushTap(intent: Intent) {
         val category = intent.getStringExtra("category") ?: return
-        intent.getStringExtra("notificationId")?.toLongOrNull()?.let { engine.notificationOpen(it) }
+        val id = intent.getStringExtra("notificationId")?.toLongOrNull()
+        // An attack's push names its server and site, and opens that site's attacks (E111).
+        engine.notificationTapped(id, category, intent.getStringExtra("itemId"))
         tab = tabFor(notificationDestination(category), view?.connection != null)
     }
 

@@ -55,6 +55,7 @@ struct ItemDto {
     read_at: Option<String>,
     #[serde(default)]
     sealed: Option<Vec<CopyDto>>,
+    item_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +93,7 @@ fn item_of(dto: ItemDto, key: &SealKey) -> NotificationItemView {
         destination: notification_destination(category.clone()),
         category,
         read: dto.read_at.is_some(),
+        item_id: dto.item_id,
     }
 }
 
@@ -101,6 +103,7 @@ pub fn notification_destination(category: String) -> NotificationDestination {
     match category.as_str() {
         "monitors" => NotificationDestination::Monitors,
         "account" => NotificationDestination::Account,
+        "deploys" => NotificationDestination::Deploy,
         _ => NotificationDestination::Inbox,
     }
 }
@@ -193,6 +196,15 @@ impl Runner {
         if screen.banner.as_ref().is_some_and(|b| b.id == id) {
             screen.banner = None;
         }
+        let target = screen
+            .items
+            .iter()
+            .find(|i| i.id == id && i.destination == NotificationDestination::Deploy)
+            .and_then(|i| i.item_id.clone());
+        if let Some(target) = target {
+            self.open_deploy_target(target);
+        }
+        let screen = &mut self.view.notifications;
         let Some(item) = screen.items.iter_mut().find(|i| i.id == id && !i.read) else {
             return;
         };
@@ -270,6 +282,23 @@ impl Runner {
 impl Engine {
     pub fn notification_open(&self, id: i64) {
         self.run(move |r| r.open_notification(id));
+    }
+
+    /// A tapped push: marks it read when the inbox has it, and opens what it is about.
+    pub fn notification_tapped(&self, id: Option<i64>, category: String, item_id: Option<String>) {
+        self.run(move |r| {
+            let known = id.filter(|id| r.view.notifications.items.iter().any(|i| i.id == *id));
+            match known {
+                Some(id) => r.open_notification(id),
+                None => {
+                    if notification_destination(category) == NotificationDestination::Deploy
+                        && let Some(target) = item_id
+                    {
+                        r.open_deploy_target(target);
+                    }
+                }
+            }
+        });
     }
 
     pub fn notification_dismiss_banner(&self) {

@@ -55,7 +55,8 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         let info = response.notification.request.content.userInfo
         if let category = info["category"] as? String {
             let id = (info["notificationId"] as? String).flatMap(Int64.init) ?? (info["notificationId"] as? Int64)
-            Task { @MainActor in self.model?.openPush(category: category, notificationId: id) }
+            let item = info["itemId"] as? String
+            Task { @MainActor in self.model?.openPush(category: category, notificationId: id, itemId: item) }
         }
         completionHandler()
     }
