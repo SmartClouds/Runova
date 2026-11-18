@@ -10,6 +10,7 @@ export * from './ai/scene/files.js';
 export * from './ai/scene/prompt.js';
 export * from './api.js';
 export * from './document/ops.js';
+export * from './document/sceneBasis.js';
 export * from './document/schema.js';
 export * from './document/undo.js';
 export * from './gen/estimate.js';

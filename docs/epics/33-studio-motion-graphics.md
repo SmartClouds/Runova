@@ -123,6 +123,14 @@ navigation and new windows are refused and reported by Electron. AC6: the scan n
 - Gemini runs during E32's spike ended on quota (HTTP 429); its log line "An unexpected critical
   error occurred:[object Object]" is not picked up as an error line yet.
 
+- A scene's `code.basis` keeps a short FNV-1a hash of each field the AI animated from (title,
+  narration, on-screen text, visual brief, length rounded the way the prompt rounds it, ready
+  pictures), taken from the document the prompt was built from. `sceneBasisChanges` compares it
+  with the scene now, and the scene card names the changed fields next to **Animate again**. A
+  hand edit keeps the basis; going back to an earlier version drops it, since what that version
+  was made from is not known. Transition, notes and music cue are left out: they are not in the
+  prompt.
+
 ## Known limits
 
 - Scenes are animated one at a time; there is no "animate every scene" yet.

@@ -68,6 +68,30 @@ describe('parseDocument', () => {
     expect(parseDocument(JSON.parse(JSON.stringify(d)))).toEqual(d);
   });
 
+  it('reads a scene saved before Studio kept what its animation was made from', () => {
+    const scene = createScene({ id: 's1', code: { treeHash: 'a'.repeat(64) } });
+    const d = doc({ scenario: { ...doc().scenario, scenes: [scene] } });
+    expect(parseDocument(JSON.parse(JSON.stringify(d))).scenario.scenes[0]?.code).toEqual({
+      treeHash: 'a'.repeat(64),
+    });
+  });
+
+  it("keeps what a scene's animation was made from", () => {
+    const basis = {
+      title: '00000001',
+      narration: '00000002',
+      onScreenText: '00000003',
+      visualBrief: '00000004',
+      length: '00000005',
+      pictures: '00000006',
+    };
+    const scene = createScene({ id: 's1', code: { treeHash: 'a'.repeat(64), basis } });
+    const d = doc({ scenario: { ...doc().scenario, scenes: [scene] } });
+    expect(parseDocument(JSON.parse(JSON.stringify(d))).scenario.scenes[0]?.code.basis).toEqual(
+      basis,
+    );
+  });
+
   it('keeps Persian text exactly as written, ZWNJ included', () => {
     const title = 'می‌خواهم ویدئو بسازم';
     expect(parseDocument(doc({ title })).title).toBe(title);

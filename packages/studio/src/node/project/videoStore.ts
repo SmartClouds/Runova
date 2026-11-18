@@ -7,6 +7,7 @@ import {
   type Aspect,
   createDocument,
   parseDocument,
+  type SceneBasis,
   type StudioDocument,
 } from '../../document/schema.js';
 import { pushTx, type TxRef, type UndoStacks } from '../../document/undo.js';
@@ -382,6 +383,8 @@ export class VideoStore {
   /**
    * Points a scene at a code tree (already in the blob store), as one history entry, and records
    * the revision. Undo puts the scene back on its previous tree; the revision list keeps them all.
+   * `basis` is what the code was made from: left out, the scene keeps the one it has (a hand edit
+   * does not change the scene's fields); null drops it (an earlier version from who knows what).
    */
   setSceneCode(input: {
     sceneId: string;
@@ -389,10 +392,12 @@ export class VideoStore {
     author: CodeRevision['author'];
     label: string;
     generationId?: string | null;
+    basis?: SceneBasis | null;
   }): EditResult {
     this.assertOpen();
     const scene = this.current.scenario.scenes.find((s) => s.id === input.sceneId);
     if (!scene) throw new Error('That scene is not in the video any more.');
+    const basis = input.basis === undefined ? scene.code.basis : input.basis;
     const result = this.commit(
       'edit',
       null,
@@ -400,7 +405,12 @@ export class VideoStore {
         {
           op: 'scene.update',
           sceneId: input.sceneId,
-          patch: { code: { treeHash: input.treeHash } },
+          patch: {
+            code:
+              basis === undefined
+                ? { treeHash: input.treeHash }
+                : { treeHash: input.treeHash, basis },
+          },
         },
       ],
       input.label,

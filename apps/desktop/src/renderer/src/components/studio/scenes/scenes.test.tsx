@@ -1,5 +1,6 @@
-import type { SceneCodeView } from '@runova/studio';
+import { type Scene, type SceneCodeView, sceneBasis } from '@runova/studio';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { NOW, status, withScenes } from '../testing/fixtures';
@@ -184,7 +185,7 @@ describe('SceneMotion', () => {
     );
     expect(onAnimate).toHaveBeenCalledWith('Bigger title');
 
-    await user.click(screen.getByRole('button', { name: /Code/ }));
+    await user.click(screen.getByRole('button', { name: 'Code' }));
     expect(onOpenCode).toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Check' }));
@@ -220,6 +221,128 @@ describe('SceneMotion', () => {
     fail = true;
     await user.click(screen.getByRole('button', { name: 'Check' }));
     expect(await screen.findByText('The window crashed.')).toBeInTheDocument();
+  });
+});
+
+describe('SceneMotion, animating again', () => {
+  const doc = withScenes('Hook');
+  const plain = doc.scenario.scenes[0]!;
+  /** A scene with an animation made from its fields as they are now. */
+  const animated: Scene = { ...plain, code: { treeHash: TREE, basis: sceneBasis(plain) } };
+  const base = {
+    videoId: 'v1',
+    document: doc,
+    index: 0,
+    busy: false,
+    run: { cliId: 'claude-code', model: 'opus', effort: 'high' as const },
+    onRunChange: vi.fn(),
+    onOpenCode: vi.fn(),
+  };
+  const bridge = { 'studioScenes.thumbnail': async () => null };
+
+  it('animates the scene again with the chosen AI, even when nothing changed', async () => {
+    const onAnimate = vi.fn(async () => true);
+    const { user } = renderWithProviders(
+      <SceneMotion {...base} scene={animated} onAnimate={onAnimate} />,
+      { bridge },
+    );
+    const again = screen.getByRole('button', { name: 'Animate scene 1 again' });
+    expect(again).toHaveTextContent('Animate again');
+    expect(again).not.toHaveAccessibleDescription();
+    expect(screen.queryByText(/changed after this animation was made/)).not.toBeInTheDocument();
+    await user.click(again);
+    expect(onAnimate).toHaveBeenCalledWith();
+  });
+
+  it('keeps the AI picker in the row, for every AI action on the scene', async () => {
+    const { user } = renderWithProviders(
+      <SceneMotion {...base} scene={animated} onAnimate={vi.fn()} />,
+      { bridge },
+    );
+    const picker = screen.getByRole('button', { name: /^AI for scene animations: Claude Code/ });
+    await user.click(picker);
+    expect(await screen.findByText('Which AI animates the scenes')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    // The Change form uses the same pick rather than showing a second picker.
+    await user.click(screen.getByRole('button', { name: /Change/ }));
+    expect(screen.getAllByRole('button', { name: /^AI for scene animations/ })).toHaveLength(1);
+  });
+
+  it('waits while AI is busy', () => {
+    renderWithProviders(<SceneMotion {...base} busy scene={animated} onAnimate={vi.fn()} />, {
+      bridge,
+    });
+    expect(screen.getByRole('button', { name: 'Animate scene 1 again' })).toBeDisabled();
+  });
+
+  it('says which fields changed since the scene was animated', () => {
+    const edited: Scene = {
+      ...animated,
+      narration: 'Something new to say.',
+      targetDuration: animated.targetDuration * 2,
+    };
+    renderWithProviders(<SceneMotion {...base} scene={edited} onAnimate={vi.fn()} />, {
+      bridge,
+    });
+    const hint = 'Narration and Length changed after this animation was made.';
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Animate scene 1 again' }),
+    ).toHaveAccessibleDescription(hint);
+  });
+
+  it('lists three or more changed fields the way a person would', () => {
+    const edited: Scene = {
+      ...animated,
+      title: 'Opening',
+      onScreenText: ['Bit Iron'],
+      visualBrief: 'A white background.',
+    };
+    renderWithProviders(<SceneMotion {...base} scene={edited} onAnimate={vi.fn()} />, {
+      bridge,
+    });
+    expect(
+      screen.getByText(
+        'Title, On screen and What the viewer sees changed after this animation was made.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing when it does not know what the animation was made from', () => {
+    const unknown: Scene = { ...plain, narration: 'New', code: { treeHash: TREE } };
+    renderWithProviders(<SceneMotion {...base} scene={unknown} onAnimate={vi.fn()} />, {
+      bridge,
+    });
+    expect(screen.queryByText(/changed after this animation was made/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Animate scene 1 again' })).toBeEnabled();
+  });
+
+  it('forgets the last check once the scene has new code', async () => {
+    function NewCode() {
+      const [treeHash, setTreeHash] = useState(TREE);
+      return (
+        <>
+          <button type="button" onClick={() => setTreeHash('b'.repeat(64))}>
+            AI is done
+          </button>
+          <SceneMotion
+            {...base}
+            scene={{ ...animated, code: { ...animated.code, treeHash } }}
+            onAnimate={vi.fn()}
+          />
+        </>
+      );
+    }
+    const { user } = renderWithProviders(<NewCode />, {
+      bridge: {
+        ...bridge,
+        'studioScenes.check': async () => ({ ok: true, problems: [], notes: [] }),
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Check' }));
+    expect(await screen.findByText('Checks pass')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'AI is done' }));
+    expect(screen.queryByText('Checks pass')).not.toBeInTheDocument();
   });
 });
 

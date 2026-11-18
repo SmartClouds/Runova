@@ -123,7 +123,7 @@ test('animates a scene with AI, previews it in its sandbox, repairs a scene that
   await page.keyboard.press('Escape');
 
   // AC4: a hand edit is a new version, and an earlier version is still there to go back to.
-  await scene1.getByRole('button', { name: /Code/ }).click();
+  await scene1.getByRole('button', { name: 'Code', exact: true }).click();
   const code = page.getByRole('dialog', { name: 'Scene 1 code' });
   const editor = code.locator('.monaco-editor').first();
   await expect(editor).toBeVisible();
@@ -138,4 +138,41 @@ test('animates a scene with AI, previews it in its sandbox, repairs a scene that
   await expect(versions.getByText(/Went back to an earlier version/)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(preview.locator('#t')).toHaveText('قطره');
+});
+
+test('says which fields changed since a scene was animated, and animates it again from them', async () => {
+  const { page } = await launch();
+  await videoWithScenario(page);
+  const scene1 = page.getByRole('region', { name: 'Scene 1' });
+
+  await scene1.getByRole('button', { name: 'Animate scene 1 with AI' }).click();
+  await expect(scene1.getByRole('img', { name: 'Scene 1 animation' })).toBeVisible({
+    timeout: 60_000,
+  });
+  const again = scene1.getByRole('button', { name: 'Animate scene 1 again' });
+  await expect(again).toBeEnabled();
+  await expect(scene1.getByRole('button', { name: /^AI for scene animations/ })).toBeVisible();
+  await expect(scene1.getByText(/changed after this animation was made/)).toHaveCount(0);
+
+  // The scripted CLI draws the scene's title, so a new title shows up only in a new animation.
+  const title = scene1.getByLabel('Scene 1 title');
+  await title.fill('باران');
+  await title.blur();
+  const hint = scene1.getByText('Title changed after this animation was made.');
+  await expect(hint).toBeVisible();
+
+  await again.click();
+  await expect(hint).toHaveCount(0, { timeout: 60_000 });
+  await scene1.getByRole('button', { name: 'Preview' }).click();
+  await expect(page.frameLocator('iframe[title="Scene 1 preview"]').locator('#t')).toHaveText(
+    'باران',
+  );
+
+  // The first animation is still one of the code's versions.
+  await scene1.getByRole('button', { name: 'Code', exact: true }).click();
+  const versions = page
+    .getByRole('dialog', { name: 'Scene 1 code' })
+    .getByRole('complementary', { name: 'Versions' });
+  await expect(versions.getByText('AI animated scene 1 again')).toBeVisible();
+  await expect(versions.getByRole('listitem')).toHaveCount(2);
 });

@@ -1526,6 +1526,8 @@ export function createStudioService(host: StudioHost): StudioService {
         treeHash: revision.treeHash,
         author: 'user',
         label: `Went back to an earlier version of the code of scene ${position}`,
+        // What that version was made from is not known, so Studio does not claim it is current.
+        basis: null,
       });
       await store.mirrorScene(sceneId);
       await afterEdit(videoId, store);

@@ -2,6 +2,8 @@ import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { StudioEvent } from '../../api.js';
+import { sceneBasis, sceneBasisChanges } from '../../document/sceneBasis.js';
+import type { Scene } from '../../document/schema.js';
 import { openNodeSqlite } from '../../test/nodeSqlite.js';
 import { useTempDirs } from '../../test/tempDir.js';
 import { createStudioService, type StudioHost, type StudioService } from '../service.js';
@@ -687,6 +689,76 @@ describe('animating a scene', () => {
     expect(entry).toMatchObject({ actor: 'ai', label: 'AI animated scene 1', generationId: g.id });
   });
 
+  async function sceneOf(s: { service: StudioService; video: { id: string } }, sceneId: string) {
+    const opened = await s.service.open({ videoId: s.video.id });
+    if (opened.state !== 'open') throw new Error('closed');
+    return {
+      scene: opened.session.document.scenario.scenes.find((x) => x.id === sceneId) as Scene,
+      seq: opened.session.status.seq,
+    };
+  }
+
+  it('keeps what the animation was made from, so a later edit shows as a change', async () => {
+    const s = await withScenes([() => answer(FILES)]);
+    const g = await s.service.startScene({ videoId: s.video.id, sceneId: s.sceneId, run });
+    await settle(s.service, s.video.id, g.id);
+    const { scene, seq } = await sceneOf(s, s.sceneId);
+    expect(scene.code.basis).toEqual(sceneBasis(scene));
+    expect(sceneBasisChanges(scene)).toEqual([]);
+
+    await s.service.apply({
+      videoId: s.video.id,
+      baseSeq: seq,
+      ops: [{ op: 'scene.update', sceneId: s.sceneId, patch: { narration: 'یک متن تازه.' } }],
+      label: 'Edited the narration',
+    });
+    expect(sceneBasisChanges((await sceneOf(s, s.sceneId)).scene)).toEqual(['narration']);
+  });
+
+  it('keeps the fields the AI saw, not ones edited while it worked', async () => {
+    let ctx: { service: StudioService; video: { id: string }; sceneId: string } | null = null;
+    const s = await withScenes([
+      async () => {
+        if (!ctx) throw new Error('no context');
+        const { seq } = await sceneOf(ctx, ctx.sceneId);
+        await ctx.service.apply({
+          videoId: ctx.video.id,
+          baseSeq: seq,
+          ops: [{ op: 'scene.update', sceneId: ctx.sceneId, patch: { title: 'تیتر تازه' } }],
+          label: 'Renamed the scene',
+        });
+        return answer(FILES);
+      },
+    ]);
+    ctx = s;
+    const g = await s.service.startScene({ videoId: s.video.id, sceneId: s.sceneId, run });
+    expect((await settle(s.service, s.video.id, g.id)).status).toBe('done');
+    expect(sceneBasisChanges((await sceneOf(s, s.sceneId)).scene)).toEqual(['title']);
+  });
+
+  it('animates a scene again from its fields, without the old code, when asked with no change', async () => {
+    const s = await withScenes([
+      () => answer(FILES),
+      () => answer(FILES.replace('هر قطره', 'تازه')),
+    ]);
+    const first = await s.service.startScene({ videoId: s.video.id, sceneId: s.sceneId, run });
+    await settle(s.service, s.video.id, first.id);
+    const again = await s.service.startScene({
+      videoId: s.video.id,
+      sceneId: s.sceneId,
+      run: { ...run, effort: 'max' as const },
+    });
+    expect((await settle(s.service, s.video.id, again.id)).status).toBe('done');
+    const prompt = s.requests.at(-1)?.prompt ?? '';
+    expect(prompt).toContain('# Animate a scene of a video');
+    expect(prompt).not.toContain('## The scene now');
+    const code = await s.service.sceneCode({ videoId: s.video.id, sceneId: s.sceneId });
+    expect(code.revisions.map((r) => r.label)).toEqual([
+      'AI animated scene 1 again',
+      'AI animated scene 1',
+    ]);
+  });
+
   it('sends the problems of a failed check back with the files, and accepts the fixed scene', async () => {
     const s = await withScenes(
       [() => answer(FILES), () => answer(FILES.replace('ctx.progress', 'ctx.progress * 0.9'))],
@@ -748,6 +820,8 @@ describe('animating a scene', () => {
     const g = await s.service.startScene({ videoId: s.video.id, sceneId: s.sceneId, run });
     await settle(s.service, s.video.id, g.id);
     const before = await s.service.sceneCode({ videoId: s.video.id, sceneId: s.sceneId });
+    const madeFrom = (await sceneOf(s, s.sceneId)).scene.code.basis;
+    expect(madeFrom).toBeTruthy();
 
     const saved = await s.service.saveSceneFiles({
       videoId: s.video.id,
@@ -755,6 +829,8 @@ describe('animating a scene', () => {
       files: [{ path: 'scene.js', content: 'Studio.scene({ render() { x(); } });' }],
     });
     expect(saved.status.undoLabel).toBe('Edited the code of scene 1');
+    // A hand edit of the code does not change what the scene's fields were when it was animated.
+    expect(saved.document.scenario.scenes[0]?.code.basis).toEqual(madeFrom);
     const after = await s.service.sceneCode({ videoId: s.video.id, sceneId: s.sceneId });
     expect(after.files.map((f) => f.path)).toEqual(['index.html', 'scene.js']);
     expect(after.revisions.map((r) => r.author)).toEqual(['user', 'ai']);
@@ -770,6 +846,8 @@ describe('animating a scene', () => {
       revisionId: before.revisions[0]?.id ?? 0,
     });
     expect(back.document.scenario.scenes[0]?.code.treeHash).toBe(before.treeHash);
+    // What an earlier version was made from is not known, so Studio does not guess.
+    expect(back.document.scenario.scenes[0]?.code.basis).toBeNull();
     await expect(
       s.service.useCodeRevision({ videoId: s.video.id, sceneId: s.sceneId, revisionId: 999 }),
     ).rejects.toThrow(/not in this video/);

@@ -162,6 +162,22 @@ export const scenePictureSchema = z.object({
 });
 export type ScenePicture = z.infer<typeof scenePictureSchema>;
 
+const basisPart = z.string().regex(/^[0-9a-f]{8}$/);
+
+/**
+ * What a scene's animation was made from: a short hash of each field the AI animates from, so
+ * Studio can tell which of them changed since. See sceneBasis.ts.
+ */
+export const sceneBasisSchema = z.object({
+  title: basisPart,
+  narration: basisPart,
+  onScreenText: basisPart,
+  visualBrief: basisPart,
+  length: basisPart,
+  pictures: basisPart,
+});
+export type SceneBasis = z.infer<typeof sceneBasisSchema>;
+
 export const sceneSchema = z.object({
   id,
   title: shortText,
@@ -178,7 +194,11 @@ export const sceneSchema = z.object({
   /** The voice profile or engine voice that narrates this scene. */
   voiceRef: z.string().max(200).nullable(),
   notes: longText,
-  code: z.object({ treeHash: sha256.nullable() }),
+  code: z.object({
+    treeHash: sha256.nullable(),
+    /** Added later: older scenes, and code put back from an earlier version, have none. */
+    basis: sceneBasisSchema.nullable().optional(),
+  }),
   params: z.record(z.string().max(64), z.union([z.string().max(2000), z.number(), z.boolean()])),
   /** Added with the Pictures step; older videos have none. */
   pictures: z.array(scenePictureSchema).max(MAX_SCENE_PICTURES).optional(),

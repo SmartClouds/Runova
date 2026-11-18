@@ -2,13 +2,15 @@ import {
   DESIGN_SIZES,
   flicksToSeconds,
   type Scene,
+  type SceneBasisField,
   type SceneCheckView,
   type StudioDocument,
+  sceneBasisChanges,
   sceneConfig,
   sceneUrl,
 } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { runLabel } from '../ai/runSettings';
 import { studioScenesClient } from '../client';
 import { errorMessage, scriptClass } from '../format';
@@ -24,6 +26,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  RefreshCw,
   type RunSettings,
   RunSettingsFields,
   SimpleTooltip,
@@ -46,6 +49,22 @@ export interface SceneMotionProps {
   onOpenCode: () => void;
 }
 
+/** The scene card's own names for the fields an animation is made from. */
+const FIELD_LABELS: Record<SceneBasisField, string> = {
+  title: 'Title',
+  narration: 'Narration',
+  onScreenText: 'On screen',
+  visualBrief: 'What the viewer sees',
+  length: 'Length',
+  pictures: 'Pictures',
+};
+
+/** "Narration", "Narration and Length", "Title, Narration and Length". */
+function listed(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
 /**
  * The motion graphics of one scene: its thumbnail and preview once it has code, and the ways to
  * get or change that code (animate with AI, ask for a change, open the code).
@@ -65,11 +84,19 @@ export function SceneMotion({
   const [previewing, setPreviewing] = useState(false);
   const [changing, setChanging] = useState(false);
   const [instruction, setInstruction] = useState('');
-  const [check, setCheck] = useState<SceneCheckView | null>(null);
+  // A check speaks for the code it ran on, so a new animation starts without one.
+  const [checked, setChecked] = useState<{
+    treeHash: string;
+    result: SceneCheckView | null;
+    error: string | null;
+  } | null>(null);
   const [checking, setChecking] = useState(false);
-  const [checkError, setCheckError] = useState<string | null>(null);
+  const check = checked?.treeHash === treeHash ? checked.result : null;
+  const checkError = checked?.treeHash === treeHash ? checked.error : null;
   const number = index + 1;
   const queryClient = useQueryClient();
+  const changesId = useId();
+  const changed = sceneBasisChanges(scene);
 
   const thumbnail = useQuery({
     queryKey: studioKeys.thumbnail(videoId, treeHash),
@@ -81,12 +108,18 @@ export function SceneMotion({
   const picker = (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" size="xs" variant="ghost" className="max-w-[14rem]">
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          className="max-w-[14rem]"
+          aria-label={`AI for scene animations: ${runLabel(run)}`}
+        >
           <span className="truncate">{runLabel(run)}</span>
           <ChevronDown />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[26rem] max-w-[calc(100vw-2rem)] space-y-2 p-3">
+      <PopoverContent align="end" className="w-[26rem] max-w-[calc(100vw-2rem)] space-y-2 p-3">
         <p className="text-xs text-muted-foreground">Which AI animates the scenes</p>
         <RunSettingsFields value={run} onChange={onRunChange} />
       </PopoverContent>
@@ -114,13 +147,14 @@ export function SceneMotion({
 
   const runCheck = async () => {
     setChecking(true);
-    setCheckError(null);
+    setChecked(null);
     try {
-      setCheck(await studioScenesClient().check(videoId, scene.id));
+      const result = await studioScenesClient().check(videoId, scene.id);
+      setChecked({ treeHash, result, error: null });
       // A check makes a fresh thumbnail.
       void queryClient.invalidateQueries({ queryKey: studioKeys.thumbnail(videoId, treeHash) });
     } catch (error) {
-      setCheckError(errorMessage(error));
+      setChecked({ treeHash, result: null, error: errorMessage(error) });
     } finally {
       setChecking(false);
     }
@@ -154,6 +188,19 @@ export function SceneMotion({
         <Button size="xs" variant="ghost" disabled={busy} onClick={() => setChanging((v) => !v)}>
           <Wand2 /> Change
         </Button>
+        <SimpleTooltip label="Make a new animation from the scene as it is now. The current one stays in the code's earlier versions.">
+          <Button
+            size="xs"
+            // Tinted once the scene changed, so the way to catch the animation up stands out.
+            variant={changed.length > 0 ? 'tint' : 'ghost'}
+            disabled={busy}
+            aria-label={`Animate scene ${number} again`}
+            aria-describedby={changed.length > 0 ? changesId : undefined}
+            onClick={() => void onAnimate()}
+          >
+            <RefreshCw /> Animate again
+          </Button>
+        </SimpleTooltip>
         <SimpleTooltip label="Open the scene's code">
           <Button size="xs" variant="ghost" onClick={onOpenCode}>
             <Code /> Code
@@ -163,7 +210,15 @@ export function SceneMotion({
           {checking ? 'Checking...' : 'Check'}
         </Button>
         {check?.ok && <Chip tone="success">Checks pass</Chip>}
+        <div className="ml-auto">{picker}</div>
       </div>
+      {changed.length > 0 && (
+        <p id={changesId} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden />
+          {listed(changed.map((field) => FIELD_LABELS[field]))} changed after this animation was
+          made.
+        </p>
+      )}
       {changing && (
         <form
           className="flex flex-wrap items-center gap-2"
@@ -188,7 +243,6 @@ export function SceneMotion({
             placeholder="Bigger title, slower motion, a darker background..."
             onChange={(event) => setInstruction(event.target.value)}
           />
-          {picker}
           <Button type="submit" size="sm" disabled={!instruction.trim() || busy}>
             Ask
           </Button>

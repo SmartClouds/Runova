@@ -2,7 +2,8 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { OpError } from '../../document/ops.js';
-import { createDocument, createScene } from '../../document/schema.js';
+import { sceneBasis } from '../../document/sceneBasis.js';
+import { createDocument, createScene, type Scene } from '../../document/schema.js';
 import { openNodeSqlite } from '../../test/nodeSqlite.js';
 import { useTempDirs } from '../../test/tempDir.js';
 import { HistoryDb } from '../db/history.js';
@@ -374,6 +375,34 @@ describe('VideoStore scene code', () => {
     expect(() =>
       store.setSceneCode({ sceneId: 'gone', treeHash: tree.treeHash, author: 'ai', label: 'x' }),
     ).toThrow(/not in the video/);
+  });
+
+  it('keeps what the code was made from, carries it over a hand edit, and drops it on request', async () => {
+    const { store, tree } = await withScene();
+    const basis = sceneBasis(store.document.scenario.scenes[0] as Scene);
+    store.setSceneCode({ sceneId: 's1', treeHash: tree.treeHash, author: 'ai', label: 'x', basis });
+    expect(store.document.scenario.scenes[0]?.code.basis).toEqual(basis);
+
+    const edited = await treeFromFiles([{ path: 'index.html', content: 'v2' }], store.blobs);
+    store.setSceneCode({ sceneId: 's1', treeHash: edited.treeHash, author: 'user', label: 'y' });
+    expect(store.document.scenario.scenes[0]?.code).toEqual({ treeHash: edited.treeHash, basis });
+
+    store.setSceneCode({
+      sceneId: 's1',
+      treeHash: tree.treeHash,
+      author: 'user',
+      label: 'z',
+      basis: null,
+    });
+    expect(store.document.scenario.scenes[0]?.code).toEqual({
+      treeHash: tree.treeHash,
+      basis: null,
+    });
+    // Undo puts back the basis together with the code it belongs to.
+    expect(store.undo()?.document.scenario.scenes[0]?.code).toEqual({
+      treeHash: edited.treeHash,
+      basis,
+    });
   });
 
   it('mirrors the current code into scenes/<id>, and clears it when the scene has none', async () => {

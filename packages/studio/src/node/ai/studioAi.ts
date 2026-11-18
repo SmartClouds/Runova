@@ -41,7 +41,13 @@ import type {
   StudioEvent,
 } from '../../api.js';
 import { type EditOp, OpError } from '../../document/ops.js';
-import { DESIGN_SIZES, type StudioDocument, UNTITLED_TITLE } from '../../document/schema.js';
+import { sceneBasis } from '../../document/sceneBasis.js';
+import {
+  DESIGN_SIZES,
+  type SceneBasis,
+  type StudioDocument,
+  UNTITLED_TITLE,
+} from '../../document/schema.js';
 import { PICTURES_DIR, scenePictures } from '../../pictures/pictures.js';
 import { sceneConfig } from '../../scenes/config.js';
 import { sceneUrl } from '../../scenes/url.js';
@@ -519,8 +525,11 @@ export function createStudioAi(deps: StudioAiDeps) {
     example: FencedFile[] | undefined,
     pictures: ScenePictureBlob[],
     carried: { path: string; hash: string }[],
+    hadCode: boolean,
   ): Plan<SceneAnswer> {
     let lastFiles: FencedFile[] = [];
+    // The fields the prompt was built from, kept with the code so a later edit shows as a change.
+    let basis: SceneBasis | null = null;
     return {
       // A CLI that can look at pictures sees the scene's, to know where to point.
       prepare: async (workDir, store) => {
@@ -536,15 +545,18 @@ export function createStudioAi(deps: StudioAiDeps) {
       params: { sceneId: input.sceneId },
       run: input.run,
       parentId,
-      request: (doc) =>
-        buildSceneRequest({
+      request: (doc) => {
+        const scene = doc.scenario.scenes.find((s) => s.id === input.sceneId);
+        if (scene) basis = sceneBasis(scene);
+        return buildSceneRequest({
           document: doc,
           sceneId: input.sceneId,
           instruction: input.instruction,
           current,
           example,
           pictures,
-        }),
+        });
+      },
       read: async (text, doc) => {
         const files = parseFencedFiles(text);
         if (files.length === 0) {
@@ -601,8 +613,9 @@ export function createStudioAi(deps: StudioAiDeps) {
           author: 'ai',
           label: input.instruction
             ? `AI changed the animation of scene ${position + 1}`
-            : `AI animated scene ${position + 1}`,
+            : `AI animated scene ${position + 1}${hadCode ? ' again' : ''}`,
           generationId,
+          ...(basis ? { basis } : {}),
         });
         if (answer.thumbnailPng) {
           store.setThumbnail(answer.treeHash, await store.blobs.put(answer.thumbnailPng));
@@ -648,7 +661,10 @@ export function createStudioAi(deps: StudioAiDeps) {
         ? await binaryFilesOfTree(store, scene.code.treeHash)
         : [];
     const pictures = scenePictureBlobs(store, input.sceneId);
-    return start(videoId, scenePlan(input, parentId, current, example, pictures, carried));
+    return start(
+      videoId,
+      scenePlan(input, parentId, current, example, pictures, carried, scene.code.treeHash !== null),
+    );
   }
 
   async function picturesPlan(

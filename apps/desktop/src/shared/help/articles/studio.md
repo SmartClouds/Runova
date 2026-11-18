@@ -69,6 +69,8 @@ Once a scene has an animation:
 - Its **thumbnail** shows the middle of the scene.
 - **Preview** plays it, with a slider to move through it. A scene that takes longer than a frame to draw skips frames in the preview and says **Slow scene**; the final video draws every frame.
 - **Change** asks the AI for a change to the animation, such as a bigger title or slower motion.
+- **Animate again** makes a new animation from the scene as it is now, as if it had none. Use it after you change the scene's text, length or pictures, or to try another model or effort: the button at the end of the row picks which AI does it, and it is used by Change and Fix with AI too. The animation it replaces stays in the code's versions, and Undo brings it back.
+- If you change the title, narration, on-screen text, what the viewer sees, the length or the pictures after a scene was animated, a line under the buttons names what changed, and **Animate again** is highlighted. The transition and notes are not part of the animation, so they do not count.
 - **Check** runs the checks again. If it fails, **Fix with AI** sends the problems to the AI.
 - **Code** opens the scene's files. Edit them and **Save** (or Ctrl+S); every save is a new version, and **Use this version** goes back to any earlier one. **Check** works there too.
 
