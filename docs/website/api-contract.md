@@ -1033,8 +1033,8 @@ the notifications hub, including the `access_token` query value on the hub path)
   or `other`; `host` is `{ "remoteId", "name" (empty for `other`), "platform", "kind",
   "identityKey" }`. An account makes 20 requests a minute; a computer takes 30 password requests
   in 10 minutes from everyone together; a connection has 8 sessions open at most. `send` (E112)
-  rings only by asking, from an app (`controllerDeviceId` of kind `app`) of the owner or a
-  teammate, to a computer whose app went online with `receive-files`; when only its background
+  rings only by asking, from an app or a phone (`controllerDeviceId` of kind `app` or `phone`,
+  E113) of the owner or a teammate, to a computer whose app went online with `receive-files`; when only its background
   agent is online the answer is `offline`. The files, their names and sizes go over the encrypted
   link and never pass the hub, and a send leaves no session record: `Connected` records nothing
   for it.

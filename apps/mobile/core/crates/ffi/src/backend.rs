@@ -35,6 +35,8 @@ pub struct SystemEntry {
     pub own: bool,
     /// It takes its unattended-access password.
     pub unattended: bool,
+    /// What it takes, such as `receive-files`. `None` from a website too old to say.
+    pub features: Option<Vec<String>>,
 }
 
 #[async_trait]
@@ -69,6 +71,8 @@ struct EntryDto {
     online: bool,
     #[serde(default)]
     unattended_enabled: bool,
+    #[serde(default)]
+    features: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -205,6 +209,7 @@ impl Backend for LiveBackend {
                 online: e.online,
                 own,
                 unattended: e.unattended_enabled,
+                features: e.features,
             }
         };
         let mut systems: Vec<_> = dto.mine.into_iter().map(entry(true)).collect();

@@ -9,6 +9,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,9 @@ import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.LockIntents
 import com.runovahq.app.ui.PasscodeIntents
 import com.runovahq.app.ui.PhraseIntents
+import com.runovahq.app.ui.SendIntents
+import com.runovahq.app.ui.SendPicks
+import com.runovahq.app.ui.StagedFile
 import com.runovahq.app.ui.NotificationIntents
 import com.runovahq.app.ui.tabFor
 import com.google.firebase.messaging.FirebaseMessaging
@@ -63,6 +67,7 @@ import com.runovahq.app.ui.StartingScreen
 import uniffi.runova_ffi.AppLifecycle
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.CoreConfig
+import uniffi.runova_ffi.PickedFile
 import uniffi.runova_ffi.RunovaCore
 import uniffi.runova_ffi.ViewListener
 
@@ -380,6 +385,7 @@ class MainActivity : FragmentActivity(), ViewListener {
                 setEnabled = { category, on -> engine.notificationSetEnabled(category, on) },
             ),
             remote = remoteIntents(),
+            send = sendIntents(),
             prompts = PromptIntents(
                 generate = { request, type, target -> engine.promptsGenerate(request, type, target) },
                 cancel = { engine.promptsCancel() },
@@ -445,8 +451,68 @@ class MainActivity : FragmentActivity(), ViewListener {
         }
         handleCallback(intent)
         handlePushTap(intent)
+        handleShare(intent)
         startPush()
     }
+
+    // Sending files (E113): the pickers stage what to send, and the core reads it as it goes.
+    private val picked by lazy { PickedUris(contentResolver) }
+    private val sendPicks = SendPicks()
+    private val background = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    private fun staged(files: () -> List<StagedFile>) {
+        background.execute {
+            val found = files()
+            main.post {
+                sendPicks.add(found)
+                sendPicks.open = true
+            }
+        }
+    }
+
+    private val pickDocuments = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) staged { picked.stageDocuments(uris) }
+    }
+    private val pickMedia = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        if (uris.isNotEmpty()) staged { picked.stageDocuments(uris) }
+    }
+    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) staged { picked.stageFolder(tree) }
+    }
+
+    private fun sendIntents() = SendIntents(
+        picks = sendPicks,
+        pickFiles = { pickDocuments.launch(arrayOf("*/*")) },
+        pickPhotos = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+        pickFolder = { pickFolder.launch(null) },
+        send = { system, files, note ->
+            engine.sendFiles(system, files.map { PickedFile(it.handle, it.path, it.size.toULong()) }, note, picked)
+        },
+        cancel = { engine.cancelSend(it) },
+        retry = { engine.retrySend(it) },
+        dismiss = { engine.dismissSend(it) },
+        clearFinished = { engine.clearFinishedSends() },
+        dismissError = { engine.dismissSendError() },
+    )
+
+    /** Files shared to Runova from another app go to the Send files screen. */
+    private fun handleShare(intent: Intent?) {
+        val uris = when (intent?.action) {
+            Intent.ACTION_SEND -> listOfNotNull(streamOf(intent))
+            Intent.ACTION_SEND_MULTIPLE -> streamsOf(intent)
+            else -> return
+        }
+        if (uris.isNotEmpty()) staged { picked.stageDocuments(uris) }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun streamOf(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java) else intent.getParcelableExtra(Intent.EXTRA_STREAM)
+
+    @Suppress("DEPRECATION")
+    private fun streamsOf(intent: Intent): List<Uri> =
+        (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java) else intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM))
+            .orEmpty()
 
     private val frames = RemoteFrames()
 
@@ -523,6 +589,7 @@ class MainActivity : FragmentActivity(), ViewListener {
         super.onNewIntent(intent)
         handleCallback(intent)
         handlePushTap(intent)
+        handleShare(intent)
     }
 
     /**
@@ -578,6 +645,17 @@ class MainActivity : FragmentActivity(), ViewListener {
             this.view = view
             guardVault(view)
             guardLock(view)
+            keepSending(view)
+        }
+    }
+
+    /** A send going keeps the phone sending in the background, with its progress on show. */
+    private fun keepSending(view: AppView) {
+        val send = view.send
+        if (send.active > 0u) {
+            SendService.show(this, send.progressLabel ?: "Sending files", send.progressPercent.toInt())
+        } else {
+            SendService.stop(this)
         }
     }
 

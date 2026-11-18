@@ -9,8 +9,8 @@ using static Runova.Website.IntegrationTests.Infrastructure.TestRemote;
 namespace Runova.Website.IntegrationTests.Remote;
 
 /// <summary>
-/// Sending files (E112): a `send` rings only a computer whose app said, on going online, that it
-/// takes files; only from an app of the owner or a teammate, and never by password. The hub only
+/// Sending files (E112, E113): a `send` rings only a computer whose app said, on going online, that
+/// it takes files; only from an app or a phone of the owner or a teammate, and never by password. The hub only
 /// passes it on: what an app can do lives with its presence, and a send leaves no record.
 /// </summary>
 public sealed class RemoteSendTests(PostgresFixture postgres) : IAsyncLifetime
@@ -155,20 +155,33 @@ public sealed class RemoteSendTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_send_needs_the_app_it_comes_from()
+    public async Task A_send_needs_the_device_it_comes_from()
+    {
+        var (_, desk, _, deskApp, laptopApp) = await OwnAsync();
+        await using var _d = deskApp;
+        await using var _l = laptopApp;
+
+        var fromNoDevice = await laptopApp.RequestAsync(desk.GetProperty("remoteId").GetString()!, "ask", null, RemoteIntents.Send);
+
+        Assert.Equal(RemoteConnectStatuses.Unavailable, fromNoDevice.Status);
+        await RemoteApp.NothingAsync(deskApp.Incoming);
+    }
+
+    [Fact]
+    public async Task A_phone_sends_to_its_owners_computer()
     {
         var (sam, desk, _, deskApp, laptopApp) = await OwnAsync();
         await using var _d = deskApp;
         await using var _l = laptopApp;
         var phone = await RegisterAsync(sam, name: "Runova app", platform: "android");
-        var remoteId = desk.GetProperty("remoteId").GetString()!;
+        await using var phoneHub = await ConnectAsync(_factory, await DeviceTokenAsync(_factory, sam));
 
-        var fromNoDevice = await laptopApp.RequestAsync(remoteId, "ask", null, RemoteIntents.Send);
-        var fromPhone = await laptopApp.RequestAsync(remoteId, "ask", phone.GetProperty("id").GetInt64(), RemoteIntents.Send);
+        var result = await phoneHub.RequestAsync(desk.GetProperty("remoteId").GetString()!, "ask", phone.GetProperty("id").GetInt64(), RemoteIntents.Send);
+        var incoming = await RemoteApp.NextAsync(deskApp.Incoming);
 
-        Assert.Equal(RemoteConnectStatuses.Unavailable, fromNoDevice.Status);
-        Assert.Equal(RemoteConnectStatuses.Unavailable, fromPhone.Status);
-        await RemoteApp.NothingAsync(deskApp.Incoming);
+        Assert.Equal(RemoteConnectStatuses.Ringing, result.Status);
+        Assert.Equal(RemoteIntents.Send, incoming.Intent);
+        Assert.Equal("Runova app", incoming.Controller.DeviceName);
     }
 
     [Fact]

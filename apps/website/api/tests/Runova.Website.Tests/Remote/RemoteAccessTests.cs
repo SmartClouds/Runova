@@ -43,9 +43,13 @@ public class RemoteAccessTests
     [InlineData(RemoteRelation.Teammate, RemoteAccessModes.Ask, RemoteDeviceKinds.App, true)]
     [InlineData(RemoteRelation.Other, RemoteAccessModes.Ask, RemoteDeviceKinds.App, false)]
     [InlineData(RemoteRelation.Own, RemoteAccessModes.Password, RemoteDeviceKinds.App, false)]
-    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, RemoteDeviceKinds.Phone, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, RemoteDeviceKinds.Phone, true)]
+    [InlineData(RemoteRelation.Teammate, RemoteAccessModes.Ask, RemoteDeviceKinds.Phone, true)]
+    [InlineData(RemoteRelation.Other, RemoteAccessModes.Ask, RemoteDeviceKinds.Phone, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Password, RemoteDeviceKinds.Phone, false)]
+    [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, RemoteDeviceKinds.Agent, false)]
     [InlineData(RemoteRelation.Own, RemoteAccessModes.Ask, null, false)]
-    public void Files_go_only_by_asking_from_an_app_of_the_owner_or_a_teammate(RemoteRelation relation, string mode, string? fromKind, bool allowed)
+    public void Files_go_only_by_asking_from_an_app_or_phone_of_the_owner_or_a_teammate(RemoteRelation relation, string mode, string? fromKind, bool allowed)
     {
         Assert.Equal(allowed, RemoteAccess.MaySend(relation, mode, fromKind));
     }

@@ -94,6 +94,15 @@ pub struct ControlLink {
     pub host_kind: HostKind,
 }
 
+/// A secured link to a computer that files are sent to (E113). The sender owns it from here on,
+/// and ends the session on the hub when it is done.
+pub struct SendLink {
+    pub link: SecureLink,
+    pub session_id: String,
+    pub safety_code: String,
+    pub direct: bool,
+}
+
 struct LinkDetails {
     session_id: String,
     safety_code: String,
@@ -456,6 +465,37 @@ pub async fn connect_control(
                 safety_code: details.safety_code,
                 direct: details.direct,
                 host_kind: details.host_kind,
+            })
+        },
+    )
+    .await
+}
+
+/// Opens a link for sending files. The computer answers by its own rules, then its person accepts
+/// or declines the list over the link itself.
+pub async fn connect_send(
+    target: ConnectTarget,
+    hub: &dyn HubPort,
+    transports: &dyn Transports,
+    pins: &dyn PinStore,
+    events: &mut mpsc::Receiver<HubEvent>,
+    on_phase: &(dyn Fn(Phase) + Send + Sync),
+) -> Result<SendLink, ConnectError> {
+    connect_with(
+        target,
+        Intent::Send,
+        None,
+        hub,
+        transports,
+        pins,
+        events,
+        on_phase,
+        |link, details| async move {
+            Ok(SendLink {
+                link,
+                session_id: details.session_id,
+                safety_code: details.safety_code,
+                direct: details.direct,
             })
         },
     )

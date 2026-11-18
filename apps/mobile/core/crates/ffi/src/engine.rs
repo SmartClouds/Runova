@@ -315,6 +315,8 @@ pub(crate) struct Runner {
     pub(crate) traffic: crate::traffic::TrafficState,
     pub(crate) app_lock: crate::app_lock::LockState,
     pub(crate) pending_phrase: Option<crate::recovery_phrases::PendingPhraseReveal>,
+    /// Files on their way to computers (E113).
+    pub(crate) send: crate::send::SendState,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -394,6 +396,7 @@ impl Runner {
             traffic: Default::default(),
             app_lock: Default::default(),
             pending_phrase: None,
+            send: Default::default(),
         }
     }
 
@@ -643,6 +646,7 @@ impl Runner {
         self.view.systems = systems.iter().map(view_of).collect();
         self.systems = systems;
         self.view.systems_loading = false;
+        self.refresh_send_targets();
     }
 
     /// Connects the hub, makes sure the phone is registered, and lists the computers.
@@ -685,7 +689,7 @@ impl Runner {
         self.clear_device();
     }
 
-    fn let_go_of_hub(&mut self) {
+    pub(crate) fn let_go_of_hub(&mut self) {
         self.feed_events = None;
         self.hub = None;
         self.hub_events = None;
@@ -737,6 +741,7 @@ impl Runner {
         self.view.notifications = Default::default();
         self.view.encryption = None;
         self.pending_step_up = None;
+        self.stop_all_sends();
         self.end_connection();
         self.let_go_of_hub();
         self.device_id = None;
@@ -930,14 +935,25 @@ impl Runner {
             self.let_go_of_hub();
             return;
         };
-        if let HubEvent::Presence { device_id, online } = event {
+        if let HubEvent::Presence {
+            device_id,
+            online,
+            features,
+        } = event
+        {
             if let Some(entry) = self.systems.iter_mut().find(|s| s.id == device_id) {
                 entry.online = online;
+                if features.is_some() {
+                    entry.features = features;
+                }
             }
             let systems = std::mem::take(&mut self.systems);
             self.set_systems(systems);
             return;
         }
+        // Every dial waiting on the hub sees each event and keeps its own session's, so an answer
+        // that comes before its dial knows its session id still finds it.
+        self.send.forward(&event);
         if let Some((events, _)) = &self.connecting {
             // A full queue means the connect task has stopped reading, so nothing is lost.
             let _ = events.try_send(event);
@@ -987,6 +1003,7 @@ impl Runner {
             Command::Lifecycle(AppLifecycle::Foregrounded) => {
                 self.view.vault.in_background = false;
                 self.let_go_at = None;
+                self.send.hold_hub = false;
                 self.app_lock_foregrounded();
                 if self.view.auth == AuthState::SignedIn && self.hub.is_none() {
                     self.boot();
@@ -1027,7 +1044,12 @@ impl Runner {
                 () = wait_until(let_go_at) => {
                     self.let_go_at = None;
                     self.end_connection();
-                    self.let_go_of_hub();
+                    // A send going in the background still needs the hub to dial again.
+                    if self.send.busy() {
+                        self.send.hold_hub = true;
+                    } else {
+                        self.let_go_of_hub();
+                    }
                 }
             }
             self.publish();

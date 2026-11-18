@@ -37,6 +37,7 @@ struct AppIntents {
     var lock = LockIntents()
     var passcode = PasscodeIntents()
     var phrases = PhraseIntents()
+    var send = SendIntents()
 }
 
 let appTabs = [
@@ -53,12 +54,14 @@ struct AppRoot: View {
 
     @State private var aboutOpen = false
     @State private var scanning = false
+    @ObservedObject private var sendPicks: SendPicks
     @Environment(\.palette) private var palette
 
     init(view: AppView, tab: Binding<String>, intents: AppIntents) {
         self.view = view
         self._tab = tab
         self.appIntents = intents
+        self._sendPicks = ObservedObject(wrappedValue: intents.send.picks)
     }
 
     private var intents: AppIntents {
@@ -126,7 +129,10 @@ struct AppRoot: View {
     }
 
     @ViewBuilder private var signedIn: some View {
-        if let remote = view.remote {
+        // Sending files goes beside a connection, so it opens over whatever is on show.
+        if sendPicks.open {
+            SendFilesScreen(screen: view.send, intents: intents.send) { sendPicks.open = false }
+        } else if let remote = view.remote {
             RemoteViewerScreen(view: remote, intents: intents.remote)
         } else if let connection = view.connection {
             if connection.phase == .connected {
@@ -227,7 +233,11 @@ struct SystemsScreen: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RunovaScreen(title: "Systems") {
+        let openSend = { intents.send.picks.open = true }
+        RunovaScreen(title: "Systems", trailing: { SendFilesButton(onOpen: openSend) }) {
+            if view.send.progressLabel != nil {
+                SendingStrip(screen: view.send, onOpen: openSend).padding(.horizontal, 16).padding(.top, 12)
+            }
             if view.systems.isEmpty && view.systemsLoading {
                 LoadingRows()
             } else if view.systems.isEmpty {

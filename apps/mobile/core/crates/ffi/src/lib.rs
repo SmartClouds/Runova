@@ -29,6 +29,8 @@ pub mod recovery_phrases;
 pub(crate) mod recovery_phrases_view;
 pub mod remote;
 pub mod secure;
+pub mod send;
+pub(crate) mod send_view;
 pub mod status;
 pub mod studio;
 pub mod studio_tools;

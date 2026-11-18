@@ -140,3 +140,19 @@ async fn signals_and_ending_name_the_session() {
     );
     assert_eq!(seen[1], ("End".to_owned(), vec![json!("s1")]));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_send_says_so_to_the_hub() {
+    let (hub, seen) = hub_answering(json!({
+        "status": "ringing",
+        "sessionId": "s1",
+        "host": {"name": "Sam's desk", "identityKey": "key"},
+    }))
+    .await;
+
+    hub.request_connect("111222333", 7, Intent::Send, AccessMode::Ask)
+        .await
+        .unwrap();
+
+    assert_eq!(seen.lock().unwrap()[0].1[0]["intent"], "send");
+}

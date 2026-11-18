@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- From Android 17, the direct path to a computer on the same Wi-Fi needs this. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Sending files carries on in the background, with its progress in a notification (E113). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -33,7 +36,22 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.runovahq.app" android:path="/auth/callback" />
             </intent-filter>
+            <!-- Share a file or a few from any app to send them to a computer. -->
+            <intent-filter android:label="Send to a computer">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter android:label="Send to a computer">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
+        <service
+            android:name=".SendService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service
             android:name=".PushService"
             android:exported="false">

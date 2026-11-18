@@ -19,18 +19,22 @@ use runova_link::opener::{Direct, Relay};
 use runova_link::secure::{HostConfig, LinkEvent, SecureLink};
 use runova_link::testing::{MemoryTransport, memory_pair};
 use runova_link::transport::{Fingerprints, LinkTransport};
+use runova_protocol::file::BIN_FILE_CHUNK;
 use runova_protocol::manage::{ManageMessage, encode_stream, parse_message};
 use runova_protocol::remote::{ControlMessage, parse_control};
+use runova_protocol::send::{SendMessage, parse_send_message};
 use runova_session::connect::{DirectLink, Transports};
 use runova_session::hub::{
     AccessMode, ConnectResult, HostInfo, HostKind, HubEvent, HubPort, Intent, RelayTicket,
 };
+use runova_transfer::receiver::{ReceiveOutcome, ReceiveState, receive_batch_with};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 pub const PHONE_SEED: [u8; 32] = [2; 32];
 const HOST_SEED: [u8; 32] = [1; 32];
@@ -78,6 +82,8 @@ pub struct FakeBackend {
     rest: Mutex<HashMap<String, Value>>,
     changes: Mutex<Vec<(String, String, Value)>>,
     unattended: AtomicBool,
+    /// More computers in the directory, after Sam's desk.
+    pub extra: Mutex<Vec<SystemEntry>>,
 }
 
 impl FakeBackend {
@@ -111,7 +117,11 @@ impl Backend for FakeBackend {
             online: true,
             own: true,
             unattended: self.unattended.load(Ordering::SeqCst),
-        }])
+            features: Some(vec!["receive-files".into()]),
+        }]
+        .into_iter()
+        .chain(self.extra.lock().unwrap().iter().cloned())
+        .collect())
     }
 
     async fn get_json(&self, path: &str) -> Result<Value, BackendError> {
@@ -202,7 +212,13 @@ impl HubPort for FakeHub {
         })
     }
 
-    async fn end(&self, _: &str) {}
+    async fn end(&self, session_id: &str) {
+        self.computer
+            .ended
+            .lock()
+            .unwrap()
+            .push(session_id.to_owned());
+    }
 }
 
 /// The notifications hub, pushing whatever a test asks.
@@ -244,6 +260,7 @@ impl HubConnector for FakeConnector {
         _token: String,
     ) -> Result<(Arc<dyn HubPort>, mpsc::Receiver<HubEvent>), String> {
         let (events, receiver) = mpsc::channel(8);
+        *self.0.hub_events.lock().unwrap() = Some(events.clone());
         let hub = FakeHub {
             events,
             computer: self.0.clone(),
@@ -346,6 +363,23 @@ pub struct Computer {
     /// Everything the remote-control side was sent.
     pub control_received: Mutex<Vec<ControlMessage>>,
     control_push: Mutex<Option<mpsc::UnboundedSender<ControlPush>>>,
+    /// What the hub pushes to the phone, for tests that play the website.
+    pub hub_events: Mutex<Option<mpsc::Sender<HubEvent>>>,
+    /// Every session the phone ended on the hub.
+    pub ended: Mutex<Vec<String>>,
+    /// Where the computer saves files sent to it.
+    pub inbox: Mutex<Option<PathBuf>>,
+    /// The person at the computer says no to files.
+    pub declines_files: AtomicBool,
+    /// The next send link goes away after this many chunk frames, as a dropped network would.
+    pub cut_after_frames: Mutex<Option<usize>>,
+    /// Every chunk frame a send link brought, over all of them.
+    pub chunk_frames: AtomicUsize,
+    /// What each send link ended in, in order.
+    pub send_outcomes: Mutex<Vec<ReceiveOutcome>>,
+    /// Every offer the computer heard.
+    pub offers: Mutex<Vec<SendMessage>>,
+    receive_state: Mutex<ReceiveState>,
 }
 
 impl Computer {
@@ -517,10 +551,96 @@ impl Computer {
         });
     }
 
+    pub fn save_to(&self, folder: &Path) {
+        *self.inbox.lock().unwrap() = Some(folder.to_path_buf());
+    }
+
+    /// Takes files as the desktop does: the offer, the person's answer, then each file checked.
+    fn serve_send(self: Arc<Self>, transport: MemoryTransport, sealed: bool) {
+        tokio::spawn(async move {
+            let phone = Identity::from_seed(PHONE_SEED).public_key();
+            let fingerprint = |value: &str| {
+                if sealed {
+                    String::new()
+                } else {
+                    value.to_owned()
+                }
+            };
+            let Ok(mut link) = SecureLink::as_host(
+                Box::new(transport),
+                HostConfig {
+                    session_id: "s1".into(),
+                    mode: Mode::Ask,
+                    identity: Identity::from_seed(HOST_SEED),
+                    expected_controller_key: phone,
+                    password_secret: None,
+                    local_fingerprint: fingerprint("sha-256 BB"),
+                    remote_fingerprint: fingerprint("sha-256 AA"),
+                },
+                sealed,
+                &mut os_random,
+            )
+            .await
+            else {
+                return;
+            };
+            let offer = loop {
+                match link.next().await {
+                    Ok(LinkEvent::Text(text)) => {
+                        if let Some(offer @ SendMessage::SendOffer { .. }) =
+                            parse_send_message(&text)
+                        {
+                            break offer;
+                        }
+                    }
+                    Ok(LinkEvent::Binary(_)) => {}
+                    Err(_) => return,
+                }
+            };
+            self.offers.lock().unwrap().push(offer.clone());
+            let folder = self
+                .inbox
+                .lock()
+                .unwrap()
+                .clone()
+                .expect("a folder to save to");
+            let mut state = std::mem::take(&mut *self.receive_state.lock().unwrap());
+            let cut = self.cut_after_frames.lock().unwrap().take();
+            let accept = !self.declines_files.load(Ordering::SeqCst);
+            let (keep, stop) = watch::channel(false);
+            let mut frames = 0;
+            let counted = &self.chunk_frames;
+            let outcome = receive_batch_with(
+                &mut link,
+                &offer,
+                &folder,
+                accept,
+                &mut state,
+                stop,
+                |frame| {
+                    if frame.first() == Some(&BIN_FILE_CHUNK) {
+                        frames += 1;
+                        counted.fetch_add(1, Ordering::SeqCst);
+                    }
+                    cut.is_none_or(|cut| frames <= cut)
+                },
+            )
+            .await;
+            drop(keep);
+            *self.receive_state.lock().unwrap() = state;
+            self.send_outcomes.lock().unwrap().push(outcome);
+            link.close().await;
+        });
+    }
+
     fn serve(self: Arc<Self>, transport: MemoryTransport, sealed: bool) {
         let last = *self.intents.lock().unwrap().last().expect("a request");
         if last.0 == Intent::Control {
             self.serve_control(transport, sealed, last.1);
+            return;
+        }
+        if last.0 == Intent::Send {
+            self.serve_send(transport, sealed);
             return;
         }
         let (push, mut pushes) = mpsc::unbounded_channel();

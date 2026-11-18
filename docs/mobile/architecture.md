@@ -29,6 +29,7 @@ apps/mobile/
     api            REST client, PKCE sign-in, single-flight refresh rotation
     link           peer to peer then relay state machine behind a PeerTransport trait
     rpc            management client, subscriptions, flow control
+    transfer       sending and receiving files over a link, resumable and checked (E113)
     term           VT parser and capped cell grid
     store          one state machine per screen, emits view state
     ffi            UniFFI surface, the only crate native code sees

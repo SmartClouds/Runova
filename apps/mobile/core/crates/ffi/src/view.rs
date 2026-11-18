@@ -1400,6 +1400,8 @@ pub struct AppView {
     pub passcode: PasscodeSettingsScreen,
     /// Recovery phrases scanned from a computer (E108).
     pub recovery_phrases: RecoveryPhrasesScreen,
+    /// Files sent from the phone to a computer (E113).
+    pub send: SendScreen,
 }
 
 impl AppView {
@@ -1446,6 +1448,7 @@ impl AppView {
             lock: LockScreen::default(),
             passcode: PasscodeSettingsScreen::default(),
             recovery_phrases: RecoveryPhrasesScreen::default(),
+            send: SendScreen::default(),
         }
     }
 }
@@ -1453,6 +1456,7 @@ impl AppView {
 pub use crate::app_lock_view::*;
 pub use crate::cloudflare_view::*;
 pub use crate::recovery_phrases_view::*;
+pub use crate::send_view::*;
 pub use crate::traffic_view::*;
 
 #[uniffi::export(with_foreign)]

@@ -88,6 +88,7 @@ data class AppIntents(
     val lock: LockIntents = LockIntents(),
     val passcode: PasscodeIntents = PasscodeIntents(),
     val phrases: PhraseIntents = PhraseIntents(),
+    val send: SendIntents = SendIntents(),
 )
 
 val AppTabs = listOf(
@@ -130,6 +131,8 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
                 val connection = view.connection
                 val remote = view.remote
                 when {
+                    // Sending files goes beside a connection, so it opens over whatever is on show.
+                    intents.send.picks.open -> SendFilesScreen(view.send, intents.send) { intents.send.picks.open = false }
                     remote != null -> RemoteViewerScreen(remote, intents.remote)
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
@@ -239,7 +242,7 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit, onScanQr: () -> Unit = {}
     }
 }
 
-private fun platformName(platform: String) = when (platform) {
+internal fun platformName(platform: String) = when (platform) {
     "windows" -> "Windows"
     "macos" -> "macOS"
     "linux" -> "Linux"
@@ -248,7 +251,11 @@ private fun platformName(platform: String) = when (platform) {
 
 @Composable
 fun SystemsScreen(view: AppView, intents: AppIntents) {
-    RunovaScreen("Systems") {
+    val openSend = { intents.send.picks.open = true }
+    RunovaScreen("Systems", trailing = { SendFilesButton(openSend) }) {
+        if (view.send.progressLabel != null) {
+            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) { SendingStrip(view.send, openSend) }
+        }
         when {
             view.systems.isEmpty() && view.systemsLoading -> LoadingRows()
             view.systems.isEmpty() -> RunovaEmptyState(

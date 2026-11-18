@@ -67,6 +67,26 @@ fn presence_names_the_device() {
         Some(HubEvent::Presence {
             device_id: 7,
             online: true,
+            features: None,
+        })
+    );
+}
+
+#[test]
+fn presence_says_what_the_device_takes_when_the_website_knows() {
+    let event = raw(
+        "PresenceChanged",
+        vec![
+            json!({"deviceId": 7, "remoteId": "111222333", "online": true, "features": ["receive-files"]}),
+        ],
+    );
+
+    assert_eq!(
+        read_event(&event),
+        Some(HubEvent::Presence {
+            device_id: 7,
+            online: true,
+            features: Some(vec!["receive-files".to_owned()]),
         })
     );
 }

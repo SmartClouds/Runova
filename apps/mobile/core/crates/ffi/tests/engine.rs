@@ -106,6 +106,7 @@ fn desk() -> SystemEntry {
         online: true,
         own: true,
         unattended: false,
+        features: Some(vec!["receive-files".into()]),
     }
 }
 
@@ -480,6 +481,7 @@ async fn a_computer_going_offline_updates_the_list() {
         .send(HubEvent::Presence {
             device_id: 5,
             online: false,
+            features: Some(Vec::new()),
         })
         .await
         .unwrap();

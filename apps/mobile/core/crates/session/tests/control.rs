@@ -8,6 +8,7 @@ use runova_link::testing::{MemoryTransport, memory_pair};
 use runova_link::transport::{Fingerprints, LinkTransport};
 use runova_session::connect::{
     ConnectError, ConnectTarget, DirectLink, Phase, PinStore, Transports, connect_control,
+    connect_send,
 };
 use runova_session::hub::{
     AccessMode, ConnectResult, HostInfo, HostKind, HubEvent, HubPort, Intent, RelayTicket,
@@ -349,4 +350,32 @@ async fn a_changed_agent_key_is_refused_without_touching_the_apps_pin() {
     .await;
 
     assert_eq!(result.err(), Some(ConnectError::KeyChanged));
+}
+
+#[tokio::test]
+async fn a_send_asks_for_a_send_and_gets_a_secured_link() {
+    let hub = FakeHub::new(HostKind::App);
+    let transports = direct_to(Mode::Ask, None);
+    let pins = MemoryPins::default();
+    let (events, mut queue) = mpsc::channel(32);
+    events.send(accepted()).await.unwrap();
+
+    let link = connect_send(
+        target(),
+        hub.as_ref(),
+        &transports,
+        &pins,
+        &mut queue,
+        &no_phases,
+    )
+    .await
+    .expect("connected");
+
+    assert_eq!(
+        hub.requests.lock().unwrap().as_slice(),
+        [(Intent::Send, AccessMode::Ask)]
+    );
+    assert_eq!(link.session_id, "s1");
+    assert!(link.direct);
+    assert!(hub.ended.lock().unwrap().is_empty());
 }

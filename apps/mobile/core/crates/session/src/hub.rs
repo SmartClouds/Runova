@@ -12,6 +12,8 @@ pub enum Intent {
     Manage,
     /// Watching and using a computer's screen.
     Control,
+    /// Sending files (E113). Only a device that takes files is rung for it.
+    Send,
 }
 
 impl Intent {
@@ -19,6 +21,7 @@ impl Intent {
         match self {
             Intent::Manage => "manage",
             Intent::Control => "control",
+            Intent::Send => "send",
         }
     }
 }
@@ -85,6 +88,8 @@ pub enum HubEvent {
     Presence {
         device_id: i64,
         online: bool,
+        /// What the device takes, such as `receive-files`. `None` from a website too old to say.
+        features: Option<Vec<String>>,
     },
 }
 
@@ -139,6 +144,8 @@ struct EndedDto {
 struct PresenceDto {
     device_id: i64,
     online: bool,
+    #[serde(default)]
+    features: Option<Vec<String>>,
 }
 
 /// The event, or `None` for one this app does not use.
@@ -169,6 +176,7 @@ pub fn read_event(event: &RawEvent) -> Option<HubEvent> {
             Some(HubEvent::Presence {
                 device_id: dto.device_id,
                 online: dto.online,
+                features: dto.features,
             })
         }
         _ => None,

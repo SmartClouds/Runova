@@ -1827,6 +1827,7 @@ dependencies = [
  "runova-session",
  "runova-signalr",
  "runova-term",
+ "runova-transfer",
  "serde",
  "serde_json",
  "sha2",
@@ -1940,6 +1941,20 @@ name = "runova-term"
 version = "4.0.0"
 dependencies = [
  "vt100",
+]
+
+[[package]]
+name = "runova-transfer"
+version = "4.0.0"
+dependencies = [
+ "hex",
+ "runova-crypto",
+ "runova-link",
+ "runova-protocol",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
 ]
 
 [[package]]

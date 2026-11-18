@@ -284,7 +284,8 @@ func fixtureView(
     qrSignIn: QrSignInView? = nil,
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
-    recoveryPhrases: RecoveryPhrasesScreen = noPhrases
+    recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
+    send: SendScreen = noSends
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -294,8 +295,12 @@ func fixtureView(
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
-        lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases)
+        lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send)
 }
+
+/// The Send files screen with nothing sent (E113).
+let noSends = SendScreen(
+    targets: [], batches: [], error: nil, active: 0, progressLabel: nil, progressPercent: 0)
 
 /// The recovery phrases screen with nothing scanned (E108).
 let noPhrases = RecoveryPhrasesScreen(
@@ -303,9 +308,11 @@ let noPhrases = RecoveryPhrasesScreen(
 
 /// Draws a state at a phone's size and writes it where the comparison with Android looks.
 @MainActor
-func renderSnapshot(_ view: AppView, _ name: String, tab: String = "systems", dark: Bool = true) throws {
+func renderSnapshot(
+    _ view: AppView, _ name: String, tab: String = "systems", dark: Bool = true, intents: AppIntents = AppIntents()
+) throws {
     let root = RunovaTheme(dark: dark) {
-        AppRoot(view: view, tab: .constant(tab), intents: AppIntents())
+        AppRoot(view: view, tab: .constant(tab), intents: intents)
             .environment(\.runovaMotion, false)
     }
     let controller = UIHostingController(rootView: root.ignoresSafeArea())

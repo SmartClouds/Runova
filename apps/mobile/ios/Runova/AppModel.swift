@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Security
 import LocalAuthentication
+import PhotosUI
 import UniformTypeIdentifiers
 import UserNotifications
 import SwiftUI
@@ -230,7 +231,66 @@ final class AppModel: NSObject, ObservableObject {
                 },
                 deleteTemplate: { [weak self] in self?.engine?.promptsDeleteTemplate(id: $0) },
                 schedule: { [weak self] in self?.engine?.promptsSchedule(task: $0) },
-                cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }))
+                cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }),
+            send: sendIntents)
+    }
+
+    // Sending files (E113): the pickers stage what to send, and the core reads it as it goes.
+    let sendPicks = SendPicks()
+    private let picked = PickedURLs()
+    private var sendTask: UIBackgroundTaskIdentifier = .invalid
+
+    private var sendIntents: SendIntents {
+        SendIntents(
+            picks: sendPicks,
+            stageFiles: { [weak self] urls in self?.stage { $0.stageFiles(urls) } },
+            stageFolder: { [weak self] url in self?.stage { $0.stageFolder(url) } },
+            stagePhotos: { [weak self] items in
+                Task { @MainActor in
+                    let urls = await loadPickedMedia(items)
+                    self?.stage { $0.stageFiles(urls) }
+                }
+            },
+            send: { [weak self] system, files, note in
+                guard let self else { return }
+                let picks = files.map { PickedFile(handle: $0.handle, path: $0.path, size: UInt64(max(0, $0.size))) }
+                self.engine?.sendFiles(systemId: system, files: picks, note: note, picked: self.picked)
+            },
+            cancel: { [weak self] in self?.engine?.cancelSend(batchId: $0) },
+            retry: { [weak self] in self?.engine?.retrySend(batchId: $0) },
+            dismiss: { [weak self] in self?.engine?.dismissSend(batchId: $0) },
+            clearFinished: { [weak self] in self?.engine?.clearFinishedSends() },
+            dismissError: { [weak self] in self?.engine?.dismissSendError() })
+    }
+
+    /// Reads what was picked off the main thread, then shows it on the Send files screen.
+    private func stage(_ read: @escaping (PickedURLs) -> [StagedFile]) {
+        let picked = self.picked
+        DispatchQueue.global(qos: .userInitiated).async {
+            let staged = read(picked)
+            DispatchQueue.main.async { [weak self] in
+                self?.sendPicks.add(staged)
+                self?.sendPicks.open = true
+            }
+        }
+    }
+
+    /// A send going keeps the app running for a while in the background.
+    func keepSending(_ view: AppView) {
+        if view.send.active > 0 {
+            guard sendTask == .invalid else { return }
+            sendTask = UIApplication.shared.beginBackgroundTask(withName: "Sending files") { [weak self] in
+                self?.endSendTask()
+            }
+        } else {
+            endSendTask()
+        }
+    }
+
+    private func endSendTask() {
+        guard sendTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(sendTask)
+        sendTask = .invalid
     }
 
     private let frames = RemoteFrames()
@@ -613,6 +673,7 @@ private final class Listener: ViewListener {
             model?.view = view
             model?.confirmIdentityIfAsked(view)
             model?.unlockIfAsked(view)
+            model?.keepSending(view)
         }
     }
 }
