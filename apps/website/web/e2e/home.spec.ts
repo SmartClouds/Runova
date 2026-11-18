@@ -112,6 +112,32 @@ test.describe('home page', () => {
     expect(overflow).toBe(0);
   });
 
+  // The section skips painting off screen (content-visibility), which also clips anything drawn
+  // past its edge, so a fan wider than its column loses the side of its last phone.
+  for (const width of [1440, 1100, 1024, 768, 360, 320]) {
+    test(`keeps every phone screen inside its section at ${width}px`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      await page.locator('#phone').scrollIntoViewIfNeeded();
+      const spare = await page.evaluate(() => {
+        const section = document.querySelector('#phone')?.getBoundingClientRect();
+        const phones = [...document.querySelectorAll('#phone .phone')]
+          .map((phone) => phone.getBoundingClientRect())
+          .filter((box) => box.width > 0);
+        if (!section || phones.length === 0) return null;
+        return {
+          count: phones.length,
+          left: Math.min(...phones.map((box) => box.left)) - section.left,
+          right: section.right - Math.max(...phones.map((box) => box.right)),
+        };
+      });
+      expect(spare?.count).toBe(width < 640 ? 3 : 4);
+      expect(spare?.left).toBeGreaterThanOrEqual(0);
+      expect(spare?.right).toBeGreaterThanOrEqual(0);
+    });
+  }
+
   test('never downloads React', async ({ page }) => {
     const react = watchScripts(page, 'https://react.dev/errors/');
     await page.goto('/');

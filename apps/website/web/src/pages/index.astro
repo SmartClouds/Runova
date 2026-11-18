@@ -544,17 +544,23 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
   }
 
   /* Four phones fanned out like cards in a hand, the two in the middle in front. A phone too
-     narrow for four shows the last three. */
+     narrow for four shows the last three. The sizes are shares of the column, so the fan, its
+     tilt and the lift on hover always stay inside the section: below-fold sections clip what
+     paints past their edge. Four at 28% overlapping by 4% take 88% of the width, and the tilt
+     adds about 5% on each side. */
   .phones {
     display: flex;
     justify-content: center;
     align-items: center;
+    max-width: 46rem;
+    margin-inline: auto;
     padding-block: 2.5rem;
   }
 
   .phone-slot {
-    width: clamp(9.5rem, 21vw, 14.5rem);
-    margin-inline: -1.4rem;
+    flex: 0 0 28%;
+    width: 28%;
+    margin-inline: -4%;
   }
 
   .phone-slot > :global(.phone) {
@@ -605,8 +611,8 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
 
   @media (max-width: 639px) {
     .phone-slot {
-      width: 38vw;
-      margin-inline: -2.2rem;
+      flex-basis: 34%;
+      width: 34%;
     }
 
     .phone-slot:nth-child(1) {
