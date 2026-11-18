@@ -169,18 +169,42 @@ describe('launchPickOptions', () => {
     expect(models.map((m) => m.label)).toEqual([
       'Gemini 3.5 Flash-Lite',
       'Gemini 3.8 Flash',
+      'Gemini 4 Hydrogen',
       'Gemini 3.1 Pro',
       'Gemini 4 Argon',
+      'Gemini 4 Carbon',
     ]);
-    expect(models.map((m) => m.tier)).toEqual(['Fast', 'Balanced', 'Deep', 'Frontier']);
-    const [lite, flash, pro, argon] = models.map((m) => m.costLevel!);
-    expect(lite).toBeLessThan(flash!);
-    expect(flash).toBeLessThan(pro!);
-    expect(pro).toBeLessThan(argon!);
+    expect(models.map((m) => m.tier)).toEqual([
+      'Fast',
+      'Balanced',
+      'Balanced',
+      'Deep',
+      'Frontier',
+      'Frontier',
+    ]);
+    // The cost scale has five steps, so the two Frontier models can share the top one.
+    const levels = models.map((m) => m.costLevel!);
+    expect(levels).toEqual([...levels].sort((a, b) => a - b));
+    expect(levels[0]).toBeLessThan(levels[1]!);
+    expect(levels[1]).toBeLessThan(levels[3]!);
+    expect(levels[3]).toBeLessThan(levels[4]!);
     for (const model of models) {
       expect(model.efforts, model.label).toBeUndefined();
       expect(model.effortCost, model.label).toBeUndefined();
     }
+  });
+
+  it('lists the Codex models cheapest first, each with an effort setting', () => {
+    const models = launchPickOptions('codex-cli')!.models;
+    expect(models.map((m) => [m.label, m.value, m.tier])).toEqual([
+      ['GPT-6 Luna', 'gpt-6-luna', 'Fast'],
+      ['GPT-6.1 Terra', 'gpt-6.1-terra', 'Balanced'],
+      ['GPT-6.2 Sol', 'gpt-6.2-sol', 'Balanced'],
+      ['GPT-6.2 Astra', 'gpt-6.2-astra', 'Deep'],
+    ]);
+    const levels = models.map((m) => m.costLevel!);
+    expect(levels).toEqual([...levels].sort((a, b) => a - b));
+    for (const model of models) expect(model.efforts?.length, model.label).toBeGreaterThan(0);
   });
 
   it('adds a tier and cost levels where the CLI has a run profile', () => {

@@ -249,8 +249,10 @@ describe('LauncherMenu flyout details', () => {
     const tiers = new Map([
       ['Gemini 3.5 Flash-Lite', 'Fast'],
       ['Gemini 3.8 Flash', 'Balanced'],
+      ['Gemini 4 Hydrogen', 'Balanced'],
       ['Gemini 3.1 Pro', 'Deep'],
       ['Gemini 4 Argon', 'Frontier'],
+      ['Gemini 4 Carbon', 'Frontier'],
     ]);
     for (const [label, tier] of tiers) {
       const item = await screen.findByRole('menuitem', { name: row(label) });

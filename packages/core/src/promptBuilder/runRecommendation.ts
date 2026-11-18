@@ -202,6 +202,15 @@ const RUN_PROFILES: Record<string, Omit<TargetRunProfile, 'cliId' | 'executable'
         effortPicks: ['low', 'low', 'medium'],
       },
       {
+        ...fromCatalog('terra', CODEX_MODELS.terra),
+        tier: 'Balanced',
+        costWeight: 2,
+        bestFor: 'Everyday edits and tests at half the price of Sol',
+        maxScore: 50,
+        efforts: CODEX_EFFORTS,
+        effortPicks: ['medium', 'medium', 'high'],
+      },
+      {
         ...fromCatalog('sol', CODEX_MODELS.sol),
         tier: 'Balanced',
         costWeight: 3,
@@ -242,6 +251,13 @@ const RUN_PROFILES: Record<string, Omit<TargetRunProfile, 'cliId' | 'executable'
         maxScore: 65,
       },
       {
+        ...fromCatalog('hydrogen', GEMINI_CLI_MODELS.hydrogen),
+        tier: 'Balanced',
+        costWeight: 3,
+        bestFor: 'Everyday coding and agent work with a long context',
+        maxScore: 75,
+      },
+      {
         ...fromCatalog('pro', GEMINI_CLI_MODELS.pro),
         tier: 'Deep',
         costWeight: 6,
@@ -252,6 +268,13 @@ const RUN_PROFILES: Record<string, Omit<TargetRunProfile, 'cliId' | 'executable'
         ...fromCatalog('argon', GEMINI_CLI_MODELS.argon),
         tier: 'Frontier',
         costWeight: 8,
+        bestFor: 'Hard reasoning and agent sessions, with fewer tokens per turn than Carbon',
+        maxScore: 95,
+      },
+      {
+        ...fromCatalog('carbon', GEMINI_CLI_MODELS.carbon),
+        tier: 'Frontier',
+        costWeight: 10,
         bestFor: 'The hardest reasoning and long agent sessions',
         maxScore: 100,
       },

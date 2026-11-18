@@ -54,10 +54,15 @@ export const CLAUDE_WEEKLY_METERED_MODEL = CLAUDE_MODELS.fable;
 
 // OpenAI (Codex CLI)
 
+// Cheapest first. The Codex models page recommends Sol for everyday work and Astra for demanding
+// work. GPT-6 Astra and GPT-6.1 Sol are still served, but the 6.2 models replace them here, so
+// their ids stay in MODEL_PRICES only for the logs that name them.
+
 export const CODEX_MODELS = {
   luna: { label: 'GPT-6 Luna', cliArg: 'gpt-6-luna', apiId: 'gpt-6-luna' },
-  sol: { label: 'GPT-6.1 Sol', cliArg: 'gpt-6.1-sol', apiId: 'gpt-6.1-sol' },
-  astra: { label: 'GPT-6 Astra', cliArg: 'gpt-6-astra', apiId: 'gpt-6-astra' },
+  terra: { label: 'GPT-6.1 Terra', cliArg: 'gpt-6.1-terra', apiId: 'gpt-6.1-terra' },
+  sol: { label: 'GPT-6.2 Sol', cliArg: 'gpt-6.2-sol', apiId: 'gpt-6.2-sol' },
+  astra: { label: 'GPT-6.2 Astra', cliArg: 'gpt-6.2-astra', apiId: 'gpt-6.2-astra' },
 } as const satisfies Record<string, CatalogModel>;
 
 /** Priced in place of a Codex log entry that never said which model it came from. */
@@ -81,12 +86,18 @@ export const GEMINI_CLI_MODELS = {
     apiId: 'gemini-3.5-flash-lite',
   },
   flash: { label: 'Gemini 3.8 Flash', cliArg: 'gemini-3.8-flash', apiId: 'gemini-3.8-flash' },
+  hydrogen: {
+    label: 'Gemini 4 Hydrogen',
+    cliArg: 'gemini-4-hydrogen',
+    apiId: 'gemini-4-hydrogen',
+  },
   pro: {
     label: 'Gemini 3.1 Pro',
     cliArg: 'gemini-3.1-pro-preview',
     apiId: 'gemini-3.1-pro-preview',
   },
   argon: { label: 'Gemini 4 Argon', cliArg: 'gemini-4-argon', apiId: 'gemini-4-argon' },
+  carbon: { label: 'Gemini 4 Carbon', cliArg: 'gemini-4-carbon', apiId: 'gemini-4-carbon' },
 } as const satisfies Record<string, CatalogModel>;
 
 // xAI (Grok CLI). Newest first. The ids are the ones xAI's model table lists, and MODEL_PRICES
@@ -146,6 +157,7 @@ export const CLI_MODEL_EXAMPLES = {
 
 export const OPENAI_API_MODELS: readonly CatalogModelOption[] = [
   { value: CODEX_MODELS.luna.apiId, label: CODEX_MODELS.luna.apiId },
+  { value: CODEX_MODELS.terra.apiId, label: CODEX_MODELS.terra.apiId },
   { value: CODEX_MODELS.sol.apiId, label: CODEX_MODELS.sol.apiId },
   { value: CODEX_MODELS.astra.apiId, label: CODEX_MODELS.astra.apiId },
 ];
@@ -154,8 +166,10 @@ export const DEFAULT_OPENAI_API_MODEL = CODEX_MODELS.luna.apiId;
 export const GEMINI_API_MODELS: readonly CatalogModelOption[] = [
   { value: GEMINI_CLI_MODELS.flash.apiId, label: GEMINI_CLI_MODELS.flash.apiId },
   { value: GEMINI_CLI_MODELS.flashLite.apiId, label: GEMINI_CLI_MODELS.flashLite.apiId },
+  { value: GEMINI_CLI_MODELS.hydrogen.apiId, label: GEMINI_CLI_MODELS.hydrogen.apiId },
   { value: GEMINI_CLI_MODELS.pro.apiId, label: GEMINI_CLI_MODELS.pro.apiId },
   { value: GEMINI_CLI_MODELS.argon.apiId, label: GEMINI_CLI_MODELS.argon.apiId },
+  { value: GEMINI_CLI_MODELS.carbon.apiId, label: GEMINI_CLI_MODELS.carbon.apiId },
 ];
 /** Google points new projects at Flash. Gemini 2.x is closed to new users. */
 export const DEFAULT_GEMINI_API_MODEL = GEMINI_CLI_MODELS.flash.apiId;
@@ -679,9 +693,13 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   'claude-3-opus': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
 
   // OpenAI (GPT / o-series / Codex). Rates for prompts under about 272k tokens; longer ones
-  // cost 2x on input and 1.5x on output. GPT-6 and GPT-5.6 cache writes carry a 1.25x premium;
+  // cost 2x on input and 1.5x on output. GPT-6 and GPT-5.6 cache writes carry a 1.25x premium
+  // (OpenAI's price page lists no write price for 6.1 and 6.2, so they follow the same rule);
   // older models list no write price, so it's billed as plain input. GPT-5.6 Sol's rate is a
-  // promotional one that runs through 2026-11-21.
+  // promotional one that runs through 2026-11-30.
+  'gpt-6.2-astra': { input: 8, output: 40, cacheRead: 0.4, cacheWrite: 10 },
+  'gpt-6.2-sol': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+  'gpt-6.1-terra': { input: 1, output: 5, cacheRead: 0.05, cacheWrite: 1.25 },
   'gpt-6-astra': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   'gpt-6.1-sol': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   'gpt-6-sol': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
@@ -708,10 +726,13 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   'codex-mini': { input: 1.5, output: 6, cacheRead: 0.375, cacheWrite: 1.5 },
 
   // Google (Gemini). Rates for prompts up to 200k tokens (3.1 Pro and 2.5 Pro cost more beyond
-  // that). The 3.8 and 3.6 Flash rates are introductory and double on 2027-01-01, and Gemini 4
-  // Argon's launch rate doubles on 2026-12-01. The flash-lite entries have to stay: pricing
-  // matches by prefix, so without them those ids would fall through to the Flash rate.
+  // that). The 3.8 and 3.6 Flash rates are introductory and double on 2027-01-01, and the launch
+  // rate of Gemini 4 Carbon and Argon doubles on 2026-12-01 (Hydrogen's has no such date). The
+  // flash-lite entries have to stay: pricing matches by prefix, so without them those ids would
+  // fall through to the Flash rate.
+  'gemini-4-carbon': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2 },
   'gemini-4-argon': { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2 },
+  'gemini-4-hydrogen': { input: 1.5, output: 7.5, cacheRead: 0.075, cacheWrite: 1.5 },
   'gemini-3.8-flash': { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 },
   'gemini-3.6-flash': { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0.75 },
   'gemini-3.5-flash-lite': { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.3 },

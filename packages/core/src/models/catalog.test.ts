@@ -96,6 +96,29 @@ describe('model catalog', () => {
     expect(getModelPrice('gemini-3.1-flash-lite')?.input).toBe(0.25);
   });
 
+  it('prices the Gemini 4 and GPT-6.x models at their own rates', () => {
+    expect(getModelPrice('gemini-4-carbon')).toEqual({
+      input: 2,
+      output: 10,
+      cacheRead: 0.1,
+      cacheWrite: 2,
+    });
+    expect(getModelPrice('gemini-4-hydrogen')?.input).toBe(1.5);
+    expect(getModelPrice('gpt-6.2-astra')?.input).toBe(8);
+    expect(getModelPrice('gpt-6.2-sol')?.input).toBe(2);
+    expect(getModelPrice('gpt-6.1-terra')?.input).toBe(1);
+    // The models these replace still price the logs that name them.
+    expect(getModelPrice('gpt-6-astra')?.input).toBe(10);
+    expect(getModelPrice('gpt-6.1-sol')?.input).toBe(2);
+  });
+
+  it('offers every Codex and Gemini CLI model to Ask AI, so none is a CLI-only id', () => {
+    const openai = OPENAI_API_MODELS.map((m) => m.value);
+    for (const model of Object.values(CODEX_MODELS)) expect(openai).toContain(model.apiId);
+    const gemini = GEMINI_API_MODELS.map((m) => m.value);
+    for (const model of Object.values(GEMINI_CLI_MODELS)) expect(gemini).toContain(model.apiId);
+  });
+
   // Same prefix pitfall: 'claude-fable-5' is a prefix of 'claude-fable-5-2', so without its own
   // entry the newer, cheaper model would be billed at the older rate.
   it('prices Fable 5.2 at its own rate, not the Fable 5 or 5.1 rate it starts with', () => {
