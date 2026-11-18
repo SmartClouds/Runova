@@ -1367,6 +1367,7 @@ test('deploy-backups', async () => {
   await serverSection(p, 'Backups').click();
   await p.getByRole('button', { name: 'Set the secret key' }).click();
   const secret = 'violet harbor lantern pebble';
+  await p.getByRole('button', { name: 'Type my own' }).click();
   await p.getByLabel('New secret key', { exact: true }).fill(secret);
   await p.getByLabel('New secret key again', { exact: true }).fill(secret);
   await p.getByRole('button', { name: 'Set the secret key' }).click();

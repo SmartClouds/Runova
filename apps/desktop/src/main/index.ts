@@ -57,6 +57,7 @@ import { registerNewsHandlers } from './ipc/news';
 import { registerNotificationHandlers } from './ipc/notifications';
 import { registerPackageManagerHandlers } from './ipc/packageManagers';
 import { registerPetHandlers } from './ipc/pet';
+import { registerPhraseHandlers } from './ipc/phrase';
 import { registerPipelineHandlers } from './ipc/pipelines';
 import { registerPowerHandlers } from './ipc/power';
 import { registerProjectCleanupHandlers } from './ipc/projectCleanup';
@@ -421,6 +422,8 @@ function registerAllIpcHandlers(): void {
   // Health targets carry sealed keys, so only the main window's own page may reach them.
   registerNewsHandlers();
   registerAccountHandlers(getAccountRuntime);
+  // Recovery phrases (E107): made and kept here, used from any page by id.
+  registerPhraseHandlers();
   registerHealthHandlers({
     guard: (event) => {
       const win = getMainWindow();

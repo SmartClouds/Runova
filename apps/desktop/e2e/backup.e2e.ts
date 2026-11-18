@@ -129,6 +129,7 @@ test('a wrong backup password is refused, and the rest still restores', async ()
 
   await openBackupSettings(page);
   await page.getByRole('switch', { name: 'Include project environments' }).click();
+  await page.getByRole('button', { name: 'Type my own password' }).click();
   // The export is held back until the two boxes agree and are long enough.
   await page.getByPlaceholder('Backup password').fill('short');
   await expect(page.getByText('Use at least 8 characters.')).toBeVisible();

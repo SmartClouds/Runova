@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { type LaunchedApp, launchApp } from './app';
 import { type FakeAccountServer, startFakeAccountServer } from './fakeAccountServer';
 
@@ -38,6 +38,27 @@ async function signIn(launched: LaunchedApp) {
 
 const syncNow = (launched: LaunchedApp) =>
   launched.page.evaluate(() => window.runova.sync.syncNow());
+
+/**
+ * Shows the recovery phrase Runova made, reads its words off the card, and answers the three-word
+ * check. Returns the phrase, so a second computer can type it.
+ */
+async function savePhraseAndPassCheck(page: Page): Promise<string> {
+  await page.getByRole('button', { name: /Show the words/ }).click();
+  const words = await page
+    .getByRole('list', { name: 'Recovery phrase' })
+    .getByRole('listitem')
+    .locator('span.font-mono')
+    .allTextContents();
+  await page.getByRole('button', { name: /I saved it/ }).click();
+  for (let i = 0; i < 3; i++) {
+    const asked = await page.getByText(/^Which is word \d+\?$/).textContent();
+    const place = Number(asked?.match(/\d+/)?.[0]);
+    await page.getByRole('button', { name: words[place - 1], exact: true }).click();
+  }
+  await expect(page.getByText('Your phrase is checked')).toBeVisible();
+  return words.join(' ');
+}
 
 test('two computers on one account share a project, and each keeps its own folder', async () => {
   test.setTimeout(240_000);
@@ -114,11 +135,12 @@ test('a server password leaves only sealed, and opens on the other computer afte
   expect(JSON.stringify(server.records())).toContain('prod.example.test');
   expect(JSON.stringify(server.records())).not.toContain('the-real-password');
 
-  // Set the key through the screen, the way a person does.
+  // Set the key through the screen, the way a person does: a recovery phrase Runova makes (E107),
+  // shown, checked, then used.
   await first.page.getByRole('button', { name: 'Sync and encryption' }).click();
   await first.page.getByRole('button', { name: /Set a key/ }).click();
-  await first.page.getByLabel('New passphrase').fill('correct horse battery staple');
-  await first.page.getByLabel('Type it again').fill('correct horse battery staple');
+  const phrase = await savePhraseAndPassCheck(first.page);
+  expect(phrase.split(' ')).toHaveLength(24);
   await first.page.getByRole('button', { name: 'Set the key' }).click();
   await expect(first.page.getByText('Save your recovery key')).toBeVisible({ timeout: 60_000 });
   await first.page.getByLabel(/I saved my recovery key/).check();
@@ -136,7 +158,12 @@ test('a server password leaves only sealed, and opens on the other computer afte
   await second.page.getByLabel('Passphrase').fill('wrong but long enough');
   await second.page.getByRole('button', { name: 'Unlock' }).click();
   await expect(second.page.getByRole('alert')).toContainText('not right');
-  await second.page.getByLabel('Passphrase').fill('correct horse battery staple');
+  // The phrase goes in the word boxes, here typed in capitals, and still opens the key.
+  await second.page.getByRole('button', { name: 'My passphrase is a recovery phrase' }).click();
+  await second.page
+    .getByRole('textbox', { name: 'Word 1', exact: true })
+    .fill(phrase.toUpperCase());
+  await expect(second.page.getByText('The words check out')).toBeVisible();
   await second.page.getByRole('button', { name: 'Unlock' }).click();
   await expect(second.page.getByText('Secrets sealed')).toBeVisible({ timeout: 60_000 });
   await syncNow(second);

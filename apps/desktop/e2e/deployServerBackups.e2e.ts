@@ -88,6 +88,7 @@ test('sets up backups, keeps 2 of 3 on each destination, and downloads one encry
   await expect(page.getByRole('button', { name: 'Back up now' })).toBeDisabled();
   await page.getByRole('button', { name: 'Set the secret key' }).click();
   await expect(page.getByText(/never stored on the server/)).toBeVisible();
+  await page.getByRole('button', { name: 'Type my own' }).click();
   await page.getByLabel('New secret key', { exact: true }).fill(SECRET);
   await page.getByLabel('New secret key again', { exact: true }).fill(SECRET);
   await page.getByRole('button', { name: 'Set the secret key' }).click();

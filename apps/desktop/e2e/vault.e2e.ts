@@ -44,6 +44,7 @@ async function openVault(page: Page): Promise<void> {
 async function createVault(page: Page): Promise<void> {
   await openVault(page);
   await expect(page.getByRole('heading', { name: 'Create your vault' })).toBeVisible();
+  await page.getByRole('button', { name: 'Type my own password' }).click();
   await page.getByLabel('Master password').fill('short');
   await expect(page.getByText('Use at least 10 characters.')).toBeVisible();
   await page.getByLabel('Master password').fill(MASTER);

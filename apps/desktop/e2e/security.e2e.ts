@@ -127,6 +127,7 @@ test('saves an encrypted backup where the dialog says', async () => {
   await expect(page.getByRole('button', { name: 'Restore a backup' })).toBeDisabled();
   await page.getByRole('button', { name: 'Back up now' }).click();
   const dialog = page.getByRole('dialog', { name: 'Back up DevHost' });
+  await dialog.getByRole('button', { name: 'Type my own' }).click();
   await dialog.getByLabel('Passphrase', { exact: true }).fill('short');
   await expect(dialog.getByText('Use at least 12 characters.')).toBeVisible();
   await dialog.getByLabel('Passphrase', { exact: true }).fill(PASSPHRASE);
