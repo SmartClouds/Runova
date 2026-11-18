@@ -47,3 +47,25 @@ describe('coming back from a saved preference', () => {
     expect(saved.state.sidebarMode).toBe('collapsed');
   });
 });
+
+describe('the context section of a tab hover card', () => {
+  it('starts closed, so a hover card only peeks at the percent', () => {
+    expect(useUiStore.getInitialState().tabContextOpen).toBe(false);
+  });
+
+  it('saves whether it was left open', () => {
+    useUiStore.getState().setTabContextOpen(true);
+    expect(useUiStore.getState().tabContextOpen).toBe(true);
+    const saved = JSON.parse(localStorage.getItem('runova-ui') ?? '{}');
+    expect(saved.state.tabContextOpen).toBe(true);
+  });
+
+  it('comes back open on the next start', async () => {
+    localStorage.setItem(
+      'runova-ui',
+      JSON.stringify({ state: { sidebarMode: 'expanded', tabContextOpen: true }, version: 0 }),
+    );
+    await useUiStore.persist.rehydrate();
+    expect(useUiStore.getState().tabContextOpen).toBe(true);
+  });
+});

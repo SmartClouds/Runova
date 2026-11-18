@@ -26,6 +26,14 @@ describe('FuelRing', () => {
     expect(container.querySelector('[data-guard-tick]')).not.toBeNull();
   });
 
+  it('can turn hot at the guard without drawing its mark, for a ring too small to show it', () => {
+    const { container } = render(
+      <FuelRing used={180_000} budget={200_000} guardAt={170_000} size={14} tick={false} />,
+    );
+    expect(container.querySelector('[data-guard-tick]')).toBeNull();
+    expect(screen.getByRole('meter')).toHaveAttribute('data-level', 'hot');
+  });
+
   it('says so when the CLI cannot report its context', () => {
     render(<FuelRing used={null} budget={200_000} guardAt={null} />);
     expect(screen.getByRole('meter', { name: 'Context used' })).toHaveAttribute(

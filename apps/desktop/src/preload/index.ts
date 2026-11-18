@@ -117,6 +117,7 @@ import type {
   AddPromptHistoryInput,
   AddUsedSkillInput,
   AddUsedSkillResult,
+  AgentContextUsage,
   AgentRunInfoMap,
   AgentSessionEntry,
   AgentSessionUsage,
@@ -887,6 +888,9 @@ const agents = {
     ipcRenderer.invoke(IPC.agents.statusHookSettings, cliId),
   /** The model and effort each agent last reported. */
   runInfos: (): Promise<AgentRunInfoMap> => ipcRenderer.invoke(IPC.agents.runInfos),
+  /** How full a Claude Code tab's context window is right now, or null before its first reply. */
+  contextUsage: (sessionId: string): Promise<AgentContextUsage | null> =>
+    ipcRenderer.invoke(IPC.agents.contextUsage, sessionId),
   /** What each CLI was last actually run on, kept across restarts. */
   lastRunInfoByCli: (): Promise<LastRunInfoByCli> =>
     ipcRenderer.invoke(IPC.agents.lastRunInfoByCli),

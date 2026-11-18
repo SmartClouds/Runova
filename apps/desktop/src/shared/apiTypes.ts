@@ -331,6 +331,14 @@ export interface AgentRunInfo {
 
 export type AgentRunInfoMap = Record<string, AgentRunInfo>;
 
+/** How full a Claude Code session's context window is, measured from its transcript. */
+export interface AgentContextUsage {
+  /** Input plus cache tokens of the latest reply, what Claude Code's own status line counts. */
+  tokens: number;
+  /** The context window of the model the session runs on. */
+  window: number;
+}
+
 /** The model and effort last reported for a CLI, kept across restarts. */
 export interface LastRunInfo {
   model?: string;

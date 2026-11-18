@@ -2201,6 +2201,8 @@ export const IPC = {
     list: 'agents:list',
     statusHookSettings: 'agents:statusHookSettings',
     runInfos: 'agents:runInfos',
+    // (sessionId) -> AgentContextUsage | null: how full a Claude Code tab's context window is now
+    contextUsage: 'agents:contextUsage',
     // The model and effort each CLI was last actually running on, kept across restarts
     lastRunInfoByCli: 'agents:lastRunInfoByCli',
     // (projectId) -> AgentHistorySession[]: past conversations from every supported CLI in its folder

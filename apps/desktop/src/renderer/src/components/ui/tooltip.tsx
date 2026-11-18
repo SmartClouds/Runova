@@ -47,6 +47,11 @@ interface SimpleTooltipProps {
    */
   wrapTrigger?: boolean;
   delayDuration?: number;
+  /**
+   * What screen readers announce instead of the label. Radix otherwise copies the label into a
+   * hidden node for them, which mounts a rich label (one with controls or effects) twice.
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -61,6 +66,7 @@ function SimpleTooltip({
   className,
   wrapTrigger = false,
   delayDuration = 300,
+  ariaLabel,
 }: SimpleTooltipProps): React.JSX.Element {
   // Nothing to show, hand the child back untouched so callers can pass
   // optional values (an absent run command, a missing error) straight through.
@@ -73,7 +79,7 @@ function SimpleTooltip({
       <TooltipTrigger asChild>
         {wrapTrigger ? <span className="inline-flex">{children}</span> : children}
       </TooltipTrigger>
-      <TooltipContent side={side} align={align} className={className}>
+      <TooltipContent side={side} align={align} className={className} aria-label={ariaLabel}>
         {label}
       </TooltipContent>
     </Tooltip>

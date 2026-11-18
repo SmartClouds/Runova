@@ -1,6 +1,7 @@
 import type { AgentHistorySession } from '@runova/core';
 import { ipcMain } from 'electron';
 import type {
+  AgentContextUsage,
   AgentRunInfoMap,
   AgentSessionEntry,
   AgentSessionUsage,
@@ -11,6 +12,7 @@ import type {
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { claudeHookSettingsPath, supportsStatusHooks } from '../agents/claudeHooks';
+import { readSessionContextUsage } from '../agents/contextUsage';
 import { readProjectUsage } from '../agents/projectUsage';
 import { listAgentHistory } from '../agents/sessionHistory';
 import { readSessionUsage } from '../agents/sessionUsage';
@@ -80,6 +82,12 @@ export function registerAgentHandlers(): void {
   ipcMain.handle(IPC.agents.list, (): AgentStatusMap => agentStatus.list());
 
   ipcMain.handle(IPC.agents.runInfos, (): AgentRunInfoMap => agentStatus.runInfos());
+
+  ipcMain.handle(
+    IPC.agents.contextUsage,
+    async (_event, sessionId: unknown): Promise<AgentContextUsage | null> =>
+      typeof sessionId === 'string' ? readSessionContextUsage(sessionId) : null,
+  );
 
   ipcMain.handle(IPC.agents.autoContinuePending, (): AutoContinuePendingMap => autoContinue.list());
 

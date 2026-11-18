@@ -34,6 +34,7 @@ export function FuelRing({
   budget,
   guardAt,
   size = 28,
+  tick = true,
   className,
   children,
 }: {
@@ -41,6 +42,8 @@ export function FuelRing({
   budget: number;
   guardAt: number | null;
   size?: number;
+  /** Draws the guard's mark on the ring. Off for a ring too small to show it clearly. */
+  tick?: boolean;
   className?: string;
   children?: React.ReactNode;
 }): React.JSX.Element {
@@ -51,7 +54,7 @@ export function FuelRing({
   const circumference = 2 * Math.PI * radius;
   const share = used === null ? 0 : Math.min(1, used / budget);
   const percent = Math.round(share * 100);
-  const guardShare = guardAt !== null ? Math.min(1, guardAt / budget) : null;
+  const guardShare = tick && guardAt !== null ? Math.min(1, guardAt / budget) : null;
   const inner = guardShare !== null ? polar(guardShare, radius - 3.5, center) : null;
   const outer = guardShare !== null ? polar(guardShare, radius + 2, center) : null;
 

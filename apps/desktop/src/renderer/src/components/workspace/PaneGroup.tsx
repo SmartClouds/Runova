@@ -38,6 +38,7 @@ import { browserRuntime } from '@/lib/browser/browserRuntime';
 import { useTerminalSessionStore } from '@/lib/terminal/terminalRuntime';
 import { cn } from '@/lib/utils';
 import { useLauncherStore } from '@/lib/workspace/commands';
+import { contextPercentLabel } from '@/lib/workspace/contextUsage';
 import { resumeInputFor, statusHooksReady } from '@/lib/workspace/launch';
 import { useDefaultAgentTabMode } from '@/lib/workspace/viewMode';
 import {
@@ -50,6 +51,7 @@ import {
   withLaunchEffort,
 } from '@/stores/agentStatusStore';
 import { confirmDialog } from '@/stores/confirmStore';
+import { useContextUsage } from '@/stores/contextUsageStore';
 import { useShortcutLabel } from '@/stores/shortcutStore';
 import {
   canShowChat,
@@ -60,13 +62,14 @@ import {
   type WorkspaceBrowserTab,
   type WorkspaceTab,
 } from '@/stores/workspaceStore';
-import { AgentStatusChip, AgentStatusDot } from './AgentStatusDot';
+import { AGENT_STATUS_LABEL, AgentStatusChip, AgentStatusDot } from './AgentStatusDot';
 import { AutoContinueMenu, autoContinuePendingLine } from './AutoContinueMenu';
 import { BrowserTabMenu } from './browser/BrowserTabMenu';
 import { AgentChatView } from './chat/AgentChatView';
 import { FileTabMenu } from './FileTabMenu';
 import { LauncherMenu } from './LauncherMenu';
 import { PaneLauncher } from './PaneLauncher';
+import { TabContextUsage } from './TabContextUsage';
 import { TerminalSlot } from './TerminalSlot';
 
 /** Monaco is heavy; it loads the first time a diff is opened. */
@@ -364,6 +367,7 @@ function PaneTab({
   const status = useAgentStatus(tab.id);
   const runInfo = useAgentRunInfo(tab.id);
   const cliRunLine = useCliRunLine(tab.kind === 'terminal' ? tab.cliId : undefined);
+  const contextUsage = useContextUsage(tab.id);
   const [editing, setEditing] = useState(false);
   const renameRequested = useRef(false);
   // An agent tab takes the name the agent gave its task, as Orca does, once that task is done:
@@ -390,17 +394,40 @@ function PaneTab({
     tab.kind !== 'terminal' || !tab.cliId
       ? null
       : tabRunLine(withLaunchEffort(runInfo, tab.launchInput), tab.runLabel, cliRunLine);
+  const otherLiveTitle =
+    tab.kind === 'terminal' && liveTitle && liveTitle !== label && liveTitle !== tab.title
+      ? liveTitle
+      : null;
+  // Only Claude Code reports its transcript through hooks, so only its tabs can be measured.
+  const showsContext = tab.kind === 'terminal' && tab.cliId === 'claude-code' && !ended;
+  // The context section has a control in it, so screen readers get these words instead of a
+  // second copy of the card.
+  const tooltipSummary =
+    showsContext && tab.kind === 'terminal'
+      ? [
+          label,
+          label !== tab.title ? tab.title : null,
+          runLine,
+          otherLiveTitle,
+          attention === 'working' || attention === 'needs-input' || attention === 'done'
+            ? AGENT_STATUS_LABEL[attention]
+            : null,
+          tab.cwd,
+          contextUsage ? `Context ${contextPercentLabel(contextUsage)} used` : null,
+        ]
+          .filter(Boolean)
+          .join(', ')
+      : undefined;
   const tooltip =
     tab.kind === 'terminal' ? (
       <span className="flex flex-col gap-0.5">
         <span className="font-semibold">{label}</span>
         {label !== tab.title ? <span>{tab.title}</span> : null}
         {runLine ? <span className="text-primary">{runLine}</span> : null}
-        {liveTitle && liveTitle !== label && liveTitle !== tab.title ? (
-          <span className="text-muted-foreground">{liveTitle}</span>
-        ) : null}
+        {otherLiveTitle ? <span className="text-muted-foreground">{otherLiveTitle}</span> : null}
         <AgentStatusChip status={attention} className="mt-0.5 self-start" />
         <span className="font-mono text-[10px] text-muted-foreground">{tab.cwd}</span>
+        {showsContext ? <TabContextUsage sessionId={tab.id} /> : null}
       </span>
     ) : tab.kind === 'browser' ? (
       <span className="flex flex-col gap-0.5">
@@ -509,7 +536,7 @@ function PaneTab({
   );
 
   const tabElement = (
-    <SimpleTooltip label={editing ? null : tooltip} delayDuration={600}>
+    <SimpleTooltip label={editing ? null : tooltip} ariaLabel={tooltipSummary} delayDuration={600}>
       {tab.kind === 'diff' ? tabBody : <ContextMenuTrigger asChild>{tabBody}</ContextMenuTrigger>}
     </SimpleTooltip>
   );

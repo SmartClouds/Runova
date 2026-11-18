@@ -26,6 +26,11 @@ const projectUsage = vi.hoisted(() => ({
 }));
 vi.mock('../agents/projectUsage', () => projectUsage);
 
+const contextUsage = vi.hoisted(() => ({
+  readSessionContextUsage: vi.fn(async (_id: string): Promise<unknown> => null),
+}));
+vi.mock('../agents/contextUsage', () => contextUsage);
+
 vi.mock('../ptyHost/sessionManager', () => ({
   PtySessionManager: class {
     createOrAttach(): unknown {
@@ -227,5 +232,26 @@ describe('project usage', () => {
       expect(await invoke(IPC.agents.projectUsage, id, days)).toEqual({ status: 'unavailable' });
     }
     expect(projectUsage.readProjectUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe('agents:contextUsage', () => {
+  it('measures the context of the tab that asked', async () => {
+    contextUsage.readSessionContextUsage.mockImplementation(async (id) =>
+      id === 'tab-1' ? { tokens: 84_100, window: 200_000 } : null,
+    );
+
+    expect(await invoke(IPC.agents.contextUsage, 'tab-1')).toEqual({
+      tokens: 84_100,
+      window: 200_000,
+    });
+    expect(await invoke(IPC.agents.contextUsage, 'tab-2')).toBeNull();
+  });
+
+  it('turns away an id that is not a string', async () => {
+    contextUsage.readSessionContextUsage.mockClear();
+
+    expect(await invoke(IPC.agents.contextUsage, 42)).toBeNull();
+    expect(contextUsage.readSessionContextUsage).not.toHaveBeenCalled();
   });
 });

@@ -366,3 +366,69 @@ describe('PaneGroup browser tab', () => {
     expect(browserRuntime.setDragging).toHaveBeenLastCalledWith(false);
   });
 });
+
+describe('PaneGroup tab hover card context', () => {
+  const contextBridge = {
+    'agents.contextUsage': async (id: string) => {
+      const tab = useWorkspaceStore.getState().workspaces.p1?.tabs[id];
+      return tab?.kind === 'terminal' && tab.cliId === 'claude-code'
+        ? { tokens: 84_100, window: 200_000 }
+        : null;
+    },
+  };
+
+  it("peeks at how full a Claude Code tab's context is when hovered", async () => {
+    const { user } = renderWithProviders(<Harness />, { bridge: contextBridge });
+
+    await user.hover(screen.getByRole('tab', { name: /Claude Code/ }));
+
+    expect(await screen.findByText('42%', {}, { timeout: 2_000 })).toBeInTheDocument();
+    expect(screen.getByText('Context window')).toBeInTheDocument();
+    // Screen readers get one plain summary, the percent included, not a copy of the card.
+    expect(screen.getByRole('tooltip', { hidden: true })).toHaveTextContent(
+      /Claude Code.*Context 42% used/,
+    );
+    expect(screen.getAllByText('Context window')).toHaveLength(1);
+  });
+
+  it('opens the details inside the card without selecting the tab', async () => {
+    const { user, bridge } = renderWithProviders(<Harness />, { bridge: contextBridge });
+    const tab = screen.getByRole('tab', { name: /Claude Code/ });
+    expect(tab).toHaveAttribute('aria-selected', 'false');
+
+    await user.hover(tab);
+    await screen.findByText('42%', {}, { timeout: 2_000 });
+    // jsdom never positions the card, so it keeps pointer-events: none and takes plain events.
+    const header = screen.getByText('Context window').closest('button') as HTMLElement;
+    fireEvent.mouseDown(header);
+    fireEvent.click(header);
+
+    expect(screen.getByText('84.1K of 200K tokens used')).toBeInTheDocument();
+    expect(screen.getByText('115.9K left')).toBeInTheDocument();
+    expect(screen.getByRole('tooltip', { hidden: true })).toBeInTheDocument();
+    expect(tab).toHaveAttribute('aria-selected', 'false');
+    expect(bridge.$fn('agents.contextUsage')).toHaveBeenCalledWith(tab.getAttribute('data-tab-id'));
+  });
+
+  it.each([
+    { title: 'PowerShell', cliId: undefined },
+    { title: 'Codex', cliId: 'codex-cli' },
+  ])(
+    'leaves the context out of the $title tab, which cannot be measured',
+    async ({ title, cliId }) => {
+      useWorkspaceStore.getState().addTerminal('p1', { title, cwd: 'C:\\work\\app', cliId });
+      const measure = vi.fn(contextBridge['agents.contextUsage']);
+      const { user } = renderWithProviders(<Harness />, {
+        bridge: { 'agents.contextUsage': measure },
+      });
+
+      await user.hover(screen.getByRole('tab', { name: new RegExp(title) }));
+
+      expect(
+        await screen.findByRole('tooltip', { hidden: true }, { timeout: 2_000 }),
+      ).toHaveTextContent(title);
+      expect(screen.queryByText('Context window')).not.toBeInTheDocument();
+      expect(measure).not.toHaveBeenCalled();
+    },
+  );
+});
