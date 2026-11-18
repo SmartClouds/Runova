@@ -1056,6 +1056,8 @@ export interface BackupExportOptions {
    * password. Left out, they stay on this computer only.
    */
   environmentsPassword?: string;
+  /** Instead of a typed password, a recovery phrase made for this backup, by id (E107). */
+  environmentsPhraseId?: string;
   /**
    * The Vault goes in by default when there is one. It stays encrypted with its own master
    * password, so it needs no backup password. False leaves it out.

@@ -1,5 +1,8 @@
+import type { PhraseRef } from '@shared/phraseTypes';
 import { useEffect, useState } from 'react';
 import { Lock, Spinner } from '@/components/icons';
+import { ExistingSecretField } from '@/components/phrase/ExistingSecretField';
+import { NewSecretField, type SecretMode } from '@/components/phrase/NewSecretField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { SecretInput } from '@/components/ui/secret-input';
+import { cn } from '@/lib/utils';
 
 export interface SshVaultUnlockDialogProps {
   open: boolean;
@@ -29,6 +33,9 @@ export function SshVaultUnlockDialog({
 }: SshVaultUnlockDialogProps): React.JSX.Element {
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  // A new passkey can be a recovery phrase Runova makes (E107).
+  const [secretMode, setSecretMode] = useState<SecretMode>('phrase');
+  const [phraseRef, setPhraseRef] = useState<PhraseRef | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,8 +47,13 @@ export function SshVaultUnlockDialog({
     setError(null);
   }, [open]);
 
+  const byPhrase = mode === 'set' && secretMode === 'phrase';
   const canSubmit =
-    passphrase.length > 0 && (mode === 'unlock' || passphrase === confirmPassphrase);
+    mode === 'unlock'
+      ? passphrase.length > 0
+      : byPhrase
+        ? phraseRef !== null
+        : passphrase.length > 0 && passphrase === confirmPassphrase;
 
   async function handleSubmit(): Promise<void> {
     if (!canSubmit || submitting) return;
@@ -55,7 +67,9 @@ export function SshVaultUnlockDialog({
           return;
         }
       } else {
-        const result = await window.runova.ssh.setPasskey(passphrase);
+        const result = await window.runova.ssh.setPasskey(
+          byPhrase && phraseRef ? phraseRef : passphrase,
+        );
         if (!result.ok) {
           setError(result.error ?? 'Could not set the passkey.');
           return;
@@ -71,7 +85,7 @@ export function SshVaultUnlockDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-sm"
+        className={cn(byPhrase ? 'max-h-[92vh] max-w-xl overflow-y-auto' : 'max-w-sm')}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
@@ -91,19 +105,43 @@ export function SshVaultUnlockDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="ssh-vault-passphrase">Passkey</Label>
-            <SecretInput id="ssh-vault-passphrase" value={passphrase} onChange={setPassphrase} />
-          </div>
-          {mode === 'set' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="ssh-vault-passphrase-confirm">Confirm passkey</Label>
-              <SecretInput
-                id="ssh-vault-passphrase-confirm"
-                value={confirmPassphrase}
-                onChange={setConfirmPassphrase}
+          {mode === 'unlock' ? (
+            <ExistingSecretField
+              id="ssh-vault-passphrase"
+              label="Passkey"
+              value={passphrase}
+              onChange={setPassphrase}
+            />
+          ) : (
+            open && (
+              <NewSecretField
+                purpose="servers-passkey"
+                label="Servers passkey"
+                mode={secretMode}
+                onModeChange={setSecretMode}
+                onPhraseReady={setPhraseRef}
+                typed={
+                  <div className="flex flex-col gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ssh-vault-passphrase">Passkey</Label>
+                      <SecretInput
+                        id="ssh-vault-passphrase"
+                        value={passphrase}
+                        onChange={setPassphrase}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ssh-vault-passphrase-confirm">Confirm passkey</Label>
+                      <SecretInput
+                        id="ssh-vault-passphrase-confirm"
+                        value={confirmPassphrase}
+                        onChange={setConfirmPassphrase}
+                      />
+                    </div>
+                  </div>
+                }
               />
-            </div>
+            )
           )}
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>

@@ -34,7 +34,7 @@ function harness(trusted = true) {
   const call = async (channel: string, ...args: unknown[]) => {
     const handler = handlers.get(channel);
     if (!handler) throw new Error(`No handler for ${channel}`);
-    return handler({} as IpcMainInvokeEvent, ...args);
+    return handler({ sender: { id: 1 } } as unknown as IpcMainInvokeEvent, ...args);
   };
   return { handlers, answer, restoreCalls, call };
 }
@@ -218,6 +218,40 @@ describe('deployServerBackups handlers', () => {
     await expect(
       call(C.restore, { ...base, secret: 'two\nlines', source: { kind: 'file', fileToken: ID } }),
     ).rejects.toThrow(/secret/);
+  });
+
+  it('sets the secret key to a recovery phrase by id, and writes a typed phrase one way (E107)', async () => {
+    const { phraseRegistry } = await import('../phrase');
+    const { call, answer, restoreCalls } = harness();
+    const made = phraseRegistry.create({ purpose: 'server-backup', label: 'web-1', owner: 1 });
+    const words = made.words.join(' ');
+
+    await call(C.setSecret, { serverId: 'srv-1', newSecret: { phraseId: made.id } });
+    expect(answer).toHaveBeenCalledWith({ serverId: 'srv-1', newSecret: words });
+
+    await call(C.setSecret, {
+      serverId: 'srv-1',
+      currentSecret: words.toUpperCase(),
+      newSecret: 'a typed secret key',
+    });
+    expect(answer).toHaveBeenLastCalledWith({
+      serverId: 'srv-1',
+      currentSecret: words,
+      newSecret: 'a typed secret key',
+    });
+
+    await call(C.restore, {
+      serverId: 'srv-1',
+      secret: words.replace(/ /g, '  '),
+      sudoPassword: null,
+      userName: 'maria',
+      password: 'pw',
+      source: { kind: 'file', fileToken: ID },
+    });
+    expect(restoreCalls.restore).toHaveBeenCalledWith(expect.objectContaining({ secret: words }));
+    await expect(
+      call(C.setSecret, { serverId: 'srv-1', newSecret: { phraseId: 'x' } }),
+    ).rejects.toThrow(/secret key/);
   });
 
   it('checks bringing the server up', async () => {

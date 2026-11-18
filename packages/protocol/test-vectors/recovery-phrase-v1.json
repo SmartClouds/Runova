@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "about": "Recovery phrases (E107, E108). BIP39 English words for 32 random bytes. The desktop (TypeScript), the phone core (Rust) and server core (.NET) all replay this file, so a phrase made on one is read the same way on the others.",
+  "entropy": [
+    {
+      "entropy": "0000000000000000000000000000000000000000000000000000000000000000",
+      "phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
+    },
+    {
+      "entropy": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "phrase": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title"
+    },
+    {
+      "entropy": "8080808080808080808080808080808080808080808080808080808080808080",
+      "phrase": "letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic bless"
+    },
+    {
+      "entropy": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "phrase": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+    },
+    {
+      "entropy": "68a79eaca2324873eacc50cb9c6eca8cc68ea5d936f98787c60c7ebc74e6ce7c",
+      "phrase": "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length"
+    },
+    {
+      "entropy": "9f6a2878b2520799a44ef18bc7df394e7061a224d2c33cd015b157d746869863",
+      "phrase": "panda eyebrow bullet gorilla call smoke muffin taste mesh discover soft ostrich alcohol speed nation flash devote level hobby quick inner drive ghost inside"
+    },
+    {
+      "entropy": "066dca1a2bb7e8a1db2832148ce9933eea0f3ac9548d793112d9a95c9407efad",
+      "phrase": "all hour make first leader extend hole alien behind guard gospel lava path output census museum junior mass reopen famous sing advance salt reform"
+    },
+    {
+      "entropy": "f585c11aec520db57dd353c69554b21a89b20fb0650966fa0a9d6f74fd989d8f",
+      "phrase": "void come effort suffer camp survey warrior heavy shoot primary clutch crush open amazing screen patrol group space point ten exist slush involve unfold"
+    }
+  ],
+  "canonical": [
+    {
+      "about": "already canonical",
+      "input": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "isPhrase": true
+    },
+    {
+      "about": "capitals, tabs, new lines and extra spaces",
+      "input": "  Legal WINNER\tthank year\nwave sausage   worth useful legal winner thank year wave sausage worth useful\r\nlegal winner thank year wave sausage worth TITLE ",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "isPhrase": true
+    },
+    {
+      "about": "full-width letters and a no-break space fold under NFKD",
+      "input": "ｌｅｇａｌ winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "isPhrase": true
+    },
+    {
+      "about": "wrong checksum: the last word is changed, so the text is a passphrase and stays exactly as typed",
+      "input": "Legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth  zoo",
+      "output": "Legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth  zoo",
+      "isPhrase": false
+    },
+    {
+      "about": "23 words",
+      "input": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth",
+      "isPhrase": false
+    },
+    {
+      "about": "25 words",
+      "input": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title title",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title title",
+      "isPhrase": false
+    },
+    {
+      "about": "a word that is not on the list",
+      "input": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage runova title",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage runova title",
+      "isPhrase": false
+    },
+    {
+      "about": "a valid 12-word phrase is not one of ours and stays a passphrase",
+      "input": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      "output": "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      "isPhrase": false
+    },
+    {
+      "about": "an ordinary passphrase",
+      "input": "Correct Horse battery staple!",
+      "output": "Correct Horse battery staple!",
+      "isPhrase": false
+    }
+  ],
+  "qr": [
+    {
+      "purpose": "sync",
+      "label": "Personal sync",
+      "phrase": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+      "payload": "RUNOVA-PHRASE:1:sync:UGVyc29uYWwgc3luYw:legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title"
+    },
+    {
+      "purpose": "vault",
+      "label": "Vault: work laptop ✓",
+      "phrase": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote",
+      "payload": "RUNOVA-PHRASE:1:vault:VmF1bHQ6IHdvcmsgbGFwdG9wIOKckw:zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+    }
+  ],
+  "badQr": [
+    { "about": "wrong prefix", "payload": "RUNOVA1:abc" },
+    { "about": "future version", "payload": "RUNOVA-PHRASE:2:sync:UGVyc29uYWwgc3luYw:zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote" },
+    { "about": "unknown purpose", "payload": "RUNOVA-PHRASE:1:wallet:UGVyc29uYWwgc3luYw:zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote" },
+    { "about": "bad checksum", "payload": "RUNOVA-PHRASE:1:sync:UGVyc29uYWwgc3luYw:zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo" },
+    { "about": "missing words", "payload": "RUNOVA-PHRASE:1:sync:UGVyc29uYWwgc3luYw" },
+    { "about": "a label that is not base64url", "payload": "RUNOVA-PHRASE:1:sync:UGVy+29u:zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote" },
+    { "about": "a bare text that is not a phrase", "payload": "hello world" }
+  ],
+  "bareQr": [
+    {
+      "about": "just the words, from another tool",
+      "payload": "ZOO zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote\n",
+      "phrase": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+    }
+  ],
+  "purposes": ["sync", "sync-recovery", "vault", "server-backup", "app-backup", "servers-passkey"]
+}

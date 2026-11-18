@@ -553,6 +553,7 @@ import type {
 import type { GrammarCheckInput, GrammarCheckResult, GrammarLocalStatus } from '../shared/grammar';
 import { IPC } from '../shared/ipcChannels';
 import type { PetPipelineMessage, PetSnoozeState, PetWorkArea } from '../shared/pet';
+import type { NewSecret } from '../shared/phraseTypes';
 import type { RemoteInputEvent, RemoteRtcMessage } from '../shared/remoteProtocol';
 import type { EditCommand, SpellcheckMenuPayload } from '../shared/spellcheck';
 import type { SshHostKeyStatus } from '../shared/sshHostKey';
@@ -576,6 +577,7 @@ import { createDeployWordPress } from './deployWordPress';
 import { createErrorTracking } from './errorTracking';
 import { createHealth } from './health';
 import { createNews } from './news';
+import { createPhrase } from './phrase';
 import { createProjectCleanup } from './projectCleanup';
 import { createRelay } from './relay';
 import { createRunnerCleanup } from './runnerCleanup';
@@ -714,7 +716,7 @@ const ssh = {
   vaultStatus: (): Promise<SshVaultStatus> => ipcRenderer.invoke(IPC.ssh.vaultStatus),
   unlockVault: (passphrase: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.ssh.unlockVault, passphrase),
-  setPasskey: (passphrase: string | null): Promise<{ ok: boolean; error?: string }> =>
+  setPasskey: (passphrase: NewSecret | null): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.ssh.setPasskey, passphrase),
   /** The stored and presented host key fingerprints, read with a handshake that never logs in. */
   hostKeyStatus: (serverId: string): Promise<SshHostKeyStatus> =>
@@ -2162,6 +2164,7 @@ const health = createHealth();
 const news = createNews();
 const account = createAccount();
 const sync = createSync();
+const phrase = createPhrase();
 const teams = createTeams();
 const studio = createStudio();
 const studioAi = createStudioAi();
@@ -3049,11 +3052,11 @@ export function windowsBuildNumber(): number | null {
 
 const vault = {
   status: (): Promise<VaultStatus> => ipcRenderer.invoke(IPC.vault.status),
-  create: (password: string): Promise<void> => ipcRenderer.invoke(IPC.vault.create, password),
+  create: (password: NewSecret): Promise<void> => ipcRenderer.invoke(IPC.vault.create, password),
   unlock: (password: string): Promise<VaultUnlockResult> =>
     ipcRenderer.invoke(IPC.vault.unlock, password),
   lock: (): Promise<void> => ipcRenderer.invoke(IPC.vault.lock),
-  changePassword: (current: string, next: string): Promise<boolean> =>
+  changePassword: (current: string, next: NewSecret): Promise<boolean> =>
     ipcRenderer.invoke(IPC.vault.changePassword, current, next),
   reset: (): Promise<void> => ipcRenderer.invoke(IPC.vault.reset),
   list: (): Promise<VaultEntrySummary[]> => ipcRenderer.invoke(IPC.vault.list),
@@ -3259,6 +3262,7 @@ const runovaApi = {
   news,
   account,
   sync,
+  phrase,
   teams,
   studio,
   studioAi,

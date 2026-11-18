@@ -163,6 +163,7 @@ describe('SecretTab', () => {
     expect(await screen.findByText(/no backup made with it can be restored/)).toBeTruthy();
     expect(screen.getByText(/never stored on the server/)).toBeTruthy();
     const save = screen.getByRole('button', { name: 'Set the secret key' });
+    await user.click(screen.getByRole('button', { name: 'Type my own' }));
     await user.type(screen.getByLabelText('New secret key'), 'too short');
     expect(screen.getByText('Use at least 12 characters.')).toBeTruthy();
     await user.clear(screen.getByLabelText('New secret key'));
@@ -186,6 +187,7 @@ describe('SecretTab', () => {
       },
     });
     await user.type(await screen.findByLabelText('Current secret key'), 'the old secret key');
+    await user.click(screen.getByRole('button', { name: 'Type my own' }));
     await user.type(screen.getByLabelText('New secret key'), 'orange tractor lamp');
     await user.type(screen.getByLabelText('New secret key again'), 'orange tractor lamp');
     await user.click(screen.getByRole('button', { name: 'Change the secret key' }));
@@ -194,6 +196,36 @@ describe('SecretTab', () => {
         serverId: 'srv-1',
         currentSecret: 'the old secret key',
         newSecret: 'orange tractor lamp',
+      }),
+    );
+  });
+
+  it('sets a recovery phrase made for it, once it is checked (E107)', async () => {
+    const words =
+      'hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length'.split(
+        ' ',
+      );
+    const { user, bridge } = renderWithProviders(<SecretHarness />, {
+      bridge: {
+        ...STEPPED_UP,
+        'deployServerBackups.getSecret': { isSet: false },
+        'deployServerBackups.setSecret': async () => ({ isSet: true, keyId: 'k1' }),
+        'phrase.create': { id: 'S'.repeat(22), words },
+      },
+    });
+    const save = await screen.findByRole('button', { name: 'Set the secret key' });
+    await user.click(await screen.findByRole('button', { name: /I saved it/ }));
+    for (let i = 0; i < 3; i++) {
+      const asked = Number(
+        screen.getByText(/^Which is word \d+\?$/).textContent?.match(/\d+/)?.[0],
+      );
+      await user.click(screen.getByRole('button', { name: words[asked - 1] }));
+    }
+    await user.click(save);
+    await waitFor(() =>
+      expect(bridge.$fn('deployServerBackups.setSecret')).toHaveBeenCalledWith({
+        serverId: 'srv-1',
+        newSecret: { phraseId: 'S'.repeat(22) },
       }),
     );
   });

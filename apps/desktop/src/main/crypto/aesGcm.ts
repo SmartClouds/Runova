@@ -5,6 +5,7 @@ import {
   type ScryptOptions,
   scrypt as scryptCallback,
 } from 'node:crypto';
+import { canonicalSecret } from '@runova/protocol';
 import type { PassphraseSecretEnvelope } from '../../shared/apiTypes';
 
 const KEY_LENGTH = 32;
@@ -18,13 +19,17 @@ function scrypt(passphrase: string, salt: string, options: ScryptOptions): Promi
   });
 }
 
-/** An AES-256 key from a passphrase. `options` defaults to Node's scrypt cost (N = 16384). */
+/**
+ * An AES-256 key from a passphrase. `options` defaults to Node's scrypt cost (N = 16384).
+ * A recovery phrase is read in its canonical form first (E107), so one typed with capitals or
+ * extra spaces still opens what it locked. Any other passphrase is used exactly as typed.
+ */
 export function deriveKey(
   passphrase: string,
   salt: string,
   options: ScryptOptions = {},
 ): Promise<Buffer> {
-  return scrypt(passphrase, salt, options);
+  return scrypt(canonicalSecret(passphrase), salt, options);
 }
 
 /** `aad` is authenticated but not encrypted: decrypting fails unless the same bytes are given. */

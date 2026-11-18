@@ -34,6 +34,7 @@
     "src/preload/deployFiles.ts",
     "src/preload/health.ts",
     "src/preload/news.ts",
+    "src/preload/phrase.ts",
     "src/preload/studio.ts",
     "src/preload/relay.ts",
     "src/preload/ciAutoFix.ts",

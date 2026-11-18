@@ -22,6 +22,7 @@ import {
   WHISPER_MODELS,
 } from '@runova/core';
 import type { OllamaConnectionTest } from '@shared/apiTypes';
+import type { PhraseRef } from '@shared/phraseTypes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -75,6 +76,7 @@ import {
 import { NAV_ITEMS } from '@/components/layout/Sidebar';
 import { SECTION_HEADING } from '@/components/pageKit';
 import { CompanionSettings } from '@/components/pet/CompanionSettings';
+import { NewSecretField, type SecretMode } from '@/components/phrase/NewSecretField';
 import { AgentTabViewSettings } from '@/components/settings/AgentTabViewSettings';
 import { AndroidSdkSettings } from '@/components/settings/AndroidSdkSettings';
 import { AiAccessActivityCard } from '@/components/settings/aiAccess/AiAccessActivityCard';
@@ -1427,6 +1429,10 @@ export default function SettingsPage(): React.JSX.Element {
   const [backupEnvironments, setBackupEnvironments] = useState(false);
   const [backupVault, setBackupVault] = useState(true);
   const [backupPassword, setBackupPassword] = useState('');
+  // The environments can be locked with a recovery phrase Runova makes instead (E107).
+  const [backupSecretMode, setBackupSecretMode] = useState<SecretMode>('phrase');
+  const [backupPhraseRef, setBackupPhraseRef] = useState<PhraseRef | null>(null);
+  const [backupPhraseRound, setBackupPhraseRound] = useState(0);
   const [backupPasswordConfirm, setBackupPasswordConfirm] = useState('');
   const [pendingRestore, setPendingRestore] = useState<{
     token: string;
@@ -1435,11 +1441,15 @@ export default function SettingsPage(): React.JSX.Element {
 
   const backupPasswordProblem = !backupEnvironments
     ? null
-    : backupPassword.length < 8
-      ? 'Use at least 8 characters.'
-      : backupPassword !== backupPasswordConfirm
-        ? 'The passwords do not match.'
-        : null;
+    : backupSecretMode === 'phrase'
+      ? backupPhraseRef
+        ? null
+        : 'Save and check the recovery phrase first.'
+      : backupPassword.length < 8
+        ? 'Use at least 8 characters.'
+        : backupPassword !== backupPasswordConfirm
+          ? 'The passwords do not match.'
+          : null;
 
   async function handleExportBackup(): Promise<void> {
     if (backupPasswordProblem) {
@@ -1449,13 +1459,18 @@ export default function SettingsPage(): React.JSX.Element {
     setExportingBackup(true);
     try {
       const result = await window.runova.backup.export(compressBackup, {
-        environmentsPassword: backupEnvironments ? backupPassword : undefined,
+        ...(!backupEnvironments
+          ? {}
+          : backupSecretMode === 'phrase' && backupPhraseRef
+            ? { environmentsPhraseId: backupPhraseRef.phraseId }
+            : { environmentsPassword: backupPassword }),
         includeVault: backupVault,
       });
       if (result.ok && result.path) {
         toast.success(`Backup saved to ${result.path}`);
         setBackupPassword('');
         setBackupPasswordConfirm('');
+        setBackupPhraseRound((round) => round + 1);
       } else if (result.error) toast.error(result.error);
     } finally {
       setExportingBackup(false);
@@ -3160,23 +3175,39 @@ export default function SettingsPage(): React.JSX.Element {
                           </div>
                           {backupEnvironments && (
                             <div className="mt-3 space-y-2">
-                              <SecretInput
-                                value={backupPassword}
-                                onChange={setBackupPassword}
-                                placeholder="Backup password"
-                              />
-                              <SecretInput
-                                value={backupPasswordConfirm}
-                                onChange={setBackupPasswordConfirm}
-                                placeholder="Confirm password"
+                              <NewSecretField
+                                key={backupPhraseRound}
+                                purpose="app-backup"
+                                label="Settings backup"
+                                mode={backupSecretMode}
+                                onModeChange={setBackupSecretMode}
+                                onPhraseReady={setBackupPhraseRef}
+                                typedLabel="Type my own password"
+                                typed={
+                                  <div className="space-y-2">
+                                    <SecretInput
+                                      value={backupPassword}
+                                      onChange={setBackupPassword}
+                                      placeholder="Backup password"
+                                    />
+                                    <SecretInput
+                                      value={backupPasswordConfirm}
+                                      onChange={setBackupPasswordConfirm}
+                                      placeholder="Confirm password"
+                                    />
+                                    {backupPassword && backupPasswordProblem && (
+                                      <p className="text-xs text-destructive">
+                                        {backupPasswordProblem}
+                                      </p>
+                                    )}
+                                  </div>
+                                }
                               />
                               <p className="text-xs leading-relaxed text-muted-foreground">
-                                Env files and credentials are encrypted with this password. You need
-                                it to restore them, and it cannot be recovered.
+                                Env files and credentials are encrypted with this{' '}
+                                {backupSecretMode === 'phrase' ? 'phrase' : 'password'}. You need it
+                                to restore them, and it cannot be recovered.
                               </p>
-                              {backupPassword && backupPasswordProblem && (
-                                <p className="text-xs text-destructive">{backupPasswordProblem}</p>
-                              )}
                             </div>
                           )}
                           <Button

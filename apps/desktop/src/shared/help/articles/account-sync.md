@@ -34,10 +34,14 @@ Passwords, private keys, environment values and tokens leave your computer only 
 
 1. Open **Account**, then **Sync and encryption**.
 2. On **Your own data**, click **Set a key**.
-3. Type a passphrase of at least 12 characters, twice. A few unrelated words work well.
-4. Runova shows a **recovery key**. Copy it into your password manager or print it, tick that you saved it, and click **Done**.
+3. Choose how to lock it:
+   - **Create a phrase for me** (the default): Runova makes 24 random words, like a crypto wallet's recovery phrase. Click **Show the words**, then copy them, **Save to a file**, or switch to **QR code** and scan it with the Runova app on your phone. Click **I saved it, check me** and pick the right word for three places.
+   - **Type my own**: a passphrase of at least 12 characters, twice. A few unrelated words work well.
+4. Click **Set the key**. Runova shows a **recovery key**, also 24 words, with the same copy, save and QR code. After a typed passphrase you check three of its words; after a phrase, tick that you saved it. Then click **Done**.
 
-On each other computer, the same card says **Locked on this computer**. Click **Unlock here** and type the passphrase (or the recovery key) once. The server keeps only a wrapped copy of the key and can never read what it seals.
+The words and the QR code stay hidden until you ask for them, hide again when you switch to another window, and are left out of screenshots and screen sharing. A copied phrase is cleared from the clipboard after the Vault's clipboard time (a minute when that is set to never). A saved file is a plain text file only your user can open: keep it in a password manager or on an encrypted drive, or print it and delete it.
+
+On each other computer, the same card says **Locked on this computer**. Click **Unlock here** and type the passphrase (or the recovery key) once. A phrase goes in 24 word boxes: paste it, type it with suggestions, or click **Open a saved file**. Capitals and spaces do not matter in a phrase. Recovery keys from before phrases (eight groups of seven characters) still work: click **I have an older key in groups of characters**. The server keeps only a wrapped copy of the key and can never read what it seals.
 
 Under **Also seal** you can seal more than the secrets: **Server connections**, **Environments**, or **Everything**.
 

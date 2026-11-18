@@ -765,6 +765,7 @@ describe('SettingsPage backup export', () => {
     await screen.findByText('Backup & restore');
 
     await user.click(screen.getByRole('switch', { name: /Include project environments/ }));
+    await user.click(screen.getByRole('button', { name: 'Type my own password' }));
     // The password cannot be recovered, so an unusable one has to be caught before the export.
     expect(screen.getByRole('button', { name: /Export backup/ })).toBeDisabled();
 
@@ -779,6 +780,7 @@ describe('SettingsPage backup export', () => {
     const { user } = renderSettings({}, '/settings?tab=data');
     await screen.findByText('Backup & restore');
     await user.click(screen.getByRole('switch', { name: /Include project environments/ }));
+    await user.click(screen.getByRole('button', { name: 'Type my own password' }));
 
     await user.type(screen.getByPlaceholderText('Backup password'), 'correct-horse');
     await user.type(screen.getByPlaceholderText('Confirm password'), 'correct-hose');
@@ -794,6 +796,7 @@ describe('SettingsPage backup export', () => {
     );
     await screen.findByText('Backup & restore');
     await user.click(screen.getByRole('switch', { name: /Include project environments/ }));
+    await user.click(screen.getByRole('button', { name: 'Type my own password' }));
 
     await user.type(screen.getByPlaceholderText('Backup password'), 'correct-horse');
     await user.type(screen.getByPlaceholderText('Confirm password'), 'correct-horse');
@@ -802,6 +805,41 @@ describe('SettingsPage backup export', () => {
     await waitFor(() =>
       expect(bridge.$fn('backup.export')).toHaveBeenCalledWith(false, {
         environmentsPassword: 'correct-horse',
+        includeVault: true,
+      }),
+    );
+  });
+});
+
+describe('SettingsPage backup export with a recovery phrase (E107)', () => {
+  it('locks the environments with a made phrase once it is checked', async () => {
+    const words =
+      'hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length'.split(
+        ' ',
+      );
+    const { user, bridge } = renderSettings(
+      {
+        'backup.export': async () => ({ ok: true, path: 'C:/backups/runova.json' }),
+        'phrase.create': { id: 'E'.repeat(22), words },
+      },
+      '/settings?tab=data',
+    );
+    await screen.findByText('Backup & restore');
+    await user.click(screen.getByRole('switch', { name: /Include project environments/ }));
+    expect(screen.getByRole('button', { name: /Export backup/ })).toBeDisabled();
+
+    await user.click(await screen.findByRole('button', { name: /I saved it/ }));
+    for (let i = 0; i < 3; i++) {
+      const asked = Number(
+        screen.getByText(/^Which is word \d+\?$/).textContent?.match(/\d+/)?.[0],
+      );
+      await user.click(screen.getByRole('button', { name: words[asked - 1] }));
+    }
+    await user.click(screen.getByRole('button', { name: /Export backup/ }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('backup.export')).toHaveBeenCalledWith(false, {
+        environmentsPhraseId: 'E'.repeat(22),
         includeVault: true,
       }),
     );

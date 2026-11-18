@@ -127,4 +127,21 @@ describe('deriveKey', () => {
     const wrong = await deriveKey('opensesam', salt, CHEAP);
     expect(() => decryptWithKey(envelope, wrong)).toThrow();
   });
+
+  it('gives a recovery phrase the same key however it was typed (E107)', async () => {
+    const salt = 'cGhyYXNl';
+    const phrase = `${'zoo '.repeat(23)}vote`;
+    const typed = `  ${'ZOO	'.repeat(23)}Vote
+`;
+    expect((await deriveKey(typed, salt, CHEAP)).equals(await deriveKey(phrase, salt, CHEAP))).toBe(
+      true,
+    );
+  });
+
+  it('uses a passphrase exactly as typed, spaces and capitals included', async () => {
+    const salt = 'cGhyYXNl';
+    const plain = await deriveKey('Open Sesame', salt, CHEAP);
+    expect(plain.equals(await deriveKey('open sesame', salt, CHEAP))).toBe(false);
+    expect(plain.equals(await deriveKey('Open  Sesame', salt, CHEAP))).toBe(false);
+  });
 });

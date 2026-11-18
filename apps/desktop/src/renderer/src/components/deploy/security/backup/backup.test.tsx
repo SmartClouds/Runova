@@ -71,6 +71,7 @@ describe('BackupCard', () => {
     await user.click(screen.getByRole('button', { name: 'Back up now' }));
     const dialog = await screen.findByRole('dialog', { name: /Back up Production/ });
     const save = within(dialog).getByRole('button', { name: 'Choose where to save' });
+    await user.click(within(dialog).getByRole('button', { name: 'Type my own' }));
     await user.type(within(dialog).getByLabelText('Passphrase'), 'short');
     expect(within(dialog).getByText('Use at least 12 characters.')).toBeTruthy();
     expect(save.hasAttribute('disabled')).toBe(true);
@@ -92,12 +93,39 @@ describe('BackupCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Back up now' }));
     const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Type my own' }));
     await user.type(within(dialog).getByLabelText('Passphrase'), PASSPHRASE);
     await user.type(within(dialog).getByLabelText('Passphrase again'), PASSPHRASE);
     await user.click(within(dialog).getByRole('button', { name: 'Choose where to save' }));
 
     expect(toast.success).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('backs up with a recovery phrase made for it, once it is checked (E107)', async () => {
+    const words =
+      'hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length'.split(
+        ' ',
+      );
+    const { user, bridge } = renderCard({ 'phrase.create': { id: 'B'.repeat(22), words } });
+
+    await user.click(screen.getByRole('button', { name: 'Back up now' }));
+    const dialog = await screen.findByRole('dialog', { name: /Back up Production/ });
+    await user.click(await within(dialog).findByRole('button', { name: /I saved it/ }));
+    for (let i = 0; i < 3; i++) {
+      const asked = Number(
+        within(dialog)
+          .getByText(/^Which is word \d+\?$/)
+          .textContent?.match(/\d+/)?.[0],
+      );
+      await user.click(within(dialog).getByRole('button', { name: words[asked - 1] }));
+    }
+    await user.click(within(dialog).getByRole('button', { name: 'Choose where to save' }));
+
+    expect(bridge.$fn('deployHardening.createBackup')).toHaveBeenCalledWith({
+      serverId: 'srv-1',
+      passphrase: { phraseId: 'B'.repeat(22) },
+    });
   });
 
   it('restores after the server name is typed, shows the steps and the outcome', async () => {

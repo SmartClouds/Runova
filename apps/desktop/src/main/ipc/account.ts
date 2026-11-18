@@ -10,6 +10,7 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import type { AccountRuntime } from '../account/runtime';
 import { refreshNotificationForwarding } from '../notifications/forward';
+import { phraseRegistry, secretFrom } from '../phrase';
 
 /**
  * The account, sync and teams channels (E48). Every payload is checked here before the runtime
@@ -24,6 +25,14 @@ const stepUp = z.strictObject({
 });
 const scope = z.strictObject({ scopeId: id });
 const passphrase = z.string().min(1).max(1024);
+const phraseId = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+/** A key's new secret: a typed passphrase, or a recovery phrase made for it, by id (E107). */
+const label = z.string().max(120).optional();
+const newSecret = z.union([
+  z.strictObject({ scopeId: id, label, passphrase }),
+  z.strictObject({ scopeId: id, label, phraseId }),
+]);
+type NewSecret = { scopeId: number; label?: string; passphrase?: string; phraseId?: string };
 const role = z.enum(['owner', 'admin', 'member', 'viewer']);
 const collection = z.string().regex(/^[a-z][a-z0-9-]{1,39}$/);
 const itemId = z.string().regex(/^[A-Za-z0-9_.:-]{1,64}$/);
@@ -36,10 +45,27 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 }
 
 export function registerAccountHandlers(runtime: () => AccountRuntime): void {
-  const handle = (channel: string, schema: z.ZodType | null, run: (input: never) => unknown) =>
-    ipcMain.handle(channel, (_event, payload: unknown) =>
-      run((schema ? parse(schema, payload) : undefined) as never),
+  const handle = (
+    channel: string,
+    schema: z.ZodType | null,
+    run: (input: never, owner: number) => unknown,
+  ) =>
+    ipcMain.handle(channel, (event, payload: unknown) =>
+      run((schema ? parse(schema, payload) : undefined) as never, event.sender.id),
     );
+
+  /** The new recovery key, kept by id so the page can copy, save and show it as a QR code. */
+  const recovery = (made: { recoveryKey: string }, input: NewSecret, owner: number) => ({
+    recovery: {
+      id: phraseRegistry.hold({
+        purpose: 'sync-recovery',
+        label: input.label || 'Sync',
+        phrase: made.recoveryKey,
+        owner,
+      }),
+      words: made.recoveryKey.split(' '),
+    },
+  });
 
   handle(IPC.account.status, null, () => runtime().status());
   handle(IPC.account.encryption, null, () =>
@@ -130,11 +156,8 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
     }) => runtime().setPolicy(input.scopeId, input.policy),
   );
   handle(IPC.sync.usage, scope, (input: { scopeId: number }) => runtime().usage(input.scopeId));
-  handle(
-    IPC.sync.setKey,
-    z.strictObject({ scopeId: id, passphrase }),
-    (input: { scopeId: number; passphrase: string }) =>
-      runtime().setKey(input.scopeId, input.passphrase),
+  handle(IPC.sync.setKey, newSecret, async (input: NewSecret, owner: number) =>
+    recovery(await runtime().setKey(input.scopeId, secretFrom(input, owner)), input, owner),
   );
   handle(
     IPC.sync.unlock,
@@ -142,7 +165,7 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
       .strictObject({
         scopeId: id,
         passphrase: passphrase.optional(),
-        recoveryKey: z.string().max(200).optional(),
+        recoveryKey: z.string().max(400).optional(),
       })
       .refine(
         (v) => !!v.passphrase !== !!v.recoveryKey,
@@ -154,17 +177,11 @@ export function registerAccountHandlers(runtime: () => AccountRuntime): void {
         ...(input.recoveryKey ? { recoveryKey: input.recoveryKey } : {}),
       }),
   );
-  handle(
-    IPC.sync.changePassphrase,
-    z.strictObject({ scopeId: id, passphrase }),
-    (input: { scopeId: number; passphrase: string }) =>
-      runtime().changePassphrase(input.scopeId, input.passphrase),
+  handle(IPC.sync.changePassphrase, newSecret, (input: NewSecret, owner: number) =>
+    runtime().changePassphrase(input.scopeId, secretFrom(input, owner)),
   );
-  handle(
-    IPC.sync.rotateKey,
-    z.strictObject({ scopeId: id, passphrase }),
-    (input: { scopeId: number; passphrase: string }) =>
-      runtime().rotateKey(input.scopeId, input.passphrase),
+  handle(IPC.sync.rotateKey, newSecret, async (input: NewSecret, owner: number) =>
+    recovery(await runtime().rotateKey(input.scopeId, secretFrom(input, owner)), input, owner),
   );
   handle(
     IPC.sync.resetKey,

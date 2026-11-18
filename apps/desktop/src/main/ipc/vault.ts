@@ -20,6 +20,7 @@ import type {
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { encodeVaultError } from '../../shared/vaultErrors';
+import { readSecret } from '../phrase';
 import type { LoginPage } from '../vault/autofill/fillSession';
 import type { VaultService } from '../vault/service';
 import { VaultError } from '../vault/session';
@@ -92,6 +93,14 @@ function webContentsId(value: unknown): number {
   return value;
 }
 
+/** A new master password: typed text, or a recovery phrase made for it, by id (E107). */
+function newSecret(value: unknown, owner: number, name: string): string {
+  if (typeof value === 'string') return text(value, name);
+  const secret = readSecret(value, owner);
+  if (secret === null) throw invalid(`${name} must be text or a recovery phrase.`);
+  return secret;
+}
+
 function oneOf<T extends string>(value: unknown, options: readonly T[], name: string): T {
   if (!options.includes(value as T)) throw invalid(`Unknown ${name}.`);
   return value as T;
@@ -121,7 +130,10 @@ export function registerVaultHandlers({
   guard,
   guestPage,
 }: VaultHandlerDeps): void {
-  const handle = (channel: string, run: (...args: unknown[]) => unknown) => {
+  const handle = (
+    channel: string,
+    run: (this: { owner: number }, ...args: unknown[]) => unknown,
+  ) => {
     ipc.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
       if (!guard(event)) {
         throw new Error(
@@ -129,7 +141,7 @@ export function registerVaultHandlers({
         );
       }
       try {
-        return await run(...args);
+        return await run.apply({ owner: event.sender.id }, args);
       } catch (error) {
         if (error instanceof VaultError)
           throw new Error(encodeVaultError(error.code, error.message));
@@ -139,15 +151,20 @@ export function registerVaultHandlers({
   };
 
   handle(IPC.vault.status, (): Promise<VaultStatus> => service.status());
-  handle(IPC.vault.create, (password) => service.create(text(password, 'Password')));
+  handle(IPC.vault.create, function (password) {
+    return service.create(newSecret(password, this.owner, 'Password'));
+  });
   handle(
     IPC.vault.unlock,
     (password): Promise<VaultUnlockResult> => service.unlock(text(password, 'Password')),
   );
   handle(IPC.vault.lock, () => service.lock('manual'));
-  handle(IPC.vault.changePassword, (current, next) =>
-    service.changePassword(text(current, 'Current password'), text(next, 'New password')),
-  );
+  handle(IPC.vault.changePassword, function (current, next) {
+    return service.changePassword(
+      text(current, 'Current password'),
+      newSecret(next, this.owner, 'New password'),
+    );
+  });
   handle(IPC.vault.reset, () => service.reset());
   handle(IPC.vault.list, () => service.list());
   handle(IPC.vault.getForEdit, (id) => service.getForEdit(text(id, 'Entry id', VAULT_LIMITS.id)));

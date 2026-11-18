@@ -1,8 +1,10 @@
 import { coreErrorMessage } from '@shared/coreErrors';
 import type { DeployServer } from '@shared/deployTypes';
+import type { PhraseRef } from '@shared/phraseTypes';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Archive, Spinner, TriangleAlert } from '@/components/icons';
+import { NewSecretField, type SecretMode } from '@/components/phrase/NewSecretField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,8 +20,9 @@ import { Notice } from '../../deployKit';
 import type { StepUp } from '../useStepUp';
 
 /**
- * Making a backup: a passphrase typed twice, then where to save it. The core encrypts with it on
- * the server, so only the passphrase can open the file; Runova keeps it nowhere.
+ * Making a backup: a recovery phrase Runova makes (E107) or a passphrase typed twice, then where to
+ * save it. The core encrypts with it on the server, so only it can open the file; Runova keeps it
+ * nowhere.
  */
 
 const MIN = 12;
@@ -42,6 +45,8 @@ export function CreateBackupDialog({
   stepUp: StepUp;
   onOpenChange: (open: boolean) => void;
 }): React.JSX.Element {
+  const [mode, setMode] = useState<SecretMode>('phrase');
+  const [phraseRef, setPhraseRef] = useState<PhraseRef | null>(null);
   const [passphrase, setPassphrase] = useState('');
   const [again, setAgain] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,8 +59,10 @@ export function CreateBackupDialog({
     setProblem(null);
   }, [open]);
 
-  const issue = passphraseIssue(passphrase, again);
-  const ready = passphrase.length >= MIN && again === passphrase && !busy;
+  const typed = mode === 'typed';
+  const issue = typed ? passphraseIssue(passphrase, again) : null;
+  const ready =
+    !busy && (typed ? passphrase.length >= MIN && again === passphrase : phraseRef !== null);
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -64,7 +71,10 @@ export function CreateBackupDialog({
     setProblem(null);
     try {
       const result = await stepUp.run(() =>
-        window.runova.deployHardening.createBackup({ serverId: server.id, passphrase }),
+        window.runova.deployHardening.createBackup({
+          serverId: server.id,
+          passphrase: typed || !phraseRef ? passphrase : phraseRef,
+        }),
       );
       if (!result?.saved) return;
       toast.success(`Backup saved to ${result.path}`);
@@ -78,7 +88,7 @@ export function CreateBackupDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={typed ? 'max-w-md' : 'max-h-[92vh] max-w-xl overflow-y-auto'}>
         <form className="space-y-4" onSubmit={(event) => void submit(event)}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -89,28 +99,45 @@ export function CreateBackupDialog({
               on the server with your passphrase and saved on this computer.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor={`backup-pass-${server.id}`}>Passphrase</Label>
-            <SecretInput
-              id={`backup-pass-${server.id}`}
-              value={passphrase}
-              onChange={setPassphrase}
-              placeholder="At least 12 characters"
-              autoFocus
+          {open && (
+            <NewSecretField
+              purpose="server-backup"
+              label={`Backup of ${server.nickname}`}
+              mode={mode}
+              onModeChange={setMode}
+              onPhraseReady={setPhraseRef}
+              typed={
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`backup-pass-${server.id}`}>Passphrase</Label>
+                    <SecretInput
+                      id={`backup-pass-${server.id}`}
+                      value={passphrase}
+                      onChange={setPassphrase}
+                      placeholder="At least 12 characters"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`backup-again-${server.id}`}>Passphrase again</Label>
+                    <SecretInput
+                      id={`backup-again-${server.id}`}
+                      value={again}
+                      onChange={setAgain}
+                    />
+                  </div>
+                </div>
+              }
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`backup-again-${server.id}`}>Passphrase again</Label>
-            <SecretInput id={`backup-again-${server.id}`} value={again} onChange={setAgain} />
-          </div>
+          )}
           {issue && (
             <p className="text-xs text-muted-foreground" role="status">
               {issue}
             </p>
           )}
           <Notice tone="warning" icon={TriangleAlert} className="text-xs">
-            Without this passphrase the backup cannot be opened, by you or anyone. Runova does not
-            keep it. Write it down somewhere safe.
+            Without this {typed ? 'passphrase' : 'phrase'} the backup cannot be opened, by you or
+            anyone. Runova does not keep it. Keep a copy somewhere safe.
           </Notice>
           {problem && (
             <p role="alert" className="text-sm text-destructive">

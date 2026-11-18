@@ -290,6 +290,11 @@ export class FakeBrowserWindow {
   setAlwaysOnTop(): void {
     return undefined;
   }
+  /** Kept so tests can see a window was hidden from screenshots and screen sharing. */
+  contentProtected = false;
+  setContentProtection(on: boolean): void {
+    this.contentProtected = on;
+  }
   setIgnoreMouseEvents(): void {
     return undefined;
   }

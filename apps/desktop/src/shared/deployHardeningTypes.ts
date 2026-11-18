@@ -1,4 +1,5 @@
 import type { BackupContents } from './deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type { NewSecret } from './phraseTypes';
 
 /**
  * The Security center's IPC shapes (E15): the checklist, its SSH fixes, and backups. SSH changes
@@ -45,6 +46,9 @@ export interface DeployBackupInput {
   serverId: string;
   passphrase: string;
 }
+
+/** What the page sends to make a backup: the passphrase may be a recovery phrase (E107). */
+export type DeployBackupRequest = Omit<DeployBackupInput, 'passphrase'> & { passphrase: NewSecret };
 
 export interface DeployBackupResult {
   /** False when the save dialog was cancelled; nothing was made then. */

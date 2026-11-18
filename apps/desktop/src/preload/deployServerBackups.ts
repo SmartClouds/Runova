@@ -22,7 +22,7 @@ import type {
   DeployBackupNowResult,
   DeployBackupRunEvent,
   DeployBackupRunInput,
-  DeployBackupSecretInput,
+  DeployBackupSecretRequest,
   DeployBackupWatchResult,
   DeployBringUpInput,
   DeployBringUpResult,
@@ -47,7 +47,7 @@ export function createDeployServerBackups(subscribe: Subscribe) {
   return {
     getSecret: (serverId: string): Promise<BackupSecretStatus> =>
       ipcRenderer.invoke(IPC.deployServerBackups.getSecret, serverId),
-    setSecret: (input: DeployBackupSecretInput): Promise<BackupSecretStatus> =>
+    setSecret: (input: DeployBackupSecretRequest): Promise<BackupSecretStatus> =>
       ipcRenderer.invoke(IPC.deployServerBackups.setSecret, input),
     listDestinations: (serverId: string): Promise<BackupDestinationInfo[]> =>
       ipcRenderer.invoke(IPC.deployServerBackups.listDestinations, serverId),

@@ -41,9 +41,9 @@ describe('scope keys', () => {
     await expect(unwrapWithPassphrase(made.envelope, PASS, 8)).rejects.toThrow();
   });
 
-  it('unwraps with the recovery key, typed in any case and with or without dashes', async () => {
+  it('unwraps with the recovery key, typed in any case and with any spaces', async () => {
     const made = await createScopeKey({ scopeId: 7, passphrase: PASS, cost: FAST });
-    const typed = made.recoveryKey.toLowerCase().replace(/-/g, ' ');
+    const typed = made.recoveryKey.toUpperCase().replace(/ /g, '  ');
 
     const key = await unwrapWithRecoveryKey(made.envelope, typed, 7);
 
@@ -108,23 +108,47 @@ describe('scope keys', () => {
 });
 
 describe('recovery keys', () => {
-  it('formats 32 bytes as eight dash-separated groups and parses them back', () => {
-    const bytes = Buffer.alloc(32, 0xab);
+  const HAMSTER = Buffer.from(
+    '68a79eaca2324873eacc50cb9c6eca8cc68ea5d936f98787c60c7ebc74e6ce7c',
+    'hex',
+  );
+  const HAMSTER_WORDS =
+    'hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length';
 
-    const text = formatRecoveryKey(bytes);
-
-    expect(text).toMatch(/^([0-9A-HJKMNP-TV-Z]{7}-){7}[0-9A-HJKMNP-TV-Z]{7}$/);
-    expect(parseRecoveryKey(text)?.equals(bytes)).toBe(true);
+  it('writes 32 bytes as 24 recovery phrase words and reads them back (E107)', () => {
+    expect(formatRecoveryKey(HAMSTER)).toBe(HAMSTER_WORDS);
+    expect(parseRecoveryKey(HAMSTER_WORDS)?.equals(HAMSTER)).toBe(true);
   });
 
-  it('reads I, L and O as the digits they look like', () => {
-    const text = formatRecoveryKey(Buffer.alloc(32, 0));
-
-    expect(parseRecoveryKey(text.replace(/0/g, 'O'))?.equals(Buffer.alloc(32, 0))).toBe(true);
+  it('reads the words in any case, with any spaces', () => {
+    const typed = `  ${HAMSTER_WORDS.toUpperCase().replace(/ /g, '\n  ')}  `;
+    expect(parseRecoveryKey(typed)?.equals(HAMSTER)).toBe(true);
   });
 
-  it('gives null for text that is not a recovery key', () => {
+  it('still reads a key written before phrases, as eight groups of seven characters', () => {
+    expect(
+      parseRecoveryKey('D2KSXB5-269477T-PCA35SR-VPAHK38-X9ES6VW-RF1Y61H-ZBRX76S-SY00000')?.equals(
+        HAMSTER,
+      ),
+    ).toBe(true);
+    expect(
+      parseRecoveryKey('nentqax bnentqa xbnentq axbnent qaxbnen tqaxbne ntqaxbn eng0000')?.equals(
+        Buffer.alloc(32, 0xab),
+      ),
+    ).toBe(true);
+  });
+
+  it('reads I, L and O in an old key as the digits they look like', () => {
+    expect(
+      parseRecoveryKey('OOOOOOO-OOOOOOO-OOOOOOO-OOOOOOO-OOOOOOO-OOOOOOO-OOOOOOO-OOOOOOO')?.equals(
+        Buffer.alloc(32, 0),
+      ),
+    ).toBe(true);
+  });
+
+  it('gives null for text that is not a recovery key, or words with a wrong checksum', () => {
     expect(parseRecoveryKey('hello')).toBeNull();
+    expect(parseRecoveryKey(HAMSTER_WORDS.replace('length', 'zoo'))).toBeNull();
   });
 });
 

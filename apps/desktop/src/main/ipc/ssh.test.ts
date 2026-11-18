@@ -361,3 +361,29 @@ describe('ssh:typePassword', () => {
     await expect(invoke(IPC.ssh.typePassword, 'tab-1')).resolves.toBe(false);
   });
 });
+
+describe('ssh:setPasskey with a recovery phrase (E107)', () => {
+  it('sets the servers passkey to a phrase by id and unlocks with the words typed any way', async () => {
+    const sender = fakeWebContents();
+    const { phraseRegistry } = await import('../phrase');
+    const vault = await import('../ssh/vault');
+    const made = phraseRegistry.create({
+      purpose: 'servers-passkey',
+      label: 'Servers',
+      owner: sender.id,
+    });
+
+    expect(await invokeFrom(sender, IPC.ssh.setPasskey, { phraseId: made.id })).toEqual({
+      ok: true,
+    });
+    vault.lockVault();
+
+    expect(await invoke(IPC.ssh.unlockVault, made.words.join('\n').toUpperCase())).toBe(true);
+  });
+
+  it('still takes a typed passkey, or null to remove it, and refuses anything else', async () => {
+    expect(await invoke(IPC.ssh.setPasskey, 'a typed servers passkey')).toEqual({ ok: true });
+    expect(await invoke(IPC.ssh.setPasskey, null)).toEqual({ ok: true });
+    await expect(invoke(IPC.ssh.setPasskey, 42)).rejects.toThrow(/passkey/);
+  });
+});

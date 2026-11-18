@@ -7,6 +7,8 @@ import {
   expectNoNativeTitles,
   installDomShims,
   installVaultApi,
+  MOCK_PHRASE_ID,
+  MOCK_PHRASE_WORDS,
   renderWithVaultProviders,
   type VaultApiMock,
 } from './testing/mockVaultApi';
@@ -186,6 +188,8 @@ describe('VaultExportDialog', () => {
 describe('ChangeMasterPasswordDialog', () => {
   const STRONG = 'violet lantern orbit 42';
   const fill = (current: string, next: string, again = next) => {
+    const own = screen.queryByRole('button', { name: 'Type my own password' });
+    if (own?.getAttribute('aria-pressed') === 'false') fireEvent.click(own);
     fireEvent.change(screen.getByLabelText('Current password'), { target: { value: current } });
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: next } });
     fireEvent.change(screen.getByLabelText('Type the new password again'), {
@@ -218,5 +222,29 @@ describe('ChangeMasterPasswordDialog', () => {
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('changes to a recovery phrase made for it, once the phrase is checked (E107)', async () => {
+    mock.api.changePassword.mockResolvedValueOnce(true);
+    renderWithVaultProviders(<ChangeMasterPasswordDialog open onOpenChange={onOpenChange} />);
+    fireEvent.change(screen.getByLabelText('Current password'), {
+      target: { value: 'right password here' },
+    });
+    expect(change().hasAttribute('disabled')).toBe(true);
+
+    fireEvent.click(await screen.findByRole('button', { name: /I saved it/ }));
+    for (let i = 0; i < 3; i++) {
+      const asked = Number(
+        screen.getByText(/^Which is word \d+\?$/).textContent?.match(/\d+/)?.[0],
+      );
+      fireEvent.click(screen.getByRole('button', { name: MOCK_PHRASE_WORDS[asked - 1] }));
+    }
+    fireEvent.click(change());
+
+    await waitFor(() =>
+      expect(mock.api.changePassword).toHaveBeenCalledWith('right password here', {
+        phraseId: MOCK_PHRASE_ID,
+      }),
+    );
   });
 });

@@ -1,9 +1,12 @@
 import { coreErrorMessage } from '@shared/coreErrors';
 import type { DeployServer } from '@shared/deployTypes';
+import type { PhraseRef } from '@shared/phraseTypes';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Key, Spinner, TriangleAlert } from '@/components/icons';
 import { Notice } from '@/components/pageKit';
+import { ExistingSecretField } from '@/components/phrase/ExistingSecretField';
+import { NewSecretField, type SecretMode } from '@/components/phrase/NewSecretField';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -17,7 +20,8 @@ import { useBackupSecret, useRefreshBackups } from './hooks';
 /**
  * The secret key every backup is encrypted under (E28). The core never stores it: it seals the
  * key ring's private half with it, so the secret alone opens a backup on a bare server, and
- * without it nothing does. Changing it needs the current one; older backups keep theirs.
+ * without it nothing does. Changing it needs the current one; older backups keep theirs. The
+ * new key can be a recovery phrase Runova makes (E107).
  */
 
 const MIN = 12;
@@ -40,19 +44,21 @@ export function SecretTab({
   const status = useBackupSecret(server.id);
   const refresh = useRefreshBackups(server.id);
   const [current, setCurrent] = useState('');
+  const [mode, setMode] = useState<SecretMode>('phrase');
+  const [phraseRef, setPhraseRef] = useState<PhraseRef | null>(null);
+  const [round, setRound] = useState(0);
   const [secret, setSecret] = useState('');
   const [again, setAgain] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const isSet = status.data?.isSet ?? false;
-  const issue = secretIssue(secret, again);
-  const ready =
-    !busy &&
-    secret.length >= MIN &&
-    again === secret &&
-    issue === null &&
-    (!isSet || current.length > 0);
+  const typed = mode === 'typed';
+  const issue = typed ? secretIssue(secret, again) : null;
+  const newReady = typed
+    ? secret.length >= MIN && again === secret && issue === null
+    : phraseRef !== null;
+  const ready = !busy && newReady && (!isSet || current.length > 0);
 
   async function save(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -63,7 +69,7 @@ export function SecretTab({
       const done = await stepUp.run(() =>
         window.runova.deployServerBackups.setSecret({
           serverId: server.id,
-          newSecret: secret,
+          newSecret: typed || !phraseRef ? secret : phraseRef,
           ...(isSet ? { currentSecret: current } : {}),
         }),
       );
@@ -72,6 +78,8 @@ export function SecretTab({
       setCurrent('');
       setSecret('');
       setAgain('');
+      // The phrase is set; the next change starts from a new one.
+      setRound((r) => r + 1);
       refresh();
     } catch (error) {
       setProblem(coreErrorMessage(error));
@@ -107,26 +115,43 @@ export function SecretTab({
               : 'No secret key yet. Set one before the first backup.'}
           </p>
         )}
-        <form className="max-w-md space-y-3" onSubmit={(event) => void save(event)}>
+        <form
+          className={cn('space-y-3', typed ? 'max-w-md' : 'max-w-xl')}
+          onSubmit={(event) => void save(event)}
+        >
           {isSet && (
-            <div className="space-y-1.5">
-              <Label htmlFor={id('current')}>Current secret key</Label>
-              <SecretInput id={id('current')} value={current} onChange={setCurrent} />
-            </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor={id('new')}>New secret key</Label>
-            <SecretInput
-              id={id('new')}
-              value={secret}
-              onChange={setSecret}
-              placeholder="At least 12 characters"
+            <ExistingSecretField
+              id={id('current')}
+              label="Current secret key"
+              value={current}
+              onChange={setCurrent}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={id('again')}>New secret key again</Label>
-            <SecretInput id={id('again')} value={again} onChange={setAgain} />
-          </div>
+          )}
+          <NewSecretField
+            key={round}
+            purpose="server-backup"
+            label={`Backups of ${server.nickname}`}
+            mode={mode}
+            onModeChange={setMode}
+            onPhraseReady={setPhraseRef}
+            typed={
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor={id('new')}>New secret key</Label>
+                  <SecretInput
+                    id={id('new')}
+                    value={secret}
+                    onChange={setSecret}
+                    placeholder="At least 12 characters"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={id('again')}>New secret key again</Label>
+                  <SecretInput id={id('again')} value={again} onChange={setAgain} />
+                </div>
+              </div>
+            }
+          />
           {issue && (
             <p className="text-xs text-muted-foreground" role="status">
               {issue}

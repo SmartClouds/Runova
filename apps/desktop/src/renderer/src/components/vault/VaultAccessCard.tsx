@@ -1,6 +1,7 @@
 import { motion, useAnimationControls, useReducedMotion } from 'framer-motion';
 import { type ReactNode, useEffect } from 'react';
 import type { IconProps } from '@/components/icons';
+import { cn } from '@/lib/utils';
 
 /**
  * The frame for the setup and lock screens: one card in the middle of the page with the lock
@@ -12,6 +13,7 @@ export function VaultAccessCard({
   title,
   description,
   shakeKey = 0,
+  wide = false,
   children,
 }: {
   icon: React.ForwardRefExoticComponent<IconProps>;
@@ -19,6 +21,8 @@ export function VaultAccessCard({
   description?: ReactNode;
   /** Bump to play the shake once, e.g. after a wrong password. */
   shakeKey?: number;
+  /** Room for a recovery phrase's 24 words. */
+  wide?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   const reduceMotion = useReducedMotion();
@@ -33,7 +37,10 @@ export function VaultAccessCard({
     <div className="flex min-h-full flex-1 items-center justify-center p-6">
       <motion.div
         animate={controls}
-        className="glass w-full max-w-md rounded-[calc(var(--radius)+2px)] px-8 pb-8 pt-9"
+        className={cn(
+          'glass w-full rounded-[calc(var(--radius)+2px)] px-8 pb-8 pt-9 transition-[max-width] duration-200',
+          wide ? 'max-w-xl' : 'max-w-md',
+        )}
       >
         <div className="mb-6 flex flex-col items-center text-center">
           {/* The glowing tile every empty state uses, with a faint keyhole ring around it. */}

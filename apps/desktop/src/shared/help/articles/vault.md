@@ -19,10 +19,11 @@ Click **Vault** in the sidebar under **Connect**, or open the command palette an
 
 The first time you open the Vault, it shows "Create your vault".
 
-1. Type a **Master password** (at least 10 characters). A strength meter shows how strong it is. Runova also refuses passwords that are too easy to guess and suggests a longer phrase of unrelated words.
-2. Type it again under **Type it again**.
-3. Tick the box saying you understand Runova cannot recover this password. If you forget it, the vault can only be reset, and everything in it is lost.
-4. Click **Create vault**.
+1. Choose the master password:
+   - **Create a phrase for me** (the default): Runova makes 24 random words. Show them, then copy them, save them to a file or scan the QR code with the Runova app on your phone, and pick the right word for three places to check you have them.
+   - **Type my own password**: at least 10 characters, typed twice. A strength meter shows how strong it is. Runova also refuses passwords that are too easy to guess and suggests a longer phrase of unrelated words.
+2. Tick the box saying you understand Runova cannot recover this password. If you forget it, the vault can only be reset, and everything in it is lost.
+3. Click **Create vault**.
 
 > [!WARNING]
 > There is no "forgot password" recovery. Pick a master password you will remember, and consider writing it somewhere safe offline.
@@ -31,7 +32,7 @@ The first time you open the Vault, it shows "Create your vault".
 
 ### Unlock
 
-When the vault is locked, the page says "Vault is locked". Type your master password and click **Unlock**.
+When the vault is locked, the page says "Vault is locked". Type your master password and click **Unlock**. If it is a recovery phrase, click **Use my recovery phrase** (or just paste the phrase) and fill the 24 word boxes.
 
 - If the password is wrong, the box shakes and says "That password doesn't match this vault."
 - After a few wrong tries in a row, Runova makes you wait a few seconds between tries ("Too many tries. Try again in Ns.").

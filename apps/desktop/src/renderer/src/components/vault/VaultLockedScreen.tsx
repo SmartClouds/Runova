@@ -3,6 +3,7 @@ import { vaultErrorCode, vaultErrorMessage } from '@shared/vaultErrors';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Lock, Spinner } from '@/components/icons';
+import { PhraseInput, pastedPhrase } from '@/components/phrase/PhraseInput';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { SecretInput } from '@/components/ui/secret-input';
@@ -46,6 +47,9 @@ export function VaultLockedScreen({ status }: { status: VaultStatus }): React.JS
   const inputRef = useRef<HTMLInputElement>(null);
   const lastLockReason = useVaultStore((s) => s.lastLockReason);
   const [password, setPassword] = useState('');
+  // A master password made as a recovery phrase (E107) is typed in 24 word boxes.
+  const [byPhrase, setByPhrase] = useState(false);
+  const [pasted, setPasted] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [corrupt, setCorrupt] = useState(false);
@@ -71,9 +75,13 @@ export function VaultLockedScreen({ status }: { status: VaultStatus }): React.JS
         return;
       }
       if (result.reason === 'wrong-password') {
-        setError("That password doesn't match this vault.");
+        setError(
+          byPhrase
+            ? "Those words don't open this vault."
+            : "That password doesn't match this vault.",
+        );
         setShake((n) => n + 1);
-        setPassword('');
+        if (!byPhrase) setPassword('');
       }
       if (result.retryAfterMs > 0) setRetryUntil(Date.now() + result.retryAfterMs);
     } catch (err) {
@@ -81,8 +89,10 @@ export function VaultLockedScreen({ status }: { status: VaultStatus }): React.JS
       setError(vaultErrorMessage(err));
     } finally {
       setBusy(false);
-      requestAnimationFrame(() => inputRef.current?.focus());
-      inputRef.current?.focus();
+      if (!byPhrase) {
+        requestAnimationFrame(() => inputRef.current?.focus());
+        inputRef.current?.focus();
+      }
     }
   }
 
@@ -94,21 +104,35 @@ export function VaultLockedScreen({ status }: { status: VaultStatus }): React.JS
       title="Vault is locked"
       description={reason ?? 'Enter your master password to open it.'}
       shakeKey={shake}
+      wide={byPhrase}
     >
       <form className="space-y-3" onSubmit={unlock}>
-        <Label htmlFor={inputId} className="sr-only">
-          Master password
-        </Label>
-        <SecretInput
-          ref={inputRef}
-          id={inputId}
-          value={password}
-          onChange={setPassword}
-          placeholder="Master password"
-          className="h-10 pl-4"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${inputId}-error` : undefined}
-        />
+        {byPhrase ? (
+          <PhraseInput autoFocus initial={pasted} onChange={setPassword} />
+        ) : (
+          <>
+            <Label htmlFor={inputId} className="sr-only">
+              Master password
+            </Label>
+            <SecretInput
+              ref={inputRef}
+              id={inputId}
+              value={password}
+              onChange={setPassword}
+              placeholder="Master password"
+              className="h-10 pl-4"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? `${inputId}-error` : undefined}
+              onPaste={(event) => {
+                const phrase = pastedPhrase(event);
+                if (!phrase) return;
+                event.preventDefault();
+                setPasted(phrase);
+                setByPhrase(true);
+              }}
+            />
+          </>
+        )}
         <div aria-live="polite" className="min-h-[1.25rem] text-sm">
           {error && (
             <p id={`${inputId}-error`} role="alert" className="text-destructive">
@@ -132,7 +156,19 @@ export function VaultLockedScreen({ status }: { status: VaultStatus }): React.JS
           {busy && <Spinner className="h-3.5 w-3.5 animate-spin" />}
           Unlock
         </Button>
-        <div className="text-center">
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          <button
+            type="button"
+            className="cursor-pointer rounded-full px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              setPassword('');
+              setPasted(undefined);
+              setError(null);
+              setByPhrase((on) => !on);
+            }}
+          >
+            {byPhrase ? 'Type a password instead' : 'Use my recovery phrase'}
+          </button>
           <button
             type="button"
             className="cursor-pointer rounded-full px-2 py-0.5 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -1,4 +1,5 @@
 import { estimateStrength } from '@runova/core';
+import { isValidPhrase } from '@runova/protocol';
 import type { KdfCost } from '../vault/kdf';
 import {
   createScopeKey,
@@ -27,6 +28,7 @@ export interface KeyApi {
 
 /** Why a passphrase is not good enough, or null. */
 export function passphraseProblem(passphrase: string): string | null {
+  if (isValidPhrase(passphrase)) return null;
   if (passphrase.length < PASSPHRASE_MIN_LENGTH) {
     return `Use at least ${PASSPHRASE_MIN_LENGTH} characters. A few unrelated words work well.`;
   }

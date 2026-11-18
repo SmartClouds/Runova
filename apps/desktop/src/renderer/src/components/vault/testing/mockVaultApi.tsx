@@ -141,8 +141,28 @@ export function installVaultApi(mock: VaultApiMock): void {
       vault: mock.api,
       shell: { openExternal: vi.fn(async () => undefined) },
       projects: { list: vi.fn(async () => []) },
+      phrase: mockPhraseApi(),
     },
   });
+}
+
+export const MOCK_PHRASE_WORDS =
+  'hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length'.split(
+    ' ',
+  );
+export const MOCK_PHRASE_ID = 'P'.repeat(22);
+
+/** The recovery phrase channels (E107), answering with one fixed phrase. */
+export function mockPhraseApi() {
+  return {
+    create: vi.fn(async () => ({ id: MOCK_PHRASE_ID, words: MOCK_PHRASE_WORDS })),
+    qr: vi.fn(async () => ({ dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+' })),
+    copy: vi.fn(async () => ({ clearsAt: null })),
+    save: vi.fn(async () => null),
+    open: vi.fn(async () => null),
+    discard: vi.fn(async () => undefined),
+    protect: vi.fn(async () => undefined),
+  };
 }
 
 let counter = 0;

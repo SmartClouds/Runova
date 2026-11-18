@@ -1,3 +1,4 @@
+import { canonicalSecret, isValidPhrase } from '@runova/protocol';
 import type { IpcMainInvokeEvent } from 'electron';
 import type {
   DeployBackupInput,
@@ -11,6 +12,7 @@ import type { DeployBackups } from '../deploy/backups';
 import { passphraseProblem } from '../deploy/backups';
 import type { DeployHardening } from '../deploy/hardening';
 import type { DeployService } from '../deploy/service';
+import { readSecret } from '../phrase';
 import { type DeployIpcRegistry, object, serverId } from './deploy';
 
 /**
@@ -63,11 +65,15 @@ function decisionInput(value: unknown): DeploySshDecisionInput {
   return { serverId: serverId(input.serverId), changeId: input.changeId };
 }
 
-function passphrase(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('Enter the backup passphrase.');
-  const problem = passphraseProblem(value);
+/** A new backup passphrase: typed text, or a recovery phrase made for it by id (E107). */
+function passphrase(value: unknown, owner: number): string {
+  const typed = typeof value === 'string' ? value : null;
+  const chosen = typed ?? readSecret(value, owner);
+  if (chosen === null) throw new Error('Enter the backup passphrase.');
+  const text = canonicalSecret(chosen);
+  const problem = isValidPhrase(text) ? null : passphraseProblem(text);
   if (problem) throw new Error(problem);
-  return value;
+  return text;
 }
 
 function secret(value: unknown, what: string): string {
@@ -82,9 +88,9 @@ function secret(value: unknown, what: string): string {
   return value;
 }
 
-function backupInput(value: unknown): DeployBackupInput {
+function backupInput(value: unknown, owner: number): DeployBackupInput {
   const input = object(value, 'a backup');
-  return { serverId: serverId(input.serverId), passphrase: passphrase(input.passphrase) };
+  return { serverId: serverId(input.serverId), passphrase: passphrase(input.passphrase, owner) };
 }
 
 function restoreInput(value: unknown): DeployRestoreInput {
@@ -99,7 +105,7 @@ function restoreInput(value: unknown): DeployRestoreInput {
     serverId: serverId(input.serverId),
     fileToken: input.fileToken,
     // The core is the judge of an old backup's passphrase; this only keeps it to one line.
-    passphrase: secret(input.passphrase, 'backup passphrase'),
+    passphrase: canonicalSecret(secret(input.passphrase, 'backup passphrase')),
     sudoPassword:
       input.sudoPassword === null || input.sudoPassword === undefined
         ? null
@@ -136,7 +142,9 @@ export function registerDeployHardeningHandlers({
   handle(IPC.deployHardening.revertSsh, (_event, input) =>
     hardening.revertSsh(decisionInput(input)),
   );
-  handle(IPC.deployHardening.createBackup, (_event, input) => backups.create(backupInput(input)));
+  handle(IPC.deployHardening.createBackup, (event, input) =>
+    backups.create(backupInput(input, event.sender.id)),
+  );
   handle(IPC.deployHardening.pickBackup, () => backups.pick());
   handle(IPC.deployHardening.restore, (event, value) => {
     const { fileToken, ...input } = restoreInput(value);

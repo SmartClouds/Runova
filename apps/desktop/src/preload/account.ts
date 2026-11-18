@@ -11,6 +11,7 @@ import type {
   StepUp,
 } from '../shared/accountTypes';
 import { IPC } from '../shared/ipcChannels';
+import type { PendingPhrase, PhraseRef } from '../shared/phraseTypes';
 import type {
   MyInvitationView,
   ShareableGroup,
@@ -61,6 +62,9 @@ export function createAccount() {
 }
 
 /** Cloud sync: status, keys, the policy and conflicts. */
+/** A sync key's secret: a typed passphrase, or a recovery phrase made for it (E107). */
+type KeySecret = { passphrase: string } | PhraseRef;
+
 export function createSync() {
   return {
     overview: (): Promise<SyncOverview> => ipcRenderer.invoke(IPC.sync.overview),
@@ -71,16 +75,24 @@ export function createSync() {
       ipcRenderer.invoke(IPC.sync.setPolicy, { scopeId, policy }),
     usage: (scopeId: number): Promise<SyncUsageView> =>
       ipcRenderer.invoke(IPC.sync.usage, { scopeId }),
-    setKey: (scopeId: number, passphrase: string): Promise<{ recoveryKey: string }> =>
-      ipcRenderer.invoke(IPC.sync.setKey, { scopeId, passphrase }),
+    setKey: (
+      scopeId: number,
+      secret: KeySecret,
+      label?: string,
+    ): Promise<{ recovery: PendingPhrase }> =>
+      ipcRenderer.invoke(IPC.sync.setKey, { scopeId, ...secret, ...(label ? { label } : {}) }),
     unlock: (
       scopeId: number,
       secret: { passphrase: string } | { recoveryKey: string },
     ): Promise<void> => ipcRenderer.invoke(IPC.sync.unlock, { scopeId, ...secret }),
-    changePassphrase: (scopeId: number, passphrase: string): Promise<void> =>
-      ipcRenderer.invoke(IPC.sync.changePassphrase, { scopeId, passphrase }),
-    rotateKey: (scopeId: number, passphrase: string): Promise<{ recoveryKey: string }> =>
-      ipcRenderer.invoke(IPC.sync.rotateKey, { scopeId, passphrase }),
+    changePassphrase: (scopeId: number, secret: KeySecret): Promise<void> =>
+      ipcRenderer.invoke(IPC.sync.changePassphrase, { scopeId, ...secret }),
+    rotateKey: (
+      scopeId: number,
+      secret: KeySecret,
+      label?: string,
+    ): Promise<{ recovery: PendingPhrase }> =>
+      ipcRenderer.invoke(IPC.sync.rotateKey, { scopeId, ...secret, ...(label ? { label } : {}) }),
     resetKey: (scopeId: number, stepUp: StepUp): Promise<void> =>
       ipcRenderer.invoke(IPC.sync.resetKey, { scopeId, ...stepUp }),
     wipeCloud: (scopeId: number, stepUp: StepUp): Promise<void> =>

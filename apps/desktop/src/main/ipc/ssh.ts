@@ -16,6 +16,7 @@ import { encodeSshError } from '../../shared/sshErrors';
 import { isHostKeyFingerprint, type SshHostKeyStatus } from '../../shared/sshHostKey';
 import { listRemoteAgentHistory } from '../agents/remoteSessionHistory';
 import { endsWithPasswordPrompt } from '../agents/shellCommand';
+import { readSecret } from '../phrase';
 import { keepAwake } from '../power/keepAwake';
 import { closeSftpSessionsForServer } from '../sftp';
 import { probeHostKey } from '../ssh/connectConfig';
@@ -282,8 +283,15 @@ export function registerSshHandlers(): void {
 
   ipcMain.handle(
     IPC.ssh.setPasskey,
-    (_event, passphrase: string | null): Promise<{ ok: boolean; error?: string }> =>
-      setPasskey(passphrase),
+    (event, value: unknown): Promise<{ ok: boolean; error?: string }> => {
+      // null removes the passkey; text or a recovery phrase by id (E107) sets one.
+      if (value === null) return setPasskey(null);
+      const passkey = readSecret(value, event.sender.id);
+      if (passkey === null || passkey.length > 1024) {
+        throw new Error('A servers passkey is text or a recovery phrase.');
+      }
+      return setPasskey(passkey);
+    },
   );
 
   ipcMain.handle(

@@ -862,6 +862,26 @@ export const IPC = {
     // main -> renderer: SyncOverview
     onChanged: 'sync:changed',
   },
+  /**
+   * Recovery phrases (E107): 24 words made in the main process for a key, by id. The page shows the
+   * words; copying, saving and the QR code go through here, and setting a key sends only the id.
+   */
+  phrase: {
+    // ({ purpose, label }) -> { id, words }
+    create: 'phrase:create',
+    // ({ id }) -> { dataUrl }, the QR code as an SVG picture
+    qr: 'phrase:qr',
+    // ({ id }) -> { clearsAt }, copies and clears the clipboard again later
+    copy: 'phrase:copy',
+    // ({ id }) -> { path } | null, asks where and writes a text file
+    save: 'phrase:save',
+    // () -> { phrase } | null, reads a saved phrase file to fill an unlock field
+    open: 'phrase:open',
+    // ({ id }) -> void
+    discard: 'phrase:discard',
+    // ({ on }) -> void, hides the window from screenshots while a phrase is on screen
+    protect: 'phrase:protect',
+  },
   /** Teams of Runova accounts (E48), straight through to the website API. */
   teams: {
     // () -> TeamView[]

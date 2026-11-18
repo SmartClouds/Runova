@@ -22,6 +22,7 @@ import {
   TriangleAlert,
 } from '@/components/icons';
 import { Chip, Notice } from '@/components/pageKit';
+import { ExistingSecretField } from '@/components/phrase/ExistingSecretField';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
@@ -443,15 +444,13 @@ export function RestoreTab({
                   and comes through this computer on its way.
                 </p>
               )}
-              <div className="space-y-1.5">
-                <Label htmlFor={id('secret')}>Secret key</Label>
-                <SecretInput
-                  id={id('secret')}
-                  value={secret}
-                  onChange={setSecret}
-                  placeholder="The key the backup was made with"
-                />
-              </div>
+              <ExistingSecretField
+                id={id('secret')}
+                label="Secret key"
+                value={secret}
+                onChange={setSecret}
+                placeholder="The key the backup was made with"
+              />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor={id('owner')}>Owner in the backup</Label>

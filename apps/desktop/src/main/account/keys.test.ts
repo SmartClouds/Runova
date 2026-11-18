@@ -1,6 +1,7 @@
+import { isValidPhrase } from '@runova/protocol';
 import { describe, expect, it } from 'vitest';
 import type { KeyEnvelope } from './keyring';
-import { createKeyService } from './keys';
+import { createKeyService, passphraseProblem } from './keys';
 import { type AccountStatePort, createAccountState } from './state';
 
 const FAST = { N: 2 ** 10, r: 8, p: 1 };
@@ -47,10 +48,23 @@ describe('key service', () => {
 
     const { recoveryKey } = await service.setKey(1, 'correct horse battery staple');
 
-    expect(recoveryKey).toMatch(/^([0-9A-Z]{7}-){7}[0-9A-Z]{7}$/);
+    expect(recoveryKey.split(' ')).toHaveLength(24);
+    expect(isValidPhrase(recoveryKey)).toBe(true);
     expect(server.keys.get(1)?.version).toBe(1);
     expect((await service.key(1))?.version).toBe(1);
     expect(JSON.stringify(server.keys.get(1))).not.toContain('correct horse');
+  });
+
+  it('takes a recovery phrase as the secret, and opens with it typed any way (E107)', async () => {
+    const server = memoryServer();
+    const phrase = `${'zoo '.repeat(23)}vote`;
+    await createKeyService({ api: server.api, state: memoryState(), cost: FAST }).setKey(1, phrase);
+
+    const other = createKeyService({ api: server.api, state: memoryState(), cost: FAST });
+    await other.unlock(1, { passphrase: phrase.toUpperCase().replace(/ /g, '	') });
+
+    expect((await other.key(1))?.version).toBe(1);
+    expect(passphraseProblem(phrase)).toBeNull();
   });
 
   it('refuses a weak passphrase before anything leaves this computer', async () => {

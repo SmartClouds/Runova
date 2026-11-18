@@ -5,13 +5,11 @@ import { toast } from 'sonner';
 import {
   CircleCheck,
   Cloud,
-  Copy,
   GitMerge,
   Key,
   Lock,
   LockOpen,
   RefreshCw,
-  ShieldSolid,
   TriangleAlert,
   Wifi,
 } from '@/components/icons';
@@ -26,13 +24,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { errorText, relativeTime, useSyncOverview } from '@/hooks/useAccount';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
+import { KeyDialog } from './KeyDialog';
 
 /**
  * Sync and encryption (E48): what syncs, the key and policy of each scope (the person's own and
@@ -271,239 +269,6 @@ function ScopeCard({ scope, needsKey }: { scope: SyncScopeView; needsKey: boolea
       )}
       {dialog && <KeyDialog scope={scope} mode={dialog} onClose={() => setDialog(null)} />}
     </SectionCard>
-  );
-}
-
-const STRENGTH = (value: string): number => {
-  if (!value) return 0;
-  const kinds = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(value)).length;
-  const words = value.trim().split(/\s+/).length;
-  const score =
-    value.length >= 20 || (value.length >= 14 && (words >= 3 || kinds >= 3))
-      ? 4
-      : value.length >= 14
-        ? 3
-        : value.length >= 12
-          ? 2
-          : 1;
-  return score;
-};
-
-/** Setting, unlocking, changing or replacing a scope's key, in one dialog. */
-function KeyDialog({
-  scope,
-  mode,
-  onClose,
-}: {
-  scope: SyncScopeView;
-  mode: 'set' | 'unlock' | 'change' | 'rotate';
-  onClose: () => void;
-}) {
-  const client = useQueryClient();
-  const [passphrase, setPassphrase] = useState('');
-  const [again, setAgain] = useState('');
-  const [useRecovery, setUseRecovery] = useState(false);
-  const [recovery, setRecovery] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const isTeam = scope.kind === 'team';
-  const what = isTeam ? 'team key' : 'passphrase';
-  const creating = mode !== 'unlock';
-  const strength = STRENGTH(passphrase);
-
-  const submit = async () => {
-    setError(null);
-    if (creating && passphrase !== again) {
-      setError('The two passphrases are not the same.');
-      return;
-    }
-    setBusy(true);
-    try {
-      if (mode === 'set')
-        setRecovery((await window.runova.sync.setKey(scope.id, passphrase)).recoveryKey);
-      else if (mode === 'rotate')
-        setRecovery((await window.runova.sync.rotateKey(scope.id, passphrase)).recoveryKey);
-      else if (mode === 'change') {
-        await window.runova.sync.changePassphrase(scope.id, passphrase);
-        toast.success(
-          `The ${what} is changed. Type the new one on your other computers when they ask.`,
-        );
-        onClose();
-      } else {
-        await window.runova.sync.unlock(
-          scope.id,
-          useRecovery ? { recoveryKey: passphrase } : { passphrase },
-        );
-        toast.success(`${isTeam ? scope.name : 'Your data'} is unlocked on this computer.`);
-        onClose();
-      }
-      void client.invalidateQueries({ queryKey: queryKeys.syncOverview });
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const titles = {
-    set: isTeam ? `Set the key of ${scope.name}` : 'Set your encryption key',
-    unlock: isTeam ? `Unlock ${scope.name}` : 'Unlock your data on this computer',
-    change: `Change the ${what}`,
-    rotate: `Replace the key of ${scope.name}`,
-  } as const;
-  const descriptions = {
-    set: isTeam
-      ? 'Pick a passphrase to give your team, the way you would share a Wi-Fi password: in person or through your password manager, never by plain email. Each member types it once on each computer.'
-      : 'Your passwords, private keys and environment values are sealed with this before they leave the computer. Runova can not reset it for you, so you also get a recovery key.',
-    unlock: `Type the ${what} you set on another computer, or the recovery key.`,
-    change:
-      'The key stays the same, so nothing needs sealing again. Your other computers keep working.',
-    rotate:
-      'Do this after someone left the team: the old key opens nothing new. Give the new passphrase to the members who stay.',
-  } as const;
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && !recovery && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ShieldSolid className="size-4 text-primary" />
-            {recovery ? 'Save your recovery key' : titles[mode]}
-          </DialogTitle>
-          <DialogDescription>
-            {recovery
-              ? 'If you ever lose the passphrase, this opens your data instead. It is shown only now. Keep it in your password manager or print it.'
-              : descriptions[mode]}
-          </DialogDescription>
-        </DialogHeader>
-        {recovery ? (
-          <div className="grid gap-3">
-            <code className="block select-all rounded-xl bg-foreground/[0.05] p-3 text-center font-mono text-[13px] leading-relaxed tracking-wider ring-1 ring-foreground/10">
-              {recovery}
-            </code>
-            <Button
-              shape="pill"
-              variant="soft"
-              onClick={() =>
-                navigator.clipboard
-                  .writeText(recovery)
-                  .then(() => toast.success('Copied the recovery key'))
-              }
-            >
-              <Copy /> Copy
-            </Button>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={saved}
-                onChange={(e) => setSaved(e.target.checked)}
-                className="accent-[hsl(var(--primary))]"
-              />
-              I saved my recovery key somewhere safe
-            </label>
-            <DialogFooter>
-              <Button shape="pill" disabled={!saved} onClick={onClose}>
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <form
-            className="grid gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit();
-            }}
-          >
-            <div className="grid gap-1.5">
-              <Label htmlFor="key-passphrase">
-                {mode === 'unlock' && useRecovery
-                  ? 'Recovery key'
-                  : creating
-                    ? `New ${what}`
-                    : what[0]?.toUpperCase() + what.slice(1)}
-              </Label>
-              <Input
-                id="key-passphrase"
-                type={useRecovery ? 'text' : 'password'}
-                autoComplete="off"
-                autoFocus
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                className={useRecovery ? 'font-mono tracking-wider' : undefined}
-              />
-              {creating && (
-                <div className="flex items-center gap-2" aria-live="polite">
-                  <div className="flex flex-1 gap-1">
-                    {[1, 2, 3, 4].map((step) => (
-                      <span
-                        key={step}
-                        className={cn(
-                          'h-1 flex-1 rounded-full',
-                          step <= strength
-                            ? strength < 3
-                              ? 'bg-warning'
-                              : 'bg-primary'
-                            : 'bg-foreground/10',
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <span className="w-28 text-right text-xs text-muted-foreground">
-                    {passphrase.length < 12
-                      ? `${12 - passphrase.length} more characters`
-                      : strength >= 3
-                        ? 'Strong'
-                        : 'Add another word'}
-                  </span>
-                </div>
-              )}
-            </div>
-            {creating && (
-              <div className="grid gap-1.5">
-                <Label htmlFor="key-again">Type it again</Label>
-                <Input
-                  id="key-again"
-                  type="password"
-                  autoComplete="off"
-                  value={again}
-                  onChange={(e) => setAgain(e.target.value)}
-                />
-              </div>
-            )}
-            {mode === 'unlock' && (
-              <button
-                type="button"
-                className="justify-self-start text-xs font-medium text-primary"
-                onClick={() => setUseRecovery((v) => !v)}
-              >
-                {useRecovery ? `Use the ${what} instead` : 'Use the recovery key instead'}
-              </button>
-            )}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <DialogFooter>
-              <Button type="button" shape="pill" variant="ghost" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" shape="pill" disabled={busy || !passphrase}>
-                {busy
-                  ? 'Working…'
-                  : mode === 'unlock'
-                    ? 'Unlock'
-                    : mode === 'change'
-                      ? 'Change it'
-                      : 'Set the key'}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   Spinner,
   TriangleAlert,
 } from '@/components/icons';
+import { ExistingSecretField } from '@/components/phrase/ExistingSecretField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -174,10 +175,12 @@ export function RestoreDialog({
                 </span>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={id('passphrase')}>Backup passphrase</Label>
-              <SecretInput id={id('passphrase')} value={passphrase} onChange={setPassphrase} />
-            </div>
+            <ExistingSecretField
+              id={id('passphrase')}
+              label="Backup passphrase"
+              value={passphrase}
+              onChange={setPassphrase}
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor={id('user')}>Owner in the backup</Label>

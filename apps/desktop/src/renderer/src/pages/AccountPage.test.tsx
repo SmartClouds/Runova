@@ -134,28 +134,41 @@ describe('AccountPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('sets a key, then holds the dialog open until the recovery key is saved', async () => {
+  it('sets a typed key, then holds the dialog open until the recovery key is checked', async () => {
+    const words =
+      'legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title'.split(
+        ' ',
+      );
     const view = renderWithProviders(<AccountPage />, {
       route: '/account?tab=sync',
       bridge: {
         ...signedInBridge(),
-        'sync.setKey': {
-          recoveryKey: 'ABCDEFG-HJKMNPQ-RSTVWXY-Z012345-6789ABC-DEFGHJK-MNPQRST-VWXYZ01',
-        },
+        'phrase.create': { id: 'K'.repeat(22), words },
+        'sync.setKey': { recovery: { id: 'R'.repeat(22), words } },
       },
     });
 
     await view.user.click(await screen.findByRole('button', { name: /Set a key/ }));
+    await view.user.click(screen.getByRole('button', { name: 'Type my own' }));
     await view.user.type(screen.getByLabelText('New passphrase'), 'correct horse battery staple');
     await view.user.type(screen.getByLabelText('Type it again'), 'correct horse battery staple');
     await view.user.click(screen.getByRole('button', { name: 'Set the key' }));
 
-    expect(await screen.findByText(/ABCDEFG-HJKMNPQ/)).toBeInTheDocument();
-    expect(view.bridge.$fn('sync.setKey')).toHaveBeenCalledWith(1, 'correct horse battery staple');
-    const done = screen.getByRole('button', { name: 'Done' });
-    expect(done).toBeDisabled();
-    await view.user.click(screen.getByLabelText(/I saved my recovery key/));
-    expect(done).toBeEnabled();
+    expect(await screen.findByText('Save your recovery key')).toBeInTheDocument();
+    expect(view.bridge.$fn('sync.setKey')).toHaveBeenCalledWith(
+      1,
+      { passphrase: 'correct horse battery staple' },
+      'Your own data',
+    );
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+    await view.user.click(screen.getByRole('button', { name: /I saved it/ }));
+    for (let i = 0; i < 3; i++) {
+      const asked = Number(
+        screen.getByText(/^Which is word \d+\?$/).textContent?.match(/\d+/)?.[0],
+      );
+      await view.user.click(screen.getByRole('button', { name: words[asked - 1] }));
+    }
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 
   it('refuses two passphrases that differ before anything is sent', async () => {
@@ -166,6 +179,7 @@ describe('AccountPage', () => {
     });
 
     await view.user.click(await screen.findByRole('button', { name: /Set a key/ }));
+    await view.user.click(screen.getByRole('button', { name: 'Type my own' }));
     await view.user.type(screen.getByLabelText('New passphrase'), 'correct horse battery staple');
     await view.user.type(screen.getByLabelText('Type it again'), 'correct horse battery stable');
     await view.user.click(screen.getByRole('button', { name: 'Set the key' }));

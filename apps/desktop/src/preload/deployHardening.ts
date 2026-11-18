@@ -6,7 +6,7 @@ import type {
 } from '../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type {
   DeployBackupFile,
-  DeployBackupInput,
+  DeployBackupRequest,
   DeployBackupResult,
   DeployRestoreInput,
   DeployRestoreProgressEvent,
@@ -40,7 +40,7 @@ export function createDeployHardening(subscribe: Subscribe) {
     onSshProgress: (callback: (event: DeploySshProgressEvent) => void): (() => void) =>
       subscribe(IPC.deployHardening.onSshProgress, callback),
     /** Asks where to save first; `saved: false` when that was cancelled. */
-    createBackup: (input: DeployBackupInput): Promise<DeployBackupResult> =>
+    createBackup: (input: DeployBackupRequest): Promise<DeployBackupResult> =>
       ipcRenderer.invoke(IPC.deployHardening.createBackup, input),
     /** The open dialog; null when cancelled. The file is named by a token from here on. */
     pickBackup: (): Promise<DeployBackupFile | null> =>

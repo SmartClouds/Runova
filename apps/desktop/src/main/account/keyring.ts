@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import { entropyToPhrase, phraseToEntropy } from '@runova/protocol';
 import {
   DEFAULT_VAULT_KDF_COST,
   deriveVaultKey,
@@ -184,7 +185,9 @@ export async function unwrapWithRecoveryKey(
 ): Promise<Buffer> {
   const recovery = parseRecoveryKey(recoveryKey);
   if (!recovery)
-    throw new Error('That is not a recovery key. It has eight groups of seven characters.');
+    throw new Error(
+      'That is not a recovery key. It has 24 words, or eight groups of seven characters if it is older.',
+    );
   try {
     return decrypt(
       recoveryKek(recovery, envelope.recovery.salt),
@@ -224,34 +227,25 @@ export function openRecord(key: Buffer, place: RecordPlace, sealed: string): unk
   return JSON.parse(decrypt(key, { iv, authTag, ciphertext }, recordAad(place)).toString('utf-8'));
 }
 
-// Crockford base32: no I, L, O or U, so a key read aloud or copied by hand is hard to get wrong.
-const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const GROUPS = 8;
-const GROUP_LENGTH = 7;
-
+/** A recovery key is written as a 24-word recovery phrase (E107), like a wallet's. */
 export function formatRecoveryKey(bytes: Buffer): string {
-  let bits = 0;
-  let value = 0;
-  let text = '';
-  for (const byte of bytes) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      text += ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-    value &= (1 << bits) - 1;
-  }
-  if (bits > 0) text += ALPHABET[(value << (5 - bits)) & 31];
-  text = text.padEnd(GROUPS * GROUP_LENGTH, '0');
-  return Array.from({ length: GROUPS }, (_, i) =>
-    text.slice(i * GROUP_LENGTH, (i + 1) * GROUP_LENGTH),
-  ).join('-');
+  return entropyToPhrase(new Uint8Array(bytes));
 }
 
+/** The 32 bytes behind a recovery key: its words, or a key written before phrases existed. */
 export function parseRecoveryKey(text: string): Buffer | null {
+  const entropy = phraseToEntropy(text);
+  return entropy ? Buffer.from(entropy) : parseLegacyRecoveryKey(text);
+}
+
+// Recovery keys from before E107 were Crockford base32 in eight groups of seven: no I, L, O or U,
+// so a key read aloud or copied by hand is hard to get wrong. They still open what they locked.
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const LEGACY_LENGTH = 8 * 7;
+
+function parseLegacyRecoveryKey(text: string): Buffer | null {
   const clean = text.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
-  if (clean.length !== GROUPS * GROUP_LENGTH || /[^0-9A-HJKMNP-TV-Z]/.test(clean)) return null;
+  if (clean.length !== LEGACY_LENGTH || /[^0-9A-HJKMNP-TV-Z]/.test(clean)) return null;
   const bytes: number[] = [];
   let bits = 0;
   let value = 0;
@@ -264,7 +258,7 @@ export function parseRecoveryKey(text: string): Buffer | null {
     }
     value &= (1 << bits) - 1;
   }
-  return bytes.length >= KEY_BYTES ? Buffer.from(bytes.slice(0, KEY_BYTES)) : null;
+  return Buffer.from(bytes.slice(0, KEY_BYTES));
 }
 
 function isWrapped(value: unknown): value is WrappedKey {

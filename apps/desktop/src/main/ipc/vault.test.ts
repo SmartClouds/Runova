@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VaultStatus } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { vaultErrorCode } from '../../shared/vaultErrors';
+import { phraseRegistry } from '../phrase';
 import type { LoginPage } from '../vault/autofill/fillSession';
 import { VaultService } from '../vault/service';
 import { MemoryVaultFiles } from '../vault/testing/memoryVaultFiles';
@@ -258,6 +259,47 @@ describe('vault IPC handlers', () => {
     expect(await ipc.invoke(IPC.vault.exportCsv, PASSWORD, 'runova')).toEqual({ ok: true });
     expect(dialogs.pickExportPath).toHaveBeenLastCalledWith('runova');
     expect(await readFile(join(dir, 'export.csv'), 'utf-8')).toContain(`${SENTINEL}-note`);
+  });
+});
+
+describe('vault IPC with a recovery phrase (E107)', () => {
+  it('creates the vault with the phrase behind an id, then opens it with the words typed any way', async () => {
+    const made = phraseRegistry.create({
+      purpose: 'vault',
+      label: 'Vault',
+      owner: ipc.mainSender.id,
+    });
+
+    await ipc.invoke(IPC.vault.create, { phraseId: made.id });
+    await ipc.invoke(IPC.vault.lock);
+
+    const typed = made.words.map((w) => w.toUpperCase()).join('  ');
+    const result = await ipc.invoke<{ ok?: boolean }>(IPC.vault.unlock, typed);
+    expect((await ipc.invoke<VaultStatus>(IPC.vault.status)).state).toBe('unlocked');
+    expect(result).toBeTruthy();
+  });
+
+  it('changes the master password to a phrase', async () => {
+    await ipc.invoke(IPC.vault.create, PASSWORD);
+    const made = phraseRegistry.create({
+      purpose: 'vault',
+      label: 'Vault',
+      owner: ipc.mainSender.id,
+    });
+
+    await ipc.invoke(IPC.vault.changePassword, PASSWORD, { phraseId: made.id });
+    await ipc.invoke(IPC.vault.lock);
+
+    expect(await codeOf(ipc.invoke(IPC.vault.unlock, PASSWORD))).not.toBeNull();
+    await ipc.invoke(IPC.vault.unlock, made.words.join(' '));
+    expect((await ipc.invoke<VaultStatus>(IPC.vault.status)).state).toBe('unlocked');
+  });
+
+  it('refuses a phrase id that is malformed or was never made', async () => {
+    expect(await codeOf(ipc.invoke(IPC.vault.create, { phraseId: '../x' }))).toBe('invalid');
+    await expect(ipc.invoke(IPC.vault.create, { phraseId: 'A'.repeat(22) })).rejects.toThrow(
+      /no longer there/,
+    );
   });
 });
 

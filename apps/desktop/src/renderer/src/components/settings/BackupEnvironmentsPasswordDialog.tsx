@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Lock, Spinner } from '@/components/icons';
+import { ExistingSecretField } from '@/components/phrase/ExistingSecretField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,8 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { SecretInput } from '@/components/ui/secret-input';
 
 export interface BackupEnvironmentsPasswordDialogProps {
   open: boolean;
@@ -79,8 +78,12 @@ export function BackupEnvironmentsPasswordDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-1.5">
-          <Label htmlFor="backup-environments-password">Password</Label>
-          <SecretInput id="backup-environments-password" value={password} onChange={setPassword} />
+          <ExistingSecretField
+            id="backup-environments-password"
+            label="Password"
+            value={password}
+            onChange={setPassword}
+          />
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
         <DialogFooter className="gap-2 sm:justify-between">

@@ -192,6 +192,10 @@ export default defineConfig({
             'src/renderer/src/pages/VaultPage.tsx': { lines: 80, functions: 75, branches: 70 },
             // The security-sensitive modules, where a silent mistake matters most.
             'src/main/crypto/**': { lines: 90, branches: 85 },
+            // Recovery phrases (E107): made, kept, copied and saved here, shown and checked there.
+            'src/main/phrase/**': { lines: 95, branches: 90 },
+            'src/main/ipc/phrase.ts': { lines: 95, branches: 85 },
+            'src/renderer/src/components/phrase/**': { lines: 90, functions: 85, branches: 80 },
             'src/main/backup/envelope.ts': { lines: 85, branches: 75 },
             'src/main/pathGuard.ts': { lines: 95, branches: 90 },
             'src/main/ptyHost/protocol.ts': { lines: 90, branches: 80 },

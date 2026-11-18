@@ -4,6 +4,7 @@ import type {
   SaveBackupDestinationRequest,
   ServerRestoreStatus,
 } from './deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type { NewSecret } from './phraseTypes';
 
 /**
  * The Backups section of a Deploy server (E28): IPC shapes the core's own contracts do not cover.
@@ -25,6 +26,11 @@ export interface DeployBackupSecretInput {
   currentSecret?: string;
   newSecret: string;
 }
+
+/** What the page sends to set a secret key: the new one may be a recovery phrase (E107). */
+export type DeployBackupSecretRequest = Omit<DeployBackupSecretInput, 'newSecret'> & {
+  newSecret: NewSecret;
+};
 
 export interface DeployBackupDestinationInput {
   serverId: string;

@@ -52,7 +52,7 @@ function harness(trusted = true) {
   const call = async (channel: string, ...args: unknown[]) => {
     const handler = handlers.get(channel);
     if (!handler) throw new Error(`No handler for ${channel}`);
-    return handler({} as IpcMainInvokeEvent, ...args);
+    return handler({ sender: { id: 1 } } as unknown as IpcMainInvokeEvent, ...args);
   };
   return { handlers, hardening, backups, service, progress, call };
 }
@@ -114,6 +114,25 @@ describe('registerDeployHardeningHandlers', () => {
     ).rejects.toThrow(/at least 12/);
 
     expect(backups.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('backs up with a recovery phrase by id and restores with it typed any way (E107)', async () => {
+    const { phraseRegistry } = await import('../phrase');
+    const { call, backups, service } = harness();
+    const made = phraseRegistry.create({ purpose: 'server-backup', label: 'web-1', owner: 1 });
+    const words = made.words.join(' ');
+
+    await call(IPC.deployHardening.createBackup, {
+      serverId: 'srv-1',
+      passphrase: { phraseId: made.id },
+    });
+    await call(IPC.deployHardening.restore, { ...RESTORE, passphrase: ` ${words.toUpperCase()} ` });
+
+    expect(backups.create).toHaveBeenCalledWith({ serverId: 'srv-1', passphrase: words });
+    expect(service.restore).toHaveBeenCalledWith(
+      expect.objectContaining({ passphrase: words }),
+      expect.any(Function),
+    );
   });
 
   it('restores the picked file by its token and passes the steps to the window', async () => {

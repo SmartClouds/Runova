@@ -17,6 +17,7 @@ import {
   electronState,
   expectChannelsCovered,
   invoke,
+  invokeFrom,
   loadIpc,
   useTempUserData,
 } from '../../test/main/ipcHarness';
@@ -459,6 +460,33 @@ describe('backup environments section', () => {
     expect(environments).toHaveLength(1);
     expect(environments[0].files[0].fileName).toBe('.env.production');
     expect(environments[0].credentials[0].label).toBe('Database');
+  });
+
+  it('locks the environments with a recovery phrase by id and opens them with it typed any way (E107)', async () => {
+    seedProject();
+    await seedEnvironment();
+    const { phraseRegistry } = await import('../phrase');
+    const owner = (await import('../../test/main/electronMock')).fakeWebContents();
+    const made = phraseRegistry.create({
+      purpose: 'app-backup',
+      label: 'Settings backup',
+      owner: owner.id,
+    });
+    const path = join(out.dir, 'phrase.json');
+    queueDialog('showSaveDialog', { canceled: false, filePath: path });
+
+    const result = await invokeFrom<BackupExportResult>(owner, IPC.backup.export, false, {
+      environmentsPhraseId: made.id,
+    });
+    expect(result.ok).toBe(true);
+
+    await store.setProjectEnvironments([]);
+    const opened = await open(path);
+    const restored = await invoke<BackupImportResult>(IPC.backup.restore, opened.token, {
+      environmentsPassword: made.words.join('\n').toUpperCase(),
+    });
+    expect(restored.ok).toBe(true);
+    expect(await store.getProjectEnvironments()).toHaveLength(1);
   });
 
   it('fails cleanly on the wrong password, writing nothing, and takes the right one after', async () => {

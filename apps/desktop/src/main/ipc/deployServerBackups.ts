@@ -1,3 +1,4 @@
+import { canonicalSecret } from '@runova/protocol';
 import type { IpcMainInvokeEvent } from 'electron';
 import type {
   BackupDestinationKind,
@@ -24,6 +25,7 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import type { ServerRestores } from '../deploy/serverBackups/restore';
 import type { ServerBackups } from '../deploy/serverBackups/service';
+import { readSecret } from '../phrase';
 import { type DeployIpcRegistry, object, optionalText, serverId } from './deploy';
 
 /**
@@ -202,15 +204,27 @@ function itemInput(value: unknown, what: string): DeployBackupItemInput {
   return { serverId: serverId(input.serverId), id: guid(input.id, what) };
 }
 
-function secretInput(value: unknown): DeployBackupSecretInput {
+/**
+ * A secret key: one line of text, with a typed recovery phrase written in its one form, or a phrase
+ * made for it by id (E107). The core derives the key from exactly this text, so a phrase typed
+ * with capitals or extra spaces must arrive the same as the one it was set with.
+ */
+function secretKey(value: unknown, owner: number, what: string): string {
+  if (typeof value === 'string') return canonicalSecret(line(value, MAX_PASSWORD, what));
+  const secret = readSecret(value, owner);
+  if (secret === null) throw new Error(`Type the ${what} or make a recovery phrase.`);
+  return secret;
+}
+
+function secretInput(value: unknown, owner: number): DeployBackupSecretInput {
   const input = object(value, 'a secret key');
   const current =
     input.currentSecret === undefined || input.currentSecret === null || input.currentSecret === ''
       ? undefined
-      : line(input.currentSecret, MAX_PASSWORD, 'current secret key');
+      : secretKey(input.currentSecret, owner, 'current secret key');
   return {
     serverId: serverId(input.serverId),
-    newSecret: line(input.newSecret, MAX_PASSWORD, 'new secret key'),
+    newSecret: secretKey(input.newSecret, owner, 'new secret key'),
     ...(current ? { currentSecret: current } : {}),
   };
 }
@@ -358,7 +372,7 @@ function restoreSource(value: unknown): DeployServerRestoreSource {
   throw new Error('Pick the backup to restore again.');
 }
 
-function restoreInput(value: unknown): DeployServerRestoreInput {
+function restoreInput(value: unknown, owner: number): DeployServerRestoreInput {
   const input = object(value, 'a restore');
   if (typeof input.userName !== 'string' || !USER_NAME.test(input.userName)) {
     throw new Error('A user name has 1 to 64 letters, digits, dots, dashes, underscores or @.');
@@ -366,7 +380,7 @@ function restoreInput(value: unknown): DeployServerRestoreInput {
   return {
     serverId: serverId(input.serverId),
     source: restoreSource(input.source),
-    secret: line(input.secret, MAX_PASSWORD, 'secret key'),
+    secret: secretKey(input.secret, owner, 'secret key'),
     sudoPassword:
       input.sudoPassword === null || input.sudoPassword === undefined || input.sudoPassword === ''
         ? null
@@ -393,15 +407,20 @@ function bringUpInput(value: unknown): DeployBringUpInput {
 
 export function registerDeployServerBackupsHandlers(deps: DeployServerBackupsHandlerDeps): void {
   const { ipc, backups, restores } = deps;
-  const handle = (channel: string, run: (...args: unknown[]) => unknown) => {
+  const handle = (
+    channel: string,
+    run: (this: { owner: number }, ...args: unknown[]) => unknown,
+  ) => {
     ipc.handle(channel, async (event, ...args) => {
       if (!deps.guard(event)) throw new Error('Deploy is only available in the main window.');
-      return run(...args);
+      return run.apply({ owner: event.sender.id }, args);
     });
   };
 
   handle(IPC.deployServerBackups.getSecret, (id) => backups.secret(serverId(id)));
-  handle(IPC.deployServerBackups.setSecret, (value) => backups.setSecret(secretInput(value)));
+  handle(IPC.deployServerBackups.setSecret, function (value) {
+    return backups.setSecret(secretInput(value, this.owner));
+  });
   handle(IPC.deployServerBackups.listDestinations, (id) => backups.destinations(serverId(id)));
   handle(IPC.deployServerBackups.saveDestination, (value) =>
     backups.saveDestination(destinationInput(value)),
@@ -453,7 +472,9 @@ export function registerDeployServerBackupsHandlers(deps: DeployServerBackupsHan
     backups.downloadStored(storedInput(value)),
   );
   handle(IPC.deployServerBackups.pickFile, () => backups.pick());
-  handle(IPC.deployServerBackups.restore, (value) => restores.restore(restoreInput(value)));
+  handle(IPC.deployServerBackups.restore, function (value) {
+    return restores.restore(restoreInput(value, this.owner));
+  });
   handle(IPC.deployServerBackups.pendingRestore, (id) => backups.pendingRestore(serverId(id)));
   handle(IPC.deployServerBackups.restoreStatus, (id) => backups.serverRestoreStatus(serverId(id)));
   handle(IPC.deployServerBackups.bringUp, (value) => restores.bringUp(bringUpInput(value)));

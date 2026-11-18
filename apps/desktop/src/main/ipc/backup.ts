@@ -36,6 +36,7 @@ import { blueprintRevisionDb } from '../blueprintRevisionDb';
 import { envFileHistoryDb } from '../envFileHistoryDb';
 import { applyNewsSettings } from '../news/runtime';
 import { petManager } from '../pet/petWindow';
+import { secretFrom } from '../phrase';
 import { promptHistoryDb } from '../promptHistoryDb';
 import { skillAuditDb } from '../skillAuditDb';
 import { store } from '../store';
@@ -115,15 +116,18 @@ export function registerBackupHandlers(): void {
   ipcMain.handle(
     IPC.backup.export,
     async (
-      _event,
+      event,
       compress: boolean,
       options: BackupExportOptions = {},
     ): Promise<BackupExportResult> => {
+      const environmentsPassword = options.environmentsPhraseId
+        ? secretFrom({ phraseId: options.environmentsPhraseId }, event.sender.id)
+        : options.environmentsPassword;
       // Before the save dialog, so a locked vault is reported without a file picked for nothing.
       let environments: EncryptedEnvironmentsSection | undefined;
-      if (options.environmentsPassword) {
+      if (environmentsPassword) {
         try {
-          environments = await sealEnvironments(options.environmentsPassword);
+          environments = await sealEnvironments(environmentsPassword);
         } catch (error) {
           return {
             ok: false,
