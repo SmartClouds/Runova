@@ -166,8 +166,16 @@ describe('download page with the API', () => {
     expect(requirements).toContain('Linux');
   });
 
-  it('says nothing about phones', () => {
-    expect(page.html).not.toMatch(/android|iphone|\bios\b|app store|google play|\bmobile\b/i);
+  it('names the phone apps as coming soon, with no store link yet', () => {
+    const phone = section(page.html, 'phone');
+    expect(phone).toContain('data-store-badges');
+    expect(phone).toMatch(/Android, coming soon to\s*<\/small>\s*<span[^>]*>Google Play/);
+    expect(phone).toMatch(/iOS, coming soon to\s*<\/small>\s*<span[^>]*>App Store/);
+    expect(phone).toContain('href="/help/phone"');
+    expect(page.html).not.toMatch(/href="https:\/\/(play\.google\.com|apps\.apple\.com)/);
+    const requirements = section(page.html, 'requirements');
+    expect(requirements).toContain('Android 8.0 or later');
+    expect(requirements).toContain('iOS 16 or later');
   });
 
   it('puts the shown version and the downloads in the SoftwareApplication JSON-LD', () => {

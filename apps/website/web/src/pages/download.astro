@@ -1,4 +1,5 @@
 ---
+import StoreBadges from '../components/StoreBadges.astro';
 import { buttonVariants } from '../components/ui/button';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import {
@@ -196,11 +197,23 @@ const code = 'rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-secondary-for
       class="mt-4 overflow-x-auto rounded-box border bg-card p-4 font-mono text-sm"><code>winget install SmartClouds.Runova</code></pre>
   </section>
 
+  <section id="phone" aria-labelledby="phone-title" class="border-t py-12 md:py-16">
+    <h2 id="phone-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+      On your phone
+    </h2>
+    <p class="mt-4 max-w-[70ch] text-muted-foreground">
+      The Runova app for Android and iOS reaches your computers from anywhere: answer agents,
+      commit, deploy, watch traffic and send files, while the work runs on the computer. Both apps
+      are on their way to the stores. <a href="/help/phone" class="link">How the phone apps work</a>.
+    </p>
+    <StoreBadges class="mt-6" />
+  </section>
+
   <section id="requirements" aria-labelledby="requirements-title" class="border-t py-12 md:py-16">
     <h2 id="requirements-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
       System requirements
     </h2>
-    <ul class="mt-6 grid gap-4 md:grid-cols-3">
+    <ul class="mt-6 grid gap-4 md:grid-cols-3 lg:grid-cols-5">
       <li class="rounded-box border bg-card p-6">
         <h3 class="font-semibold text-lg">Windows</h3>
         <p class="mt-2 text-muted-foreground">Windows 10 or Windows 11, 64-bit (x64).</p>
@@ -217,6 +230,14 @@ const code = 'rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-secondary-for
           A 64-bit (x64) distribution with a desktop. The AppImage runs on most of them, and the
           .deb package is for Debian, Ubuntu and their derivatives.
         </p>
+      </li>
+      <li class="rounded-box border border-dashed bg-card p-6">
+        <h3 class="font-semibold text-lg">Android</h3>
+        <p class="mt-2 text-muted-foreground">Android 8.0 or later. Coming soon.</p>
+      </li>
+      <li class="rounded-box border border-dashed bg-card p-6">
+        <h3 class="font-semibold text-lg">iOS</h3>
+        <p class="mt-2 text-muted-foreground">iOS 16 or later. Coming soon.</p>
       </li>
     </ul>
     <p class="mt-6 max-w-[70ch] text-muted-foreground">

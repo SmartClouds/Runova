@@ -28,10 +28,11 @@ const OTHER_CLASS =
 /**
  * The radii plain CSS may use. Besides the three shapes: `inherit` for layers inside a shape, the
  * header's alias of the box radius, and three that belong to text rather than to a button or a
- * box (inline code, the focus outline of a link, the lines of the menu icon).
+ * box (inline code, the focus outline of a link, the lines of the menu icon), and the phone frame
+ * on the home page, which draws a device rather than a box.
  */
 const ALLOWED_RULE =
-  /^(999px|9999px|inherit|var\(--radius-(box|inner)\)|var\(--mega-radius\)|0 0 var\(--mega-radius\) var\(--mega-radius\)|0 0 var\(--radius-box\) var\(--radius-box\)|calc\(var\(--radius\) - [46]px\)|1px)$/;
+  /^(999px|9999px|inherit|var\(--radius-(box|inner)\)|var\(--mega-radius\)|0 0 var\(--mega-radius\) var\(--mega-radius\)|0 0 var\(--radius-box\) var\(--radius-box\)|calc\(var\(--radius\) - [46]px\)|var\(--phone-radius\)|calc\(var\(--phone-radius\) - 7px\)|1px)$/;
 
 /** The favicon keeps the rounding of the app icon it is cut from. */
 const isFavicon = (line: string) => line.includes('/favicon-');

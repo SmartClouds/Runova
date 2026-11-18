@@ -1,0 +1,22 @@
+[
+  {
+    "name": "systems",
+    "source": "systems-dark.png",
+    "alt": "The Systems tab of the Runova app on a phone, listing three computers: Sam's desk online, Build server offline and Office PC with screen only."
+  },
+  {
+    "name": "terminal",
+    "source": "terminal.png",
+    "alt": "A Claude terminal on a computer, read live on the phone, with keys for Esc, Tab, Ctrl C and the arrows and a field to type a command."
+  },
+  {
+    "name": "traffic",
+    "source": "traffic.png",
+    "alt": "Website traffic for the Prod server on the phone: unique visitors, visits, page views, bounce rate, bandwidth and bot share for the last 7 days."
+  },
+  {
+    "name": "send-files",
+    "source": "send-progress.png",
+    "alt": "Sending three files from the phone to Sam's desk, 44% done at 18 MB/s, with the user's computers and a teammate's computer to pick from."
+  }
+]

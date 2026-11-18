@@ -31,6 +31,11 @@ export function llmsTxt(site: string | URL, features: LlmsFeature[]): string {
     '## Help',
     '',
     link('Help center', '/help', 'How to set up and use each part of the app, searchable.'),
+    link(
+      'Runova on your phone',
+      '/help/phone',
+      'The Android and iOS apps, coming to the stores, that reach your computers from anywhere.',
+    ),
     '',
     '## Download',
     '',

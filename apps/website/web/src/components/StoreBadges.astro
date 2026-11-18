@@ -1,0 +1,80 @@
+---
+/**
+ * The two phone app badges. A store with no address yet (PHONE_STORES in
+ * src/lib/download/phone.ts) shows a quiet "Coming soon" badge that links nowhere.
+ */
+import { PHONE_STORES } from '../lib/download/phone';
+import Icon from './effects/Icon.astro';
+
+interface Props {
+  class?: string;
+  /** Centered under a centered call to action, start-aligned elsewhere. */
+  align?: 'center' | 'start';
+}
+
+const { class: className, align = 'start' } = Astro.props;
+---
+
+<ul
+  aria-label="Phone apps"
+  data-store-badges
+  class:list={[
+    'flex flex-wrap gap-3',
+    align === 'center' ? 'justify-center' : 'justify-start',
+    className,
+  ]}
+>
+  {
+    PHONE_STORES.map((store) => {
+      const body = (
+        <>
+          <Icon name={store.mark} size={22} class="shrink-0" />
+          <span class="flex flex-col items-start leading-tight">
+            <small class="text-[0.68rem] text-muted-foreground">
+              {store.url ? `${store.system} app on` : `${store.system}, coming soon to`}
+            </small>
+            <span class="font-semibold text-[0.95rem]">{store.store}</span>
+          </span>
+        </>
+      );
+      return (
+        <li data-store={store.id} data-soon={store.url ? undefined : ''}>
+          {store.url ? (
+            <a href={store.url} class="app-badge" rel="noopener">
+              {body}
+            </a>
+          ) : (
+            <span class="app-badge">{body}</span>
+          )}
+        </li>
+      );
+    })
+  }
+</ul>
+
+<style>
+  .app-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 48px;
+    padding: 0.4rem 1.35rem 0.4rem 1.1rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 9999px;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+
+  [data-soon] .app-badge {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  a.app-badge {
+    transition: border-color 120ms var(--ease-enter);
+  }
+
+  a.app-badge:hover {
+    border-color: hsl(var(--primary) / 0.5);
+  }
+</style>

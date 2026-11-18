@@ -147,8 +147,10 @@ Every button and box on the site has one of three shapes, set in `global.css`:
 | Box | `rounded-box` / `--radius-box` (1rem) | Cards, panels, the header menu surface and the phone sheet, the download menu, dialogs, code blocks, callouts, screenshot frames and the hero workspace window |
 | Inner | `rounded-inner` / `--radius-inner` (0.625rem) | Anything inside a box (menu rows, icon tiles, images in a card, the panes of the hero workspace) and form fields |
 
-Text keeps its own small radius (inline code chips, the focus outline of a link), and the favicon
-keeps the rounding of the app icon. `tests/shapes.test.ts` fails on any other radius in `src/`.
+Text keeps its own small radius (inline code chips, the focus outline of a link), the favicon
+keeps the rounding of the app icon, and the phone frame on the home page keeps a phone's own
+rounding (`--phone-radius` in `PhoneShot.astro`), since it draws a device rather than a box.
+`tests/shapes.test.ts` fails on any other radius in `src/`.
 
 ## Effects
 
@@ -249,6 +251,19 @@ and links it to `/download/<os>/latest`, which redirects to that system's file i
 release (the same pick as the main button on /download, or /download itself for a Mac of unknown
 arch). Picking a system in the menu downloads it and makes it the main link. The menu works with
 arrows, Home, End and Escape, and closes on a click outside. The pill is white with dark text.
+
+Under it sit the phone app badges (`src/components/StoreBadges.astro`), pills with the system's
+mark. While a store has no address in `PHONE_STORES` the badge has a dashed border, says
+"coming soon to" and is not a link. The download menu itself lists only the desktop systems.
+
+### Phone section and sealed link
+
+The home page's phone section fans four phone screens out like cards in a hand
+(`src/components/home/PhoneShot.astro`), the middle two in front. A screen lifts and straightens
+under the pointer; a phone too narrow for four shows the last three. The security section's
+picture (`src/components/home/SealedLink.astro`) is a computer and a phone with the relay between
+them, and small padlock tiles travel both ways along two dashed lanes. With reduced motion the
+tiles stand still along the lanes and the relay ring does not turn.
 
 Not allowed anywhere: scroll hijacking, parallax on text, cursor followers, autoplaying video with
 sound, effects inside the admin area (it uses shadcn/ui only), and anything that moves while the

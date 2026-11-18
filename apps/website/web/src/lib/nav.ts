@@ -155,6 +155,6 @@ export const DOWNLOAD_SECTION: NavSection = {
   href: '/download',
   kind: 'links',
   links: DOWNLOAD_LINKS,
-  summary: 'Free and open source.',
+  summary: 'Free and open source. Android and iOS apps coming soon.',
   index: { href: '/download', label: 'All builds and checksums' },
 };

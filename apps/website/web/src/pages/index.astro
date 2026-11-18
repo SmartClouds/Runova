@@ -4,8 +4,18 @@ import CopyCommand from '../components/CopyCommand.astro';
 import Icon from '../components/effects/Icon.astro';
 import DownloadSplit from '../components/home/DownloadSplit.astro';
 import HeroDemo from '../components/home/HeroDemo.astro';
+import PhoneShot from '../components/home/PhoneShot.astro';
+import SealedLink from '../components/home/SealedLink.astro';
+import StoreBadges from '../components/StoreBadges.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../lib/home';
+import {
+  ADE_POINTS,
+  AGENT_CLIS,
+  HIGHLIGHTS,
+  PHONE_POINTS,
+  PHONE_SHOTS,
+  SECURITY_POINTS,
+} from '../lib/home';
 import { softwareApplication } from '../lib/seo';
 
 const site = Astro.site ?? new URL('https://runovahq.com');
@@ -71,6 +81,11 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
       </div>
       <p class="hero-rise mt-4 text-muted-foreground text-sm" style="--order: 4">
         Open source under the MIT license.
+        <a href="#phone" class="phone-note ml-1 inline-flex items-center gap-1.5 font-medium text-foreground">
+          <Icon name="android" size={13} />
+          <Icon name="apple" size={13} />
+          Android and iOS apps coming soon
+        </a>
       </p>
     </div>
     <HeroDemo class="hero-rise mt-12 md:mt-14" />
@@ -186,6 +201,106 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     </div>
   </section>
 
+  <section id="phone" aria-labelledby="phone-title" class="below-fold border-t py-20 md:py-28">
+    <div class="grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
+      <div>
+        <div data-reveal>
+          <p class="font-mono text-primary text-xs uppercase tracking-[0.14em]">On your phone</p>
+          <h2 id="phone-title" class:list={[sectionTitle, 'mt-3']}>
+            Your computers, in your pocket
+          </h2>
+          <p class="mt-5 text-lg text-muted-foreground">
+            The Runova app for Android and iOS reaches your computers from anywhere. The work still
+            runs on the computer. The phone follows it and steps in when it needs you, over the same
+            encrypted link as the desktop.
+          </p>
+        </div>
+        <ul class="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          {
+            PHONE_POINTS.map((point, index) => (
+              <li data-reveal style={`--reveal-order: ${index}`} class="flex gap-4">
+                <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-inner border bg-card text-primary">
+                  <Icon name={point.icon} size={19} />
+                </span>
+                <div>
+                  <h3 class="font-semibold">{point.title}</h3>
+                  <p class="mt-1 text-muted-foreground text-sm">{point.body}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+        <div data-reveal class="mt-10 flex flex-col gap-5">
+          <StoreBadges />
+          <a href="/help/phone" class="link group inline-flex items-center gap-1.5 self-start">
+            How the phone apps work
+            <Icon name="arrow-right" size={16} class="nudge" />
+          </a>
+        </div>
+      </div>
+      <div class="phones">
+        {
+          PHONE_SHOTS.map((name, index) => (
+            <div data-reveal class="phone-slot" style={`--reveal-order: ${index}`}>
+              <PhoneShot name={name} />
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="security" aria-labelledby="security-title" class="below-fold border-t py-20 md:py-28">
+    <div class="security-glow" aria-hidden="true"></div>
+    <div class="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
+      <div data-reveal>
+        <p class="font-mono text-primary text-xs uppercase tracking-[0.14em]">Security</p>
+        <h2 id="security-title" class:list={[sectionTitle, 'mt-3']}>Private by design</h2>
+        <p class="mt-5 text-lg text-muted-foreground">
+          Runova connects your computers, your phone and your team without handing your work to a
+          server. Sessions are encrypted end to end, secrets are sealed before they leave your
+          computer, and the relay in the middle only ever sees ciphertext.
+        </p>
+      </div>
+      <div data-reveal>
+        <SealedLink />
+      </div>
+    </div>
+    <ul class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        SECURITY_POINTS.map((point, index) => (
+          <li
+            data-reveal
+            data-spotlight
+            style={`--reveal-order: ${index}`}
+            class:list={[
+              'security-card rounded-box border bg-card p-6 transition-colors duration-[120ms] hover:border-primary/40 md:p-7',
+              index === 0 && 'sm:col-span-2',
+            ]}
+          >
+            <span class="inline-flex size-10 items-center justify-center rounded-inner border bg-background text-primary">
+              <Icon name={point.icon} size={20} />
+            </span>
+            <h3 class="mt-5 font-semibold text-lg">{point.title}</h3>
+            <p class="mt-2 text-muted-foreground">{point.body}</p>
+            <ul class="mt-4 flex flex-wrap gap-2" aria-label="In short">
+              {point.facts.map((fact) => (
+                <li class="rounded-full border bg-background px-2.5 py-0.5 font-mono text-[0.7rem] text-muted-foreground">
+                  {fact}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))
+      }
+    </ul>
+    <p data-reveal class="mt-8 max-w-[62ch] text-muted-foreground text-sm">
+      Connections to Runova's servers use TLS, which is not end to end, and the server still sees
+      account details, times and which devices talk to each other.
+      The <a href="/privacy" class="link">privacy policy</a> lists everything it keeps.
+    </p>
+  </section>
+
   <section id="download" aria-labelledby="download-title" class="py-16 md:py-24">
     <div
       data-reveal
@@ -195,11 +310,13 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
         Get Runova
       </h2>
       <p class="mx-auto mt-4 max-w-[60ch] text-lg text-muted-foreground">
-        Installers for Windows, macOS and Linux, with updates from inside the app.
+        Installers for Windows, macOS and Linux, with updates from inside the app. The phone apps
+        for Android and iOS are on their way to the stores.
       </p>
       <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
         <DownloadSplit id="cta-download" />
       </div>
+      <StoreBadges class="mt-6" align="center" />
       <p class="mt-6 text-muted-foreground text-sm">On Windows:</p>
       <CopyCommand class="mt-2" command="winget install SmartClouds.Runova" label="winget command" />
     </div>
@@ -348,6 +465,14 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     --fold-height: 390px;
   }
 
+  #phone {
+    --fold-height: 2050px;
+  }
+
+  #security {
+    --fold-height: 2300px;
+  }
+
   @media (min-width: 768px) {
     #ade {
       --fold-height: 1240px;
@@ -355,6 +480,14 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
 
     #features {
       --fold-height: 2720px;
+    }
+
+    #phone {
+      --fold-height: 1500px;
+    }
+
+    #security {
+      --fold-height: 1500px;
     }
   }
 
@@ -365,6 +498,14 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
 
     #features {
       --fold-height: 3130px;
+    }
+
+    #phone {
+      --fold-height: 940px;
+    }
+
+    #security {
+      --fold-height: 1150px;
     }
   }
 
@@ -394,6 +535,100 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
     transform: translateX(3px);
   }
 
+  .phone-note {
+    transition: color 120ms var(--ease-enter);
+  }
+
+  .phone-note:hover {
+    color: hsl(var(--primary));
+  }
+
+  /* Four phones fanned out like cards in a hand, the two in the middle in front. A phone too
+     narrow for four shows the last three. */
+  .phones {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-block: 2.5rem;
+  }
+
+  .phone-slot {
+    width: clamp(9.5rem, 21vw, 14.5rem);
+    margin-inline: -1.4rem;
+  }
+
+  .phone-slot > :global(.phone) {
+    transition: transform 400ms var(--ease-enter);
+  }
+
+  .phone-slot:nth-child(1) {
+    z-index: 1;
+  }
+
+  .phone-slot:nth-child(1) > :global(.phone) {
+    transform: rotate(-9deg) translateY(2.25rem);
+  }
+
+  .phone-slot:nth-child(2) {
+    z-index: 3;
+  }
+
+  .phone-slot:nth-child(2) > :global(.phone) {
+    transform: rotate(-3deg) translateY(-0.5rem);
+  }
+
+  .phone-slot:nth-child(3) {
+    z-index: 2;
+  }
+
+  .phone-slot:nth-child(3) > :global(.phone) {
+    transform: rotate(4deg) translateY(-1.5rem);
+  }
+
+  .phone-slot:nth-child(4) {
+    z-index: 1;
+  }
+
+  .phone-slot:nth-child(4) > :global(.phone) {
+    transform: rotate(10deg) translateY(1.75rem);
+  }
+
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .phone-slot:hover {
+      z-index: 4;
+    }
+
+    .phone-slot:hover > :global(.phone) {
+      transform: rotate(0deg) translateY(-2.25rem) scale(1.04);
+    }
+  }
+
+  @media (max-width: 639px) {
+    .phone-slot {
+      width: 38vw;
+      margin-inline: -2.2rem;
+    }
+
+    .phone-slot:nth-child(1) {
+      display: none;
+    }
+  }
+
+  /* A faint light behind the security section, so it reads as its own part of the page. */
+  #security {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .security-glow {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse 55% 40% at 75% 20%, hsl(var(--glow) / 0.09), transparent 70%);
+  }
+
+  .security-card :global(h3),
   .ade-card :global(h3) {
     letter-spacing: -0.02em;
   }

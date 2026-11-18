@@ -1,0 +1,72 @@
+---
+import { Picture } from 'astro:assets';
+import { phoneShot } from '../../lib/phoneShots';
+
+interface Props {
+  /** The name in src/assets/phone/manifest.json. */
+  name: string;
+  class?: string;
+  style?: string;
+}
+
+const { name, class: className, style } = Astro.props;
+const shot = phoneShot(name);
+// A plain phone outline in CSS: a dark rim, rounded like a current phone, and a camera dot. The
+// snapshot is the app's own screen, so the frame adds no status bar of its own.
+---
+
+<figure class:list={['phone', className]} style={style}>
+  <div class="phone-screen">
+    <Picture
+      src={shot.image}
+      alt={shot.alt}
+      formats={['avif', 'webp']}
+      fallbackFormat="webp"
+      width={390}
+      height={844}
+      widths={[260, 390, 780]}
+      sizes="(min-width: 1024px) 240px, (min-width: 640px) 30vw, 60vw"
+      loading="lazy"
+      decoding="async"
+      class="block h-auto w-full"
+    />
+  </div>
+</figure>
+
+<style>
+  /* A phone is a picture of a device, not a box, so it keeps a phone's own rounding (the one
+     radius besides the three shapes, see tests/shapes.test.ts). */
+  .phone {
+    --phone-radius: 2.4rem;
+
+    position: relative;
+    margin: 0;
+    padding: 7px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--phone-radius);
+    background: linear-gradient(160deg, hsl(0 0% 16%), hsl(0 0% 7%));
+    box-shadow:
+      0 30px 70px -35px hsl(var(--glow) / 0.45),
+      inset 0 0 0 1px hsl(0 0% 100% / 0.06);
+  }
+
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    z-index: 1;
+    width: 9px;
+    height: 9px;
+    border-radius: 9999px;
+    background: hsl(0 0% 4%);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.08);
+    transform: translateX(-50%);
+  }
+
+  .phone-screen {
+    overflow: hidden;
+    border-radius: calc(var(--phone-radius) - 7px);
+    background: #0a0a0a;
+  }
+</style>

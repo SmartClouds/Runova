@@ -1,35 +1,5 @@
 [
   {
-    "name": "workspace",
-    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
-    "theme": "dark",
-    "alt": "The Runova workspace on the Northwind storefront: Claude Code has finished adding discount codes in an agent pane, the diff of the cart totals is open next to it, and the source control panel lists the changes."
-  },
-  {
-    "name": "workspace-light",
-    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
-    "theme": "light",
-    "alt": "The same Northwind storefront workspace in the Light theme, with the agent pane, the cart totals diff and source control."
-  },
-  {
-    "name": "workspace-vscode-dark",
-    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
-    "theme": "vscode-dark",
-    "alt": "The Northwind storefront workspace in the VS Code Dark theme, with the agent pane, the cart totals diff and source control."
-  },
-  {
-    "name": "workspace-vs2026",
-    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
-    "theme": "vs2026",
-    "alt": "The Northwind storefront workspace in the VS 2026 theme, with the agent pane, the cart totals diff and source control."
-  },
-  {
-    "name": "workspace-git",
-    "route": "/workspace/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
-    "theme": "dark",
-    "alt": "Source control in the Northwind storefront workspace: the new discount function in price.ts is staged on its own hunk, while the rest of the change waits unstaged next to a new test file."
-  },
-  {
     "name": "projects",
     "route": "/projects",
     "theme": "dark",
@@ -37,7 +7,7 @@
   },
   {
     "name": "project-detail",
-    "route": "/projects/d468ccf6-3193-4ee5-afbe-871a65aa26e3",
+    "route": "/projects/c208af37-7145-46d2-80d9-8e9166303341",
     "theme": "dark",
     "alt": "The storefront project's page: its description, agent and tags, the standing prompt every agent starts from, and notes for the discount code launch."
   },
@@ -49,7 +19,7 @@
   },
   {
     "name": "blueprint",
-    "route": "/projects/17622fc0-67c6-4040-a70f-9cd1e7fc8218?tab=blueprint",
+    "route": "/projects/1d61a217-c26e-4c06-b6fa-6a84cddacccb?tab=blueprint",
     "theme": "dark",
     "alt": "The admin portal's Blueprint partway through: the idea, architecture and backend steps of a wholesale portal are written, with frontend, CI/CD and quality still to come."
   },
@@ -58,6 +28,36 @@
     "route": "/prompt-builder",
     "theme": "dark",
     "alt": "Prompt Builder with a generated prompt for Claude Code: a short request about discount codes turned into a structured task with context, steps, constraints and a definition of done."
+  },
+  {
+    "name": "workspace",
+    "route": "/workspace/215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
+    "theme": "dark",
+    "alt": "The Runova workspace on the Northwind storefront: Claude Code has finished adding discount codes in an agent pane, the diff of the cart totals is open next to it, and the source control panel lists the changes."
+  },
+  {
+    "name": "workspace-light",
+    "route": "/workspace/215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
+    "theme": "light",
+    "alt": "The same Northwind storefront workspace in the Light theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-vscode-dark",
+    "route": "/workspace/215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
+    "theme": "vscode-dark",
+    "alt": "The Northwind storefront workspace in the VS Code Dark theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-vs2026",
+    "route": "/workspace/215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
+    "theme": "vs2026",
+    "alt": "The Northwind storefront workspace in the VS 2026 theme, with the agent pane, the cart totals diff and source control."
+  },
+  {
+    "name": "workspace-git",
+    "route": "/workspace/215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
+    "theme": "dark",
+    "alt": "Source control in the Northwind storefront workspace: the new discount function in price.ts is staged on its own hunk, while the rest of the change waits unstaged next to a new test file."
   },
   {
     "name": "cli-manager",
@@ -79,7 +79,7 @@
   },
   {
     "name": "mcp",
-    "route": "/tools?tab=mcp&projectId=d468ccf6-3193-4ee5-afbe-871a65aa26e3",
+    "route": "/tools?tab=mcp&projectId=215f0efb-69b4-42bb-bb4e-6bb23f35a0be",
     "theme": "dark",
     "alt": "The MCP directory filtered to the four servers installed in the storefront project: Sentry, Linear, Figma and a copy-paste detector."
   },
@@ -187,7 +187,7 @@
   },
   {
     "name": "relay",
-    "route": "/projects/17622fc0-67c6-4040-a70f-9cd1e7fc8218",
+    "route": "/projects/ee282ee1-8f6e-462f-8da1-9798ef59eae4",
     "theme": "dark",
     "alt": "The Relay board for the admin portal's wholesale work: tasks move from To do through In progress and Testing to Done as agent sessions pick them up."
   },

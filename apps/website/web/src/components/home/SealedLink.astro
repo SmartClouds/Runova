@@ -1,0 +1,294 @@
+---
+/**
+ * The picture beside "Private by design": a computer and a phone with the relay between them.
+ * Locked frames travel both ways and stay locked as they pass the relay, which is the point: only
+ * the two ends hold the keys. Plain SVG and CSS, no script. With reduced motion the frames stand
+ * still along the line.
+ *
+ * The SVG has an aria-label rather than a title element: the SEO check counts every title on a page.
+ */
+
+// Each frame's place along its lane when still, and its head start when moving (of a 5 s trip).
+const OUTBOUND = [
+  { x: 40, delay: '0s' },
+  { x: 160, delay: '-1.7s' },
+  { x: 280, delay: '-3.4s' },
+];
+const INBOUND = [
+  { x: 90, delay: '-0.8s' },
+  { x: 230, delay: '-2.5s' },
+];
+const LANE_START = 132;
+const LANE_LENGTH = 296;
+---
+
+<figure class="sealed rounded-box border bg-card p-5 md:p-7">
+  <svg
+    viewBox="0 0 560 230"
+    role="img"
+    aria-label="Locked frames travel between your computer and your phone through the relay, which passes them along without the keys to open them."
+    class="block h-auto w-full"
+    style={`--lane: ${LANE_LENGTH}px`}
+  >
+    <!-- The two lanes, one each way. -->
+    <line class="lane" x1={LANE_START} y1="98" x2={LANE_START + LANE_LENGTH} y2="98" />
+    <line class="lane" x1={LANE_START} y1="128" x2={LANE_START + LANE_LENGTH} y2="128" />
+
+    <!-- Your computer. -->
+    <g class="node" transform="translate(28 64)">
+      <rect class="device" x="0" y="0" width="100" height="64" rx="8" />
+      <rect class="screen" x="7" y="7" width="86" height="44" rx="3" />
+      <path class="device-line" d="M38 78h24M50 64v14" />
+      <g class="key" transform="translate(68 -26)">
+        <circle cx="7" cy="7" r="6" />
+        <path d="M12 11l9 9M17 16l3-3M20 19l2-2" />
+      </g>
+      <text class="label" x="50" y="104" text-anchor="middle">Your computer</text>
+    </g>
+
+    <!-- The relay. -->
+    <g class="relay" transform="translate(280 113)">
+      <circle class="relay-ring" r="40" />
+      <circle class="relay-core" r="26" />
+      <path
+        class="relay-eye"
+        transform="translate(-10 -10) scale(0.84)"
+        d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49M14.084 14.158a3 3 0 0 1-4.242-4.242M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143M2 2l20 20"
+      />
+      <text class="label" y="64" text-anchor="middle">Relay</text>
+      <text class="note" y="82" text-anchor="middle">passes sealed frames, holds no keys</text>
+    </g>
+
+    <!-- Your phone. -->
+    <g class="node" transform="translate(456 56)">
+      <rect class="device" x="0" y="0" width="46" height="84" rx="9" />
+      <rect class="screen" x="5" y="9" width="36" height="64" rx="3" />
+      <circle class="device-dot" cx="23" cy="78.5" r="1.6" />
+      <g class="key" transform="translate(-30 -18)">
+        <circle cx="7" cy="7" r="6" />
+        <path d="M12 11l9 9M17 16l3-3M20 19l2-2" />
+      </g>
+      <text class="label" x="23" y="112" text-anchor="middle">Your phone</text>
+    </g>
+
+    <!-- Sealed frames. Each is a small padlock tile. -->
+    {
+      OUTBOUND.map((frame) => (
+        <g class="frame out" style={`--x: ${frame.x}px; --delay: ${frame.delay}`}>
+          <g transform={`translate(${LANE_START - 13} 89)`}>
+            <rect class="frame-tile" width="26" height="18" rx="5" />
+            <path class="frame-lock" d="M9.5 9V7a3.5 3.5 0 0 1 7 0v2M8.5 9h9v6h-9z" />
+          </g>
+        </g>
+      ))
+    }
+    {
+      INBOUND.map((frame) => (
+        <g class="frame in" style={`--x: ${frame.x}px; --delay: ${frame.delay}`}>
+          <g transform={`translate(${LANE_START + LANE_LENGTH - 13} 119)`}>
+            <rect class="frame-tile" width="26" height="18" rx="5" />
+            <path class="frame-lock" d="M9.5 9V7a3.5 3.5 0 0 1 7 0v2M8.5 9h9v6h-9z" />
+          </g>
+        </g>
+      ))
+    }
+  </svg>
+  <figcaption class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-muted-foreground text-sm">
+    <span class="inline-flex items-center gap-2">
+      <span class="legend-key" aria-hidden="true"></span>
+      Keys stay on your devices
+    </span>
+    <span class="inline-flex items-center gap-2">
+      <span class="legend-frame" aria-hidden="true"></span>
+      Every frame sealed with AES-256-GCM
+    </span>
+  </figcaption>
+</figure>
+
+<style>
+  .sealed {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sealed::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 70% at 50% 45%, hsl(var(--glow) / 0.1), transparent 70%);
+  }
+
+  svg {
+    position: relative;
+    overflow: visible;
+  }
+
+  .lane {
+    stroke: hsl(var(--muted-foreground) / 0.35);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 6;
+    stroke-linecap: round;
+  }
+
+  .device {
+    fill: hsl(var(--background));
+    stroke: hsl(var(--foreground) / 0.55);
+    stroke-width: 1.5;
+  }
+
+  .screen {
+    fill: hsl(var(--primary) / 0.12);
+    stroke: hsl(var(--primary) / 0.35);
+  }
+
+  .device-line {
+    fill: none;
+    stroke: hsl(var(--foreground) / 0.55);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+
+  .device-dot {
+    fill: hsl(var(--foreground) / 0.55);
+  }
+
+  .key {
+    fill: none;
+    stroke: hsl(var(--primary));
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .label {
+    fill: hsl(var(--foreground));
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .note {
+    fill: hsl(var(--muted-foreground));
+    font-size: 11.5px;
+  }
+
+  .relay-ring {
+    fill: none;
+    stroke: hsl(var(--primary) / 0.25);
+    stroke-width: 1;
+    stroke-dasharray: 2 5;
+  }
+
+  .relay-core {
+    fill: hsl(var(--card));
+    stroke: hsl(var(--foreground) / 0.4);
+    stroke-width: 1.5;
+  }
+
+  .relay-eye {
+    fill: none;
+    stroke: hsl(var(--muted-foreground));
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .frame-tile {
+    fill: hsl(var(--primary));
+  }
+
+  .frame-lock {
+    fill: none;
+    stroke: hsl(var(--primary-foreground));
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+  }
+
+  /* Still: each frame waits at its own place along the lane. */
+  .frame.out {
+    transform: translateX(var(--x));
+  }
+
+  .frame.in {
+    transform: translateX(calc(var(--x) * -1));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .frame {
+      animation: 5s linear infinite;
+      animation-delay: var(--delay);
+    }
+
+    .frame.out {
+      animation-name: travel-out;
+    }
+
+    .frame.in {
+      animation-name: travel-in;
+    }
+
+    .relay-ring {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: relay-turn 24s linear infinite;
+    }
+  }
+
+  @keyframes travel-out {
+    0% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+
+    8%,
+    92% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateX(var(--lane));
+    }
+  }
+
+  @keyframes travel-in {
+    0% {
+      opacity: 0;
+      transform: translateX(0);
+    }
+
+    8%,
+    92% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateX(calc(var(--lane) * -1));
+    }
+  }
+
+  @keyframes relay-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .legend-key,
+  .legend-frame {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.6rem;
+    border-radius: 9999px;
+  }
+
+  .legend-key {
+    width: 0.6rem;
+    border: 2px solid hsl(var(--primary));
+    border-radius: 9999px;
+  }
+
+  .legend-frame {
+    background: hsl(var(--primary));
+  }
+</style>

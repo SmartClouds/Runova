@@ -4,7 +4,14 @@ import { getContainerRenderer as reactRenderer } from '@astrojs/react/container-
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEMO_LENGTH, DEMO_PANES, statusSummary } from '../src/lib/heroDemo';
-import { ADE_POINTS, AGENT_CLIS, HIGHLIGHTS } from '../src/lib/home';
+import {
+  ADE_POINTS,
+  AGENT_CLIS,
+  HIGHLIGHTS,
+  PHONE_POINTS,
+  PHONE_SHOTS,
+  SECURITY_POINTS,
+} from '../src/lib/home';
 import { HOME_TITLE } from '../src/lib/seo';
 import Home from '../src/pages/index.astro';
 import { scanHtml } from './helpers/textScan';
@@ -16,6 +23,10 @@ interface ManifestEntry {
 
 const manifest: ManifestEntry[] = JSON.parse(
   readFileSync(new URL('../src/assets/screenshots/manifest.json', import.meta.url), 'utf8'),
+);
+
+const phoneManifest: ManifestEntry[] = JSON.parse(
+  readFileSync(new URL('../src/assets/phone/manifest.json', import.meta.url), 'utf8'),
 );
 
 let html: string;
@@ -183,6 +194,71 @@ describe('home page', () => {
         const shown = / alt="([^"]*)"/.exec(img)?.[1] ?? '';
         expect(decodeAttribute(shown)).toBe(alt);
       });
+    });
+  });
+
+  describe('phone apps', () => {
+    it('says in the hero that the phone apps are coming, linking to their section', () => {
+      expect(section('hero')).toMatch(
+        /<a[^>]* href="#phone"[^>]*>[\s\S]*Android and iOS apps coming soon/,
+      );
+    });
+
+    it('lists what the phone does, with a link to its help article', () => {
+      const phone = section('phone');
+      expect(phone).toMatch(/<h2[^>]* id="phone-title"/);
+      for (const point of PHONE_POINTS) expect(decodeAttribute(phone)).toContain(point.title);
+      expect(phone).toContain('href="/help/phone"');
+    });
+
+    it('shows real phone screens as AVIF and WebP, sized and lazy, with their alt text', () => {
+      const pictures = section('phone').match(/<picture[\s\S]*?<\/picture>/g) ?? [];
+      expect(pictures).toHaveLength(PHONE_SHOTS.length);
+      pictures.forEach((picture, index) => {
+        expect(picture).toMatch(/<source[^>]* type="image\/avif"/);
+        expect(picture).toMatch(/<source[^>]* type="image\/webp"/);
+        const img = /<img[^>]*>/.exec(picture)?.[0] ?? '';
+        expect(img).toMatch(/ width="\d+"/);
+        expect(img).toMatch(/ height="\d+"/);
+        expect(img).toContain('loading="lazy"');
+        const alt = phoneManifest.find((entry) => entry.name === PHONE_SHOTS[index])?.alt;
+        expect(alt).toBeTruthy();
+        expect(decodeAttribute(/ alt="([^"]*)"/.exec(img)?.[1] ?? '')).toBe(alt);
+      });
+    });
+
+    it('shows both store badges as coming soon, with no link until the apps are published', () => {
+      for (const id of ['phone', 'download']) {
+        const badges = /<ul[^>]* data-store-badges[\s\S]*?<\/ul>/.exec(section(id))?.[0] ?? '';
+        expect(badges, id).toContain('Google Play');
+        expect(badges, id).toContain('App Store');
+        expect(badges, id).not.toContain('<a ');
+        expect(badges.match(/data-soon/g), id).toHaveLength(2);
+      }
+    });
+  });
+
+  describe('security', () => {
+    it('explains each protection with its facts', () => {
+      const security = decodeAttribute(section('security'));
+      expect(security).toContain('Private by design');
+      for (const point of SECURITY_POINTS) {
+        expect(security).toContain(point.title);
+        for (const fact of point.facts) expect(security).toContain(fact);
+      }
+    });
+
+    it('says plainly what is not end to end', () => {
+      expect(section('security')).toContain('which is not end to end');
+      expect(section('security')).toContain('href="/privacy"');
+    });
+
+    it('draws the sealed link as one labelled image', () => {
+      const figure = /<figure class="sealed[\s\S]*?<\/figure>/.exec(section('security'))?.[0] ?? '';
+      expect(figure).toMatch(
+        /<svg[^>]* role="img" aria-label="Locked frames travel[^"]*relay[^"]*"/,
+      );
+      expect(figure).not.toContain('<title');
     });
   });
 
