@@ -47,6 +47,39 @@ function rank(severity: AlertSeverity): number {
   return severity === 'critical' ? 2 : severity === 'warning' ? 1 : 0;
 }
 
+const WEB_ATTACKS: ReadonlySet<AlertInfo['kind']> = new Set([
+  'webScan',
+  'webBruteForce',
+  'webFlood',
+  'webInjection',
+]);
+
+/** The site an attack alert is about: its resource is `site:<id>` (E110). */
+function siteOf(alert: Pick<AlertInfo, 'resource'>): string {
+  return alert.resource.startsWith('site:') ? alert.resource.slice('site:'.length) : alert.resource;
+}
+
+/** Where a click on the entry goes: an attack opens the Security view of that site's traffic. */
+function routeOf(serverId: string, alert: AlertInfo): string {
+  const server = `/deploy?server=${encodeURIComponent(serverId)}`;
+  if (!WEB_ATTACKS.has(alert.kind)) return server;
+  return `${server}&view=traffic&traffic=${encodeURIComponent(siteOf(alert))}&panel=security`;
+}
+
+/** The most a push carries as the id of what it is about. */
+const MAX_ITEM_ID = 64;
+
+/**
+ * What a phone hears this alert is about (E111): the server, and for an attack on a website also
+ * the site, as `<server>:<site>`, so tapping it opens that site's attacks. A pair too long for a
+ * push falls back to the server alone.
+ */
+export function phoneItemId(serverId: string, alert: Pick<AlertInfo, 'kind' | 'resource'>): string {
+  if (!WEB_ATTACKS.has(alert.kind)) return serverId;
+  const item = `${serverId}:${siteOf(alert)}`;
+  return item.length <= MAX_ITEM_ID ? item : serverId;
+}
+
 function titleOf(alert: AlertInfo, server: string): string {
   switch (alert.kind) {
     case 'diskPressure':
@@ -73,6 +106,14 @@ function titleOf(alert: AlertInfo, server: string): string {
       return `The Cloudflare Tunnel is down on ${server}`;
     case 'tunnelBreakGlassOpened':
       return `SSH was opened on ${server} because the tunnel is down`;
+    case 'webScan':
+      return `Scan on ${siteOf(alert)} (${server})`;
+    case 'webBruteForce':
+      return `Password guessing on ${siteOf(alert)} (${server})`;
+    case 'webFlood':
+      return `Flood of requests on ${siteOf(alert)} (${server})`;
+    case 'webInjection':
+      return `Injection probes on ${siteOf(alert)} (${server})`;
     default:
       return `Alert on ${server}`;
   }
@@ -160,7 +201,7 @@ export class DeployAlertWatcher {
   private async announce(serverId: string, alert: AlertInfo): Promise<void> {
     const name = this.watched.get(serverId)?.name ?? serverId;
     const title = titleOf(alert, name);
-    const route = `/deploy?server=${encodeURIComponent(serverId)}`;
+    const route = routeOf(serverId, alert);
     await this.deps.inbox.add({
       id: `${entryPrefix(serverId, alert.id)}${alert.revision}`,
       kind: `deploy-${alert.severity}`,
@@ -177,7 +218,7 @@ export class DeployAlertWatcher {
       category: 'deploys',
       status: alert.severity,
       subject: name,
-      itemId: serverId,
+      itemId: phoneItemId(serverId, alert),
     });
     if (alert.severity !== 'info' && !this.deps.focused()) {
       this.deps.toast({ title, body: alert.message, route });

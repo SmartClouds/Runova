@@ -3,7 +3,7 @@
 /* tslint:disable */
 // @ts-nocheck
 import type { IStreamResult, Subject } from '@microsoft/signalr';
-import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, ReleaseTokenInfo, SaveReleaseTokenRequest, ReleaseAccessCheck, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
+import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, ReleaseTokenInfo, SaveReleaseTokenRequest, ReleaseAccessCheck, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, TrafficStatus, TrafficReportRequest, TrafficReport, TrafficDimensionRequest, TrafficDimensionPage, TrafficLiveRequest, TrafficLive, TrafficSettings, TrafficSaveResult, AttackQuery, AttackSummary, AttackSettings, AutoBlockSettings, BlockedAddressInfo, BlockAddressRequest, BlockAddressResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
 
 /**
 * Everything the app can ask the core over the WebSocket. The desktop's typed client is
@@ -1071,6 +1071,73 @@ export type ICoreHub = {
     * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TelegramNotificationsTestResult>
     */
     sendTelegramNotificationTest(): Promise<TelegramNotificationsTestResult>;
+    /**
+    * The settings for statistics, detection and auto-block, each site, and the country database.
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficStatus>
+    */
+    getTrafficStatus(): Promise<TrafficStatus>;
+    /**
+    * @param request Transpiled from Runova.ServerCore.Contracts.TrafficReportRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficReport>
+    */
+    getTrafficReport(request: TrafficReportRequest): Promise<TrafficReport>;
+    /**
+    * @param request Transpiled from Runova.ServerCore.Contracts.TrafficDimensionRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficDimensionPage>
+    */
+    getTrafficDimension(request: TrafficDimensionRequest): Promise<TrafficDimensionPage>;
+    /**
+    * Visitors now, every five seconds.
+    * @param request Transpiled from Runova.ServerCore.Contracts.TrafficLiveRequest
+    * @param cancellationToken Transpiled from System.Threading.CancellationToken
+    * @returns Transpiled from System.Collections.Generic.IAsyncEnumerable<Runova.ServerCore.Contracts.TrafficLive>
+    */
+    streamTrafficLive(request: TrafficLiveRequest): IStreamResult<TrafficLive>;
+    /**
+    * Turns statistics on or off and sets them up, effective at once. Admin.
+    * @param settings Transpiled from Runova.ServerCore.Contracts.TrafficSettings
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficSaveResult>
+    */
+    saveTrafficSettings(settings: TrafficSettings): Promise<TrafficSaveResult>;
+    /**
+    * Deletes the statistics of one site, or of all when SiteId is null. Admin, with a step-up.
+    * @param siteId Transpiled from string?
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficStatus>
+    */
+    deleteTrafficData(siteId: string): Promise<TrafficStatus>;
+    /**
+    * @param query Transpiled from Runova.ServerCore.Contracts.AttackQuery
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.AttackSummary>
+    */
+    listAttacks(query: AttackQuery): Promise<AttackSummary>;
+    /**
+    * Detection on or off, its thresholds and the allowlist. Admin.
+    * @param settings Transpiled from Runova.ServerCore.Contracts.AttackSettings
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficSaveResult>
+    */
+    saveAttackSettings(settings: AttackSettings): Promise<TrafficSaveResult>;
+    /**
+    * Lets the core block attacking addresses by itself. Owner, with a step-up.
+    * @param settings Transpiled from Runova.ServerCore.Contracts.AutoBlockSettings
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.TrafficSaveResult>
+    */
+    saveAutoBlock(settings: AutoBlockSettings): Promise<TrafficSaveResult>;
+    /**
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.BlockedAddressInfo[]>
+    */
+    listBlockedAddresses(): Promise<BlockedAddressInfo[]>;
+    /**
+    * Makes nginx refuse the address on every site. Admin.
+    * @param request Transpiled from Runova.ServerCore.Contracts.BlockAddressRequest
+    * @returns Transpiled from System.Threading.Tasks.Task<Runova.ServerCore.Contracts.BlockAddressResult>
+    */
+    blockAddress(request: BlockAddressRequest): Promise<BlockAddressResult>;
+    /**
+    * Lets the address back. Admin.
+    * @param blockId Transpiled from long
+    * @returns Transpiled from System.Threading.Tasks.Task
+    */
+    unblockAddress(blockId: number): Promise<void>;
     /**
     * Downloads the release from its GitHub address, checks it against the app's checksum and
     * switches to it a few seconds later. A failed download is an outcome, not an error, so the

@@ -13,7 +13,8 @@ export type SiteTab =
   | 'performance'
   | 'security'
   | 'advanced'
-  | 'logs';
+  | 'logs'
+  | 'traffic';
 
 export interface PlacedProblem {
   scope: 'site' | 'stream' | 'general';

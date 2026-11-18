@@ -24,6 +24,9 @@ internal sealed class HubConnections
 
     public void Remove(string connectionId) => _open.TryRemove(connectionId, out _);
 
+    /// <summary>Every open connection, for the addresses apps connect from (E110).</summary>
+    public IReadOnlyList<HubCallerContext> Contexts => [.. _open.Values.Select(entry => entry.Context)];
+
     public void CloseSession(Guid sessionId, string callerConnectionId) =>
         Close(entry => entry.Session == sessionId, callerConnectionId);
 

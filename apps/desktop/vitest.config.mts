@@ -254,6 +254,17 @@ export default defineConfig({
             },
             'src/renderer/src/lib/deploy/sites/**': { lines: 95, branches: 90 },
             'src/renderer/src/pages/DeployPage.tsx': { lines: 85, functions: 75, branches: 75 },
+            // Website traffic and attacks (E109, E110): the report, its charts, settings and blocking.
+            'src/main/deploy/traffic/**': { lines: 95, branches: 80 },
+            'src/main/ipc/deployTraffic.ts': { lines: 95, branches: 90 },
+            'src/main/deploy/cloudflare/geolocation.ts': { lines: 95, branches: 80 },
+            'src/shared/deploy/traffic*.ts': { lines: 95, branches: 90 },
+            'src/renderer/src/components/deploy/traffic/**': {
+              lines: 90,
+              functions: 85,
+              branches: 80,
+            },
+            'src/renderer/src/lib/deploy/traffic/**': { lines: 95, branches: 90 },
             // The firewall (E13): safe apply, the rule checks and its screen.
             'src/main/deploy/firewall.ts': { lines: 95, branches: 85 },
             'src/main/ipc/deployFirewall.ts': { lines: 95, branches: 90 },

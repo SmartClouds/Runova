@@ -52,7 +52,8 @@ internal sealed partial class CoreHub(
     ErrorReporting.ErrorReportingManager errorReporting,
     Notifications.TelegramManager telegram,
     AssistantHubServices assistant,
-    Files.ContainerFilesService files) : Hub<ICoreHubReceiver>, ICoreHub
+    Files.ContainerFilesService files,
+    Traffic.TrafficHubServices traffic) : Hub<ICoreHubReceiver>, ICoreHub
 {
     public const string Path = "/hubs/core";
 

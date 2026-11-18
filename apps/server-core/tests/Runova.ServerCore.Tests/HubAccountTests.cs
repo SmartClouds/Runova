@@ -387,7 +387,12 @@ public sealed class HubAccountTests
         string[] directTls = ["GetDirectTls"];
         // The core domain (E44): its status, never the key.
         string[] coreDomain = ["GetCoreDomain"];
-        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. coreDomain];
+        // Website traffic (E109) and attacks (E110): reports, the live view, attacks and blocked addresses.
+        string[] traffic =
+        [
+            "GetTrafficDimension", "GetTrafficReport", "GetTrafficStatus", "ListAttacks", "ListBlockedAddresses", "StreamTrafficLive",
+        ];
+        reads = [.. reads, .. docker, .. stacks, .. cloudflare, .. directTls, .. coreDomain, .. traffic];
         Assert.Equal(account.Concat(reads).Concat(firewallReads).Order(StringComparer.Ordinal), open.Order(StringComparer.Ordinal));
     }
 

@@ -1567,6 +1567,46 @@ export const IPC = {
     detectChat: 'deployTelegram:detectChat',
   },
   /**
+   * Website traffic statistics (E109) and attack detection (E110) on a server. Every role reads;
+   * Admins change settings, block and unblock; deleting statistics needs a step-up and auto-block
+   * is an Owner's call with one. The Cloudflare geolocation calls go to Cloudflare from this
+   * computer with the token kept here.
+   */
+  deployTraffic: {
+    /** (serverId) -> TrafficStatus. */
+    status: 'deployTraffic:status',
+    /** (DeployTrafficReportInput) -> TrafficReport. */
+    report: 'deployTraffic:report',
+    /** (DeployTrafficDimensionInput) -> TrafficDimensionPage, behind "See all". */
+    dimension: 'deployTraffic:dimension',
+    /** (DeployTrafficSettingsInput) -> DeployTrafficSaveResult; Admin. */
+    saveSettings: 'deployTraffic:saveSettings',
+    /** (DeployTrafficDeleteInput) -> TrafficStatus; Admin, may need a step-up. */
+    deleteData: 'deployTraffic:deleteData',
+    /** (DeployAttackListInput) -> AttackSummary. */
+    attacks: 'deployTraffic:attacks',
+    /** (DeployAttackSettingsInput) -> DeployTrafficSaveResult; Admin. */
+    saveAttackSettings: 'deployTraffic:saveAttackSettings',
+    /** (DeployAutoBlockInput) -> DeployTrafficSaveResult; Owner, may need a step-up. */
+    saveAutoBlock: 'deployTraffic:saveAutoBlock',
+    /** (serverId) -> BlockedAddressInfo[]. */
+    blocked: 'deployTraffic:blocked',
+    /** (DeployBlockInput) -> BlockAddressResult; Admin. */
+    block: 'deployTraffic:block',
+    /** (DeployUnblockInput) -> void; Admin. */
+    unblock: 'deployTraffic:unblock',
+    /** (DeployTrafficLiveWatchInput) -> subscription id; readings arrive on onLive. */
+    watchLive: 'deployTraffic:watchLive',
+    /** (subscriptionId) -> boolean. */
+    unwatchLive: 'deployTraffic:unwatchLive',
+    /** main -> renderer: DeployTrafficLiveEvent. */
+    onLive: 'deployTraffic:onLive',
+    /** (serverId) -> TrafficGeolocationStatus: Cloudflare's geolocation per site domain. */
+    geolocation: 'deployTraffic:geolocation',
+    /** (DeployTrafficGeolocationInput) -> TrafficGeolocationStatus: turns both on for a zone. */
+    turnOnGeolocation: 'deployTraffic:turnOnGeolocation',
+  },
+  /**
    * Docker on a server (E06): the engine and its install, containers and their lifecycle, live
    * stats, logs and engine events, a console, and images, volumes, networks and disk use.
    */

@@ -22,6 +22,8 @@ using Runova.ServerCore.Tests.Cloudflare;
 using Runova.ServerCore.Tests.Docker;
 using Runova.ServerCore.Tests.ErrorReporting;
 using Runova.ServerCore.Tests.Notifications;
+using Runova.ServerCore.Tests.Traffic;
+using Runova.ServerCore.Traffic;
 using Runova.ServerCore.Updates;
 
 namespace Runova.ServerCore.Tests;
@@ -134,6 +136,11 @@ public sealed class CoreFactory : WebApplicationFactory<Program>
 
             // Hangfire's workers (E28): only the tests that run a backup start them (HubServerBackupTests).
             services.AddSingleton(new BackupJobServerOptions(RunInBackground: false));
+
+            // Website traffic (E109, E110): nothing tails the logs unless a test ticks the tailer, and
+            // DB-IP's country file never comes from the internet.
+            services.AddSingleton(new TrafficOptions(RunInBackground: false));
+            services.AddSingleton(new GeoDownload(new FakeGeoHttp()));
 
             // Telegram notifications (E30): a fake Bot API, so no alert a test raises reaches a chat.
             services.AddSingleton<FakeTelegramApi>();

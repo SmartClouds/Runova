@@ -20,6 +20,7 @@ export type ProblemKind =
   | 'diskPressure'
   | 'certificate'
   | 'exposedPort'
+  | 'attack'
   | 'alert';
 
 export type ProblemSeverity = 'critical' | 'warning';
@@ -55,7 +56,8 @@ const ORDER: Record<ProblemKind, number> = {
   diskPressure: 3,
   certificate: 4,
   exposedPort: 5,
-  alert: 6,
+  attack: 6,
+  alert: 7,
 };
 
 export const PROBLEM_LABELS: Record<ProblemKind, string> = {
@@ -65,6 +67,7 @@ export const PROBLEM_LABELS: Record<ProblemKind, string> = {
   diskPressure: 'Disk pressure',
   certificate: 'Certificate',
   exposedPort: 'Exposed port',
+  attack: 'Attack',
   alert: 'Alert',
 };
 
@@ -131,6 +134,23 @@ function stackProblems(stacks: readonly StackInfo[]): Problem[] {
   return found;
 }
 
+/** What an attack on a website (E110) is called, by its site; null for any other alert. */
+function attackTitle(alert: AlertInfo): string | null {
+  const site = alert.resource.startsWith('site:') ? alert.resource.slice(5) : alert.resource;
+  switch (alert.kind) {
+    case 'webScan':
+      return `${site} is being scanned`;
+    case 'webBruteForce':
+      return `Someone is guessing passwords on ${site}`;
+    case 'webFlood':
+      return `${site} is being flooded`;
+    case 'webInjection':
+      return `Someone is probing ${site} for injections`;
+    default:
+      return null;
+  }
+}
+
 /** `looping` are the containers already listed as crash loops from their own state. */
 function alertProblems(alerts: readonly AlertInfo[], looping: ReadonlySet<string>): Problem[] {
   const found: Problem[] = [];
@@ -145,6 +165,17 @@ function alertProblems(alerts: readonly AlertInfo[], looping: ReadonlySet<string
         title: `${alert.resource} keeps restarting`,
         detail: alert.message,
         containerName: alert.resource,
+      });
+      continue;
+    }
+    const attack = attackTitle(alert);
+    if (attack) {
+      found.push({
+        id: `alert:${alert.id}`,
+        kind: 'attack',
+        severity: alert.severity === 'critical' ? 'critical' : 'warning',
+        title: attack,
+        detail: alert.message,
       });
       continue;
     }

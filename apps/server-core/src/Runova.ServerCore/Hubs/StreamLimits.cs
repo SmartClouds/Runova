@@ -32,6 +32,9 @@ internal sealed class StreamLimits
 
     public const string Journal = "journal";
 
+    // Website traffic (E109).
+    public const string TrafficLive = "traffic-live";
+
     public const int PerConnection = 8;
 
     public static readonly IReadOnlyDictionary<string, int> PerKind = new Dictionary<string, int>(StringComparer.Ordinal)
@@ -46,6 +49,7 @@ internal sealed class StreamLimits
         [SiteLog] = 2,
         [Exec] = 2,
         [Journal] = 2,
+        [TrafficLive] = 2,
     };
 
     private readonly Lock _gate = new();

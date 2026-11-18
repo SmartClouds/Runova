@@ -87,3 +87,17 @@ describe('sectionFromView', () => {
     expect(sectionFromView(null)).toBe('overview');
   });
 });
+
+describe('ServerSections traffic', () => {
+  it('lists Traffic right after Websites and switches to it (E109)', async () => {
+    const onChange = vi.fn();
+    const { user } = renderWithProviders(<ServerSections value="overview" onChange={onChange} />);
+    const names = within(screen.getByRole('navigation', { name: 'Server sections' }))
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+    expect(names.indexOf('Traffic')).toBe(names.indexOf('Websites') + 1);
+    await user.click(screen.getByRole('button', { name: 'Traffic' }));
+    expect(onChange).toHaveBeenCalledWith('traffic');
+    expect(sectionFromView('traffic')).toBe('traffic');
+  });
+});

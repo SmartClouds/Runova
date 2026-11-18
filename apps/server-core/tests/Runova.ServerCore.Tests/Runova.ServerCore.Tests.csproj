@@ -40,6 +40,7 @@
     <Compile Include="..\..\src\Runova.ServerCore.DevHost\Fakes\SimulatedCompose.cs" Link="DevHost\SimulatedCompose.cs" />
     <Compile Include="..\..\src\Runova.ServerCore.DevHost\Fakes\FakeSsh.cs" Link="DevHost\FakeSsh.cs" />
     <Compile Include="..\..\src\Runova.ServerCore.DevHost\Fakes\FakeAssistant.cs" Link="DevHost\FakeAssistant.cs" />
+    <Compile Include="..\..\src\Runova.ServerCore.DevHost\Fakes\FakeTraffic.cs" Link="DevHost\FakeTraffic.cs" />
   </ItemGroup>
 
   <!-- The compose lint parity fixture, shared with the app's linter in packages/core. -->

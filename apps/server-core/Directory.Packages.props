@@ -51,6 +51,12 @@
     <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
   </ItemGroup>
+  <ItemGroup Label="Website traffic">
+    <!-- Website traffic (E109): DB-IP Lite's country file (an .mmdb) is read with MaxMind's reader
+         (Apache 2.0), and visitors are counted by XxHash64 of a salted address and user agent. -->
+    <PackageVersion Include="MaxMind.Db" Version="5.3.0" />
+    <PackageVersion Include="System.IO.Hashing" Version="11.0.0" />
+  </ItemGroup>
   <ItemGroup Label="DevHost">
     <!-- Reads compose files for the DevHost's simulated docker compose. Never in the release. -->
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />

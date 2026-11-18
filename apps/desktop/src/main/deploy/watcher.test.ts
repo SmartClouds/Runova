@@ -4,7 +4,7 @@ import { FakeCore } from '../../shared/deploy/testing/fakeCore';
 import { CoreLinks } from './live/coreLinks';
 import { DeployState } from './state';
 import { fakeLiveHubs } from './testing/fakeLiveHub';
-import { appNotificationInbox, DeployAlertWatcher } from './watcher';
+import { appNotificationInbox, DeployAlertWatcher, phoneItemId } from './watcher';
 
 /**
  * Alerts from every enrolled server become inbox entries and, while the app is in the
@@ -160,6 +160,38 @@ describe('DeployAlertWatcher', () => {
       'A firewall change was rolled back on Production',
       'The Cloudflare lock could not be refreshed on Production',
     ]);
+  });
+
+  it('names attacks on a website and opens its Security view in Traffic (E110)', async () => {
+    const { core, inbox, toasts, watcher } = setup();
+    core.raise('webScan', 'site:blog', 'warning', '198.51.100.23 (NL) probed 412 paths.');
+    core.raise('webBruteForce', 'site:shop', 'critical', '203.0.113.45 tried 238 logins.');
+    core.raise('webFlood', 'site:shop', 'warning', 'A flood.');
+    core.raise('webInjection', 'site:blog', 'warning', 'Injection probes.');
+
+    await watcher.sync();
+    await settle();
+
+    expect(inbox.map((entry) => entry.title).sort()).toEqual([
+      'Flood of requests on shop (Production)',
+      'Injection probes on blog (Production)',
+      'Password guessing on shop (Production)',
+      'Scan on blog (Production)',
+    ]);
+    const scan = inbox.find((entry) => entry.title.startsWith('Scan'));
+    expect(scan?.route).toBe('/deploy?server=srv-1&view=traffic&traffic=blog&panel=security');
+    expect(toasts.find((toast) => toast.title.startsWith('Scan'))?.route).toBe(scan?.route);
+  });
+
+  it("tells the phone which site an attack is on, so it opens that site's attacks (E111)", () => {
+    const alert = (kind: string, resource: string) => ({ kind, resource }) as never;
+    const server = '6f1c2a4e-9b7d-4c3e-8a2f-0d5e7b9c1a3f';
+
+    expect(phoneItemId(server, alert('webScan', 'site:blog'))).toBe(`${server}:blog`);
+    expect(phoneItemId(server, alert('webFlood', 'site:shop-2'))).toBe(`${server}:shop-2`);
+    expect(phoneItemId(server, alert('rebootRequired', 'system'))).toBe(server);
+    // Past the 64 characters a push carries, the phone still gets the server.
+    expect(phoneItemId(server, alert('webScan', `site:${'a'.repeat(40)}`))).toBe(server);
   });
 
   it('leaves the toast to the app while its window has focus', async () => {

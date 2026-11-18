@@ -35,6 +35,7 @@ import { SetupFailure } from '@/components/deploy/SetupFailure';
 import { SecurityPanel } from '@/components/deploy/security/SecurityPanel';
 import { ServerFilesPanel } from '@/components/deploy/serverFiles/ServerFilesPanel';
 import { SitesPanel } from '@/components/deploy/sites/SitesPanel';
+import { TrafficPanel } from '@/components/deploy/traffic/TrafficPanel';
 import { ConnectorDownloadCard } from '@/components/deploy/wordpress/ConnectorDownloadCard';
 import { useSiteListUpdate, useWordPressSites } from '@/components/deploy/wordpress/hooks';
 import { wpProblem } from '@/components/deploy/wordpress/messages';
@@ -705,6 +706,24 @@ export default function DeployPage(): React.JSX.Element {
   } else if (section === 'websites') {
     sections = true;
     content = <SitesPanel server={selected} />;
+  } else if (section === 'traffic') {
+    sections = true;
+    content = (
+      <TrafficPanel
+        server={selected}
+        siteId={params.get('traffic')}
+        onSiteChange={(siteId) =>
+          setParams(
+            siteId
+              ? { server: selected.id, view: 'traffic', traffic: siteId }
+              : { server: selected.id, view: 'traffic' },
+            { replace: true },
+          )
+        }
+        focusSecurity={params.get('panel') === 'security'}
+        onUpdateCore={updateCore}
+      />
+    );
   } else if (section === 'logs') {
     sections = true;
     content = <LogsPanel server={selected} />;

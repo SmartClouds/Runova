@@ -55,6 +55,11 @@ export interface FakeZoneState {
   settings: Record<string, Json>;
   /** GET/PUT /zones/:id/bot_management. */
   bots: Json;
+  /** GET/PATCH /zones/:id/managed_headers: the Managed Transforms and whether each is on. */
+  managedHeaders: {
+    managed_request_headers: Array<Json & { id: string; enabled: boolean }>;
+    managed_response_headers: Array<Json & { id: string; enabled: boolean }>;
+  };
   ruleset: Json | null;
   accessRules: Json[];
   purges: Json[];
@@ -123,6 +128,7 @@ const PERMISSION_NAMES: Record<CloudflareAnyPermissionId, Record<Access, string>
     read: 'Access: Organizations, Identity Providers, and Groups Read',
     edit: 'Access: Organizations, Identity Providers, and Groups Write',
   },
+  transformRules: { read: 'Transform Rules Read', edit: 'Transform Rules Write' },
 };
 /** The two name servers Cloudflare hands every zone the fake makes. */
 export const NEW_ZONE_NAME_SERVERS = ['ada.ns.cloudflare.com', 'kip.ns.cloudflare.com'];
@@ -139,6 +145,7 @@ const SETTING_VALUES: Record<string, readonly string[]> = {
   ssl: ['off', 'flexible', 'full', 'strict'],
   always_use_https: ['on', 'off'],
   tls_client_auth: ['on', 'off'],
+  ip_geolocation: ['on', 'off'],
   automatic_https_rewrites: ['on', 'off'],
   min_tls_version: ['1.0', '1.1', '1.2', '1.3'],
   tls_1_3: ['on', 'off', 'zrt'],
@@ -211,6 +218,7 @@ export function createFakeCloudflare(options: {
       records: copy(seed.records ?? []),
       settings: copy(recorded.settings) as Record<string, Json>,
       bots: copy(recorded.botManagement),
+      managedHeaders: copy(recorded.managedHeaders),
       ruleset: seed.ruleset === undefined ? null : copy(seed.ruleset),
       accessRules: copy(seed.accessRules ?? []),
       purges: [],
@@ -806,6 +814,7 @@ export function createFakeCloudflare(options: {
       records: [],
       settings: copy(recorded.settings) as Record<string, Json>,
       bots: copy(recorded.botManagement),
+      managedHeaders: copy(recorded.managedHeaders),
       ruleset: null,
       accessRules: [],
       purges: [],
@@ -822,6 +831,7 @@ export function createFakeCloudflare(options: {
     if (rest.startsWith('/rulesets')) return ['waf', access];
     if (rest.startsWith('/firewall/access_rules')) return ['accessRules', access];
     if (rest === '/bot_management') return ['botManagement', access];
+    if (rest === '/managed_headers') return ['transformRules', access];
     return ['zone', access];
   }
 
@@ -924,6 +934,20 @@ export function createFakeCloudflare(options: {
       }
       state.bots = { ...state.bots, ...body };
       return ok(state.bots);
+    }
+    if (rest === '/managed_headers') {
+      if (method === 'GET') return ok(state.managedHeaders);
+      // Only the transforms named change; Cloudflare refuses an id it does not have.
+      for (const list of ['managed_request_headers', 'managed_response_headers'] as const) {
+        for (const change of (body[list] as Array<{ id: string; enabled: unknown }>) ?? []) {
+          const known = state.managedHeaders[list].find((header) => header.id === change.id);
+          if (!known || typeof change.enabled !== 'boolean') {
+            return fail(400, 20001, `Unknown Managed Transform ${change.id}`);
+          }
+          known.enabled = change.enabled;
+        }
+      }
+      return ok(state.managedHeaders);
     }
     if (rest === '/purge_cache') {
       state.purges.push(body);

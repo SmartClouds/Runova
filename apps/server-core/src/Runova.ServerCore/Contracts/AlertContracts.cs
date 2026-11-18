@@ -31,6 +31,18 @@ public enum AlertKind
 
     /// <summary>The tunnel stayed down, so the core opened SSH to everyone as the person asked (E95).</summary>
     TunnelBreakGlassOpened,
+
+    /// <summary>Addresses probing a site for files and admin pages (E110). The resource is <c>site:&lt;id&gt;</c>.</summary>
+    WebScan,
+
+    /// <summary>Addresses trying passwords on a site's login pages (E110). The resource is <c>site:&lt;id&gt;</c>.</summary>
+    WebBruteForce,
+
+    /// <summary>A site flooded with requests (E110). The resource is <c>site:&lt;id&gt;</c>.</summary>
+    WebFlood,
+
+    /// <summary>Injection probes (SQL, XSS, traversal, commands) against a site (E110). The resource is <c>site:&lt;id&gt;</c>.</summary>
+    WebInjection,
 }
 
 [TranspilationSource]

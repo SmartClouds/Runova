@@ -59,6 +59,10 @@ public sealed class TelegramMessagesTests
     [InlineData(AlertKind.OriginLockRefreshFailed, AlertSeverity.Warning, "The Cloudflare lock could not be refreshed")]
     [InlineData(AlertKind.BackupFailed, AlertSeverity.Warning, "A backup failed")]
     [InlineData(AlertKind.ContainerCrashLoop, AlertSeverity.Critical, "A container keeps restarting")]
+    [InlineData(AlertKind.WebScan, AlertSeverity.Warning, "A website is being scanned")]
+    [InlineData(AlertKind.WebBruteForce, AlertSeverity.Warning, "Someone is trying passwords on a website")]
+    [InlineData(AlertKind.WebFlood, AlertSeverity.Critical, "A website is flooded with requests")]
+    [InlineData(AlertKind.WebInjection, AlertSeverity.Warning, "A website is getting injection attacks")]
     public void Every_kind_has_a_title(AlertKind kind, AlertSeverity severity, string title)
     {
         Assert.Equal(title, TelegramMessages.Title(kind, severity));

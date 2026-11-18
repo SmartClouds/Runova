@@ -187,7 +187,7 @@ export type AuditVerificationInfo = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.AlertKind */
-export type AlertKind = "diskPressure" | "jobFailed" | "rebootRequired" | "firewallRolledBack" | "firewallRollbackFailed" | "certificateRenewalFailed" | "originLockRefreshFailed" | "backupFailed" | "containerCrashLoop" | "cloudflareTunnelDown" | "tunnelBreakGlassOpened";
+export type AlertKind = "diskPressure" | "jobFailed" | "rebootRequired" | "firewallRolledBack" | "firewallRollbackFailed" | "certificateRenewalFailed" | "originLockRefreshFailed" | "backupFailed" | "containerCrashLoop" | "cloudflareTunnelDown" | "tunnelBreakGlassOpened" | "webScan" | "webBruteForce" | "webFlood" | "webInjection";
 
 /** Transpiled from Runova.ServerCore.Contracts.AlertSeverity */
 export type AlertSeverity = "info" | "warning" | "critical";
@@ -3206,6 +3206,405 @@ export type MetricsHistory = {
     intervalSeconds: number;
     /** Transpiled from Runova.ServerCore.Contracts.MetricsSample[] */
     samples: MetricsSample[];
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficGranularity */
+export type TrafficGranularity = "hour" | "day" | "week" | "month";
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficDimension */
+export type TrafficDimension = "page" | "entryPage" | "referrer" | "browser" | "operatingSystem" | "device" | "country" | "city" | "statusCode" | "bot";
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficTotals */
+export type TrafficTotals = {
+    /** Transpiled from long */
+    visitors: number;
+    /** Transpiled from long */
+    visits: number;
+    /** Transpiled from long */
+    pageViews: number;
+    /** Transpiled from long */
+    requests: number;
+    /** Transpiled from long */
+    botRequests: number;
+    /** Transpiled from long */
+    bytes: number;
+    /** Transpiled from long */
+    bounces: number;
+    /** Transpiled from long */
+    visitSeconds: number;
+    /** Transpiled from long */
+    status2xx: number;
+    /** Transpiled from long */
+    status3xx: number;
+    /** Transpiled from long */
+    status4xx: number;
+    /** Transpiled from long */
+    status5xx: number;
+    /** Transpiled from double */
+    averageResponseMs: number;
+    /** Transpiled from double */
+    p95ResponseMs: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficPoint */
+export type TrafficPoint = {
+    /** Transpiled from long */
+    startUnixMs: number;
+    /** Transpiled from long */
+    visitors: number;
+    /** Transpiled from long */
+    visits: number;
+    /** Transpiled from long */
+    pageViews: number;
+    /** Transpiled from long */
+    requests: number;
+    /** Transpiled from long */
+    botRequests: number;
+    /** Transpiled from long */
+    bytes: number;
+    /** Transpiled from long */
+    status4xx: number;
+    /** Transpiled from long */
+    status5xx: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficCount */
+export type TrafficCount = {
+    /** Transpiled from string */
+    value: string;
+    /** Transpiled from long */
+    count: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficBreakdown */
+export type TrafficBreakdown = {
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficDimension */
+    dimension: TrafficDimension;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficCount[] */
+    top: TrafficCount[];
+    /** Transpiled from long */
+    total: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficCountrySources */
+export type TrafficCountrySources = {
+    /** Transpiled from long */
+    cloudflare: number;
+    /** Transpiled from long */
+    dbIp: number;
+    /** Transpiled from long */
+    unknown: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficReportRequest */
+export type TrafficReportRequest = {
+    /** Transpiled from string? */
+    siteId?: string;
+    /** Transpiled from long */
+    fromUnixMs: number;
+    /** Transpiled from long */
+    toUnixMs: number;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficGranularity */
+    granularity: TrafficGranularity;
+    /** Transpiled from bool */
+    compare: boolean;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficReport */
+export type TrafficReport = {
+    /** Transpiled from string? */
+    siteId?: string;
+    /** Transpiled from long */
+    fromUnixMs: number;
+    /** Transpiled from long */
+    toUnixMs: number;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficGranularity */
+    granularity: TrafficGranularity;
+    /** Transpiled from string */
+    timeZone: string;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficTotals */
+    totals: TrafficTotals;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficPoint[] */
+    series: TrafficPoint[];
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficBreakdown[] */
+    breakdowns: TrafficBreakdown[];
+    /** Transpiled from long[] */
+    hourOfWeek: number[];
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficCountrySources */
+    countrySources: TrafficCountrySources;
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from long */
+    collectingSinceUnixMs?: number;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficTotals? */
+    previous?: TrafficTotals;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficPoint[]? */
+    previousSeries?: TrafficPoint[];
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficDimensionRequest */
+export type TrafficDimensionRequest = {
+    /** Transpiled from string? */
+    siteId?: string;
+    /** Transpiled from long */
+    fromUnixMs: number;
+    /** Transpiled from long */
+    toUnixMs: number;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficDimension */
+    dimension: TrafficDimension;
+    /** Transpiled from int */
+    offset: number;
+    /** Transpiled from int */
+    limit: number;
+    /** Transpiled from string? */
+    search?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficDimensionPage */
+export type TrafficDimensionPage = {
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficDimension */
+    dimension: TrafficDimension;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficCount[] */
+    items: TrafficCount[];
+    /** Transpiled from long */
+    total: number;
+    /** Transpiled from int */
+    totalItems: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficLiveRequest */
+export type TrafficLiveRequest = {
+    /** Transpiled from string? */
+    siteId?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficLive */
+export type TrafficLive = {
+    /** Transpiled from long */
+    atUnixMs: number;
+    /** Transpiled from int */
+    visitorsNow: number;
+    /** Transpiled from int */
+    requestsLastMinute: number;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficCount[] */
+    pagesNow: TrafficCount[];
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficSettings */
+export type TrafficSettings = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from bool */
+    countries: boolean;
+    /** Transpiled from string[] */
+    excludedSites: string[];
+    /** Transpiled from int */
+    hourlyRetentionDays: number;
+    /** Transpiled from int */
+    dailyRetentionDays: number;
+    /** Transpiled from string */
+    timeZone: string;
+    /** Transpiled from bool */
+    readExistingLogs: boolean;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackKind */
+export type AttackKind = "scan" | "bruteForce" | "flood" | "injection";
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackThresholds */
+export type AttackThresholds = {
+    /** Transpiled from int */
+    scanProbes: number;
+    /** Transpiled from int */
+    scanNotFound: number;
+    /** Transpiled from int */
+    scanWindowMinutes: number;
+    /** Transpiled from int */
+    bruteForceAttempts: number;
+    /** Transpiled from int */
+    bruteForceWindowMinutes: number;
+    /** Transpiled from int */
+    floodRequestsPerMinute: number;
+    /** Transpiled from int */
+    injectionHits: number;
+    /** Transpiled from int */
+    injectionWindowMinutes: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackSettings */
+export type AttackSettings = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from Runova.ServerCore.Contracts.AttackThresholds */
+    thresholds: AttackThresholds;
+    /** Transpiled from string[] */
+    allowlist: string[];
+    /** Transpiled from int */
+    eventRetentionDays: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AutoBlockSettings */
+export type AutoBlockSettings = {
+    /** Transpiled from bool */
+    enabled: boolean;
+    /** Transpiled from Runova.ServerCore.Contracts.AttackKind[] */
+    kinds: AttackKind[];
+    /** Transpiled from int */
+    minutes: number;
+    /** Transpiled from int */
+    maxBlocked: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficSiteStatus */
+export type TrafficSiteStatus = {
+    /** Transpiled from string */
+    siteId: string;
+    /** Transpiled from string[] */
+    domains: string[];
+    /** Transpiled from bool */
+    excluded: boolean;
+    /** Transpiled from bool */
+    loggingOff: boolean;
+    /** Transpiled from long */
+    lastLineAtUnixMs?: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficStatus */
+export type TrafficStatus = {
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficSettings */
+    settings: TrafficSettings;
+    /** Transpiled from Runova.ServerCore.Contracts.AttackSettings */
+    attacks: AttackSettings;
+    /** Transpiled from Runova.ServerCore.Contracts.AutoBlockSettings */
+    autoBlock: AutoBlockSettings;
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficSiteStatus[] */
+    sites: TrafficSiteStatus[];
+    /** Transpiled from bool */
+    geoDatabaseReady: boolean;
+    /** Transpiled from long */
+    storageBytes: number;
+    /** Transpiled from string */
+    defaultTimeZone: string;
+    /** Transpiled from long */
+    collectingSinceUnixMs?: number;
+    /** Transpiled from long */
+    geoDatabaseUpdatedAtUnixMs?: number;
+    /** Transpiled from string? */
+    geoDatabaseProblem?: string;
+    /** Transpiled from long */
+    changedAtUnixMs?: number;
+    /** Transpiled from string? */
+    changedBy?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.TrafficSaveResult */
+export type TrafficSaveResult = {
+    /** Transpiled from string[] */
+    problems: string[];
+    /** Transpiled from Runova.ServerCore.Contracts.TrafficStatus? */
+    status?: TrafficStatus;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackEventInfo */
+export type AttackEventInfo = {
+    /** Transpiled from long */
+    id: number;
+    /** Transpiled from string */
+    siteId: string;
+    /** Transpiled from Runova.ServerCore.Contracts.AttackKind */
+    kind: AttackKind;
+    /** Transpiled from string */
+    address: string;
+    /** Transpiled from long */
+    firstSeenAtUnixMs: number;
+    /** Transpiled from long */
+    lastSeenAtUnixMs: number;
+    /** Transpiled from int */
+    count: number;
+    /** Transpiled from string[] */
+    samplePaths: string[];
+    /** Transpiled from bool */
+    blocked: boolean;
+    /** Transpiled from string? */
+    country?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackQuery */
+export type AttackQuery = {
+    /** Transpiled from string? */
+    siteId?: string;
+    /** Transpiled from long */
+    fromUnixMs?: number;
+    /** Transpiled from long */
+    toUnixMs?: number;
+    /** Transpiled from int */
+    limit: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackPoint */
+export type AttackPoint = {
+    /** Transpiled from long */
+    startUnixMs: number;
+    /** Transpiled from int */
+    scan: number;
+    /** Transpiled from int */
+    bruteForce: number;
+    /** Transpiled from int */
+    flood: number;
+    /** Transpiled from int */
+    injection: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.AttackSummary */
+export type AttackSummary = {
+    /** Transpiled from Runova.ServerCore.Contracts.AttackEventInfo[] */
+    events: AttackEventInfo[];
+    /** Transpiled from Runova.ServerCore.Contracts.AttackPoint[] */
+    series: AttackPoint[];
+    /** Transpiled from int */
+    addresses: number;
+    /** Transpiled from int */
+    blocked: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.BlockedAddressInfo */
+export type BlockedAddressInfo = {
+    /** Transpiled from long */
+    id: number;
+    /** Transpiled from string */
+    network: string;
+    /** Transpiled from string */
+    reason: string;
+    /** Transpiled from bool */
+    automatic: boolean;
+    /** Transpiled from long */
+    createdAtUnixMs: number;
+    /** Transpiled from string? */
+    siteId?: string;
+    /** Transpiled from string? */
+    createdBy?: string;
+    /** Transpiled from long */
+    expiresAtUnixMs?: number;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.BlockAddressRequest */
+export type BlockAddressRequest = {
+    /** Transpiled from string */
+    network: string;
+    /** Transpiled from string? */
+    reason?: string;
+    /** Transpiled from int */
+    minutes?: number;
+    /** Transpiled from string? */
+    siteId?: string;
+}
+
+/** Transpiled from Runova.ServerCore.Contracts.BlockAddressResult */
+export type BlockAddressResult = {
+    /** Transpiled from string[] */
+    problems: string[];
+    /** Transpiled from Runova.ServerCore.Contracts.BlockedAddressInfo? */
+    blocked?: BlockedAddressInfo;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.UpgradablePackage */

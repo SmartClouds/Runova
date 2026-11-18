@@ -9,9 +9,19 @@ namespace Runova.ServerCore.Notifications;
 /// The Telegram settings as a small file in the core's own state folder (root only), like the error
 /// reporting settings. The bot token is sealed with Data Protection, so a copy of the file alone cannot
 /// send as the bot. A file that cannot be read back reads as "not set up": better silent than guessing.
+/// The file also keeps every kind of alert there was when it was saved: a kind added to the core later
+/// was never turned off by anyone, so it counts as on, as every kind is by default (E30).
 /// </summary>
 internal sealed class TelegramStore(string path, IDataProtector protector)
 {
+    /// <summary>The kinds a file saved before it listed them knew of: everything before the website attack alerts (E110).</summary>
+    public static readonly AlertKind[] KindsBeforeKnownKinds =
+    [
+        AlertKind.DiskPressure, AlertKind.JobFailed, AlertKind.RebootRequired, AlertKind.FirewallRolledBack,
+        AlertKind.FirewallRollbackFailed, AlertKind.CertificateRenewalFailed, AlertKind.OriginLockRefreshFailed,
+        AlertKind.BackupFailed, AlertKind.ContainerCrashLoop, AlertKind.CloudflareTunnelDown, AlertKind.TunnelBreakGlassOpened,
+    ];
+
     public TelegramConfig? Read()
     {
         if (!File.Exists(path))
@@ -28,7 +38,9 @@ internal sealed class TelegramStore(string path, IDataProtector protector)
             }
 
             var token = protector.Unprotect(stored.BotToken);
-            var problems = TelegramConfig.Check(stored.ChatId, stored.ServerName, stored.Kinds, string.Empty, out var chat, out var serverName, out var kinds);
+            var known = stored.KnownKinds ?? KindsBeforeKnownKinds;
+            AlertKind[] chosen = [.. stored.Kinds, .. TelegramConfig.AllKinds.Where(kind => !known.Contains(kind))];
+            var problems = TelegramConfig.Check(stored.ChatId, stored.ServerName, chosen, string.Empty, out var chat, out var serverName, out var kinds);
             return problems.Length > 0 || serverName.Length == 0 || TelegramConfig.TokenProblem(token) is not null
                 ? null
                 : new TelegramConfig(stored.Enabled, token, chat, serverName, kinds, stored.SendResolved, stored.ChangedAt, stored.ChangedBy);
@@ -53,7 +65,8 @@ internal sealed class TelegramStore(string path, IDataProtector protector)
             config.Kinds,
             config.SendResolved,
             config.ChangedAt,
-            config.ChangedBy);
+            config.ChangedBy,
+            TelegramConfig.AllKinds);
         File.WriteAllText(temporary, JsonSerializer.Serialize(stored, CoreJson.Options));
         if (!OperatingSystem.IsWindows())
         {
@@ -79,5 +92,6 @@ internal sealed class TelegramStore(string path, IDataProtector protector)
         AlertKind[] Kinds,
         bool SendResolved,
         long? ChangedAt,
-        string? ChangedBy);
+        string? ChangedBy,
+        AlertKind[]? KnownKinds = null);
 }

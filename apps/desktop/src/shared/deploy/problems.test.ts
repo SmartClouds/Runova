@@ -134,6 +134,29 @@ describe('buildProblems', () => {
     );
   });
 
+  it('names an attack on a website by its site (E110)', () => {
+    const problems = buildProblems({
+      now: NOW,
+      alerts: [
+        alert(1, {
+          kind: 'webScan',
+          resource: 'site:blog',
+          message: '198.51.100.23 probed 412 paths.',
+        }),
+        alert(2, { kind: 'webBruteForce', resource: 'site:shop', severity: 'critical' }),
+        alert(3, { kind: 'webFlood', resource: 'site:shop' }),
+        alert(4, { kind: 'webInjection', resource: 'site:blog' }),
+      ],
+    });
+    expect(problems.map((p) => [p.kind, p.severity, p.title])).toEqual([
+      ['attack', 'critical', 'Someone is guessing passwords on shop'],
+      ['attack', 'warning', 'blog is being scanned'],
+      ['attack', 'warning', 'shop is being flooded'],
+      ['attack', 'warning', 'Someone is probing blog for injections'],
+    ]);
+    expect(problems[1]?.detail).toBe('198.51.100.23 probed 412 paths.');
+  });
+
   it('names failed backups and crash loops the core saw, without listing a loop twice (E30)', () => {
     const problems = buildProblems({
       now: NOW,
@@ -229,6 +252,6 @@ describe('buildProblems', () => {
   it('is empty for a healthy server and labels every kind', () => {
     expect(buildProblems({ now: NOW })).toEqual([]);
     expect(buildProblems({ now: NOW, exposure: null, containers: [container('web')] })).toEqual([]);
-    expect(Object.keys(PROBLEM_LABELS)).toHaveLength(7);
+    expect(Object.keys(PROBLEM_LABELS)).toHaveLength(8);
   });
 });

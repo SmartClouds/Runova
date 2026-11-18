@@ -317,6 +317,18 @@ export const queryKeys = {
   /** How a server's core reports its warnings and errors to Sentry (E29); never the DSN. */
   deployErrorReporting: (serverId: string) => ['deploy', 'errorReporting', serverId] as const,
   deployTelegram: (serverId: string) => ['deploy', 'telegram', serverId] as const,
+  /** Website traffic and attacks (E109, E110); every key starts with deployTraffic(serverId). */
+  deployTraffic: (serverId: string) => ['deploy', 'traffic', serverId] as const,
+  deployTrafficStatus: (serverId: string) => ['deploy', 'traffic', serverId, 'status'] as const,
+  deployTrafficReport: (serverId: string, view: Record<string, unknown>) =>
+    ['deploy', 'traffic', serverId, 'report', view] as const,
+  deployTrafficDimension: (serverId: string, view: Record<string, unknown>) =>
+    ['deploy', 'traffic', serverId, 'dimension', view] as const,
+  deployTrafficAttacks: (serverId: string, siteId: string | null) =>
+    ['deploy', 'traffic', serverId, 'attacks', siteId ?? '*'] as const,
+  deployTrafficBlocked: (serverId: string) => ['deploy', 'traffic', serverId, 'blocked'] as const,
+  deployTrafficGeolocation: (serverId: string) =>
+    ['deploy', 'traffic', serverId, 'geolocation'] as const,
   /** Prefix of a server's Backups section (E28): the secret, destinations, plans and runs. */
   deployServerBackups: (serverId: string) => ['deploy', 'serverBackups', serverId] as const,
   deployBackupSecret: (serverId: string) =>

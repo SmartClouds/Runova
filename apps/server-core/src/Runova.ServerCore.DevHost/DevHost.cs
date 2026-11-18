@@ -1,11 +1,14 @@
 using System.Net;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Runova.ServerCore;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Data;
 using Runova.ServerCore.Docker;
 using Runova.ServerCore.Files;
+using Runova.ServerCore.Nginx;
 using Runova.ServerCore.Security;
+using Runova.ServerCore.Traffic;
 
 namespace Runova.ServerCore.DevHost;
 
@@ -63,6 +66,8 @@ internal static class DevHost
         app.MapPost("/dev/enroll", EnrollAsync).AllowAnonymous();
         app.MapPost("/dev/files/seed", SeedFile).AllowAnonymous();
         app.MapPost("/dev/containers/crash", Crash).AllowAnonymous();
+        app.MapPost("/dev/sites/traffic", SeedTrafficAsync).AllowAnonymous();
+        app.MapPost("/dev/sites/attack", SeedAttackAsync).AllowAnonymous();
         await app.StartAsync();
         await EnsureDevOwnerAsync(app.Services);
         await app.WaitForShutdownAsync();
@@ -212,7 +217,89 @@ internal static class DevHost
         return Results.NoContent();
     }
 
+    /// <summary>
+    /// Appends synthetic visits (E109) to a pretend site's access log, then has the tailer read and
+    /// write them at once, so the app's end-to-end tests see them in the report without waiting a
+    /// minute. Statistics must be on (the lines come after the point they started from). Loopback only.
+    /// </summary>
+    private static async Task<IResult> SeedTrafficAsync(DevTrafficRequest request, HttpContext http, CoreDbContext db, SimulatedNginxMachine machine, TrafficTailer tailer)
+    {
+        if (http.Connection.RemoteIpAddress is not { } remote || !IPAddress.IsLoopback(remote))
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        if (request.Count is < 1 or > 200_000 || request.DaysBack is < 0 or > 400 || string.IsNullOrEmpty(request.SiteId))
+        {
+            return Results.BadRequest();
+        }
+
+        if (!await db.Sites.AnyAsync(s => s.Id == request.SiteId, http.RequestAborted))
+        {
+            return Results.NotFound();
+        }
+
+        var lines = Fakes.FakeTraffic.Visits(request.Count, request.DaysBack, request.Seed, DateTimeOffset.UtcNow);
+        machine.AppendText(NginxLayout.Debian.AccessLog(request.SiteId), string.Concat(lines));
+        await DrainAsync(tailer, lines.Sum(line => (long)line.Length), http.RequestAborted);
+        return Results.Ok(new DevTrafficResponse(lines.Count));
+    }
+
+    /// <summary>
+    /// Appends a burst from one address that trips one attack detector (E110), now, and has the tailer
+    /// read it at once, so the alert opens straight away. Detection must be on. Loopback only.
+    /// </summary>
+    private static async Task<IResult> SeedAttackAsync(DevAttackRequest request, HttpContext http, CoreDbContext db, SimulatedNginxMachine machine, TrafficTailer tailer, TrafficManager manager)
+    {
+        if (http.Connection.RemoteIpAddress is not { } remote || !IPAddress.IsLoopback(remote))
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        var address = string.IsNullOrWhiteSpace(request.Address) ? DevAttackAddress : request.Address.Trim();
+        if (!Enum.TryParse<AttackKind>(request.Kind, ignoreCase: true, out var kind) || !Enum.IsDefined(kind)
+            || !IpKey.TryParse(address, out _) || string.IsNullOrEmpty(request.SiteId))
+        {
+            return Results.BadRequest();
+        }
+
+        if (!await db.Sites.AnyAsync(s => s.Id == request.SiteId, http.RequestAborted))
+        {
+            return Results.NotFound();
+        }
+
+        await manager.EnsureLoadedAsync(http.RequestAborted);
+        var lines = Fakes.FakeTraffic.Attack(kind, address, manager.Current.Attacks.Thresholds, DateTimeOffset.UtcNow);
+        machine.AppendText(NginxLayout.Debian.AccessLog(request.SiteId), string.Concat(lines));
+        await DrainAsync(tailer, lines.Sum(line => (long)line.Length), http.RequestAborted);
+        return Results.Ok(new DevTrafficResponse(lines.Count));
+    }
+
+    /// <summary>Enough ticks for the tailer to read what was just written under its budget, then a flush.</summary>
+    private static async Task DrainAsync(TrafficTailer tailer, long bytes, CancellationToken cancellationToken)
+    {
+        for (var tick = 0; tick <= (bytes / TrafficOptions.DefaultTickBudget) + 1; tick++)
+        {
+            await tailer.TickAsync(cancellationToken);
+        }
+
+        await tailer.FlushAsync(cancellationToken);
+    }
+
+    /// <summary>The address attack bursts come from unless asked otherwise: a documentation address, not the app's own.</summary>
+    public const string DevAttackAddress = "198.51.100.23";
+
     internal sealed record DevEnrollRequest(string PublicKey, string? DeviceName);
+
+    /// <param name="DaysBack">Spread over this many days before now; 0 for the last hour.</param>
+    /// <param name="Seed">The same seed gives the same lines.</param>
+    internal sealed record DevTrafficRequest(string SiteId, int Count = 500, int DaysBack = 7, int Seed = 1);
+
+    /// <param name="Kind">"scan", "bruteForce", "flood" or "injection".</param>
+    /// <param name="Address">Where the burst comes from; 198.51.100.23 unless given.</param>
+    internal sealed record DevAttackRequest(string SiteId, string Kind, string? Address = null);
+
+    internal sealed record DevTrafficResponse(int Lines);
 
     internal sealed record DevCrashRequest(string Container, int ExitCode = 1);
 

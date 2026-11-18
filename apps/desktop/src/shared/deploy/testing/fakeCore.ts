@@ -27,6 +27,7 @@ import { FakeFiles } from './fakeFiles';
 import { FakeFirewall } from './fakeFirewall';
 import { FakeNginx } from './fakeNginx';
 import { FakeTelegram } from './fakeTelegram';
+import { FakeTraffic } from './fakeTraffic';
 
 /**
  * A server core in memory for tests (T11): the machine behind the hub. Tests move it along by
@@ -167,6 +168,20 @@ export class FakeCore {
     now: () => this.now(),
     userName: () => this.userName,
   });
+
+  /** Website traffic and attacks (E109, E110): statistics off until an Admin turns them on. */
+  readonly traffic: FakeTraffic = new FakeTraffic({
+    now: () => this.now(),
+    userName: () => this.userName,
+    sites: () =>
+      [...this.nginx.sites.values()].map((site) => ({
+        siteId: site.settings.id,
+        domains: [...site.settings.domains],
+      })),
+  });
+
+  /** While true the traffic calls answer as a core from before E109 does. */
+  trafficMissing = false;
 
   constructor(readonly now: () => number = Date.now) {
     this.firewall = new FakeFirewall(now, (change) =>

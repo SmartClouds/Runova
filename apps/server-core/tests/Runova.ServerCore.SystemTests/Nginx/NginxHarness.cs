@@ -238,6 +238,9 @@ internal sealed class NginxHarness : IAsyncDisposable
             ],
             cancellationToken);
 
+        // Every release reads the blocked addresses (E110) from here, as the core's setup leaves it.
+        await CopyAsync("/etc/nginx", [("runova/blocked.conf", Traffic.BlockList.Render([]))], cancellationToken);
+
         var ipv6 = await ShellAsync("grep -q '^00000000000000000000000000000001 ' /proc/net/if_inet6", cancellationToken);
         Layout = Layout with { ListenIPv6 = ipv6.Succeeded };
 

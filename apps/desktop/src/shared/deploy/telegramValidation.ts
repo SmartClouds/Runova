@@ -74,6 +74,26 @@ export const TELEGRAM_ALERT_KINDS: ReadonlyArray<{
     label: 'SSH opened by break-glass',
     hint: 'The tunnel stayed down, so the server opened SSH to everyone as you asked.',
   },
+  {
+    value: 'webScan',
+    label: 'Website scanned',
+    hint: 'An address probed a website for files and admin pages such as /.env or /phpmyadmin.',
+  },
+  {
+    value: 'webBruteForce',
+    label: 'Password guessing on a website',
+    hint: 'An address tried many logins on a page such as /wp-login.php or /login.',
+  },
+  {
+    value: 'webFlood',
+    label: 'Website flooded',
+    hint: 'An address, or the traffic as a whole, went far above what the website normally gets.',
+  },
+  {
+    value: 'webInjection',
+    label: 'Injection probes on a website',
+    hint: 'Requests carried SQL injection, script injection, path traversal or Log4Shell attempts.',
+  },
 ];
 
 const KNOWN_KINDS: ReadonlySet<string> = new Set(TELEGRAM_ALERT_KINDS.map((kind) => kind.value));

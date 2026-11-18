@@ -118,10 +118,20 @@ internal static class NginxRenderer
         return text.EndsWith('\n') ? text : text + "\n";
     }
 
+    /// <summary>1 for an address blocked under Traffic (E110), from a geo map that reads <see cref="NginxLayout.BlockListFile"/>.</summary>
+    public static string BlockedVariable(NginxLayout layout) => "$" + layout.NamePrefix + "_blocked";
+
     private static string RenderHttp(NginxConfiguration configuration, NginxLayout layout, string directory)
     {
         var writer = new ConfigWriter();
         writer.Section(Header);
+        writer.Section(
+            "# Every site's access log: nginx's combined fields, then what traffic statistics read (E109).",
+            $"log_format {Traffic.TrafficLogFormat.Name(layout)} '{Traffic.TrafficLogFormat.Combined} '",
+            $"    '{Traffic.TrafficLogFormat.Extra}';");
+        writer.Open("geo " + BlockedVariable(layout), "# Addresses blocked under Traffic (E110). The file is outside the releases, so blocking needs no apply.");
+        writer.Section("default 0;", $"include {layout.BlockListFile};");
+        writer.Close();
         writer.Section(
             "# WebSocket requests ask the upstream to switch protocols; other requests close as usual.",
             $"map $http_upgrade {ConnectionUpgradeVariable(layout)} {{",
@@ -196,6 +206,7 @@ internal static class NginxRenderer
         writer.Open("server", "# Through the Cloudflare Tunnel: only cloudflared on this machine reaches this listener.");
         writer.Section(new[] { $"listen {TunnelListen(tunnel)};", $"server_name {domains};", "server_tokens off;", $"root {layout.SiteFolder(site.Id)};" }.Concat(Logs(site, layout)));
         writer.Section($"include {directory}/{NginxCloudflare.TunnelRealIpFile};");
+        WriteBlocked(writer, layout);
         WriteAcmeLocation(writer, layout);
         if (site.Certificate is not null && site.RedirectToHttps)
         {
@@ -260,6 +271,7 @@ internal static class NginxRenderer
             writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
         }
 
+        WriteBlocked(writer, layout);
         WriteAcmeLocation(writer, layout);
         if (redirect)
         {
@@ -307,6 +319,7 @@ internal static class NginxRenderer
                     "ssl_verify_client on;");
             }
 
+            WriteBlocked(writer, layout);
             WriteServerBody(writer, site, layout, upstreams, directory, overTls: true);
             writer.Close();
         }
@@ -699,9 +712,23 @@ internal static class NginxRenderer
         return writer.ToString();
     }
 
-    /// <summary>Each site logs to files of its own, which the app reads through the core (E10 T8).</summary>
+    /// <summary>
+    /// Each site logs to files of its own, which the app reads through the core (E10 T8), in the
+    /// format traffic statistics and attack detection read (E109).
+    /// </summary>
     private static string[] Logs(NginxSite site, NginxLayout layout) =>
-        [$"access_log {layout.AccessLog(site.Id)};", $"error_log {layout.ErrorLog(site.Id)};"];
+        [$"access_log {layout.AccessLog(site.Id)} {Traffic.TrafficLogFormat.Name(layout)};", $"error_log {layout.ErrorLog(site.Id)};"];
+
+    /// <summary>
+    /// A blocked address gets no answer at all (E110). The core's own site never refuses anyone this
+    /// way: blocking the address the app connects from must not lock its owner out of the server.
+    /// </summary>
+    private static void WriteBlocked(ConfigWriter writer, NginxLayout layout)
+    {
+        writer.Open($"if ({BlockedVariable(layout)})");
+        writer.Section("return 444;");
+        writer.Close();
+    }
 
     private static IEnumerable<string> Listen(NginxLayout layout, string what) =>
         layout.ListenIPv6 ? [$"listen {what};", $"listen [::]:{what};"] : [$"listen {what};"];

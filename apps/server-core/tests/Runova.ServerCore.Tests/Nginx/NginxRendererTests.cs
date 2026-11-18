@@ -39,7 +39,7 @@ public sealed class NginxRendererTests
     {
         var content = SiteFile(Render(Site() with { Certificate = new NginxCertificate("/etc/ssl/a.pem", "/etc/ssl/a.key") }));
 
-        Assert.Equal(2, CountOf(content, "access_log /var/log/nginx/runova-app.access.log;"));
+        Assert.Equal(2, CountOf(content, "access_log /var/log/nginx/runova-app.access.log runova_main;"));
         Assert.Equal(2, CountOf(content, "error_log /var/log/nginx/runova-app.error.log;"));
         Assert.Equal("/var/log/nginx/runova-app.access.log", _layout.AccessLog("app"));
         Assert.Equal("/var/log/nginx/runova-app.error.log", _layout.ErrorLog("app"));

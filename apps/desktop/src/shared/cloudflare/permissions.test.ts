@@ -40,12 +40,21 @@ describe('the permission catalog', () => {
       'access',
       'mesh',
       'accessLogin',
+      'transformRules',
     ]);
     const turnstile = cloudflarePermission('turnstile');
     expect(turnstile.label).toBe('Account > Turnstile > Edit');
     expect(turnstile.apiNames).toContain('Turnstile Write');
     expect(permissionDeniedMessage('turnstile')).toBe(
       'This token is not allowed to manage Turnstile widgets. On Cloudflare, edit the token and add Account > Turnstile > Edit, then check it again here.',
+    );
+  });
+
+  it('asks for Transform Rules only to add the visitor location headers (E109)', () => {
+    expect(cloudflarePermission('transformRules').label).toBe('Zone > Transform Rules > Edit');
+    expect(cloudflarePermission('transformRules').apiNames).toContain('Transform Rules Write');
+    expect(permissionDeniedMessage('transformRules')).toBe(
+      'This token is not allowed to turn on the visitor location headers. On Cloudflare, edit the token and add Zone > Transform Rules > Edit, then check it again here.',
     );
   });
 

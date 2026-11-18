@@ -84,6 +84,9 @@ internal sealed record NginxLayout
 
     public string KeyFile(string siteId) => $"{CertificatesDirectory}/{siteId}/privkey.pem";
 
+    /// <summary>Addresses nginx refuses on every site (E110), outside the releases so blocking never needs an apply.</summary>
+    public string BlockListFile => ConfigRoot + "/blocked.conf";
+
     /// <summary>Written while an apply is under way, so a core that stopped halfway can finish or undo it.</summary>
     public string ApplyMarker => ConfigRoot + "/apply.json";
 

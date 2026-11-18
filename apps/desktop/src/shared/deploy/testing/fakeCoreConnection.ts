@@ -4,6 +4,10 @@ import type {
   AlertInfo,
   AlertQuery,
   AlertStreamRequest,
+  AttackQuery,
+  AttackSettings,
+  AutoBlockSettings,
+  BlockAddressRequest,
   CertificateIssueRequest,
   CertificateRemoveRequest,
   CertificateUploadRequest,
@@ -76,6 +80,11 @@ import type {
   StepUpRequest,
   StreamProxySettings,
   TelegramNotificationsRequest,
+  TrafficDimensionRequest,
+  TrafficLive,
+  TrafficLiveRequest,
+  TrafficReportRequest,
+  TrafficSettings,
   TunnelBreakGlassRequest,
   TunnelSshRequest,
   VolumeInfo,
@@ -110,6 +119,7 @@ const LIMITS = {
   'docker-events': 2,
   console: 2,
   siteLog: 2,
+  trafficLive: 2,
   exec: 2,
   journal: 2,
 } as const;
@@ -454,6 +464,50 @@ export class FakeCoreConnection implements ICoreHub {
     this.assertRole('SendTelegramNotificationTest', ADMINS);
     return this.answer(this.core.telegram.test());
   };
+
+  // Website traffic (E109) and attacks (E110): every role reads, Admins change and block,
+  // deleting statistics needs a step-up, and auto-block is an Owner's call with one.
+
+  getTrafficStatus = async () => this.traffic('GetTrafficStatus', VIEWERS, (t) => t.status());
+  getTrafficReport = async (request: TrafficReportRequest) =>
+    this.traffic('GetTrafficReport', VIEWERS, (t) => t.report(request));
+  getTrafficDimension = async (request: TrafficDimensionRequest) =>
+    this.traffic('GetTrafficDimension', VIEWERS, (t) => t.dimension(request));
+  streamTrafficLive = (request: TrafficLiveRequest): IStreamResult<TrafficLive> =>
+    this.open<TrafficLive>('trafficLive', [request], (stream) => {
+      if (this.core.trafficMissing) {
+        stream.fail(streamError('Method does not exist.'));
+        return;
+      }
+      if (!this.core.roles.some((role) => VIEWERS.has(role))) {
+        stream.fail(unauthorizedError('StreamTrafficLive'));
+        return;
+      }
+      stream.push(this.core.traffic.live(request.siteId));
+    });
+  saveTrafficSettings = async (settings: TrafficSettings) =>
+    this.traffic('SaveTrafficSettings', ADMINS, (t) => t.saveSettings(settings));
+  deleteTrafficData = async (siteId: string) =>
+    this.traffic('DeleteTrafficData', ADMINS, (t) => t.deleteData(siteId ?? null), {
+      stepUp: true,
+    });
+  listAttacks = async (query: AttackQuery) =>
+    this.traffic('ListAttacks', VIEWERS, (t) => t.attacks(query));
+  saveAttackSettings = async (settings: AttackSettings) =>
+    this.traffic('SaveAttackSettings', ADMINS, (t) => t.saveAttackSettings(settings));
+  saveAutoBlock = async (settings: AutoBlockSettings) =>
+    this.traffic('SaveAutoBlock', OWNERS, (t) => t.saveAutoBlock(settings), { stepUp: true });
+  listBlockedAddresses = async () =>
+    this.traffic('ListBlockedAddresses', VIEWERS, (t) => t.blocked());
+  blockAddress = async (request: BlockAddressRequest) =>
+    this.traffic('BlockAddress', ADMINS, (t) => t.block(request));
+  unblockAddress = async (blockId: number) =>
+    this.traffic('UnblockAddress', ADMINS, (t) => t.unblock(blockId));
+
+  /** Pushes a live reading to every traffic stream for that site (or for every site). */
+  deliverTrafficLive(live: TrafficLive): void {
+    for (const open of this.of('trafficLive')) open.stream.push({ ...live });
+  }
 
   // The core updating itself: an Owner with a step-up. The test says how the core answers.
 
@@ -1184,6 +1238,29 @@ export class FakeCoreConnection implements ICoreHub {
     }
     try {
       return this.core.startJob(kind, title, options);
+    } catch (error) {
+      throw invocationError(method, (error as Error).message);
+    }
+  }
+
+  private traffic<T>(
+    method: string,
+    allowed: ReadonlySet<string>,
+    work: (traffic: FakeCore['traffic']) => T,
+    options: { stepUp?: boolean } = {},
+  ): T {
+    this.assertOpen();
+    if (this.core.trafficMissing) {
+      throw new Error(
+        `Failed to invoke '${method}' due to an error on the server. HubException: Method does not exist.`,
+      );
+    }
+    this.assertRole(method, allowed);
+    if (options.stepUp && this.core.stepUpUntil <= this.core.now()) {
+      throw unauthorizedError(method);
+    }
+    try {
+      return structuredClone(work(this.core.traffic));
     } catch (error) {
       throw invocationError(method, (error as Error).message);
     }

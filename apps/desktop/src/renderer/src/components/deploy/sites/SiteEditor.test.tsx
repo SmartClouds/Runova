@@ -293,3 +293,33 @@ describe('SiteEditor for a saved site', () => {
     expect(await screen.findByRole('log', { name: 'Access log' })).toBeInTheDocument();
   });
 });
+
+describe('SiteEditor traffic', () => {
+  it('shows a saved site its own traffic on a tab of its own (E109)', async () => {
+    const report = vi.fn(async () => {
+      throw new Error(
+        'This server runs an older core without traffic statistics. Update the core from the Overview, then try again.',
+      );
+    });
+    const { user } = renderEditor({
+      site: SHOP,
+      bridge: {
+        'deploy.access': async () => ({ state: 'signed-in', user: { roles: ['viewer'] } }),
+        'deployTraffic.status': async () => {
+          throw new Error(
+            'This server runs an older core without traffic statistics. Update the core from the Overview, then try again.',
+          );
+        },
+        'deployTraffic.report': report,
+      },
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Traffic' }));
+    expect(await screen.findByText(/older core without traffic statistics/)).toBeInTheDocument();
+  });
+
+  it('has no Traffic tab for a site not saved yet', () => {
+    renderEditor();
+    expect(screen.queryByRole('tab', { name: 'Traffic' })).toBeNull();
+  });
+});

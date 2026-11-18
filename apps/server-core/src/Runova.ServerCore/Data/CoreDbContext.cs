@@ -75,6 +75,21 @@ internal sealed class CoreDbContext(DbContextOptions<CoreDbContext> options)
 
     public DbSet<BackupRunTargetRecord> BackupRunTargets => Set<BackupRunTargetRecord>();
 
+    // Website traffic (E109) and attack detection (E110).
+    public DbSet<TrafficHour> TrafficHours => Set<TrafficHour>();
+
+    public DbSet<TrafficDay> TrafficDays => Set<TrafficDay>();
+
+    public DbSet<TrafficDimensionDay> TrafficDimensionDays => Set<TrafficDimensionDay>();
+
+    public DbSet<TrafficLogCursor> TrafficLogCursors => Set<TrafficLogCursor>();
+
+    public DbSet<TrafficSetting> TrafficSettings => Set<TrafficSetting>();
+
+    public DbSet<AttackEvent> AttackEvents => Set<AttackEvent>();
+
+    public DbSet<BlockedAddress> BlockedAddresses => Set<BlockedAddress>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -167,6 +182,7 @@ internal sealed class CoreDbContext(DbContextOptions<CoreDbContext> options)
         ReleaseModel.Configure(builder);
         CloudflareModel.Configure(builder);
         BackupModel.Configure(builder);
+        TrafficModel.Configure(builder);
     }
 }
 

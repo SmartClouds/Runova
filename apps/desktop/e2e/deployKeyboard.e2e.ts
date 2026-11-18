@@ -21,6 +21,7 @@ const SECTIONS = [
   'Cleanup',
   'App Store',
   'Websites',
+  'Traffic',
   'Firewall',
   'Logs',
   'Database',

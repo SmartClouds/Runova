@@ -24,6 +24,7 @@ import { registerDeploySitesHandlers } from '../ipc/deploySites';
 import { registerDeployStacksHandlers } from '../ipc/deployStacks';
 import { registerDeploySystemHandlers, subscriptionOwners } from '../ipc/deploySystem';
 import { registerDeployTelegramHandlers } from '../ipc/deployTelegram';
+import { registerDeployTrafficHandlers } from '../ipc/deployTraffic';
 import { dockerHubSignIn, registerDockerHubHandlers } from '../ipc/dockerHub';
 import { resolveProjectEnvironment } from '../ipc/environments';
 import { broadcastToWindows, sendToWindow } from '../ipc/send';
@@ -68,7 +69,7 @@ import { DeployHardening } from './hardening';
 import { DockerLinks } from './live/dockerLinks';
 import { DockerSubscriptions } from './live/dockerSubscriptions';
 import { DeploySubscriptions } from './live/subscriptions';
-import { setLiveDeployServices } from './liveServices';
+import { liveDeployService, setLiveDeployServices } from './liveServices';
 import { JournalSubscriptions } from './logs/journal';
 import { registerRecaptchaIpc } from './recaptcha';
 import { createDeployRegistries, registerDeployRegistryIpc } from './registry';
@@ -85,6 +86,8 @@ import { DeployStacks } from './stacks/service';
 import { DeployState, jsonFilePort } from './state';
 import { DeploySystem } from './system';
 import { DeployTelegram } from './telegram/service';
+import { TrafficLiveSubscriptions } from './traffic/live';
+import { DeployTraffic } from './traffic/service';
 import { appNotificationInbox, DeployAlertWatcher } from './watcher';
 import { registerDeployWordPressIpc, wordPressState } from './wordpress';
 import type { StoredWpSite } from './wordpress/state';
@@ -275,6 +278,24 @@ export function registerDeployIpc(): void {
       detectChat: detectLatestChatId,
     }),
     guard,
+  });
+
+  // Website traffic and attacks (E109, E110). Live visitors end with the window that opened them;
+  // Cloudflare's visitor location is read with this computer's token, wired with the Cloudflare page.
+  const trafficLive = new TrafficLiveSubscriptions({ links: service.links });
+  const trafficLiveOwnerOf = subscriptionOwners((ownerId) => trafficLive.dropOwner(ownerId));
+  const traffic = new DeployTraffic({ links: service.links, roles: (id) => service.roles(id) });
+  setLiveDeployServices({ traffic });
+  registerDeployTrafficHandlers({
+    ipc: ipcMain,
+    traffic,
+    live: trafficLive,
+    geolocation: {
+      status: (id) => liveDeployService('cloudflareGeolocation').status(id),
+      turnOn: (id, zoneId) => liveDeployService('cloudflareGeolocation').turnOn(id, zoneId),
+    },
+    guard,
+    owner: (event) => trafficLiveOwnerOf(event.sender),
   });
 
   // Private registries (E08): this computer's sign-ins go with each deploy that pulls from them.

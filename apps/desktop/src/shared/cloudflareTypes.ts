@@ -331,7 +331,8 @@ export type CloudflareExtraPermissionId =
   | 'tunnel'
   | 'access'
   | 'mesh'
-  | 'accessLogin';
+  | 'accessLogin'
+  | 'transformRules';
 
 export type CloudflareAnyPermissionId = CloudflarePermissionId | CloudflareExtraPermissionId;
 

@@ -71,10 +71,12 @@
     <PackageReference Include="Hangfire.AspNetCore" />
     <PackageReference Include="Hangfire.Core" GeneratePathProperty="true" />
     <PackageReference Include="Hangfire.Storage.SQLite" />
+    <PackageReference Include="MaxMind.Db" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" />
     <PackageReference Include="SSH.NET" />
+    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="OpenTelemetry" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <!-- Generator and attributes only; nothing of Mapperly ships at run time. -->

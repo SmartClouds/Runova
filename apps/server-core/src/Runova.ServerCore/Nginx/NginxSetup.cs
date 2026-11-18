@@ -101,6 +101,12 @@ internal sealed class NginxSetup(
             await Machine.CreateDirectoryAsync(folder, OpenFolder, cancellationToken);
         }
 
+        // Every release reads the blocked addresses (E110) from here, so it is there before nginx -t.
+        if (!await Machine.ExistsAsync(layout.BlockListFile, cancellationToken))
+        {
+            await Machine.WriteAsync(layout.BlockListFile, Encoding.UTF8.GetBytes(Traffic.BlockList.Render([])), Readable, cancellationToken);
+        }
+
         if (inspection.CurrentRelease is null)
         {
             job.Log("Writing the first release: no sites yet, and a default server that answers nothing.");

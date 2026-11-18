@@ -1,6 +1,16 @@
 ==> http.conf <==
 # Managed by Runova. Each apply writes a new release, so change this in the app instead.
 
+# Every site's access log: nginx's combined fields, then what traffic statistics read (E109).
+log_format runova_main '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" '
+    '"$host" $request_time "$sent_http_content_type" $scheme $realip_remote_addr "$http_cf_ipcountry" "$http_cf_ipcity" "$http_cf_region"';
+
+# Addresses blocked under Traffic (E110). The file is outside the releases, so blocking needs no apply.
+geo $runova_blocked {
+    default 0;
+    include /etc/nginx/runova/blocked.conf;
+}
+
 # WebSocket requests ask the upstream to switch protocols; other requests close as usual.
 map $http_upgrade $runova_connection_upgrade {
     default upgrade;
@@ -48,8 +58,12 @@ server {
     listen [::]:80;
     server_name tunneled.test;
     server_tokens off;
-    access_log /var/log/nginx/runova-tunneled.access.log;
+    access_log /var/log/nginx/runova-tunneled.access.log runova_main;
     error_log /var/log/nginx/runova-tunneled.error.log;
+
+    if ($runova_blocked) {
+        return 444;
+    }
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/runova/acme;
@@ -71,7 +85,7 @@ server {
     server_name tunneled.test;
     server_tokens off;
     root /var/www/runova/sites/tunneled;
-    access_log /var/log/nginx/runova-tunneled.access.log;
+    access_log /var/log/nginx/runova-tunneled.access.log runova_main;
     error_log /var/log/nginx/runova-tunneled.error.log;
 
     ssl_certificate /etc/runova-test/tls/sites.crt;
@@ -82,6 +96,10 @@ server {
     ssl_session_timeout 1d;
     ssl_session_tickets off;
     ssl_stapling off;
+
+    if ($runova_blocked) {
+        return 444;
+    }
 
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -106,10 +124,14 @@ server {
     server_name tunneled.test;
     server_tokens off;
     root /var/www/runova/sites/tunneled;
-    access_log /var/log/nginx/runova-tunneled.access.log;
+    access_log /var/log/nginx/runova-tunneled.access.log runova_main;
     error_log /var/log/nginx/runova-tunneled.error.log;
 
     include /etc/nginx/runova/releases/1/cloudflare/tunnel-real-ip.conf;
+
+    if ($runova_blocked) {
+        return 444;
+    }
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/runova/acme;

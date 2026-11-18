@@ -45,6 +45,10 @@ You need to be an Owner on the server. Admins can see how it stands and send a t
 | Firewall rolled back | A firewall change was not confirmed in time, so the old rules are back. |
 | Firewall rollback failed | Putting the old firewall rules back did not work. |
 | Cloudflare lock refresh failed | Cloudflare's address ranges could not be fetched or applied. |
+| Website scanned | An address probed a website for files and admin pages. See [Attack detection and blocking](deploy-attacks.md). |
+| Password guessing on a website | An address tried many logins on a website's login pages. |
+| Website flooded | An address, or the traffic as a whole, went far above what the website normally gets. |
+| Injection probes on a website | Requests carried SQL injection, script injection, path traversal or Log4Shell attempts. |
 
 A message looks like this:
 

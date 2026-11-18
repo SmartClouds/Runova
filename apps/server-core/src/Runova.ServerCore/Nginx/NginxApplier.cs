@@ -142,6 +142,7 @@ internal sealed partial class NginxApplier(
         }
 
         await WriteCertificatesAsync(plan.Certificates, layout, cancellationToken);
+        await EnsureBlockListAsync(layout, cancellationToken);
         var releases = await ReleasesAsync(layout, cancellationToken);
         var previous = await control.CurrentReleaseAsync(layout, cancellationToken);
         var number = Math.Max(releases.DefaultIfEmpty(0).Max(), previous ?? 0) + 1;
@@ -239,10 +240,25 @@ internal sealed partial class NginxApplier(
             return marker;
         }
 
+        await EnsureBlockListAsync(layout, cancellationToken);
         var current = await control.CurrentReleaseAsync(layout, cancellationToken);
         await UndoAsync(layout, marker.Release, marker.Previous, reload: current == marker.Release && inspection.Running, cancellationToken);
         LogRecoveredUndone(logger, marker.Release, marker.Previous);
         return marker with { Phase = NginxApplyMarker.Switched };
+    }
+
+    /// <summary>
+    /// Every release includes the blocked addresses (E110) from a file outside it, which nginx -t
+    /// refuses to find missing. It is made empty when it is not there, and never replaced: blocking
+    /// is <see cref="Traffic.BlockList"/>'s alone.
+    /// </summary>
+    public async Task EnsureBlockListAsync(NginxLayout layout, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!await Machine.ExistsAsync(layout.BlockListFile, cancellationToken))
+        {
+            await Machine.WriteAsync(layout.BlockListFile, Encoding.UTF8.GetBytes(Traffic.BlockList.Render([])), Readable, cancellationToken);
+        }
     }
 
     /// <summary>Back to the previous release (if the link moved), reloaded when nginx may have seen the new one, and the new one gone.</summary>

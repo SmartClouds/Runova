@@ -160,6 +160,13 @@ export const CLOUDFLARE_EXTRA_PERMISSIONS: readonly CloudflarePermission<Cloudfl
       action: 'turn on email codes for Cloudflare Access',
       apiNames: ['Access: Organizations, Identity Providers, and Groups Write'],
     },
+    {
+      id: 'transformRules',
+      label: 'Zone > Transform Rules > Edit',
+      purpose: "Visitors' city and region in a server's traffic report",
+      action: 'turn on the visitor location headers',
+      apiNames: ['Transform Rules Write', 'Zone Transform Rules Write'],
+    },
   ];
 
 /** Cloudflare's page for creating and editing user API tokens. */

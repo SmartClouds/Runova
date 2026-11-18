@@ -573,6 +573,7 @@ import { createDeployHardening } from './deployHardening';
 import { createDeployRegistry } from './deployRegistry';
 import { createDeployServerBackups } from './deployServerBackups';
 import { createDeployTelegram } from './deployTelegram';
+import { createDeployTraffic } from './deployTraffic';
 import { createDeployWordPress } from './deployWordPress';
 import { createErrorTracking } from './errorTracking';
 import { createHealth } from './health';
@@ -2066,6 +2067,7 @@ const deployDirectTls = createDeployDirectTls();
 const deployCoreDomain = createDeployCoreDomain();
 const deployErrorReporting = createDeployErrorReporting();
 const deployTelegram = createDeployTelegram();
+const deployTraffic = createDeployTraffic(subscribe);
 
 /** The Security center (E15): the checklist, its SSH fixes, backups and restores. */
 const deployHardening = createDeployHardening(subscribe);
@@ -3251,6 +3253,7 @@ const runovaApi = {
   deployCoreDomain,
   deployErrorReporting,
   deployTelegram,
+  deployTraffic,
   deployAssistant,
   deployLogs,
   deploySites,

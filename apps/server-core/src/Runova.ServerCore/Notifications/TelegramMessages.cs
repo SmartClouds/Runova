@@ -33,6 +33,10 @@ internal static class TelegramMessages
         AlertKind.ContainerCrashLoop => "A container keeps restarting",
         AlertKind.CloudflareTunnelDown => "The Cloudflare Tunnel is down",
         AlertKind.TunnelBreakGlassOpened => "SSH was opened because the tunnel is down",
+        AlertKind.WebScan => "A website is being scanned",
+        AlertKind.WebBruteForce => "Someone is trying passwords on a website",
+        AlertKind.WebFlood => "A website is flooded with requests",
+        AlertKind.WebInjection => "A website is getting injection attacks",
         _ => "Something needs a look",
     };
 

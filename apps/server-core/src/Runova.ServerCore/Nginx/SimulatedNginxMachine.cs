@@ -381,7 +381,7 @@ internal sealed class SimulatedNginxMachine : INginxMachine
             case "nginx" when arguments is ["-v"]:
                 return Result(0, error: $"nginx version: nginx/{Version}\n");
             case "nginx" when arguments is ["-t"]:
-                return TestFailure?.Invoke(this) is { } failure
+                return (MissingInclude() ?? TestFailure?.Invoke(this)) is { } failure
                     ? Result(1, error: failure + $"\nnginx: configuration file {NginxConf} test failed\n")
                     : Result(0, error: $"nginx: the configuration file {NginxConf} syntax is ok\nnginx: configuration file {NginxConf} test is successful\n");
             case "nginx" when arguments is ["-s", "reload"]:
@@ -397,6 +397,30 @@ internal sealed class SimulatedNginxMachine : INginxMachine
             default:
                 return Result(0);
         }
+    }
+
+    /// <summary>
+    /// What nginx -t says when the configuration in place includes a file that is not there (nginx
+    /// refuses to load it). Only the includes of Runova's http.conf are looked at.
+    /// </summary>
+    private string? MissingInclude()
+    {
+        const string http = "/etc/nginx/runova/current/http.conf";
+        var lines = (Text(http) ?? string.Empty).Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (line.StartsWith("include /", StringComparison.Ordinal) && line.EndsWith(';') && !line.Contains('*', StringComparison.Ordinal))
+            {
+                var path = line["include ".Length..^1];
+                if (!Exists(path))
+                {
+                    return $"nginx: [emerg] open() \"{path}\" failed (2: No such file or directory) in {http}:{(i + 1).ToString(CultureInfo.InvariantCulture)}";
+                }
+            }
+        }
+
+        return null;
     }
 
     private ProcessResult Reload()
@@ -497,6 +521,36 @@ internal sealed class SimulatedNginxMachine : INginxMachine
     {
         Workers = [_nextPid++, _nextPid++];
         WriteText($"/proc/{MasterPid}/task/{MasterPid}/children", string.Join(' ', Workers) + " ");
+        OpenLogs();
+    }
+
+    /// <summary>
+    /// nginx opens every access_log and error_log the configuration names when it loads it,
+    /// creating the files that are not there; the ones that are keep what they hold.
+    /// </summary>
+    private void OpenLogs()
+    {
+        lock (_gate)
+        {
+            var sites = Resolve("/etc/nginx/runova/current") + "/sites/";
+            foreach (var content in _files.Where(file => file.Key.StartsWith(sites, StringComparison.Ordinal)).Select(file => Encoding.UTF8.GetString(file.Value)).ToList())
+            {
+                foreach (var line in content.Split('\n'))
+                {
+                    var parts = line.Trim().TrimEnd(';').Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts is ["access_log" or "error_log", var path, ..] && path.StartsWith('/'))
+                    {
+                        var target = Resolve(path);
+                        if (!_files.ContainsKey(target))
+                        {
+                            AddDirectory(Parent(target));
+                            _files[target] = [];
+                            _modes[target] = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static ProcessResult Result(int exitCode, string output = "", string error = "") =>

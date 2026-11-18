@@ -4,7 +4,7 @@
 // @ts-nocheck
 import type { HubConnection, IStreamResult, Subject } from '@microsoft/signalr';
 import type { ICoreHub, ICoreHubReceiver } from './Runova.ServerCore.Contracts';
-import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, ReleaseTokenInfo, SaveReleaseTokenRequest, ReleaseAccessCheck, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
+import type { PingResponse, AccountInfo, StepUpRequest, StepUpResponse, DeviceInfo, SessionInfo, TotpSetup, RecoveryCodes, CreateEnrollmentCodeRequest, EnrollmentCodeInfo, UserInfo, CreateUserRequest, ResetUserPasswordRequest, AuditQuery, AuditPage, AuditVerificationInfo, SystemInfo, ServiceInfo, MetricsHistoryRequest, MetricsHistory, MetricsStreamRequest, MetricsSample, UpdatesInfo, JobQuery, JobPage, JobInfo, JobStreamItem, AlertQuery, AlertInfo, AlertStreamRequest, ManagedService, FirewallStatus, FirewallPreset, FirewallChangeSetQuery, FirewallChangeSetInfo, ExposureInventory, FirewallChangeRequest, FirewallChangePreview, DockerStatus, ContainerList, ContainerDetails, ContainerStatsRequest, ContainerStatsBatch, ContainerLogsRequest, ContainerLogBatch, ImageInfo, VolumeInfo, NetworkInfo, DockerDiskUsage, DockerEventsRequest, DockerEvent, ContainerSummary, ContainerLimitsRequest, ContainerRemoveRequest, ImagePullRequest, ImageRemoveRequest, ContainerNetworkRequest, ContainerEnvVariable, ConsoleRequest, ConsoleInput, ConsoleOutput, DockerPruneRequest, DockerPruneResult, DockerInstallRequest, FileTarget, FileSessionInfo, FilePathRequest, FileListing, FileEntry, FileRenameRequest, FileRemoveRequest, FileChmodRequest, NginxStatus, SiteInfo, StreamProxyInfo, CertificateInfo, SiteLogRequest, SiteLogBatch, SiteSettings, SiteSaveResult, StreamProxySettings, StreamProxySaveResult, NginxApplyResult, CertificateIssueRequest, CertificateUploadRequest, CertificateUploadResult, CertificateRemoveRequest, StackInfo, StackDetails, StackRevisionRef, StackRevisionFiles, CreateStackRequest, AcknowledgeStackRisksRequest, StackRevisionInfo, StackActionRequest, ReviseStackRequest, StackEnvEntry, StackDeployRequest, RegistryCredentialInfo, SaveRegistryCredentialRequest, ReleaseTokenInfo, SaveReleaseTokenRequest, ReleaseAccessCheck, AssistantModeInfo, ExecApprovalNonce, ExecRequest, ExecOutput, JournalRequest, JournalBatch, SiteSnippets, OriginLockStatus, OriginLockRequest, OriginLockPreview, OriginLockResult, OriginCertificateRequestInfo, OriginCertificateInstall, DnsCredentialInfo, DnsCredentialRequest, DnsCredentialSaveResult, CloudflareTunnelStatus, CloudflareTunnelSetup, CloudflareTunnelFirewallRequest, CloudflareTunnelPreview, CloudflareTunnelResult, TunnelSshRequest, CloudflareTunnelOffRequest, TunnelBreakGlassRequest, CloudflareMeshJoin, SecurityChecklistRequest, SecurityChecklist, SshHardeningRequest, SshHardeningPreview, SshHardeningChangeInfo, BackupRequest, BackupInfo, BackupSecretStatus, SetBackupSecretRequest, BackupDestinationInfo, SaveBackupDestinationRequest, BackupDestinationTest, BackupPlanInfo, SaveBackupPlanRequest, BackupPlanPreviewRequest, BackupPlanPreview, BackupRunInfo, RunBackupNowRequest, StoredBackupInfo, StartTelegramLoginRequest, TelegramLoginState, ContinueTelegramLoginRequest, BackupFetchInfo, PendingServerRestore, RunServerRestoreRequest, ServerRestoreStatus, DirectTlsStatus, DirectTlsRequest, CoreDomainStatus, CoreDomainRequest, ErrorReportingStatus, ErrorReportingRequest, ErrorReportingSaveResult, ErrorReportingTestResult, TelegramNotificationsStatus, TelegramNotificationsRequest, TelegramNotificationsSaveResult, TelegramNotificationsTestResult, TrafficStatus, TrafficReportRequest, TrafficReport, TrafficDimensionRequest, TrafficDimensionPage, TrafficLiveRequest, TrafficLive, TrafficSettings, TrafficSaveResult, AttackQuery, AttackSummary, AttackSettings, AutoBlockSettings, BlockedAddressInfo, BlockAddressRequest, BlockAddressResult, CoreUpdateRequest, CoreUpdateResult } from '../Runova.ServerCore.Contracts';
 
 
 // components
@@ -842,6 +842,54 @@ class ICoreHub_HubProxy implements ICoreHub {
 
     public readonly sendTelegramNotificationTest = async (): Promise<TelegramNotificationsTestResult> => {
         return await this.connection.invoke("SendTelegramNotificationTest");
+    }
+
+    public readonly getTrafficStatus = async (): Promise<TrafficStatus> => {
+        return await this.connection.invoke("GetTrafficStatus");
+    }
+
+    public readonly getTrafficReport = async (request: TrafficReportRequest): Promise<TrafficReport> => {
+        return await this.connection.invoke("GetTrafficReport", request);
+    }
+
+    public readonly getTrafficDimension = async (request: TrafficDimensionRequest): Promise<TrafficDimensionPage> => {
+        return await this.connection.invoke("GetTrafficDimension", request);
+    }
+
+    public readonly streamTrafficLive = (request: TrafficLiveRequest): IStreamResult<TrafficLive> => {
+        return this.connection.stream("StreamTrafficLive", request);
+    }
+
+    public readonly saveTrafficSettings = async (settings: TrafficSettings): Promise<TrafficSaveResult> => {
+        return await this.connection.invoke("SaveTrafficSettings", settings);
+    }
+
+    public readonly deleteTrafficData = async (siteId: string): Promise<TrafficStatus> => {
+        return await this.connection.invoke("DeleteTrafficData", siteId);
+    }
+
+    public readonly listAttacks = async (query: AttackQuery): Promise<AttackSummary> => {
+        return await this.connection.invoke("ListAttacks", query);
+    }
+
+    public readonly saveAttackSettings = async (settings: AttackSettings): Promise<TrafficSaveResult> => {
+        return await this.connection.invoke("SaveAttackSettings", settings);
+    }
+
+    public readonly saveAutoBlock = async (settings: AutoBlockSettings): Promise<TrafficSaveResult> => {
+        return await this.connection.invoke("SaveAutoBlock", settings);
+    }
+
+    public readonly listBlockedAddresses = async (): Promise<BlockedAddressInfo[]> => {
+        return await this.connection.invoke("ListBlockedAddresses");
+    }
+
+    public readonly blockAddress = async (request: BlockAddressRequest): Promise<BlockAddressResult> => {
+        return await this.connection.invoke("BlockAddress", request);
+    }
+
+    public readonly unblockAddress = async (blockId: number): Promise<void> => {
+        return await this.connection.invoke("UnblockAddress", blockId);
     }
 
     public readonly updateCore = async (request: CoreUpdateRequest): Promise<CoreUpdateResult> => {

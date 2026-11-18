@@ -29,6 +29,7 @@
     "src/preload/deployDirectTls.ts",
     "src/preload/deployErrorReporting.ts",
     "src/preload/deployTelegram.ts",
+    "src/preload/deployTraffic.ts",
     "src/preload/deployAssistant.ts",
     "src/preload/deployWordPress.ts",
     "src/preload/deployFiles.ts",

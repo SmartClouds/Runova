@@ -5,6 +5,7 @@ import type {
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployServer } from '@shared/deployTypes';
 import { lazy, Suspense, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Save, Spinner, Trash2, TriangleAlert } from '@/components/icons';
 import { GLASS_PANEL } from '@/components/pageKit';
@@ -16,12 +17,16 @@ import { problemsByTab, problemsFor, type SiteTab, tabOf } from '@/lib/deploy/si
 import { type DraftErrors, settingsFromDraft } from '@/lib/deploy/sites/settings';
 import { cn } from '@/lib/utils';
 import { confirmDialog } from '@/stores/confirmStore';
+import { TrafficPanel } from '../traffic/TrafficPanel';
 import { DomainsTab } from './DomainsTab';
 import { LogsTab } from './LogsTab';
 import { PerformanceTab } from './PerformanceTab';
 import { ProxyTab } from './ProxyTab';
 import { SecurityTab } from './SecurityTab';
 import { SslTab } from './SslTab';
+
+// The site's traffic tab is the Traffic section's report with this site fixed (E109). The Deploy
+// page already holds that section, so it is imported here as well rather than loaded on demand.
 
 /**
  * One site's settings on tabs. Saving stores the site on the server without putting it live;
@@ -46,7 +51,11 @@ const TABS: ReadonlyArray<{ value: SiteTab; label: string }> = [
   { value: 'security', label: 'Security' },
   { value: 'advanced', label: 'Advanced' },
   { value: 'logs', label: 'Logs' },
+  { value: 'traffic', label: 'Traffic' },
 ];
+
+/** Tabs that read what a saved site did, so a new one has nothing to show there. */
+const SAVED_ONLY: ReadonlySet<SiteTab> = new Set(['logs', 'traffic']);
 
 export function SiteEditor({
   server,
@@ -82,6 +91,7 @@ export function SiteEditor({
       : blank;
   });
   const [tab, setTab] = useState<SiteTab>(initialTab);
+  const navigate = useNavigate();
   const [local, setLocal] = useState<DraftErrors>({});
   const [saveProblems, setSaveProblems] = useState<NginxProblemInfo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -187,7 +197,7 @@ export function SiteEditor({
           className="h-9 border-none bg-transparent px-1.5"
           containerClassName={cn('border-b-0', HAIRLINE_BELOW)}
         >
-          {TABS.filter((entry) => entry.value !== 'logs' || site).map((entry) => {
+          {TABS.filter((entry) => !SAVED_ONLY.has(entry.value) || site).map((entry) => {
             const count = counts[entry.value] ?? 0;
             return (
               <TabsTrigger key={entry.value} value={entry.value}>
@@ -235,6 +245,19 @@ export function SiteEditor({
           {site && (
             <TabsContent value="logs" className="mt-0">
               <LogsTab serverId={server.id} siteId={site.settings.id} />
+            </TabsContent>
+          )}
+          {site && (
+            <TabsContent value="traffic" className="mt-0">
+              <TrafficPanel
+                server={server}
+                siteId={site.settings.id}
+                onOpenSection={() =>
+                  navigate(
+                    `/deploy?server=${encodeURIComponent(server.id)}&view=traffic&traffic=${encodeURIComponent(site.settings.id)}`,
+                  )
+                }
+              />
             </TabsContent>
           )}
         </div>

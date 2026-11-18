@@ -67,6 +67,8 @@ internal static class FakePlatform
         // Websites and certificates: nginx.org's nginx installed and running but not set up yet,
         // a pretend CA, and upstream names that all resolve to a documentation address.
         services.AddSingleton(_ => new SimulatedNginxMachine(installed: true));
+        // Website traffic (E109): no download of DB-IP's country file from a developer's machine.
+        services.AddSingleton(new Traffic.GeoDownload(new OfflineGeoDownloads()));
         services.AddSingleton<INginxMachine>(provider => provider.GetRequiredService<SimulatedNginxMachine>());
         services.AddSingleton<ICertificateAuthorities, FakeCertificateAuthorities>();
         services.AddSingleton<IUpstreamResolver, FakeResolver>();

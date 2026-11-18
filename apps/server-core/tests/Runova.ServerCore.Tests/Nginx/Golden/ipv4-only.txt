@@ -1,6 +1,16 @@
 ==> http.conf <==
 # Managed by Runova. Each apply writes a new release, so change this in the app instead.
 
+# Every site's access log: nginx's combined fields, then what traffic statistics read (E109).
+log_format runova_main '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" '
+    '"$host" $request_time "$sent_http_content_type" $scheme $realip_remote_addr "$http_cf_ipcountry" "$http_cf_ipcity" "$http_cf_region"';
+
+# Addresses blocked under Traffic (E110). The file is outside the releases, so blocking needs no apply.
+geo $runova_blocked {
+    default 0;
+    include /etc/nginx/runova/blocked.conf;
+}
+
 # WebSocket requests ask the upstream to switch protocols; other requests close as usual.
 map $http_upgrade $runova_connection_upgrade {
     default upgrade;
@@ -27,8 +37,12 @@ server {
     server_name v4.test;
     server_tokens off;
     root /var/www/runova/sites/v4;
-    access_log /var/log/nginx/runova-v4.access.log;
+    access_log /var/log/nginx/runova-v4.access.log runova_main;
     error_log /var/log/nginx/runova-v4.error.log;
+
+    if ($runova_blocked) {
+        return 444;
+    }
 
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/runova/acme;

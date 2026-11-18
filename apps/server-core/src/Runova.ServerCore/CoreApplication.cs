@@ -18,6 +18,7 @@ using Runova.ServerCore.Hosting;
 using Runova.ServerCore.Hubs;
 using Runova.ServerCore.Notifications;
 using Runova.ServerCore.Security;
+using Runova.ServerCore.Traffic;
 using Runova.ServerCore.Web;
 
 namespace Runova.ServerCore;
@@ -77,6 +78,8 @@ internal static class CoreApplication
         builder.Services.AddCoreOperations();
         builder.Services.AddWebOperations();
         builder.Services.AddCloudflare();
+        // Website traffic statistics and attack detection (E109, E110): nothing reads the logs until turned on.
+        builder.Services.AddTrafficOperations();
         // The opt-in HTTPS listener (E16): nothing is bound until the mode is turned on.
         builder.AddDirectTls();
         // The core behind its own domain in nginx (E44): nothing is bound until the mode is turned on.

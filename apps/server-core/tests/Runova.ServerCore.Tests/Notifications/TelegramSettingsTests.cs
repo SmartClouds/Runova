@@ -35,6 +35,53 @@ public sealed class TelegramSettingsTests : IDisposable
         Assert.Equivalent(config, store.Read(), strict: true);
     }
 
+    /// <summary>A file as the core wrote it before E110: no list of the kinds the person saw.</summary>
+    private void WriteOldFile(string kinds, string? knownKinds = null)
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            SettingsFile,
+            $"{{\"enabled\":true,\"botToken\":\"{_protector.Protect(Token)}\",\"chatId\":\"-1001234567890\",\"serverName\":\"web-1\",\"kinds\":[{kinds}],"
+            + $"\"sendResolved\":true,\"changedAt\":1700000000000,\"changedBy\":\"maria\"{(knownKinds is null ? string.Empty : $",\"knownKinds\":[{knownKinds}]")}}}");
+    }
+
+    [Fact]
+    public void A_setup_saved_before_the_attack_alerts_gets_them_on_and_keeps_its_own_choices()
+    {
+        WriteOldFile("\"diskPressure\",\"backupFailed\"");
+
+        var config = new TelegramStore(SettingsFile, _protector).Read();
+
+        Assert.Equal(
+            [AlertKind.DiskPressure, AlertKind.BackupFailed, AlertKind.WebScan, AlertKind.WebBruteForce, AlertKind.WebFlood, AlertKind.WebInjection],
+            config!.Kinds);
+    }
+
+    [Fact]
+    public void A_kind_turned_off_and_saved_stays_off()
+    {
+        var store = new TelegramStore(SettingsFile, _protector);
+
+        store.Write(Config(kinds: [.. TelegramConfig.AllKinds.Where(kind => kind is not (AlertKind.WebScan or AlertKind.JobFailed))]));
+
+        var kinds = store.Read()!.Kinds;
+        Assert.DoesNotContain(AlertKind.WebScan, kinds);
+        Assert.DoesNotContain(AlertKind.JobFailed, kinds);
+        Assert.Contains(AlertKind.WebFlood, kinds);
+        Assert.Contains("knownKinds", File.ReadAllText(SettingsFile), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_kind_that_came_after_the_save_counts_as_on()
+    {
+        var known = string.Join(',', TelegramConfig.AllKinds.Where(kind => kind != AlertKind.WebFlood).Select(kind => $"\"{System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(kind.ToString())}\""));
+        WriteOldFile("\"diskPressure\"", known);
+
+        var kinds = new TelegramStore(SettingsFile, _protector).Read()!.Kinds;
+
+        Assert.Equal([AlertKind.DiskPressure, AlertKind.WebFlood], kinds);
+    }
+
     [Fact]
     public void Nothing_stored_means_not_set_up()
     {

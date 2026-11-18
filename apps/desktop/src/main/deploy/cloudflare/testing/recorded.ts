@@ -114,6 +114,8 @@ export const settings = {
   ssl: { id: 'ssl', value: 'full', editable: true, modified_on: null },
   always_use_https: { id: 'always_use_https', value: 'off', editable: true, modified_on: null },
   tls_client_auth: { id: 'tls_client_auth', value: 'off', editable: true, modified_on: null },
+  /** On by default for every zone; off here so the app's switch has something to do. */
+  ip_geolocation: { id: 'ip_geolocation', value: 'off', editable: true, modified_on: null },
   automatic_https_rewrites: {
     id: 'automatic_https_rewrites',
     value: 'off',
@@ -124,6 +126,34 @@ export const settings = {
   tls_1_3: { id: 'tls_1_3', value: 'on', editable: true, modified_on: null },
   cache_level: { id: 'cache_level', value: 'aggressive', editable: true, modified_on: null },
   browser_cache_ttl: { id: 'browser_cache_ttl', value: 14400, editable: true, modified_on: null },
+};
+
+/**
+ * GET /zones/:id/managed_headers on a Free plan: Cloudflare's Managed Transforms, all off. The
+ * visitor location headers (cf-ipcity, cf-region...) are the one the traffic report uses (E109).
+ */
+export const managedHeaders = {
+  managed_request_headers: [
+    { id: 'add_bot_protection_headers', enabled: false, has_conflict: false },
+    { id: 'add_client_certificate_headers', enabled: false, has_conflict: false },
+    {
+      id: 'add_true_client_ip_headers',
+      enabled: false,
+      has_conflict: false,
+      conflicts_with: ['remove_visitor_ip_headers'],
+    },
+    { id: 'add_visitor_location_headers', enabled: false, has_conflict: false },
+    {
+      id: 'remove_visitor_ip_headers',
+      enabled: false,
+      has_conflict: false,
+      conflicts_with: ['add_true_client_ip_headers'],
+    },
+  ],
+  managed_response_headers: [
+    { id: 'add_security_headers', enabled: false, has_conflict: false },
+    { id: 'remove_x-powered-by_header', enabled: false, has_conflict: false },
+  ],
 };
 
 /** GET /zones/:id/bot_management on a Free plan, where Bot Fight Mode is the bot switch. */

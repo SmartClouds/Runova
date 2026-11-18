@@ -631,6 +631,40 @@ public interface ICoreHub
     /// <summary>Sends one test message to the chat and says whether Telegram took it. Admin.</summary>
     Task<TelegramNotificationsTestResult> SendTelegramNotificationTest();
 
+    // Website traffic (E109) and attacks (E110), read from the sites' access logs. Reads are open to every role.
+
+    /// <summary>The settings for statistics, detection and auto-block, each site, and the country database.</summary>
+    Task<TrafficStatus> GetTrafficStatus();
+
+    Task<TrafficReport> GetTrafficReport(TrafficReportRequest request);
+
+    Task<TrafficDimensionPage> GetTrafficDimension(TrafficDimensionRequest request);
+
+    /// <summary>Visitors now, every five seconds.</summary>
+    IAsyncEnumerable<TrafficLive> StreamTrafficLive(TrafficLiveRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Turns statistics on or off and sets them up, effective at once. Admin.</summary>
+    Task<TrafficSaveResult> SaveTrafficSettings(TrafficSettings settings);
+
+    /// <summary>Deletes the statistics of one site, or of all when SiteId is null. Admin, with a step-up.</summary>
+    Task<TrafficStatus> DeleteTrafficData(string? siteId);
+
+    Task<AttackSummary> ListAttacks(AttackQuery query);
+
+    /// <summary>Detection on or off, its thresholds and the allowlist. Admin.</summary>
+    Task<TrafficSaveResult> SaveAttackSettings(AttackSettings settings);
+
+    /// <summary>Lets the core block attacking addresses by itself. Owner, with a step-up.</summary>
+    Task<TrafficSaveResult> SaveAutoBlock(AutoBlockSettings settings);
+
+    Task<BlockedAddressInfo[]> ListBlockedAddresses();
+
+    /// <summary>Makes nginx refuse the address on every site. Admin.</summary>
+    Task<BlockAddressResult> BlockAddress(BlockAddressRequest request);
+
+    /// <summary>Lets the address back. Admin.</summary>
+    Task UnblockAddress(long blockId);
+
     // Updating the core itself, without SSH. Owner, with a step-up: the release runs as root.
 
     /// <summary>

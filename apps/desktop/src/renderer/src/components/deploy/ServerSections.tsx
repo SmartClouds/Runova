@@ -2,6 +2,7 @@ import {
   Archive,
   Bell,
   Blocks,
+  ChartColumn,
   Database,
   Docker,
   FileText,
@@ -24,6 +25,7 @@ export type ServerSection =
   | 'cleanup'
   | 'store'
   | 'websites'
+  | 'traffic'
   | 'firewall'
   | 'logs'
   | 'backups'
@@ -39,6 +41,7 @@ const SECTIONS: ReadonlyArray<{ value: ServerSection; label: string; icon?: type
   { value: 'cleanup', label: 'Cleanup', icon: Sparkles },
   { value: 'store', label: 'App Store', icon: Store },
   { value: 'websites', label: 'Websites', icon: Globe },
+  { value: 'traffic', label: 'Traffic', icon: ChartColumn },
   { value: 'firewall', label: 'Firewall', icon: Lock },
   { value: 'logs', label: 'Logs', icon: FileText },
   { value: 'database', label: 'Database', icon: Database },

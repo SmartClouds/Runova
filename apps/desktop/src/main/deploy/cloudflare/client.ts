@@ -3,6 +3,7 @@ import { BaseBotManagement } from 'cloudflare/resources/bot-management/bot-manag
 import { BaseCache } from 'cloudflare/resources/cache/cache';
 import { BaseRecords } from 'cloudflare/resources/dns/records';
 import { BaseAccessRules } from 'cloudflare/resources/firewall/access-rules';
+import { BaseManagedTransforms } from 'cloudflare/resources/managed-transforms/managed-transforms';
 import { BaseOriginCACertificates } from 'cloudflare/resources/origin-ca-certificates/origin-ca-certificates';
 import { BasePhases } from 'cloudflare/resources/rulesets/phases/phases';
 import { BaseRules } from 'cloudflare/resources/rulesets/rules';
@@ -77,6 +78,8 @@ export function createCloudflareApi(token: string, options: CloudflareClientOpti
       BaseWidgets,
       BaseAccounts,
       BaseBotManagement,
+      // Visitor location headers for the traffic report (E109).
+      BaseManagedTransforms,
       // The Cloudflare Tunnel (E95): the tunnel, its routes and token, Access for SSH, Mesh nodes.
       BaseCloudflared,
       BaseTunnelConfigurations,

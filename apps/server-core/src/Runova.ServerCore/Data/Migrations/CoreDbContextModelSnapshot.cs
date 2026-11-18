@@ -214,6 +214,57 @@ namespace Runova.ServerCore.Data.Migrations
                     b.ToTable("Alerts");
                 });
 
+            modelBuilder.Entity("Runova.ServerCore.Data.AttackEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Blocked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FirstSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SamplePaths")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SiteId")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastSeenAt");
+
+                    b.HasIndex("SiteId", "LastSeenAt");
+
+                    b.ToTable("AttackEvents");
+                });
+
             modelBuilder.Entity("Runova.ServerCore.Data.AuditAnchor", b =>
                 {
                     b.Property<int>("Id")
@@ -506,6 +557,49 @@ namespace Runova.ServerCore.Data.Migrations
                     b.HasKey("RunId", "DestinationId");
 
                     b.ToTable("BackupRunTargets");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.BlockedAddress", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Automatic")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SiteId")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("Network")
+                        .IsUnique();
+
+                    b.ToTable("BlockedAddresses");
                 });
 
             modelBuilder.Entity("Runova.ServerCore.Data.CloudflareTunnelSetting", b =>
@@ -1555,6 +1649,299 @@ namespace Runova.ServerCore.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("StreamProxies");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.TrafficDay", b =>
+                {
+                    b.Property<string>("SiteId")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BotRequests")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bounces")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CountryCloudflare")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CountryDbIp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CountryUnknown")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PageViews")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Requests")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ResponseCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("ResponseHistogram")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("ResponseMsTotal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Sketch")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("StartUnixMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status2xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status3xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status4xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status5xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("VisitSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Visits")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SiteId", "Day");
+
+                    b.HasIndex("StartUnixMs");
+
+                    b.HasIndex("SiteId", "StartUnixMs");
+
+                    b.ToTable("TrafficDays");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.TrafficDimensionDay", b =>
+                {
+                    b.Property<string>("SiteId")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Dimension")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("StartUnixMs")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SiteId", "Day", "Dimension", "Value");
+
+                    b.HasIndex("StartUnixMs");
+
+                    b.HasIndex("SiteId", "Dimension", "StartUnixMs");
+
+                    b.ToTable("TrafficDimensionDays");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.TrafficHour", b =>
+                {
+                    b.Property<string>("SiteId")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("HourUnixMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BotRequests")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bounces")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PageViews")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Requests")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ResponseCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("ResponseHistogram")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("ResponseMsTotal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status2xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status3xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status4xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Status5xx")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("VisitSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Visitors")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Visits")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SiteId", "HourUnixMs");
+
+                    b.HasIndex("HourUnixMs");
+
+                    b.ToTable("TrafficHours");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.TrafficLogCursor", b =>
+                {
+                    b.Property<string>("SiteId")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FingerprintLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastLineAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Offset")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SiteId");
+
+                    b.ToTable("TrafficLogCursors");
+                });
+
+            modelBuilder.Entity("Runova.ServerCore.Data.TrafficSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Allowlist")
+                        .IsRequired()
+                        .HasMaxLength(40000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AttackEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AutoBlockEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AutoBlockKinds")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AutoBlockMaxBlocked")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AutoBlockMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BruteForceAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BruteForceWindowMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChangedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Countries")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DailyRetentionDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("DetectionChosen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("EnabledAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("EventRetentionDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ExcludedSites")
+                        .IsRequired()
+                        .HasMaxLength(40000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FloodRequestsPerMinute")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("HourlyRetentionDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("InjectionHits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("InjectionWindowMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ScanNotFound")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ScanProbes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ScanWindowMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TrafficSettings");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

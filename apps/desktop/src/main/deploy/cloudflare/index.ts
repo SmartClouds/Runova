@@ -21,6 +21,7 @@ import { isE2E } from '../../testMode';
 import type { AccessPassLookup } from '../coreDomain/transport';
 import { setLiveDeployServices } from '../liveServices';
 import { CloudflareEmailGateOps, type EmailGateServer } from './emailGate';
+import { CloudflareGeolocation } from './geolocation';
 import { addressesFromCore, addressesOfHost, type ServerAddresses } from './pointDomain';
 import { CloudflareServerOps } from './serverOps';
 import { CloudflareService } from './service';
@@ -156,6 +157,14 @@ export function registerCloudflareIpc(core?: CloudflareCoreAccess): void {
       serverName: core.serverName,
     });
     setLiveDeployServices({ cloudflareServer: serverOps });
+    // The traffic report's visitor location (E109): read and turned on with the token kept here.
+    setLiveDeployServices({
+      cloudflareGeolocation: new CloudflareGeolocation({
+        cloudflare: service,
+        links: { call: core.call },
+        roles: core.roles,
+      }),
+    });
     registerCloudflareServerHandlers({ ipc: ipcMain, ops: serverOps, guard });
     const tunnelOps = new CloudflareTunnelOps({
       cloudflare: service,

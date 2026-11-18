@@ -26,6 +26,8 @@ const PROMPTS: Record<Problem['kind'], string> = {
   diskPressure: 'Find out what is filling the disk and what can safely be cleaned up.',
   certificate: 'Find out why this certificate is not renewing.',
   exposedPort: 'Check what this published port exposes and how to keep it private.',
+  attack:
+    'Look at this attack on the website: which addresses, what they tried, and whether to block them.',
   alert: 'Look into this alert and tell me what it means.',
 };
 
