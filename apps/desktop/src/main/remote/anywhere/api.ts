@@ -41,11 +41,13 @@ export function createAnywhereApi(request: Request) {
 
     remove: (id: number) => request<void>('DELETE', `/remote-devices/${id}`),
 
+    /** `phones` is missing from a website older than E114. */
     reachable: () =>
-      request<{ mine: AnywhereDirectoryEntry[]; teammates: AnywhereDirectoryEntry[] }>(
-        'GET',
-        '/reachable-devices',
-      ),
+      request<{
+        mine: AnywhereDirectoryEntry[];
+        teammates: AnywhereDirectoryEntry[];
+        phones?: AnywhereDirectoryEntry[];
+      }>('GET', '/reachable-devices'),
 
     async teams(): Promise<{ id: number; name: string }[]> {
       const teams = await request<{ items: { id: number; name: string }[] }>('GET', '/teams');

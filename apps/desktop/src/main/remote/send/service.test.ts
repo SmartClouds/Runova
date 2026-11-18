@@ -30,6 +30,8 @@ interface Computer {
   busy: boolean[];
   /** The links this computer dialed, so a test can cut them. */
   outLinks: MemoryLink[];
+  /** A phone of its owner's (E114), listed with the phones rather than the computers. */
+  phone: boolean;
 }
 
 const services: SendService[] = [];
@@ -45,11 +47,11 @@ function entry(
   features: string[] | undefined,
 ): AnywhereDirectoryEntry {
   return {
-    id: of.userId * 100,
+    id: Number(of.remoteId),
     remoteId: of.remoteId,
     name: of.name,
-    platform: 'windows',
-    kind: 'app',
+    platform: of.phone ? 'android' : 'windows',
+    kind: of.phone ? 'phone' : 'app',
     identityKey: `key-${of.remoteId}`,
     unattendedEnabled: false,
     online: of.online,
@@ -76,6 +78,7 @@ function network() {
     options: {
       redialDelaysMs?: number[];
       giveUpMs?: number;
+      phone?: boolean;
     } = {},
   ): Computer {
     const inbox = tempDir('runova-inbox-');
@@ -95,6 +98,7 @@ function network() {
       dials: 0,
       busy: [],
       outLinks: [],
+      phone: options.phone ?? false,
     };
     let session = 0;
     computer.service = createSendService({
@@ -106,11 +110,14 @@ function network() {
           settings: computer.settings,
           directory: {
             mine: computers
-              .filter((c) => c.userId === userId)
+              .filter((c) => c.userId === userId && !c.phone)
               .map((c) => entry(c, computer, ['receive-files'])),
             teammates: computers
-              .filter((c) => c.userId !== userId)
+              .filter((c) => c.userId !== userId && !c.phone)
               .map((c) => entry(c, computer, ['receive-files'])),
+            phones: computers
+              .filter((c) => c.userId === userId && c.phone)
+              .map((c) => entry(c, computer, c.online ? ['receive-files'] : [])),
           },
         }),
         dial: async (to) => {
@@ -225,6 +232,21 @@ describe('sending files to another computer', () => {
     await vi.waitFor(() => expect(batchOf(desk, batchId)?.phase).toBe('done'), { timeout: 10_000 });
     expect(laptop.offersShown).toBe(0);
     expect(readdirSync(laptop.inbox).sort()).toEqual(['.runova-partial', 'Holiday', 'report.pdf']);
+  });
+
+  it('sends to my phone like to any of my own devices', async () => {
+    const net = network();
+    const desk = net.add('100000111', 1, "Sam's desk", 'Sam');
+    const phone = net.add('100000333', 1, 'Runova app', 'Sam', { phone: true });
+    await desk.service.stage(picked().paths);
+
+    const { batchId } = await desk.service.send({ remoteId: phone.remoteId });
+    await vi.waitFor(() => expect(state(phone).offers).toHaveLength(1));
+    await phone.service.respond(batchId, { accept: true });
+
+    await vi.waitFor(() => expect(batchOf(desk, batchId)?.phase).toBe('done'), { timeout: 10_000 });
+    expect(batchOf(desk, batchId)?.peer.deviceName).toBe('Runova app');
+    expect(readFileSync(join(phone.inbox, 'Holiday', 'notes.txt'), 'utf8')).toBe('beach day');
   });
 
   it('still asks about a teammate when my own devices go straight in', async () => {
@@ -400,6 +422,26 @@ describe('what the screens are told', () => {
         unavailable: 'offline',
       }),
     ]);
+  });
+
+  it("puts this person's own phones among the devices files can go to", () => {
+    const net = network();
+    const sam = net.add('100000111', 1, "Sam's desk", 'Sam');
+    const phone = net.add('100000333', 1, 'Runova app', 'Sam', { phone: true });
+    net.add('100000444', 2, "Kim's phone", 'Kim', { phone: true });
+
+    expect(state(sam).recipients).toEqual([
+      expect.objectContaining({
+        remoteId: phone.remoteId,
+        name: 'Runova app',
+        kind: 'phone',
+        relation: 'own',
+        unavailable: null,
+      }),
+    ]);
+
+    phone.online = false;
+    expect(state(sam).recipients[0]).toMatchObject({ kind: 'phone', unavailable: 'offline' });
   });
 
   it('never names a staged file by where it is on this computer', async () => {

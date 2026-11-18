@@ -52,6 +52,9 @@ targets:
       properties:
         NSFaceIDUsageDescription: Unlocks Runova and confirms it's you before showing a Vault secret.
         NSCameraUsageDescription: Reads the QR code that signs you in.
+        # Files computers send to the phone (E114) show in the Files app, under Runova.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         RunovaKeychainGroup: $(AppIdentifierPrefix)com.runovahq.app.shared
         UIAppFonts:
           - fonts/Inter.ttf

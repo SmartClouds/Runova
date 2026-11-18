@@ -156,3 +156,19 @@ async fn a_send_says_so_to_the_hub() {
 
     assert_eq!(seen.lock().unwrap()[0].1[0]["intent"], "send");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_goes_online_taking_files_and_answers_a_request() {
+    let (hub, seen) = hub_answering(Value::Null).await;
+
+    hub.go_online(7, &["receive-files".to_owned()])
+        .await
+        .unwrap();
+    hub.respond("s9", true).await;
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen[0].0, "GoOnlineWithFeatures");
+    assert_eq!(seen[0].1, vec![json!(7), json!(["receive-files"])]);
+    assert_eq!(seen[1].0, "Respond");
+    assert_eq!(seen[1].1, vec![json!("s9"), json!(true)]);
+}

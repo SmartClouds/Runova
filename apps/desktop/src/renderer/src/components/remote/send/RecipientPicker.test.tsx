@@ -84,6 +84,22 @@ describe('picking who to send to', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('says a closed phone needs Runova open to take files', () => {
+    const phone = recipient({
+      remoteId: '100000555',
+      name: 'Runova app',
+      platform: 'android',
+      kind: 'phone',
+      online: false,
+      unavailable: 'offline',
+    });
+    picker([laptop, phone]);
+
+    const row = screen.getByRole('radio', { name: /Runova app/ });
+    expect(row).toBeDisabled();
+    expect(within(row).getByText('Open Runova on the phone')).toBeInTheDocument();
+  });
+
   it('finds a device by its name, its owner or its team once there are many', async () => {
     const many = Array.from({ length: 6 }, (_, i) =>
       recipient({ remoteId: `10000100${i}`, name: `Desk ${i}` }),

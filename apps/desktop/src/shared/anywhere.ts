@@ -6,6 +6,13 @@ import type { ManageScope } from '@runova/protocol';
  */
 
 export type AnywherePlatform = 'windows' | 'macos' | 'linux';
+
+/** What a device in the directory runs on: a computer, or a phone (E114). */
+export type AnywhereDevicePlatform = AnywherePlatform | 'android' | 'ios';
+
+export function isComputerPlatform(platform: AnywhereDevicePlatform): platform is AnywherePlatform {
+  return platform === 'windows' || platform === 'macos' || platform === 'linux';
+}
 export type AnywhereMode = 'ask' | 'password';
 /** `send` (E112) opens a link only for files offered by the one dialing. */
 export type AnywhereIntent = 'control' | 'files' | 'manage' | 'send';
@@ -31,8 +38,8 @@ export interface AnywhereDirectoryEntry {
   id: number;
   remoteId: string;
   name: string;
-  platform: AnywherePlatform;
-  kind: 'app' | 'agent';
+  platform: AnywhereDevicePlatform;
+  kind: 'app' | 'agent' | 'phone';
   identityKey: string;
   unattendedEnabled: boolean;
   online: boolean;
@@ -44,6 +51,12 @@ export interface AnywhereDirectoryEntry {
    * Missing altogether when the website is older than that.
    */
   features?: string[];
+}
+
+export interface AnywhereDirectory {
+  mine: AnywhereDirectoryEntry[];
+  teammates: AnywhereDirectoryEntry[];
+  phones: AnywhereDirectoryEntry[];
 }
 
 export interface AnywhereRecentEntry {
@@ -163,7 +176,8 @@ export interface AnywhereState {
   account: { displayName: string; email: string } | null;
   device: AnywhereThisDevice | null;
   settings: AnywhereSettingsView;
-  directory: { mine: AnywhereDirectoryEntry[]; teammates: AnywhereDirectoryEntry[] };
+  /** Phones are this account's own (E114); they take files while their app is open. */
+  directory: AnywhereDirectory;
   recent: AnywhereRecentEntry[];
   teams: { id: number; name: string }[];
   outgoing: AnywhereOutgoing | null;
@@ -261,7 +275,7 @@ export const EMPTY_ANYWHERE_STATE: AnywhereState = {
     autoAcceptOwn: false,
     saveFolder: null,
   },
-  directory: { mine: [], teammates: [] },
+  directory: { mine: [], teammates: [], phones: [] },
   recent: [],
   teams: [],
   outgoing: null,

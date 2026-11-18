@@ -47,6 +47,7 @@ import com.runovahq.app.ui.GitIntents
 import com.runovahq.app.ui.LockIntents
 import com.runovahq.app.ui.PasscodeIntents
 import com.runovahq.app.ui.PhraseIntents
+import com.runovahq.app.ui.ReceiveIntents
 import com.runovahq.app.ui.SendIntents
 import com.runovahq.app.ui.SendPicks
 import com.runovahq.app.ui.StagedFile
@@ -97,6 +98,8 @@ class MainActivity : FragmentActivity(), ViewListener {
             this,
         )
         engine = core.engine()
+        // Files computers send to the phone go to a folder of the app's own (E114).
+        engine.setReceiveFolder(receivedFolder().absolutePath)
         val intents = AppIntents(
             signIn = ::openSignIn,
             refresh = { core.refresh() },
@@ -386,6 +389,7 @@ class MainActivity : FragmentActivity(), ViewListener {
             ),
             remote = remoteIntents(),
             send = sendIntents(),
+            receive = receiveIntents(),
             prompts = PromptIntents(
                 generate = { request, type, target -> engine.promptsGenerate(request, type, target) },
                 cancel = { engine.promptsCancel() },
@@ -494,6 +498,41 @@ class MainActivity : FragmentActivity(), ViewListener {
         clearFinished = { engine.clearFinishedSends() },
         dismissError = { engine.dismissSendError() },
     )
+
+    private fun receiveIntents() = ReceiveIntents(
+        answer = { id, yes -> engine.answerOffer(id, yes) },
+        cancel = { engine.cancelReceive(it) },
+        dismiss = { engine.dismissReceived(it) },
+        clear = { engine.clearReceived() },
+        setEnabled = { engine.setReceiveEnabled(it) },
+        setAutoAccept = { engine.setReceiveAutoAccept(it) },
+        open = ::openReceived,
+        share = ::shareReceived,
+    )
+
+    private fun receivedFolder(): File =
+        File(getExternalFilesDir(null) ?: filesDir, "Received").apply { mkdirs() }
+
+    private fun receivedUri(path: String): Pair<Uri, String> {
+        val file = File(path)
+        val type = android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream"
+        return FileProvider.getUriForFile(this, "$packageName.files", file) to type
+    }
+
+    private fun openReceived(path: String) {
+        val (uri, type) = runCatching { receivedUri(path) }.getOrNull() ?: return
+        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        runCatching { startActivity(Intent.createChooser(view, "Open with")) }
+            .onFailure { Toast.makeText(this, "No app here opens this kind of file.", Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun shareReceived(path: String) {
+        val (uri, type) = runCatching { receivedUri(path) }.getOrNull() ?: return
+        val send = Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "Share or save"))
+    }
 
     /** Files shared to Runova from another app go to the Send files screen. */
     private fun handleShare(intent: Intent?) {
@@ -649,13 +688,16 @@ class MainActivity : FragmentActivity(), ViewListener {
         }
     }
 
-    /** A send going keeps the phone sending in the background, with its progress on show. */
+    /** Files going or coming keep the phone at it in the background, with the progress on show. */
     private fun keepSending(view: AppView) {
         val send = view.send
-        if (send.active > 0u) {
-            SendService.show(this, send.progressLabel ?: "Sending files", send.progressPercent.toInt())
-        } else {
-            SendService.stop(this)
+        val receive = view.receive
+        when {
+            send.active > 0u ->
+                SendService.show(this, send.progressLabel ?: "Sending files", send.progressPercent.toInt())
+            receive.active > 0u ->
+                SendService.show(this, receive.progressLabel ?: "Receiving files", receive.progressPercent.toInt())
+            else -> SendService.stop(this)
         }
     }
 

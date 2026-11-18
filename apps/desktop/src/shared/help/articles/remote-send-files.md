@@ -38,6 +38,10 @@ A send that loses its connection says **Reconnecting** and picks up where it sto
 
 The Runova app on your phone sends to your computers and your teammates' the same way. Tap the paper plane on the **Systems** tab, pick files, photos or a whole folder, pick the computer, and tap **Send**. On Android you can also share files to Runova from any other app. The send carries on while the app is in the background, and the computer asks you to accept the files just as it does for another computer.
 
+## Send to your phone
+
+Your phones are listed under your own devices while the Runova app is open on them. The phone asks before anything comes in, unless you turned on **Accept from my computers without asking** in the app, and keeps the files in Runova's **Received** folder, where you can open, share or save them. A phone that is closed reads **Open Runova on the phone**. Only your own computers can send to your phone.
+
 ## Who can send you files
 
 The **Receiving on this computer** card on the **Send files** tab sets this:

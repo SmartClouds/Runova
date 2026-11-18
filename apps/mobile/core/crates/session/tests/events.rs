@@ -1,4 +1,4 @@
-use runova_session::hub::{HubEvent, read_event};
+use runova_session::hub::{HubEvent, IncomingRequest, read_event};
 use runova_signalr::client::HubEvent as Raw;
 use serde_json::{Value, json};
 
@@ -102,4 +102,38 @@ fn a_malformed_event_is_skipped_and_does_no_harm() {
     assert_eq!(read_event(&raw("RequestResolved", vec![])), None);
     assert_eq!(read_event(&raw("SessionEnded", vec![json!("x")])), None);
     assert_eq!(read_event(&raw("PresenceChanged", vec![json!({})])), None);
+}
+
+#[test]
+fn a_request_to_this_phone_names_who_asks_and_what_for() {
+    let event = raw(
+        "IncomingRequest",
+        vec![json!({
+            "sessionId": "s9",
+            "mode": "ask",
+            "relation": "own",
+            "intent": "send",
+            "controller": {
+                "userId": 1, "displayName": "Sam", "email": "sam@example.com",
+                "deviceName": "Sam's desk", "platform": "windows", "remoteId": "111222333",
+                "identityKey": "key"
+            },
+            "teams": []
+        })],
+    );
+
+    assert_eq!(
+        read_event(&event),
+        Some(HubEvent::Incoming(IncomingRequest {
+            session_id: "s9".into(),
+            intent: "send".into(),
+            relation: "own".into(),
+            mode: "ask".into(),
+            person: "Sam".into(),
+            device_name: Some("Sam's desk".into()),
+            platform: Some("windows".into()),
+            remote_id: Some("111222333".into()),
+            identity_key: Some("key".into()),
+        }))
+    );
 }

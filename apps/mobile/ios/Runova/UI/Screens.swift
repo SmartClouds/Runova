@@ -38,6 +38,7 @@ struct AppIntents {
     var passcode = PasscodeIntents()
     var phrases = PhraseIntents()
     var send = SendIntents()
+    var receive = ReceiveIntents()
 }
 
 let appTabs = [
@@ -115,6 +116,10 @@ struct AppRoot: View {
             if let confirm = view.confirm {
                 ConfirmOverlay(confirm: confirm, onConfirm: intents.confirm, onDismiss: intents.dismissConfirm)
             }
+            // Files on their way to the phone ask first, over whatever is on show (E114).
+            if view.auth == .signedIn, let offer = view.receive.offers.first {
+                IncomingOfferSheet(offer: offer, intents: intents.receive)
+            }
             if aboutOpen {
                 AboutSheet(version: view.appVersion) { aboutOpen = false }
             }
@@ -131,7 +136,9 @@ struct AppRoot: View {
     @ViewBuilder private var signedIn: some View {
         // Sending files goes beside a connection, so it opens over whatever is on show.
         if sendPicks.open {
-            SendFilesScreen(screen: view.send, intents: intents.send) { sendPicks.open = false }
+            SendFilesScreen(
+                screen: view.send, intents: intents.send, receive: view.receive, receiveIntents: intents.receive
+            ) { sendPicks.open = false }
         } else if let remote = view.remote {
             RemoteViewerScreen(view: remote, intents: intents.remote)
         } else if let connection = view.connection {
@@ -235,8 +242,13 @@ struct SystemsScreen: View {
     var body: some View {
         let openSend = { intents.send.picks.open = true }
         RunovaScreen(title: "Systems", trailing: { SendFilesButton(onOpen: openSend) }) {
-            if view.send.progressLabel != nil {
-                SendingStrip(screen: view.send, onOpen: openSend).padding(.horizontal, 16).padding(.top, 12)
+            if let label = view.send.progressLabel {
+                SendingStrip(label: label, percent: Int(view.send.progressPercent), icon: RunovaIcons.send, onOpen: openSend)
+                    .padding(.horizontal, 16).padding(.top, 12)
+            }
+            if let label = view.receive.progressLabel {
+                SendingStrip(label: label, percent: Int(view.receive.progressPercent), icon: RunovaIcons.pull, onOpen: openSend)
+                    .padding(.horizontal, 16).padding(.top, 12)
             }
             if view.systems.isEmpty && view.systemsLoading {
                 LoadingRows()

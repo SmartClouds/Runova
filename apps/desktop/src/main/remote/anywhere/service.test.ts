@@ -68,6 +68,10 @@ class FakeServer {
   readonly agents = new Map<number, string>();
   /** Computers whose app is away, so requests reach the background agent. */
   readonly agentAnswers = new Set<number>();
+  /** Phones of each account (E114), listed apart from the computers. */
+  readonly phones: { id: number; remoteId: string; name: string; userId: number }[] = [];
+  /** An older website, from before phones took files, lists none at all. */
+  listsPhones = true;
   private nextId = 1;
   private nextSession = 1;
 
@@ -152,6 +156,30 @@ class FakeServer {
         teammates: this.devices
           .filter((d) => d.userId !== userId && this.shared(d, userId).length > 0)
           .map(entry),
+        ...(this.listsPhones
+          ? {
+              phones: this.phones
+                .filter((p) => p.userId === userId)
+                .map((p) => ({
+                  id: p.id,
+                  remoteId: p.remoteId,
+                  name: p.name,
+                  platform: 'android' as const,
+                  kind: 'phone' as const,
+                  identityKey: `key-${p.remoteId}`,
+                  unattendedEnabled: false,
+                  online: this.online.has(p.id),
+                  lastSeenAt: '2026-11-18T09:00:00Z',
+                  features: this.online.has(p.id) ? ['receive-files'] : [],
+                  owner: {
+                    userId,
+                    displayName: this.users.get(userId)?.displayName ?? '',
+                    email: '',
+                  },
+                  teams: [],
+                })),
+            }
+          : {}),
       }),
       teams: async () =>
         [...this.teams.entries()]
@@ -875,6 +903,36 @@ describe('Runova Anywhere service: other outcomes', () => {
     kim.hub.handlers?.presence({ deviceId: entry.id, remoteId: entry.remoteId, online: false });
 
     expect(kim.state().directory.teammates[0].online).toBe(false);
+  });
+
+  it('keeps my phones in the directory and moves them as the hub says', async () => {
+    const { server, sam } = await world();
+    server.phones.push({ id: 900, remoteId: '100000900', name: 'Runova app', userId: 1 });
+    await sam.service.refresh();
+    expect(sam.state().directory.phones).toEqual([
+      expect.objectContaining({ name: 'Runova app', kind: 'phone', online: false }),
+    ]);
+
+    sam.hub.handlers?.presence({
+      deviceId: 900,
+      remoteId: '100000900',
+      online: true,
+      features: ['receive-files'],
+    });
+
+    expect(sam.state().directory.phones[0]).toMatchObject({
+      online: true,
+      features: ['receive-files'],
+    });
+  });
+
+  it('reads a directory from a website that lists no phones as having none', async () => {
+    const { server, sam } = await world();
+    server.listsPhones = false;
+
+    await sam.service.refresh();
+
+    expect(sam.state().directory.phones).toEqual([]);
   });
 
   it('pushes the access settings to the server', async () => {

@@ -76,9 +76,11 @@ internal sealed partial class RemoteHub(
         var agentOf = AgentOf;
         var device = await db.RemoteDevices.SingleOrDefaultAsync(d => d.Id == deviceId && d.UserId == me && d.RevokedAt == null)
             ?? throw new HubException("There is no such computer on this account.");
-        if (device.Kind == RemoteDeviceKinds.Phone)
+        // A phone is reached only to take files (E114), and only while its app is open.
+        var phone = device.Kind == RemoteDeviceKinds.Phone;
+        if (phone && (agentOf is not null || !features.Contains(RemoteFeatures.ReceiveFiles)))
         {
-            throw new HubException("A phone connects to computers and can not be connected to.");
+            throw new HubException("A phone goes online only to take files.");
         }
 
         if (agentOf is not null && (agentOf != device.Id || device.AgentSecretHash is null))
@@ -90,8 +92,13 @@ internal sealed partial class RemoteHub(
         var before = presence.FeaturesOf(device.Id);
         // The background agent only shows the screen; it never takes files.
         presence.Online(device.Id, me, Context.ConnectionId, agentOf is null ? RemoteDeviceKinds.App : RemoteDeviceKinds.Agent, agentOf is null ? features : []);
-        device.LastSeenAt = time.GetUtcNow();
-        await db.SaveChangesAsync();
+        // A phone going online leaves nothing behind: its presence lives in memory only.
+        if (!phone)
+        {
+            device.LastSeenAt = time.GetUtcNow();
+            await db.SaveChangesAsync();
+        }
+
         var now = presence.FeaturesOf(device.Id);
         if (!wasOnline || !before.SequenceEqual(now))
         {
@@ -116,7 +123,7 @@ internal sealed partial class RemoteHub(
         if (RemoteIds.Parse(request.RemoteId) is not { } remoteId
             || !RemoteAccessModes.All.Contains(request.Mode)
             || !RemoteIntents.All.Contains(request.Intent)
-            || await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.RemoteId == remoteId && d.Kind != RemoteDeviceKinds.Phone && d.RevokedAt == null) is not { } target)
+            || await db.RemoteDevices.AsNoTracking().SingleOrDefaultAsync(d => d.RemoteId == remoteId && (d.Kind != RemoteDeviceKinds.Phone || request.Intent == RemoteIntents.Send) && d.RevokedAt == null) is not { } target)
         {
             return Result(RemoteConnectStatuses.Unavailable);
         }
@@ -135,7 +142,9 @@ internal sealed partial class RemoteHub(
         var sends = request.Intent == RemoteIntents.Send;
         if (!RemoteAccess.MayRequest(relation, request.Mode, target.UnattendedEnabled)
             || (manages && (relation != RemoteRelation.Own || from?.Kind != RemoteDeviceKinds.Phone))
-            || (sends && !RemoteAccess.MaySend(relation, request.Mode, from?.Kind)))
+            || (sends && !RemoteAccess.MaySend(relation, request.Mode, from?.Kind))
+            // Only its owner's own devices send to a phone (E114).
+            || (target.Kind == RemoteDeviceKinds.Phone && relation != RemoteRelation.Own))
         {
             return Result(RemoteConnectStatuses.Unavailable);
         }

@@ -11,6 +11,7 @@ import {
 } from '@runova/protocol';
 import {
   type AnywhereConnectRequest,
+  type AnywhereDirectory,
   type AnywhereDirectoryEntry,
   type AnywhereHosted,
   type AnywhereIncoming,
@@ -26,6 +27,7 @@ import {
   type AnywhereStatus,
   EMPTY_ANYWHERE_STATE,
   formatRemoteId,
+  isComputerPlatform,
   parseRemoteId,
 } from '../../../shared/anywhere';
 import { passwordProblem } from '../../../shared/anywherePassword';
@@ -204,10 +206,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   let identity: IdentityKeyPair | null = null;
   let settings: AnywhereSettings | null = null;
   let passwordSet = false;
-  let directory: { mine: AnywhereDirectoryEntry[]; teammates: AnywhereDirectoryEntry[] } = {
-    mine: [],
-    teammates: [],
-  };
+  let directory: AnywhereDirectory = { mine: [], teammates: [], phones: [] };
   let teams: { id: number; name: string }[] = [];
   let recent: AnywhereState['recent'] = [];
   let outgoing: Outgoing | null = null;
@@ -308,7 +307,11 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
               }
             : e,
         );
-      directory = { mine: flip(directory.mine), teammates: flip(directory.teammates) };
+      directory = {
+        mine: flip(directory.mine),
+        teammates: flip(directory.teammates),
+        phones: flip(directory.phones),
+      };
       announce();
     },
     reconnected: () => {
@@ -331,7 +334,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     settings = null;
     passwordSet = false;
     agentInstalled = false;
-    directory = { mine: [], teammates: [] };
+    directory = { mine: [], teammates: [], phones: [] };
     teams = [];
     recent = [];
     error = null;
@@ -420,7 +423,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     try {
       const [reachable, myTeams] = await Promise.all([deps.api.reachable(), deps.api.teams()]);
       if (overtaken(run)) return;
-      directory = reachable;
+      directory = { ...reachable, phones: reachable.phones ?? [] };
       teams = myTeams;
     } catch (e) {
       log(`reading the directory failed: ${String(e)}`);
@@ -570,7 +573,7 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         phase: 'requesting',
         remoteId,
         hostName: entry?.name ?? '',
-        platform: entry?.platform ?? null,
+        platform: entry && isComputerPlatform(entry.platform) ? entry.platform : null,
         mode: 'ask',
         intent: request.intent,
         transport: null,

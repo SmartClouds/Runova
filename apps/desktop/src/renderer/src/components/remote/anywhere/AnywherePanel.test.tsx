@@ -134,6 +134,7 @@ describe('AnywherePanel signed in', () => {
           }),
         ],
         teammates: [entry({})],
+        phones: [],
       },
     });
 
@@ -280,7 +281,7 @@ describe('AnywherePanel signed in', () => {
 describe('AnywherePanel sending files (E112)', () => {
   const withKim: AnywhereState = {
     ...online,
-    directory: { mine: [], teammates: [entry({ features: ['receive-files'] })] },
+    directory: { mine: [], teammates: [entry({ features: ['receive-files'] })], phones: [] },
   };
 
   it('opens the Send files tab with a device picked, from its row', async () => {
@@ -315,7 +316,11 @@ describe('AnywherePanel sending files (E112)', () => {
     act(() =>
       useAnywhereStore.getState().set({
         ...online,
-        directory: { mine: [], teammates: [entry({ online: false, features: ['receive-files'] })] },
+        directory: {
+          mine: [],
+          teammates: [entry({ online: false, features: ['receive-files'] })],
+          phones: [],
+        },
       }),
     );
 

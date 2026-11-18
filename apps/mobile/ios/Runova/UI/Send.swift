@@ -89,6 +89,8 @@ func stagedGroups(_ files: [StagedFile]) -> [StagedGroup] {
 struct SendFilesScreen: View {
     let screen: SendScreen
     let intents: SendIntents
+    var receive: ReceiveScreen?
+    var receiveIntents = ReceiveIntents()
     let onClose: () -> Void
 
     @ObservedObject private var picks: SendPicks
@@ -97,9 +99,14 @@ struct SendFilesScreen: View {
     @State private var photos: [PhotosPickerItem] = []
     @Environment(\.palette) private var palette
 
-    init(screen: SendScreen, intents: SendIntents, onClose: @escaping () -> Void) {
+    init(
+        screen: SendScreen, intents: SendIntents, receive: ReceiveScreen? = nil,
+        receiveIntents: ReceiveIntents = ReceiveIntents(), onClose: @escaping () -> Void
+    ) {
         self.screen = screen
         self.intents = intents
+        self.receive = receive
+        self.receiveIntents = receiveIntents
         self.onClose = onClose
         self._picks = ObservedObject(wrappedValue: intents.picks)
     }
@@ -132,6 +139,9 @@ struct SendFilesScreen: View {
                         }
                         .padding(.top, 8)
                         ForEach(finished, id: \.batchId) { BatchCard(batch: $0, intents: intents) }
+                    }
+                    if let receive {
+                        ReceivedSection(screen: receive, intents: receiveIntents)
                     }
                 }
                 .padding(16)
@@ -531,34 +541,34 @@ struct SendRunway: View {
     }
 }
 
-/// The line on the Systems tab while files are going, which opens the Send files screen.
+/// The line on the Systems tab while files are going or coming, which opens the Send files screen.
 struct SendingStrip: View {
-    let screen: SendScreen
+    let label: String
+    let percent: Int
+    let icon: String
     let onOpen: () -> Void
 
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let label = screen.progressLabel {
-            let shape = RoundedRectangle(cornerRadius: 16)
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        RunovaIcon(glyph: RunovaIcons.send, size: 13, color: palette.primary)
-                        RunovaText(label, style: RunovaType.smallMedium, maxLines: 1)
-                        Spacer(minLength: 0)
-                        RunovaIcon(glyph: RunovaIcons.forward, size: 10, color: palette.mutedForeground)
-                    }
-                    SendRunway(percent: Int(screen.progressPercent), phase: .sending)
+        let shape = RoundedRectangle(cornerRadius: 16)
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    RunovaIcon(glyph: icon, size: 13, color: palette.primary)
+                    RunovaText(label, style: RunovaType.smallMedium, maxLines: 1)
+                    Spacer(minLength: 0)
+                    RunovaIcon(glyph: RunovaIcons.forward, size: 10, color: palette.mutedForeground)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(shape.fill(palette.primary.opacity(0.08)))
-                .overlay(shape.strokeBorder(palette.primary.opacity(0.22), lineWidth: 1))
-                .contentShape(shape)
+                SendRunway(percent: percent, phase: .sending)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(shape.fill(palette.primary.opacity(0.08)))
+            .overlay(shape.strokeBorder(palette.primary.opacity(0.22), lineWidth: 1))
+            .contentShape(shape)
         }
+        .buttonStyle(.plain)
     }
 }
 

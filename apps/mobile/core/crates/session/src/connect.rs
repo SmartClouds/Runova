@@ -7,7 +7,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use runova_crypto::handshake::{HandshakeError, Identity, Mode, derive_password_secret, os_random};
 use runova_link::opener::{Direct, LinkKind, RELAY_SIGNAL, Relay, RelaySignal, open_link};
-use runova_link::secure::{ControllerConfig, LinkError, SecureLink};
+use runova_link::secure::{ControllerConfig, HostConfig, LinkError, SecureLink};
 use runova_link::transport::{Fingerprints, LinkTransport};
 use runova_rpc::{ManageClient, RpcError};
 use std::future::Future;
@@ -500,4 +500,43 @@ pub async fn connect_send(
         },
     )
     .await
+}
+
+/// Takes a send on this phone (E114), once the request was said yes to. The phone has no WebRTC to
+/// answer with, so it tells the computer to use the relay at once, as a background agent does, and
+/// meets it there as the host, sealed, holding it to the key the hub named.
+pub async fn accept_send(
+    session_id: &str,
+    controller_key: &str,
+    identity_seed: [u8; 32],
+    hub: &dyn HubPort,
+    transports: &dyn Transports,
+) -> Result<SecureLink, ConnectError> {
+    let expected_controller_key: [u8; 32] = URL_SAFE_NO_PAD
+        .decode(controller_key)
+        .ok()
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(|| ConnectError::Failed("That computer sent an unusable key.".to_owned()))?;
+    hub.signal(session_id, RELAY_SIGNAL).await;
+    let ticket = hub
+        .relay_ticket(session_id)
+        .await
+        .map_err(ConnectError::Failed)?;
+    let transport = transports
+        .relay(ticket)
+        .connect()
+        .await
+        .map_err(ConnectError::Failed)?;
+    let config = HostConfig {
+        session_id: session_id.to_owned(),
+        mode: Mode::Ask,
+        identity: Identity::from_seed(identity_seed),
+        expected_controller_key,
+        password_secret: None,
+        local_fingerprint: String::new(),
+        remote_fingerprint: String::new(),
+    };
+    SecureLink::as_host(transport, config, true, &mut os_random)
+        .await
+        .map_err(|error| ConnectError::Failed(error.to_string()))
 }

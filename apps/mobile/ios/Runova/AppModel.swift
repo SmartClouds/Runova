@@ -65,6 +65,7 @@ final class AppModel: NSObject, ObservableObject {
             config: CoreConfig(site: site, platform: "ios", appVersion: version),
             secure: secure,
             listener: Listener(model: self))
+        core?.engine().setReceiveFolder(path: Self.receivedFolder())
         // The core makes the seed the first time, so this has to come after it.
         if let seed = secure.get(key: "identity-seed"), let secret = notificationSecret(identitySeed: seed) {
             NotificationSecret.store(secret)
@@ -232,7 +233,22 @@ final class AppModel: NSObject, ObservableObject {
                 deleteTemplate: { [weak self] in self?.engine?.promptsDeleteTemplate(id: $0) },
                 schedule: { [weak self] in self?.engine?.promptsSchedule(task: $0) },
                 cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }),
-            send: sendIntents)
+            send: sendIntents,
+            receive: ReceiveIntents(
+                answer: { [weak self] in self?.engine?.answerOffer(id: $0, accept: $1) },
+                cancel: { [weak self] in self?.engine?.cancelReceive(id: $0) },
+                dismiss: { [weak self] in self?.engine?.dismissReceived(id: $0) },
+                clear: { [weak self] in self?.engine?.clearReceived() },
+                setEnabled: { [weak self] in self?.engine?.setReceiveEnabled(on: $0) },
+                setAutoAccept: { [weak self] in self?.engine?.setReceiveAutoAccept(on: $0) }))
+    }
+
+    /// Files computers send to the phone (E114), in Documents so the Files app shows them too.
+    private static func receivedFolder() -> String {
+        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Received", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.path
     }
 
     // Sending files (E113): the pickers stage what to send, and the core reads it as it goes.
@@ -275,9 +291,9 @@ final class AppModel: NSObject, ObservableObject {
         }
     }
 
-    /// A send going keeps the app running for a while in the background.
+    /// Files going or coming keep the app running for a while in the background.
     func keepSending(_ view: AppView) {
-        if view.send.active > 0 {
+        if view.send.active > 0 || view.receive.active > 0 {
             guard sendTask == .invalid else { return }
             sendTask = UIApplication.shared.beginBackgroundTask(withName: "Sending files") { [weak self] in
                 self?.endSendTask()

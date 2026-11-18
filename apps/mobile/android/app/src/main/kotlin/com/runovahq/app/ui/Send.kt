@@ -76,6 +76,7 @@ import uniffi.runova_ffi.SendBatchView
 import uniffi.runova_ffi.SendFileState
 import uniffi.runova_ffi.SendFileView
 import uniffi.runova_ffi.SendPhase
+import uniffi.runova_ffi.ReceiveScreen
 import uniffi.runova_ffi.SendScreen
 import uniffi.runova_ffi.SendTargetView
 import uniffi.runova_ffi.fileSizeLabel
@@ -154,7 +155,13 @@ private fun groupsOf(files: List<StagedFile>): List<StagedGroup> {
 
 /** The Send files screen: what to send, where to, and every send so far. */
 @Composable
-fun SendFilesScreen(screen: SendScreen, intents: SendIntents, onClose: () -> Unit) {
+fun SendFilesScreen(
+    screen: SendScreen,
+    intents: SendIntents,
+    receive: ReceiveScreen? = null,
+    receiveIntents: ReceiveIntents = ReceiveIntents(),
+    onClose: () -> Unit,
+) {
     val picks = intents.picks
     BackHandler(onBack = onClose)
     RunovaScreen("Send files", subtitle = "To your computers and your team's", onBack = onClose) {
@@ -191,6 +198,7 @@ fun SendFilesScreen(screen: SendScreen, intents: SendIntents, onClose: () -> Uni
                 }
                 items(finished, key = { it.batchId }) { BatchCard(it, intents) }
             }
+            if (receive != null) receivedItems(receive, receiveIntents)
             item(key = "end") { Spacer(Modifier.height(8.dp)) }
         }
     }
@@ -579,10 +587,9 @@ fun SendRunway(percent: Int, phase: SendPhase, modifier: Modifier = Modifier) {
     }
 }
 
-/** The line on the Systems tab while files are going, which opens the Send files screen. */
+/** The line on the Systems tab while files are going or coming, which opens the Send files screen. */
 @Composable
-fun SendingStrip(screen: SendScreen, onOpen: () -> Unit) {
-    val label = screen.progressLabel ?: return
+fun SendingStrip(label: String, percent: Int, icon: String, onOpen: () -> Unit) {
     val colors = RunovaTheme.colors
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -596,11 +603,11 @@ fun SendingStrip(screen: SendScreen, onOpen: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            RunovaIcon(RunovaIcons.Send, size = 13.dp, color = colors.primary)
+            RunovaIcon(icon, size = 13.dp, color = colors.primary)
             RunovaText(label, Modifier.weight(1f), style = RunovaType.small.copy(fontWeight = FontWeight.Medium), maxLines = 1)
             RunovaIcon(RunovaIcons.Forward, size = 10.dp, color = colors.mutedForeground)
         }
-        SendRunway(screen.progressPercent.toInt(), SendPhase.SENDING)
+        SendRunway(percent, SendPhase.SENDING)
     }
 }
 

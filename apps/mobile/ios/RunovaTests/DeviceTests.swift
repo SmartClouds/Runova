@@ -285,7 +285,8 @@ func fixtureView(
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
-    send: SendScreen = noSends
+    send: SendScreen = noSends,
+    receive: ReceiveScreen = noReceives
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -295,8 +296,13 @@ func fixtureView(
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
-        lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send)
+        lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send, receive: receive)
 }
+
+/// Nothing sent to the phone, and it takes files once it knows where (E114).
+let noReceives = ReceiveScreen(
+    enabled: true, autoAccept: false, ready: true, offers: [], batches: [], active: 0, progressLabel: nil,
+    progressPercent: 0)
 
 /// The Send files screen with nothing sent (E113).
 let noSends = SendScreen(

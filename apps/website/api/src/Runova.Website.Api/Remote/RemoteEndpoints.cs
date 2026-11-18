@@ -221,6 +221,7 @@ internal static class RemoteEndpoints
                            join device in db.RemoteDevices on link.RemoteDeviceId equals device.Id
                            join team in db.Teams on link.TeamId equals team.Id
                            where device.RevokedAt == null
+                               && device.Kind != RemoteDeviceKinds.Phone
                                && device.UserId != me
                                && myTeams.Contains(link.TeamId)
                                && db.TeamMembers.Any(m => m.TeamId == link.TeamId && m.UserId == device.UserId)
@@ -240,10 +241,17 @@ internal static class RemoteEndpoints
             .OrderBy(e => e.Owner.DisplayName, StringComparer.Ordinal).ThenBy(e => e.Name, StringComparer.Ordinal)
             .ToList();
 
+        // The caller's phones take files from its other devices while their app is open (E114).
+        var phones = await db.RemoteDevices.AsNoTracking()
+            .Where(d => d.UserId == me && d.Kind == RemoteDeviceKinds.Phone && d.RevokedAt == null)
+            .OrderBy(d => d.Name).ThenBy(d => d.Id)
+            .ToListAsync();
+
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(new RemoteDirectoryDto(
             [.. mine.Select(d => RemoteMapper.ToEntry(d, self, [], presence.IsOnline(d.Id), presence.FeaturesOf(d.Id)))],
-            teammates));
+            teammates,
+            [.. phones.Select(d => RemoteMapper.ToEntry(d, self, [], presence.IsOnline(d.Id), presence.FeaturesOf(d.Id)))]));
     }
 
     private static async Task<Results<Ok<Page<RemoteSessionDto>>, ValidationProblem>> SessionsAsync(

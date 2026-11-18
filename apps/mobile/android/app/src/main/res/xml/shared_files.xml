@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <external-files-path name="videos" path="Movies/" />
+    <!-- Files computers sent to the phone (E114). -->
+    <external-files-path name="received" path="Received/" />
     <files-path name="internal" path="." />
 </paths>

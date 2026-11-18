@@ -43,7 +43,14 @@ public sealed record RemoteDirectoryEntryDto(
     IReadOnlyList<RemoteTeamDto> Teams,
     IReadOnlyList<string> Features);
 
-public sealed record RemoteDirectoryDto(IReadOnlyList<RemoteDirectoryEntryDto> Mine, IReadOnlyList<RemoteDirectoryEntryDto> Teammates);
+/// <summary>
+/// The caller's computers, teammates' computers shown to a shared team, and the caller's phones
+/// (E114), each online or not and with what it takes while online.
+/// </summary>
+public sealed record RemoteDirectoryDto(
+    IReadOnlyList<RemoteDirectoryEntryDto> Mine,
+    IReadOnlyList<RemoteDirectoryEntryDto> Teammates,
+    IReadOnlyList<RemoteDirectoryEntryDto> Phones);
 
 /// <summary>A past or live session the caller was in, from either side.</summary>
 public sealed record RemoteSessionDto(

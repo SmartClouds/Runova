@@ -3,12 +3,12 @@
 use async_trait::async_trait;
 use runova_crypto::handshake::{Identity, Mode, base64url, derive_password_secret, os_random};
 use runova_link::opener::{Direct, Relay};
-use runova_link::secure::{HostConfig, SecureLink};
+use runova_link::secure::{ControllerConfig, HostConfig, LinkEvent, SecureLink};
 use runova_link::testing::{MemoryTransport, memory_pair};
 use runova_link::transport::{Fingerprints, LinkTransport};
 use runova_session::connect::{
-    ConnectError, ConnectTarget, DirectLink, Phase, PinStore, Transports, connect_control,
-    connect_send,
+    ConnectError, ConnectTarget, DirectLink, Phase, PinStore, Transports, accept_send,
+    connect_control, connect_send,
 };
 use runova_session::hub::{
     AccessMode, ConnectResult, HostInfo, HostKind, HubEvent, HubPort, Intent, RelayTicket,
@@ -378,4 +378,71 @@ async fn a_send_asks_for_a_send_and_gets_a_secured_link() {
     assert_eq!(link.session_id, "s1");
     assert!(link.direct);
     assert!(hub.ended.lock().unwrap().is_empty());
+}
+
+/// A computer sending to the phone: it dials, and meets the phone on the relay as the controller.
+fn sending_computer(transport: MemoryTransport) -> tokio::task::JoinHandle<String> {
+    tokio::spawn(async move {
+        let mut link = SecureLink::as_controller(
+            Box::new(transport),
+            ControllerConfig {
+                session_id: "s9".into(),
+                mode: Mode::Ask,
+                identity: Identity::from_seed(HOST_SEED),
+                expected_host_key: Identity::from_seed(PHONE_SEED).public_key(),
+                password_secret: None,
+                local_fingerprint: String::new(),
+                remote_fingerprint: String::new(),
+            },
+            true,
+            &mut os_random,
+        )
+        .await
+        .expect("the handshake");
+        link.send_text("hello phone").await.unwrap();
+        match link.next().await.unwrap() {
+            LinkEvent::Text(text) => text,
+            other => panic!("expected text, got {other:?}"),
+        }
+    })
+}
+
+#[tokio::test]
+async fn a_phone_takes_a_send_over_the_relay_and_says_so_first() {
+    let hub = FakeHub::new(HostKind::App);
+    let (phone, computer) = memory_pair();
+    let heard = sending_computer(computer);
+    let transports = FakeTransports {
+        direct: Arc::new(ReadyDirect(Mutex::new(None))),
+        relay: Mutex::new(Some(phone)),
+    };
+
+    let mut link = accept_send(
+        "s9",
+        &base64url(&Identity::from_seed(HOST_SEED).public_key()),
+        PHONE_SEED,
+        hub.as_ref(),
+        &transports,
+    )
+    .await
+    .expect("secured");
+
+    assert_eq!(hub.signals.lock().unwrap().as_slice(), [r#"{"k":"relay"}"#]);
+    assert!(matches!(link.next().await.unwrap(), LinkEvent::Text(t) if t == "hello phone"));
+    link.send_text("hello computer").await.unwrap();
+    assert_eq!(heard.await.unwrap(), "hello computer");
+}
+
+#[tokio::test]
+async fn a_controller_key_that_is_not_a_key_is_refused_before_anything_opens() {
+    let hub = FakeHub::new(HostKind::App);
+    let transports = FakeTransports {
+        direct: Arc::new(ReadyDirect(Mutex::new(None))),
+        relay: Mutex::new(None),
+    };
+
+    let result = accept_send("s9", "not a key", PHONE_SEED, hub.as_ref(), &transports).await;
+
+    assert!(matches!(result, Err(ConnectError::Failed(_))));
+    assert!(hub.signals.lock().unwrap().is_empty());
 }

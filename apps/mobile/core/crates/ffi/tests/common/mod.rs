@@ -16,18 +16,23 @@ use runova_ffi::notifications::{FeedConnector, FeedEvent};
 use runova_ffi::secure::{SecureStore, SecureTokens};
 use runova_ffi::view::{AppView, AuthState, ConnectionPhase, ViewListener};
 use runova_link::opener::{Direct, Relay};
+use runova_link::secure::ControllerConfig;
 use runova_link::secure::{HostConfig, LinkEvent, SecureLink};
 use runova_link::testing::{MemoryTransport, memory_pair};
+use runova_link::transport::TransportClosed;
 use runova_link::transport::{Fingerprints, LinkTransport};
 use runova_protocol::file::BIN_FILE_CHUNK;
 use runova_protocol::manage::{ManageMessage, encode_stream, parse_message};
 use runova_protocol::remote::{ControlMessage, parse_control};
 use runova_protocol::send::{SendMessage, parse_send_message};
 use runova_session::connect::{DirectLink, Transports};
+use runova_session::hub::IncomingRequest;
 use runova_session::hub::{
     AccessMode, ConnectResult, HostInfo, HostKind, HubEvent, HubPort, Intent, RelayTicket,
 };
 use runova_transfer::receiver::{ReceiveOutcome, ReceiveState, receive_batch_with};
+use runova_transfer::sender::{SendOutcome, SendPlan, send_batch};
+use runova_transfer::source::PathOpener;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -219,6 +224,23 @@ impl HubPort for FakeHub {
             .unwrap()
             .push(session_id.to_owned());
     }
+
+    async fn respond(&self, session_id: &str, accept: bool) {
+        self.computer
+            .responses
+            .lock()
+            .unwrap()
+            .push((session_id.to_owned(), accept));
+    }
+
+    async fn go_online(&self, device_id: i64, features: &[String]) -> Result<(), String> {
+        self.computer
+            .went_online
+            .lock()
+            .unwrap()
+            .push((device_id, features.to_vec()));
+        Ok(())
+    }
 }
 
 /// The notifications hub, pushing whatever a test asks.
@@ -322,7 +344,12 @@ impl Transports for MemoryTransports {
 
     fn relay(&self, _ticket: RelayTicket) -> Box<dyn Relay + Send> {
         let (phone, host) = memory_pair();
-        self.0.clone().serve(host, true);
+        // A computer sending to the phone meets it on the relay as the controller (E114).
+        let sending = self.0.to_phone.lock().unwrap().take();
+        match sending {
+            Some((session, send)) => self.0.clone().send_to_phone(host, session, send),
+            None => self.0.clone().serve(host, true),
+        }
         Box::new(MemoryRelay(Mutex::new(Some(phone))))
     }
 }
@@ -380,6 +407,57 @@ pub struct Computer {
     /// Every offer the computer heard.
     pub offers: Mutex<Vec<SendMessage>>,
     receive_state: Mutex<ReceiveState>,
+    /// Every answer the phone gave a request for it, in order.
+    pub responses: Mutex<Vec<(String, bool)>>,
+    /// Every time the phone went online, and what it said it takes.
+    pub went_online: Mutex<Vec<(i64, Vec<String>)>>,
+    /// The send the computer makes on the next relay link to the phone, and its session.
+    to_phone: Mutex<Option<(String, ToPhone)>>,
+    /// What each send to the phone ended in, in order.
+    pub phone_outcomes: Mutex<Vec<SendOutcome>>,
+}
+
+/// A send the scripted computer makes to the phone.
+pub struct ToPhone {
+    pub plan: SendPlan,
+    pub sources: PathOpener,
+    /// The link goes away after this many frames, as a dropped network would.
+    pub cut_after: Option<usize>,
+}
+
+/// A transport that goes away after a number of frames.
+struct Cutting {
+    inner: Option<MemoryTransport>,
+    left: Option<usize>,
+}
+
+#[async_trait]
+impl LinkTransport for Cutting {
+    async fn send(&mut self, frame: Vec<u8>) -> Result<(), TransportClosed> {
+        if self.left == Some(0) {
+            self.inner = None;
+            return Err(TransportClosed);
+        }
+        if let Some(left) = self.left.as_mut() {
+            *left -= 1;
+        }
+        self.inner
+            .as_mut()
+            .ok_or(TransportClosed)?
+            .send(frame)
+            .await
+    }
+
+    async fn recv(&mut self) -> Option<Vec<u8>> {
+        self.inner.as_mut()?.recv().await
+    }
+
+    async fn close(&mut self) {
+        if let Some(inner) = self.inner.as_mut() {
+            inner.close().await;
+        }
+        self.inner = None;
+    }
 }
 
 impl Computer {
@@ -548,6 +626,67 @@ impl Computer {
                     }
                 }
             }
+        });
+    }
+
+    /// Asks the phone to take `send`, as Sam's desk dialing it through the hub would.
+    pub fn ask_phone(&self, session_id: &str, intent: &str, send: Option<ToPhone>) {
+        *self.to_phone.lock().unwrap() = send.map(|send| (session_id.to_owned(), send));
+        let request = IncomingRequest {
+            session_id: session_id.to_owned(),
+            intent: intent.to_owned(),
+            relation: "own".to_owned(),
+            mode: "ask".to_owned(),
+            person: "Sam".to_owned(),
+            device_name: Some("Sam's desk".to_owned()),
+            platform: Some("windows".to_owned()),
+            remote_id: Some("111222333".to_owned()),
+            identity_key: Some(base64url(&Identity::from_seed(HOST_SEED).public_key())),
+        };
+        let events = self.hub_events.lock().unwrap().clone().expect("a hub");
+        events
+            .try_send(HubEvent::Incoming(request))
+            .expect("room for the request");
+    }
+
+    fn send_to_phone(self: Arc<Self>, transport: MemoryTransport, session: String, send: ToPhone) {
+        tokio::spawn(async move {
+            let cutting = Cutting {
+                inner: Some(transport),
+                left: send.cut_after,
+            };
+            let Ok(mut link) = SecureLink::as_controller(
+                Box::new(cutting),
+                ControllerConfig {
+                    session_id: session,
+                    mode: Mode::Ask,
+                    identity: Identity::from_seed(HOST_SEED),
+                    expected_host_key: Identity::from_seed(PHONE_SEED).public_key(),
+                    password_secret: None,
+                    local_fingerprint: String::new(),
+                    remote_fingerprint: String::new(),
+                },
+                true,
+                &mut os_random,
+            )
+            .await
+            else {
+                return;
+            };
+            let (keep, stop) = watch::channel(false);
+            let mut finished = std::collections::HashSet::new();
+            let outcome = send_batch(
+                &mut link,
+                &send.plan,
+                &send.sources,
+                &mut finished,
+                &|_| {},
+                stop,
+            )
+            .await;
+            drop(keep);
+            link.close().await;
+            self.phone_outcomes.lock().unwrap().push(outcome);
         });
     }
 

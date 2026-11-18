@@ -70,8 +70,25 @@ pub struct RelayTicket {
     pub ticket: String,
 }
 
+/// Someone asks for this phone (E114). Only a `send` from the owner's own devices gets this far.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncomingRequest {
+    pub session_id: String,
+    pub intent: String,
+    pub relation: String,
+    pub mode: String,
+    /// The person asking, by their display name.
+    pub person: String,
+    pub device_name: Option<String>,
+    pub platform: Option<String>,
+    pub remote_id: Option<String>,
+    /// The asking device's key, which the handshake holds it to.
+    pub identity_key: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HubEvent {
+    Incoming(IncomingRequest),
     Resolved {
         session_id: String,
         accepted: bool,
@@ -105,6 +122,14 @@ pub trait HubPort: Send + Sync {
     async fn signal(&self, session_id: &str, payload: &str);
     async fn relay_ticket(&self, session_id: &str) -> Result<RelayTicket, String>;
     async fn end(&self, session_id: &str);
+
+    /// Says yes or no to a request for this phone.
+    async fn respond(&self, _session_id: &str, _accept: bool) {}
+
+    /// Makes this phone reachable, saying what it takes (E114). It stays so while the hub is.
+    async fn go_online(&self, _device_id: i64, _features: &[String]) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]
@@ -141,6 +166,30 @@ struct EndedDto {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PeerDto {
+    display_name: String,
+    #[serde(default)]
+    device_name: Option<String>,
+    #[serde(default)]
+    platform: Option<String>,
+    #[serde(default)]
+    remote_id: Option<String>,
+    #[serde(default)]
+    identity_key: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IncomingDto {
+    session_id: String,
+    mode: String,
+    relation: String,
+    intent: String,
+    controller: PeerDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PresenceDto {
     device_id: i64,
     online: bool,
@@ -152,6 +201,20 @@ struct PresenceDto {
 pub fn read_event(event: &RawEvent) -> Option<HubEvent> {
     let first = || event.arguments.first().cloned();
     match event.target.as_str() {
+        "IncomingRequest" => {
+            let dto: IncomingDto = serde_json::from_value(first()?).ok()?;
+            Some(HubEvent::Incoming(IncomingRequest {
+                session_id: dto.session_id,
+                intent: dto.intent,
+                relation: dto.relation,
+                mode: dto.mode,
+                person: dto.controller.display_name,
+                device_name: dto.controller.device_name,
+                platform: dto.controller.platform,
+                remote_id: dto.controller.remote_id,
+                identity_key: dto.controller.identity_key,
+            }))
+        }
         "RequestResolved" => {
             let dto: ResolvedDto = serde_json::from_value(first()?).ok()?;
             Some(HubEvent::Resolved {
@@ -238,5 +301,19 @@ impl HubPort for RemoteHub {
 
     async fn end(&self, session_id: &str) {
         let _ = self.0.invoke("End", vec![Value::from(session_id)]).await;
+    }
+
+    async fn respond(&self, session_id: &str, accept: bool) {
+        let arguments = vec![Value::from(session_id), Value::from(accept)];
+        let _ = self.0.invoke("Respond", arguments).await;
+    }
+
+    async fn go_online(&self, device_id: i64, features: &[String]) -> Result<(), String> {
+        let arguments = vec![Value::from(device_id), json!(features)];
+        self.0
+            .invoke("GoOnlineWithFeatures", arguments)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }

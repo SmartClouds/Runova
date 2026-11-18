@@ -12038,7 +12038,8 @@
       "RemoteDirectoryDto": {
         "required": [
           "mine",
-          "teammates"
+          "teammates",
+          "phones"
         ],
         "type": "object",
         "properties": {
@@ -12049,6 +12050,12 @@
             }
           },
           "teammates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteDirectoryEntryDto"
+            }
+          },
+          "phones": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RemoteDirectoryEntryDto"

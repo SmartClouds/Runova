@@ -13,7 +13,9 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use tokio::sync::watch;
+use std::time::Duration;
+use tokio::sync::{oneshot, watch};
+use tokio::time::Instant;
 
 /// The folder part files wait in, inside the folder the files are saved to.
 pub const PARTIAL_DIR: &str = ".runova-partial";
@@ -132,6 +134,47 @@ pub async fn receive_batch_observed(
     on_event: &(dyn Fn(ReceiveEvent) + Send + Sync),
 ) -> ReceiveOutcome {
     run(link, offer, folder, true, state, stop, |_| true, on_event).await
+}
+
+/// How the wait for the person's answer ended.
+#[derive(Debug)]
+pub enum Waited<T> {
+    Answer(T),
+    /// The sender stopped waiting.
+    Cancelled,
+    Gone,
+    Timeout,
+}
+
+/// Waits for the person here to answer an offer, pinging the sender meanwhile so the link is not
+/// taken for dead, and noticing when the sender gives up.
+pub async fn wait_for_answer<T>(
+    link: &mut SecureLink,
+    batch_id: &str,
+    mut answer: oneshot::Receiver<T>,
+    deadline: Duration,
+) -> Waited<T> {
+    let (_keep, stop) = watch::channel(false);
+    let mut wire = Wire::new(link, stop);
+    let until = Instant::now() + deadline;
+    loop {
+        match answer.try_recv() {
+            Ok(value) => return Waited::Answer(value),
+            Err(oneshot::error::TryRecvError::Closed) => return Waited::Gone,
+            Err(oneshot::error::TryRecvError::Empty) => {}
+        }
+        if Instant::now() >= until {
+            return Waited::Timeout;
+        }
+        let soon = (Instant::now() + Duration::from_millis(100)).min(until);
+        match wire.hear(Some(soon)).await {
+            Heard::Send(SendMessage::SendCancel { batch_id: id, .. }) if id == batch_id => {
+                return Waited::Cancelled;
+            }
+            Heard::Gone | Heard::Stop => return Waited::Gone,
+            _ => {}
+        }
+    }
 }
 
 /// Turns an offer away without a person saying so: this side is busy, does not take files from

@@ -6,7 +6,9 @@ use runova_link::secure::{ControllerConfig, HostConfig, LinkEvent, SecureLink};
 use runova_link::testing::memory_pair;
 use runova_protocol::file::{FileMessage, decode_chunk, transfer_key};
 use runova_protocol::send::{AnswerReason, SendFile, SendMessage, parse_send_message};
-use runova_transfer::receiver::{ReceiveOutcome, ReceiveState, receive_batch, receive_batch_with};
+use runova_transfer::receiver::{
+    ReceiveOutcome, ReceiveState, Waited, receive_batch, receive_batch_with, wait_for_answer,
+};
 use runova_transfer::sender::{SendOutcome, SendPlan, send_batch};
 use runova_transfer::source::PathOpener;
 use sha2::{Digest, Sha256};
@@ -793,4 +795,93 @@ async fn a_chunk_out_of_turn_spoils_its_part() {
         timeout(WAIT, receiver).await.unwrap().unwrap(),
         ReceiveOutcome::Cancelled
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_person_taking_their_time_to_answer_keeps_the_link_alive() {
+    let picked = Folder::new("pick");
+    let inbox = Folder::new("inbox");
+    let file = picked.write("a.txt", b"worth the wait");
+    let (plan, opener) = plan(&[("a.txt", file)]);
+    let (mut phone, mut desk) = linked().await;
+    let inbox_path = inbox.0.clone();
+    let receiver = tokio::spawn(async move {
+        let offer = loop {
+            if let LinkEvent::Text(text) = hear(&mut desk).await
+                && let Some(offer @ SendMessage::SendOffer { .. }) = parse_send_message(&text)
+            {
+                break offer;
+            }
+        };
+        let (answer, asked) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            // Well past the 20 seconds a silent link is given.
+            tokio::time::sleep(Duration::from_secs(40)).await;
+            let _ = answer.send(true);
+        });
+        let waited = wait_for_answer(&mut desk, "batch-1", asked, Duration::from_secs(60)).await;
+        assert!(matches!(waited, Waited::Answer(true)));
+        let mut state = ReceiveState::default();
+        receive_batch(&mut desk, &offer, &inbox_path, true, &mut state, never()).await
+    });
+
+    let outcome = send_batch(
+        &mut phone,
+        &plan,
+        &opener,
+        &mut HashSet::new(),
+        &|_| {},
+        never(),
+    )
+    .await;
+
+    assert_eq!(outcome, SendOutcome::Done { failed: 0 });
+    assert_eq!(
+        timeout(WAIT, receiver).await.unwrap().unwrap(),
+        ReceiveOutcome::Done
+    );
+    assert_eq!(
+        std::fs::read(inbox.0.join("a.txt")).unwrap(),
+        b"worth the wait"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_sender_giving_up_ends_the_wait_for_an_answer() {
+    let (mut phone, mut desk) = linked().await;
+    let sender = tokio::spawn(async move {
+        say(
+            &mut phone,
+            &SendMessage::SendCancel {
+                batch_id: "batch-1".into(),
+                reason: None,
+            },
+        )
+        .await;
+        phone
+    });
+    let (_answer, asked) = tokio::sync::oneshot::channel::<bool>();
+
+    let waited = wait_for_answer(&mut desk, "batch-1", asked, Duration::from_secs(60)).await;
+
+    assert!(matches!(waited, Waited::Cancelled));
+    let _ = sender.await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn no_answer_in_time_is_said_so() {
+    let (mut phone, mut desk) = linked().await;
+    // A sender that waits as the real one does, pinging all along.
+    let pinging = tokio::spawn(async move {
+        loop {
+            say(&mut phone, &SendMessage::SendPing).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        }
+    });
+    let (_answer, asked) = tokio::sync::oneshot::channel::<bool>();
+
+    let waited = wait_for_answer(&mut desk, "batch-1", asked, Duration::from_secs(60)).await;
+
+    assert!(matches!(waited, Waited::Timeout));
+    pinging.abort();
 }

@@ -89,6 +89,7 @@ data class AppIntents(
     val passcode: PasscodeIntents = PasscodeIntents(),
     val phrases: PhraseIntents = PhraseIntents(),
     val send: SendIntents = SendIntents(),
+    val receive: ReceiveIntents = ReceiveIntents(),
 )
 
 val AppTabs = listOf(
@@ -132,7 +133,8 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
                 val remote = view.remote
                 when {
                     // Sending files goes beside a connection, so it opens over whatever is on show.
-                    intents.send.picks.open -> SendFilesScreen(view.send, intents.send) { intents.send.picks.open = false }
+                    intents.send.picks.open ->
+                        SendFilesScreen(view.send, intents.send, view.receive, intents.receive) { intents.send.picks.open = false }
                     remote != null -> RemoteViewerScreen(remote, intents.remote)
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
@@ -147,6 +149,10 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
         }
         view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
         view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
+        // Files on their way to the phone ask first, over whatever is on show (E114).
+        if (view.auth == AuthState.SIGNED_IN) {
+            view.receive.offers.firstOrNull()?.let { IncomingOfferSheet(it, intents.receive) }
+        }
         if (aboutOpen) AboutSheet(view.appVersion, { aboutOpen = false })
     }
     }
@@ -253,8 +259,15 @@ internal fun platformName(platform: String) = when (platform) {
 fun SystemsScreen(view: AppView, intents: AppIntents) {
     val openSend = { intents.send.picks.open = true }
     RunovaScreen("Systems", trailing = { SendFilesButton(openSend) }) {
-        if (view.send.progressLabel != null) {
-            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) { SendingStrip(view.send, openSend) }
+        view.send.progressLabel?.let { label ->
+            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                SendingStrip(label, view.send.progressPercent.toInt(), RunovaIcons.Send, openSend)
+            }
+        }
+        view.receive.progressLabel?.let { label ->
+            Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+                SendingStrip(label, view.receive.progressPercent.toInt(), RunovaIcons.Pull, openSend)
+            }
         }
         when {
             view.systems.isEmpty() && view.systemsLoading -> LoadingRows()

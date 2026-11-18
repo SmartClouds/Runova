@@ -22,6 +22,20 @@ const WHY_LONG: Record<NonNullable<SendRecipient['unavailable']>, string> = {
   'website-outdated': 'The Runova website needs an update before files can be sent.',
 };
 
+/** A phone is online only while its app is open (E114), so its offline says what to do. */
+function whyShort(
+  recipient: SendRecipient,
+  why: NonNullable<SendRecipient['unavailable']>,
+): string {
+  return recipient.kind === 'phone' && why === 'offline' ? 'Open Runova on the phone' : WHY[why];
+}
+
+function whyLong(recipient: SendRecipient, why: NonNullable<SendRecipient['unavailable']>): string {
+  return recipient.kind === 'phone' && why === 'offline'
+    ? 'A phone takes files while the Runova app is open on it.'
+    : WHY_LONG[why];
+}
+
 /**
  * Who files go to (E112): my own devices first, then each teammate with the devices they show to
  * a team I am in. One device at a time, as radio cards; one that can not take files right now is
@@ -162,7 +176,7 @@ function DeviceCard({
   const why = recipient.unavailable;
   const Icon = recipient.kind === 'phone' ? Smartphone : Monitor;
   return (
-    <SimpleTooltip label={why ? WHY_LONG[why] : null} wrapTrigger>
+    <SimpleTooltip label={why ? whyLong(recipient, why) : null} wrapTrigger>
       <button
         type="button"
         role="radio"
@@ -196,7 +210,7 @@ function DeviceCard({
           </span>
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {why ? (
-              <span>{WHY[why]}</span>
+              <span>{whyShort(recipient, why)}</span>
             ) : (
               <>
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-success" />

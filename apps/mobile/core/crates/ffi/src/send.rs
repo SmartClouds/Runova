@@ -224,12 +224,12 @@ struct Row {
 }
 
 #[derive(Default)]
-struct Meter {
+pub(crate) struct Meter {
     samples: VecDeque<(Instant, u64)>,
 }
 
 impl Meter {
-    fn add(&mut self, total: u64) {
+    pub(crate) fn add(&mut self, total: u64) {
         let now = Instant::now();
         self.samples.push_back((now, total));
         while self
@@ -241,7 +241,7 @@ impl Meter {
         }
     }
 
-    fn per_second(&self) -> Option<f64> {
+    pub(crate) fn per_second(&self) -> Option<f64> {
         let (first, last) = (self.samples.front()?, self.samples.back()?);
         let seconds = last.0.duration_since(first.0).as_secs_f64();
         (seconds >= 0.5 && last.1 > first.1).then(|| (last.1 - first.1) as f64 / seconds)
@@ -417,7 +417,7 @@ fn numbered(path: &str, n: usize) -> String {
     format!("{folder}{stem} ({n}){ext}")
 }
 
-fn count_label(count: usize) -> String {
+pub(crate) fn count_label(count: usize) -> String {
     let digits = count.to_string();
     let mut out = String::new();
     for (i, digit) in digits.chars().enumerate() {
@@ -429,7 +429,7 @@ fn count_label(count: usize) -> String {
     out
 }
 
-fn files_label(count: usize) -> String {
+pub(crate) fn files_label(count: usize) -> String {
     format!(
         "{} {}",
         count_label(count),
@@ -437,11 +437,11 @@ fn files_label(count: usize) -> String {
     )
 }
 
-fn rate_label(per_second: f64) -> String {
+pub(crate) fn rate_label(per_second: f64) -> String {
     format!("{}/s", bytes_label(per_second.round() as u64))
 }
 
-fn time_left_label(seconds: u64) -> String {
+pub(crate) fn time_left_label(seconds: u64) -> String {
     if seconds < 60 {
         return "less than a minute left".to_owned();
     }
@@ -453,7 +453,7 @@ fn time_left_label(seconds: u64) -> String {
     format!("about {hours} h {} min left", minutes - hours * 60)
 }
 
-fn percent_of(part: u64, whole: u64) -> u8 {
+pub(crate) fn percent_of(part: u64, whole: u64) -> u8 {
     if whole == 0 {
         return 0;
     }
@@ -981,10 +981,7 @@ impl Runner {
         }
         self.trim_sends();
         self.refresh_send_view();
-        if self.send.hold_hub && !self.send.busy() {
-            self.send.hold_hub = false;
-            self.let_go_of_hub();
-        }
+        self.release_hub_if_idle();
     }
 
     pub(crate) fn cancel_send(&mut self, id: &str) {

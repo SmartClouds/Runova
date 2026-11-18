@@ -29,6 +29,7 @@ import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.QrSignInView
 import uniffi.runova_ffi.RecoveryPhrasesScreen
 import uniffi.runova_ffi.RemoteView
+import uniffi.runova_ffi.ReceiveScreen
 import uniffi.runova_ffi.SendScreen
 import uniffi.runova_ffi.StatusScreen
 import uniffi.runova_ffi.StudioScreen
@@ -119,6 +120,9 @@ val noPhrases = RecoveryPhrasesScreen(emptyList(), null, null, null, null, null)
 /** The Send files screen with nothing sent (E113). */
 val noSends = SendScreen(emptyList(), emptyList(), null, 0u, null, 0u)
 
+/** Nothing sent to the phone, and it takes files once it knows where (E114). */
+val noReceives = ReceiveScreen(true, false, true, emptyList(), emptyList(), 0u, null, 0u)
+
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
     auth: AuthState = AuthState.SIGNED_IN,
@@ -160,6 +164,7 @@ fun appView(
     passcode: PasscodeSettingsScreen = noPasscode,
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
     send: SendScreen = noSends,
+    receive: ReceiveScreen = noReceives,
 ) = AppView(
     auth,
     true,
@@ -203,4 +208,5 @@ fun appView(
     passcode,
     recoveryPhrases,
     send,
+    receive,
 )

@@ -317,6 +317,8 @@ pub(crate) struct Runner {
     pub(crate) pending_phrase: Option<crate::recovery_phrases::PendingPhraseReveal>,
     /// Files on their way to computers (E113).
     pub(crate) send: crate::send::SendState,
+    /// Files on their way to this phone (E114).
+    pub(crate) receive: crate::receive::ReceiveState,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -397,6 +399,7 @@ impl Runner {
             app_lock: Default::default(),
             pending_phrase: None,
             send: Default::default(),
+            receive: Default::default(),
         }
     }
 
@@ -742,6 +745,7 @@ impl Runner {
         self.view.encryption = None;
         self.pending_step_up = None;
         self.stop_all_sends();
+        self.stop_all_receives();
         self.end_connection();
         self.let_go_of_hub();
         self.device_id = None;
@@ -887,6 +891,7 @@ impl Runner {
                 self.device_id = Some(booted.device_id);
                 self.view.hub_connected = true;
                 self.set_systems(booted.systems);
+                self.receive_hub_changed();
                 if self.view.connection.is_none()
                     && let Some(system) = self.return_to
                 {
@@ -949,6 +954,10 @@ impl Runner {
             }
             let systems = std::mem::take(&mut self.systems);
             self.set_systems(systems);
+            return;
+        }
+        if let HubEvent::Incoming(request) = event {
+            self.on_incoming(request);
             return;
         }
         // Every dial waiting on the hub sees each event and keeps its own session's, so an answer
@@ -1023,6 +1032,7 @@ impl Runner {
         self.view.app_version = self.deps.app_version.clone();
         self.load_app_lock();
         self.load_recovery_phrases();
+        self.load_receive_settings();
         if self.deps.session.is_signed_in().await {
             self.view.auth = AuthState::SignedIn;
             self.boot();
@@ -1044,8 +1054,8 @@ impl Runner {
                 () = wait_until(let_go_at) => {
                     self.let_go_at = None;
                     self.end_connection();
-                    // A send going in the background still needs the hub to dial again.
-                    if self.send.busy() {
+                    // A send or receive going in the background still needs the hub.
+                    if self.transfers_busy() {
                         self.send.hold_hub = true;
                     } else {
                         self.let_go_of_hub();

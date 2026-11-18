@@ -982,13 +982,13 @@ turn away what the computer would refuse anyway; the computer always decides.
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/remote-devices` | Account | none | 200 `{ "items": RemoteDeviceDto[] }`; 401 |
-| POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos", "linux", "android" or "ios", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401. `android` and `ios` register a phone (kind `phone`): it can ask to connect but never goes online, is never a target, and is left out of `/remote-devices` and `/reachable-devices` |
+| POST | `/api/v1/remote-devices` | Account | `{ "deviceId": uuid, "name": string (1 to 100), "platform": "windows", "macos", "linux", "android" or "ios", "identityKey": string (Ed25519 public key, base64url) }` | 201 `RemoteDeviceDto` (new); 200 `RemoteDeviceDto` (this computer registered before: name, platform and key updated, same ID); 400; 401. `android` and `ios` register a phone (kind `phone`): it can ask to connect, goes online only to take files (E114), is a target only for a `send` from its owner's own devices, is left out of `/remote-devices`, and is listed under `phones` in `/reachable-devices` |
 | PATCH | `/api/v1/remote-devices/{id}` | Account (owner) | merge patch of `name`, `allowOwnDevices`, `unattendedEnabled`, `teamIds` | 200 `RemoteDeviceDto`; 400 (a team the owner is not in); 401; 404 |
 | DELETE | `/api/v1/remote-devices/{id}` | Account (owner) | none | 204 (the ID is retired, and the computer goes offline); 401; 404 |
 | POST | `/api/v1/remote-devices/{id}/agents` | Account (owner) | `{ "identityKey": string }` (the agent's own Ed25519 public key) | 201 `{ "identityKey": string, "agentSecret": string }` (the secret is shown this once; turning the agent on again gives a new one and retires the old one and its tokens); 400; 401; 404 |
 | DELETE | `/api/v1/remote-devices/{id}/agents` | Account (owner) | none | 204 (the agent goes offline and its tokens stop working); 401; 404 |
 | POST | `/api/v1/remote-agent-tokens` | none | `{ "remoteId": string, "secret": string }` | 200 `{ "accessToken": string, "expiresIn": 3600 }`; 401; 429 |
-| GET | `/api/v1/reachable-devices` | Account | none | 200 `{ "mine": RemoteDirectoryEntryDto[], "teammates": RemoteDirectoryEntryDto[] }`; 401 |
+| GET | `/api/v1/reachable-devices` | Account | none | 200 `{ "mine": RemoteDirectoryEntryDto[], "teammates": RemoteDirectoryEntryDto[], "phones": RemoteDirectoryEntryDto[] }` (`phones`, E114: the caller's own phones, online while their app is open, with what they take); 401 |
 | GET | `/api/v1/remote-sessions` | Account | query `page`, `pageSize` | 200 `Page<RemoteSessionDto>` (the last 30 days, either side); 400; 401 |
 | DELETE | `/api/v1/remote-sessions/{id}` | Account (either side) | none | 204; 401; 404 |
 
@@ -1037,7 +1037,9 @@ the notifications hub, including the `access_token` query value on the hub path)
   E113) of the owner or a teammate, to a computer whose app went online with `receive-files`; when only its background
   agent is online the answer is `offline`. The files, their names and sizes go over the encrypted
   link and never pass the hub, and a send leaves no session record: `Connected` records nothing
-  for it.
+  for it. A phone (E114) goes online with `GoOnlineWithFeatures` and `receive-files` only (plain
+  `GoOnline` or no `receive-files` is refused), which writes nothing: not even its last seen time.
+  It is rung only for a `send` and only from its owner's own devices; it answers over the relay.
 - `Respond(sessionId, accept)`: the computer accepts or declines a ringing request. Unanswered
   requests stop ringing after 60 seconds.
 - `Signal(sessionId, payload)`: a WebRTC signaling message (up to 64 KiB, 600 a minute) to the

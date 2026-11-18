@@ -128,6 +128,8 @@ export function createSendService(deps: SendServiceDeps) {
     const self = anywhere.device?.remoteId;
     const entries = [
       ...anywhere.directory.mine.filter((e) => e.remoteId !== self).map((e) => [e, 'own'] as const),
+      // This person's phones take files from their own devices while the app is open (E114).
+      ...anywhere.directory.phones.map((e) => [e, 'own'] as const),
       ...anywhere.directory.teammates.map((e) => [e, 'teammate'] as const),
     ];
     const websiteOutdated =
@@ -138,7 +140,7 @@ export function createSendService(deps: SendServiceDeps) {
         remoteId: entry.remoteId,
         name: entry.name,
         platform: entry.platform,
-        kind: 'computer' as const,
+        kind: entry.kind === 'phone' ? ('phone' as const) : ('computer' as const),
         relation,
         owner: entry.owner,
         teams: entry.teams.map((team) => team.name),
