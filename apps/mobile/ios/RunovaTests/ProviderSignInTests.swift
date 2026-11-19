@@ -47,7 +47,7 @@ final class ProviderSignInTests: XCTestCase {
     }
 
     func testTheViewCarriesTheSheetAndTheBrowserHint() {
-        let view = appView(
+        let view = fixtureView(
             auth: .signedOut, providerSignIn: ProviderSignInView(provider: "apple", nonce: "nonce-1", clientId: nil),
             continueInBrowser: "google")
 

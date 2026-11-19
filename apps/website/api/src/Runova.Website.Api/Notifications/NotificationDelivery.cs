@@ -57,7 +57,7 @@ internal sealed partial class NotificationDelivery(
             foreach (var device in devices[notification.UserId])
             {
                 var copy = device.SealKeyId is null ? null : dto.Sealed?.FirstOrDefault(c => c.KeyId == device.SealKeyId);
-                queue.Enqueue(new PushDelivery(device.Id, device.Platform, device.PushToken, line, category, notification.Id, notification.ItemId, copy?.Sealed));
+                queue.Enqueue(new PushDelivery(device.Id, device.Platform, device.PushToken, line, category, notification.Id, notification.ItemId, copy?.Sealed, device.AccountTag));
             }
         }
     }

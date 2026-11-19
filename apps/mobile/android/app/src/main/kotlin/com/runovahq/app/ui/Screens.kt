@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import com.runovahq.app.design.TabItem
+import uniffi.runova_ffi.AccountsView
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
 import uniffi.runova_ffi.ConfirmView
@@ -85,6 +87,9 @@ data class AppIntents(
     /** Shows Google's sheet for a nonce the core put in the view. */
     val promptGoogle: (nonce: String, clientId: String?) -> Unit = { _, _ -> },
     val openAbout: () -> Unit = {},
+    /** Opens the account switcher (E118). The app's root fills this in. */
+    val openAccounts: () -> Unit = {},
+    val accounts: AccountsIntents = AccountsIntents(),
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
     val vault: VaultIntents = VaultIntents(),
@@ -116,8 +121,11 @@ val AppTabs = listOf(
 fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: AppIntents) {
     val colors = RunovaTheme.colors
     var aboutOpen by remember { mutableStateOf(false) }
-    var scanning by remember { mutableStateOf(false) }
-    val intents = remember(appIntents) { appIntents.copy(openAbout = { aboutOpen = true }) }
+    var switcherOpen by remember { mutableStateOf(false) }
+    var manageOpen by rememberSaveable { mutableStateOf(false) }
+    val intents = remember(appIntents) {
+        appIntents.copy(openAbout = { aboutOpen = true }, openAccounts = { switcherOpen = true })
+    }
     if (view.lock.locked) {
         // Only the lock is composed, so nothing behind it reaches the screen or a screen reader.
         AppLockScreen(view.lock, intents.lock)
@@ -129,49 +137,16 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
         when (view.auth) {
             AuthState.STARTING -> StartingScreen()
             AuthState.SIGNED_OUT ->
-                when {
-                    view.showIntro -> IntroScreen(intents.finishIntro)
-                    view.qrSignIn != null -> QrWaitingScreen(view.qrSignIn!!, intents.cancelQrSignIn)
-                    scanning -> QrScanScreen(
-                        onCode = {
-                            scanning = false
-                            intents.scanSignIn(it)
-                        },
-                        onCancel = { scanning = false },
-                    )
-                    else -> {
-                        val passkey = view.passkeySignIn
-                        // Once per challenge: a recomposition must not open the prompt again.
-                        if (passkey?.optionsJson != null) {
-                            LaunchedEffect(passkey.challengeId) {
-                                intents.promptPasskey(passkey.challengeId, passkey.optionsJson!!)
-                            }
-                        }
-                        val sheet = view.providerSignIn
-                        // Once per nonce, as with the passkey prompt.
-                        if (sheet?.provider == "google" && sheet.nonce != null) {
-                            LaunchedEffect(sheet.nonce) { intents.promptGoogle(sheet.nonce!!, sheet.clientId) }
-                        }
-                        // Two-step sign-in: the browser asks for the code. Once each time it is set.
-                        view.continueInBrowser?.let { provider ->
-                            LaunchedEffect(provider) { intents.signInInBrowser(provider) }
-                        }
-                        SignInScreen(
-                            view.error,
-                            intents.signIn,
-                            onScanQr = { scanning = true },
-                            onPasskey = intents.signInWithPasskey,
-                            passkeyWaiting = passkey != null,
-                            onGoogle = { intents.signInWithProvider("google") },
-                            googleWaiting = sheet?.provider == "google",
-                            onBrowserProvider = intents.signInInBrowser,
-                        )
-                    }
-                }
+                if (view.showIntro) IntroScreen(intents.finishIntro) else SignInFlow(view, intents, adding = false)
             AuthState.SIGNED_IN -> {
                 val connection = view.connection
                 val remote = view.remote
+                val switching = view.accounts.switching
                 when {
+                    switching != null -> SwitchingScreen(switching)
+                    // Adding an account: the sign-in screen over the account in use (E118).
+                    view.accounts.adding -> SignInFlow(view, intents, adding = true)
+                    manageOpen -> ManageAccountsScreen(view.accounts, intents.accounts) { manageOpen = false }
                     // Sending files goes beside a connection, so it opens over whatever is on show.
                     intents.send.picks.open ->
                         SendFilesScreen(view.send, intents.send, view.receive, intents.receive) { intents.send.picks.open = false }
@@ -186,6 +161,15 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
             Box(Modifier.align(Alignment.TopCenter)) {
                 NotificationBanner(it, view.connection != null, intents.notifications, onTab)
             }
+        }
+        // What the core says about a switch, over the tabs (a connected computer has its own bar).
+        if (view.auth == AuthState.SIGNED_IN && view.connection == null && view.accounts.switching == null) {
+            view.notice?.let { notice ->
+                AccountToast(notice, intents.dismissNotice, Modifier.align(Alignment.BottomCenter).padding(bottom = 92.dp))
+            }
+        }
+        if (switcherOpen && view.auth == AuthState.SIGNED_IN && !view.accounts.adding) {
+            AccountSwitcherSheet(view.accounts, intents.accounts, onManage = { manageOpen = true }) { switcherOpen = false }
         }
         view.account.stepUp?.let { StepUpOverlay(it, intents.account) }
         view.confirm?.let { ConfirmOverlay(it, intents.confirm, intents.dismissConfirm) }
@@ -255,6 +239,58 @@ private fun Shell(view: AppView, tab: String, onTab: (String) -> Unit, intents: 
     }
 }
 
+/**
+ * Signing in, with its QR scan and the platform prompts. Used signed out, and over the account in
+ * use when another is being added.
+ */
+@Composable
+private fun SignInFlow(view: AppView, intents: AppIntents, adding: Boolean) {
+    var scanning by remember { mutableStateOf(false) }
+    val qr = view.qrSignIn
+    when {
+        qr != null -> QrWaitingScreen(qr, intents.cancelQrSignIn)
+        scanning -> QrScanScreen(
+            onCode = {
+                scanning = false
+                intents.scanSignIn(it)
+            },
+            onCancel = { scanning = false },
+        )
+        else -> {
+            val passkey = view.passkeySignIn
+            // Once per challenge: a recomposition must not open the prompt again.
+            if (passkey?.optionsJson != null) {
+                LaunchedEffect(passkey.challengeId) {
+                    intents.promptPasskey(passkey.challengeId, passkey.optionsJson!!)
+                }
+            }
+            val sheet = view.providerSignIn
+            // Once per nonce, as with the passkey prompt.
+            if (sheet?.provider == "google" && sheet.nonce != null) {
+                LaunchedEffect(sheet.nonce) { intents.promptGoogle(sheet.nonce!!, sheet.clientId) }
+            }
+            // Two-step sign-in: the browser asks for the code. Once each time it is set.
+            view.continueInBrowser?.let { provider ->
+                LaunchedEffect(provider) { intents.signInInBrowser(provider) }
+            }
+            SignInScreen(
+                view.error,
+                intents.signIn,
+                onScanQr = { scanning = true },
+                onPasskey = intents.signInWithPasskey,
+                passkeyWaiting = passkey != null,
+                onGoogle = { intents.signInWithProvider("google") },
+                googleWaiting = sheet?.provider == "google",
+                onBrowserProvider = intents.signInInBrowser,
+                adding = if (adding) view.accounts else null,
+                onCancelAdding = intents.accounts.cancelAdd,
+                signedOut = if (!adding && view.accounts.items.isNotEmpty()) view.accounts else null,
+                onSwitch = intents.accounts.switchTo,
+            )
+        }
+    }
+}
+
 @Composable
 fun StartingScreen() {
     RunovaSplash()
@@ -270,60 +306,92 @@ fun SignInScreen(
     onGoogle: () -> Unit = {},
     googleWaiting: Boolean = false,
     onBrowserProvider: (String) -> Unit = {},
+    /** The accounts already on the phone while one more is added (E118). */
+    adding: AccountsView? = null,
+    onCancelAdding: () -> Unit = {},
+    /** The accounts on the phone after a session ended, to sign in again or switch. */
+    signedOut: AccountsView? = null,
+    onSwitch: (Long) -> Unit = {},
 ) {
     val colors = RunovaTheme.colors
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        RunovaLogo(112.dp)
-        Spacer(Modifier.height(12.dp))
-        RunovaText("Runova", style = RunovaType.heading)
-        Spacer(Modifier.height(6.dp))
-        RunovaText(
-            "Your computers, terminals and deployments, wherever you are.",
-            color = colors.mutedForeground,
-            align = TextAlign.Center,
-        )
-        Spacer(Modifier.height(24.dp))
-        RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth(), icon = RunovaIcons.Forward)
-        Spacer(Modifier.height(8.dp))
-        ScanQrButton(onScanQr)
-        Spacer(Modifier.height(8.dp))
-        RunovaButton(
-            if (passkeyWaiting) "Waiting for your passkey…" else "Use a passkey",
-            onClick = onPasskey,
-            modifier = Modifier.fillMaxWidth(),
-            kind = ButtonKind.Soft,
-            enabled = !passkeyWaiting,
-            icon = RunovaIcons.Fingerprint,
-        )
-        Spacer(Modifier.height(16.dp))
-        RunovaButton(
-            if (googleWaiting) "Waiting for Google…" else "Continue with Google",
-            onClick = onGoogle,
-            modifier = Modifier.fillMaxWidth(),
-            kind = ButtonKind.Soft,
-            enabled = !googleWaiting,
-        )
-        Spacer(Modifier.height(8.dp))
-        RunovaButton(
-            "Continue with Apple",
-            onClick = { onBrowserProvider("apple") },
-            modifier = Modifier.fillMaxWidth(),
-            kind = ButtonKind.Soft,
-        )
-        Spacer(Modifier.height(8.dp))
-        RunovaButton(
-            "Continue with Microsoft",
-            onClick = { onBrowserProvider("microsoft") },
-            modifier = Modifier.fillMaxWidth(),
-            kind = ButtonKind.Soft,
-        )
-        if (error != null) {
-            Spacer(Modifier.height(12.dp))
-            RunovaText(error, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)
+    Column(Modifier.fillMaxSize()) {
+        if (adding != null) {
+            val again = adding.reauth
+            RunovaTopBar(if (again != null) "Sign in again" else "Add an account", onBack = onCancelAdding)
+        }
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (adding != null) {
+                val again = adding.reauth
+                val current = adding.current()
+                RunovaLogo(72.dp)
+                Spacer(Modifier.height(12.dp))
+                RunovaText(
+                    when {
+                        again != null -> "Your session for ${again.email} ended. Sign in again to keep using it."
+                        current != null -> "You'll stay signed in to ${current.email}."
+                        else -> "You'll stay signed in to this account."
+                    },
+                    color = colors.mutedForeground,
+                    align = TextAlign.Center,
+                )
+            } else {
+                RunovaLogo(112.dp)
+                Spacer(Modifier.height(12.dp))
+                RunovaText("Runova", style = RunovaType.heading)
+                Spacer(Modifier.height(6.dp))
+                RunovaText(
+                    "Your computers, terminals and deployments, wherever you are.",
+                    color = colors.mutedForeground,
+                    align = TextAlign.Center,
+                )
+                if (signedOut != null) {
+                    Spacer(Modifier.height(16.dp))
+                    SignedOutAccounts(signedOut, onSwitch)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth(), icon = RunovaIcons.Forward)
+            Spacer(Modifier.height(8.dp))
+            ScanQrButton(onScanQr)
+            Spacer(Modifier.height(8.dp))
+            RunovaButton(
+                if (passkeyWaiting) "Waiting for your passkey…" else "Use a passkey",
+                onClick = onPasskey,
+                modifier = Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+                enabled = !passkeyWaiting,
+                icon = RunovaIcons.Fingerprint,
+            )
+            Spacer(Modifier.height(16.dp))
+            RunovaButton(
+                if (googleWaiting) "Waiting for Google…" else "Continue with Google",
+                onClick = onGoogle,
+                modifier = Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+                enabled = !googleWaiting,
+            )
+            Spacer(Modifier.height(8.dp))
+            RunovaButton(
+                "Continue with Apple",
+                onClick = { onBrowserProvider("apple") },
+                modifier = Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+            )
+            Spacer(Modifier.height(8.dp))
+            RunovaButton(
+                "Continue with Microsoft",
+                onClick = { onBrowserProvider("microsoft") },
+                modifier = Modifier.fillMaxWidth(),
+                kind = ButtonKind.Soft,
+            )
+            if (error != null) {
+                Spacer(Modifier.height(12.dp))
+                RunovaText(error, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)
+            }
         }
     }
 }
@@ -338,7 +406,16 @@ internal fun platformName(platform: String) = when (platform) {
 @Composable
 fun SystemsScreen(view: AppView, intents: AppIntents) {
     val openSend = { intents.send.picks.open = true }
-    RunovaScreen("Systems", trailing = { SendFilesButton(openSend) }) {
+    RunovaScreen(
+        "Systems",
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // With one account there is nothing to switch to, so the bar stays as it was.
+                if (view.accounts.items.size > 1) AccountAvatarButton(view.accounts, intents.openAccounts)
+                SendFilesButton(openSend)
+            }
+        },
+    ) {
         view.send.progressLabel?.let { label ->
             Box(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
                 SendingStrip(label, view.send.progressPercent.toInt(), RunovaIcons.Send, openSend)

@@ -28,4 +28,18 @@ final class CoreBridgeTests: XCTestCase {
             XCTAssertEqual(error as? CoreError, .SignInDeclined)
         }
     }
+
+    func testAPushNamesItsAccountOnlyWhenThePhoneHoldsMoreThanOne() {
+        func item(_ id: Int, _ email: String, _ tag: String) -> String {
+            #"{"id":\#(id),"email":"\#(email)","name":"Sam","tag":"\#(tag)","added_ms":\#(id),"used_ms":\#(id),"push_sent":null,"signed_out":false}"#
+        }
+        let work = item(11, "sam@work.test", "work-tag-123")
+        let home = item(22, "sam@home.test", "home-tag-456")
+        let two = #"{"active":22,"items":["# + work + "," + home + "]}"
+        let one = #"{"active":11,"items":["# + work + "]}"
+
+        XCTAssertEqual(pushAccountLabel(accountsJson: two, tag: "work-tag-123"), "sam@work.test")
+        XCTAssertNil(pushAccountLabel(accountsJson: one, tag: "work-tag-123"))
+        XCTAssertNil(pushAccountLabel(accountsJson: two, tag: nil))
+    }
 }

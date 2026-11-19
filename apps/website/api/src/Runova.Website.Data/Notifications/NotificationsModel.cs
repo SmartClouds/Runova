@@ -14,9 +14,10 @@ internal static class NotificationsModel
             device.Property(d => d.Platform).HasMaxLength(16);
             device.Property(d => d.PushToken).HasMaxLength(1024);
             device.Property(d => d.SealKeyId).HasMaxLength(12);
+            device.Property(d => d.AccountTag).HasMaxLength(32);
             device.HasIndex(d => d.SessionId).IsUnique();
-            device.HasIndex(d => d.PushToken).IsUnique();
-            device.HasIndex(d => d.UserId);
+            device.HasIndex(d => new { d.UserId, d.PushToken }).IsUnique();
+            device.HasIndex(d => d.PushToken);
             device.HasOne<AppUser>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade);
             device.HasOne<AccountSession>().WithMany().HasForeignKey(d => d.SessionId).OnDelete(DeleteBehavior.Cascade);
         });

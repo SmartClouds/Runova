@@ -40,4 +40,31 @@ class PushTest {
         assertEquals("Generic", line)
         assertEquals(false, opened)
     }
+
+    // E118: a push tagged with its account comes as data only, so the app shows it and can say whose it is.
+    private val tagged = mapOf("category" to "monitors", "account" to "work-tag-123", "fallback" to "Monitor down: api", "notificationId" to "42")
+
+    @Test
+    fun aTaggedPushShowsTheLineItCameWith() {
+        assertEquals("Monitor down: api", pushLine(tagged) { _, _ -> "never" })
+    }
+
+    @Test
+    fun aTaggedSealedPushStillOpens() {
+        assertEquals("Critical alert on prod", pushLine(sealed + ("account" to "work-tag-123")) { _, _ -> "Critical alert on prod" })
+    }
+
+    @Test
+    fun anUntaggedPlainPushIsStillLeftToTheOs() {
+        assertNull(pushLine(mapOf("category" to "deploys")) { _, _ -> "opened" })
+    }
+
+    @Test
+    fun theTapCarriesTheAccountSoTheAppCanSwitchToIt() {
+        val extras = pushTapExtras(tagged)
+
+        assertEquals("work-tag-123", extras["account"])
+        assertEquals("monitors", extras["category"])
+        assertEquals("42", extras["notificationId"])
+    }
 }

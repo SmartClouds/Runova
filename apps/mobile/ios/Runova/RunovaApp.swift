@@ -56,7 +56,11 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         if let category = info["category"] as? String {
             let id = (info["notificationId"] as? String).flatMap(Int64.init) ?? (info["notificationId"] as? Int64)
             let item = info["itemId"] as? String
-            Task { @MainActor in self.model?.openPush(category: category, notificationId: id, itemId: item) }
+            // The tag of the account the push came for, when the phone holds more than one (E118).
+            let account = info["account"] as? String
+            Task { @MainActor in
+                self.model?.openPush(category: category, notificationId: id, itemId: item, account: account)
+            }
         }
         completionHandler()
     }

@@ -14,9 +14,11 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import uniffi.runova_ffi.notificationSecret
 import uniffi.runova_ffi.openSealedNotification
+import uniffi.runova_ffi.pushAccountLabel
 
 private const val CHANNEL = "runova"
 private const val IDENTITY_SEED = "identity-seed"
+private const val ACCOUNTS = "accounts"
 
 /** Does nothing until the app is built with a Firebase project. */
 fun ensureFirebase(context: Context) {
@@ -51,14 +53,36 @@ fun sealedPushLine(data: Map<String, String>, open: (category: String, sealed: S
     return open(category, sealed) ?: data["fallback"]
 }
 
-/** Opens sealed notifications, which arrive with no text the OS could show by itself. */
+/**
+ * The line for a push the app shows itself: a sealed one, or one tagged with its account, which
+ * the server sends as data only so the app can say whose it is (E118). Null leaves it to the OS.
+ */
+fun pushLine(data: Map<String, String>, open: (category: String, sealed: String) -> String?): String? {
+    if (data["sealed"] != null) return sealedPushLine(data, open)
+    return if (data["account"] != null) data["fallback"] else null
+}
+
+/** What a tap on a push hands the app, so it opens the right thing for the right account. */
+fun pushTapExtras(data: Map<String, String>): Map<String, String?> = mapOf(
+    "category" to data["category"],
+    "notificationId" to data["notificationId"],
+    "itemId" to data["itemId"],
+    "account" to data["account"],
+)
+
+/** Opens sealed and tagged notifications, which arrive with no text the OS would show by itself. */
 class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
-        val line = sealedPushLine(message.data, ::open) ?: return
+        val line = pushLine(message.data, ::open) ?: return
         // With the app on screen the inbox has already shown it.
         if (appOnScreen()) return
         show(line, message.data)
     }
+
+    /** The account's email, while the phone holds more than one account. */
+    private fun accountLabel(tag: String?): String? = runCatching {
+        pushAccountLabel(AndroidSecureStore(this).get(ACCOUNTS), tag)
+    }.getOrNull()
 
     private fun open(category: String, sealed: String): String? = runCatching {
         val seed = AndroidSecureStore(this).get(IDENTITY_SEED) ?: return null
@@ -76,21 +100,17 @@ class PushService : FirebaseMessagingService() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Notifications", NotificationManager.IMPORTANCE_HIGH))
         val id = data["notificationId"]?.toLongOrNull()?.hashCode() ?: line.hashCode()
-        val open = Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra("category", data["category"])
-            .putExtra("notificationId", data["notificationId"])
-            .putExtra("itemId", data["itemId"])
+        val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        pushTapExtras(data).forEach { (key, value) -> open.putExtra(key, value) }
         val tap = PendingIntent.getActivity(this, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        manager.notify(
-            id,
-            Notification.Builder(this, CHANNEL)
-                .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Runova")
-                .setContentText(line)
-                .setContentIntent(tap)
-                .setAutoCancel(true)
-                .build(),
-        )
+        val builder = Notification.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Runova")
+            .setContentText(line)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+        // Several accounts on the phone: say whose this is, and keep each account's together.
+        accountLabel(data["account"])?.let { label -> builder.setSubText(label).setGroup("account:${data["account"]}") }
+        manager.notify(id, builder.build())
     }
 }

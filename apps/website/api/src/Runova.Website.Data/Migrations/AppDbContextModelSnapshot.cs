@@ -3529,6 +3529,10 @@ namespace Runova.Website.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AccountTag")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Platform")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -3554,13 +3558,13 @@ namespace Runova.Website.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PushToken")
-                        .IsUnique();
+                    b.HasIndex("PushToken");
 
                     b.HasIndex("SessionId")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "PushToken")
+                        .IsUnique();
 
                     b.ToTable("PushDevices");
                 });

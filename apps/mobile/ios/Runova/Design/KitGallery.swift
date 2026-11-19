@@ -27,6 +27,11 @@ struct KitGallery: View {
                     RunovaBadge(text: "Failed", tone: .danger)
                     RunovaBadge(text: "Idle")
                 }
+                HStack(spacing: 8) {
+                    RunovaAvatar(initials: "SR", tone: 5, ring: true)
+                    RunovaAvatar(initials: "S", tone: 4)
+                    RunovaAvatar(initials: "JL", tone: 0)
+                }
                 RunovaCard(padding: 0) {
                     VStack(spacing: 0) {
                         RunovaListRow(

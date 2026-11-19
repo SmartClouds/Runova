@@ -1,6 +1,8 @@
 //! Everything secret goes through one small store native code provides: Android Keystore or the
-//! iOS Keychain. Tokens, the identity seed and the pinned computer keys all live in it.
+//! iOS Keychain. Tokens, the identity seed and the pinned computer keys all live in it. The
+//! identity seed and device id belong to the phone and are shared by every account on it.
 
+use crate::accounts;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use runova_api::auth::{StoredTokens, TokenStore};
@@ -8,9 +10,10 @@ use runova_crypto::handshake::{Identity, base64url, os_random};
 use runova_session::connect::PinStore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-const TOKENS: &str = "tokens";
+/// Where the one account a phone held before E118 kept its tokens.
+const LEGACY_TOKENS: &str = "tokens";
 const IDENTITY_SEED: &str = "identity-seed";
 const DEVICE_ID: &str = "device-id";
 
@@ -29,33 +32,118 @@ struct TokensJson {
     session_id: i64,
 }
 
-pub struct SecureTokens(pub Arc<dyn SecureStore>);
+fn load_from(store: &dyn SecureStore, key: &str) -> Option<StoredTokens> {
+    let json: TokensJson = serde_json::from_str(&store.get(key.to_owned())?).ok()?;
+    Some(StoredTokens {
+        access_token: json.access_token,
+        refresh_token: json.refresh_token,
+        expires_at: json.expires_at,
+        session_id: json.session_id,
+    })
+}
 
-impl TokenStore for SecureTokens {
-    fn load(&self) -> Option<StoredTokens> {
-        let json: TokensJson = serde_json::from_str(&self.0.get(TOKENS.to_owned())?).ok()?;
-        Some(StoredTokens {
-            access_token: json.access_token,
-            refresh_token: json.refresh_token,
-            expires_at: json.expires_at,
-            session_id: json.session_id,
+fn save_to(store: &dyn SecureStore, key: &str, tokens: &StoredTokens) {
+    let json = TokensJson {
+        access_token: tokens.access_token.clone(),
+        refresh_token: tokens.refresh_token.clone(),
+        expires_at: tokens.expires_at,
+        session_id: tokens.session_id,
+    };
+    if let Ok(text) = serde_json::to_string(&json) {
+        store.set(key.to_owned(), text);
+    }
+}
+
+/// The tokens of the account the phone is using (E118). Each account keeps its own in
+/// `tokens:{id}`; a sign-in not yet matched to an account waits in `tokens:pending`. The slot only
+/// changes through [`AccountTokens::point_at`] and [`AccountTokens::rename`], both under the same
+/// lock as every read and write, so a refresh that lands mid-change still saves to the account it
+/// belongs to.
+pub struct AccountTokens {
+    secure: Arc<dyn SecureStore>,
+    slot: Mutex<String>,
+}
+
+impl AccountTokens {
+    /// Opens the store on the account last in use, moving the one set of tokens a phone held
+    /// before E118 to the pending slot so the next start finds out whose it is.
+    pub fn new(secure: Arc<dyn SecureStore>) -> Arc<Self> {
+        if secure.get(accounts::INDEX.to_owned()).is_none()
+            && let Some(old) = secure.get(LEGACY_TOKENS.to_owned())
+        {
+            secure.set(accounts::PENDING.to_owned(), old);
+            secure.remove(LEGACY_TOKENS.to_owned());
+        }
+        let slot = accounts::slot_of(accounts::read_index(secure.as_ref()).active);
+        Arc::new(Self {
+            secure,
+            slot: Mutex::new(slot),
         })
     }
 
-    fn save(&self, tokens: &StoredTokens) {
-        let json = TokensJson {
-            access_token: tokens.access_token.clone(),
-            refresh_token: tokens.refresh_token.clone(),
-            expires_at: tokens.expires_at,
-            session_id: tokens.session_id,
-        };
-        if let Ok(text) = serde_json::to_string(&json) {
-            self.0.set(TOKENS.to_owned(), text);
+    /// Reads and writes `slot` from now on. Call it inside `Session::switch` so no refresh is
+    /// half done.
+    pub(crate) fn point_at(&self, slot: String) {
+        *self.slot.lock().expect("token slot") = slot;
+    }
+
+    /// Moves the tokens in use to `to`, which they belong in now that the account is known.
+    pub(crate) fn rename(&self, to: String) {
+        let mut slot = self.slot.lock().expect("token slot");
+        if *slot == to {
+            return;
         }
+        match self.secure.get(slot.clone()) {
+            Some(text) => {
+                self.secure.set(to.clone(), text);
+                self.secure.remove(slot.clone());
+            }
+            None => self.secure.remove(to.clone()),
+        }
+        *slot = to;
+    }
+}
+
+impl TokenStore for AccountTokens {
+    fn load(&self) -> Option<StoredTokens> {
+        let slot = self.slot.lock().expect("token slot");
+        load_from(self.secure.as_ref(), &slot)
+    }
+
+    fn save(&self, tokens: &StoredTokens) {
+        let slot = self.slot.lock().expect("token slot");
+        save_to(self.secure.as_ref(), &slot, tokens);
     }
 
     fn clear(&self) {
-        self.0.remove(TOKENS.to_owned());
+        let slot = self.slot.lock().expect("token slot");
+        self.secure.remove(slot.clone());
+    }
+}
+
+/// One fixed slot, for a sign-in on its way or an account the phone is not using right now.
+pub struct SlotTokens {
+    secure: Arc<dyn SecureStore>,
+    key: String,
+}
+
+impl SlotTokens {
+    pub fn new(secure: Arc<dyn SecureStore>, key: String) -> Arc<Self> {
+        Arc::new(Self { secure, key })
+    }
+}
+
+impl TokenStore for SlotTokens {
+    fn load(&self) -> Option<StoredTokens> {
+        load_from(self.secure.as_ref(), &self.key)
+    }
+
+    fn save(&self, tokens: &StoredTokens) {
+        save_to(self.secure.as_ref(), &self.key, tokens);
+    }
+
+    fn clear(&self) {
+        self.secure.remove(self.key.clone());
     }
 }
 

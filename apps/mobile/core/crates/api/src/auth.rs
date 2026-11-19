@@ -271,7 +271,7 @@ pub struct Session {
     token_url: String,
     http: Arc<dyn HttpTransport>,
     store: Arc<dyn TokenStore>,
-    clock: Box<dyn Fn() -> u64 + Send + Sync>,
+    clock: Arc<dyn Fn() -> u64 + Send + Sync>,
     /// Held across a refresh, which is what makes it single-flight.
     state: Mutex<State>,
 }
@@ -289,12 +289,50 @@ impl Session {
             site,
             http,
             store,
-            clock,
+            clock: Arc::from(clock),
             state: Mutex::new(State {
                 loaded: false,
                 tokens: None,
             }),
         }
+    }
+
+    /// Another session on the same site, network and clock, keeping its tokens in `store`. Used to
+    /// add an account, or to act as one that is not the phone's active account.
+    pub fn sibling(&self, store: Arc<dyn TokenStore>) -> Session {
+        Session {
+            site: self.site.clone(),
+            token_url: self.token_url.clone(),
+            http: self.http.clone(),
+            store,
+            clock: self.clock.clone(),
+            state: Mutex::new(State {
+                loaded: false,
+                tokens: None,
+            }),
+        }
+    }
+
+    /// Forgets the tokens held in memory, so the next use reads the store again. The phone calls
+    /// this after pointing the store at another account.
+    pub async fn reload(&self) {
+        self.switch(|| {}).await;
+    }
+
+    /// Runs `change` (pointing the store at another account) once no refresh is under way, then
+    /// forgets the tokens held in memory. A refresh that was running saves where it began.
+    pub async fn switch(&self, change: impl FnOnce()) {
+        let mut state = self.state.lock().await;
+        change();
+        state.loaded = false;
+        state.tokens = None;
+    }
+
+    /// The server's id for this sign-in, while there is one.
+    pub async fn session_id(&self) -> Option<i64> {
+        let mut state = self.state.lock().await;
+        self.ensure_loaded(&mut state);
+        state.tokens.as_ref().map(|t| t.session_id)
     }
 
     fn ensure_loaded(&self, state: &mut State) {

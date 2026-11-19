@@ -136,8 +136,9 @@ internal sealed partial class FcmPushSender(
 
     /// <summary>
     /// The whole body FCM receives: the one line and identifiers, nothing else. With a sealed copy
-    /// it is data only, so the app's own service runs and can open it; <c>fallback</c> is the line it
-    /// shows if it can not.
+    /// or an account tag it is data only, so the app's own service runs: it opens the sealed copy,
+    /// and with several accounts on the phone it files the push under <c>account</c>. <c>fallback</c>
+    /// is the line it shows.
     /// </summary>
     internal static JsonObject Body(PushDelivery delivery)
     {
@@ -152,13 +153,22 @@ internal sealed partial class FcmPushSender(
         }
 
         var message = new JsonObject { ["token"] = delivery.Token };
-        if (delivery.Sealed is null)
+        if (delivery.Sealed is null && delivery.AccountTag is null)
         {
             message["notification"] = new JsonObject { ["title"] = PushContent.Title, ["body"] = delivery.Line };
         }
         else
         {
-            data["sealed"] = delivery.Sealed;
+            if (delivery.Sealed is not null)
+            {
+                data["sealed"] = delivery.Sealed;
+            }
+
+            if (delivery.AccountTag is not null)
+            {
+                data["account"] = delivery.AccountTag;
+            }
+
             data["fallback"] = delivery.Line;
         }
 
@@ -316,7 +326,9 @@ internal sealed partial class ApnsPushSender(
 
     /// <summary>
     /// The whole body APNs receives: the one line and identifiers, nothing else. A sealed copy rides
-    /// beside the generic alert, and <c>mutable-content</c> wakes the app's extension to open it.
+    /// beside the generic alert, and <c>mutable-content</c> wakes the app's extension to open it. An
+    /// account tag says whose push it is when several accounts are signed in on the phone, and wakes
+    /// the extension too.
     /// </summary>
     internal static JsonObject Body(PushDelivery delivery)
     {
@@ -340,6 +352,12 @@ internal sealed partial class ApnsPushSender(
         {
             body["aps"]!["mutable-content"] = 1;
             body["sealed"] = delivery.Sealed;
+        }
+
+        if (delivery.AccountTag is not null)
+        {
+            body["aps"]!["mutable-content"] = 1;
+            body["account"] = delivery.AccountTag;
         }
 
         return body;

@@ -1,6 +1,7 @@
 package com.runovahq.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,6 +10,7 @@ import uniffi.runova_ffi.DeviceDetails
 import uniffi.runova_ffi.beginPhoneSignIn
 import uniffi.runova_ffi.coreVersion
 import uniffi.runova_ffi.finishBrowserCallback
+import uniffi.runova_ffi.pushAccountLabel
 
 /** Kotlin calling the real Rust core through the generated bindings. */
 class CoreBridgeTest {
@@ -39,5 +41,17 @@ class CoreBridgeTest {
         assertThrows(CoreException.SignInDeclined::class.java) {
             finishBrowserCallback(declined, "s-12345678")
         }
+    }
+
+    @Test
+    fun aPushNamesItsAccountOnlyWhenThePhoneHoldsMoreThanOne() {
+        fun item(id: Int, email: String, tag: String) =
+            """{"id":$id,"email":"$email","name":"Sam","tag":"$tag","added_ms":$id,"used_ms":$id,"push_sent":null,"signed_out":false}"""
+        val two = """{"active":22,"items":[${item(11, "sam@work.test", "work-tag-123")},${item(22, "sam@home.test", "home-tag-456")}]}"""
+        val one = """{"active":11,"items":[${item(11, "sam@work.test", "work-tag-123")}]}"""
+
+        assertEquals("sam@work.test", pushAccountLabel(two, "work-tag-123"))
+        assertNull(pushAccountLabel(one, "work-tag-123"))
+        assertNull(pushAccountLabel(two, null))
     }
 }

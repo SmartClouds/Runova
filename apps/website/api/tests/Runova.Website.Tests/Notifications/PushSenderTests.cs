@@ -23,6 +23,7 @@ public class PushSenderTests
 
         var message = body["message"]!;
         Assert.Equal("device-token", message["token"]!.GetValue<string>());
+        Assert.Equal(["category", "itemId", "notificationId"], message["data"]!.AsObject().Select(p => p.Key).Order().ToArray());
         Assert.Equal(PushContent.Title, message["notification"]!["title"]!.GetValue<string>());
         Assert.Equal(_delivery.Line, message["notification"]!["body"]!.GetValue<string>());
         Assert.Equal("42", message["data"]!["notificationId"]!.GetValue<string>());
@@ -73,6 +74,50 @@ public class PushSenderTests
 
         Assert.Equal(PushContent.SealedLine, FcmPushSender.Body(delivery)["message"]!["notification"]!["body"]!.GetValue<string>());
         Assert.Null(ApnsPushSender.Body(delivery)["aps"]!["mutable-content"]);
+    }
+
+    [Fact]
+    public void A_tagged_fcm_body_is_data_only_and_says_which_account_it_is_for()
+    {
+        var message = FcmPushSender.Body(_delivery with { AccountTag = "acct_Tag-1234" })["message"]!;
+
+        Assert.Equal(["android", "data", "token"], message.AsObject().Select(p => p.Key).Order().ToArray());
+        Assert.Equal("high", message["android"]!["priority"]!.GetValue<string>());
+        var data = message["data"]!.AsObject();
+        Assert.Equal(["account", "category", "fallback", "itemId", "notificationId"], data.Select(p => p.Key).Order().ToArray());
+        Assert.Equal("acct_Tag-1234", data["account"]!.GetValue<string>());
+        Assert.Equal(_delivery.Line, data["fallback"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_tagged_sealed_fcm_body_carries_the_account_beside_the_sealed_copy()
+    {
+        var data = FcmPushSender.Body(_delivery with { Line = PushContent.SealedLine, Sealed = "c2VhbGVk", AccountTag = "acct_Tag-1234" })["message"]!["data"]!.AsObject();
+
+        Assert.Equal(["account", "category", "fallback", "itemId", "notificationId", "sealed"], data.Select(p => p.Key).Order().ToArray());
+        Assert.Equal("acct_Tag-1234", data["account"]!.GetValue<string>());
+        Assert.Equal(PushContent.SealedLine, data["fallback"]!.GetValue<string>());
+        Assert.Equal("c2VhbGVk", data["sealed"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_tagged_apns_body_says_which_account_and_wakes_the_app()
+    {
+        var body = ApnsPushSender.Body(_delivery with { Platform = PushPlatforms.Ios, AccountTag = "acct_Tag-1234" });
+
+        Assert.Equal(["account", "aps", "category", "itemId", "notificationId"], body.AsObject().Select(p => p.Key).Order().ToArray());
+        Assert.Equal("acct_Tag-1234", body["account"]!.GetValue<string>());
+        Assert.Equal(1, body["aps"]!["mutable-content"]!.GetValue<int>());
+        Assert.Equal(_delivery.Line, body["aps"]!["alert"]!["body"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_tagged_sealed_apns_body_has_both_the_account_and_the_sealed_copy()
+    {
+        var body = ApnsPushSender.Body(_delivery with { Platform = PushPlatforms.Ios, Line = PushContent.SealedLine, Sealed = "c2VhbGVk", AccountTag = "acct_Tag-1234" });
+
+        Assert.Equal(["account", "aps", "category", "itemId", "notificationId", "sealed"], body.AsObject().Select(p => p.Key).Order().ToArray());
+        Assert.Equal(1, body["aps"]!["mutable-content"]!.GetValue<int>());
     }
 
     [Theory]

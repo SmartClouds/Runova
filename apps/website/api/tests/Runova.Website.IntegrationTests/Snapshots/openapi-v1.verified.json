@@ -12106,6 +12106,12 @@
               "null",
               "string"
             ]
+          },
+          "accountTag": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false

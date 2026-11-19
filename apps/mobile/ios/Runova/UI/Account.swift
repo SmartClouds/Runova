@@ -83,7 +83,7 @@ struct AccountTab: View {
             RunovaScreen(title: "Account") {
                 if let profile = view.account.profile {
                     AccountList(
-                        profile: profile, account: view.account, encryption: view.encryption,
+                        profile: profile, account: view.account, accounts: view.accounts, encryption: view.encryption,
                         lockEnabled: view.lock.enabled, phraseCount: view.recoveryPhrases.items.count,
                         intents: intents, openPhrases: { phrasesOpen = true })
                 } else {
@@ -133,6 +133,7 @@ private struct EncryptionCard: View {
 private struct AccountList: View {
     let profile: ProfileView
     let account: AccountScreen
+    let accounts: AccountsView
     let encryption: EncryptionScreen?
     let lockEnabled: Bool
     let phraseCount: Int
@@ -144,16 +145,7 @@ private struct AccountList: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                RunovaCard {
-                    VStack(alignment: .leading, spacing: 2) {
-                        RunovaText(profile.name.isEmpty ? profile.email : profile.name, style: RunovaType.title)
-                        RunovaText(profile.email, style: RunovaType.small, color: palette.mutedForeground)
-                        if profile.twoFactor {
-                            RunovaBadge(text: "Two-factor on", tone: .success, dot: true).padding(.top, 6)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                AccountHeader(profile: profile, accounts: accounts, onOpen: intents.openAccounts)
                 Heading(text: "Security")
                 Button(action: intents.passcode.open) {
                     HStack(spacing: 8) {
@@ -250,7 +242,9 @@ private struct AccountList: View {
                     RunovaListRow(title: activity.action, detail: activity.detail, icon: RunovaIcons.history, iconTone: .neutral)
                 }
                 RunovaListRow(title: "About Runova", icon: RunovaIcons.info, onTap: intents.openAbout)
-                RunovaButton(text: "Sign out", kind: .soft, icon: RunovaIcons.signOut, action: intents.signOut)
+                // With more than one account, signing out is of this one only, and the core asks first.
+                let signOut = signOutButton(accounts, intents: intents)
+                RunovaButton(text: signOut.text, kind: .soft, icon: RunovaIcons.signOut, action: signOut.action)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 16)
             }

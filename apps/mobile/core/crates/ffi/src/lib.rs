@@ -5,6 +5,7 @@ use runova_crypto::handshake::os_random;
 use thiserror::Error;
 
 pub mod account;
+pub mod accounts;
 pub mod agents;
 pub mod app_lock;
 pub(crate) mod app_lock_view;

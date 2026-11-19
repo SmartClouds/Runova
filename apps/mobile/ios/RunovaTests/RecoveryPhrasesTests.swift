@@ -47,6 +47,6 @@ final class RecoveryPhrasesTests: XCTestCase {
 
     @MainActor
     func testTheAccountRowDraws() throws {
-        try renderSnapshot(appView(recoveryPhrases: screen()), "recovery_phrases_account", tab: "account")
+        try renderSnapshot(fixtureView(recoveryPhrases: screen()), "recovery_phrases_account", tab: "account")
     }
 }

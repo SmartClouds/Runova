@@ -41,6 +41,11 @@ fun KitGallery() {
                 RunovaBadge("Failed", BadgeTone.Danger)
                 RunovaBadge("Idle")
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RunovaAvatar("SR", 5, ring = true)
+                RunovaAvatar("S", 4)
+                RunovaAvatar("JL", 0)
+            }
             RunovaCard(Modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                 Column {
                     RunovaListRow("Sam's desk", detail = "Windows, online", icon = RunovaIcons.Systems, onClick = {})

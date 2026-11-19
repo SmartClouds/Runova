@@ -276,6 +276,49 @@ struct RunovaIconTile: View {
     }
 }
 
+extension RunovaPalette {
+    /// The six colours an account's avatar can take, one per `tone` the core gives it (E118), far
+    /// apart in hue. The same order as `avatarInk` in `Kit.kt`.
+    func avatarInk(_ tone: Int) -> Color {
+        switch ((tone % 6) + 6) % 6 {
+        case 0: return primary
+        case 1: return severityInfo
+        case 2: return severityMedium
+        case 3: return severityLow
+        case 4: return severityCritical
+        default: return severityHigh
+        }
+    }
+}
+
+/// An account as its initials on a tinted disc. The account in use gets a ring in its colour,
+/// set apart from the disc by a gap of the surface behind it.
+struct RunovaAvatar: View {
+    let initials: String
+    let tone: Int
+    var size: CGFloat = 40
+    var ring = false
+
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let ink = palette.avatarInk(tone)
+        let letters = size * 0.36
+        let disc = ring ? size - 8 : size
+        ZStack {
+            Circle().fill(palette.background)
+            Circle().fill(ink.opacity(0.18))
+            RunovaText(
+                initials, style: RunovaTextStyle(size: letters, lineHeight: (letters * 1.3).rounded(), weight: 600),
+                color: ink, maxLines: 1)
+        }
+        .frame(width: disc, height: disc)
+        .padding(ring ? 4 : 0)
+        .overlay(Circle().strokeBorder(ring ? ink : Color.clear, lineWidth: 2))
+        .frame(width: size, height: size)
+    }
+}
+
 /// The big glowing tile at the head of an empty state or a form.
 struct RunovaHeroIcon: View {
     let icon: String

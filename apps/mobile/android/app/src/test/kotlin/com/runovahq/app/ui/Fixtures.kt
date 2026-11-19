@@ -1,5 +1,8 @@
 package com.runovahq.app.ui
 
+import uniffi.runova_ffi.AccountItem
+import uniffi.runova_ffi.AccountsView
+import uniffi.runova_ffi.PushLabelView
 import uniffi.runova_ffi.AccountScreen
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.AuthState
@@ -125,6 +128,33 @@ val noSends = SendScreen(emptyList(), emptyList(), null, 0u, null, 0u)
 /** Nothing sent to the phone, and it takes files once it knows where (E114). */
 val noReceives = ReceiveScreen(true, false, true, emptyList(), emptyList(), 0u, null, 0u)
 
+/** One account on the phone (E118). */
+fun accountItem(
+    id: Long,
+    name: String,
+    email: String,
+    initials: String,
+    tone: Int = 0,
+    active: Boolean = false,
+    needsSignIn: Boolean = false,
+    lastUsed: String = if (active) "In use" else "Used 2d ago",
+) = AccountItem(id, name, email, initials, tone.toUByte(), active, needsSignIn, lastUsed)
+
+val workAccount = accountItem(11, "Sam Rivera", "sam@work.test", "SR", tone = 5)
+val homeAccount = accountItem(22, "Sam", "sam@home.test", "S", tone = 4, active = true)
+
+/** A phone with one account, which is how every screen test before E118 ran. */
+val noAccounts = AccountsView(emptyList(), false, null, null, emptyList())
+
+/** The work and the home account, with home in use. */
+val twoAccounts = AccountsView(
+    listOf(workAccount, homeAccount),
+    false,
+    null,
+    null,
+    listOf(PushLabelView("work-tag-123", "sam@work.test"), PushLabelView("home-tag-456", "sam@home.test")),
+)
+
 /** One place to build what the core publishes, so a new screen changes only this function. */
 fun appView(
     auth: AuthState = AuthState.SIGNED_IN,
@@ -170,6 +200,7 @@ fun appView(
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
     send: SendScreen = noSends,
     receive: ReceiveScreen = noReceives,
+    accounts: AccountsView = noAccounts,
 ) = AppView(
     auth,
     true,
@@ -217,4 +248,5 @@ fun appView(
     recoveryPhrases,
     send,
     receive,
+    accounts,
 )

@@ -95,6 +95,16 @@ PIN), and stop being trusted when a face or finger is added. Wrong codes earn gr
 survive a restart. While a passcode is set the app hides in the app switcher, and while locked
 nothing behind the lock is drawn.
 
+## Several accounts
+
+The phone can hold several accounts (E118), with one in use at a time: only that one has the hub,
+the feed and a computer link. The identity seed, device id, seal key, pinned keys, passcode lock,
+recovery phrases and settings belong to the phone and are shared by every account. Tokens, the
+systems list, the account screens and the push registration belong to an account. The core keeps
+an index under `accounts` and each account's tokens under `tokens:{id}`; a sign-in waits in
+`tokens:pending` until the website says whose it is. Every account registers the push token with
+its own tag, so pushes say whose they are and a tap switches to the right account.
+
 ## Tests
 
 Work is test-first: every epic starts with failing tests.

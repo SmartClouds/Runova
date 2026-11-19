@@ -21,7 +21,7 @@ public sealed record NotificationPreferencesDto(IReadOnlyList<NotificationPrefer
 
 public sealed record NotificationPreferenceWrite(bool? Enabled);
 
-public sealed record PushDeviceWrite(string? Platform, string? PushToken, string? SealKeyId = null);
+public sealed record PushDeviceWrite(string? Platform, string? PushToken, string? SealKeyId = null, string? AccountTag = null);
 
 public sealed record PushDeviceDto(long Id, string Platform, DateTimeOffset UpdatedAt);
 
@@ -101,6 +101,11 @@ internal static partial class NotificationSettingsEndpoints
             errors["sealKeyId"] = ["sealKeyId is 12 letters, digits, dashes or underscores."];
         }
 
+        if (request.AccountTag is not null && !AccountTag().IsMatch(request.AccountTag))
+        {
+            errors["accountTag"] = ["accountTag is 8 to 32 letters, digits, dashes or underscores."];
+        }
+
         if (errors.Count > 0)
         {
             return ApiProblems.Invalid(errors);
@@ -108,13 +113,14 @@ internal static partial class NotificationSettingsEndpoints
 
         var sessionId = AccountSessions.SessionId(http.User)!.Value;
         var now = time.GetUtcNow();
-        // A token someone else's sign-in held on this phone is this phone's now.
-        await db.PushDevices.Where(d => d.PushToken == request.PushToken && d.SessionId != sessionId).ExecuteDeleteAsync();
+        // The same person's earlier sign-in on this phone gives the token up. Other accounts signed
+        // in on the phone keep theirs: each one gets its own pushes, tagged so the phone can tell.
+        await db.PushDevices.Where(d => d.PushToken == request.PushToken && d.UserId == userId && d.SessionId != sessionId).ExecuteDeleteAsync();
         await db.Database.ExecuteSqlAsync(
             $"""
-            INSERT INTO "PushDevices" ("UserId", "SessionId", "Platform", "PushToken", "SealKeyId", "UpdatedAt")
-            VALUES ({userId}, {sessionId}, {request.Platform}, {request.PushToken}, {request.SealKeyId}, {now})
-            ON CONFLICT ("SessionId") DO UPDATE SET "Platform" = {request.Platform}, "PushToken" = {request.PushToken}, "SealKeyId" = {request.SealKeyId}, "UpdatedAt" = {now}
+            INSERT INTO "PushDevices" ("UserId", "SessionId", "Platform", "PushToken", "SealKeyId", "AccountTag", "UpdatedAt")
+            VALUES ({userId}, {sessionId}, {request.Platform}, {request.PushToken}, {request.SealKeyId}, {request.AccountTag}, {now})
+            ON CONFLICT ("SessionId") DO UPDATE SET "Platform" = {request.Platform}, "PushToken" = {request.PushToken}, "SealKeyId" = {request.SealKeyId}, "AccountTag" = {request.AccountTag}, "UpdatedAt" = {now}
             """);
         var device = await db.PushDevices.AsNoTracking().SingleAsync(d => d.SessionId == sessionId);
         http.Response.Headers.CacheControl = HttpCaching.Private;
@@ -206,6 +212,9 @@ internal static partial class NotificationSettingsEndpoints
 
     [GeneratedRegex(@"\A[A-Za-z0-9:_.-]{1,1024}\z", RegexOptions.CultureInvariant)]
     private static partial Regex PushToken();
+
+    [GeneratedRegex(@"\A[A-Za-z0-9_-]{8,32}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex AccountTag();
 }
 
 internal static class NotificationsSetup

@@ -610,3 +610,90 @@ async fn google_s_grant_sends_no_code_or_name() {
     assert_eq!(body["authorizationCode"], Value::Null);
     assert_eq!(body["name"], Value::Null);
 }
+
+fn other_tokens() -> StoredTokens {
+    StoredTokens {
+        access_token: "rd1.other".into(),
+        refresh_token: "rr1.other".into(),
+        expires_at: 5_000,
+        session_id: 71,
+    }
+}
+
+#[tokio::test]
+async fn reloading_reads_the_store_again_for_the_account_now_in_it() {
+    let world = world();
+    signed_in(&world).await;
+    world.store.save(&other_tokens());
+
+    world.session.reload().await;
+
+    assert_eq!(world.session.access_token().await.unwrap(), "rd1.other");
+    assert_eq!(world.session.session_id().await, Some(71));
+}
+
+#[tokio::test]
+async fn reloading_an_empty_store_is_signed_out() {
+    let world = world();
+    signed_in(&world).await;
+    world.store.clear();
+
+    world.session.reload().await;
+
+    assert!(!world.session.is_signed_in().await);
+    assert_eq!(
+        world.session.access_token().await,
+        Err(AuthError::SignedOut)
+    );
+}
+
+#[tokio::test]
+async fn the_session_id_comes_from_the_tokens_held() {
+    let world = world();
+    assert_eq!(world.session.session_id().await, None);
+
+    signed_in(&world).await;
+
+    assert_eq!(world.session.session_id().await, Some(44));
+}
+
+#[tokio::test]
+async fn a_sibling_signs_in_to_its_own_store_and_leaves_the_session_alone() {
+    let world = world();
+    signed_in(&world).await;
+    let other = Arc::new(MemoryStore::default());
+    let sibling = world.session.sibling(other.clone());
+    world.http.answer(200, tokens_body(2));
+
+    sibling
+        .complete_sign_in("code-2", "verifier-2")
+        .await
+        .unwrap();
+
+    assert_eq!(other.load().unwrap().access_token, "rd1.access-2");
+    assert_eq!(world.store.load().unwrap().access_token, "rd1.access-1");
+    assert_eq!(world.session.access_token().await.unwrap(), "rd1.access-1");
+    assert_eq!(
+        world.http.calls()[1].0,
+        "https://runovahq.com/api/v1/device-tokens"
+    );
+}
+
+#[tokio::test]
+async fn a_sibling_keeps_time_with_the_session_s_clock() {
+    let world = world();
+    let other = Arc::new(MemoryStore::default());
+    other.save(&StoredTokens {
+        access_token: "rd1.old".into(),
+        refresh_token: "rr1.old".into(),
+        expires_at: 1_500,
+        session_id: 3,
+    });
+    let sibling = world.session.sibling(other.clone());
+    assert_eq!(sibling.access_token().await.unwrap(), "rd1.old");
+    world.now.fetch_add(460, Ordering::SeqCst);
+    world.http.answer(200, tokens_body(5));
+
+    assert_eq!(sibling.access_token().await.unwrap(), "rd1.access-5");
+    assert_eq!(other.load().unwrap().refresh_token, "rr1.refresh-5");
+}

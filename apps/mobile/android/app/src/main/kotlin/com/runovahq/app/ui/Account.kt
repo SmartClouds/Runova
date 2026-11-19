@@ -45,6 +45,7 @@ import com.runovahq.app.design.RunovaScreen
 import com.runovahq.app.design.RunovaTopBar
 import com.runovahq.app.design.RunovaType
 import uniffi.runova_ffi.AccountScreen
+import uniffi.runova_ffi.AccountsView
 import uniffi.runova_ffi.AppView
 import uniffi.runova_ffi.EncryptionScreen
 import uniffi.runova_ffi.MyInvitationView
@@ -133,7 +134,7 @@ fun AccountTab(view: AppView, intents: AppIntents) {
         if (profile == null) {
             LoadingRows()
         } else {
-            AccountList(profile, account, view.encryption, view.lock.enabled, view.recoveryPhrases.items.size, intents) {
+            AccountList(profile, account, view.accounts, view.encryption, view.lock.enabled, view.recoveryPhrases.items.size, intents) {
                 phrasesOpen = true
             }
         }
@@ -166,6 +167,7 @@ private fun EncryptionCard(screen: EncryptionScreen, intents: AccountIntents) {
 private fun AccountList(
     profile: ProfileView,
     account: AccountScreen,
+    accounts: AccountsView,
     encryption: EncryptionScreen?,
     lockEnabled: Boolean,
     phraseCount: Int,
@@ -173,7 +175,7 @@ private fun AccountList(
     openPhrases: () -> Unit,
 ) {
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
-        item(key = "profile") { ProfileCard(profile) }
+        item(key = "profile") { AccountHeader(profile, accounts, intents.openAccounts) }
         heading("Security")
         item(key = "passcode") {
             RunovaListRow(
@@ -235,26 +237,16 @@ private fun AccountList(
             RunovaListRow(title = "About Runova", icon = RunovaIcons.Info, onClick = intents.openAbout)
         }
         item(key = "sign-out") {
+            // With more than one account, signing out is of this one only, and the core asks first.
+            val current = accounts.current()
+            val several = accounts.items.size > 1 && current != null
             RunovaButton(
-                "Sign out",
-                onClick = intents.signOut,
+                if (several) "Sign out of ${current!!.email}" else "Sign out",
+                onClick = if (several) ({ intents.accounts.signOutOf(current!!.id) }) else intents.signOut,
                 Modifier.fillMaxWidth().padding(top = 16.dp),
                 kind = ButtonKind.Soft,
                 icon = RunovaIcons.SignOut,
             )
-        }
-    }
-}
-
-@Composable
-private fun ProfileCard(profile: ProfileView) {
-    RunovaCard(Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            RunovaText(profile.name.ifEmpty { profile.email }, style = RunovaType.title)
-            RunovaText(profile.email, style = RunovaType.small, color = RunovaTheme.colors.mutedForeground)
-            if (profile.twoFactor) {
-                RunovaBadge("Two-factor on", BadgeTone.Success, Modifier.padding(top = 6.dp), dot = true)
-            }
         }
     }
 }

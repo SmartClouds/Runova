@@ -61,7 +61,7 @@ public class NotificationMapperTests
     [Fact]
     public void A_push_device_never_shows_its_token()
     {
-        var device = new PushDevice { Id = 3, UserId = 9, SessionId = 4, Platform = "android", PushToken = "secret-token", UpdatedAt = _at };
+        var device = new PushDevice { Id = 3, UserId = 9, SessionId = 4, Platform = "android", PushToken = "secret-token", AccountTag = "acct-tag-1", UpdatedAt = _at };
 
         var dto = NotificationMapper.ToDto(device);
 

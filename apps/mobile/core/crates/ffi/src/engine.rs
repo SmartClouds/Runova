@@ -2,11 +2,13 @@
 //! a new view goes out whenever anything a screen shows has changed.
 
 use crate::account::PendingStepUp;
+use crate::accounts::{AccountsState, Me};
 use crate::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use crate::notifications::{FeedConnector, FeedEvent};
 use crate::remote::RemoteSession;
 use crate::secure::{
-    SecurePins, SecureStore, device_id, identity_key, identity_seed, phone_fingerprint,
+    AccountTokens, SecurePins, SecureStore, device_id, identity_key, identity_seed,
+    phone_fingerprint,
 };
 use crate::studio::SharedThumbnails;
 use crate::terminals::OpenTerminal;
@@ -66,6 +68,8 @@ pub struct Dependencies {
     pub secure: Arc<dyn SecureStore>,
     pub listener: Arc<dyn ViewListener>,
     pub session: Arc<Session>,
+    /// The store `session` keeps its tokens in, which says whose account they are (E118).
+    pub tokens: Arc<AccountTokens>,
     pub backend: Arc<dyn Backend>,
     pub hub: Arc<dyn HubConnector>,
     pub transports: Arc<dyn Transports>,
@@ -74,19 +78,31 @@ pub struct Dependencies {
     pub refresh_every: Duration,
 }
 
-enum Command {
-    FinishSignIn { url: String, pending: SignInRequest },
+pub(crate) enum Command {
+    FinishSignIn {
+        url: String,
+        pending: SignInRequest,
+    },
     Refresh,
     Connect(i64),
     Disconnect,
     Lifecycle(AppLifecycle),
+    /// Out of the account in use.
     SignOut,
+    SignOutAccount(i64),
+    SignOutAll,
     Run(Task),
 }
 
 pub(crate) enum Done {
-    Boot(Result<Booted, BootError>),
-    Systems(Result<Vec<SystemEntry>, BackendError>),
+    Boot {
+        generation: u64,
+        result: Result<Booted, BootError>,
+    },
+    Systems {
+        generation: u64,
+        result: Result<Vec<SystemEntry>, BackendError>,
+    },
     Phase {
         attempt: u64,
         phase: Phase,
@@ -123,6 +139,8 @@ pub(crate) struct Booted {
     feed: Option<mpsc::Receiver<FeedEvent>>,
     device_id: i64,
     systems: Vec<SystemEntry>,
+    /// Whose account this is, when the website said.
+    me: Option<Me>,
 }
 
 pub(crate) enum BootError {
@@ -156,7 +174,7 @@ impl Engine {
             app_version: deps.app_version.clone(),
             secure: deps.secure.clone(),
         };
-        tokio::spawn(Runner::new(deps, thumbnails).run(queue));
+        tokio::spawn(Runner::new(deps, thumbnails, engine.commands.clone()).run(queue));
         engine
     }
 
@@ -336,6 +354,9 @@ pub(crate) struct Runner {
     pub(crate) send: crate::send::SendState,
     /// Files on their way to this phone (E114).
     pub(crate) receive: crate::receive::ReceiveState,
+    /// Several accounts on the phone (E118).
+    pub(crate) accounts: AccountsState,
+    commands: mpsc::UnboundedSender<Command>,
 }
 
 fn view_of(entry: &SystemEntry) -> SystemView {
@@ -375,7 +396,11 @@ struct ProjectDto {
 }
 
 impl Runner {
-    fn new(deps: Dependencies, thumbnails: SharedThumbnails) -> Self {
+    fn new(
+        deps: Dependencies,
+        thumbnails: SharedThumbnails,
+        commands: mpsc::UnboundedSender<Command>,
+    ) -> Self {
         let (done_tx, done_rx) = mpsc::unbounded_channel();
         Self {
             studio_language: String::new(),
@@ -421,7 +446,14 @@ impl Runner {
             pending_phrase: None,
             send: Default::default(),
             receive: Default::default(),
+            accounts: Default::default(),
+            commands,
         }
+    }
+
+    /// Runs `command` after the current one, for work that has to wait on the network.
+    pub(crate) fn queue(&self, command: Command) {
+        let _ = self.commands.send(command);
     }
 
     pub(crate) fn platform_name(&self) -> String {
@@ -442,6 +474,7 @@ impl Runner {
     /// Removes everything that identifies this phone, so the next person starts clean.
     pub(crate) async fn clear_identity(&mut self) {
         self.deps.session.sign_out().await;
+        self.forget_accounts();
         for key in ["identity-seed", "device-id"] {
             self.deps.secure.remove(key.to_owned());
         }
@@ -677,6 +710,10 @@ impl Runner {
     pub(crate) fn boot(&mut self) {
         self.view.systems_loading = true;
         let done = self.done_tx.clone();
+        let generation = self.accounts.generation;
+        let tokens = self.deps.tokens.clone();
+        let slot = crate::accounts::slot_of(self.active_account());
+        let lock = self.accounts.token_lock.clone();
         let session = self.deps.session.clone();
         let connector = self.deps.hub.clone();
         let backend = self.deps.backend.clone();
@@ -684,9 +721,14 @@ impl Runner {
         let platform = self.deps.platform.clone();
         let feed = self.deps.feed.clone();
         tokio::spawn(async move {
-            let _ = done.send(Done::Boot(
-                run_boot(session, connector, feed, backend, secure, platform).await,
-            ));
+            // Pointing the session at the account to start waits for any refresh under way.
+            {
+                let _held = lock.lock().await;
+                session.switch(|| tokens.point_at(slot)).await;
+                let _ = session.access_token().await;
+            }
+            let result = run_boot(session, connector, feed, backend, secure, platform).await;
+            let _ = done.send(Done::Boot { generation, result });
         });
     }
 
@@ -694,8 +736,10 @@ impl Runner {
         self.view.systems_loading = true;
         let done = self.done_tx.clone();
         let backend = self.deps.backend.clone();
+        let generation = self.accounts.generation;
         tokio::spawn(async move {
-            let _ = done.send(Done::Systems(backend.systems().await));
+            let result = backend.systems().await;
+            let _ = done.send(Done::Systems { generation, result });
         });
     }
 
@@ -759,7 +803,17 @@ impl Runner {
         });
     }
 
+    /// The session in use ended. Its account stays listed, to be signed in again.
     fn signed_out(&mut self) {
+        self.reset_account_state();
+        self.mark_active_signed_out();
+        self.view.auth = AuthState::SignedOut;
+        self.refresh_accounts_view();
+    }
+
+    /// Drops everything that belongs to the account in use, before another takes over.
+    pub(crate) fn reset_account_state(&mut self) {
+        self.accounts.generation += 1;
         self.view.monitoring = MonitoringScreen::default();
         self.view.account = Default::default();
         self.view.notifications = Default::default();
@@ -774,7 +828,7 @@ impl Runner {
         self.systems.clear();
         self.view.systems.clear();
         self.view.systems_loading = false;
-        self.view.auth = AuthState::SignedOut;
+        self.view.accounts.switching = None;
     }
 
     pub(crate) fn connect(&mut self, system_id: i64) {
@@ -904,7 +958,15 @@ impl Runner {
 
     fn on_done(&mut self, done: Done) {
         match done {
-            Done::Boot(Ok(booted)) => {
+            Done::Boot { generation, .. } | Done::Systems { generation, .. }
+                if generation != self.accounts.generation => {}
+            Done::Boot {
+                result: Ok(mut booted),
+                ..
+            } => {
+                if let Some(me) = booted.me.take() {
+                    self.identified(me);
+                }
                 self.hub = Some(booted.hub);
                 self.hub_events = Some(booted.events);
                 self.feed_events = booted.feed;
@@ -918,15 +980,33 @@ impl Runner {
                 {
                     self.connect(system);
                 }
+                self.push_to_others();
+                self.account_started();
             }
-            Done::Boot(Err(BootError::SignedOut)) => self.signed_out(),
-            Done::Boot(Err(BootError::Failed(message))) => {
+            Done::Boot {
+                result: Err(BootError::SignedOut),
+                ..
+            } => self.signed_out(),
+            Done::Boot {
+                result: Err(BootError::Failed(message)),
+                ..
+            } => {
                 self.view.systems_loading = false;
+                self.view.accounts.switching = None;
                 self.view.error = Some(message);
             }
-            Done::Systems(Ok(systems)) => self.set_systems(systems),
-            Done::Systems(Err(BackendError::SignedOut)) => self.signed_out(),
-            Done::Systems(Err(BackendError::Failed(message))) => {
+            Done::Systems {
+                result: Ok(systems),
+                ..
+            } => self.set_systems(systems),
+            Done::Systems {
+                result: Err(BackendError::SignedOut),
+                ..
+            } => self.signed_out(),
+            Done::Systems {
+                result: Err(BackendError::Failed(message)),
+                ..
+            } => {
                 self.view.systems_loading = false;
                 self.view.error = Some(message);
             }
@@ -997,15 +1077,11 @@ impl Runner {
                 match read_callback(&url, &pending.state) {
                     Ok(code) => {
                         match self
-                            .deps
-                            .session
+                            .sign_in_session()
                             .complete_sign_in(&code, &pending.verifier)
                             .await
                         {
-                            Ok(()) => {
-                                self.view.auth = AuthState::SignedIn;
-                                self.boot();
-                            }
+                            Ok(()) => self.signed_in(),
                             Err(AuthError::Network(_)) | Err(_) => {
                                 self.view.error = Some(SIGN_IN_FAILED.to_owned());
                             }
@@ -1039,10 +1115,9 @@ impl Runner {
                     self.boot();
                 }
             }
-            Command::SignOut => {
-                self.sign_out_fully().await;
-                self.signed_out();
-            }
+            Command::SignOut => self.sign_out_account_now(None).await,
+            Command::SignOutAccount(id) => self.sign_out_account_now(Some(id)).await,
+            Command::SignOutAll => self.sign_out_all_now().await,
             Command::Run(task) => task(self),
         }
     }
@@ -1060,6 +1135,7 @@ impl Runner {
         } else {
             self.view.auth = AuthState::SignedOut;
         }
+        self.refresh_accounts_view();
         self.publish();
 
         loop {
@@ -1133,6 +1209,12 @@ async fn run_boot(
         AuthError::SignedOut => BootError::SignedOut,
         other => BootError::Failed(other.to_string()),
     })?;
+    // Who this is: a failure only leaves the account to be named at the next start.
+    let me = match backend.get_json(crate::accounts::ME).await {
+        Ok(value) => serde_json::from_value::<Me>(value).ok(),
+        Err(BackendError::SignedOut) => return Err(BootError::SignedOut),
+        Err(BackendError::Failed(_)) => None,
+    };
     let (hub, events) = connector
         .connect(token.clone())
         .await
@@ -1156,5 +1238,6 @@ async fn run_boot(
         feed,
         device_id,
         systems,
+        me,
     })
 }

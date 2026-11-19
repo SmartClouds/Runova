@@ -6,7 +6,7 @@
 
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::secure::device_id;
-use crate::view::{AuthState, ProviderSignInView};
+use crate::view::ProviderSignInView;
 use runova_api::auth::{AuthError, DeviceInfo, Session};
 use std::sync::Arc;
 
@@ -51,9 +51,8 @@ impl Runner {
             client_id: None,
         });
         let generation = self.provider_generation;
-        let attempt = self.attempt;
         let done = self.done_tx.clone();
-        let session: Arc<Session> = self.deps.session.clone();
+        let session: Arc<Session> = self.sign_in_session();
         self.provider_task = Some(tokio::spawn(async move {
             let nonce = session.begin_provider_sign_in(&provider).await;
             let task: Task = Box::new(move |runner: &mut Runner| {
@@ -81,7 +80,7 @@ impl Runner {
                     }
                 }
             });
-            let _ = done.send(Done::Run { attempt, task });
+            let _ = done.send(Done::Local(task));
         }));
     }
 
@@ -102,9 +101,8 @@ impl Runner {
         };
         self.stop_provider_sign_in();
         let generation = self.provider_generation;
-        let attempt = self.attempt;
         let done = self.done_tx.clone();
-        let session: Arc<Session> = self.deps.session.clone();
+        let session: Arc<Session> = self.sign_in_session();
         let device = DeviceInfo {
             device_id: device_id(self.deps.secure.as_ref()),
             name: "Runova app".to_owned(),
@@ -128,10 +126,7 @@ impl Runner {
                 }
                 runner.provider_task = None;
                 match outcome {
-                    Ok(()) => {
-                        runner.view.auth = AuthState::SignedIn;
-                        runner.boot();
-                    }
+                    Ok(()) => runner.signed_in(),
                     Err(error) => {
                         if error == AuthError::ContinueInBrowser {
                             runner.view.continue_in_browser = Some(provider.clone());
@@ -140,12 +135,12 @@ impl Runner {
                     }
                 }
             });
-            let _ = done.send(Done::Run { attempt, task });
+            let _ = done.send(Done::Local(task));
         }));
     }
 
     /// Makes anything the old attempt still has on its way count for nothing.
-    fn stop_provider_sign_in(&mut self) {
+    pub(crate) fn stop_provider_sign_in(&mut self) {
         self.provider_generation += 1;
         self.view.provider_sign_in = None;
         if let Some(task) = self.provider_task.take() {

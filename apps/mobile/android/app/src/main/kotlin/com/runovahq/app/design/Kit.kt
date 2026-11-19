@@ -272,6 +272,48 @@ fun RunovaIconTile(icon: String, tone: BadgeTone = BadgeTone.Primary, modifier: 
     }
 }
 
+/** The six colours an account's avatar can take, one per `tone` the core gives it (E118), far apart in hue. */
+@Composable
+fun avatarInk(tone: Int): Color {
+    val colors = RunovaTheme.colors
+    return when (tone.mod(6)) {
+        0 -> colors.primary
+        1 -> colors.severityInfo
+        2 -> colors.severityMedium
+        3 -> colors.severityLow
+        4 -> colors.severityCritical
+        else -> colors.severityHigh
+    }
+}
+
+/**
+ * An account as its initials on a tinted disc. The account in use gets a ring in its colour,
+ * set apart from the disc by a gap of the surface behind it.
+ */
+@Composable
+fun RunovaAvatar(
+    initials: String,
+    tone: Int,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    ring: Boolean = false,
+) {
+    val colors = RunovaTheme.colors
+    val ink = avatarInk(tone)
+    val outer = if (ring) modifier.size(size).border(2.dp, ink, CircleShape).padding(4.dp) else modifier.size(size)
+    Box(
+        outer.clip(CircleShape).background(colors.background).background(ink.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        RunovaText(
+            initials,
+            style = RunovaType.label.copy(fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.36f).sp),
+            color = ink,
+            maxLines = 1,
+        )
+    }
+}
+
 /** The big glowing tile at the head of an empty state or a form. */
 @Composable
 fun RunovaHeroIcon(icon: String, tone: BadgeTone = BadgeTone.Primary, modifier: Modifier = Modifier) {

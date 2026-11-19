@@ -3,7 +3,7 @@
 use crate::backend::LiveBackend;
 use crate::engine::{AppLifecycle, Dependencies, Engine, HubConnector};
 use crate::notifications::{FeedConnector, FeedEvent};
-use crate::secure::{SecureStore, SecureTokens};
+use crate::secure::{AccountTokens, SecureStore};
 use crate::view::{Section, ViewListener};
 use crate::{CoreError, SignInLink};
 use async_trait::async_trait;
@@ -115,10 +115,11 @@ impl RunovaCore {
             .build()
             .map_err(|_| CoreError::StartFailed)?;
         let http = ReqwestTransport::new().map_err(|_| CoreError::StartFailed)?;
+        let tokens = AccountTokens::new(secure.clone());
         let session = Arc::new(Session::new(
             &config.site,
             Arc::new(http),
-            Arc::new(SecureTokens(secure.clone())),
+            tokens.clone(),
             Box::new(|| {
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -133,6 +134,7 @@ impl RunovaCore {
                 site: config.site.clone(),
                 platform: config.platform,
                 app_version: config.app_version,
+                tokens,
                 secure,
                 listener,
                 session,

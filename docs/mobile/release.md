@@ -76,6 +76,13 @@ with Apple. Both send the ID token to the website, which checks it against keys 
 - Microsoft, and Google on the iPhone, go through the browser sign-in with `provider=` on the
   authorize link, so they need nothing more than the website's own setup.
 
+### Several accounts (E118)
+
+Nothing to set up. The website's `PushDevicesPerAccount` migration has to run before phones on this
+version register their push token with an account tag (the API refuses an unknown field), so ship
+the website first. Phones signed in on an earlier version keep their account: its tokens move to
+the new slot on the first start.
+
 ### Push notifications
 
 Needs a Firebase project and an APNs key. The website API reads them from `Push__Fcm__*` and

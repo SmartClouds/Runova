@@ -179,16 +179,47 @@ impl Runner {
         let backend = self.deps_backend();
         let platform = self.platform_name();
         let seal_key_id = self.seal_key().key_id();
+        let account = self.active_account();
+        // Each account's pushes carry its own tag, so the phone can say whose they are (E118).
+        let tag = self.active_push_tag();
+        let hash = crate::accounts::token_hash(&token);
+        let done = self.done_tx.clone();
         tokio::spawn(async move {
             // A failure is retried at the next start, and the inbox still works without it.
-            let _ = backend
+            let sent = backend
                 .send_json(
                     "PUT",
                     PUSH_DEVICE,
-                    json!({ "platform": platform, "pushToken": token, "sealKeyId": seal_key_id }),
+                    json!({
+                        "platform": platform,
+                        "pushToken": token,
+                        "sealKeyId": seal_key_id,
+                        "accountTag": tag,
+                    }),
                 )
                 .await;
+            if sent.is_ok()
+                && let Some(id) = account
+            {
+                let _ = done.send(Done::Local(Box::new(move |r: &mut Runner| {
+                    r.push_sent(id, hash)
+                })));
+            }
         });
+    }
+
+    pub(crate) fn route_tap(&mut self, id: Option<i64>, category: String, item_id: Option<String>) {
+        let known = id.filter(|id| self.view.notifications.items.iter().any(|i| i.id == *id));
+        match known {
+            Some(id) => self.open_notification(id),
+            None => {
+                if notification_destination(category) == NotificationDestination::Deploy
+                    && let Some(target) = item_id
+                {
+                    self.open_deploy_target(target);
+                }
+            }
+        }
     }
 
     fn open_notification(&mut self, id: i64) {
@@ -284,20 +315,27 @@ impl Engine {
         self.run(move |r| r.open_notification(id));
     }
 
-    /// A tapped push: marks it read when the inbox has it, and opens what it is about.
-    pub fn notification_tapped(&self, id: Option<i64>, category: String, item_id: Option<String>) {
+    /// A tapped push: marks it read when the inbox has it, and opens what it is about. `account`
+    /// is the tag it came with; a push for an account not in use switches to it first (E118).
+    pub fn notification_tapped(
+        &self,
+        id: Option<i64>,
+        category: String,
+        item_id: Option<String>,
+        account: Option<String>,
+    ) {
         self.run(move |r| {
-            let known = id.filter(|id| r.view.notifications.items.iter().any(|i| i.id == *id));
-            match known {
-                Some(id) => r.open_notification(id),
-                None => {
-                    if notification_destination(category) == NotificationDestination::Deploy
-                        && let Some(target) = item_id
-                    {
-                        r.open_deploy_target(target);
-                    }
+            if let Some(tag) = account {
+                let tap = crate::accounts::Tap {
+                    id,
+                    category: category.clone(),
+                    item_id: item_id.clone(),
+                };
+                if r.tapped_for(&tag, tap) {
+                    return;
                 }
             }
+            r.route_tap(id, category, item_id);
         });
     }
 
@@ -328,6 +366,7 @@ impl Engine {
             if r.view.auth == crate::view::AuthState::SignedIn {
                 r.send_push_token();
             }
+            r.push_to_others();
         });
     }
 }

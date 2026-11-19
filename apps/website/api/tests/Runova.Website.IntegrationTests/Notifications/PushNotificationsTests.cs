@@ -49,9 +49,9 @@ public sealed class PushNotificationsTests(PostgresFixture postgres) : IAsyncLif
         return (user, browser, desktop, phone);
     }
 
-    private static async Task RegisterAsync(TestPhones.Phone phone, string token, string platform = "android")
+    private static async Task RegisterAsync(TestPhones.Phone phone, string token, string platform = "android", string? accountTag = null)
     {
-        var response = await phone.Client.PutAsJsonAsync("/api/v1/accounts/me/push-devices/current", new { platform, pushToken = token }, TestContext.Current.CancellationToken);
+        var response = await phone.Client.PutAsJsonAsync("/api/v1/accounts/me/push-devices/current", new { platform, pushToken = token, accountTag }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -298,7 +298,32 @@ public sealed class PushNotificationsTests(PostgresFixture postgres) : IAsyncLif
     }
 
     [Fact]
-    public async Task A_token_seen_again_under_another_sign_in_moves_to_it()
+    public async Task Two_accounts_on_one_phone_each_get_their_own_push_with_their_own_tag()
+    {
+        var (_, samBrowser) = await AccountAsync(_factory, "Sam");
+        var samDesktop = TestPhones.BearerClient(_factory, await DeviceTokenAsync(_factory, samBrowser));
+        var samPhone = await TestPhones.SignInAsync(_factory, samBrowser);
+        var (_, kimBrowser) = await AccountAsync(_factory, "Kim");
+        var kimDesktop = TestPhones.BearerClient(_factory, await DeviceTokenAsync(_factory, kimBrowser));
+        var kimPhone = await TestPhones.SignInAsync(_factory, kimBrowser);
+        await RegisterAsync(samPhone, "fcm-shared", accountTag: "sam-tag-0001");
+        await RegisterAsync(kimPhone, "fcm-shared", accountTag: "kim-tag-0002");
+
+        await ForwardAsync(samDesktop, Finished("Shop"));
+        var first = await _push.WaitForAsync(1);
+        await ForwardAsync(kimDesktop, Finished("Web"));
+        var pushed = await _push.WaitForAsync(2);
+
+        Assert.Equal(2, pushed.Count);
+        Assert.Equal("sam-tag-0001", Assert.Single(first).AccountTag);
+        Assert.All(pushed, p => Assert.Equal("fcm-shared", p.Token));
+        Assert.Equal("sam-tag-0001", pushed.Single(p => p.Line == "Claude Code finished in Shop").AccountTag);
+        Assert.Equal("kim-tag-0002", pushed.Single(p => p.Line == "Claude Code finished in Web").AccountTag);
+        Assert.Equal(2, await DeviceCountAsync());
+    }
+
+    [Fact]
+    public async Task The_same_person_signing_in_again_on_a_phone_takes_its_token_over()
     {
         var (_, browser, desktop, firstPhone) = await SetUpAsync();
         var secondPhone = await TestPhones.SignInAsync(_factory, browser);
@@ -308,8 +333,45 @@ public sealed class PushNotificationsTests(PostgresFixture postgres) : IAsyncLif
 
         var pushed = await _push.WaitForAsync(1);
         Assert.Single(pushed);
-        Assert.Equal(1, await DeviceCountAsync());
-        Assert.NotNull(firstPhone);
+        using var scope = _factory.Services.CreateScope();
+        var device = await scope.ServiceProvider.GetRequiredService<AppDbContext>().PushDevices.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(secondPhone.SessionId, device.SessionId);
+        Assert.NotEqual(firstPhone.SessionId, device.SessionId);
+    }
+
+    [Fact]
+    public async Task An_account_tag_is_kept_and_a_bad_one_is_refused()
+    {
+        var (_, browser) = await AccountAsync(_factory);
+        var phone = await TestPhones.SignInAsync(_factory, browser);
+
+        await RegisterAsync(phone, "fcm-token-1", accountTag: "Ab_9-xyzAb_9-xyz");
+        string[] bad = ["short", "has space 1234", "has.dot.12345", new string('a', 33), ""];
+        foreach (var tag in bad)
+        {
+            var refused = await phone.Client.PutAsJsonAsync("/api/v1/accounts/me/push-devices/current", new { platform = "android", pushToken = "fcm-token-1", accountTag = tag }, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            var problem = await refused.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            Assert.True(problem.GetProperty("errors").TryGetProperty("accountTag", out _), tag);
+        }
+
+        using var scope = _factory.Services.CreateScope();
+        var device = await scope.ServiceProvider.GetRequiredService<AppDbContext>().PushDevices.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Ab_9-xyzAb_9-xyz", device.AccountTag);
+        Assert.Equal(phone.SessionId, device.SessionId);
+    }
+
+    [Fact]
+    public async Task A_token_registered_again_without_a_tag_drops_the_old_tag()
+    {
+        var (_, browser) = await AccountAsync(_factory);
+        var phone = await TestPhones.SignInAsync(_factory, browser);
+
+        await RegisterAsync(phone, "fcm-token-1", accountTag: "acct-tag-0001");
+        await RegisterAsync(phone, "fcm-token-1");
+
+        using var scope = _factory.Services.CreateScope();
+        Assert.Null((await scope.ServiceProvider.GetRequiredService<AppDbContext>().PushDevices.SingleAsync(TestContext.Current.CancellationToken)).AccountTag);
     }
 
     [Fact]
@@ -322,6 +384,26 @@ public sealed class PushNotificationsTests(PostgresFixture postgres) : IAsyncLif
         await _push.WaitForAsync(1);
 
         await WaitUntilAsync(async () => await DeviceCountAsync() == 0);
+    }
+
+    [Fact]
+    public async Task A_token_the_push_service_no_longer_knows_is_forgotten_for_every_account()
+    {
+        var (_, samBrowser) = await AccountAsync(_factory, "Sam");
+        var samDesktop = TestPhones.BearerClient(_factory, await DeviceTokenAsync(_factory, samBrowser));
+        await RegisterAsync(await TestPhones.SignInAsync(_factory, samBrowser), "fcm-shared", accountTag: "sam-tag-0001");
+        var (_, kimBrowser) = await AccountAsync(_factory, "Kim");
+        await RegisterAsync(await TestPhones.SignInAsync(_factory, kimBrowser), "fcm-shared", accountTag: "kim-tag-0002");
+        var (_, leeBrowser) = await AccountAsync(_factory, "Lee");
+        await RegisterAsync(await TestPhones.SignInAsync(_factory, leeBrowser), "fcm-other");
+        _push.Result = PushSendResult.Unregistered;
+
+        await ForwardAsync(samDesktop, Finished());
+        await _push.WaitForAsync(1);
+
+        await WaitUntilAsync(async () => await DeviceCountAsync() == 1);
+        using var scope = _factory.Services.CreateScope();
+        Assert.Equal("fcm-other", (await scope.ServiceProvider.GetRequiredService<AppDbContext>().PushDevices.SingleAsync(TestContext.Current.CancellationToken)).PushToken);
     }
 
     [Fact]

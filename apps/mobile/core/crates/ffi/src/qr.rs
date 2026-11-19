@@ -3,7 +3,7 @@
 
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::secure::device_id;
-use crate::view::{AuthState, QrSignInView};
+use crate::view::QrSignInView;
 use runova_api::auth::{AuthError, DeviceInfo, QrPoll, Session, read_qr_code};
 use runova_crypto::handshake::os_random;
 use std::sync::Arc;
@@ -69,9 +69,8 @@ impl Runner {
         };
         self.view.qr_sign_in = Some(QrSignInView { match_code: None });
         let generation = self.qr_generation;
-        let attempt = self.attempt;
         let done = self.done_tx.clone();
-        let session: Arc<Session> = self.deps.session.clone();
+        let session: Arc<Session> = self.sign_in_session();
         let device = DeviceInfo {
             device_id: device_id(self.deps.secure.as_ref()),
             name: "Runova app".to_owned(),
@@ -80,7 +79,7 @@ impl Runner {
         };
         self.qr_task = Some(tokio::spawn(async move {
             let send = |task: Task| {
-                let _ = done.send(Done::Run { attempt, task });
+                let _ = done.send(Done::Local(task));
             };
             let outcome = async {
                 let claim = session
@@ -109,10 +108,7 @@ impl Runner {
                 runner.view.qr_sign_in = None;
                 runner.qr_task = None;
                 match outcome {
-                    Ok(()) => {
-                        runner.view.auth = AuthState::SignedIn;
-                        runner.boot();
-                    }
+                    Ok(()) => runner.signed_in(),
                     Err(stop) => runner.view.error = Some(stop.message().to_owned()),
                 }
             }));
@@ -120,7 +116,7 @@ impl Runner {
     }
 
     /// Makes anything the old attempt still has on its way count for nothing.
-    fn stop_qr(&mut self) {
+    pub(crate) fn stop_qr(&mut self) {
         self.qr_generation += 1;
         self.view.qr_sign_in = None;
         if let Some(task) = self.qr_task.take() {

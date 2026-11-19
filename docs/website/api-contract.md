@@ -811,7 +811,7 @@ off, nothing is stored and `notificationId` is null.
 |---|---|---|---|---|
 | GET | `/api/v1/accounts/me/notification-preferences` | Account | none | 200 `{ "items": NotificationPreferenceDto[] }`, one per category in display order; 401 |
 | PUT | `/api/v1/accounts/me/notification-preferences/{category}` | Account | `{ "enabled": bool }` | 200 `NotificationPreferenceDto`; 400; 401; 404 unknown category |
-| PUT | `/api/v1/accounts/me/push-devices/current` | Account, `mobile` session | `{ "platform": "android" \| "ios", "pushToken": string, "sealKeyId": string \| null }` | 200 `PushDeviceDto`; 400; 401; 403 |
+| PUT | `/api/v1/accounts/me/push-devices/current` | Account, `mobile` session | `{ "platform": "android" \| "ios", "pushToken": string, "sealKeyId": string \| null, "accountTag": string \| null }` | 200 `PushDeviceDto`; 400; 401; 403 |
 | DELETE | `/api/v1/accounts/me/push-devices/current` | Account | none | 204; 401 |
 | GET | `/api/v1/accounts/me/notification-listeners` | Account | none | 200 `{ "count": int, "sealing": bool }` (signed-in phones; a computer forwards nothing at 0; `sealing` is whether notifications are to be end-to-end encrypted); 401 |
 | GET | `/api/v1/accounts/me/encryption-preferences` | Account | none | 200 `EncryptionDto`; 401 |
@@ -821,9 +821,18 @@ off, nothing is stored and `notificationId` is null.
 `NotificationPreferenceDto`: `{ "category": string, "label": string, "enabled": bool }`.
 `PushDeviceDto`: `{ "id": number, "platform": string, "updatedAt": time }`; the token itself is
 write-only. `pushToken` is the FCM registration token on Android and the APNs device token on
-iOS. A session has at most one push device, registering again replaces it, and a token registered
-under another session moves to this one. Ending the session removes the device, so a signed-out
-phone gets no more pushes.
+iOS. A session has at most one push device, and registering again replaces it. Several accounts
+can be signed in on one phone, each with its own `mobile` session, and each registers the same
+token for itself: every account gets its own pushes. An account holds a token once, so when the
+same person signs in again on that phone the token moves from their earlier session to the new
+one, and other accounts keep theirs. Ending the session removes the device, so a signed-out
+account gets no more pushes on that phone. A token the push service says is gone is removed for
+every account that held it.
+
+`accountTag` is an opaque name the phone picks for the account, 8 to 32 letters, digits, dashes or
+underscores (anything else is a 400 on `accountTag`). It comes back in every push to that
+account, so a phone with several accounts knows whose push it is. Registering without it clears
+it. Neither the token nor the tag is ever returned.
 
 `NotificationEventRequest`: `{ "category": string, "status": string | null, "agent": string | null,
 "project": string | null, "subject": string | null, "itemId": string | null }`. `status` is one of
@@ -837,7 +846,11 @@ or target, up to 64 letters, digits, dots, dashes or underscores.
 A push is sent through FCM (Android) or APNs (iOS) with the line as its text and `category`,
 `notificationId` and (when present) `itemId` as data; the same message arrives as
 `NotificationCreated` for a phone that is connected, so the app can collapse the two by
-`notificationId`. The push services read `Push__Fcm__ProjectId`, `Push__Fcm__ClientEmail`,
+`notificationId`. When the device has an `accountTag`, the push also carries `account` set to it.
+On FCM such a push is data only (no `notification` block, the line goes in `data.fallback`, and
+`data.account` is the tag), so the app decides what to show. On APNs `account` sits at the top
+level next to `category`, and `aps.mutable-content` is 1 so the app's extension runs. A device with
+no tag gets the same push as before. The push services read `Push__Fcm__ProjectId`, `Push__Fcm__ClientEmail`,
 `Push__Fcm__PrivateKey`, `Push__Apns__KeyId`, `Push__Apns__TeamId`, `Push__Apns__PrivateKey` and
 `Push__Apns__BundleId` (default `com.runovahq.app`); without them that service is off and logs it
 once.

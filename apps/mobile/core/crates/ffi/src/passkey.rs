@@ -5,7 +5,7 @@
 
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::secure::device_id;
-use crate::view::{AuthState, PasskeySignInView};
+use crate::view::PasskeySignInView;
 use runova_api::auth::{AuthError, DeviceInfo, Session};
 use std::sync::Arc;
 
@@ -23,9 +23,8 @@ impl Runner {
             options_json: None,
         });
         let generation = self.passkey_generation;
-        let attempt = self.attempt;
         let done = self.done_tx.clone();
-        let session: Arc<Session> = self.deps.session.clone();
+        let session: Arc<Session> = self.sign_in_session();
         self.passkey_task = Some(tokio::spawn(async move {
             let challenge = session.begin_passkey_sign_in().await;
             let task: Task = Box::new(move |runner: &mut Runner| {
@@ -46,7 +45,7 @@ impl Runner {
                     }
                 }
             });
-            let _ = done.send(Done::Run { attempt, task });
+            let _ = done.send(Done::Local(task));
         }));
     }
 
@@ -63,9 +62,8 @@ impl Runner {
         }
         self.stop_passkey();
         let generation = self.passkey_generation;
-        let attempt = self.attempt;
         let done = self.done_tx.clone();
-        let session: Arc<Session> = self.deps.session.clone();
+        let session: Arc<Session> = self.sign_in_session();
         let device = DeviceInfo {
             device_id: device_id(self.deps.secure.as_ref()),
             name: "Runova app".to_owned(),
@@ -82,17 +80,14 @@ impl Runner {
                 }
                 runner.passkey_task = None;
                 match outcome {
-                    Ok(()) => {
-                        runner.view.auth = AuthState::SignedIn;
-                        runner.boot();
-                    }
+                    Ok(()) => runner.signed_in(),
                     Err(AuthError::PasskeyRefused) => {
                         runner.view.error = Some(REFUSED.to_owned());
                     }
                     Err(_) => runner.view.error = Some(FAILED.to_owned()),
                 }
             });
-            let _ = done.send(Done::Run { attempt, task });
+            let _ = done.send(Done::Local(task));
         }));
     }
 
@@ -104,7 +99,7 @@ impl Runner {
     }
 
     /// Makes anything the old attempt still has on its way count for nothing.
-    fn stop_passkey(&mut self) {
+    pub(crate) fn stop_passkey(&mut self) {
         self.passkey_generation += 1;
         self.view.passkey_sign_in = None;
         if let Some(task) = self.passkey_task.take() {

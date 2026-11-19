@@ -31,6 +31,9 @@ struct AppIntents {
     /// Shows the Sign in with Apple sheet for a nonce the core put in the view.
     var promptApple: (_ nonce: String) -> Void = { _ in }
     var openAbout: () -> Void = {}
+    /// Opens the account switcher (E118). The app's root fills this in.
+    var openAccounts: () -> Void = {}
+    var accounts = AccountsIntents()
     var git = GitIntents()
     var status = StatusIntents()
     var vault = VaultIntents()
@@ -64,7 +67,8 @@ struct AppRoot: View {
     let appIntents: AppIntents
 
     @State private var aboutOpen = false
-    @State private var scanning = false
+    @State private var switcherOpen = false
+    @State private var manageOpen = false
     @ObservedObject private var sendPicks: SendPicks
     @Environment(\.palette) private var palette
 
@@ -78,6 +82,7 @@ struct AppRoot: View {
     private var intents: AppIntents {
         var routed = appIntents
         routed.openAbout = { aboutOpen = true }
+        routed.openAccounts = { switcherOpen = true }
         return routed
     }
 
@@ -99,39 +104,8 @@ struct AppRoot: View {
             case .signedOut:
                 if view.showIntro {
                     IntroScreen(onDone: intents.finishIntro)
-                } else if let qr = view.qrSignIn {
-                    QrWaitingScreen(view: qr, onCancel: intents.cancelQrSignIn)
-                } else if scanning {
-                    QrScanScreen(
-                        onCode: {
-                            scanning = false
-                            intents.scanSignIn($0)
-                        },
-                        onCancel: { scanning = false })
                 } else {
-                    SignInScreen(
-                        error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true },
-                        onPasskey: intents.signInWithPasskey, passkeyWaiting: view.passkeySignIn != nil,
-                        onApple: { intents.signInWithProvider("apple") },
-                        appleWaiting: view.providerSignIn?.provider == "apple",
-                        onBrowserProvider: intents.signInInBrowser
-                    )
-                    // Once per challenge: a redraw must not open the prompt again.
-                    .task(id: view.passkeySignIn?.challengeId) {
-                        if let passkey = view.passkeySignIn, let options = passkey.optionsJson {
-                            intents.promptPasskey(passkey.challengeId, options)
-                        }
-                    }
-                    // Once per nonce, as with the passkey prompt.
-                    .task(id: view.providerSignIn?.nonce) {
-                        if let sheet = view.providerSignIn, sheet.provider == "apple", let nonce = sheet.nonce {
-                            intents.promptApple(nonce)
-                        }
-                    }
-                    // Two-step sign-in: the browser asks for the code. Once each time it is set.
-                    .task(id: view.continueInBrowser) {
-                        if let provider = view.continueInBrowser { intents.signInInBrowser(provider) }
-                    }
+                    SignInFlow(view: view, intents: intents, adding: false)
                 }
             case .signedIn: signedIn
             }
@@ -141,6 +115,19 @@ struct AppRoot: View {
                         item: banner, connected: view.connection != nil, intents: intents.notifications, tab: $tab)
                     Spacer(minLength: 0)
                 }
+            }
+            // What the core says about a switch, over the tabs (a connected computer has its own bar).
+            if view.auth == .signedIn, view.connection == nil, view.accounts.switching == nil, let notice = view.notice {
+                VStack {
+                    Spacer(minLength: 0)
+                    AccountToast(message: notice, onDismiss: intents.dismissNotice)
+                        .padding(.bottom, 92)
+                }
+            }
+            if switcherOpen, view.auth == .signedIn, !view.accounts.adding {
+                AccountSwitcherSheet(
+                    accounts: view.accounts, intents: intents.accounts, onManage: { manageOpen = true }
+                ) { switcherOpen = false }
             }
             if let stepUp = view.account.stepUp {
                 StepUpOverlay(stepUp: stepUp, intents: intents.account)
@@ -166,8 +153,15 @@ struct AppRoot: View {
     }
 
     @ViewBuilder private var signedIn: some View {
-        // Sending files goes beside a connection, so it opens over whatever is on show.
-        if sendPicks.open {
+        if let switching = view.accounts.switching {
+            SwitchingScreen(item: switching)
+        } else if view.accounts.adding {
+            // Adding an account: the sign-in screen over the account in use (E118).
+            SignInFlow(view: view, intents: intents, adding: true)
+        } else if manageOpen {
+            ManageAccountsScreen(accounts: view.accounts, intents: intents.accounts) { manageOpen = false }
+        } else if sendPicks.open {
+            // Sending files goes beside a connection, so it opens over whatever is on show.
             SendFilesScreen(
                 screen: view.send, intents: intents.send, receive: view.receive, receiveIntents: intents.receive
             ) { sendPicks.open = false }
@@ -215,6 +209,57 @@ struct StartingScreen: View {
     }
 }
 
+/// Signing in, with its QR scan and the platform prompts. Used signed out, and over the account in
+/// use when another is being added.
+private struct SignInFlow: View {
+    let view: AppView
+    let intents: AppIntents
+    let adding: Bool
+
+    @State private var scanning = false
+
+    var body: some View {
+        if let qr = view.qrSignIn {
+            QrWaitingScreen(view: qr, onCancel: intents.cancelQrSignIn)
+        } else if scanning {
+            QrScanScreen(
+                onCode: {
+                    scanning = false
+                    intents.scanSignIn($0)
+                },
+                onCancel: { scanning = false })
+        } else {
+            SignInScreen(
+                error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true },
+                onPasskey: intents.signInWithPasskey, passkeyWaiting: view.passkeySignIn != nil,
+                onApple: { intents.signInWithProvider("apple") },
+                appleWaiting: view.providerSignIn?.provider == "apple",
+                onBrowserProvider: intents.signInInBrowser,
+                adding: adding ? view.accounts : nil,
+                onCancelAdding: intents.accounts.cancelAdd,
+                signedOut: !adding && !view.accounts.items.isEmpty ? view.accounts : nil,
+                onSwitch: intents.accounts.switchTo
+            )
+            // Once per challenge: a redraw must not open the prompt again.
+            .task(id: view.passkeySignIn?.challengeId) {
+                if let passkey = view.passkeySignIn, let options = passkey.optionsJson {
+                    intents.promptPasskey(passkey.challengeId, options)
+                }
+            }
+            // Once per nonce, as with the passkey prompt.
+            .task(id: view.providerSignIn?.nonce) {
+                if let sheet = view.providerSignIn, sheet.provider == "apple", let nonce = sheet.nonce {
+                    intents.promptApple(nonce)
+                }
+            }
+            // Two-step sign-in: the browser asks for the code. Once each time it is set.
+            .task(id: view.continueInBrowser) {
+                if let provider = view.continueInBrowser { intents.signInInBrowser(provider) }
+            }
+        }
+    }
+}
+
 struct SignInScreen: View {
     let error: String?
     let onSignIn: () -> Void
@@ -224,18 +269,48 @@ struct SignInScreen: View {
     var onApple: () -> Void = {}
     var appleWaiting = false
     var onBrowserProvider: (String) -> Void = { _ in }
+    /// The accounts already on the phone while one more is added (E118).
+    var adding: AccountsView? = nil
+    var onCancelAdding: () -> Void = {}
+    /// The accounts on the phone after a session ended, to sign in again or switch.
+    var signedOut: AccountsView? = nil
+    var onSwitch: (Int64) -> Void = { _ in }
 
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 0) {
-            RunovaLogo(size: 112)
-            Spacer().frame(height: 12)
-            RunovaText("Runova", style: RunovaType.heading)
-            Spacer().frame(height: 6)
-            RunovaText(
-                "Your computers, terminals and deployments, wherever you are.",
-                color: palette.mutedForeground, alignment: .center)
+            if let adding {
+                RunovaTopBar(title: adding.reauth != nil ? "Sign in again" : "Add an account", onBack: onCancelAdding)
+            }
+            // Scrolls only when it does not fit, such as with several accounts listed above the buttons.
+            ViewThatFits(in: .vertical) {
+                form
+                ScrollView { form }
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+
+    private var form: some View {
+        VStack(spacing: 0) {
+            if let adding {
+                RunovaLogo(size: 72)
+                Spacer().frame(height: 12)
+                RunovaText(addingLine(adding), color: palette.mutedForeground, alignment: .center)
+            } else {
+                RunovaLogo(size: 112)
+                Spacer().frame(height: 12)
+                RunovaText("Runova", style: RunovaType.heading)
+                Spacer().frame(height: 6)
+                RunovaText(
+                    "Your computers, terminals and deployments, wherever you are.",
+                    color: palette.mutedForeground, alignment: .center)
+                if let signedOut {
+                    Spacer().frame(height: 16)
+                    SignedOutAccounts(accounts: signedOut, onSwitch: onSwitch)
+                }
+            }
             Spacer().frame(height: 24)
             RunovaButton(text: "Sign in", icon: RunovaIcons.forward, action: onSignIn).frame(maxWidth: .infinity)
             Spacer().frame(height: 8)
@@ -313,7 +388,18 @@ struct SystemsScreen: View {
 
     var body: some View {
         let openSend = { intents.send.picks.open = true }
-        RunovaScreen(title: "Systems", trailing: { SendFilesButton(onOpen: openSend) }) {
+        RunovaScreen(
+            title: "Systems",
+            trailing: {
+                HStack(spacing: 0) {
+                    // With one account there is nothing to switch to, so the bar stays as it was.
+                    if view.accounts.items.count > 1 {
+                        AccountAvatarButton(accounts: view.accounts, onOpen: intents.openAccounts)
+                    }
+                    SendFilesButton(onOpen: openSend)
+                }
+            }
+        ) {
             if let label = view.send.progressLabel {
                 SendingStrip(label: label, percent: Int(view.send.progressPercent), icon: RunovaIcons.send, onOpen: openSend)
                     .padding(.horizontal, 16).padding(.top, 12)

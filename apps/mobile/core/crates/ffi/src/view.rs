@@ -711,6 +711,46 @@ pub struct StatusScreen {
     pub computer: Vec<ComputerItemView>,
 }
 
+/// One account on this phone (E118).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AccountItem {
+    pub id: i64,
+    /// The display name, or the email when there is none.
+    pub name: String,
+    pub email: String,
+    /// One or two letters for the avatar.
+    pub initials: String,
+    /// Which of the six avatar colours, steady for the account.
+    pub tone: u8,
+    /// The account in use.
+    pub active: bool,
+    /// Its session ended: tapping it goes to the sign-in screen for it.
+    pub needs_sign_in: bool,
+    /// "In use", or how long ago it was.
+    pub last_used: String,
+}
+
+/// What a push carrying `tag` says it is for, kept where a notification extension can read it.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PushLabelView {
+    pub tag: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, uniffi::Record)]
+pub struct AccountsView {
+    /// In the order they were added.
+    pub items: Vec<AccountItem>,
+    /// The sign-in screen is up over the account in use, to add another.
+    pub adding: bool,
+    /// The account being switched to, until it has started.
+    pub switching: Option<AccountItem>,
+    /// The account the sign-in screen asks to have signed in again.
+    pub reauth: Option<AccountItem>,
+    /// Empty while the phone holds one account: its pushes need no name.
+    pub push_labels: Vec<PushLabelView>,
+}
+
 /// Asked before anything hard to undo.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ConfirmView {
@@ -1432,6 +1472,8 @@ pub struct AppView {
     pub send: SendScreen,
     /// Files sent to the phone (E114).
     pub receive: ReceiveScreen,
+    /// The accounts on this phone (E118).
+    pub accounts: AccountsView,
 }
 
 impl AppView {
@@ -1483,6 +1525,7 @@ impl AppView {
             recovery_phrases: RecoveryPhrasesScreen::default(),
             send: SendScreen::default(),
             receive: ReceiveScreen::default(),
+            accounts: AccountsView::default(),
         }
     }
 }

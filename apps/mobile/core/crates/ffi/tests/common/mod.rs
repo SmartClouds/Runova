@@ -13,7 +13,7 @@ use runova_crypto::handshake::{Identity, Mode, base64url, derive_password_secret
 use runova_ffi::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use runova_ffi::engine::{Dependencies, Engine, HubConnector};
 use runova_ffi::notifications::{FeedConnector, FeedEvent};
-use runova_ffi::secure::{SecureStore, SecureTokens};
+use runova_ffi::secure::{AccountTokens, SecureStore};
 use runova_ffi::view::{AppView, AuthState, ConnectionPhase, ViewListener};
 use runova_link::opener::{Direct, Relay};
 use runova_link::secure::ControllerConfig;
@@ -949,10 +949,11 @@ pub async fn start_signed_in(store: Arc<MemoryStore>, unattended: bool) -> World
     let backend = Arc::new(FakeBackend::default());
     let feed = Arc::new(FakeFeed::default());
     backend.unattended.store(unattended, Ordering::SeqCst);
+    let tokens = AccountTokens::new(store.clone());
     let session = Arc::new(Session::new(
         "https://runovahq.test",
         Arc::new(OneToken),
-        Arc::new(SecureTokens(store.clone())),
+        tokens.clone(),
         Box::new(|| 1_000),
     ));
     let kept = store.clone();
@@ -963,6 +964,7 @@ pub async fn start_signed_in(store: Arc<MemoryStore>, unattended: bool) -> World
         secure: store,
         listener: views.clone(),
         session,
+        tokens,
         backend: backend.clone(),
         feed: feed.clone(),
         hub: Arc::new(FakeConnector(computer.clone())),

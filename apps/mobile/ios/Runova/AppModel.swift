@@ -103,6 +103,12 @@ final class AppModel: NSObject, ObservableObject {
                 guard let self else { return }
                 Task { @MainActor in await self.applePrompt.answer(nonce: nonce) }
             },
+            accounts: AccountsIntents(
+                add: { [weak self] in self?.engine?.addAccount() },
+                cancelAdd: { [weak self] in self?.engine?.cancelAddAccount() },
+                switchTo: { [weak self] in self?.engine?.switchAccount(id: $0) },
+                signOutOf: { [weak self] in self?.engine?.signOutAccount(id: $0) },
+                signOutAll: { [weak self] in self?.engine?.signOutAll() }),
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },
@@ -439,11 +445,28 @@ final class AppModel: NSObject, ObservableObject {
     }
 
     /// A tapped push, with what the server put next to its alert.
-    func openPush(category: String, notificationId: Int64?, itemId: String? = nil) {
+    func openPush(category: String, notificationId: Int64?, itemId: String? = nil, account: String? = nil) {
         // An attack's push names its server and site, and opens that site's attacks (E111).
-        engine?.notificationTapped(id: notificationId, category: category, itemId: itemId)
+        // The account it came for is switched to first when it is not the one in use (E118).
+        engine?.notificationTapped(id: notificationId, category: category, itemId: itemId, account: account)
         tab = tabFor(notificationDestination(category: category), connected: view?.connection != nil)
     }
+
+    private var pushLabels: [String: String]?
+
+    /// Whose each push is, kept where the notification extension can read it (E118). The core
+    /// sends none while the phone holds one account, and then nothing is kept.
+    func keepPushLabels(_ view: AppView) {
+        let labels = pushLabelMap(view.accounts.pushLabels)
+        guard labels != pushLabels else { return }
+        pushLabels = labels
+        if labels.isEmpty {
+            PushAccountLabels.remove()
+        } else {
+            PushAccountLabels.write(labels)
+        }
+    }
+
     private var lastBiometric: UInt64 = 0
     private var lastUnlockPrompt: UInt64 = 0
 
@@ -720,6 +743,7 @@ private final class Listener: ViewListener {
             model?.confirmIdentityIfAsked(view)
             model?.unlockIfAsked(view)
             model?.keepSending(view)
+            model?.keepPushLabels(view)
         }
     }
 }

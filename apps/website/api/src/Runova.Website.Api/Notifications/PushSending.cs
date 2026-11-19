@@ -16,6 +16,8 @@ internal static class PushPlatforms
 /// <summary>
 /// One line to one phone. It holds a push token, so it is never logged. <c>Sealed</c> is this
 /// phone's own copy of a sealed notification; <c>Line</c> is then the generic line.
+/// <c>AccountTag</c> is the tag the phone gave this account, so a phone with several accounts
+/// signed in knows whose push it is.
 /// </summary>
 internal sealed record PushDelivery(
     long DeviceId,
@@ -25,13 +27,14 @@ internal sealed record PushDelivery(
     string Category,
     long NotificationId,
     string? ItemId,
-    string? Sealed = null);
+    string? Sealed = null,
+    string? AccountTag = null);
 
 internal enum PushSendResult
 {
     Sent,
 
-    /// <summary>The push service says the token is gone: the device is removed.</summary>
+    /// <summary>The push service says the token is gone: every device row holding it is removed.</summary>
     Unregistered,
 
     /// <summary>The push service refused or could not be reached. Nothing is retried; the inbox still has it.</summary>
@@ -94,7 +97,8 @@ internal sealed partial class PushDispatcher(
             {
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                await db.PushDevices.Where(d => d.Id == delivery.DeviceId).ExecuteDeleteAsync(stoppingToken);
+                // A dead token is dead for every account signed in on that phone, not just this one.
+                await db.PushDevices.Where(d => d.PushToken == delivery.Token).ExecuteDeleteAsync(stoppingToken);
             }
         }
         catch (Exception e) when (e is not OperationCanceledException)

@@ -40,6 +40,7 @@ import uniffi.runova_ffi.BiometricRequestView
 import uniffi.runova_ffi.Engine
 import com.runovahq.app.design.RunovaTheme
 import com.runovahq.app.ui.AccountIntents
+import com.runovahq.app.ui.AccountsIntents
 import com.runovahq.app.ui.AppIntents
 import com.runovahq.app.ui.AppRoot
 import com.runovahq.app.ui.CloudflareIntents
@@ -356,6 +357,13 @@ class MainActivity : FragmentActivity(), ViewListener {
                 autoFixCommit = { engine.autoFixCommit(it) },
                 autoFixDismiss = { engine.autoFixDismiss(it) },
                 watchAgent = { core.openTerminal(it) },
+            ),
+            accounts = AccountsIntents(
+                add = { engine.addAccount() },
+                cancelAdd = { engine.cancelAddAccount() },
+                switchTo = { engine.switchAccount(it) },
+                signOutOf = { engine.signOutAccount(it) },
+                signOutAll = { engine.signOutAll() },
             ),
             account = AccountIntents(
                 setName = { engine.accountSetName(it) },
@@ -686,7 +694,8 @@ class MainActivity : FragmentActivity(), ViewListener {
         val category = intent.getStringExtra("category") ?: return
         val id = intent.getStringExtra("notificationId")?.toLongOrNull()
         // An attack's push names its server and site, and opens that site's attacks (E111).
-        engine.notificationTapped(id, category, intent.getStringExtra("itemId"))
+        // The account it came for is switched to first when it is not the one in use (E118).
+        engine.notificationTapped(id, category, intent.getStringExtra("itemId"), intent.getStringExtra("account"))
         tab = tabFor(notificationDestination(category), view?.connection != null)
     }
 

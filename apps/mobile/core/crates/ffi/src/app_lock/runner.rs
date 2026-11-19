@@ -608,7 +608,7 @@ impl Engine {
             r.show_lock();
         });
         if sign_out {
-            self.sign_out();
+            self.run(|r| r.queue(crate::engine::Command::SignOutAll));
         }
     }
 

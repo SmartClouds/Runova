@@ -758,7 +758,7 @@ async fn a_push_tapped_before_the_computer_is_there_opens_once_it_is() {
     let world = signed_in().await;
     world
         .engine
-        .notification_tapped(None, "deploys".into(), Some("srv1:blog".into()));
+        .notification_tapped(None, "deploys".into(), Some("srv1:blog".into()), None);
     world.computer.answer("deploy.servers", servers());
     world
         .computer

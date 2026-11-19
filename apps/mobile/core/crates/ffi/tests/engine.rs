@@ -5,7 +5,7 @@ use runova_api::auth::Session;
 use runova_api::http::{HttpError, HttpReply, HttpTransport};
 use runova_ffi::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
 use runova_ffi::engine::{AppLifecycle, Dependencies, Engine, HubConnector};
-use runova_ffi::secure::{SecureStore, SecureTokens};
+use runova_ffi::secure::{AccountTokens, SecureStore};
 use runova_ffi::view::{AppView, AuthState, ConnectionPhase, ViewListener};
 use runova_link::opener::{Direct, Relay};
 use runova_link::transport::{Fingerprints, LinkTransport};
@@ -216,10 +216,11 @@ fn world_with(store: Arc<MemoryStore>) -> World {
     });
     let clock = Arc::new(AtomicU64::new(1_000));
     let now = clock.clone();
+    let tokens = AccountTokens::new(store.clone());
     let session = Arc::new(Session::new(
         "https://runovahq.test",
         http.clone(),
-        Arc::new(SecureTokens(store.clone())),
+        tokens.clone(),
         Box::new(move || now.load(Ordering::SeqCst)),
     ));
     let engine = Engine::start(Dependencies {
@@ -231,6 +232,7 @@ fn world_with(store: Arc<MemoryStore>) -> World {
         secure: store.clone(),
         listener: views.clone(),
         session,
+        tokens,
         backend: backend.clone(),
         hub: connector.clone(),
         transports: Arc::new(NoTransports),

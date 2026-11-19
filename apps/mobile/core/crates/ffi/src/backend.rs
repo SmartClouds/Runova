@@ -58,6 +58,17 @@ pub trait Backend: Send + Sync {
     ) -> Result<Value, BackendError> {
         Err(BackendError::Failed("Not available.".to_owned()))
     }
+
+    /// The same change as another account on the phone, with that account's access token (E118).
+    async fn send_json_as(
+        &self,
+        _token: &str,
+        _method: &str,
+        _path: &str,
+        _body: Value,
+    ) -> Result<Value, BackendError> {
+        Err(BackendError::Failed("Not available.".to_owned()))
+    }
 }
 
 #[derive(Deserialize)]
@@ -167,11 +178,22 @@ impl Backend for LiveBackend {
         path: &str,
         body: Value,
     ) -> Result<Value, BackendError> {
+        let token = self.token().await?;
+        self.send_json_as(&token, method, path, body).await
+    }
+
+    async fn send_json_as(
+        &self,
+        token: &str,
+        method: &str,
+        path: &str,
+        body: Value,
+    ) -> Result<Value, BackendError> {
         let verb = reqwest::Method::from_bytes(method.as_bytes()).map_err(failed)?;
         let response = self
             .client
             .request(verb, format!("{}{path}", self.site))
-            .bearer_auth(self.token().await?)
+            .bearer_auth(token)
             // The server refuses a change with no version unless it is told any version will do.
             .header("if-match", "*")
             .json(&body)
