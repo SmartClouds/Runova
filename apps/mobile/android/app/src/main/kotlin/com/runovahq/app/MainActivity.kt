@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import java.io.File
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -81,6 +83,15 @@ class MainActivity : FragmentActivity(), ViewListener {
     private var tab by mutableStateOf("systems")
     private lateinit var core: RunovaCore
     private lateinit var engine: Engine
+
+    /** The platform's passkey prompt for a sign-in the core started (E115). */
+    private val passkeyPrompt by lazy {
+        PasskeyPrompt(
+            CredentialManagerPasskeys(this),
+            finish = { id, answer -> engine.finishPasskeySignIn(id, answer) },
+            cancel = { noPasskey -> engine.cancelPasskeySignIn(noPasskey) },
+        )
+    }
     private var lastBiometric = 0uL
     private var lastUnlockPrompt = 0uL
     private var pendingConnect: Long? = null
@@ -119,6 +130,8 @@ class MainActivity : FragmentActivity(), ViewListener {
             finishIntro = { engine.introDone() },
             scanSignIn = { engine.scanSignIn(it) },
             cancelQrSignIn = { engine.cancelQrSignIn() },
+            signInWithPasskey = { engine.beginPasskeySignIn() },
+            promptPasskey = { id, options -> lifecycleScope.launch { passkeyPrompt.answer(id, options) } },
             git = GitIntents(
                 openDiff = { path, group -> engine.openGitDiff(path, group) },
                 closeDiff = { engine.closeGitDiff() },

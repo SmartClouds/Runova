@@ -469,6 +469,142 @@ async fn a_declined_qr_code_stays_signed_out_and_says_so() {
     assert_eq!(view.auth, AuthState::SignedOut);
 }
 
+// Passkey sign-in (E115): the core asks for the challenge and shows it in the view, the platform's
+// prompt answers it, and the core trades the answer for tokens.
+
+fn passkey_challenge() -> HttpReply {
+    reply(
+        201,
+        json!({
+            "id": "challenge-1",
+            "options": { "challenge": "AQID", "rpId": "runovahq.com" },
+            "expiresAt": "2026-11-19T10:05:00Z",
+        }),
+    )
+}
+
+async fn passkey_prompt(world: &World) -> runova_ffi::view::PasskeySignInView {
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(passkey_challenge());
+    world.engine.begin_passkey_sign_in();
+    until(
+        world,
+        |v| {
+            v.passkey_sign_in
+                .as_ref()
+                .is_some_and(|p| p.options_json.is_some())
+        },
+        "the passkey prompt",
+    )
+    .await
+    .passkey_sign_in
+    .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_passkey_answer_signs_in_with_no_code() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    let prompt = passkey_prompt(&world).await;
+    assert_eq!(prompt.challenge_id, "challenge-1");
+    let options: Value = serde_json::from_str(prompt.options_json.as_deref().unwrap()).unwrap();
+    assert_eq!(options["rpId"], "runovahq.com");
+    world.http.replies.lock().unwrap().push_back(tokens());
+
+    world
+        .engine
+        .finish_passkey_sign_in(prompt.challenge_id, r#"{"id":"AQI","rawId":"AQI"}"#.into());
+
+    let view = until(&world, |v| v.auth == AuthState::SignedIn, "signed in").await;
+    assert_eq!(view.passkey_sign_in, None);
+    assert_eq!(view.error, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_passkey_stays_signed_out_and_says_so() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    let prompt = passkey_prompt(&world).await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(reply(401, json!({})));
+
+    world
+        .engine
+        .finish_passkey_sign_in(prompt.challenge_id, r#"{"id":"AQI"}"#.into());
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("wasn't accepted"));
+    assert_eq!(view.passkey_sign_in, None);
+    assert_eq!(view.auth, AuthState::SignedOut);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn closing_the_passkey_prompt_says_nothing() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    passkey_prompt(&world).await;
+
+    world.engine.cancel_passkey_sign_in(false);
+
+    let view = until(&world, |v| v.passkey_sign_in.is_none(), "cancelled").await;
+    assert_eq!(view.error, None);
+    assert_eq!(view.auth, AuthState::SignedOut);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_with_no_passkey_for_runova_says_how_to_get_one() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    passkey_prompt(&world).await;
+
+    world.engine.cancel_passkey_sign_in(true);
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("Security page"));
+    assert_eq!(view.passkey_sign_in, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_challenge_means_no_prompt_and_a_message() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(reply(503, json!({})));
+
+    world.engine.begin_passkey_sign_in();
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("Couldn't start"));
+    assert_eq!(view.passkey_sign_in, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_answer_to_an_old_prompt_counts_for_nothing() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    passkey_prompt(&world).await;
+
+    world
+        .engine
+        .finish_passkey_sign_in("some-other-challenge".into(), r#"{"id":"AQI"}"#.into());
+
+    let view = until(&world, |v| v.passkey_sign_in.is_none(), "dropped").await;
+    assert_eq!(view.auth, AuthState::SignedOut);
+    assert!(world.http.replies.lock().unwrap().is_empty());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_computer_going_offline_updates_the_list() {
     let world = world();

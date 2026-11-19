@@ -1332,6 +1332,16 @@ pub struct EncryptionItemView {
     pub can_change: bool,
 }
 
+/// A passkey sign-in on its way (E115).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PasskeySignInView {
+    /// The id to answer with. Empty until the server has given a challenge.
+    pub challenge_id: String,
+    /// The WebAuthn request options as JSON. Show the platform's passkey prompt once this is set,
+    /// once per challenge.
+    pub options_json: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct QrSignInView {
     /// The digits both screens show. None until the server has taken the code.
@@ -1394,6 +1404,8 @@ pub struct AppView {
     pub encryption: Option<EncryptionScreen>,
     /// A scanned QR sign-in on its way. None the rest of the time.
     pub qr_sign_in: Option<QrSignInView>,
+    /// A passkey sign-in on its way. None the rest of the time.
+    pub passkey_sign_in: Option<PasskeySignInView>,
     /// The app lock (E106). While `lock.locked`, nothing else is drawn.
     pub lock: LockScreen,
     /// Settings for the app lock, from the Account tab.
@@ -1447,6 +1459,7 @@ impl AppView {
             git_more: GitMoreScreen::default(),
             encryption: None,
             qr_sign_in: None,
+            passkey_sign_in: None,
             lock: LockScreen::default(),
             passcode: PasscodeSettingsScreen::default(),
             recovery_phrases: RecoveryPhrasesScreen::default(),

@@ -381,3 +381,101 @@ async fn polling_reads_each_answer() {
     assert_eq!(url, "https://runovahq.com/api/v1/qr-sign-in-polls");
     assert_eq!(body, json!({ "code": QR_CODE, "codeVerifier": "v" }));
 }
+
+// Passkeys (E115): a challenge with no cookie, the platform's passkey prompt, the passkey grant.
+
+#[tokio::test]
+async fn a_passkey_sign_in_starts_with_a_sign_in_challenge_and_hands_the_options_on() {
+    let world = world();
+    world.http.answer(
+        201,
+        json!({
+            "id": "challenge-1",
+            "options": {"challenge": "AQID", "rpId": "runovahq.com", "userVerification": "required"},
+            "expiresAt": "2026-11-19T10:05:00Z",
+        }),
+    );
+
+    let challenge = world.session.begin_passkey_sign_in().await.unwrap();
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/passkey-challenges");
+    assert_eq!(body, json!({"purpose": "sign-in"}));
+    assert_eq!(challenge.id, "challenge-1");
+    let options: Value = serde_json::from_str(&challenge.options_json).unwrap();
+    assert_eq!(options["rpId"], "runovahq.com");
+    assert_eq!(options["challenge"], "AQID");
+}
+
+#[tokio::test]
+async fn the_passkey_answer_is_traded_for_tokens_with_the_phone_s_details() {
+    let world = world();
+    world.http.answer(200, tokens_body(1));
+    let answer = r#"{"id":"AQI","rawId":"AQI","type":"public-key","response":{}}"#;
+
+    world
+        .session
+        .finish_passkey_sign_in("challenge-1", answer, &phone())
+        .await
+        .unwrap();
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/device-tokens");
+    assert_eq!(body["grantType"], "passkey");
+    assert_eq!(body["challengeId"], "challenge-1");
+    assert_eq!(body["credential"]["rawId"], "AQI");
+    assert_eq!(body["platform"], "android");
+    assert_eq!(body["appVersion"], "3.4.0");
+    assert_eq!(body["deviceId"], "4b2c0c0e-1111-4222-8333-944444444444");
+    assert_eq!(world.store.load().unwrap().refresh_token, "rr1.refresh-1");
+    assert_eq!(world.session.access_token().await.unwrap(), "rd1.access-1");
+}
+
+#[tokio::test]
+async fn a_passkey_the_site_refuses_saves_nothing() {
+    let world = world();
+    world.http.answer(401, json!({"title": "no"}));
+
+    let result = world
+        .session
+        .finish_passkey_sign_in("challenge-1", r#"{"id":"AQI"}"#, &phone())
+        .await;
+
+    assert_eq!(result, Err(AuthError::PasskeyRefused));
+    assert!(world.store.load().is_none());
+}
+
+#[tokio::test]
+async fn an_answer_that_is_not_json_is_never_sent() {
+    let world = world();
+
+    let result = world
+        .session
+        .finish_passkey_sign_in("challenge-1", "not json", &phone())
+        .await;
+
+    assert_eq!(result, Err(AuthError::PasskeyRefused));
+    assert!(world.http.calls().is_empty());
+}
+
+#[tokio::test]
+async fn no_challenge_when_the_site_can_not_be_reached() {
+    let world = world();
+    world.http.fail();
+
+    let result = world.session.begin_passkey_sign_in().await;
+
+    assert!(matches!(result, Err(AuthError::Network(_))));
+}
+
+#[tokio::test]
+async fn a_refused_challenge_is_a_network_error_with_its_status() {
+    let world = world();
+    world
+        .http
+        .answer(429, json!({"title": "Too many requests."}));
+
+    let result = world.session.begin_passkey_sign_in().await;
+
+    assert_eq!(result, Err(AuthError::Network("status 429".into())));
+}

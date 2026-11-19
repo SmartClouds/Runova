@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,10 @@ data class AppIntents(
     val finishIntro: () -> Unit = {},
     val scanSignIn: (String) -> Unit = {},
     val cancelQrSignIn: () -> Unit = {},
+    /** Asks the core for a passkey challenge (E115). */
+    val signInWithPasskey: () -> Unit = {},
+    /** Shows the platform's passkey prompt for a challenge the core put in the view. */
+    val promptPasskey: (challengeId: String, optionsJson: String) -> Unit = { _, _ -> },
     val openAbout: () -> Unit = {},
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
@@ -126,7 +131,22 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
                         },
                         onCancel = { scanning = false },
                     )
-                    else -> SignInScreen(view.error, intents.signIn) { scanning = true }
+                    else -> {
+                        val passkey = view.passkeySignIn
+                        // Once per challenge: a recomposition must not open the prompt again.
+                        if (passkey?.optionsJson != null) {
+                            LaunchedEffect(passkey.challengeId) {
+                                intents.promptPasskey(passkey.challengeId, passkey.optionsJson!!)
+                            }
+                        }
+                        SignInScreen(
+                            view.error,
+                            intents.signIn,
+                            onScanQr = { scanning = true },
+                            onPasskey = intents.signInWithPasskey,
+                            passkeyWaiting = passkey != null,
+                        )
+                    }
                 }
             AuthState.SIGNED_IN -> {
                 val connection = view.connection
@@ -221,7 +241,13 @@ fun StartingScreen() {
 }
 
 @Composable
-fun SignInScreen(error: String?, onSignIn: () -> Unit, onScanQr: () -> Unit = {}) {
+fun SignInScreen(
+    error: String?,
+    onSignIn: () -> Unit,
+    onScanQr: () -> Unit = {},
+    onPasskey: () -> Unit = {},
+    passkeyWaiting: Boolean = false,
+) {
     val colors = RunovaTheme.colors
     Column(
         Modifier.fillMaxSize().padding(32.dp),
@@ -241,6 +267,15 @@ fun SignInScreen(error: String?, onSignIn: () -> Unit, onScanQr: () -> Unit = {}
         RunovaButton("Sign in", onClick = onSignIn, modifier = Modifier.fillMaxWidth(), icon = RunovaIcons.Forward)
         Spacer(Modifier.height(8.dp))
         ScanQrButton(onScanQr)
+        Spacer(Modifier.height(8.dp))
+        RunovaButton(
+            if (passkeyWaiting) "Waiting for your passkey…" else "Use a passkey",
+            onClick = onPasskey,
+            modifier = Modifier.fillMaxWidth(),
+            kind = ButtonKind.Soft,
+            enabled = !passkeyWaiting,
+            icon = RunovaIcons.Fingerprint,
+        )
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             RunovaText(error, style = RunovaType.small, color = colors.destructive, align = TextAlign.Center)

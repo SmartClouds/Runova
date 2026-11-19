@@ -92,6 +92,11 @@ final class AppModel: NSObject, ObservableObject {
             finishIntro: { [weak self] in self?.engine?.introDone() },
             scanSignIn: { [weak self] in self?.engine?.scanSignIn(text: $0) },
             cancelQrSignIn: { [weak self] in self?.engine?.cancelQrSignIn() },
+            signInWithPasskey: { [weak self] in self?.engine?.beginPasskeySignIn() },
+            promptPasskey: { [weak self] id, options in
+                guard let self else { return }
+                Task { @MainActor in await self.passkeyPrompt.answer(challengeId: id, optionsJson: options) }
+            },
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },
@@ -653,6 +658,12 @@ final class AppModel: NSObject, ObservableObject {
         default: break
         }
     }
+
+    /// The platform's passkey prompt for a sign-in the core started (E115).
+    private lazy var passkeyPrompt = PasskeyPrompt(
+        provider: AuthenticationServicesPasskeys(),
+        finish: { [weak self] id, answer in self?.engine?.finishPasskeySignIn(challengeId: id, credentialJson: answer) },
+        cancel: { [weak self] noPasskey in self?.engine?.cancelPasskeySignIn(noPasskey: noPasskey) })
 
     private func signIn() {
         guard let core, let url = URL(string: core.beginSignIn(deviceName: UIDevice.current.model).url)

@@ -20,6 +20,10 @@ struct AppIntents {
     var finishIntro: () -> Void = {}
     var scanSignIn: (String) -> Void = { _ in }
     var cancelQrSignIn: () -> Void = {}
+    /// Asks the core for a passkey challenge (E115).
+    var signInWithPasskey: () -> Void = {}
+    /// Shows the platform's passkey prompt for a challenge the core put in the view.
+    var promptPasskey: (_ challengeId: String, _ optionsJson: String) -> Void = { _, _ in }
     var openAbout: () -> Void = {}
     var git = GitIntents()
     var status = StatusIntents()
@@ -99,7 +103,16 @@ struct AppRoot: View {
                         },
                         onCancel: { scanning = false })
                 } else {
-                    SignInScreen(error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true })
+                    SignInScreen(
+                        error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true },
+                        onPasskey: intents.signInWithPasskey, passkeyWaiting: view.passkeySignIn != nil
+                    )
+                    // Once per challenge: a redraw must not open the prompt again.
+                    .task(id: view.passkeySignIn?.challengeId) {
+                        if let passkey = view.passkeySignIn, let options = passkey.optionsJson {
+                            intents.promptPasskey(passkey.challengeId, options)
+                        }
+                    }
                 }
             case .signedIn: signedIn
             }
@@ -187,6 +200,8 @@ struct SignInScreen: View {
     let error: String?
     let onSignIn: () -> Void
     var onScanQr: () -> Void = {}
+    var onPasskey: () -> Void = {}
+    var passkeyWaiting = false
 
     @Environment(\.palette) private var palette
 
@@ -204,6 +219,13 @@ struct SignInScreen: View {
             Spacer().frame(height: 8)
             RunovaButton(text: "Scan QR code", kind: .soft, icon: RunovaIcons.qrCode, action: onScanQr)
                 .frame(maxWidth: .infinity)
+            Spacer().frame(height: 8)
+            RunovaButton(
+                text: passkeyWaiting ? "Waiting for your passkey…" : "Use a passkey", kind: .soft,
+                icon: RunovaIcons.fingerprint, action: onPasskey
+            )
+            .disabled(passkeyWaiting)
+            .frame(maxWidth: .infinity)
             if let error {
                 Spacer().frame(height: 12)
                 RunovaText(error, style: RunovaType.small, color: palette.destructive, alignment: .center)

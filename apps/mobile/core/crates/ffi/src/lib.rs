@@ -24,6 +24,7 @@ pub(crate) mod labels;
 pub mod notifications;
 pub mod ops;
 pub mod palette;
+pub mod passkey;
 pub mod qr;
 pub mod receive;
 pub(crate) mod receive_view;

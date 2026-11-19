@@ -26,6 +26,7 @@ import uniffi.runova_ffi.MonitoringScreen
 import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
+import uniffi.runova_ffi.PasskeySignInView
 import uniffi.runova_ffi.QrSignInView
 import uniffi.runova_ffi.RecoveryPhrasesScreen
 import uniffi.runova_ffi.RemoteView
@@ -160,6 +161,7 @@ fun appView(
     gitMore: GitMoreScreen = GitMoreScreen(null, null),
     encryption: EncryptionScreen? = null,
     qrSignIn: QrSignInView? = null,
+    passkeySignIn: PasskeySignInView? = null,
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
@@ -204,6 +206,7 @@ fun appView(
     gitMore,
     encryption,
     qrSignIn,
+    passkeySignIn,
     lock,
     passcode,
     recoveryPhrases,

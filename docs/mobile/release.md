@@ -42,6 +42,22 @@ Store Connect API key with the Admin role.
 
 The build goes to TestFlight.
 
+### Passkeys (E115)
+
+The phone apps sign in with the website's passkeys only once the site and the apps vouch for each
+other. Set these on the website's server (`docker-compose.production.yaml` passes them to the API),
+then check `https://<site>/.well-known/assetlinks.json` and
+`https://<site>/.well-known/apple-app-site-association`.
+
+| Server setting | Value |
+|---|---|
+| `PASSKEY_ANDROID_CERT_FINGERPRINTS` | the SHA-256 of the release key (`keytool -list -v -keystore release.keystore -alias runova`), and on a test site also the debug key's, split by commas |
+| `PASSKEY_APPLE_APP_IDS` | `<APPLE_TEAM_ID>.com.runovahq.app` |
+
+For iOS, turn on **Associated Domains** for `com.runovahq.app` in the Apple developer account, so
+the provisioning profile carries the `webcredentials:runovahq.com` entitlement that `project.yml`
+asks for. A site on another domain needs that entry changed to match.
+
 ### Push notifications
 
 Needs a Firebase project and an APNs key. The website API reads them from `Push__Fcm__*` and

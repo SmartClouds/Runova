@@ -47,6 +47,22 @@ pub enum AuthError {
     BadCallback,
     #[error("could not reach Runova: {0}")]
     Network(String),
+    #[error("that passkey was not accepted")]
+    PasskeyRefused,
+}
+
+/// A passkey sign-in to show the platform's prompt for (E115): the WebAuthn request options as
+/// JSON, as Credential Manager and AuthenticationServices take them, and the id to answer with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PasskeyChallenge {
+    pub id: String,
+    pub options_json: String,
+}
+
+#[derive(Deserialize)]
+struct PasskeyChallengeReply {
+    id: String,
+    options: serde_json::Value,
 }
 
 #[derive(Debug, Clone)]
@@ -265,6 +281,66 @@ impl Session {
                 self.accept(&mut state, &reply)
             }
             401 => Err(AuthError::SignedOut),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// A `sign-in` passkey challenge. It needs no session: the passkey says whose account it is.
+    pub async fn begin_passkey_sign_in(&self) -> Result<PasskeyChallenge, AuthError> {
+        let reply = self
+            .http
+            .post_json(
+                &format!("{}/api/v1/passkey-challenges", self.site),
+                json!({ "purpose": "sign-in" }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        if reply.status != 201 {
+            return Err(AuthError::Network(format!("status {}", reply.status)));
+        }
+        let parsed: PasskeyChallengeReply = serde_json::from_str(&reply.body)
+            .map_err(|_| AuthError::Network("an answer that could not be read".to_owned()))?;
+        Ok(PasskeyChallenge {
+            id: parsed.id,
+            options_json: parsed.options.to_string(),
+        })
+    }
+
+    /// Trades the platform's answer to a passkey challenge for the first pair of tokens. No
+    /// two-factor code follows: the passkey's own check (fingerprint, face or PIN) is the second.
+    pub async fn finish_passkey_sign_in(
+        &self,
+        challenge_id: &str,
+        credential_json: &str,
+        device: &DeviceInfo,
+    ) -> Result<(), AuthError> {
+        let credential: serde_json::Value =
+            serde_json::from_str(credential_json).map_err(|_| AuthError::PasskeyRefused)?;
+        if !credential.is_object() {
+            return Err(AuthError::PasskeyRefused);
+        }
+        let mut state = self.state.lock().await;
+        let reply = self
+            .http
+            .post_json(
+                &self.token_url,
+                json!({
+                    "grantType": "passkey",
+                    "challengeId": challenge_id,
+                    "credential": credential,
+                    "platform": device.platform,
+                    "appVersion": device.app_version,
+                    "deviceId": device.device_id,
+                }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            200 => {
+                state.loaded = true;
+                self.accept(&mut state, &reply)
+            }
+            400 | 401 => Err(AuthError::PasskeyRefused),
             status => Err(AuthError::Network(format!("status {status}"))),
         }
     }
