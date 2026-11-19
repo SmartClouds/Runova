@@ -57,3 +57,23 @@ export const keepWindowsHidden = isE2E && process.env.RUNOVA_E2E_SHOW !== '1';
 // macOS gives every Electron process an icon in the Dock, window or not, so a run with hidden
 // windows still made one pop in and out of the Dock for each test.
 if (keepWindowsHidden && process.platform === 'darwin') app.dock?.hide();
+
+/**
+ * No CSS animations in the app's own windows during e2e runs. A hidden window only moves its
+ * animations on a slow tick, so a closing menu or dialog stayed mounted for seconds (past 20 under
+ * a busy machine) waiting for its exit animation, and while a modal menu is mounted the page behind
+ * it is hidden from the accessibility tree. `none` rather than a zero duration, because a zero
+ * length animation still waits for that tick to send its animationend. Transitions stay, since
+ * code can wait for transitionend.
+ */
+const E2E_NO_ANIMATIONS_CSS = '*, *::before, *::after { animation: none !important; }';
+
+if (isE2E) {
+  app.on('web-contents-created', (_event, contents) => {
+    // Only the app's windows: pages in the built-in browser keep their own look.
+    if (contents.getType() !== 'window') return;
+    contents.on('dom-ready', () => {
+      contents.insertCSS(E2E_NO_ANIMATIONS_CSS, { cssOrigin: 'user' }).catch(() => undefined);
+    });
+  });
+}

@@ -75,8 +75,6 @@ export function PathBar({
       return;
     }
     if (result.status === 'failed') setProblem(result.problem);
-    // The field was disabled while it waited, which dropped the focus; give it back.
-    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   if (editing) {
@@ -91,7 +89,10 @@ export function PathBar({
             aria-describedby={problem ? `${side}-path-problem` : undefined}
             value={text}
             spellCheck={false}
-            disabled={busy}
+            // Read-only rather than disabled while it waits: a disabled field loses the focus, and
+            // that blur closed the field when it landed just as the path came back.
+            readOnly={busy}
+            aria-busy={busy || undefined}
             onChange={(event) => {
               setText(event.target.value);
               setProblem(null);
@@ -104,7 +105,7 @@ export function PathBar({
               if (event.key === 'Enter') {
                 event.preventDefault();
                 void submit();
-              } else if (event.key === 'Escape') {
+              } else if (event.key === 'Escape' && !busy) {
                 event.preventDefault();
                 onEditingChange(false);
               }

@@ -67,11 +67,17 @@ export function NewSecretField({
   typedLabel?: string;
 }): React.JSX.Element {
   const { phrase, error, renew } = usePendingPhrase(purpose, label, mode === 'phrase');
-  const [step, setStep] = useState<Step>('show');
+  // The step belongs to one phrase, so a new phrase starts at 'show' in the same render. Resetting
+  // it in an effect instead let a click on "I saved it" land before the effect, which then undid it.
+  const [progress, setProgress] = useState<{ phraseId: string | null; step: Step }>({
+    phraseId: null,
+    step: 'show',
+  });
+  const step: Step = phrase && progress.phraseId === phrase.id ? progress.step : 'show';
+  const setStep = (next: Step) => setProgress({ phraseId: phrase?.id ?? null, step: next });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new phrase starts over
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new phrase is not checked yet
   useEffect(() => {
-    setStep('show');
     onPhraseReady(null);
   }, [phrase?.id, mode]);
 

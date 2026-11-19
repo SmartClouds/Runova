@@ -28,8 +28,13 @@ export function RecoveryPhraseCard({
 }): React.JSX.Element {
   const reduceMotion = useReducedMotion();
   const [view, setView] = useState<View>('words');
-  const [shown, setShown] = useState(false);
-  const [qr, setQr] = useState<string | null>(null);
+  // Both belong to one phrase, so a different phrase starts hidden in the same render. Resetting
+  // them in an effect instead let a click on "Show the words" land before it, which then undid it.
+  const [shownFor, setShownFor] = useState<string | null>(null);
+  const [qrFor, setQrFor] = useState<{ phraseId: string; dataUrl: string } | null>(null);
+  const shown = shownFor === phrase.id;
+  const setShown = (on: boolean) => setShownFor(on ? phrase.id : null);
+  const qr = qrFor?.phraseId === phrase.id ? qrFor.dataUrl : null;
 
   useEffect(() => {
     void window.runova.phrase.protect(true);
@@ -39,23 +44,18 @@ export function RecoveryPhraseCard({
   }, []);
 
   useEffect(() => {
-    const hide = () => setShown(false);
+    const hide = () => setShownFor(null);
     window.addEventListener('blur', hide);
     return () => window.removeEventListener('blur', hide);
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a different phrase starts hidden
-  useEffect(() => {
-    setQr(null);
-    setShown(false);
-  }, [phrase.id]);
-
   useEffect(() => {
     if (view !== 'qr' || !shown || qr) return;
     let live = true;
+    const phraseId = phrase.id;
     window.runova.phrase
-      .qr(phrase.id)
-      .then((result) => live && setQr(result.dataUrl))
+      .qr(phraseId)
+      .then((result) => live && setQrFor({ phraseId, dataUrl: result.dataUrl }))
       .catch((error) => toast.error(errorText(error)));
     return () => {
       live = false;

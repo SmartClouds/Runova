@@ -270,7 +270,14 @@ export async function startFakeSentry(): Promise<FakeSentryServer> {
       json(response, {
         version: '0',
         auth: {
-          scopes: ['org:read', 'project:read', 'event:read', 'event:write', 'project:write'],
+          scopes: [
+            'org:read',
+            'project:read',
+            'event:read',
+            'event:write',
+            'project:write',
+            'org:write',
+          ],
         },
         user: { id: '1', email: LEAK_EMAIL },
       });

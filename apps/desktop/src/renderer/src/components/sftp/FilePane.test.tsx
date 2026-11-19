@@ -353,9 +353,9 @@ describe('the path bar, overtaken', () => {
       pending.get('/var')?.();
     });
     await waitFor(() => expect(files().remote.path).toBe('/home'));
-    expect(
-      within(remotePane()).getByRole('textbox', { name: 'Folder on the server' }),
-    ).toBeTruthy();
+    const kept = within(remotePane()).getByRole('textbox', { name: 'Folder on the server' });
+    expect((kept as HTMLInputElement).value).toBe('/var');
+    expect(kept).toHaveFocus();
     expect(within(remotePane()).queryByRole('alert')).toBeNull();
   });
 });
