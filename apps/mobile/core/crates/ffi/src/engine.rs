@@ -18,7 +18,7 @@ use crate::view::{
 };
 use async_trait::async_trait;
 use runova_api::auth::{
-    AuthError, DeviceInfo, Session, SignInRequest, begin_sign_in, read_callback,
+    AuthError, DeviceInfo, Session, SignInRequest, begin_sign_in_with_provider, read_callback,
 };
 use runova_crypto::handshake::os_random;
 use runova_rpc::{ManageClient, RpcError};
@@ -162,13 +162,26 @@ impl Engine {
 
     /// The link to open in the system browser.
     pub fn begin_sign_in(&self, device_name: String) -> SignInRequest {
+        self.begin_browser_sign_in(device_name, None)
+    }
+
+    /// The same link, going straight to `provider`'s sign-in on the website (E117).
+    pub fn begin_sign_in_with_provider(
+        &self,
+        device_name: String,
+        provider: String,
+    ) -> SignInRequest {
+        self.begin_browser_sign_in(device_name, Some(&provider))
+    }
+
+    fn begin_browser_sign_in(&self, device_name: String, provider: Option<&str>) -> SignInRequest {
         let info = DeviceInfo {
             device_id: device_id(self.secure.as_ref()),
             name: device_name,
             platform: self.platform.clone(),
             app_version: self.app_version.clone(),
         };
-        let request = begin_sign_in(&self.site, &info, &mut os_random);
+        let request = begin_sign_in_with_provider(&self.site, &info, provider, &mut os_random);
         let copy = SignInRequest {
             url: request.url.clone(),
             verifier: request.verifier.clone(),
@@ -313,6 +326,8 @@ pub(crate) struct Runner {
     pub(crate) qr_generation: u64,
     pub(crate) passkey_task: Option<JoinHandle<()>>,
     pub(crate) passkey_generation: u64,
+    pub(crate) provider_task: Option<JoinHandle<()>>,
+    pub(crate) provider_generation: u64,
     pub(crate) cloudflare: crate::cloudflare::CloudflareState,
     pub(crate) traffic: crate::traffic::TrafficState,
     pub(crate) app_lock: crate::app_lock::LockState,
@@ -398,6 +413,8 @@ impl Runner {
             qr_generation: 0,
             passkey_task: None,
             passkey_generation: 0,
+            provider_task: None,
+            provider_generation: 0,
             cloudflare: Default::default(),
             traffic: Default::default(),
             app_lock: Default::default(),

@@ -585,7 +585,8 @@ the code at `POST /device-tokens`.
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | POST | `/api/v1/device-authorizations` | Account (cookie, with antiforgery) | `DeviceAuthorizationRequest` | 201 `{ "redirectUrl": string, "expiresAt": time }`; 400; 401 |
-| POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 429 |
+| POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 401 `two-factor-required` (`id_token`: finish in the browser); 403 `email-unverified` (`id_token`); 409 `conflict` (`id_token`: an account has that email); 429 |
+| POST | `/api/v1/sign-in-nonces` | Anonymous (no cookie, no antiforgery) | `{ "provider": "google" \| "apple" }` | 201 `{ "nonce": string, "expiresAt": time, "clientId": string \| null }`; 400; 404 not set up; 429 |
 | POST | `/api/v1/qr-sign-ins` | Account | none | 201 `QrSignInDto`; 401 |
 | GET | `/api/v1/qr-sign-ins/{id}` | Account | none | 200 `QrSignInStatusDto`; 401; 404 |
 | POST | `/api/v1/qr-sign-ins/{id}/decisions` | Account | `{ "approve": boolean }` | 204; 400; 401; 404; 409 |
@@ -615,13 +616,29 @@ string | null, "deviceId": uuid | null }`. A phone's session has kind `mobile`, 
 `Runova app` and has the platform `Phone`, whatever the app sent. The code is 32 random bytes, kept only as its SHA-256, good for two
 minutes and one use.
 
-`DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token" | "passkey", "code":
-string | null, "codeVerifier": string | null, "redirectUri": string | null, "refreshToken": string |
-null, "challengeId": string | null, "credential": object | null, "platform": "android" | "ios" |
-null, "appVersion": string | null, "deviceId": uuid | null }`. A code needs the verifier that
+`DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token" | "passkey" |
+"id_token", "code": string | null, "codeVerifier": string | null, "redirectUri": string | null,
+"refreshToken": string | null, "challengeId": string | null, "credential": object | null,
+"platform": "android" | "ios" | null, "appVersion": string | null, "deviceId": uuid | null,
+"provider": "google" | "apple" | null, "idToken": string | null, "nonce": string | null,
+"authorizationCode": string | null, "name": string | null }`. A code needs the verifier that
 matches its challenge and the same redirect URI. The `passkey` grant is the phone app's: it answers
 a `sign-in` [passkey challenge](#passkeys) and gets a phone session (`mobile`, `Runova app`,
-`Phone`) as a browser approval would, with no two-factor code. `DeviceTokenDto`:
+`Phone`) as a browser approval would, with no two-factor code.
+
+The `id_token` grant (E117) is the phone app's too, for the system's own Google sheet (Android
+Credential Manager) or Sign in with Apple (iOS). The app first asks `POST /sign-in-nonces` for a
+nonce for that provider, which is 32 random bytes kept only as a SHA-256, good for 5 minutes, one
+use and that provider; for Google the answer's `clientId` is the web client id Credential Manager
+needs. The sheet puts the nonce in the ID token. The grant checks the token's signature against
+the provider's published keys, its issuer, its audience (the Google web client id, or
+`appleBundleId` from the [sign-in settings](#sign-in-settings-admin) for Apple), its lifetime and
+the nonce, then applies the same account rules as [Continue with
+Google](#continue-with-google-apple-or-microsoft): 409 when a confirmed account already has that
+email, 403 when the email is not verified. An account with two-step sign-in gets 401
+`two-factor-required` and finishes in the browser sign-in, which asks for the code. For Apple, the
+app also sends the authorization code, which the API trades for Apple's refresh token to revoke
+later, and the name Apple gives the app only the first time. `DeviceTokenDto`:
 `{ "accessToken": string, "refreshToken": string, "expiresIn": 900, "sessionId": number,
 "account": AccountDto }`.
 

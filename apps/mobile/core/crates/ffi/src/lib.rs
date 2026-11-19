@@ -25,6 +25,7 @@ pub mod notifications;
 pub mod ops;
 pub mod palette;
 pub mod passkey;
+pub mod provider_sign_in;
 pub mod qr;
 pub mod receive;
 pub(crate) mod receive_view;

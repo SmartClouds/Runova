@@ -79,6 +79,9 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
                 ("POST", "/api/v1/qr-sign-in-polls", false),
                 ("POST", "/api/v1/remote-agent-tokens", false),
                 ("POST", "/api/v1/sessions", true),
+
+                // Anonymous with no cookie: the phone asks before Google's or Apple's own sheet (E117).
+                ("POST", "/api/v1/sign-in-nonces", false),
                 ("POST", "/api/v1/stripe-events", false),
 
                 // Telegram posts the bot's updates with its secret header; it sends no cookie to forge (E51).

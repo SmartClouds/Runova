@@ -93,6 +93,8 @@ dependencies {
     // Passkey sign-in (E115); play-services-auth brings Google Password Manager's passkeys on Android 13 and older.
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    // Sign in with Google through Credential Manager (E117).
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("androidx.camera:camera-camera2:1.6.2")
     implementation("androidx.camera:camera-lifecycle:1.6.2")
     implementation("androidx.camera:camera-view:1.6.2")

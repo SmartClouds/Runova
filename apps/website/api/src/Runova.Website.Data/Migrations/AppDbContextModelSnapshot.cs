@@ -1347,6 +1347,42 @@ namespace Runova.Website.Data.Migrations
                     b.ToTable("QrSignIns");
                 });
 
+            modelBuilder.Entity("Runova.Website.Data.Accounts.SignInNonce", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("NonceHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("NonceHash")
+                        .IsUnique();
+
+                    b.ToTable("SignInNonces");
+                });
+
             modelBuilder.Entity("Runova.Website.Data.Accounts.SignInSettings", b =>
                 {
                     b.Property<int>("Id")

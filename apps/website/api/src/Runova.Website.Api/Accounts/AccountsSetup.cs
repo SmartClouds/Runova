@@ -18,6 +18,9 @@ internal static class AccountsSetup
         services.AddScoped<ExternalAccounts>();
         services.AddScoped<AppleTokens>();
         services.AddHttpClient(AppleTokens.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddSingleton<IdTokenValidator>();
+        services.AddHttpClient(IdTokenValidator.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<IdTokenGrant>();
         services.AddWebsiteSync();
         services.AddScoped<SyncTombstonesPurgeJob>();
         services.AddSingleton<DeviceTokens>();

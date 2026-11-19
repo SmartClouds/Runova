@@ -84,6 +84,15 @@ class MainActivity : FragmentActivity(), ViewListener {
     private lateinit var core: RunovaCore
     private lateinit var engine: Engine
 
+    /** Google's own sheet for a sign-in the core started (E117). */
+    private val googlePrompt by lazy {
+        GooglePrompt(
+            CredentialManagerGoogle(this),
+            finish = { nonce, token -> engine.finishProviderSignIn(nonce, token, null, null) },
+            cancel = { engine.cancelProviderSignIn() },
+        )
+    }
+
     /** The platform's passkey prompt for a sign-in the core started (E115). */
     private val passkeyPrompt by lazy {
         PasskeyPrompt(
@@ -132,6 +141,9 @@ class MainActivity : FragmentActivity(), ViewListener {
             cancelQrSignIn = { engine.cancelQrSignIn() },
             signInWithPasskey = { engine.beginPasskeySignIn() },
             promptPasskey = { id, options -> lifecycleScope.launch { passkeyPrompt.answer(id, options) } },
+            signInWithProvider = { engine.beginProviderSignIn(it) },
+            signInInBrowser = ::openSignInWith,
+            promptGoogle = { nonce, client -> lifecycleScope.launch { googlePrompt.answer(nonce, client) } },
             git = GitIntents(
                 openDiff = { path, group -> engine.openGitDiff(path, group) },
                 closeDiff = { engine.closeGitDiff() },
@@ -787,6 +799,12 @@ class MainActivity : FragmentActivity(), ViewListener {
 
     private fun openSignIn() {
         val link = core.beginSignIn(Build.MODEL)
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+    }
+
+    /** The browser sign-in, going straight to Apple or Microsoft, or to Google for its code step. */
+    private fun openSignInWith(provider: String) {
+        val link = core.beginSignInWithProvider(Build.MODEL, provider)
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
     }
 

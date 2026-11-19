@@ -479,3 +479,134 @@ async fn a_refused_challenge_is_a_network_error_with_its_status() {
 
     assert_eq!(result, Err(AuthError::Network("status 429".into())));
 }
+
+// Google's and Apple's own sheets (E117): a nonce for the provider, the sheet, the id_token grant.
+
+fn problem(slug: &str) -> Value {
+    json!({"type": format!("https://runovahq.com/problems/{slug}"), "title": "no", "detail": "no"})
+}
+
+#[tokio::test]
+async fn a_provider_sign_in_starts_with_a_nonce_for_that_provider() {
+    let world = world();
+    world.http.answer(
+        201,
+        json!({"nonce": "nonce-1", "expiresAt": "2026-11-19T10:05:00Z", "clientId": "web.apps.googleusercontent.com"}),
+    );
+
+    let nonce = world
+        .session
+        .begin_provider_sign_in("google")
+        .await
+        .unwrap();
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/sign-in-nonces");
+    assert_eq!(body, json!({"provider": "google"}));
+    assert_eq!(nonce.nonce, "nonce-1");
+    assert_eq!(
+        nonce.client_id.as_deref(),
+        Some("web.apps.googleusercontent.com")
+    );
+}
+
+#[tokio::test]
+async fn apple_s_nonce_comes_with_no_client_id() {
+    let world = world();
+    world.http.answer(
+        201,
+        json!({"nonce": "nonce-2", "expiresAt": "2026-11-19T10:05:00Z", "clientId": null}),
+    );
+
+    let nonce = world.session.begin_provider_sign_in("apple").await.unwrap();
+
+    assert_eq!(nonce.client_id, None);
+}
+
+#[tokio::test]
+async fn a_provider_the_site_has_off_is_said_so() {
+    let world = world();
+    world.http.answer(404, problem("not-found"));
+
+    let result = world.session.begin_provider_sign_in("google").await;
+
+    assert_eq!(result, Err(AuthError::ProviderOff));
+}
+
+#[tokio::test]
+async fn the_id_token_is_traded_for_tokens_with_the_nonce_and_the_phone_s_details() {
+    let world = world();
+    world.http.answer(200, tokens_body(1));
+
+    world
+        .session
+        .finish_provider_sign_in(
+            "apple",
+            "nonce-1",
+            "eyJ.id.token",
+            Some("apple-code"),
+            Some("Sam Apple"),
+            &phone(),
+        )
+        .await
+        .unwrap();
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/device-tokens");
+    assert_eq!(body["grantType"], "id_token");
+    assert_eq!(body["provider"], "apple");
+    assert_eq!(body["idToken"], "eyJ.id.token");
+    assert_eq!(body["nonce"], "nonce-1");
+    assert_eq!(body["authorizationCode"], "apple-code");
+    assert_eq!(body["name"], "Sam Apple");
+    assert_eq!(body["platform"], "android");
+    assert_eq!(body["deviceId"], "4b2c0c0e-1111-4222-8333-944444444444");
+    assert_eq!(world.store.load().unwrap().refresh_token, "rr1.refresh-1");
+}
+
+#[tokio::test]
+async fn each_answer_of_the_id_token_grant_reads_as_its_own_error() {
+    let cases = [
+        (409, problem("conflict"), AuthError::LinkNeeded),
+        (403, problem("email-unverified"), AuthError::EmailUnverified),
+        (
+            401,
+            problem("two-factor-required"),
+            AuthError::ContinueInBrowser,
+        ),
+        (401, problem("unauthorized"), AuthError::ProviderRefused),
+        (
+            400,
+            problem("validation-failed"),
+            AuthError::ProviderRefused,
+        ),
+    ];
+    for (status, body, expected) in cases {
+        let world = world();
+        world.http.answer(status, body);
+
+        let result = world
+            .session
+            .finish_provider_sign_in("google", "nonce-1", "eyJ", None, None, &phone())
+            .await;
+
+        assert_eq!(result, Err(expected));
+        assert!(world.store.load().is_none());
+    }
+}
+
+#[tokio::test]
+async fn google_s_grant_sends_no_code_or_name() {
+    let world = world();
+    world.http.answer(200, tokens_body(1));
+
+    world
+        .session
+        .finish_provider_sign_in("google", "nonce-1", "eyJ", None, None, &phone())
+        .await
+        .unwrap();
+
+    let (_, body) = world.http.calls().remove(0);
+    assert_eq!(body["authorizationCode"], Value::Null);
+    assert_eq!(body["name"], Value::Null);
+}

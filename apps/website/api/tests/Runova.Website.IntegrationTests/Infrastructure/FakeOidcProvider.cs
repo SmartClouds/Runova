@@ -313,3 +313,43 @@ internal sealed class FakeApple : FakeOidcProvider
         ["Authentication:Apple:PrivateKey"] = PrivateKey,
     };
 }
+
+/// <summary>Google as it signs the ID tokens Credential Manager hands the Android app.</summary>
+internal sealed class FakeGoogleIdTokens : FakeOidcProvider
+{
+    public override string Authority => "https://accounts.google.com";
+
+    public override string Provider => "google";
+
+    protected override string Scheme => "Google";
+
+    protected override Dictionary<string, object> Claims(string issuer)
+    {
+        var claims = base.Claims(issuer);
+        claims.TryAdd("email_verified", true);
+        claims.TryAdd("name", "Sam Google");
+        return claims;
+    }
+
+    /// <summary>The Google handler is OAuth, not OpenID Connect, so there is nothing to hand it.</summary>
+    public override void Register(IServiceCollection services)
+    {
+    }
+}
+
+/// <summary>
+/// Hands the API's ID token checker the fakes, by host: Google's and Apple's discovery documents
+/// and signing keys.
+/// </summary>
+internal sealed class FakeIdTokenProviders(IReadOnlyDictionary<string, HttpMessageInvoker> byHost) : HttpMessageHandler
+{
+    public static void Register(IServiceCollection services, params FakeOidcProvider[] providers)
+    {
+        var byHost = providers.ToDictionary(p => p.AuthorizeHost, p => new HttpMessageInvoker(p, disposeHandler: false));
+        services.AddHttpClient(Runova.Website.Api.Accounts.IdTokenValidator.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new FakeIdTokenProviders(byHost));
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        byHost[request.RequestUri!.Host].SendAsync(request, cancellationToken);
+}

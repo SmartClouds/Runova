@@ -605,6 +605,213 @@ async fn an_answer_to_an_old_prompt_counts_for_nothing() {
     assert!(world.http.replies.lock().unwrap().is_empty());
 }
 
+// Google's and Apple's own sheets (E117): the core asks for a nonce and shows it in the view, the
+// sheet answers with an ID token, and the core trades it for tokens.
+
+fn nonce(client_id: Option<&str>) -> HttpReply {
+    reply(
+        201,
+        json!({ "nonce": "nonce-1", "expiresAt": "2026-11-19T10:05:00Z", "clientId": client_id }),
+    )
+}
+
+fn problem(status: u16, slug: &str) -> HttpReply {
+    reply(
+        status,
+        json!({ "type": format!("https://runovahq.com/problems/{slug}"), "title": "no" }),
+    )
+}
+
+async fn provider_sheet(
+    world: &World,
+    provider: &str,
+    client_id: Option<&str>,
+) -> runova_ffi::view::ProviderSignInView {
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(nonce(client_id));
+    world.engine.begin_provider_sign_in(provider.into());
+    until(
+        world,
+        |v| {
+            v.provider_sign_in
+                .as_ref()
+                .is_some_and(|p| p.nonce.is_some())
+        },
+        "the sheet",
+    )
+    .await
+    .provider_sign_in
+    .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_token_from_google_s_sheet_signs_in() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    let sheet = provider_sheet(&world, "google", Some("web.apps.googleusercontent.com")).await;
+    assert_eq!(sheet.provider, "google");
+    assert_eq!(
+        sheet.client_id.as_deref(),
+        Some("web.apps.googleusercontent.com")
+    );
+    world.http.replies.lock().unwrap().push_back(tokens());
+
+    world
+        .engine
+        .finish_provider_sign_in("nonce-1".into(), "eyJ".into(), None, None);
+
+    let view = until(&world, |v| v.auth == AuthState::SignedIn, "signed in").await;
+    assert_eq!(view.provider_sign_in, None);
+    assert_eq!(view.error, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_account_with_that_email_is_told_to_link_the_provider_on_the_website() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    provider_sheet(&world, "apple", None).await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(problem(409, "conflict"));
+
+    world.engine.finish_provider_sign_in(
+        "nonce-1".into(),
+        "eyJ".into(),
+        Some("code".into()),
+        Some("Sam".into()),
+    );
+
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("link Apple under Security"));
+    assert_eq!(view.auth, AuthState::SignedOut);
+    assert_eq!(view.provider_sign_in, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn two_step_sign_in_sends_the_person_on_to_the_browser_for_that_provider() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    provider_sheet(&world, "google", Some("web")).await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(problem(401, "two-factor-required"));
+
+    world
+        .engine
+        .finish_provider_sign_in("nonce-1".into(), "eyJ".into(), None, None);
+
+    let view = until(&world, |v| v.continue_in_browser.is_some(), "the browser").await;
+    assert_eq!(view.continue_in_browser.as_deref(), Some("google"));
+    assert!(view.error.unwrap().contains("browser"));
+
+    // Starting again clears it, so the app opens the browser once per refusal.
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(nonce(Some("web")));
+    world.engine.begin_provider_sign_in("google".into());
+    let view = until(&world, |v| v.continue_in_browser.is_none(), "cleared").await;
+    assert_eq!(view.error, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_token_says_so_and_closing_the_sheet_says_nothing() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    provider_sheet(&world, "google", Some("web")).await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(problem(401, "unauthorized"));
+    world
+        .engine
+        .finish_provider_sign_in("nonce-1".into(), "eyJ".into(), None, None);
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("wasn't accepted"));
+
+    provider_sheet(&world, "google", Some("web")).await;
+    world.engine.cancel_provider_sign_in();
+
+    let view = until(&world, |v| v.provider_sign_in.is_none(), "cancelled").await;
+    assert_eq!(view.error, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_provider_the_site_has_off_or_cannot_reach_gives_a_message_and_no_sheet() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(problem(404, "not-found"));
+    world.engine.begin_provider_sign_in("apple".into());
+    let view = until(&world, |v| v.error.is_some(), "the message").await;
+    assert!(view.error.unwrap().contains("isn't available"));
+    assert_eq!(view.provider_sign_in, None);
+
+    world
+        .http
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(reply(503, json!({})));
+    world.engine.begin_provider_sign_in("apple".into());
+    let view = until(
+        &world,
+        |v| {
+            v.error
+                .as_deref()
+                .is_some_and(|e| e.contains("Couldn't start"))
+        },
+        "the other message",
+    )
+    .await;
+    assert!(view.error.unwrap().contains("with Apple"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_token_for_a_sheet_the_phone_moved_on_from_counts_for_nothing() {
+    let world = world();
+    until(&world, |v| v.auth == AuthState::SignedOut, "signed out").await;
+    provider_sheet(&world, "google", Some("web")).await;
+
+    world
+        .engine
+        .finish_provider_sign_in("some-other-nonce".into(), "eyJ".into(), None, None);
+
+    let view = until(&world, |v| v.provider_sign_in.is_none(), "dropped").await;
+    assert_eq!(view.auth, AuthState::SignedOut);
+    assert!(world.http.replies.lock().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_browser_sign_in_can_go_straight_to_a_provider() {
+    let world = world();
+
+    let link = world
+        .engine
+        .begin_sign_in_with_provider("Runova app".into(), "microsoft".into());
+
+    assert!(link.url.contains("/account/authorize?"));
+    assert!(link.url.ends_with("&provider=microsoft"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_computer_going_offline_updates_the_list() {
     let world = world();

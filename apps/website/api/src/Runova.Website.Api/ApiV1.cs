@@ -38,6 +38,7 @@ internal static class ApiV1
         api.MapDeviceTokens();
         api.MapQrSignIns();
         api.MapPasskeys();
+        api.MapSignInNonces();
         api.MapSync();
         api.MapEncryption();
         api.MapTeams();

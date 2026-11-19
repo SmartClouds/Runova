@@ -1342,6 +1342,17 @@ pub struct PasskeySignInView {
     pub options_json: Option<String>,
 }
 
+/// A sign-in with Google's or Apple's own sheet on its way (E117).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ProviderSignInView {
+    /// `google` or `apple`.
+    pub provider: String,
+    /// What the sheet must put in the ID token. Show the sheet once this is set, once per nonce.
+    pub nonce: Option<String>,
+    /// Google's web client id, which Credential Manager asks for. None for Apple.
+    pub client_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct QrSignInView {
     /// The digits both screens show. None until the server has taken the code.
@@ -1406,6 +1417,11 @@ pub struct AppView {
     pub qr_sign_in: Option<QrSignInView>,
     /// A passkey sign-in on its way. None the rest of the time.
     pub passkey_sign_in: Option<PasskeySignInView>,
+    /// A sign-in with Google's or Apple's own sheet on its way. None the rest of the time.
+    pub provider_sign_in: Option<ProviderSignInView>,
+    /// Set to the provider when its sign-in must finish in the browser (two-step sign-in is on):
+    /// open the browser sign-in with that provider once, each time this becomes set.
+    pub continue_in_browser: Option<String>,
     /// The app lock (E106). While `lock.locked`, nothing else is drawn.
     pub lock: LockScreen,
     /// Settings for the app lock, from the Account tab.
@@ -1460,6 +1476,8 @@ impl AppView {
             encryption: None,
             qr_sign_in: None,
             passkey_sign_in: None,
+            provider_sign_in: None,
+            continue_in_browser: None,
             lock: LockScreen::default(),
             passcode: PasscodeSettingsScreen::default(),
             recovery_phrases: RecoveryPhrasesScreen::default(),

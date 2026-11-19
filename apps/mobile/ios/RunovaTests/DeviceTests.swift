@@ -283,6 +283,8 @@ func fixtureView(
     encryption: EncryptionScreen? = nil,
     qrSignIn: QrSignInView? = nil,
     passkeySignIn: PasskeySignInView? = nil,
+    providerSignIn: ProviderSignInView? = nil,
+    continueInBrowser: String? = nil,
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
@@ -297,7 +299,7 @@ func fixtureView(
         notifications: notifications,
         remote: remote, phoneFingerprint: nil,
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
-        passkeySignIn: passkeySignIn,
+        passkeySignIn: passkeySignIn, providerSignIn: providerSignIn, continueInBrowser: continueInBrowser,
         lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send, receive: receive)
 }
 

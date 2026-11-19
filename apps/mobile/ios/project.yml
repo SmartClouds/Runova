@@ -33,6 +33,9 @@ targets:
         # Passkey sign-in (E115): the site's apple-app-site-association names this app.
         com.apple.developer.associated-domains:
           - webcredentials:runovahq.com
+        # Sign in with Apple on the phone (E117).
+        com.apple.developer.applesignin:
+          - Default
         keychain-access-groups:
           # The first group is where items go by default, so the identity seed stays out of the shared one.
           - $(AppIdentifierPrefix)com.runovahq.app

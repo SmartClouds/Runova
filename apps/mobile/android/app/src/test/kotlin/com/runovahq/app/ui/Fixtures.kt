@@ -27,6 +27,7 @@ import uniffi.runova_ffi.NotificationsScreen
 import uniffi.runova_ffi.PipelinesScreen
 import uniffi.runova_ffi.ProjectView
 import uniffi.runova_ffi.PasskeySignInView
+import uniffi.runova_ffi.ProviderSignInView
 import uniffi.runova_ffi.QrSignInView
 import uniffi.runova_ffi.RecoveryPhrasesScreen
 import uniffi.runova_ffi.RemoteView
@@ -162,6 +163,8 @@ fun appView(
     encryption: EncryptionScreen? = null,
     qrSignIn: QrSignInView? = null,
     passkeySignIn: PasskeySignInView? = null,
+    providerSignIn: ProviderSignInView? = null,
+    continueInBrowser: String? = null,
     lock: LockScreen = noLock,
     passcode: PasscodeSettingsScreen = noPasscode,
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
@@ -207,6 +210,8 @@ fun appView(
     encryption,
     qrSignIn,
     passkeySignIn,
+    providerSignIn,
+    continueInBrowser,
     lock,
     passcode,
     recoveryPhrases,

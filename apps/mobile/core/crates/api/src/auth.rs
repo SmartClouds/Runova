@@ -49,6 +49,51 @@ pub enum AuthError {
     Network(String),
     #[error("that passkey was not accepted")]
     PasskeyRefused,
+    /// The site has that provider switched off.
+    #[error("that sign-in provider is not available")]
+    ProviderOff,
+    /// The ID token from Google's or Apple's sheet was not accepted.
+    #[error("that sign-in was not accepted")]
+    ProviderRefused,
+    /// A confirmed account already has the email; it links the provider from the website.
+    #[error("an account with that email already exists")]
+    LinkNeeded,
+    /// The provider has not confirmed the email address.
+    #[error("that email address is not confirmed")]
+    EmailUnverified,
+    /// The account has two-step sign-in, which only the browser sign-in asks for.
+    #[error("finish signing in in the browser")]
+    ContinueInBrowser,
+}
+
+/// A nonce for Google's or Apple's own sign-in sheet (E117), which puts it in the ID token. For
+/// Google, the web client id Credential Manager asks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderNonce {
+    pub provider: String,
+    pub nonce: String,
+    pub client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NonceReply {
+    nonce: String,
+    client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ProblemReply {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+}
+
+/// Whether a problem answer has the given type, such as `two-factor-required`.
+fn is_problem(reply: &HttpReply, slug: &str) -> bool {
+    serde_json::from_str::<ProblemReply>(&reply.body)
+        .ok()
+        .and_then(|p| p.kind)
+        .is_some_and(|kind| kind.rsplit('/').next() == Some(slug))
 }
 
 /// A passkey sign-in to show the platform's prompt for (E115): the WebAuthn request options as
@@ -90,6 +135,17 @@ pub fn begin_sign_in(
     device: &DeviceInfo,
     random: &mut dyn FnMut(usize) -> Vec<u8>,
 ) -> SignInRequest {
+    begin_sign_in_with_provider(site, device, None, random)
+}
+
+/// The same link with a provider hint (E117): signed out, the website goes straight to that
+/// provider's sign-in instead of showing its own page.
+pub fn begin_sign_in_with_provider(
+    site: &str,
+    device: &DeviceInfo,
+    provider: Option<&str>,
+    random: &mut dyn FnMut(usize) -> Vec<u8>,
+) -> SignInRequest {
     let verifier = URL_SAFE_NO_PAD.encode(random(32));
     let state = URL_SAFE_NO_PAD.encode(random(16));
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
@@ -109,6 +165,10 @@ pub fn begin_sign_in(
     .map(|(key, value)| format!("{key}={}", escape(value)))
     .collect::<Vec<_>>()
     .join("&");
+    let query = match provider {
+        Some(provider) => format!("{query}&provider={}", escape(provider)),
+        None => query,
+    };
     SignInRequest {
         url: format!("{}/account/authorize?{query}", site.trim_end_matches('/')),
         verifier,
@@ -341,6 +401,75 @@ impl Session {
                 self.accept(&mut state, &reply)
             }
             400 | 401 => Err(AuthError::PasskeyRefused),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// A nonce for `provider`'s own sign-in sheet (`google` or `apple`). It needs no session.
+    pub async fn begin_provider_sign_in(&self, provider: &str) -> Result<ProviderNonce, AuthError> {
+        let reply = self
+            .http
+            .post_json(
+                &format!("{}/api/v1/sign-in-nonces", self.site),
+                json!({ "provider": provider }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            201 => {
+                let parsed: NonceReply = serde_json::from_str(&reply.body).map_err(|_| {
+                    AuthError::Network("an answer that could not be read".to_owned())
+                })?;
+                Ok(ProviderNonce {
+                    provider: provider.to_owned(),
+                    nonce: parsed.nonce,
+                    client_id: parsed.client_id,
+                })
+            }
+            404 => Err(AuthError::ProviderOff),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// Trades the ID token the sheet gave for the first pair of tokens. Apple also gives an
+    /// authorization code, and the person's name the very first time only.
+    pub async fn finish_provider_sign_in(
+        &self,
+        provider: &str,
+        nonce: &str,
+        id_token: &str,
+        authorization_code: Option<&str>,
+        name: Option<&str>,
+        device: &DeviceInfo,
+    ) -> Result<(), AuthError> {
+        let mut state = self.state.lock().await;
+        let reply = self
+            .http
+            .post_json(
+                &self.token_url,
+                json!({
+                    "grantType": "id_token",
+                    "provider": provider,
+                    "idToken": id_token,
+                    "nonce": nonce,
+                    "authorizationCode": authorization_code,
+                    "name": name,
+                    "platform": device.platform,
+                    "appVersion": device.app_version,
+                    "deviceId": device.device_id,
+                }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            200 => {
+                state.loaded = true;
+                self.accept(&mut state, &reply)
+            }
+            409 => Err(AuthError::LinkNeeded),
+            403 => Err(AuthError::EmailUnverified),
+            401 if is_problem(&reply, "two-factor-required") => Err(AuthError::ContinueInBrowser),
+            400 | 401 => Err(AuthError::ProviderRefused),
             status => Err(AuthError::Network(format!("status {status}"))),
         }
     }

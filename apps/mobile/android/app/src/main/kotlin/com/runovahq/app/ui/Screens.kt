@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -76,6 +78,12 @@ data class AppIntents(
     val signInWithPasskey: () -> Unit = {},
     /** Shows the platform's passkey prompt for a challenge the core put in the view. */
     val promptPasskey: (challengeId: String, optionsJson: String) -> Unit = { _, _ -> },
+    /** Asks the core for a nonce for a provider's own sheet: Google on Android (E117). */
+    val signInWithProvider: (provider: String) -> Unit = {},
+    /** Opens the browser sign-in going straight to a provider (E117). */
+    val signInInBrowser: (provider: String) -> Unit = {},
+    /** Shows Google's sheet for a nonce the core put in the view. */
+    val promptGoogle: (nonce: String, clientId: String?) -> Unit = { _, _ -> },
     val openAbout: () -> Unit = {},
     val git: GitIntents = GitIntents(),
     val status: StatusIntents = StatusIntents(),
@@ -139,12 +147,24 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
                                 intents.promptPasskey(passkey.challengeId, passkey.optionsJson!!)
                             }
                         }
+                        val sheet = view.providerSignIn
+                        // Once per nonce, as with the passkey prompt.
+                        if (sheet?.provider == "google" && sheet.nonce != null) {
+                            LaunchedEffect(sheet.nonce) { intents.promptGoogle(sheet.nonce!!, sheet.clientId) }
+                        }
+                        // Two-step sign-in: the browser asks for the code. Once each time it is set.
+                        view.continueInBrowser?.let { provider ->
+                            LaunchedEffect(provider) { intents.signInInBrowser(provider) }
+                        }
                         SignInScreen(
                             view.error,
                             intents.signIn,
                             onScanQr = { scanning = true },
                             onPasskey = intents.signInWithPasskey,
                             passkeyWaiting = passkey != null,
+                            onGoogle = { intents.signInWithProvider("google") },
+                            googleWaiting = sheet?.provider == "google",
+                            onBrowserProvider = intents.signInInBrowser,
                         )
                     }
                 }
@@ -247,10 +267,13 @@ fun SignInScreen(
     onScanQr: () -> Unit = {},
     onPasskey: () -> Unit = {},
     passkeyWaiting: Boolean = false,
+    onGoogle: () -> Unit = {},
+    googleWaiting: Boolean = false,
+    onBrowserProvider: (String) -> Unit = {},
 ) {
     val colors = RunovaTheme.colors
     Column(
-        Modifier.fillMaxSize().padding(32.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -275,6 +298,28 @@ fun SignInScreen(
             kind = ButtonKind.Soft,
             enabled = !passkeyWaiting,
             icon = RunovaIcons.Fingerprint,
+        )
+        Spacer(Modifier.height(16.dp))
+        RunovaButton(
+            if (googleWaiting) "Waiting for Google…" else "Continue with Google",
+            onClick = onGoogle,
+            modifier = Modifier.fillMaxWidth(),
+            kind = ButtonKind.Soft,
+            enabled = !googleWaiting,
+        )
+        Spacer(Modifier.height(8.dp))
+        RunovaButton(
+            "Continue with Apple",
+            onClick = { onBrowserProvider("apple") },
+            modifier = Modifier.fillMaxWidth(),
+            kind = ButtonKind.Soft,
+        )
+        Spacer(Modifier.height(8.dp))
+        RunovaButton(
+            "Continue with Microsoft",
+            onClick = { onBrowserProvider("microsoft") },
+            modifier = Modifier.fillMaxWidth(),
+            kind = ButtonKind.Soft,
         )
         if (error != null) {
             Spacer(Modifier.height(12.dp))

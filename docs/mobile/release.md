@@ -58,6 +58,24 @@ For iOS, turn on **Associated Domains** for `com.runovahq.app` in the Apple deve
 the provisioning profile carries the `webcredentials:runovahq.com` entitlement that `project.yml`
 asks for. A site on another domain needs that entry changed to match.
 
+### Google and Apple sign-in (E117)
+
+The Android app signs in with Google through Credential Manager, and the iPhone app with Sign in
+with Apple. Both send the ID token to the website, which checks it against keys it already has
+(E116), so the apps need no keys of their own.
+
+- Google: in the same Google Cloud project as the website's web client, add an OAuth client of type
+  **Android** for the package `com.runovahq.app` with the SHA-1 of the release key (and, on a test
+  project, the debug key). Credential Manager only hands out tokens for an app Google knows. The
+  token's audience is the website's web client, which the API reads from the sign-in settings.
+- Apple: turn on **Sign in with Apple** for the App ID `com.runovahq.app` in the Apple developer
+  account, so the provisioning profile carries the `com.apple.developer.applesignin` entitlement
+  that `project.yml` asks for. The website's Apple key must be enabled for this App ID too, and
+  `appleBundleId` in the sign-in settings must be the app's bundle id (`com.runovahq.app` unless
+  changed), since that is the audience of the app's tokens.
+- Microsoft, and Google on the iPhone, go through the browser sign-in with `provider=` on the
+  authorize link, so they need nothing more than the website's own setup.
+
 ### Push notifications
 
 Needs a Firebase project and an APNs key. The website API reads them from `Push__Fcm__*` and

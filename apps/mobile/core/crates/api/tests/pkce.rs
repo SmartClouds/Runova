@@ -1,6 +1,9 @@
 //! The browser half of signing in.
 
-use runova_api::auth::{AuthError, DeviceInfo, PHONE_REDIRECT, begin_sign_in, read_callback};
+use runova_api::auth::{
+    AuthError, DeviceInfo, PHONE_REDIRECT, begin_sign_in, begin_sign_in_with_provider,
+    read_callback,
+};
 
 fn device() -> DeviceInfo {
     DeviceInfo {
@@ -100,4 +103,26 @@ fn a_link_from_elsewhere_is_refused() {
         ),
         Err(AuthError::BadCallback)
     );
+}
+
+#[test]
+fn a_provider_hint_sends_the_browser_straight_to_that_provider() {
+    let request = begin_sign_in_with_provider(
+        "https://runovahq.com",
+        &device(),
+        Some("microsoft"),
+        &mut rfc_bytes,
+    );
+
+    assert!(request.url.ends_with("&provider=microsoft"));
+    assert!(request.url.contains("client_id=runova-mobile"));
+}
+
+#[test]
+fn no_hint_is_the_plain_sign_in_link() {
+    let plain = begin_sign_in("https://runovahq.com", &device(), &mut rfc_bytes);
+    let none = begin_sign_in_with_provider("https://runovahq.com", &device(), None, &mut rfc_bytes);
+
+    assert_eq!(plain.url, none.url);
+    assert!(!plain.url.contains("provider="));
 }

@@ -1049,6 +1049,45 @@
         }
       }
     },
+    "/api/v1/sign-in-nonces": {
+      "post": {
+        "tags": [
+          "IdTokenSignIn"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInNonceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInNonceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/technologies": {
       "get": {
         "tags": [
@@ -8833,6 +8872,36 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "provider": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "idToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nonce": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorizationCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "additionalProperties": false
@@ -13043,6 +13112,45 @@
         },
         "additionalProperties": false
       },
+      "SignInNonceDto": {
+        "required": [
+          "nonce",
+          "expiresAt",
+          "clientId"
+        ],
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SignInNonceRequest": {
+        "required": [
+          "provider"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "SignInProvidersDto": {
         "required": [
           "items",
@@ -14845,6 +14953,9 @@
     },
     {
       "name": "ExternalSignInEndpoints"
+    },
+    {
+      "name": "IdTokenSignIn"
     },
     {
       "name": "InventoryEndpoints"

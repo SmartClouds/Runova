@@ -81,6 +81,13 @@ internal static class AccountsModel
             challenge.HasOne<AppUser>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<SignInNonce>(nonce =>
+        {
+            nonce.Property(n => n.Provider).HasMaxLength(16);
+            nonce.HasIndex(n => n.NonceHash).IsUnique();
+            nonce.HasIndex(n => n.ExpiresAt);
+        });
+
         builder.Entity<Team>(team =>
         {
             team.Property(t => t.Name).HasMaxLength(80);

@@ -24,6 +24,12 @@ struct AppIntents {
     var signInWithPasskey: () -> Void = {}
     /// Shows the platform's passkey prompt for a challenge the core put in the view.
     var promptPasskey: (_ challengeId: String, _ optionsJson: String) -> Void = { _, _ in }
+    /// Asks the core for a nonce for a provider's own sheet: Sign in with Apple on iOS (E117).
+    var signInWithProvider: (_ provider: String) -> Void = { _ in }
+    /// Opens the browser sign-in going straight to a provider (E117).
+    var signInInBrowser: (_ provider: String) -> Void = { _ in }
+    /// Shows the Sign in with Apple sheet for a nonce the core put in the view.
+    var promptApple: (_ nonce: String) -> Void = { _ in }
     var openAbout: () -> Void = {}
     var git = GitIntents()
     var status = StatusIntents()
@@ -105,13 +111,26 @@ struct AppRoot: View {
                 } else {
                     SignInScreen(
                         error: view.error, onSignIn: intents.signIn, onScanQr: { scanning = true },
-                        onPasskey: intents.signInWithPasskey, passkeyWaiting: view.passkeySignIn != nil
+                        onPasskey: intents.signInWithPasskey, passkeyWaiting: view.passkeySignIn != nil,
+                        onApple: { intents.signInWithProvider("apple") },
+                        appleWaiting: view.providerSignIn?.provider == "apple",
+                        onBrowserProvider: intents.signInInBrowser
                     )
                     // Once per challenge: a redraw must not open the prompt again.
                     .task(id: view.passkeySignIn?.challengeId) {
                         if let passkey = view.passkeySignIn, let options = passkey.optionsJson {
                             intents.promptPasskey(passkey.challengeId, options)
                         }
+                    }
+                    // Once per nonce, as with the passkey prompt.
+                    .task(id: view.providerSignIn?.nonce) {
+                        if let sheet = view.providerSignIn, sheet.provider == "apple", let nonce = sheet.nonce {
+                            intents.promptApple(nonce)
+                        }
+                    }
+                    // Two-step sign-in: the browser asks for the code. Once each time it is set.
+                    .task(id: view.continueInBrowser) {
+                        if let provider = view.continueInBrowser { intents.signInInBrowser(provider) }
                     }
                 }
             case .signedIn: signedIn
@@ -202,6 +221,9 @@ struct SignInScreen: View {
     var onScanQr: () -> Void = {}
     var onPasskey: () -> Void = {}
     var passkeyWaiting = false
+    var onApple: () -> Void = {}
+    var appleWaiting = false
+    var onBrowserProvider: (String) -> Void = { _ in }
 
     @Environment(\.palette) private var palette
 
@@ -226,12 +248,40 @@ struct SignInScreen: View {
             )
             .disabled(passkeyWaiting)
             .frame(maxWidth: .infinity)
+            Spacer().frame(height: 16)
+            AppleButton(waiting: appleWaiting, action: onApple)
+            Spacer().frame(height: 8)
+            RunovaButton(text: "Continue with Google", kind: .soft, action: { onBrowserProvider("google") })
+                .frame(maxWidth: .infinity)
+            Spacer().frame(height: 8)
+            RunovaButton(text: "Continue with Microsoft", kind: .soft, action: { onBrowserProvider("microsoft") })
+                .frame(maxWidth: .infinity)
             if let error {
                 Spacer().frame(height: 12)
                 RunovaText(error, style: RunovaType.small, color: palette.destructive, alignment: .center)
             }
         }
         .padding(32)
+    }
+}
+
+/// Continue with Apple as Apple's guidelines draw it: white, with the Apple logo, on a dark screen.
+private struct AppleButton: View {
+    let waiting: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "apple.logo")
+                Text(waiting ? "Waiting for Apple…" : "Continue with Apple").font(.system(size: 17, weight: .semibold))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(.white, in: Capsule())
+        }
+        .disabled(waiting)
+        .accessibilityLabel(waiting ? "Waiting for Apple" : "Continue with Apple")
     }
 }
 

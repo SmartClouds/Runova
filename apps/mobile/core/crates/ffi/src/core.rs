@@ -160,6 +160,19 @@ impl RunovaCore {
         }
     }
 
+    /// The browser sign-in, going straight to `provider` on the website (E117).
+    pub fn begin_sign_in_with_provider(&self, device_name: String, provider: String) -> SignInLink {
+        let _inside = self.runtime.enter();
+        let request = self
+            .engine
+            .begin_sign_in_with_provider(device_name, provider);
+        SignInLink {
+            url: request.url,
+            verifier: request.verifier,
+            state: request.state,
+        }
+    }
+
     pub fn finish_sign_in(&self, url: String) {
         self.engine.finish_sign_in(url);
     }

@@ -65,6 +65,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
 
+    public DbSet<SignInNonce> SignInNonces => Set<SignInNonce>();
+
     public DbSet<SyncScope> SyncScopes => Set<SyncScope>();
 
     public DbSet<Team> Teams => Set<Team>();

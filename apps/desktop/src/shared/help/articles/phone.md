@@ -3,7 +3,7 @@ title: Runova on your phone
 category: Connect
 order: 14
 summary: The Runova app for Android and iOS reaches your computers from anywhere. Follow and answer agents, commit, deploy, watch traffic and monitors, send files and open the Vault, with everything running on your computer.
-keywords: phone, mobile, android, ios, app, sign in, passkey, qr code, approve phone, trusted phones, notifications, inbox, app lock, passcode, biometrics, face id, fingerprint, manage, scopes, forget phone
+keywords: phone, mobile, android, ios, app, sign in, passkey, google, apple, microsoft, qr code, approve phone, trusted phones, notifications, inbox, app lock, passcode, biometrics, face id, fingerprint, manage, scopes, forget phone
 ---
 
 The Runova app for Android and iOS is a remote for your computers. The work still happens on the computer: the phone shows what is going on there and sends what you ask for, over the same encrypted link as [Runova Anywhere](remote-anywhere.md). The apps are coming to Google Play and the App Store.
@@ -11,6 +11,8 @@ The Runova app for Android and iOS is a remote for your computers. The work stil
 ## Sign in
 
 Open the app and sign in with your Runova account in the browser, or tap **Scan QR code** and scan the code a signed-in computer shows under **Account**, **Devices** (the website shows one under **Devices and sessions** too). The computer then shows four digits. Check that your phone shows the same four, and click **Approve**.
+
+You can also tap **Continue with Google**, **Continue with Apple** or **Continue with Microsoft**. On Android, Google opens the phone's own Google account sheet, and on an iPhone, Apple opens Sign in with Apple, with no browser. The others open the browser and go straight to that sign-in. The first time, this makes your Runova account. If an account with the same email already exists, sign in with its password once and link the provider under **Security** on runovahq.com. If you turned on two-step sign-in, the app sends you to the browser for your code.
 
 If your account has a passkey the phone can use (one made on the phone, or one that syncs to it), tap **Use a passkey** and confirm with your fingerprint, face or screen lock. No password or code is needed. Add a passkey from **Security** on runovahq.com first if you have none.
 

@@ -40,7 +40,10 @@ public sealed record DeviceAuthorizationDto(string RedirectUrl, DateTimeOffset E
 /// <summary>
 /// A token request. <c>authorization_code</c> sends the code, verifier and redirect;
 /// <c>refresh_token</c> the refresh token; <c>passkey</c> (the phone, E115) the answer to a
-/// <c>sign-in</c> passkey challenge with the phone's platform, app version and device id.
+/// <c>sign-in</c> passkey challenge with the phone's platform, app version and device id;
+/// <c>id_token</c> (the phone, E117) the provider, the ID token Google's or Apple's own sheet
+/// gave the app, the nonce from <c>/sign-in-nonces</c> it carries and, for Apple, the
+/// authorization code and the name Apple gives only the first time.
 /// </summary>
 public sealed record DeviceTokenRequest(
     string? GrantType,
@@ -52,7 +55,12 @@ public sealed record DeviceTokenRequest(
     System.Text.Json.JsonElement? Credential = null,
     string? Platform = null,
     string? AppVersion = null,
-    Guid? DeviceId = null);
+    Guid? DeviceId = null,
+    string? Provider = null,
+    string? IdToken = null,
+    string? Nonce = null,
+    string? AuthorizationCode = null,
+    string? Name = null);
 
 public sealed record DeviceTokenDto(string AccessToken, string RefreshToken, int ExpiresIn, long SessionId, AccountDto Account);
 
@@ -201,6 +209,7 @@ internal static partial class DeviceTokenEndpoints
         EmailOutbox outbox,
         IConfiguration configuration,
         PasskeyCeremonies passkeys,
+        IdTokenGrant idTokens,
         TimeProvider time)
     {
         http.Response.Headers.CacheControl = HttpCaching.Private;
@@ -279,6 +288,43 @@ internal static partial class DeviceTokenEndpoints
                     return TypedResults.Ok(await StartSessionAsync(start, user, AccountSessionKinds.Mobile, PhoneDeviceName, platform, request.AppVersion, request.DeviceId));
                 }
 
+            case "id_token":
+                {
+                    if (IdTokenSignIn.Find(request.Provider) is not { } provider)
+                    {
+                        return ApiProblems.Invalid("provider", "provider is google or apple.");
+                    }
+
+                    if (string.IsNullOrEmpty(request.IdToken) || string.IsNullOrEmpty(request.Nonce))
+                    {
+                        return ApiProblems.Invalid("idToken", "Send the ID token and the nonce it carries.");
+                    }
+
+                    if (request.Platform is null || !PhonePlatforms.TryGetValue(request.Platform, out var platform))
+                    {
+                        return ApiProblems.Invalid("platform", "The id_token grant is for the phone app: platform is android or ios.");
+                    }
+
+                    if (request.AppVersion is { Length: > 32 })
+                    {
+                        return ApiProblems.Invalid("appVersion", "appVersion is up to 32 characters.");
+                    }
+
+                    var outcome = await idTokens.SignInAsync(provider, request, now, http.RequestAborted);
+                    if (outcome.Problem is { } problem)
+                    {
+                        return problem;
+                    }
+
+                    if (outcome.User is not { } user)
+                    {
+                        return Refused();
+                    }
+
+                    await activity.MarkSignedInAsync(user.Id);
+                    return TypedResults.Ok(await StartSessionAsync(start, user, AccountSessionKinds.Mobile, PhoneDeviceName, platform, request.AppVersion, request.DeviceId));
+                }
+
             case "refresh_token":
                 {
                     if (string.IsNullOrEmpty(request.RefreshToken))
@@ -333,7 +379,7 @@ internal static partial class DeviceTokenEndpoints
                 }
 
             default:
-                return ApiProblems.Invalid("grantType", "grantType is authorization_code, refresh_token or passkey.");
+                return ApiProblems.Invalid("grantType", "grantType is authorization_code, refresh_token, passkey or id_token.");
         }
     }
 

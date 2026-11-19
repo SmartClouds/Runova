@@ -97,6 +97,12 @@ final class AppModel: NSObject, ObservableObject {
                 guard let self else { return }
                 Task { @MainActor in await self.passkeyPrompt.answer(challengeId: id, optionsJson: options) }
             },
+            signInWithProvider: { [weak self] in self?.engine?.beginProviderSignIn(provider: $0) },
+            signInInBrowser: { [weak self] in self?.signIn(provider: $0) },
+            promptApple: { [weak self] nonce in
+                guard let self else { return }
+                Task { @MainActor in await self.applePrompt.answer(nonce: nonce) }
+            },
             git: gitIntents,
             status: StatusIntents(
                 openProvider: { [weak self] in self?.engine?.openUsageProvider(providerId: $0) },
@@ -665,9 +671,22 @@ final class AppModel: NSObject, ObservableObject {
         finish: { [weak self] id, answer in self?.engine?.finishPasskeySignIn(challengeId: id, credentialJson: answer) },
         cancel: { [weak self] noPasskey in self?.engine?.cancelPasskeySignIn(noPasskey: noPasskey) })
 
-    private func signIn() {
-        guard let core, let url = URL(string: core.beginSignIn(deviceName: UIDevice.current.model).url)
-        else { return }
+    /// Sign in with Apple for a sign-in the core started (E117).
+    private lazy var applePrompt = AppleSignInPrompt(
+        provider: AuthenticationServicesAppleSignIn(),
+        finish: { [weak self] nonce, token, code, name in
+            self?.engine?.finishProviderSignIn(nonce: nonce, idToken: token, authorizationCode: code, name: name)
+        },
+        cancel: { [weak self] in self?.engine?.cancelProviderSignIn() })
+
+    /// The browser sign-in, going straight to `provider` when one is given (E117).
+    private func signIn(provider: String? = nil) {
+        guard let core else { return }
+        let device = UIDevice.current.model
+        let link =
+            provider.map { core.beginSignInWithProvider(deviceName: device, provider: $0) }
+            ?? core.beginSignIn(deviceName: device)
+        guard let url = URL(string: link.url) else { return }
         let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "com.runovahq.app") {
             [weak self] callback, _ in
             guard let callback else { return }
