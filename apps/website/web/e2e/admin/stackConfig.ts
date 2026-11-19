@@ -16,6 +16,8 @@ export const STACK = {
   siteVerifyPort: port('E2E_ADMIN_SITEVERIFY_PORT', 4379),
   /** Stands in for api.stripe.com and its hosted checkout, so the plan spec never pays anyone. */
   stripePort: port('E2E_ADMIN_STRIPE_PORT', 4389),
+  /** Stands in for login.microsoftonline.com, on another site than the proxy, for the external sign-in spec. */
+  microsoftPort: port('E2E_ADMIN_MICROSOFT_PORT', 4399),
 };
 
 /** The keys the plan spec saves in the payment settings; the fake Stripe takes only this secret key. */

@@ -77,6 +77,17 @@ with those keys and Cloudflare accepts that token with the new secret. If it sti
 - Google: in Google Cloud Console, an OAuth client of type Web application, with the redirect URI
   the settings page shows (`https://runovahq.com/api/oauth/google/callback`). Paste the client ID
   and secret and save.
+- Apple (E116): in the Apple Developer account, an App ID with Sign in with Apple, a Services ID
+  (this is the client ID, for example `com.runovahq.web`) with the site's domain and the return
+  URL the settings page shows (`https://runovahq.com/api/oauth/apple/callback`), and a key with
+  Sign in with Apple, downloaded once as a .p8 file. Paste the Services ID, your Team ID, the
+  key's ID and the whole .p8 file, and save.
+- Microsoft (E116): in Microsoft Entra, an app registration for "Accounts in any organizational
+  directory and personal Microsoft accounts", with a Web redirect URI of
+  `https://runovahq.com/api/oauth/microsoft/callback` and a client secret. Under Token
+  configuration, add the optional claim `xms_edov` to the ID token, so a work or school account
+  whose email Microsoft verified can sign in. Paste the Application (client) ID and the secret's
+  value, and save.
 - Locally, Cloudflare's test keys work: site key `1x00000000000000000000AA`, secret
   `1x0000000000000000000000000000000AA`.
 

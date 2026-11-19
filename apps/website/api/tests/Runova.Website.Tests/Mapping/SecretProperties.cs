@@ -4,13 +4,13 @@ namespace Runova.Website.Tests.Mapping;
 
 /// <summary>
 /// Finds properties a DTO must never carry: password hashes, security stamps, tokens, secret
-/// hashes and signing keys. Every mapper's test runs its output type through this. It also looks
+/// hashes, signing and private keys. Every mapper's test runs its output type through this. It also looks
 /// inside the website's own types a DTO holds, alone or in a list, and names those as
 /// <c>Outer.Inner</c>.
 /// </summary>
 internal static class SecretProperties
 {
-    private static readonly string[] _forbidden = ["password", "securitystamp", "concurrencystamp", "token", "secret", "signingkey", "authenticatorkey", "recoverycode"];
+    private static readonly string[] _forbidden = ["password", "securitystamp", "concurrencystamp", "token", "secret", "signingkey", "privatekey", "authenticatorkey", "recoverycode"];
 
     public static IReadOnlyList<string> In(Type type) => [.. Walk(type, prefix: "", path: [])];
 

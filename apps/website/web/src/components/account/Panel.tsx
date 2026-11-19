@@ -28,6 +28,7 @@ import {
   type Team,
 } from '@/lib/account/api';
 import { AppInput } from './fields';
+import { isProvider, providerLabel } from './providers';
 import { QrSignIn } from './QrSignIn';
 import {
   Card,
@@ -53,8 +54,8 @@ export function describeActivity(entry: Activity): string {
   const d = entry.details ?? {};
   switch (entry.action) {
     case 'sign-in':
-      return d.method === 'google'
-        ? 'Signed in with Google'
+      return typeof d.method === 'string' && isProvider(d.method)
+        ? `Signed in with ${providerLabel(d.method)}`
         : d.method === 'email-link'
           ? 'Signed in from the email link'
           : 'Signed in';
@@ -81,9 +82,9 @@ export function describeActivity(entry: Activity): string {
     case 'two-factor-off':
       return 'Turned off two-factor';
     case 'login-linked':
-      return 'Linked Google';
+      return `Linked ${providerLabel(d.provider ?? 'google')}`;
     case 'login-unlinked':
-      return 'Unlinked Google';
+      return `Unlinked ${providerLabel(d.provider ?? 'google')}`;
     case 'account-updated':
       return 'Changed the profile';
     case 'key-set':
@@ -235,8 +236,8 @@ export function Overview() {
               <CheckRow done={me.emailConfirmed} label="Email confirmed" />
               <CheckRow done={me.twoFactorEnabled} label="Two-factor on" href="/account/security" />
               <CheckRow
-                done={me.logins.includes('google')}
-                label="Google linked"
+                done={me.logins.length > 0}
+                label="Google, Apple or Microsoft linked"
                 optional
                 href="/account/security"
               />

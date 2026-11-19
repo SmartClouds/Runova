@@ -36,33 +36,81 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/account/security');
 });
 
-describe('Security, the Google card', () => {
-  it('offers to link Google while the site has it on', async () => {
-    fakeFetch(routes(ME, ['google']));
+describe('Security, Connected accounts', () => {
+  it('offers to link each provider the site has on', async () => {
+    fakeFetch(routes(ME, ['google', 'apple', 'microsoft']));
     render(<Security />);
 
-    expect(await screen.findByRole('link', { name: 'Link Google' })).toHaveAttribute(
-      'href',
-      '/api/v1/external-sign-ins/google?link=true&returnUrl=%2Faccount%2Fsecurity',
-    );
+    expect(await screen.findByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
+    for (const [name, provider] of [
+      ['Google', 'google'],
+      ['Apple', 'apple'],
+      ['Microsoft', 'microsoft'],
+    ]) {
+      expect(screen.getByRole('link', { name: `Link ${name}` })).toHaveAttribute(
+        'href',
+        `/api/v1/external-sign-ins/${provider}?link=true&returnUrl=%2Faccount%2Fsecurity`,
+      );
+    }
   });
 
-  it('offers no link while an Admin has Google off', async () => {
+  it('shows nothing while an Admin has every provider off', async () => {
     fakeFetch(routes(ME, []));
     render(<Security />);
 
     await screen.findByRole('heading', { name: /Password/ });
-    expect(screen.queryByRole('link', { name: 'Link Google' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('Sign in with your Google account as well as your password.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Connected accounts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Link / })).not.toBeInTheDocument();
   });
 
-  it('still lets a linked account unlink Google while it is off', async () => {
-    fakeFetch(routes({ ...ME, logins: ['google'] }, []));
+  it('still lets a linked account unlink a provider while it is off', async () => {
+    const api = fakeFetch({
+      ...routes({ ...ME, logins: ['apple'] }, ['google']),
+      'DELETE /api/v1/accounts/me/logins/apple': new Response(null, { status: 204 }),
+    });
+    const user = userEvent.setup();
     render(<Security />);
 
-    expect(await screen.findByRole('button', { name: 'Unlink' })).toBeInTheDocument();
+    const apple = within(await screen.findByRole('listitem', { name: 'Apple' }));
+    expect(apple.getByText('Linked')).toBeInTheDocument();
+    await user.click(apple.getByRole('button', { name: 'Unlink Apple' }));
+
+    await waitFor(() =>
+      expect(api.calls('DELETE /api/v1/accounts/me/logins/apple')).toHaveLength(1),
+    );
+    expect(screen.getByRole('link', { name: 'Link Google' })).toBeInTheDocument();
+  });
+
+  it('says why the last way in can not be unlinked', async () => {
+    fakeFetch({
+      ...routes({ ...ME, hasPassword: false, logins: ['microsoft'] }, ['microsoft']),
+      'DELETE /api/v1/accounts/me/logins/microsoft': problem(409, 'conflict', {
+        detail: 'This is your only way to sign in. Set a password first, then unlink it.',
+      }),
+    });
+    const user = userEvent.setup();
+    render(<Security />);
+
+    await user.click(await screen.findByRole('button', { name: 'Unlink Microsoft' }));
+
+    expect(await screen.findByText(/This is your only way to sign in/)).toBeInTheDocument();
+  });
+
+  it('says a provider was linked when the browser comes back', async () => {
+    window.history.replaceState(null, '', '/account/security?linked=microsoft');
+    fakeFetch(routes({ ...ME, logins: ['microsoft'] }, ['microsoft']));
+    render(<Security />);
+
+    expect(
+      await screen.findByText('Microsoft is linked. You can sign in with it from now on.'),
+    ).toBeInTheDocument();
+  });
+
+  it('names the provider a password-less account signs in with', async () => {
+    fakeFetch(routes({ ...ME, hasPassword: false, logins: ['apple'] }, ['apple']));
+    render(<Security />);
+
+    expect(await screen.findByText(/You sign in with Apple\./)).toBeInTheDocument();
   });
 });
 

@@ -22,6 +22,8 @@
   <ItemGroup Label="Accounts">
     <!-- Continue with Google for Runova accounts (E48.3). -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="11.0.0" />
+    <!-- Sign in with Apple and Microsoft, and checking the ID tokens the phone sends (E116, E117). -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="11.0.0" />
   </ItemGroup>
   <ItemGroup Label="Billing">
     <!-- Card payments: Checkout, the customer portal and webhook signatures (E53). -->

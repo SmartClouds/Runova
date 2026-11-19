@@ -16,7 +16,7 @@ Click **Account** near the bottom of the sidebar, above Help and Settings. When 
 ## Sign in
 
 1. Open **Account** and click **Sign in**.
-2. Your browser opens runovahq.com. Sign in there with your email and password, or with **Continue with Google**, and give the code from your authenticator app if you turned on two-factor. If you added a passkey, click **Use a passkey** instead: your fingerprint, face or screen lock is all it asks for, with no password and no code.
+2. Your browser opens runovahq.com. Sign in there with your email and password, or with **Continue with Google**, **Continue with Apple** or **Continue with Microsoft** (a first sign-in with one of them makes your account), and give the code from your authenticator app if you turned on two-factor. If you added a passkey, click **Use a passkey** instead: your fingerprint, face or screen lock is all it asks for, with no password and no code.
 3. The page asks **Sign in Runova on** your computer's name. Click **Sign in this computer**.
 4. Go back to Runova. It is signed in and starts syncing.
 

@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Primitives;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
 using Runova.Website.Core.Accounts;
@@ -32,9 +31,6 @@ public sealed record TwoFactorSignInRequest(string? Code, string? RecoveryCode);
 /// </summary>
 internal static class GoogleSignIn
 {
-    public const string Provider = "google";
-    public const string CallbackPath = "/api/oauth/google/callback";
-
     /// <summary>
     /// The Google handler, always registered and configured when first used. Its options are made
     /// again whenever the sign-in settings change, so new keys work without a restart. Google signs
@@ -45,51 +41,43 @@ internal static class GoogleSignIn
     {
         services.AddAuthentication().AddGoogle(_ => { });
         services.AddSingleton<IOptionsChangeTokenSource<GoogleOptions>>(provider =>
-            new SettingsChangeTokenSource(provider.GetRequiredService<SignInSettingsStore>()));
+            new SignInSettingsChangeTokenSource<GoogleOptions>(GoogleDefaults.AuthenticationScheme, provider.GetRequiredService<SignInSettingsStore>()));
         services.AddOptions<GoogleOptions>(GoogleDefaults.AuthenticationScheme).Configure<SignInSettingsStore>((options, store) =>
         {
             var settings = store.Current;
             options.ClientId = settings.GoogleClientId ?? "not-configured";
             options.ClientSecret = settings.GoogleClientSecret ?? "not-configured";
-            options.CallbackPath = CallbackPath;
+            options.CallbackPath = ExternalProviders.Google.CallbackPath;
             options.SignInScheme = IdentityConstants.ExternalScheme;
             options.SaveTokens = false;
             options.ClaimActions.MapJsonKey("email_verified", "email_verified");
             options.ClaimActions.MapJsonKey("email_verified", "verified_email");
 
             // Pressing Cancel at Google, or a failed exchange, lands on the sign-in page with a reason.
-            options.Events.OnRemoteFailure = context =>
-            {
-                context.Response.Redirect("/account/sign-in?error=google-failed");
-                context.HandleResponse();
-                return Task.CompletedTask;
-            };
+            options.Events.OnRemoteFailure = context => ExternalProviders.OnRemoteFailure(ExternalProviders.Google, context);
         });
         return services;
-    }
-
-    private sealed class SettingsChangeTokenSource(SignInSettingsStore store) : IOptionsChangeTokenSource<GoogleOptions>
-    {
-        public string Name => GoogleDefaults.AuthenticationScheme;
-
-        public IChangeToken GetChangeToken() => store.GetChangeToken();
     }
 }
 
 /// <summary>
-/// "Continue with Google" for Runova accounts (E48.3), as browser redirects. A Google login is
-/// never linked to an existing account by email alone: an account with that address that someone
-/// confirmed must sign in with its password and link Google from Security. An address nobody
-/// confirmed goes to the Google owner, and the password it was registered with stops working.
-/// Two-factor still applies after Google.
+/// "Continue with Google", Apple or Microsoft for Runova accounts (E48.3, E116), as browser
+/// redirects. <see cref="ExternalAccounts"/> holds the rules for which account a login belongs to.
+/// Two-factor still applies after the provider.
 /// </summary>
 internal static class ExternalSignInEndpoints
 {
-    private const string SignInPage = "/account/sign-in";
-    private const string DefaultReturn = "/account";
+    internal const string SignInPage = "/account/sign-in";
+    internal const string DefaultReturn = "/account";
+
+    /// <summary>The site's page a provider's callback lands on before <c>/external-sign-ins/current</c>.</summary>
+    internal const string FinishPage = "/account/external-sign-in";
 
     /// <summary>Identity's own item for the user a link is for, checked by GetExternalLoginInfoAsync.</summary>
     private const string LinkItem = "XsrfId";
+
+    /// <summary>Identity's own item for the scheme a sign-in started with.</summary>
+    private const string LoginProviderItem = "LoginProvider";
 
     public static RouteGroupBuilder MapExternalSignIns(this RouteGroupBuilder api)
     {
@@ -105,7 +93,7 @@ internal static class ExternalSignInEndpoints
     {
         var settings = await store.GetAsync(cancellationToken);
         return TypedResults.Ok(new SignInProvidersDto(
-            settings.GoogleActive ? [GoogleSignIn.Provider] : [],
+            [.. ExternalProviders.All.Where(p => p.IsActive(settings)).Select(p => p.Name)],
             settings.CaptchaActive ? new CaptchaDto("turnstile", settings.TurnstileSiteKey!) : null));
     }
 
@@ -127,7 +115,7 @@ internal static class ExternalSignInEndpoints
     private static async Task<Results<ChallengeHttpResult, ProblemHttpResult>> StartAsync(
         string provider, string? returnUrl, bool? link, HttpContext http, SignInSettingsStore store, SignInManager<AppUser> signIn, UserManager<AppUser> users)
     {
-        if (provider != GoogleSignIn.Provider || !(await store.GetAsync(http.RequestAborted)).GoogleActive)
+        if (!ExternalProviders.TryFind(provider, out var found) || !found.IsActive(await store.GetAsync(http.RequestAborted)))
         {
             return ApiProblems.Of(ProblemTypes.NotFound, "That sign-in provider is not available here.");
         }
@@ -136,9 +124,12 @@ internal static class ExternalSignInEndpoints
         var userId = link == true && await users.GetUserAsync(http.User) is { } user
             ? user.Id.ToString(CultureInfo.InvariantCulture)
             : null;
-        var finish = $"/api/v1/external-sign-ins/current?returnUrl={Uri.EscapeDataString(back)}";
-        var properties = signIn.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, finish, userId);
-        return TypedResults.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
+        // The provider comes back from another site, so the browser would leave the SameSite=Strict
+        // session cookie off the rest of the chain. The site's hop page moves on to
+        // /external-sign-ins/current by script, a navigation of this site's own (E116).
+        var finish = $"{FinishPage}?returnUrl={Uri.EscapeDataString(back)}";
+        var properties = signIn.ConfigureExternalAuthenticationProperties(found.Scheme, finish, userId);
+        return TypedResults.Challenge(properties, [found.Scheme]);
     }
 
     private static async Task<RedirectHttpResult> FinishAsync(
@@ -146,9 +137,11 @@ internal static class ExternalSignInEndpoints
         HttpContext http,
         SignInManager<AppUser> signIn,
         UserManager<AppUser> users,
+        ExternalAccounts accounts,
+        AppleTokens appleTokens,
+        SignInSettingsStore store,
         AppDbContext db,
-        ActivityLog activity,
-        TimeProvider time)
+        ActivityLog activity)
     {
         var back = SafeReturn(returnUrl);
         var external = await http.AuthenticateAsync(IdentityConstants.ExternalScheme);
@@ -158,24 +151,21 @@ internal static class ExternalSignInEndpoints
         var linkFor = linking ? users.GetUserId(http.User) : null;
         var info = linking && linkFor is null ? null : await signIn.GetExternalLoginInfoAsync(linkFor);
         await http.SignOutAsync(IdentityConstants.ExternalScheme);
-        if (info is null)
+        var provider = ExternalProviders.ForScheme(info?.LoginProvider ?? external.Properties?.GetString(LoginProviderItem));
+        if (info is null || provider is null)
         {
-            return Fail("google-failed");
+            return Fail((provider ?? ExternalProviders.Google).FailedCode, back);
         }
-
-        var email = info.Principal.FindFirstValue(ClaimTypes.Email);
-        var verified = string.Equals(info.Principal.FindFirstValue("email_verified"), "true", StringComparison.OrdinalIgnoreCase);
-        var name = info.Principal.FindFirstValue(ClaimTypes.Name);
-        var owner = await users.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
 
         if (linkFor is not null)
         {
             var me = await users.FindByIdAsync(linkFor);
             if (me is null)
             {
-                return Fail("google-failed");
+                return Fail(provider.FailedCode, back);
             }
 
+            var owner = await users.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
             if (owner is not null && owner.Id != me.Id)
             {
                 return TypedResults.Redirect(WithQuery(back, "error=login-taken"));
@@ -183,58 +173,28 @@ internal static class ExternalSignInEndpoints
 
             if (owner is null)
             {
-                Succeeded(await users.AddLoginAsync(me, info));
-                activity.Add(me.Id, ActivityActions.LoginLinked, new { provider = GoogleSignIn.Provider });
+                ExternalAccounts.Succeeded(await users.AddLoginAsync(me, info));
+                activity.Add(me.Id, ActivityActions.LoginLinked, new { provider = provider.Name });
                 await db.SaveChangesAsync();
+                await KeepAppleTokenAsync(me);
                 await signIn.RefreshSignInAsync(me);
             }
 
-            return TypedResults.Redirect(WithQuery(back, "linked=google"));
+            return TypedResults.Redirect(WithQuery(back, $"linked={provider.Name}"));
         }
 
-        if (owner is null)
+        var account = await accounts.ResolveAsync(info, provider);
+        if (account.Owner is not { } found)
         {
-            if (!verified || string.IsNullOrWhiteSpace(email))
-            {
-                return Fail("email-unverified");
-            }
-
-            var existing = await users.FindByEmailAsync(email);
-            if (existing is { EmailConfirmed: true })
-            {
-                return Fail("link-needed");
-            }
-
-            await using var transaction = await db.Database.BeginTransactionAsync();
-            owner = existing ?? new AppUser { UserName = email, Email = email, CreatedAt = time.GetUtcNow() };
-            owner.EmailConfirmed = true;
-            owner.DisplayName = string.IsNullOrWhiteSpace(name) ? email.Split('@')[0] : name.Trim()[..Math.Min(name.Trim().Length, AccountEndpoints.DisplayNameMax)];
-            if (existing is null)
-            {
-                Succeeded(await users.CreateAsync(owner));
-            }
-            else
-            {
-                // Whoever typed this address in never proved it; the Google owner just did.
-                if (await users.HasPasswordAsync(owner))
-                {
-                    Succeeded(await users.RemovePasswordAsync(owner));
-                }
-
-                await db.SetupLinks.Where(l => l.UserId == owner.Id).ExecuteDeleteAsync();
-                Succeeded(await users.UpdateAsync(owner));
-            }
-
-            Succeeded(await users.AddLoginAsync(owner, info));
-            activity.Add(owner.Id, ActivityActions.LoginLinked, new { provider = GoogleSignIn.Provider });
-            await db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            return Fail(account.Error!, back);
         }
 
-        if (owner.DisabledAt is not null)
+        if (found.DisabledAt is not null)
         {
-            return Fail("disabled");
+            return Fail("disabled", back);
         }
+
+        await KeepAppleTokenAsync(found);
 
         var result = await signIn.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: false);
         if (result.RequiresTwoFactor)
@@ -244,15 +204,26 @@ internal static class ExternalSignInEndpoints
 
         if (!result.Succeeded)
         {
-            return Fail(result.IsLockedOut ? "locked" : "google-failed");
+            return Fail(result.IsLockedOut ? "locked" : provider.FailedCode, back);
         }
 
-        await activity.MarkSignedInAsync(owner.Id);
-        await activity.SaveNowAsync(owner.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
+        await activity.MarkSignedInAsync(found.Id);
+        await activity.SaveNowAsync(found.Id, ActivityActions.SignIn, new { method = provider.Name });
         return TypedResults.Redirect(back);
+
+        // Apple's refresh token, kept sealed so it can be revoked when the account goes (E116).
+        async Task KeepAppleTokenAsync(AppUser user)
+        {
+            if (provider == ExternalProviders.Apple
+                && info.AuthenticationTokens?.FirstOrDefault(t => t.Name == AppleTokens.TokenName)?.Value is { Length: > 0 } refresh
+                && (await store.GetAsync(http.RequestAborted)).AppleServicesId is { } servicesId)
+            {
+                await appleTokens.KeepAsync(user, servicesId, refresh);
+            }
+        }
     }
 
-    /// <summary>The second step after Google for an account with two-factor on.</summary>
+    /// <summary>The second step after a provider, for an account with two-factor on.</summary>
     private static async Task<Results<NoContent, ProblemHttpResult>> TwoFactorAsync(
         TwoFactorSignInRequest request, HttpContext http, SignInManager<AppUser> signIn, UserManager<AppUser> users, AppDbContext db, ActivityLog activity)
     {
@@ -260,6 +231,10 @@ internal static class ExternalSignInEndpoints
         {
             return ApiProblems.Of(ProblemTypes.Unauthorized, "Start signing in again.");
         }
+
+        // Identity keeps the provider of the first step on its two-factor cookie.
+        var firstStep = await http.AuthenticateAsync(IdentityConstants.TwoFactorUserIdScheme);
+        var method = ExternalProviders.ForScheme(firstStep.Principal?.FindFirstValue(ClaimTypes.AuthenticationMethod))?.Name;
 
         var result = request switch
         {
@@ -276,14 +251,14 @@ internal static class ExternalSignInEndpoints
                 : ApiProblems.Of(ProblemTypes.TwoFactorRequired, "The code is not right or was already used.");
         }
 
-        await activity.SaveNowAsync(user.Id, ActivityActions.SignIn, new { method = GoogleSignIn.Provider });
+        await activity.SaveNowAsync(user.Id, ActivityActions.SignIn, new { method });
         http.User = await signIn.CreateUserPrincipalAsync(user);
         AntiforgeryCheck.IssueToken(http);
         return TypedResults.NoContent();
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, UnauthorizedHttpResult>> UnlinkAsync(
-        string provider, HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn, AppDbContext db, ActivityLog activity)
+        string provider, HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn, AppleTokens appleTokens, AppDbContext db, ActivityLog activity)
     {
         if (await users.GetUserAsync(http.User) is not { } user)
         {
@@ -302,22 +277,19 @@ internal static class ExternalSignInEndpoints
             return ApiProblems.Of(ProblemTypes.Conflict, "This is your only way to sign in. Set a password first, then unlink it.");
         }
 
-        Succeeded(await users.RemoveLoginAsync(user, login.LoginProvider, login.ProviderKey));
+        ExternalAccounts.Succeeded(await users.RemoveLoginAsync(user, login.LoginProvider, login.ProviderKey));
+        if (ExternalProviders.ForScheme(login.LoginProvider) == ExternalProviders.Apple)
+        {
+            await appleTokens.RevokeAsync(user, forget: true, http.RequestAborted);
+        }
+
         activity.Add(user.Id, ActivityActions.LoginUnlinked, new { provider = provider.ToLowerInvariant() });
         await db.SaveChangesAsync();
         await signIn.RefreshSignInAsync(user);
         return TypedResults.NoContent();
     }
 
-    private static RedirectHttpResult Fail(string error) => TypedResults.Redirect($"{SignInPage}?error={error}");
+    private static RedirectHttpResult Fail(string error, string back) => TypedResults.Redirect(ExternalProviders.FailurePath(error, back));
 
     private static string WithQuery(string path, string query) => path + (path.Contains('?', StringComparison.Ordinal) ? "&" : "?") + query;
-
-    private static void Succeeded(IdentityResult result)
-    {
-        if (!result.Succeeded)
-        {
-            throw new InvalidOperationException(string.Join(" ", result.Errors.Select(e => $"{e.Code}: {e.Description}")));
-        }
-    }
 }

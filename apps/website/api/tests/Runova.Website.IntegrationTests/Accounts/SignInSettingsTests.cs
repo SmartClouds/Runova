@@ -55,7 +55,22 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
         Assert.False(body.GetProperty("hasGoogleClientSecret").GetBoolean());
         Assert.False(body.GetProperty("googleFromEnvironment").GetBoolean());
         Assert.Equal("https://runovahq.com/api/oauth/google/callback", body.GetProperty("googleCallbackUrl").GetString());
-        Assert.Equal(0, body.GetProperty("googleOnlyAccounts").GetInt32());
+        Assert.True(body.GetProperty("appleEnabled").GetBoolean());
+        Assert.False(body.GetProperty("appleActive").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("appleServicesId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("appleTeamId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("appleKeyId").ValueKind);
+        Assert.False(body.GetProperty("hasApplePrivateKey").GetBoolean());
+        Assert.Equal("com.runovahq.app", body.GetProperty("appleBundleId").GetString());
+        Assert.False(body.GetProperty("appleFromEnvironment").GetBoolean());
+        Assert.Equal("https://runovahq.com/api/oauth/apple/callback", body.GetProperty("appleCallbackUrl").GetString());
+        Assert.True(body.GetProperty("microsoftEnabled").GetBoolean());
+        Assert.False(body.GetProperty("microsoftActive").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("microsoftClientId").ValueKind);
+        Assert.False(body.GetProperty("hasMicrosoftClientSecret").GetBoolean());
+        Assert.False(body.GetProperty("microsoftFromEnvironment").GetBoolean());
+        Assert.Equal("https://runovahq.com/api/oauth/microsoft/callback", body.GetProperty("microsoftCallbackUrl").GetString());
+        Assert.Equal(0, body.GetProperty("externalOnlyAccounts").GetInt32());
         Assert.NotNull(response.Headers.ETag);
         Assert.Equal("private, no-store", response.Headers.NonValidated["Cache-Control"].ToString());
     }
@@ -95,10 +110,83 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Apple_keys_saved_by_an_admin_turn_apple_on_and_the_private_key_never_comes_back()
+    {
+        var admin = await AdminAsync();
+        var key = TestAppleKeys.NewPrivateKeyPem();
+
+        var response = await TestSignInSettings.PatchAsync(admin, new
+        {
+            appleServicesId = "com.runovahq.web",
+            appleTeamId = "TEAM123456",
+            appleKeyId = "KEY1234567",
+            applePrivateKey = key,
+            appleBundleId = "com.runovahq.app.beta",
+        });
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = await ApiClient.ReadJsonAsync(response, HttpStatusCode.OK);
+
+        Assert.Equal("com.runovahq.web", body.GetProperty("appleServicesId").GetString());
+        Assert.Equal("TEAM123456", body.GetProperty("appleTeamId").GetString());
+        Assert.Equal("KEY1234567", body.GetProperty("appleKeyId").GetString());
+        Assert.Equal("com.runovahq.app.beta", body.GetProperty("appleBundleId").GetString());
+        Assert.True(body.GetProperty("hasApplePrivateKey").GetBoolean());
+        Assert.True(body.GetProperty("appleActive").GetBoolean());
+        Assert.DoesNotContain(TestAppleKeys.Body(key), text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_apple_key_pasted_on_one_line_still_works()
+    {
+        var admin = await AdminAsync();
+        // A password field drops the newlines a .p8 file has.
+        var oneLine = TestAppleKeys.NewPrivateKeyPem().ReplaceLineEndings("");
+
+        var response = await TestSignInSettings.PatchAsync(admin, new
+        {
+            appleServicesId = "com.runovahq.web",
+            appleTeamId = "TEAM123456",
+            appleKeyId = "KEY1234567",
+            applePrivateKey = oneLine,
+        });
+
+        var body = await ApiClient.ReadJsonAsync(response, HttpStatusCode.OK);
+        Assert.True(body.GetProperty("appleActive").GetBoolean());
+    }
+
+    [Fact]
+    public async Task An_apple_key_that_is_not_a_p8_key_is_refused()
+    {
+        var admin = await AdminAsync();
+
+        var response = await TestSignInSettings.PatchAsync(admin, new { applePrivateKey = "-----BEGIN PRIVATE KEY-----\nnot-a-key\n-----END PRIVATE KEY-----" });
+
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), Path);
+        Assert.True(problem.GetProperty("errors").TryGetProperty("applePrivateKey", out _));
+    }
+
+    [Fact]
+    public async Task Microsoft_keys_saved_by_an_admin_turn_microsoft_on_and_the_secret_never_comes_back()
+    {
+        var admin = await AdminAsync();
+
+        var response = await TestSignInSettings.PatchAsync(admin, new { microsoftClientId = "6f1c2c1e-0000-4000-8000-000000000001", microsoftClientSecret = "ms~secret-never-shown" });
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = await ApiClient.ReadJsonAsync(response, HttpStatusCode.OK);
+
+        Assert.Equal("6f1c2c1e-0000-4000-8000-000000000001", body.GetProperty("microsoftClientId").GetString());
+        Assert.True(body.GetProperty("hasMicrosoftClientSecret").GetBoolean());
+        Assert.True(body.GetProperty("microsoftActive").GetBoolean());
+        Assert.DoesNotContain("ms~secret-never-shown", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Secrets_are_sealed_in_the_database()
     {
         var admin = await AdminAsync();
+        var appleKey = TestAppleKeys.NewPrivateKeyPem();
         await TestSignInSettings.PatchAsync(admin, new { googleClientId = "id", googleClientSecret = GoogleSecret });
+        await TestSignInSettings.PatchAsync(admin, new { applePrivateKey = appleKey, microsoftClientSecret = "ms~secret-never-shown" });
         await TestSignInSettings.TurnOnCaptchaAsync(admin, _turnstile);
 
         await using var connection = new NpgsqlConnection(_connectionString);
@@ -107,6 +195,8 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
         var row = (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
 
         Assert.DoesNotContain(GoogleSecret, row, StringComparison.Ordinal);
+        Assert.DoesNotContain(TestAppleKeys.Body(appleKey), row, StringComparison.Ordinal);
+        Assert.DoesNotContain("ms~secret-never-shown", row, StringComparison.Ordinal);
         Assert.DoesNotContain(FakeTurnstile.Secret, row, StringComparison.Ordinal);
         Assert.Contains(FakeTurnstile.SiteKey, row, StringComparison.Ordinal);
     }
@@ -272,7 +362,7 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
-    public async Task Accounts_that_only_have_google_are_counted()
+    public async Task Accounts_that_only_have_a_provider_are_counted()
     {
         var admin = await AdminAsync();
         var withPassword = await TestAccounts.CreateAsync(_factory.Services);
@@ -285,8 +375,12 @@ public sealed class SignInSettingsTests(PostgresFixture postgres) : IAsyncLifeti
             Assert.True((await users.AddLoginAsync(googleOnly, new UserLoginInfo("Google", "sub-only", "Google"))).Succeeded);
             var both = (await users.FindByIdAsync(withPassword.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)))!;
             Assert.True((await users.AddLoginAsync(both, new UserLoginInfo("Google", "sub-both", "Google"))).Succeeded);
+            var otherEmail = TestAccounts.NewEmail();
+            var microsoftOnly = new AppUser { UserName = otherEmail, Email = otherEmail, EmailConfirmed = true, DisplayName = "M", CreatedAt = DateTimeOffset.UtcNow };
+            Assert.True((await users.CreateAsync(microsoftOnly)).Succeeded);
+            Assert.True((await users.AddLoginAsync(microsoftOnly, new UserLoginInfo("Microsoft", "sub-ms", "Microsoft"))).Succeeded);
         }
 
-        Assert.Equal(1, (await GetAsync(admin)).GetProperty("googleOnlyAccounts").GetInt32());
+        Assert.Equal(2, (await GetAsync(admin)).GetProperty("externalOnlyAccounts").GetInt32());
     }
 }

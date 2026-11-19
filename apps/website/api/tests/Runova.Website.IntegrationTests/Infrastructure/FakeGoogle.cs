@@ -62,13 +62,24 @@ internal sealed partial class FakeGoogle : HttpMessageHandler
         var callback = await client.GetAsync($"{new Uri(redirectUri).PathAndQuery}?code=fake-code&state={state}");
         Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
 
-        return await client.GetAsync(callback.Headers.Location!.OriginalString);
+        return await client.GetAsync(FollowHop(callback.Headers.Location!));
+    }
+
+    /// <summary>
+    /// The site's hop page, which the API's test host does not serve: its script moves on to the
+    /// API's finish address with the same query, as this does.
+    /// </summary>
+    public static string FollowHop(Uri location)
+    {
+        var path = location.OriginalString;
+        Assert.StartsWith("/account/external-sign-in?", path, StringComparison.Ordinal);
+        return "/api/v1/external-sign-ins/current" + path["/account/external-sign-in".Length..];
     }
 
     /// <summary>The browser coming back from Google with an error, as when the person presses Cancel.</summary>
-    public static async Task<HttpResponseMessage> CancelAsync(ApiClient client)
+    public static async Task<HttpResponseMessage> CancelAsync(ApiClient client, string startPath = "/api/v1/external-sign-ins/google?returnUrl=%2Faccount")
     {
-        var start = await client.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount");
+        var start = await client.GetAsync(startPath);
         var toGoogle = start.Headers.Location!;
         var state = StateParameter().Match(toGoogle.Query).Groups[1].Value;
         var redirectUri = Uri.UnescapeDataString(RedirectParameter().Match(toGoogle.Query).Groups[1].Value);

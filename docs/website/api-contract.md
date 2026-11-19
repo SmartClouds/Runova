@@ -19,8 +19,9 @@ the same commit.
   runova-health/1 report for Runova's Health page: `Authorization: Bearer <key>` whose SHA-256 is
   `RUNOVA_HEALTH_TOKEN_SHA256`, else an empty 401; 200 or 503 `application/health+json`; 30 requests
   a minute per address, then an empty 429), `GET /openapi/v1.json` (the built-in OpenAPI
-  document), `GET /api/oauth/google/callback` (where Google sends the browser back during "Continue
-  with Google"; handled by the Google sign-in middleware, not an endpoint), `GET /scalar` (the reference page, development and staging only), `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
+  document), `GET /api/oauth/google/callback`, `POST /api/oauth/apple/callback` and
+  `GET /api/oauth/microsoft/callback` (where each provider sends the browser back during "Continue
+  with Google", "Apple" or "Microsoft"; handled by the sign-in middleware, not endpoints), `GET /scalar` (the reference page, development and staging only), `/hangfire` (the dashboard, Admin only) and `/media/...` (uploaded images, served as static files).
 - **JSON.** UTF-8, camelCase property names, `null` for a missing optional value (never left out of
   a response), enums as the lowercase strings listed below. Ids are JSON numbers (PostgreSQL
   `bigint`; the API never hands out an id above 2^53 - 1 so JavaScript reads them exactly).
@@ -366,29 +367,44 @@ staging). Click and open tracking are off, so one-time links reach the reader as
 send is retried with a growing wait, up to ten times. A sent email keeps its subject but loses its
 body, which held a one-time link.
 
-### Continue with Google
+### Continue with Google, Apple or Microsoft
 
-Google sign-in for accounts, as browser redirects, when Google has a client id and secret (saved in
-the [sign-in settings](#sign-in-settings-admin), or else `Authentication__Google__ClientId` and
-`Authentication__Google__ClientSecret`) and an Admin has not turned it off. Only an email Google
-says is verified is trusted.
+Sign-in for accounts with a Google, Apple or Microsoft account (E48.3, E116), as browser
+redirects. `{provider}` is `google`, `apple` or `microsoft`. Each is offered when its keys are
+there (saved in the [sign-in settings](#sign-in-settings-admin), or else
+`Authentication__Google__ClientId` and `__ClientSecret`; `Authentication__Apple__ServicesId`,
+`__TeamId`, `__KeyId` and `__PrivateKey`; `Authentication__Microsoft__ClientId` and
+`__ClientSecret`) and an Admin has not turned it off. Only an email the provider says is verified
+is trusted.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
-| GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[], "captcha": { "provider": "turnstile", "siteKey": string } \| null }` (`["google"]` when it is set up; `captcha` while the captcha is on) |
-| GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add Google to the signed-in account) | 302 to Google; 404 not set up |
-| GET | `/api/v1/external-sign-ins/current` | Anonymous (Google's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
-| POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after Google) | `{ "code": string or null, "recoveryCode": string or null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
+| GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[], "captcha": { "provider": "turnstile", "siteKey": string } \| null }` (the providers that are set up, always in the order `google`, `apple`, `microsoft`; `captcha` while the captcha is on) |
+| GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add the provider to the signed-in account) | 302 to the provider; 404 not set up |
+| GET | `/api/v1/external-sign-ins/current` | Anonymous (the provider's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
+| POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after a provider) | `{ "code": string or null, "recoveryCode": string or null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
 | DELETE | `/api/v1/accounts/me/logins/{provider}` | Account | none | 204; 401; 404 not linked; 409 it is the only way in |
 
-Rules: a Google login already linked signs in to its account (two-factor still applies). A new
-address gets a new confirmed account with no password. An address whose account someone confirmed
-is never linked by email alone: the redirect carries `error=link-needed`, and the owner signs in
-with their password and links Google from Security (`link=true`), which only finishes for the
-account that started it. An address nobody confirmed goes to the Google owner, and the password it
-was registered with stops working. Errors in the redirect: `google-failed`, `email-unverified`,
+Rules: a login already linked signs in to its account (two-factor still applies). A new address
+gets a new confirmed account with no password. An address whose account someone confirmed is never
+linked by email alone: the redirect carries `error=link-needed`, and the owner signs in with their
+password and links the provider from Security (`link=true`), which only finishes for the account
+that started it. An address nobody confirmed goes to the provider's owner, and the password it was
+registered with stops working. Errors in the redirect: `{provider}-failed` (such as
+`google-failed`; Cancel at the provider, or a token that did not check out), `email-unverified`,
 `link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
-Google login). A `returnUrl` that is not a path on this site becomes `/account`.
+login). A failed sign-in that was going anywhere but `/account` also carries `next` with that
+path, so an app's authorize page can still finish. A `returnUrl` that is not a path on this site
+becomes `/account`.
+
+- **Microsoft** uses the `common` endpoint, so personal and work or school accounts both work. A
+  personal account (tenant `9188040d-6c67-4c5b-b112-36a304b66dad`) has a verified email. A work or
+  school account's email counts as verified only when the ID token carries `xms_edov: true`, an
+  optional claim the app registration must ask for. The issuer must name the token's own tenant.
+- **Apple** posts the code back (`response_mode=form_post`) and sends the name only on the first
+  sign-in. The client secret is an ES256 JWT signed with the saved key for each exchange, valid 5
+  minutes. Apple's refresh token is kept sealed and revoked (`/auth/revoke`) when the account is
+  deleted or Apple is unlinked; a failed revoke is logged and never stops either.
 
 ### Passkeys
 
@@ -430,14 +446,15 @@ is 404 while its setting is empty. They are outside `/api/v1` and not in the Ope
 
 ### Sign-in settings (Admin)
 
-The switches and keys for the sign-in captcha (Cloudflare Turnstile) and Google (E52), kept in the
+The switches and keys for the sign-in captcha (Cloudflare Turnstile), Google, Apple and Microsoft
+(E52, E116), kept in the
 database so an Admin can change them without a redeploy. Secrets are sealed with Data Protection
 and never come back; only whether one is saved.
 
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/sign-in-settings` | Admin | none | 200 `SignInSettingsDto`; 401; 403 |
-| PATCH | `/api/v1/sign-in-settings` | Admin | merge patch of `captchaEnabled`, `turnstileSiteKey`, `turnstileSecret`, `googleEnabled`, `googleClientId`, `googleClientSecret`, plus `captchaToken`; `If-Match` | 200 `SignInSettingsDto`; 400; 401; 403; 412; 428 |
+| PATCH | `/api/v1/sign-in-settings` | Admin | merge patch of `captchaEnabled`, `turnstileSiteKey`, `turnstileSecret`, `googleEnabled`, `googleClientId`, `googleClientSecret`, `appleEnabled`, `appleServicesId`, `appleTeamId`, `appleKeyId`, `applePrivateKey`, `appleBundleId`, `microsoftEnabled`, `microsoftClientId`, `microsoftClientSecret`, plus `captchaToken`; `If-Match` | 200 `SignInSettingsDto`; 400; 401; 403; 412; 428 |
 
 `SignInSettingsDto`:
 
@@ -452,7 +469,22 @@ and never come back; only whether one is saved.
   "hasGoogleClientSecret": true,
   "googleFromEnvironment": false,
   "googleCallbackUrl": "https://runovahq.com/api/oauth/google/callback",
-  "googleOnlyAccounts": 3,
+  "appleEnabled": true,
+  "appleActive": true,
+  "appleServicesId": "com.runovahq.web",
+  "appleTeamId": "TEAM123456",
+  "appleKeyId": "KEY1234567",
+  "hasApplePrivateKey": true,
+  "appleBundleId": "com.runovahq.app",
+  "appleFromEnvironment": false,
+  "appleCallbackUrl": "https://runovahq.com/api/oauth/apple/callback",
+  "microsoftEnabled": true,
+  "microsoftActive": false,
+  "microsoftClientId": null,
+  "hasMicrosoftClientSecret": false,
+  "microsoftFromEnvironment": false,
+  "microsoftCallbackUrl": "https://runovahq.com/api/oauth/microsoft/callback",
+  "externalOnlyAccounts": 3,
   "updatedAt": "2026-11-06T10:00:00.000Z",
   "version": "1234"
 }
@@ -461,7 +493,10 @@ and never come back; only whether one is saved.
 Rules:
 
 - A secret given replaces the saved one; `null` or an empty string removes it. Keys are trimmed:
-  the site key up to 100 characters, the client id up to 300, a secret up to 200.
+  the site key up to 100 characters, a client id, Services ID or bundle id up to 300, Apple's team
+  and key ids up to 20, a secret up to 200, and Apple's private key (the whole .p8 file, a P-256
+  key in PEM) up to 2000. A private key that is not one is 400 with `errors.applePrivateKey`.
+  `appleBundleId` is the phone app's bundle id, `com.runovahq.app` unless changed (E117).
 - The captcha can only be on with both keys. Turning it on, or giving it new keys while it is on,
   needs `captchaToken`: a token the settings page's own widget got with the new site key (action
   `settings-check`), which Cloudflare must accept with the new secret. Otherwise 400 with
@@ -472,11 +507,12 @@ Rules:
   (an outage included, since the check fails closed): 400 `validation-failed` with
   `errors.captchaToken`, before anything else about the request is checked. The captcha is checked
   after the rate limit.
-- `googleActive` is whether "Continue with Google" shows: on, with a client id and secret from here
-  or, for a key left empty here, from the environment (`googleFromEnvironment`). Turned off, Google
-  is gone even with keys in the environment. New keys work without a restart.
-- `googleOnlyAccounts` counts accounts that have a linked login and no password. With Google off,
-  they get back in by setting a password through `POST /password-resets`.
+- `googleActive`, `appleActive` and `microsoftActive` say whether each button shows: on, with
+  every key from here or, for a key left empty here, from the environment (`googleFromEnvironment`
+  and the others). Turned off, a provider is gone even with keys in the environment. New keys work
+  without a restart. Each `*CallbackUrl` is the redirect URI to give that provider's console.
+- `externalOnlyAccounts` counts accounts that have a linked login and no password. With their
+  provider off, they get back in by setting a password through `POST /password-resets`.
 - Every change writes a `sign-in-settings.update` audit entry naming the fields, never their values.
 - `admin captcha-off` (the CLI) turns the captcha off and keeps its keys, for when nobody can sign in.
 
@@ -1143,7 +1179,7 @@ code, token or key.
 | null, "passkeyCredential": object | null }`. An answer to a `step-up` [passkey
 challenge](#passkeys) from one of the account's passkeys is enough on its own. Without one, an
 account with a password gives it; one with none but two-factor gives a current code; one with
-neither (Google only) must have signed in within the last 10 minutes. A failure is 400
+neither (a provider only) must have signed in within the last 10 minutes. A failure is 400
 `validation-failed` naming `passkey`, `password`, `code` or `signIn`.
 
 ### Audit entries (Admin)

@@ -26,6 +26,8 @@ const PUBLIC_PATHS = new Set([
   '/account/verify-email',
   '/account/forgot-password',
   '/account/reset-password',
+  // The hop back from Google, Apple or Microsoft, before the API has set the session (E116).
+  '/account/external-sign-in',
 ]);
 /** Pages a signed-in visit skips, straight on to the panel. */
 const SIGNED_OUT_ONLY = new Set([SIGN_IN, '/account/register']);
@@ -94,5 +96,32 @@ export async function accountMiddleware(
   }
   if (isPublic) return withHeaders(await next());
   if (session.state === 'unavailable') return withHeaders(unavailable());
+  const hinted = await providerHint(context.url);
+  if (hinted) return withHeaders(redirect(hinted));
   return withHeaders(redirect(`${SIGN_IN}?next=${encodeURIComponent(`${pathname}${search}`)}`));
+}
+
+/**
+ * The phone and desktop apps can open `/account/authorize?...&provider=apple` to skip the sign-in
+ * page and go straight to that provider (E117). Only a provider the API has on is followed; the
+ * hint is dropped from the page the sign-in comes back to.
+ */
+async function providerHint(url: URL): Promise<string | null> {
+  const provider = url.searchParams.get('provider');
+  const baseUrl = process.env.WEBSITE_API_INTERNAL_URL;
+  if (url.pathname !== '/account/authorize' || !provider || !baseUrl) return null;
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/api/v1/sign-in-providers`, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(3_000),
+    });
+    const { items } = response.ok ? await response.json() : { items: [] };
+    if (!Array.isArray(items) || !items.includes(provider)) return null;
+  } catch {
+    return null;
+  }
+  const back = new URL(url);
+  back.searchParams.delete('provider');
+  const returnUrl = `${back.pathname}${back.search}`;
+  return `/api/v1/external-sign-ins/${encodeURIComponent(provider)}?returnUrl=${encodeURIComponent(returnUrl)}`;
 }

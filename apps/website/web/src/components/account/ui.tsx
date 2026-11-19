@@ -340,7 +340,7 @@ export function LoadFailure({ problem, retry }: { problem: Problem; retry: () =>
 
 /**
  * Asks for proof before a sensitive change: the password, or a two-factor code for an account
- * signed in with Google only, or one of the account's passkeys (E115). The caller sends it with
+ * signed in with a provider only, or one of the account's passkeys (E115). The caller sends it with
  * the change; a wrong one comes back as a field error the dialog shows. `children` go above the
  * proof, for a field the change itself needs.
  */
@@ -462,8 +462,8 @@ export function StepUpDialog({
           </div>
         ) : (
           <p className="text-muted-foreground text-sm">
-            You signed in with Google, so a sign-in in the last 10 minutes is the proof. If this
-            fails, sign out and in again first.
+            You signed in with Google, Apple or Microsoft, so a sign-in in the last 10 minutes is
+            the proof. If this fails, sign out and in again first.
           </p>
         )}
         {canUsePasskey && (

@@ -16,8 +16,9 @@ namespace Runova.Website.Api.Accounts;
 
 /// <summary>
 /// The sign-in settings as an Admin sees them. Secrets are never shown, only whether one is saved.
-/// <c>googleActive</c> says whether "Continue with Google" shows, with keys from here or from the
-/// environment; <c>googleOnlyAccounts</c> is how many people could only sign in with Google.
+/// <c>googleActive</c>, <c>appleActive</c> and <c>microsoftActive</c> say whether each button
+/// shows, with keys from here or from the environment; <c>externalOnlyAccounts</c> is how many
+/// people can only sign in with a provider.
 /// </summary>
 public sealed record SignInSettingsDto(
     bool CaptchaEnabled,
@@ -29,7 +30,22 @@ public sealed record SignInSettingsDto(
     bool HasGoogleClientSecret,
     bool GoogleFromEnvironment,
     string GoogleCallbackUrl,
-    int GoogleOnlyAccounts,
+    bool AppleEnabled,
+    bool AppleActive,
+    string? AppleServicesId,
+    string? AppleTeamId,
+    string? AppleKeyId,
+    bool HasApplePrivateKey,
+    string AppleBundleId,
+    bool AppleFromEnvironment,
+    string AppleCallbackUrl,
+    bool MicrosoftEnabled,
+    bool MicrosoftActive,
+    string? MicrosoftClientId,
+    bool HasMicrosoftClientSecret,
+    bool MicrosoftFromEnvironment,
+    string MicrosoftCallbackUrl,
+    int ExternalOnlyAccounts,
     DateTimeOffset? UpdatedAt,
     string Version);
 
@@ -44,10 +60,19 @@ public sealed record SignInSettingsPatch(
     bool? GoogleEnabled,
     string? GoogleClientId,
     string? GoogleClientSecret,
+    bool? AppleEnabled,
+    string? AppleServicesId,
+    string? AppleTeamId,
+    string? AppleKeyId,
+    string? ApplePrivateKey,
+    string? AppleBundleId,
+    bool? MicrosoftEnabled,
+    string? MicrosoftClientId,
+    string? MicrosoftClientSecret,
     string? CaptchaToken);
 
 /// <summary>
-/// The Admin's switches and keys for the captcha and Google (E52). Turning the captcha on, or
+/// The Admin's switches and keys for the captcha, Google, Apple and Microsoft (E52, E116). Turning the captcha on, or
 /// giving it new keys, needs a token the settings page got with those keys and that Cloudflare
 /// accepts with the new secret, so a wrong key can never lock everyone out, Admins included.
 /// </summary>
@@ -56,6 +81,8 @@ internal static class SignInSettingsEndpoints
     public const int MaxSiteKey = 100;
     public const int MaxClientId = 300;
     public const int MaxSecret = 200;
+    public const int MaxAppleId = 20;
+    public const int MaxPrivateKey = 2000;
 
     public static RouteGroupBuilder MapSignInSettings(this RouteGroupBuilder api)
     {
@@ -97,7 +124,9 @@ internal static class SignInSettingsEndpoints
 
         var before = new Values(
             row.CaptchaEnabled, row.TurnstileSiteKey, secrets.Unseal(row.TurnstileSecretSealed),
-            row.GoogleEnabled, row.GoogleClientId, secrets.Unseal(row.GoogleClientSecretSealed));
+            row.GoogleEnabled, row.GoogleClientId, secrets.Unseal(row.GoogleClientSecretSealed),
+            row.AppleEnabled, row.AppleServicesId, row.AppleTeamId, row.AppleKeyId, secrets.Unseal(row.ApplePrivateKeySealed), row.AppleBundleId,
+            row.MicrosoftEnabled, row.MicrosoftClientId, secrets.Unseal(row.MicrosoftClientSecretSealed));
         var after = before with
         {
             CaptchaEnabled = Switch(body, "captchaEnabled", patch.CaptchaEnabled, before.CaptchaEnabled, errors),
@@ -106,7 +135,21 @@ internal static class SignInSettingsEndpoints
             GoogleEnabled = Switch(body, "googleEnabled", patch.GoogleEnabled, before.GoogleEnabled, errors),
             GoogleClientId = Text(body, "googleClientId", patch.GoogleClientId, before.GoogleClientId, MaxClientId, errors),
             GoogleClientSecret = Text(body, "googleClientSecret", patch.GoogleClientSecret, before.GoogleClientSecret, MaxSecret, errors),
+            AppleEnabled = Switch(body, "appleEnabled", patch.AppleEnabled, before.AppleEnabled, errors),
+            AppleServicesId = Text(body, "appleServicesId", patch.AppleServicesId, before.AppleServicesId, MaxClientId, errors),
+            AppleTeamId = Text(body, "appleTeamId", patch.AppleTeamId, before.AppleTeamId, MaxAppleId, errors),
+            AppleKeyId = Text(body, "appleKeyId", patch.AppleKeyId, before.AppleKeyId, MaxAppleId, errors),
+            ApplePrivateKey = Text(body, "applePrivateKey", patch.ApplePrivateKey, before.ApplePrivateKey, MaxPrivateKey, errors),
+            AppleBundleId = Text(body, "appleBundleId", patch.AppleBundleId, before.AppleBundleId, MaxClientId, errors) ?? SignInSettings.DefaultAppleBundleId,
+            MicrosoftEnabled = Switch(body, "microsoftEnabled", patch.MicrosoftEnabled, before.MicrosoftEnabled, errors),
+            MicrosoftClientId = Text(body, "microsoftClientId", patch.MicrosoftClientId, before.MicrosoftClientId, MaxClientId, errors),
+            MicrosoftClientSecret = Text(body, "microsoftClientSecret", patch.MicrosoftClientSecret, before.MicrosoftClientSecret, MaxSecret, errors),
         };
+
+        if (after.ApplePrivateKey is { } appleKey && appleKey != before.ApplePrivateKey && !AppleClientSecret.IsPrivateKey(appleKey))
+        {
+            errors["applePrivateKey"] = ["Paste the whole .p8 file Apple gave you, from BEGIN PRIVATE KEY to END PRIVATE KEY."];
+        }
 
         if (errors.Count == 0 && after.CaptchaEnabled && (after.TurnstileSiteKey is null || after.TurnstileSecret is null))
         {
@@ -134,6 +177,15 @@ internal static class SignInSettingsEndpoints
             row.GoogleEnabled = after.GoogleEnabled;
             row.GoogleClientId = after.GoogleClientId;
             row.GoogleClientSecretSealed = after.GoogleClientSecret is null ? null : secrets.Seal(after.GoogleClientSecret);
+            row.AppleEnabled = after.AppleEnabled;
+            row.AppleServicesId = after.AppleServicesId;
+            row.AppleTeamId = after.AppleTeamId;
+            row.AppleKeyId = after.AppleKeyId;
+            row.ApplePrivateKeySealed = after.ApplePrivateKey is null ? null : secrets.Seal(after.ApplePrivateKey);
+            row.AppleBundleId = after.AppleBundleId;
+            row.MicrosoftEnabled = after.MicrosoftEnabled;
+            row.MicrosoftClientId = after.MicrosoftClientId;
+            row.MicrosoftClientSecretSealed = after.MicrosoftClientSecret is null ? null : secrets.Seal(after.MicrosoftClientSecret);
             row.UpdatedAt = time.GetUtcNow();
             audit.Add(AuditActions.SignInSettingsUpdate, AuditTargetTypes.SignInSettings, row.Id, new { fields = changed });
             try
@@ -156,11 +208,22 @@ internal static class SignInSettingsEndpoints
         HttpContext http, AppDbContext db, SignInSettingsStore store, IConfiguration configuration, SignInSettings row)
     {
         var effective = await store.GetAsync(http.RequestAborted);
-        var googleOnly = await db.Users.CountAsync(u => u.PasswordHash == null && db.UserLogins.Any(l => l.UserId == u.Id));
+        var externalOnly = await db.Users.CountAsync(u => u.PasswordHash == null && db.UserLogins.Any(l => l.UserId == u.Id));
+        var site = SiteUrl.From(configuration);
         Versions.SetETag(http.Response, row.Version);
         http.Response.Headers.CacheControl = HttpCaching.Private;
         return TypedResults.Ok(SignInSettingsMapper.ToDto(
-            row, effective.GoogleActive, effective.GoogleFromEnvironment, SiteUrl.From(configuration) + GoogleSignIn.CallbackPath, googleOnly));
+            row,
+            effective.GoogleActive,
+            effective.GoogleFromEnvironment,
+            site + ExternalProviders.Google.CallbackPath,
+            effective.AppleActive,
+            effective.AppleFromEnvironment,
+            site + ExternalProviders.Apple.CallbackPath,
+            effective.MicrosoftActive,
+            effective.MicrosoftFromEnvironment,
+            site + ExternalProviders.Microsoft.CallbackPath,
+            externalOnly));
     }
 
     /// <summary>A switch the patch names, or the current value. null is not a switch.</summary>
@@ -199,7 +262,21 @@ internal static class SignInSettingsEndpoints
     }
 
     private sealed record Values(
-        bool CaptchaEnabled, string? TurnstileSiteKey, string? TurnstileSecret, bool GoogleEnabled, string? GoogleClientId, string? GoogleClientSecret)
+        bool CaptchaEnabled,
+        string? TurnstileSiteKey,
+        string? TurnstileSecret,
+        bool GoogleEnabled,
+        string? GoogleClientId,
+        string? GoogleClientSecret,
+        bool AppleEnabled,
+        string? AppleServicesId,
+        string? AppleTeamId,
+        string? AppleKeyId,
+        string? ApplePrivateKey,
+        string AppleBundleId,
+        bool MicrosoftEnabled,
+        string? MicrosoftClientId,
+        string? MicrosoftClientSecret)
     {
         /// <summary>The names of the fields that differ, for the audit entry. Never their values.</summary>
         public List<string> ChangedFrom(Values before)
@@ -211,6 +288,15 @@ internal static class SignInSettingsEndpoints
             if (GoogleEnabled != before.GoogleEnabled) changed.Add("googleEnabled");
             if (GoogleClientId != before.GoogleClientId) changed.Add("googleClientId");
             if (GoogleClientSecret != before.GoogleClientSecret) changed.Add("googleClientSecret");
+            if (AppleEnabled != before.AppleEnabled) changed.Add("appleEnabled");
+            if (AppleServicesId != before.AppleServicesId) changed.Add("appleServicesId");
+            if (AppleTeamId != before.AppleTeamId) changed.Add("appleTeamId");
+            if (AppleKeyId != before.AppleKeyId) changed.Add("appleKeyId");
+            if (ApplePrivateKey != before.ApplePrivateKey) changed.Add("applePrivateKey");
+            if (AppleBundleId != before.AppleBundleId) changed.Add("appleBundleId");
+            if (MicrosoftEnabled != before.MicrosoftEnabled) changed.Add("microsoftEnabled");
+            if (MicrosoftClientId != before.MicrosoftClientId) changed.Add("microsoftClientId");
+            if (MicrosoftClientSecret != before.MicrosoftClientSecret) changed.Add("microsoftClientSecret");
             return changed;
         }
     }

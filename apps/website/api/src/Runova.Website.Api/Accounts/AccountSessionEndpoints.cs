@@ -180,7 +180,7 @@ internal static class AccountSessionEndpoints
 /// scope and records (all by cascade), its memberships, and each team it was the only member of. A
 /// team it owns alone while others are in it must be handed over or deleted first.
 /// </summary>
-internal sealed class AccountDeletion(UserManager<AppUser> users, AppDbContext db)
+internal sealed class AccountDeletion(UserManager<AppUser> users, AppDbContext db, AppleTokens appleTokens)
 {
     /// <summary>Why the account can not be deleted yet, or null.</summary>
     public async Task<string?> BlockerAsync(AppUser user)
@@ -201,6 +201,8 @@ internal sealed class AccountDeletion(UserManager<AppUser> users, AppDbContext d
 
     public async Task DeleteAsync(AppUser user)
     {
+        // Apple asks for its token to be revoked when the account goes; the row goes with the user.
+        await appleTokens.RevokeAsync(user, forget: false);
         await using var transaction = await db.Database.BeginTransactionAsync();
         var alone = await db.TeamMembers.Where(m => m.UserId == user.Id)
             .Where(m => !db.TeamMembers.Any(o => o.TeamId == m.TeamId && o.UserId != user.Id))

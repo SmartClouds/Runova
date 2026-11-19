@@ -1,0 +1,27 @@
+---
+import AuthLayout from '../../layouts/AuthLayout.astro';
+import { finishUrl } from '../../lib/account/externalSignIn';
+
+// Where a provider's sign-in comes back to before the API finishes it (E116). See
+// src/lib/account/externalSignIn.ts for why the hop is needed.
+export const prerender = false;
+
+const finish = finishUrl(Astro.url.search);
+---
+
+<AuthLayout title="Signing you in">
+  <div class="space-y-3 text-center">
+    <p class="text-sm text-muted-foreground" data-finishing>Signing you in…</p>
+    <noscript>
+      <p class="text-sm">
+        <a class="link" href={finish}>Continue</a>
+      </p>
+    </noscript>
+  </div>
+</AuthLayout>
+
+<script>
+  import { finishUrl } from '../../lib/account/externalSignIn';
+
+  window.location.replace(finishUrl(window.location.search));
+</script>

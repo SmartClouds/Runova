@@ -99,12 +99,65 @@ describe('SignIn', () => {
     );
   });
 
-  it('explains why Google could not link by email', async () => {
+  it('explains why a provider could not link by email', async () => {
     fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google']) });
     window.history.replaceState(null, '', '/account/sign-in?error=link-needed');
     render(<SignIn />);
 
-    expect(screen.getByText(/link Google from Security/)).toBeInTheDocument();
+    expect(screen.getByText(/then link it under Security/)).toBeInTheDocument();
+  });
+
+  it('offers Google, Apple and Microsoft in the order the site lists them', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google', 'apple', 'microsoft']) });
+    render(<SignIn />);
+
+    const links = await screen.findAllByRole('link', { name: /^Continue with / });
+
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Continue with Google', '/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fteams'],
+      ['Continue with Apple', '/api/v1/external-sign-ins/apple?returnUrl=%2Faccount%2Fteams'],
+      [
+        'Continue with Microsoft',
+        '/api/v1/external-sign-ins/microsoft?returnUrl=%2Faccount%2Fteams',
+      ],
+    ]);
+  });
+
+  it('offers only the providers the site has', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['microsoft', 'something-new']) });
+    render(<SignIn />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Continue with Microsoft' }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^Continue with / })).toHaveLength(1);
+  });
+
+  it.each([
+    ['apple-failed', 'Apple did not finish signing you in. Try again.'],
+    ['microsoft-failed', 'Microsoft did not finish signing you in. Try again.'],
+    ['google-failed', 'Google did not finish signing you in. Try again.'],
+  ])('says what went wrong for %s', async (error, message) => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google', 'apple', 'microsoft']) });
+    window.history.replaceState(null, '', `/account/sign-in?error=${error}`);
+    render(<SignIn />);
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it('keeps where a failed provider sign-in was going', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['apple']) });
+    window.history.replaceState(
+      null,
+      '',
+      `/account/sign-in?error=apple-failed&next=${encodeURIComponent('/account/authorize?client_id=runova-mobile')}`,
+    );
+    render(<SignIn />);
+
+    expect(await screen.findByRole('link', { name: 'Continue with Apple' })).toHaveAttribute(
+      'href',
+      `/api/v1/external-sign-ins/apple?returnUrl=${encodeURIComponent('/account/authorize?client_id=runova-mobile')}`,
+    );
   });
 });
 
@@ -208,6 +261,18 @@ describe('SignIn with a passkey', () => {
 });
 
 describe('Register', () => {
+  it('offers to make the account with Google, Apple or Microsoft instead', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers(['google', 'apple', 'microsoft']) });
+    render(<Register />);
+
+    expect(await screen.findByRole('link', { name: 'Continue with Apple' })).toHaveAttribute(
+      'href',
+      '/api/v1/external-sign-ins/apple?returnUrl=%2Faccount',
+    );
+    expect(screen.getByRole('link', { name: 'Continue with Google' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Continue with Microsoft' })).toBeInTheDocument();
+  });
+
   it('says to check the email once the account is made', async () => {
     const api = fakeFetch({
       'GET /api/v1/sign-in-providers': providers(),
@@ -359,6 +424,15 @@ describe('describeActivity', () => {
     expect(describeActivity({ ...entry, action: 'sign-in', details: { method: 'google' } })).toBe(
       'Signed in with Google',
     );
+    expect(describeActivity({ ...entry, action: 'sign-in', details: { method: 'apple' } })).toBe(
+      'Signed in with Apple',
+    );
+    expect(
+      describeActivity({ ...entry, action: 'login-linked', details: { provider: 'microsoft' } }),
+    ).toBe('Linked Microsoft');
+    expect(
+      describeActivity({ ...entry, action: 'login-unlinked', details: { provider: 'apple' } }),
+    ).toBe('Unlinked Apple');
     expect(describeActivity({ ...entry, action: 'something-new', details: null })).toBe(
       'something-new',
     );

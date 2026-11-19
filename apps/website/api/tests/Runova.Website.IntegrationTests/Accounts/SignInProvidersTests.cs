@@ -103,6 +103,49 @@ public sealed class SignInProvidersTests(PostgresFixture postgres) : IAsyncLifet
     }
 
     [Fact]
+    public async Task Apple_and_microsoft_keys_an_admin_saves_turn_them_on_in_a_fixed_order()
+    {
+        var factory = Factory(googleFromEnvironment: true);
+        var admin = await TestSignInSettings.AdminAsync(factory);
+        Assert.Equal(["google"], Items(await ProvidersAsync(factory)));
+
+        await TestSignInSettings.PatchAsync(admin, new { microsoftClientId = "ms-client", microsoftClientSecret = "ms-secret" });
+        Assert.Equal(["google", "microsoft"], Items(await ProvidersAsync(factory)));
+
+        await TestSignInSettings.PatchAsync(admin, new
+        {
+            appleServicesId = "com.runovahq.web",
+            appleTeamId = "TEAM123456",
+            appleKeyId = "KEY1234567",
+            applePrivateKey = TestAppleKeys.NewPrivateKeyPem(),
+        });
+        Assert.Equal(["google", "apple", "microsoft"], Items(await ProvidersAsync(factory)));
+
+        await TestSignInSettings.PatchAsync(admin, new { appleEnabled = false, microsoftEnabled = false });
+        Assert.Equal(["google"], Items(await ProvidersAsync(factory)));
+    }
+
+    [Fact]
+    public async Task Apple_and_microsoft_keys_in_the_environment_turn_them_on()
+    {
+        var factory = new WebsiteApiFactory(_connectionString, settings: new Dictionary<string, string>
+        {
+            ["Authentication:Apple:ServicesId"] = "com.runovahq.web",
+            ["Authentication:Apple:TeamId"] = "TEAM123456",
+            ["Authentication:Apple:KeyId"] = "KEY1234567",
+            ["Authentication:Apple:PrivateKey"] = TestAppleKeys.NewPrivateKeyPem(),
+            ["Authentication:Microsoft:ClientId"] = "ms-client",
+            ["Authentication:Microsoft:ClientSecret"] = "ms-secret",
+        });
+        _factories.Add(factory);
+
+        Assert.Equal(["apple", "microsoft"], Items(await ProvidersAsync(factory)));
+        var settings = await ApiClient.ReadJsonAsync(await (await TestSignInSettings.AdminAsync(factory)).GetAsync(TestSignInSettings.Path), HttpStatusCode.OK);
+        Assert.True(settings.GetProperty("appleFromEnvironment").GetBoolean());
+        Assert.True(settings.GetProperty("microsoftFromEnvironment").GetBoolean());
+    }
+
+    [Fact]
     public async Task The_providers_name_no_captcha_while_it_is_off()
     {
         var providers = await ProvidersAsync(Factory(googleFromEnvironment: false));

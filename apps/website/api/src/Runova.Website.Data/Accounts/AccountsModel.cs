@@ -15,6 +15,11 @@ internal static class AccountsModel
             settings.ToTable(t => t.HasCheckConstraint("CK_SignInSettings_Singleton", $"\"Id\" = {SignInSettings.SingletonId}"));
             settings.Property(s => s.TurnstileSiteKey).HasMaxLength(100);
             settings.Property(s => s.GoogleClientId).HasMaxLength(300);
+            settings.Property(s => s.AppleServicesId).HasMaxLength(300);
+            settings.Property(s => s.AppleTeamId).HasMaxLength(20);
+            settings.Property(s => s.AppleKeyId).HasMaxLength(20);
+            settings.Property(s => s.AppleBundleId).HasMaxLength(300).HasDefaultValue(SignInSettings.DefaultAppleBundleId);
+            settings.Property(s => s.MicrosoftClientId).HasMaxLength(300);
             settings.Property(s => s.Version).IsRowVersion();
             settings.HasData(new SignInSettings());
         });

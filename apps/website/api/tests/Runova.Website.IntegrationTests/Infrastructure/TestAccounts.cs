@@ -59,6 +59,19 @@ internal static partial class TestAccounts
         return (await users.FindByIdAsync(id.ToString(CultureInfo.InvariantCulture)))!;
     }
 
+    /// <summary>The <c>method</c> of every sign-in entry in an account's activity, oldest first.</summary>
+    public static async Task<IReadOnlyList<string?>> SignInMethodsAsync(IServiceProvider services, long userId)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var details = await db.AccountActivities
+            .Where(a => a.UserId == userId && a.Action == Core.Accounts.ActivityActions.SignIn)
+            .OrderBy(a => a.Id)
+            .Select(a => a.Details)
+            .ToListAsync();
+        return [.. details.Select(d => d is null ? null : System.Text.Json.JsonElement.Parse(d).GetProperty("method").GetString())];
+    }
+
     /// <summary>Every email queued for an address, oldest first.</summary>
     public static async Task<IReadOnlyList<EmailMessage>> EmailsToAsync(IServiceProvider services, string to)
     {

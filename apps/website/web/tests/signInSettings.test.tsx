@@ -20,7 +20,22 @@ const BASE: SignInSettings = {
   hasGoogleClientSecret: true,
   googleFromEnvironment: false,
   googleCallbackUrl: 'https://runovahq.com/api/oauth/google/callback',
-  googleOnlyAccounts: 0,
+  appleEnabled: true,
+  appleActive: false,
+  appleServicesId: null,
+  appleTeamId: null,
+  appleKeyId: null,
+  hasApplePrivateKey: false,
+  appleBundleId: 'com.runovahq.app',
+  appleFromEnvironment: false,
+  appleCallbackUrl: 'https://runovahq.com/api/oauth/apple/callback',
+  microsoftEnabled: true,
+  microsoftActive: false,
+  microsoftClientId: null,
+  hasMicrosoftClientSecret: false,
+  microsoftFromEnvironment: false,
+  microsoftCallbackUrl: 'https://runovahq.com/api/oauth/microsoft/callback',
+  externalOnlyAccounts: 0,
   updatedAt: null,
   version: '7',
 };
@@ -76,6 +91,13 @@ describe('SignInSettingsEditor', () => {
       googleEnabled: true,
       googleClientId: 'new.apps.googleusercontent.com',
       googleClientSecret: 'GOCSPX-secret',
+      appleEnabled: true,
+      appleServicesId: null,
+      appleTeamId: null,
+      appleKeyId: null,
+      appleBundleId: 'com.runovahq.app',
+      microsoftEnabled: true,
+      microsoftClientId: null,
     });
   });
 
@@ -131,6 +153,13 @@ describe('SignInSettingsEditor', () => {
       captchaToken: 'tok-check',
       googleEnabled: true,
       googleClientId: '123.apps.googleusercontent.com',
+      appleEnabled: true,
+      appleServicesId: null,
+      appleTeamId: null,
+      appleKeyId: null,
+      appleBundleId: 'com.runovahq.app',
+      microsoftEnabled: true,
+      microsoftClientId: null,
     });
   });
 
@@ -175,14 +204,77 @@ describe('SignInSettingsEditor', () => {
     expect(api.calls(`PATCH ${SETTINGS}`)[0]?.json()).not.toHaveProperty('captchaToken');
   });
 
-  it('warns before Google goes off for people who only sign in with it', async () => {
-    fakeFetch({ [`GET ${SETTINGS}`]: answer({ googleOnlyAccounts: 3 }) });
+  it('warns before a provider goes off for people who only sign in with one', async () => {
+    fakeFetch({ [`GET ${SETTINGS}`]: answer({ externalOnlyAccounts: 3 }) });
     const user = userEvent.setup();
     render(<SignInSettingsEditor />);
 
-    await user.click(await screen.findByRole('checkbox', { name: /Continue with Google/ }));
+    await user.click(await screen.findByRole('checkbox', { name: /Continue with Microsoft/ }));
 
-    expect(screen.getByText(/3 accounts can only sign in with Google/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/3 accounts can only sign in with Google, Apple or Microsoft/),
+    ).toBeInTheDocument();
+  });
+
+  it('saves the four Apple keys, the private key only when typed', async () => {
+    const api = fakeFetch({
+      [`GET ${SETTINGS}`]: answer(),
+      [`PATCH ${SETTINGS}`]: answer({ version: '8' }),
+    });
+    const user = userEvent.setup();
+    render(<SignInSettingsEditor />);
+
+    await user.type(await screen.findByLabelText('Services ID'), 'com.runovahq.web');
+    await user.type(screen.getByLabelText('Team ID'), 'TEAM123456');
+    await user.type(screen.getByLabelText('Key ID'), 'KEY1234567');
+    await user.type(screen.getByLabelText('Private key (.p8)'), 'PEM');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await screen.findByText('Saved.');
+    expect(api.calls(`PATCH ${SETTINGS}`)[0]?.json()).toMatchObject({
+      appleEnabled: true,
+      appleServicesId: 'com.runovahq.web',
+      appleTeamId: 'TEAM123456',
+      appleKeyId: 'KEY1234567',
+      applePrivateKey: 'PEM',
+      appleBundleId: 'com.runovahq.app',
+    });
+    expect(screen.getByLabelText('Return URL')).toHaveValue(
+      'https://runovahq.com/api/oauth/apple/callback',
+    );
+  });
+
+  it('saves the Microsoft keys and shows the redirect URI to register', async () => {
+    const api = fakeFetch({
+      [`GET ${SETTINGS}`]: answer(),
+      [`PATCH ${SETTINGS}`]: answer({ version: '8' }),
+    });
+    const user = userEvent.setup();
+    render(<SignInSettingsEditor />);
+
+    await user.type(await screen.findByLabelText('Application (client) ID'), 'ms-client');
+    await user.type(screen.getByLabelText('Client secret value'), 'ms-secret');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await screen.findByText('Saved.');
+    expect(api.calls(`PATCH ${SETTINGS}`)[0]?.json()).toMatchObject({
+      microsoftEnabled: true,
+      microsoftClientId: 'ms-client',
+      microsoftClientSecret: 'ms-secret',
+    });
+    expect(screen.getByLabelText('Redirect URI (Web)')).toHaveValue(
+      'https://runovahq.com/api/oauth/microsoft/callback',
+    );
+  });
+
+  it('says whether Apple and Microsoft show yet', async () => {
+    fakeFetch({ [`GET ${SETTINGS}`]: answer({ appleActive: true, microsoftEnabled: false }) });
+    render(<SignInSettingsEditor />);
+
+    expect(
+      await screen.findByText('Continue with Apple shows on the sign-in pages.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Microsoft sign-in is off.')).toBeInTheDocument();
   });
 
   it('says where keys left empty come from', async () => {

@@ -7,33 +7,14 @@ import { passkeysSupported, runPasskey } from '@/lib/account/passkeys';
 import { type SignInOptions, useSignInOptions } from '@/lib/account/signInOptions';
 import { captchaField, useCaptcha } from './Captcha';
 import { AppInput, PasswordInput } from './fields';
+import { knownProviders, PROVIDERS, providerError, providerStart } from './providers';
 import { Notice } from './ui';
 
 const goTo = (path: string) => window.location.assign(path);
 
-function GoogleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24Z"
-      />
-      <path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1Z" />
-      <path
-        fill="#EA4335"
-        d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9Z"
-      />
-    </svg>
-  );
-}
-
 /**
  * The ways in that need no password: a passkey when the browser has passkeys (E115), and
- * "Continue with Google" when the API says Google sign-in is set up.
+ * "Continue with Google", "Apple" or "Microsoft" for each one the API says is set up (E116).
  */
 function OtherWays({
   next,
@@ -48,8 +29,8 @@ function OtherWays({
   passkeyBusy: boolean;
   onPasskey: () => void;
 }) {
-  const google = !!options?.providers.includes('google');
-  if (!google && !passkeys) return null;
+  const providers = knownProviders(options?.providers);
+  if (providers.length === 0 && !passkeys) return null;
   return (
     <>
       {passkeys && (
@@ -64,14 +45,17 @@ function OtherWays({
           {passkeyBusy ? 'Waiting for your passkey…' : 'Use a passkey'}
         </Button>
       )}
-      {google && (
-        <Button asChild variant="outline" className="w-full app-field border-0">
-          <a href={`/api/v1/external-sign-ins/google?returnUrl=${encodeURIComponent(next)}`}>
-            <GoogleMark />
-            Continue with Google
-          </a>
-        </Button>
-      )}
+      {providers.map((name) => {
+        const { label, Mark } = PROVIDERS[name];
+        return (
+          <Button key={name} asChild variant="outline" className="w-full app-field border-0">
+            <a href={providerStart(name, next)}>
+              <Mark />
+              Continue with {label}
+            </a>
+          </Button>
+        );
+      })}
       <div className="flex items-center gap-3 text-muted-foreground text-xs">
         <span className="h-px flex-1 bg-foreground/10" />
         or with your email
@@ -90,15 +74,6 @@ function Title({ children, lead }: { children: ReactNode; lead?: ReactNode }) {
   );
 }
 
-const GOOGLE_ERRORS: Record<string, string> = {
-  'google-failed': 'Google did not finish signing you in. Try again.',
-  'email-unverified': 'Google has not confirmed that email address, so Runova can not use it.',
-  'link-needed':
-    'An account with that email already exists. Sign in with its password, then link Google from Security.',
-  disabled: 'This account is turned off. Contact support to turn it back on.',
-  locked: 'Too many tries in a row. Wait a few minutes and try again.',
-};
-
 const messageProblem = (message: string): Problem => ({
   type: 'passkey',
   title: message,
@@ -110,10 +85,10 @@ const messageProblem = (message: string): Problem => ({
 export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void }) {
   const params = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
   const next = safeAccountPath(params.get('next') ?? params.get('returnUrl'));
-  const googleTwoFactor = params.get('step') === 'two-factor';
+  const providerTwoFactor = params.get('step') === 'two-factor';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [step, setStep] = useState<'password' | 'code'>(googleTwoFactor ? 'code' : 'password');
+  const [step, setStep] = useState<'password' | 'code'>(providerTwoFactor ? 'code' : 'password');
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -122,10 +97,10 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
   const [busy, setBusy] = useState(false);
   const [passkeys] = useState(passkeysSupported);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
-  const googleError = params.get('error');
+  const providerProblem = providerError(params.get('error'));
   const options = useSignInOptions();
-  // The code step after Google needs no check: Google already let the person in.
-  const captcha = useCaptcha(googleTwoFactor ? null : (options?.captcha ?? null), 'sign-in');
+  // The code step after a provider needs no check: the provider already let the person in.
+  const captcha = useCaptcha(providerTwoFactor ? null : (options?.captcha ?? null), 'sign-in');
   const resendCaptcha = useCaptcha(
     unverified && !resent ? (options?.captcha ?? null) : null,
     'verification-email',
@@ -136,7 +111,7 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
     setBusy(true);
     setProblem(null);
     const cleaned = useRecovery ? code.trim() : code.replace(/\s/g, '');
-    const response = googleTwoFactor
+    const response = providerTwoFactor
       ? await apiRequest('/two-factor-sign-ins', {
           method: 'POST',
           body: { code: useRecovery ? null : cleaned, recoveryCode: useRecovery ? cleaned : null },
@@ -218,9 +193,7 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
         {step === 'code' ? 'Two-step check' : 'Sign in to Runova'}
       </Title>
       <div className="grid gap-4">
-        {googleError && GOOGLE_ERRORS[googleError] && (
-          <Notice tone="warning">{GOOGLE_ERRORS[googleError]}</Notice>
-        )}
+        {providerProblem && <Notice tone="warning">{providerProblem}</Notice>}
         {problem && !unverified && <Notice tone="danger">{problem.detail || problem.title}</Notice>}
         {unverified && (
           <Notice tone="warning" title="Confirm your email first">

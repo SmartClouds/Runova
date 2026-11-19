@@ -13122,7 +13122,22 @@
           "hasGoogleClientSecret",
           "googleFromEnvironment",
           "googleCallbackUrl",
-          "googleOnlyAccounts",
+          "appleEnabled",
+          "appleActive",
+          "appleServicesId",
+          "appleTeamId",
+          "appleKeyId",
+          "hasApplePrivateKey",
+          "appleBundleId",
+          "appleFromEnvironment",
+          "appleCallbackUrl",
+          "microsoftEnabled",
+          "microsoftActive",
+          "microsoftClientId",
+          "hasMicrosoftClientSecret",
+          "microsoftFromEnvironment",
+          "microsoftCallbackUrl",
+          "externalOnlyAccounts",
           "updatedAt",
           "version"
         ],
@@ -13161,7 +13176,64 @@
           "googleCallbackUrl": {
             "type": "string"
           },
-          "googleOnlyAccounts": {
+          "appleEnabled": {
+            "type": "boolean"
+          },
+          "appleActive": {
+            "type": "boolean"
+          },
+          "appleServicesId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleTeamId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleKeyId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasApplePrivateKey": {
+            "type": "boolean"
+          },
+          "appleBundleId": {
+            "type": "string"
+          },
+          "appleFromEnvironment": {
+            "type": "boolean"
+          },
+          "appleCallbackUrl": {
+            "type": "string"
+          },
+          "microsoftEnabled": {
+            "type": "boolean"
+          },
+          "microsoftActive": {
+            "type": "boolean"
+          },
+          "microsoftClientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasMicrosoftClientSecret": {
+            "type": "boolean"
+          },
+          "microsoftFromEnvironment": {
+            "type": "boolean"
+          },
+          "microsoftCallbackUrl": {
+            "type": "string"
+          },
+          "externalOnlyAccounts": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -13190,6 +13262,15 @@
           "googleEnabled",
           "googleClientId",
           "googleClientSecret",
+          "appleEnabled",
+          "appleServicesId",
+          "appleTeamId",
+          "appleKeyId",
+          "applePrivateKey",
+          "appleBundleId",
+          "microsoftEnabled",
+          "microsoftClientId",
+          "microsoftClientSecret",
           "captchaToken"
         ],
         "type": "object",
@@ -13225,6 +13306,60 @@
             ]
           },
           "googleClientSecret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "appleServicesId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleTeamId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleKeyId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "applePrivateKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appleBundleId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "microsoftEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "microsoftClientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "microsoftClientSecret": {
             "type": [
               "null",
               "string"

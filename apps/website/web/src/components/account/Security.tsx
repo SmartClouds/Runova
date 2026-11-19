@@ -7,19 +7,45 @@ import { passkeysSupported, runPasskey } from '@/lib/account/passkeys';
 import { useSignInOptions } from '@/lib/account/signInOptions';
 import { StrengthMeter } from './AuthForms';
 import { AppInput, PasswordInput } from './fields';
+import {
+  isProvider,
+  knownProviders,
+  PROVIDERS,
+  type ProviderName,
+  providerLabel,
+  providerStart,
+} from './providers';
 import { Card, CardHeader, Notice, PageHeader, Pill, Shimmer, StepUpDialog, useLoad } from './ui';
 
-const LINK_MESSAGES: Record<string, { tone: 'success' | 'warning'; text: string }> = {
-  'linked=google': {
-    tone: 'success',
-    text: 'Google is linked. You can sign in with it from now on.',
-  },
-  'error=login-taken': {
-    tone: 'warning',
-    text: 'That Google account already signs in to another Runova account.',
-  },
-  'error=google-failed': { tone: 'warning', text: 'Google did not finish. Try linking again.' },
+/** The providers a password-less account signs in with, in words: "Apple", "Google or Apple". */
+const signsInWith = (account: Account) => {
+  const names = account.logins.map(providerLabel);
+  return names.length === 0 ? 'a passkey' : names.join(' or ');
 };
+
+/** What Security says when the browser comes back from linking a provider. */
+function readLinkMessage(query: string): { tone: 'success' | 'warning'; text: string } | null {
+  const params = new URLSearchParams(query);
+  const linked = params.get('linked');
+  if (linked && isProvider(linked)) {
+    return {
+      tone: 'success',
+      text: `${PROVIDERS[linked].label} is linked. You can sign in with it from now on.`,
+    };
+  }
+  const error = params.get('error');
+  if (error === 'login-taken') {
+    return { tone: 'warning', text: 'That account already signs in to another Runova account.' };
+  }
+  const failed = error && /^(.+)-failed$/.exec(error)?.[1];
+  if (failed && isProvider(failed)) {
+    return {
+      tone: 'warning',
+      text: `${PROVIDERS[failed].label} did not finish. Try linking again.`,
+    };
+  }
+  return null;
+}
 
 export default function Security() {
   const account = useLoad<Account>('/accounts/me');
@@ -28,7 +54,7 @@ export default function Security() {
   );
   const me = account.value;
   const query = typeof window === 'undefined' ? '' : window.location.search.slice(1);
-  const linkMessage = LINK_MESSAGES[query];
+  const linkMessage = readLinkMessage(query);
   return (
     <>
       <PageHeader
@@ -57,7 +83,7 @@ export default function Security() {
             }}
           />
           <PasskeysCard account={me} reloadAccount={account.reload} />
-          <GoogleCard account={me} reload={account.reload} />
+          <ConnectedAccountsCard account={me} reload={account.reload} />
           <DeleteCard account={me} />
         </div>
       )}
@@ -90,7 +116,7 @@ function PasswordCard({ account }: { account: Account }) {
         <CardHeader
           icon={<KeyRound />}
           title="Password"
-          description="You sign in with Google. Add a password too, so you can sign in if you ever lose that Google account."
+          description={`You sign in with ${signsInWith(account)}. Add a password too, so you can sign in if you ever lose that account.`}
           actions={
             <Button
               size="sm"
@@ -322,45 +348,64 @@ function TwoFactorCard({
   );
 }
 
-/** Linking Google, while the site has it on; an account already linked can always unlink. */
-function GoogleCard({ account, reload }: { account: Account; reload: () => void }) {
-  const linked = account.logins.includes('google');
+/**
+ * Google, Apple and Microsoft (E116): link each one the site has on, and unlink one that is linked
+ * even while the site has it off. The API refuses to unlink the last way in.
+ */
+function ConnectedAccountsCard({ account, reload }: { account: Account; reload: () => void }) {
   const options = useSignInOptions();
   const [problem, setProblem] = useState<string | null>(null);
-  const unlink = async () => {
-    const response = await apiRequest('/accounts/me/logins/google', { method: 'DELETE' });
+  const offered = knownProviders(options?.providers);
+  const shown = (Object.keys(PROVIDERS) as ProviderName[]).filter(
+    (name) => account.logins.includes(name) || offered.includes(name),
+  );
+  const unlink = async (name: ProviderName) => {
+    setProblem(null);
+    const response = await apiRequest(`/accounts/me/logins/${name}`, { method: 'DELETE' });
     if (response.ok) reload();
-    else setProblem(response.problem.detail);
+    else setProblem(response.problem.detail || response.problem.title);
   };
-  if (!linked && !options?.providers.includes('google')) return null;
+  if (shown.length === 0) return null;
   return (
     <Card>
       <CardHeader
         icon={<Link2 />}
-        title={
-          <span className="flex items-center gap-2">
-            Google {linked && <Pill tone="success">Linked</Pill>}
-          </span>
-        }
-        description={
-          linked
-            ? 'You can sign in with your Google account.'
-            : 'Sign in with your Google account as well as your password.'
-        }
-        actions={
-          linked ? (
-            <Button size="sm" variant="ghost" onClick={unlink}>
-              Unlink
-            </Button>
-          ) : (
-            <Button asChild size="sm" variant="outline" className="app-field border-0">
-              <a href="/api/v1/external-sign-ins/google?link=true&returnUrl=%2Faccount%2Fsecurity">
-                Link Google
-              </a>
-            </Button>
-          )
-        }
+        title="Connected accounts"
+        description="Sign in with another account as well as your password or passkey."
       />
+      <ul className="grid gap-2 px-5 pb-5">
+        {shown.map((name) => {
+          const { label, Mark } = PROVIDERS[name];
+          const linked = account.logins.includes(name);
+          return (
+            <li
+              key={name}
+              aria-label={label}
+              className="flex items-center justify-between gap-3 rounded-inner app-field px-3 py-2"
+            >
+              <span className="flex items-center gap-2.5 font-medium text-sm">
+                <Mark />
+                {label}
+                {linked && <Pill tone="success">Linked</Pill>}
+              </span>
+              {linked ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Unlink ${label}`}
+                  onClick={() => unlink(name)}
+                >
+                  Unlink
+                </Button>
+              ) : (
+                <Button asChild size="sm" variant="outline" className="app-field border-0">
+                  <a href={providerStart(name, '/account/security', true)}>{`Link ${label}`}</a>
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
       {problem && (
         <div className="px-5 pb-5">
           <Notice tone="warning">{problem}</Notice>

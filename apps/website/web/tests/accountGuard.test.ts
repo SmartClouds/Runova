@@ -70,8 +70,52 @@ describe('accountMiddleware', () => {
       '/account/verify-email',
       '/account/forgot-password',
       '/account/reset-password',
+      '/account/external-sign-in?returnUrl=%2Faccount',
     ]) {
       expect((await accountMiddleware(context(path), page)).status, path).toBe(200);
+    }
+  });
+
+  it('sends a signed-out app sign-in with a provider hint straight to that provider', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        input === `${API}/api/v1/sign-in-providers`
+          ? Response.json({ items: ['google', 'apple'], captcha: null })
+          : new Response(null, { status: 401 }),
+      ),
+    );
+
+    const response = await accountMiddleware(
+      context('/account/authorize?client_id=runova-mobile&state=s&provider=apple'),
+      page,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      `/api/v1/external-sign-ins/apple?returnUrl=${encodeURIComponent('/account/authorize?client_id=runova-mobile&state=s')}`,
+    );
+  });
+
+  it('ignores a hint for a provider the site does not have', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        input === `${API}/api/v1/sign-in-providers`
+          ? Response.json({ items: ['google'], captcha: null })
+          : new Response(null, { status: 401 }),
+      ),
+    );
+
+    for (const hint of ['microsoft', 'evil']) {
+      const response = await accountMiddleware(
+        context(`/account/authorize?client_id=runova-mobile&provider=${hint}`),
+        page,
+      );
+
+      expect(response.headers.get('location'), hint).toBe(
+        `/account/sign-in?next=${encodeURIComponent(`/account/authorize?client_id=runova-mobile&provider=${hint}`)}`,
+      );
     }
   });
 

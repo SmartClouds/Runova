@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
+import { FAKE_MICROSOFT, fakeMicrosoft } from './fakeMicrosoft.ts';
 import { FAKE_STRIPE, OWNER, REFUSED_CAPTCHA_TOKEN, STACK } from './stackConfig.ts';
 
 const web = resolve(import.meta.dirname, '../..');
@@ -277,9 +278,17 @@ try {
     Admin__DisplayName: OWNER.displayName,
     Captcha__VerifyUrl: `http://127.0.0.1:${STACK.siteVerifyPort}/siteverify`,
     Billing__StripeApiBase: `http://127.0.0.1:${STACK.stripePort}`,
+    // Continue with Microsoft against the fake, which is on 127.0.0.1, another site than localhost.
+    Authentication__Microsoft__Authority: `http://127.0.0.1:${STACK.microsoftPort}/common/v2.0`,
+    Authentication__Microsoft__ClientId: FAKE_MICROSOFT.clientId,
+    Authentication__Microsoft__ClientSecret: FAKE_MICROSOFT.clientSecret,
   };
   createHttpServer(siteVerify).listen(STACK.siteVerifyPort, '127.0.0.1');
   createHttpServer(fakeStripe).listen(STACK.stripePort, '127.0.0.1');
+  createHttpServer(fakeMicrosoft(`http://127.0.0.1:${STACK.microsoftPort}`)).listen(
+    STACK.microsoftPort,
+    '127.0.0.1',
+  );
   log('migrating');
   await run('dotnet', [dll, 'admin', 'migrate'], { env: apiEnv });
   start('dotnet', [dll], api, apiEnv);

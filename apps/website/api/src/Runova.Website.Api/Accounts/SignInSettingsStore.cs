@@ -10,8 +10,9 @@ using Runova.Website.Data.Accounts;
 namespace Runova.Website.Api.Accounts;
 
 /// <summary>
-/// The sign-in settings in force: the Admin's row, with Google's keys falling back to
-/// <c>Authentication__Google__*</c> when the row has none, so a host set up before E52 keeps working.
+/// The sign-in settings in force: the Admin's row, with each provider's keys falling back to
+/// <c>Authentication__Google__*</c>, <c>Authentication__Apple__*</c> or
+/// <c>Authentication__Microsoft__*</c> when the row has none, so a host set up with those keeps working.
 /// </summary>
 internal sealed record SignInSnapshot(
     bool CaptchaEnabled,
@@ -22,10 +23,38 @@ internal sealed record SignInSnapshot(
     string? GoogleClientSecret,
     bool GoogleFromEnvironment)
 {
+    public bool AppleEnabled { get; init; }
+
+    public string? AppleServicesId { get; init; }
+
+    public string? AppleTeamId { get; init; }
+
+    public string? AppleKeyId { get; init; }
+
+    /// <summary>The .p8 key in PEM, unsealed.</summary>
+    public string? ApplePrivateKey { get; init; }
+
+    public string AppleBundleId { get; init; } = SignInSettings.DefaultAppleBundleId;
+
+    public bool AppleFromEnvironment { get; init; }
+
+    public bool MicrosoftEnabled { get; init; }
+
+    public string? MicrosoftClientId { get; init; }
+
+    public string? MicrosoftClientSecret { get; init; }
+
+    public bool MicrosoftFromEnvironment { get; init; }
+
     /// <summary>The captcha is checked only when it is on and both keys are there.</summary>
     public bool CaptchaActive => CaptchaEnabled && TurnstileSiteKey is not null && TurnstileSecret is not null;
 
     public bool GoogleActive => GoogleEnabled && GoogleClientId is not null && GoogleClientSecret is not null;
+
+    public bool AppleActive =>
+        AppleEnabled && AppleServicesId is not null && AppleTeamId is not null && AppleKeyId is not null && ApplePrivateKey is not null;
+
+    public bool MicrosoftActive => MicrosoftEnabled && MicrosoftClientId is not null && MicrosoftClientSecret is not null;
 }
 
 /// <summary>Seals the settings' secrets for the database and opens them again. Neither ever leaves the API.</summary>
@@ -179,18 +208,50 @@ internal sealed partial class SignInSettingsStore(
 
     private SignInSnapshot From(SignInSettings row)
     {
-        var environmentId = Blank(configuration["Authentication:Google:ClientId"]);
-        var environmentSecret = Blank(configuration["Authentication:Google:ClientSecret"]);
-        var clientId = Blank(row.GoogleClientId);
-        var clientSecret = secrets.Unseal(row.GoogleClientSecretSealed);
+        var google = new Fallback(configuration, "Google");
+        var apple = new Fallback(configuration, "Apple");
+        var microsoft = new Fallback(configuration, "Microsoft");
         return new SignInSnapshot(
             row.CaptchaEnabled,
             Blank(row.TurnstileSiteKey),
             secrets.Unseal(row.TurnstileSecretSealed),
             row.GoogleEnabled,
-            clientId ?? environmentId,
-            clientSecret ?? environmentSecret,
-            (clientId is null && environmentId is not null) || (clientSecret is null && environmentSecret is not null));
+            google.Pick(row.GoogleClientId, "ClientId"),
+            google.Pick(secrets.Unseal(row.GoogleClientSecretSealed), "ClientSecret"),
+            google.Used)
+        {
+            AppleEnabled = row.AppleEnabled,
+            AppleServicesId = apple.Pick(row.AppleServicesId, "ServicesId"),
+            AppleTeamId = apple.Pick(row.AppleTeamId, "TeamId"),
+            AppleKeyId = apple.Pick(row.AppleKeyId, "KeyId"),
+            ApplePrivateKey = apple.Pick(secrets.Unseal(row.ApplePrivateKeySealed), "PrivateKey"),
+            AppleBundleId = Blank(configuration["Authentication:Apple:BundleId"]) is { } bundle && row.AppleBundleId == SignInSettings.DefaultAppleBundleId
+                ? bundle
+                : row.AppleBundleId,
+            AppleFromEnvironment = apple.Used,
+            MicrosoftEnabled = row.MicrosoftEnabled,
+            MicrosoftClientId = microsoft.Pick(row.MicrosoftClientId, "ClientId"),
+            MicrosoftClientSecret = microsoft.Pick(secrets.Unseal(row.MicrosoftClientSecretSealed), "ClientSecret"),
+            MicrosoftFromEnvironment = microsoft.Used,
+        };
+    }
+
+    /// <summary>A provider's value from the row, or else from <c>Authentication:{provider}:{key}</c>, noting when the environment filled in.</summary>
+    private sealed class Fallback(IConfiguration configuration, string provider)
+    {
+        public bool Used { get; private set; }
+
+        public string? Pick(string? saved, string key)
+        {
+            if (Blank(saved) is { } value)
+            {
+                return value;
+            }
+
+            var environment = Blank(configuration[$"Authentication:{provider}:{key}"]);
+            Used |= environment is not null;
+            return environment;
+        }
     }
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

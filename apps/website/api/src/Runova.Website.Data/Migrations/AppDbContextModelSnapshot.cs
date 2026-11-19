@@ -1352,6 +1352,31 @@ namespace Runova.Website.Data.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AppleBundleId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasDefaultValue("com.runovahq.app");
+
+                    b.Property<bool>("AppleEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AppleKeyId")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ApplePrivateKeySealed")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AppleServicesId")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("AppleTeamId")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<bool>("CaptchaEnabled")
                         .HasColumnType("boolean");
 
@@ -1363,6 +1388,16 @@ namespace Runova.Website.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("GoogleEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MicrosoftClientId")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("MicrosoftClientSecretSealed")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("MicrosoftEnabled")
                         .HasColumnType("boolean");
 
                     b.Property<string>("TurnstileSecretSealed")
@@ -1392,8 +1427,11 @@ namespace Runova.Website.Data.Migrations
                         new
                         {
                             Id = 1,
+                            AppleBundleId = "com.runovahq.app",
+                            AppleEnabled = true,
                             CaptchaEnabled = false,
                             GoogleEnabled = true,
+                            MicrosoftEnabled = true,
                             Version = 0u
                         });
                 });

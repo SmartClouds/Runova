@@ -170,6 +170,35 @@ public sealed class GoogleSignInTests : IDisposable
         Assert.Equal("/account/sign-in?error=google-failed", response.Headers.Location!.OriginalString);
     }
 
+    [Fact]
+    public async Task Cancelling_keeps_where_the_sign_in_was_going_so_an_app_can_still_finish()
+    {
+        var response = await FakeGoogle.CancelAsync(
+            _factory.CreateApiClient(), "/api/v1/external-sign-ins/google?returnUrl=" + Uri.EscapeDataString("/account/authorize?client_id=runova-mobile&state=s"));
+
+        Assert.Equal(
+            "/account/sign-in?error=google-failed&next=" + Uri.EscapeDataString("/account/authorize?client_id=runova-mobile&state=s"),
+            response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task Signing_in_again_while_two_factor_is_on_records_google_as_the_way_in()
+    {
+        var client = _factory.CreateApiClient();
+        await FakeGoogle.SignInAsync(client);
+        var user = (await TestAccounts.FindAsync(_factory.Services, _google.Email))!;
+        var key = await TestUsers.EnableTwoFactorAsync(_factory.Services, user);
+        var next = _factory.CreateApiClient();
+        await FakeGoogle.SignInAsync(next);
+        await next.RefreshAntiforgeryTokenAsync();
+
+        var code = Core.Identity.Totp.Code(key, Core.Identity.Totp.TimeStep(DateTimeOffset.UtcNow));
+        await next.SendAsync(HttpMethod.Post, "/api/v1/two-factor-sign-ins", new { code, recoveryCode = (string?)null });
+
+        var methods = await TestAccounts.SignInMethodsAsync(_factory.Services, user.Id);
+        Assert.Equal("google", methods[^1]);
+    }
+
     [Theory]
     [InlineData("/\t/evil.example")]
     [InlineData("/\n/evil.example")]

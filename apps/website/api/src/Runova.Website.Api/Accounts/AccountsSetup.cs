@@ -14,6 +14,10 @@ internal static class AccountsSetup
         services.AddOptions<CaptchaOptions>().BindConfiguration(CaptchaOptions.Section);
         services.AddHttpClient<TurnstileVerifier>(TurnstileVerifier.Configure);
         services.AddGoogleSignIn();
+        services.AddOidcSignIns();
+        services.AddScoped<ExternalAccounts>();
+        services.AddScoped<AppleTokens>();
+        services.AddHttpClient(AppleTokens.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddWebsiteSync();
         services.AddScoped<SyncTombstonesPurgeJob>();
         services.AddSingleton<DeviceTokens>();
