@@ -1,12 +1,13 @@
 version: 2.1
 
-# CI for the website: the site in apps/website/web and its API in apps/website/api, plus the
-# desktop app's Linux end-to-end shards. The rest of the repo (the desktop's unit tests and its
-# macOS end-to-end shards, mobile, server core) still runs on GitHub Actions, in
-# .github/workflows/ci.yml, which has a circleci job for each job here that waits for it.
+# Not used for CI any more. Every job here also runs on GitHub Actions, on our self-hosted
+# runners: the website jobs in .github/workflows/ci.yml and the desktop app's Linux end-to-end
+# shards in .github/workflows/test.yml, and nothing waits for a CircleCI status. The config stays
+# so it can be run again, but a push no longer starts its workflows: they only run when a pipeline
+# is triggered by hand (the CircleCI app or API) with the run-workflows parameter set to true.
 #
-# Left out for now: path filtering (every push runs every job), matrices, other operating systems
-# and deploys.
+# The jobs: the website's site in apps/website/web and its API in apps/website/api, plus the
+# desktop app's Linux end-to-end shards.
 #
 # The unit, monitoring and integration tests are circleci testsuite run (see test-suites.yml). It
 # runs the same tests as before, with free static splitting across a job's parallelism and a rerun
@@ -465,12 +466,20 @@ jobs:
       - store_artifacts:
           path: apps/desktop/test-results
 
+# False on every push, so CircleCI starts a pipeline with no workflows in it and runs nothing.
+parameters:
+  run-workflows:
+    type: boolean
+    default: false
+
 workflows:
   website:
+    when: << pipeline.parameters.run-workflows >>
     jobs:
       - website-web
       - website-api
       - website-e2e
   desktop:
+    when: << pipeline.parameters.run-workflows >>
     jobs:
       - desktop-e2e-linux

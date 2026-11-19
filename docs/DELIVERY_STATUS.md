@@ -20,9 +20,9 @@ Plan: docs/ROADMAP.md
 | Server core tests | `pnpm server-core:test` (Linux-only socket tests run in the .NET SDK container or CI) |
 | Contracts | `pnpm server-core:contracts`, then no diff under `apps/desktop/src/shared/deploy/protocol/generated` |
 | System tests | `pnpm server-core:publish linux-x64`, then `RUNOVA_SYSTEM_TESTS=1 pnpm --filter @runova/desktop exec vitest run src/main/deploy/deploy.int.test.ts` (Docker with Linux containers; CI job "Server core on test servers", on every CI run) |
-| e2e | `pnpm test:e2e`, on every CI run (Linux on CircleCI, job `desktop-e2e-linux`; macOS on the self-hosted Mac); Windows only on a manual run of the Tests workflow with `github-hosted` ticked |
-| Website API | `pnpm website-api:format:check`, `pnpm website-api:build`, `pnpm website-api:test` (integration tests start PostgreSQL in Docker; CircleCI job `website-api`) |
-| Website | `pnpm website:build` (`astro check` and the build with its SEO check), `pnpm website:test` (lint and Vitest), `pnpm website:e2e`; in `apps/website/web`, `bun run e2e:stack` and `bun run lighthouse:stack` against `compose.test.yaml` (CircleCI jobs `website-web` and `website-e2e`) |
+| e2e | `pnpm test:e2e`, on every CI run (Linux on the self-hosted Linux runner, macOS on the self-hosted Mac); Windows only on a manual run of the Tests workflow with `github-hosted` ticked |
+| Website API | `pnpm website-api:format:check`, `pnpm website-api:build`, `pnpm website-api:test` (integration tests start PostgreSQL in Docker; CI job `Website API`) |
+| Website | `pnpm website:build` (`astro check` and the build with its SEO check), `pnpm website:test` (lint and Vitest), `pnpm website:e2e`; in `apps/website/web`, `bun run e2e:stack` and `bun run lighthouse:stack` against `compose.test.yaml` (CI jobs `Website` and `Website end-to-end`) |
 | Full server matrix | `.github/workflows/nightly.yml` (nightly and `gh workflow run nightly.yml`): every Deploy system test once per test server (`RUNOVA_TEST_SERVER_IMAGES`), plus the server core's nginx and Pebble system tests |
 
 ## Epics

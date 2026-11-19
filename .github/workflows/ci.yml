@@ -8,12 +8,14 @@ name: CI
 # It runs on our two self-hosted runners (CD never uses them). Everything that
 # does not care about the OS (lint, types, the build and the unit suites)
 # runs on the Mac mini, which is much faster. The Linux runner keeps
-# what needs Linux: Docker and the server core. The macOS end-to-end shards
-# run on the Mac too. The website (its site, its API, the Playwright specs and
-# the compose stack with Lighthouse) and the desktop app's Linux end-to-end
-# shards run on CircleCI, in .circleci/config.yml, and the circleci jobs below
-# wait for them. GitHub's hosted runners are for CD, which packages the
-# installers.
+# what needs Linux: Docker, the server core, the website (its site, its API,
+# the Playwright specs and the compose stack with Lighthouse) and the desktop
+# app's Linux end-to-end shards. The macOS end-to-end shards run on the Mac
+# too. GitHub's hosted runners are for CD, which packages the installers.
+#
+# .circleci/config.yml is still in the repo, but its workflows only run when a
+# pipeline is started by hand with run-workflows set (see the top of that file),
+# so no CI result comes from CircleCI any more.
 #
 # The self-hosted runners keep their disks between jobs, so every job that runs on one starts with
 # the Runner cleanup step (.github/actions/runner-cleanup). It gives the job a temp folder of its
@@ -155,61 +157,304 @@ jobs:
     with:
       e2e: true
 
-  # The website (the site, its API, the Playwright specs, the compose stack and Lighthouse) and the
-  # desktop app's Linux end-to-end shards run on CircleCI, in .circleci/config.yml. CircleCI reports
-  # each job on the commit as a status named "ci/circleci: <job>". This job has one copy per
-  # CircleCI job, so each shows up on its own in the run, and each waits for its job's status, so
-  # all-green below, and with it CD's ci-passed, fail when one of them fails. Hosted, like CD's own
-  # wait: it only polls. A job added to .circleci/config.yml needs adding to the list here too.
+  # The website API (apps/website/api). Its global.json pins the SDK feature band and the
+  # Microsoft.Testing.Platform runner, so every dotnet command runs from that folder. The
+  # integration tests start PostgreSQL and RabbitMQ with Testcontainers, so this needs the Linux
+  # runner's Docker.
   #
-  # A job that is still running is waited for. One that fails ends its copy at once. One that never
-  # reports (CircleCI is not triggered, or its config is broken) fails it after 15 minutes. Rerun a
-  # copy after rerunning its failed CircleCI job: it reads the latest status.
-  circleci:
-    name: CircleCI (${{ matrix.job }})
+  # Every integration test starts its own host, and on a busy runner the whole suite does not fit
+  # in one job, so it runs as three. Shards 1 and 2 take the integration namespaces listed for
+  # them. Shard 3 checks the format and runs everything else: the other test projects and the
+  # rest of the integration tests, so a new namespace or test project lands there without a
+  # change here.
+  #
+  # 45 minutes: on smartvpn the Release build alone takes 10 minutes and a shard's tests up to 17
+  # more.
+  website-api:
+    name: Website API (${{ matrix.shard }}/3)
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        job: [website-web, website-api, website-e2e, desktop-e2e-linux]
-    permissions:
-      statuses: read
+        shard: [1, 2, 3]
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SHARD_1_NAMESPACES: Accounts Monitoring Posts Media Reports Jobs Analytics Billing Notifications
+      SHARD_2_NAMESPACES: News Remote Users Identity Releases ApiClients Telemetry Http
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
+        working-directory: apps/website/api
     steps:
-      - name: Wait for ${{ matrix.job }} on this commit
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        # The default, /usr/share/dotnet, needs root, which a self-hosted runner may not have.
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          # A pull request's own commit, not the merge commit the workflow runs on.
-          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          JOB: ${{ matrix.job }}
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 11.0.1xx
+
+      # The run steps from here on run in a container that is removed when the job ends (see
+      # .github/ci-container). Checkout, the setup actions and the caches stay on the runner.
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
+      # Locked: the lock files are what was reviewed. Known high or critical vulnerabilities fail
+      # this step through NuGet audit.
+      - name: Restore
+        run: dotnet restore Runova.Website.slnx --locked-mode
+
+      - name: Format
+        if: ${{ matrix.shard == 3 }}
+        run: dotnet format Runova.Website.slnx --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build Runova.Website.slnx --no-restore --configuration Release
+
+      - name: Unit and integration tests
         run: |
-          waited=0
-          while true; do
-            # The latest status of this job's CircleCI context.
-            state="$(gh api "repos/$REPO/commits/$SHA/statuses?per_page=100" --jq "[.[] | select(.context == \"ci/circleci: $JOB\")] | sort_by(.created_at) | last | .state // \"\"")"
-            case "$state" in
-              success)
-                echo "CircleCI job $JOB passed on $SHA"
-                exit 0
-                ;;
-              failure|error)
-                echo "::error::CircleCI job $JOB ended as $state on $SHA. Open the ci/circleci: $JOB status on the commit."
-                exit 1
-                ;;
-              pending) ;;
-              *)
-                if [ "$waited" -ge 900 ]; then
-                  echo "::error::CircleCI never reported $JOB on $SHA. Check that the project follows this repository and that .circleci/config.yml is valid."
-                  exit 1
-                fi
-                ;;
-            esac
-            echo "Waiting for CircleCI job $JOB (${state:-not reported yet})"
-            sleep 30
-            waited=$((waited + 30))
-          done
+          filters=()
+          case "${{ matrix.shard }}" in
+            1) for ns in $SHARD_1_NAMESPACES; do filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+            2) for ns in $SHARD_2_NAMESPACES; do filters+=(--filter-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+            *) for ns in $SHARD_1_NAMESPACES $SHARD_2_NAMESPACES; do filters+=(--filter-not-namespace "Runova.Website.IntegrationTests.$ns*"); done ;;
+          esac
+          if [ "${{ matrix.shard }}" = 3 ]; then
+            dotnet test --solution Runova.Website.slnx --no-build --configuration Release --output Detailed "${filters[@]}"
+          else
+            dotnet test --project tests/Runova.Website.IntegrationTests --no-build --configuration Release --output Detailed "${filters[@]}"
+          fi
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
+  # The website's site (apps/website/web): lint, types, unit tests and the build. They all run,
+  # so one failure does not hide the others.
+  website-web:
+    name: Website
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
+        working-directory: apps/website/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      # The job container has no Node of its own, and the CLIs that bun run starts (Astro,
+      # Vitest) ask for it by name.
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      # The Bun the site's Dockerfile builds with. Like Node it lands where the job container sees
+      # it at the same path.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Astro's cache of optimized images (over 200 files). Each cached file is named by a hash of
+      # its source and transform, so a changed screenshot is never served from an old one. Without
+      # it the build spends minutes encoding them. Restored after the install, which owns
+      # node_modules. website-e2e saves it under the same key.
+      - name: Restore the optimized image cache
+        uses: actions/cache/restore@v6
+        with:
+          path: apps/website/web/node_modules/.astro/assets
+          key: astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-${{ hashFiles('apps/website/web/src/assets/**') }}
+          restore-keys: |
+            astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: bunx biome ci --reporter=github .
+
+      - name: Astro check
+        if: ${{ !cancelled() }}
+        run: bun run check
+
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: bun run test
+
+      - name: Build
+        if: ${{ !cancelled() }}
+        run: bun run build
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
+
+  # The Playwright specs against the real thing: the site with a fake API, the site with the real
+  # API and PostgreSQL (the admin project, which needs the .NET SDK and Docker for
+  # Testcontainers), then the compose stack the way production runs it, with the full-stack specs
+  # and Lighthouse against it. The compose stack uses the host's Docker and fixed ports, so only
+  # one of these runs at a time.
+  website-e2e:
+    name: Website end-to-end
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    concurrency: website-stack
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      COMPOSE_PROJECT_NAME: runova-e2e-website
+      HTTP_PORT: "18080"
+      HTTPS_PORT: "18443"
+      STACK_URL: https://localhost:18443
+      STACK_HTTP_URL: http://localhost:18080
+    defaults:
+      run:
+        shell: bash ${{ github.workspace }}/.github/ci-container/shell.sh {0}
+        working-directory: apps/website/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Runner cleanup
+        uses: ./.github/actions/runner-cleanup
+
+      # Node for the admin stack's launcher (e2e/admin/stack.ts) and Testcontainers.
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        # The default, /usr/share/dotnet, needs root, which a self-hosted runner may not have.
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 11.0.1xx
+
+      - name: Start the job container
+        if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/start.sh"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Restore the optimized image cache
+        id: astro-assets
+        uses: actions/cache/restore@v6
+        with:
+          path: apps/website/web/node_modules/.astro/assets
+          key: astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-${{ hashFiles('apps/website/web/src/assets/**') }}
+          restore-keys: |
+            astro-assets-${{ runner.os }}-${{ hashFiles('apps/website/web/bun.lock') }}-
+
+      # Built first, so the optimized images are in the cache folder when Playwright's web server
+      # builds again (it gives that build 4 minutes) and when the compose image build reuses them.
+      - name: Build
+        id: build
+        run: bun run build
+
+      # Saved right after the build, not at the end of the job, so a later failure or a timeout
+      # still leaves the next run a warm cache.
+      - name: Save the optimized image cache
+        if: ${{ steps.build.outcome == 'success' && steps.astro-assets.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: apps/website/web/node_modules/.astro/assets
+          key: ${{ steps.astro-assets.outputs.cache-primary-key }}
+
+      # The job container has the system libraries Chromium needs (.github/ci-container) and no
+      # root to install more, so this only downloads the browser. It lands in the runner user's
+      # home, where the next job finds it.
+      - name: Playwright browser
+        run: bunx playwright install chromium
+
+      - name: End-to-end tests
+        run: bun run e2e
+
+      # SITE_URL only here: the e2e build above must keep the default, which its fixtures (and the
+      # CSP that allows their runovahq.com images) expect. compose.test.yaml adds the telemetry
+      # sink that the secrets spec reads.
+      - name: Start the compose stack
+        id: stack
+        if: ${{ !cancelled() }}
+        env:
+          SITE_URL: https://localhost:18443
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml up --detach --build --wait
+
+      - name: Full-stack tests
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: bun run e2e:stack
+
+      # Even when a full-stack spec fails, but only on a stack that came up.
+      - name: Lighthouse against the stack
+        if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+        run: bun run lighthouse:stack
+
+      - name: Stack logs
+        if: ${{ failure() && steps.stack.outcome != 'skipped' }}
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml logs --no-color --tail 300 || true
+
+      # The runner keeps its Docker between jobs, so the stack, its volumes and its network go here.
+      - name: Stop the compose stack
+        if: ${{ always() && steps.stack.outcome != 'skipped' }}
+        run: docker compose -f ../compose.yaml -f ../compose.test.yaml down --volumes --remove-orphans || true
+
+      - name: Upload reports
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-reports
+          path: |
+            apps/website/web/test-results
+            apps/website/web/.lighthouseci
+          # upload-artifact leaves out dot directories unless told, which dropped the Lighthouse
+          # reports.
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+      - name: Remove the job container
+        if: ${{ always() && env.CI_CONTAINER != '' }}
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: bash "$GITHUB_WORKSPACE/.github/ci-container/stop.sh"
 
   # One status to require in branch protection: the matrix job names change whenever the OS list
   # does, and a skipped job would otherwise count as success. Left out for a fork pull request,
@@ -217,7 +462,7 @@ jobs:
   all-green:
     name: All checks passed
     if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
-    needs: [check, tests, circleci]
+    needs: [check, tests, website-api, website-web, website-e2e]
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Fail if anything failed, was cancelled or was skipped
