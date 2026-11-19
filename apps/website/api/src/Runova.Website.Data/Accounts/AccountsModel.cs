@@ -68,6 +68,14 @@ internal static class AccountsModel
             qr.HasOne<AppUser>().WithMany().HasForeignKey(q => q.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<PasskeyChallenge>(challenge =>
+        {
+            challenge.Property(c => c.Purpose).HasMaxLength(16);
+            challenge.HasIndex(c => c.IdHash).IsUnique();
+            challenge.HasIndex(c => c.ExpiresAt);
+            challenge.HasOne<AppUser>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<Team>(team =>
         {
             team.Property(t => t.Name).HasMaxLength(80);

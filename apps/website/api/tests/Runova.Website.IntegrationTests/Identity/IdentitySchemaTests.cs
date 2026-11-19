@@ -30,7 +30,7 @@ public sealed class IdentitySchemaTests(PostgresFixture postgres)
             [
                 ("AspNetRoleClaims", "Id"), ("AspNetRoleClaims", "RoleId"), ("AspNetRoles", "Id"),
                 ("AspNetUserClaims", "Id"), ("AspNetUserClaims", "UserId"), ("AspNetUserLogins", "UserId"),
-                ("AspNetUserRoles", "RoleId"), ("AspNetUserRoles", "UserId"), ("AspNetUserTokens", "UserId"),
+                ("AspNetUserPasskeys", "UserId"), ("AspNetUserRoles", "RoleId"), ("AspNetUserRoles", "UserId"), ("AspNetUserTokens", "UserId"),
                 ("AspNetUsers", "Id"),
             ],
             columns.Keys.Order());

@@ -94,10 +94,12 @@ namespace Runova.Website.Data.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<long>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("ProviderDisplayName")
                         .HasColumnType("text");
@@ -110,6 +112,56 @@ namespace Runova.Website.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("AspNetUserLogins", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserPasskey<long>", b =>
+                {
+                    b.Property<byte[]>("CredentialId")
+                        .HasMaxLength(1024)
+                        .HasColumnType("bytea");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Data", "Microsoft.AspNetCore.Identity.IdentityUserPasskey<long>.Data#IdentityPasskeyData", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<byte[]>("Aaguid");
+
+                            b1.Property<byte[]>("AttestationObject")
+                                .IsRequired();
+
+                            b1.Property<byte[]>("ClientDataJson")
+                                .IsRequired();
+
+                            b1.Property<DateTimeOffset>("CreatedAt");
+
+                            b1.Property<bool>("IsBackedUp");
+
+                            b1.Property<bool>("IsBackupEligible");
+
+                            b1.Property<bool>("IsUserVerified");
+
+                            b1.Property<string>("Name");
+
+                            b1.Property<byte[]>("PublicKey")
+                                .IsRequired();
+
+                            b1.Property<long>("SignCount");
+
+                            b1.PrimitiveCollection<string>("Transports");
+
+                            b1
+                                .ToJson("Data")
+                                .HasColumnType("jsonb");
+                        });
+
+                    b.HasKey("CredentialId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AspNetUserPasskeys", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<long>", b =>
@@ -133,10 +185,12 @@ namespace Runova.Website.Data.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Value")
                         .HasColumnType("text");
@@ -1182,6 +1236,51 @@ namespace Runova.Website.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("DeviceAuthorizations");
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.PasskeyChallenge", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("IdHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("IdHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PasskeyChallenges");
                 });
 
             modelBuilder.Entity("Runova.Website.Data.Accounts.QrSignIn", b =>
@@ -2795,7 +2894,8 @@ namespace Runova.Website.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
@@ -3558,6 +3658,15 @@ namespace Runova.Website.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserPasskey<long>", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<long>", b =>
                 {
                     b.HasOne("Runova.Website.Data.Identity.AppRole", null)
@@ -3725,6 +3834,14 @@ namespace Runova.Website.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Runova.Website.Data.Accounts.PasskeyChallenge", b =>
+                {
+                    b.HasOne("Runova.Website.Data.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Runova.Website.Data.Accounts.QrSignIn", b =>

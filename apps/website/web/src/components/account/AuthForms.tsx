@@ -1,8 +1,9 @@
-import { ArrowRight, MailCheck } from 'lucide-react';
+import { ArrowRight, Fingerprint, MailCheck } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
 import { apiRequest, type Problem, safeAccountPath } from '@/lib/account/api';
+import { passkeysSupported, runPasskey } from '@/lib/account/passkeys';
 import { type SignInOptions, useSignInOptions } from '@/lib/account/signInOptions';
 import { captchaField, useCaptcha } from './Captcha';
 import { AppInput, PasswordInput } from './fields';
@@ -30,17 +31,47 @@ function GoogleMark() {
   );
 }
 
-/** "Continue with Google", shown only when the API says Google sign-in is set up. */
-function GoogleButton({ next, options }: { next: string; options: SignInOptions | null }) {
-  if (!options?.providers.includes('google')) return null;
+/**
+ * The ways in that need no password: a passkey when the browser has passkeys (E115), and
+ * "Continue with Google" when the API says Google sign-in is set up.
+ */
+function OtherWays({
+  next,
+  options,
+  passkeys,
+  passkeyBusy,
+  onPasskey,
+}: {
+  next: string;
+  options: SignInOptions | null;
+  passkeys: boolean;
+  passkeyBusy: boolean;
+  onPasskey: () => void;
+}) {
+  const google = !!options?.providers.includes('google');
+  if (!google && !passkeys) return null;
   return (
     <>
-      <Button asChild variant="outline" className="w-full app-field border-0">
-        <a href={`/api/v1/external-sign-ins/google?returnUrl=${encodeURIComponent(next)}`}>
-          <GoogleMark />
-          Continue with Google
-        </a>
-      </Button>
+      {passkeys && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full app-field border-0"
+          onClick={onPasskey}
+          disabled={passkeyBusy}
+        >
+          <Fingerprint />
+          {passkeyBusy ? 'Waiting for your passkey…' : 'Use a passkey'}
+        </Button>
+      )}
+      {google && (
+        <Button asChild variant="outline" className="w-full app-field border-0">
+          <a href={`/api/v1/external-sign-ins/google?returnUrl=${encodeURIComponent(next)}`}>
+            <GoogleMark />
+            Continue with Google
+          </a>
+        </Button>
+      )}
       <div className="flex items-center gap-3 text-muted-foreground text-xs">
         <span className="h-px flex-1 bg-foreground/10" />
         or with your email
@@ -68,6 +99,14 @@ const GOOGLE_ERRORS: Record<string, string> = {
   locked: 'Too many tries in a row. Wait a few minutes and try again.',
 };
 
+const messageProblem = (message: string): Problem => ({
+  type: 'passkey',
+  title: message,
+  status: 0,
+  detail: message,
+  errors: {},
+});
+
 export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void }) {
   const params = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
   const next = safeAccountPath(params.get('next') ?? params.get('returnUrl'));
@@ -81,6 +120,8 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [passkeys] = useState(passkeysSupported);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const googleError = params.get('error');
   const options = useSignInOptions();
   // The code step after Google needs no check: Google already let the person in.
@@ -127,6 +168,29 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
     }
     if (failure.type === 'email-unverified') setUnverified(true);
     setProblem(failure);
+  };
+
+  // No email, password or code: the passkey says who it is, and its fingerprint, face or PIN is the second factor.
+  const signInWithPasskey = async () => {
+    setPasskeyBusy(true);
+    setProblem(null);
+    setUnverified(false);
+    const ceremony = await runPasskey('sign-in');
+    if (!ceremony.ok) {
+      setPasskeyBusy(false);
+      if (!ceremony.cancelled) setProblem(messageProblem(ceremony.message));
+      return;
+    }
+    const response = await apiRequest('/passkey-sign-ins', {
+      method: 'POST',
+      body: { challengeId: ceremony.challengeId, credential: ceremony.credential },
+    });
+    setPasskeyBusy(false);
+    if (response.ok) {
+      navigate(next);
+      return;
+    }
+    setProblem(response.problem);
   };
 
   const resend = async () => {
@@ -180,7 +244,15 @@ export function SignIn({ navigate = goTo }: { navigate?: (path: string) => void 
             )}
           </Notice>
         )}
-        {step === 'password' && <GoogleButton next={next} options={options} />}
+        {step === 'password' && (
+          <OtherWays
+            next={next}
+            options={options}
+            passkeys={passkeys}
+            passkeyBusy={passkeyBusy}
+            onPasskey={signInWithPasskey}
+          />
+        )}
         <form onSubmit={submit} className="grid gap-4">
           {step === 'password' ? (
             <>
@@ -377,7 +449,13 @@ export function Register() {
         Make your Runova account
       </Title>
       <div className="grid gap-4">
-        <GoogleButton next="/account" options={options} />
+        <OtherWays
+          next="/account"
+          options={options}
+          passkeys={false}
+          passkeyBusy={false}
+          onPasskey={() => {}}
+        />
         {problem && <Notice tone="danger">{problem.detail || problem.title}</Notice>}
         <form onSubmit={submit} className="grid gap-4">
           <Field id="name" label="Your name" errors={errors.displayName}>

@@ -294,7 +294,8 @@ internal static class AccountEndpoints
             user,
             await users.HasPasswordAsync(user),
             [.. logins.Select(l => l.LoginProvider.ToLowerInvariant()).Order(StringComparer.Ordinal)],
-            roles.Contains(Roles.Admin) || roles.Contains(Roles.Editor));
+            roles.Contains(Roles.Admin) || roles.Contains(Roles.Editor),
+            (await users.GetPasskeysAsync(user)).Count);
     }
 
     /// <summary>A plain address with an @ and a dot in the domain, as MailAddress reads it, and nothing else around it.</summary>

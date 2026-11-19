@@ -1,8 +1,9 @@
-import { Copy, KeyRound, Link2, Smartphone, Trash2 } from 'lucide-react';
+import { Copy, Fingerprint, KeyRound, Link2, Pencil, Smartphone, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Field } from '@/components/admin/Field';
 import { Button } from '@/components/ui/button';
-import { type Account, apiRequest } from '@/lib/account/api';
+import { type Account, apiRequest, type Passkey } from '@/lib/account/api';
+import { passkeysSupported, runPasskey } from '@/lib/account/passkeys';
 import { useSignInOptions } from '@/lib/account/signInOptions';
 import { StrengthMeter } from './AuthForms';
 import { AppInput, PasswordInput } from './fields';
@@ -55,6 +56,7 @@ export default function Security() {
               void account.reload();
             }}
           />
+          <PasskeysCard account={me} reloadAccount={account.reload} />
           <GoogleCard account={me} reload={account.reload} />
           <DeleteCard account={me} />
         </div>
@@ -368,6 +370,218 @@ function GoogleCard({ account, reload }: { account: Account; reload: () => void 
   );
 }
 
+const added = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+/**
+ * Passkeys (E115): sign in with a fingerprint, face or PIN instead of a password and code. Adding
+ * and removing one asks for the usual proof, which another passkey can give.
+ */
+function PasskeysCard({ account, reloadAccount }: { account: Account; reloadAccount: () => void }) {
+  const list = useLoad<{ items: Passkey[] }>('/users/me/passkeys');
+  const [supported] = useState(passkeysSupported);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [removing, setRemoving] = useState<Passkey | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const passkeys = list.value?.items ?? [];
+  const reload = () => {
+    void list.reload();
+    reloadAccount();
+  };
+  const rename = async (passkey: Passkey) => {
+    const response = await apiRequest(`/users/me/passkeys/${passkey.id}`, {
+      method: 'PATCH',
+      body: { name: newName.trim() },
+    });
+    if (!response.ok) {
+      setRenameError(Object.values(response.problem.errors).flat()[0] ?? response.problem.detail);
+      return;
+    }
+    setRenaming(null);
+    setRenameError(null);
+    void list.reload();
+  };
+  return (
+    <Card>
+      <CardHeader
+        icon={<Fingerprint />}
+        title="Passkeys"
+        description="Sign in with your fingerprint, face or screen lock instead of a password. No code needed."
+        actions={
+          supported && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="app-field border-0"
+              onClick={() => {
+                setName('');
+                setAdding(true);
+              }}
+            >
+              Add a passkey
+            </Button>
+          )
+        }
+      />
+      <div className="grid gap-3 px-4 pb-4 sm:px-5 sm:pb-5">
+        {!supported && (
+          <p className="text-muted-foreground text-sm">
+            This browser can not make passkeys. Add one from a browser or phone that can.
+          </p>
+        )}
+        {passkeys.length > 0 && (
+          <ul className="grid gap-2">
+            {passkeys.map((passkey) => (
+              <li
+                key={passkey.id}
+                className="app-field flex flex-wrap items-center gap-3 rounded-inner px-3 py-2 text-sm"
+              >
+                {renaming === passkey.id ? (
+                  <form
+                    className="flex flex-1 flex-wrap items-center gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void rename(passkey);
+                    }}
+                  >
+                    <AppInput
+                      aria-label={`New name for ${passkey.name}`}
+                      value={newName}
+                      maxLength={50}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="h-8 max-w-64 flex-1"
+                      required
+                      autoFocus
+                    />
+                    <Button type="submit" size="sm">
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setRenaming(null)}
+                    >
+                      Cancel
+                    </Button>
+                    {renameError && (
+                      <span className="w-full text-destructive text-xs" role="alert">
+                        {renameError}
+                      </span>
+                    )}
+                  </form>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{passkey.name}</p>
+                      <p className="text-muted-foreground text-xs">
+                        Added {added(passkey.createdAt)}
+                        {passkey.synced ? ' · Synced between your devices' : ' · On one device'}
+                      </p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Rename ${passkey.name}`}
+                      onClick={() => {
+                        setNewName(passkey.name);
+                        setRenameError(null);
+                        setRenaming(passkey.id);
+                      }}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Remove ${passkey.name}`}
+                      onClick={() => setRemoving(passkey)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <StepUpDialog
+        open={adding}
+        title="Add a passkey"
+        description="Your browser or phone asks you to make the passkey next. It stays on that device, or in the password manager that holds it."
+        confirm="Add passkey"
+        hasPassword={account.hasPassword}
+        twoFactor={account.twoFactorEnabled}
+        passkeys={account.passkeyCount > 0}
+        onClose={() => setAdding(false)}
+        onConfirm={async (stepUp) => {
+          const ceremony = await runPasskey('register');
+          if (!ceremony.ok) {
+            return {
+              credential: [
+                ceremony.cancelled
+                  ? 'No passkey was made. Try again when you are ready.'
+                  : ceremony.message,
+              ],
+            };
+          }
+          const response = await apiRequest('/users/me/passkeys', {
+            method: 'POST',
+            body: {
+              challengeId: ceremony.challengeId,
+              credential: ceremony.credential,
+              name: name.trim(),
+              ...stepUp,
+            },
+          });
+          if (!response.ok) return response.problem.errors;
+          setAdding(false);
+          reload();
+          return null;
+        }}
+      >
+        <Field id="passkey-name" label="Name it">
+          {(control) => (
+            <AppInput
+              {...control}
+              placeholder="Work laptop"
+              maxLength={50}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          )}
+        </Field>
+      </StepUpDialog>
+      <StepUpDialog
+        open={removing !== null}
+        title={`Remove ${removing?.name ?? 'this passkey'}?`}
+        description="It stops signing you in at once. Remove it from the device or password manager too."
+        confirm="Remove"
+        destructive
+        hasPassword={account.hasPassword}
+        twoFactor={account.twoFactorEnabled}
+        passkeys={account.passkeyCount > 0}
+        onClose={() => setRemoving(null)}
+        onConfirm={async (stepUp) => {
+          if (!removing) return null;
+          const response = await apiRequest(`/users/me/passkeys/${removing.id}`, {
+            method: 'DELETE',
+            body: stepUp,
+          });
+          if (!response.ok) return response.problem.errors;
+          setRemoving(null);
+          reload();
+          return null;
+        }}
+      />
+    </Card>
+  );
+}
+
 function DeleteCard({ account }: { account: Account }) {
   const [open, setOpen] = useState(false);
   const [blocked, setBlocked] = useState<string | null>(null);
@@ -403,6 +617,7 @@ function DeleteCard({ account }: { account: Account }) {
         destructive
         hasPassword={account.hasPassword}
         twoFactor={account.twoFactorEnabled}
+        passkeys={account.passkeyCount > 0}
         onClose={() => setOpen(false)}
         onConfirm={async (stepUp) => {
           const response = await apiRequest('/accounts/me', { method: 'DELETE', body: stepUp });

@@ -2,7 +2,7 @@
 import './setup/dom';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Register, SignIn } from '../src/components/account/AuthForms';
 import AuthorizeDevice, { readAuthorizeRequest } from '../src/components/account/AuthorizeDevice';
 import { ActivityList, describeActivity } from '../src/components/account/Panel';
@@ -105,6 +105,105 @@ describe('SignIn', () => {
     render(<SignIn />);
 
     expect(screen.getByText(/link Google from Security/)).toBeInTheDocument();
+  });
+});
+
+describe('SignIn with a passkey', () => {
+  const assertion = {
+    id: 'AQI',
+    rawId: new Uint8Array([1, 2]).buffer,
+    type: 'public-key',
+    authenticatorAttachment: 'platform',
+    getClientExtensionResults: () => ({}),
+    response: {
+      clientDataJSON: new Uint8Array([3]).buffer,
+      authenticatorData: new Uint8Array([4]).buffer,
+      signature: new Uint8Array([5]).buffer,
+      userHandle: new Uint8Array([0x34, 0x32]).buffer,
+    },
+  };
+  const challenge = () =>
+    json(
+      { id: 'challenge-1', options: { challenge: 'AQID', rpId: 'runovahq.com' }, expiresAt: '' },
+      { status: 201 },
+    );
+
+  function stubPasskeys(get: () => Promise<unknown>) {
+    vi.stubGlobal('PublicKeyCredential', class {});
+    Object.defineProperty(navigator, 'credentials', { value: { get }, configurable: true });
+  }
+
+  beforeEach(() =>
+    window.history.replaceState(null, '', '/account/sign-in?next=%2Faccount%2Fteams'),
+  );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, 'credentials', { value: undefined, configurable: true });
+  });
+
+  it('signs in with the passkey the browser offers, with no email or password', async () => {
+    stubPasskeys(vi.fn().mockResolvedValue(assertion));
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/passkey-challenges': challenge(),
+      'POST /api/v1/passkey-sign-ins': noContent(),
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<SignIn navigate={navigate} />);
+
+    await user.click(screen.getByRole('button', { name: 'Use a passkey' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/account/teams'));
+    expect(api.calls('POST /api/v1/passkey-sign-ins')[0]?.json()).toEqual({
+      challengeId: 'challenge-1',
+      credential: expect.objectContaining({ id: 'AQI', rawId: 'AQI' }),
+    });
+    expect(api.calls('POST /api/v1/sessions')).toHaveLength(0);
+  });
+
+  it('says so when the site does not accept the passkey', async () => {
+    stubPasskeys(vi.fn().mockResolvedValue(assertion));
+    fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/passkey-challenges': challenge(),
+      'POST /api/v1/passkey-sign-ins': problem(401, 'unauthorized', {
+        detail: 'That passkey was not accepted.',
+      }),
+    });
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<SignIn navigate={navigate} />);
+
+    await user.click(screen.getByRole('button', { name: 'Use a passkey' }));
+
+    expect(await screen.findByText('That passkey was not accepted.')).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows nothing when the person closes the passkey prompt', async () => {
+    stubPasskeys(vi.fn().mockRejectedValue(new DOMException('closed', 'NotAllowedError')));
+    const api = fakeFetch({
+      'GET /api/v1/sign-in-providers': providers(),
+      'POST /api/v1/passkey-challenges': challenge(),
+    });
+    const user = userEvent.setup();
+    render(<SignIn />);
+
+    await user.click(screen.getByRole('button', { name: 'Use a passkey' }));
+
+    await waitFor(() => expect(api.calls('POST /api/v1/passkey-challenges')).toHaveLength(1));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use a passkey' })).toBeEnabled();
+  });
+
+  it('offers no passkey in a browser that has none', async () => {
+    fakeFetch({ 'GET /api/v1/sign-in-providers': providers() });
+    render(<SignIn />);
+
+    await screen.findByLabelText('Email');
+    expect(screen.queryByRole('button', { name: 'Use a passkey' })).not.toBeInTheDocument();
   });
 });
 

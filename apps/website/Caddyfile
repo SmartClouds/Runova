@@ -25,7 +25,7 @@ http://{$SITE_ADDRESS:localhost} {
 	}
 
 	# /hubs and /relay are WebSockets Caddy passes through as they are.
-	@api path /api /api/* /hangfire /hangfire/* /hubs/* /relay/* /_runova/health
+	@api path /api /api/* /hangfire /hangfire/* /hubs/* /relay/* /_runova/health /.well-known/assetlinks.json /.well-known/apple-app-site-association
 	handle @api {
 		reverse_proxy api:8080
 	}

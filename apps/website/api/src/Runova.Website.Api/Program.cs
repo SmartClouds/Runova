@@ -86,6 +86,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 
 app.MapHealth();
 app.MapRunovaHealth();
+app.MapAppSiteAssociation();
 app.MapApiV1();
 app.MapNotificationsHub();
 app.MapRemoteHub();

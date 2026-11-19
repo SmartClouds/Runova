@@ -1,7 +1,8 @@
-import { AlertTriangle, CheckCircle2, Info, Loader2 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Fingerprint, Info, Loader2 } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { apiRequest, type Problem, type StepUp } from '@/lib/account/api';
+import { passkeysSupported, runPasskey } from '@/lib/account/passkeys';
 import { cn } from '@/lib/utils';
 import { AppInput, PasswordInput } from './fields';
 
@@ -339,8 +340,9 @@ export function LoadFailure({ problem, retry }: { problem: Problem; retry: () =>
 
 /**
  * Asks for proof before a sensitive change: the password, or a two-factor code for an account
- * signed in with Google only. The caller sends it with the change; a wrong one comes back as a
- * field error the dialog shows.
+ * signed in with Google only, or one of the account's passkeys (E115). The caller sends it with
+ * the change; a wrong one comes back as a field error the dialog shows. `children` go above the
+ * proof, for a field the change itself needs.
  */
 export function StepUpDialog({
   open,
@@ -350,6 +352,8 @@ export function StepUpDialog({
   destructive,
   hasPassword,
   twoFactor,
+  passkeys = false,
+  children,
   onClose,
   onConfirm,
 }: {
@@ -360,11 +364,16 @@ export function StepUpDialog({
   destructive?: boolean;
   hasPassword: boolean;
   twoFactor: boolean;
+  /** Whether the account has a passkey that can confirm instead. */
+  passkeys?: boolean;
+  children?: ReactNode;
   onClose: () => void;
   /** Resolves to field errors, or null when it worked. */
   onConfirm: (stepUp: StepUp) => Promise<Record<string, string[]> | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Several of these dialogs can be on one page, so each names its own field.
+  const secretId = useId();
   const [secret, setSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -380,15 +389,35 @@ export function StepUpDialog({
   }, [open]);
   const usesCode = !hasPassword && twoFactor;
   const asks = hasPassword || twoFactor;
+  const canUsePasskey = passkeys && passkeysSupported();
+  const confirmWith = async (stepUp: StepUp) => {
+    const errors = await onConfirm(stepUp);
+    setBusy(false);
+    if (errors) setError(Object.values(errors).flat()[0] ?? 'That did not work. Try again.');
+  };
   const submit = async (event: { preventDefault(): void }) => {
     event.preventDefault();
     setBusy(true);
-    const errors = await onConfirm({
+    await confirmWith({
       password: hasPassword ? secret : null,
       code: usesCode ? secret.replace(/\s/g, '') : null,
     });
-    setBusy(false);
-    if (errors) setError(Object.values(errors).flat()[0] ?? 'That did not work. Try again.');
+  };
+  const withPasskey = async () => {
+    setBusy(true);
+    setError(null);
+    const ceremony = await runPasskey('step-up');
+    if (!ceremony.ok) {
+      setBusy(false);
+      if (!ceremony.cancelled) setError(ceremony.message);
+      return;
+    }
+    await confirmWith({
+      password: null,
+      code: null,
+      passkeyChallengeId: ceremony.challengeId,
+      passkeyCredential: ceremony.credential,
+    });
   };
   return (
     <dialog
@@ -401,14 +430,15 @@ export function StepUpDialog({
           <h2 className="font-display font-semibold text-xl">{title}</h2>
           <div className="mt-1.5 text-muted-foreground text-sm leading-relaxed">{description}</div>
         </div>
+        {children}
         {asks ? (
           <div className="grid gap-2 text-sm">
-            <label htmlFor="step-up-secret" className="font-medium">
+            <label htmlFor={secretId} className="font-medium">
               {usesCode ? 'Code from your authenticator app' : 'Your password'}
             </label>
             {usesCode ? (
               <AppInput
-                id="step-up-secret"
+                id={secretId}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 className="font-mono tracking-[0.2em]"
@@ -420,7 +450,7 @@ export function StepUpDialog({
               />
             ) : (
               <PasswordInput
-                id="step-up-secret"
+                id={secretId}
                 autoComplete="current-password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
@@ -435,6 +465,18 @@ export function StepUpDialog({
             You signed in with Google, so a sign-in in the last 10 minutes is the proof. If this
             fails, sign out and in again first.
           </p>
+        )}
+        {canUsePasskey && (
+          <Button
+            type="button"
+            variant="outline"
+            className="app-field w-full border-0"
+            onClick={withPasskey}
+            disabled={busy}
+          >
+            <Fingerprint />
+            Use a passkey instead
+          </Button>
         )}
         {error && (
           <p className="text-destructive text-sm" role="alert">

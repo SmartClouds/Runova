@@ -12,6 +12,7 @@ public sealed record AccountDto(
     bool HasPassword,
     bool TwoFactorEnabled,
     IReadOnlyList<string> Logins,
+    int PasskeyCount,
     bool Staff,
     DateTimeOffset CreatedAt,
     DateTimeOffset? LastSignInAt,

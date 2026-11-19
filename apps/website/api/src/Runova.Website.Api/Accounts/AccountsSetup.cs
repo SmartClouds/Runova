@@ -22,6 +22,7 @@ internal static class AccountsSetup
         services.AddHttpContextAccessor();
         services.AddScoped<AccountSessions>();
         services.AddScoped<ActivityLog>();
+        services.AddWebsitePasskeys();
         services.AddScoped<AccountDeletion>();
         services.AddScoped<UnverifiedAccountsCleanupJob>();
         return services;

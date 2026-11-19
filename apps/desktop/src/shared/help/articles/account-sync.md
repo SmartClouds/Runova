@@ -3,7 +3,7 @@ title: Account, sync and teams
 category: Settings
 order: 5
 summary: Sign in to a Runova account on each of your computers so your projects, servers, Vault and settings stay the same everywhere, with secrets sealed by a key only you hold, and share chosen items with a team.
-keywords: account, sign in, sign out, sync, cloud, devices, sessions, computers, encryption, end to end, passphrase, recovery key, team, share, invite, conflict, google, two-factor
+keywords: account, sign in, sign out, sync, cloud, devices, sessions, computers, encryption, end to end, passphrase, recovery key, team, share, invite, conflict, google, two-factor, passkey
 route: /account
 ---
 
@@ -16,11 +16,13 @@ Click **Account** near the bottom of the sidebar, above Help and Settings. When 
 ## Sign in
 
 1. Open **Account** and click **Sign in**.
-2. Your browser opens runovahq.com. Sign in there with your email and password, or with **Continue with Google**, and give the code from your authenticator app if you turned on two-factor.
+2. Your browser opens runovahq.com. Sign in there with your email and password, or with **Continue with Google**, and give the code from your authenticator app if you turned on two-factor. If you added a passkey, click **Use a passkey** instead: your fingerprint, face or screen lock is all it asks for, with no password and no code.
 3. The page asks **Sign in Runova on** your computer's name. Click **Sign in this computer**.
 4. Go back to Runova. It is signed in and starts syncing.
 
 Runova never sees your password: the browser signs you in, and the app gets a key for this computer only. Each computer you sign in on shows up under **Devices**.
+
+To add a passkey, open **Security** on runovahq.com and click **Add a passkey**. Name it (say, the laptop or phone it lives on), confirm with your password, and let the browser or phone make it. A passkey that syncs (iCloud Keychain, Google Password Manager or another password manager) works on every device that holds it. The same list renames and removes passkeys, and a passkey can stand in for your password when the website asks you to confirm a sensitive change.
 
 ## A project's folder stays on each computer
 

@@ -59,6 +59,7 @@ internal static class IdentitySetup
                 options.Lockout.AllowedForNewUsers = true;
 
                 options.User.RequireUniqueEmail = true;
+                options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
                 options.Tokens.AuthenticatorTokenProvider = TokenOptions.DefaultAuthenticatorProvider;
             })
             .AddEntityFrameworkStores<AppDbContext>()

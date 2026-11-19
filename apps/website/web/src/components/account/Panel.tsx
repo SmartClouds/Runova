@@ -603,6 +603,7 @@ export function Sessions() {
         confirm="Sign out the others"
         hasPassword={account.value?.hasPassword ?? true}
         twoFactor={account.value?.twoFactorEnabled ?? false}
+        passkeys={(account.value?.passkeyCount ?? 0) > 0}
         onClose={() => setConfirmAll(false)}
         onConfirm={async (stepUp) => {
           const response = await apiRequest('/sessions', { method: 'DELETE', body: stepUp });

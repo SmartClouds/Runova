@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Data;
 
@@ -10,5 +11,5 @@ namespace Runova.Website.Data;
 internal sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args) =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=localhost;Database=runova_website").Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql("Host=localhost;Database=runova_website").WithIdentitySchema().Options);
 }

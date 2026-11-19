@@ -50,6 +50,10 @@ services:
       # Only the gateway reaches the API, from the Docker network. It passes on the visitor's
       # address and scheme exactly as the server's nginx set them.
       Website__KnownProxies: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      # The phone apps' passkeys (E115): the Android signing certificate's SHA-256 and the iOS
+      # app as TEAMID.com.runovahq.app. Empty keeps passkeys on the website only.
+      Website__Passkeys__AndroidCertFingerprints: ${PASSKEY_ANDROID_CERT_FINGERPRINTS:-}
+      Website__Passkeys__AppleAppIds: ${PASSKEY_APPLE_APP_IDS:-}
       Sentry__Dsn: ${SENTRY_DSN:-}
       Sentry__Environment: ${SENTRY_ENVIRONMENT:-production}
       GitHub__Token: ${GITHUB_TOKEN:-}
@@ -218,7 +222,7 @@ configs:
       	}
 
       	# /_runova/health is the API's report for Runova's Health page.
-      	@api path /api /api/* /hangfire /hangfire/* /hubs/* /relay/* /_runova/health
+      	@api path /api /api/* /hangfire /hangfire/* /hubs/* /relay/* /_runova/health /.well-known/assetlinks.json /.well-known/apple-app-site-association
       	handle @api {
       		reverse_proxy api:8080 {
       			import from_nginx

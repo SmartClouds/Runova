@@ -67,6 +67,10 @@ public sealed class AuthorizationTests(PostgresFixture postgres) : IDisposable
 
                 // NOWPayments and Stripe post signed payment events; they send no cookie to forge (E53).
                 ("POST", "/api/v1/nowpayments-events", false),
+
+                // Anonymous for sign-in, so the phone can ask with no cookie; register and step-up check the account inside.
+                ("POST", "/api/v1/passkey-challenges", false),
+                ("POST", "/api/v1/passkey-sign-ins", true),
                 ("POST", "/api/v1/password-resets", true),
                 ("POST", "/api/v1/password-setups", true),
 

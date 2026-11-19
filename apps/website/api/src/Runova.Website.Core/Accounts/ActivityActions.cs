@@ -17,6 +17,8 @@ public static class ActivityActions
     public const string TwoFactorOff = "two-factor-off";
     public const string LoginLinked = "login-linked";
     public const string LoginUnlinked = "login-unlinked";
+    public const string PasskeyAdded = "passkey-added";
+    public const string PasskeyRemoved = "passkey-removed";
     public const string AccountUpdated = "account-updated";
     public const string KeySet = "key-set";
     public const string KeyChanged = "key-changed";
@@ -55,5 +57,8 @@ public sealed record ActivityDto(
     DateTimeOffset At,
     IReadOnlyDictionary<string, object?>? Details);
 
-/// <summary>Proof the person at the keyboard is the owner: the password, or a two-factor code for an account with none.</summary>
-public sealed record StepUpRequest(string? Password, string? Code);
+/// <summary>
+/// Proof the person at the keyboard is the owner: the password, or a two-factor code for an account
+/// with none, or the answer to a <c>step-up</c> passkey challenge (E115).
+/// </summary>
+public sealed record StepUpRequest(string? Password, string? Code, string? PasskeyChallengeId = null, System.Text.Json.JsonElement? PasskeyCredential = null);

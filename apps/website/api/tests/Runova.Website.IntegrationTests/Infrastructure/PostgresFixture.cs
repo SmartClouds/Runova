@@ -2,6 +2,7 @@ using DotNet.Testcontainers.Builders;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Runova.Website.Data;
+using Runova.Website.Data.Identity;
 using Testcontainers.PostgreSql;
 
 [assembly: AssemblyFixture(typeof(Runova.Website.IntegrationTests.Infrastructure.PostgresFixture))]
@@ -78,7 +79,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private static async Task MigrateAsync(string connectionString)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).WithIdentitySchema().Options;
         await using var db = new AppDbContext(options);
         await db.Database.MigrateAsync(TestContext.Current.CancellationToken);
     }

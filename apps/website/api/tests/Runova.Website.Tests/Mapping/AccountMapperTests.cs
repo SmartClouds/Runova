@@ -26,16 +26,16 @@ public class AccountMapperTests
             Version = 41,
         };
 
-        var dto = AccountMapper.ToDto(user, hasPassword: true, ["github", "google"], staff: false);
+        var dto = AccountMapper.ToDto(user, hasPassword: true, ["github", "google"], staff: false, passkeyCount: 2);
 
-        Assert.Equal(new AccountDto(3, "sam@example.com", "Sam", true, true, true, dto.Logins, false, _at, _at.AddDays(1), "41"), dto);
+        Assert.Equal(new AccountDto(3, "sam@example.com", "Sam", true, true, true, dto.Logins, 2, false, _at, _at.AddDays(1), "41"), dto);
         Assert.Equal(["github", "google"], dto.Logins);
     }
 
     [Fact]
     public void An_account_with_no_email_shows_an_empty_one()
     {
-        Assert.Equal("", AccountMapper.ToDto(new AppUser { Email = null }, false, [], false).Email);
+        Assert.Equal("", AccountMapper.ToDto(new AppUser { Email = null }, false, [], false, 0).Email);
     }
 
     [Fact]

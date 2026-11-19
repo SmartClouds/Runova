@@ -968,6 +968,87 @@
         }
       }
     },
+    "/api/v1/passkey-challenges": {
+      "post": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyChallengeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/passkey-sign-ins": {
+      "post": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeySignInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/technologies": {
       "get": {
         "tags": [
@@ -2456,6 +2537,191 @@
               "application/problem\u002Bjson": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/passkeys": {
+      "get": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyListDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPasskeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/passkeys/{id}": {
+      "patch": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "PasskeyEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -6374,6 +6640,7 @@
           "hasPassword",
           "twoFactorEnabled",
           "logins",
+          "passkeyCount",
           "staff",
           "createdAt",
           "lastSignInAt",
@@ -6409,6 +6676,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "passkeyCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           },
           "staff": {
             "type": "boolean"
@@ -6787,6 +7062,71 @@
             "type": [
               "null",
               "object"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AddPasskeyRequest": {
+        "required": [
+          "challengeId",
+          "credential",
+          "name",
+          "password",
+          "code",
+          "passkeyChallengeId",
+          "passkeyCredential"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "credential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkeyChallengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkeyCredential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
             ]
           }
         },
@@ -8467,6 +8807,32 @@
               "null",
               "string"
             ]
+          },
+          "challengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "credential": {},
+          "platform": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deviceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         },
         "additionalProperties": false
@@ -10713,6 +11079,108 @@
         },
         "additionalProperties": false
       },
+      "PasskeyChallengeDto": {
+        "required": [
+          "id",
+          "options",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "options": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasskeyChallengeRequest": {
+        "required": [
+          "purpose"
+        ],
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasskeyDto": {
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "synced"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "synced": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasskeyListDto": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasskeyDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasskeySignInRequest": {
+        "required": [
+          "challengeId",
+          "credential"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "credential": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "PasswordChangeRequest": {
         "required": [
           "currentPassword",
@@ -12243,6 +12711,21 @@
         },
         "additionalProperties": false
       },
+      "RenamePasskeyRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ReportDto": {
         "required": [
           "generatedAt",
@@ -12877,7 +13360,14 @@
               "null",
               "string"
             ]
-          }
+          },
+          "passkeyChallengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkeyCredential": {}
         },
         "additionalProperties": false
       },
@@ -14244,6 +14734,9 @@
     },
     {
       "name": "NotificationSettingsEndpoints"
+    },
+    {
+      "name": "PasskeyEndpoints"
     },
     {
       "name": "PasswordSetupEndpoints"

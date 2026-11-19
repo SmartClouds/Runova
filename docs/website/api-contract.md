@@ -352,6 +352,7 @@ password. Setting a password ends every other session.
   "hasPassword": true,
   "twoFactorEnabled": false,
   "logins": ["google"],
+  "passkeyCount": 1,
   "staff": false,
   "createdAt": "2026-11-05T08:00:00.000Z",
   "lastSignInAt": "2026-11-05T09:12:44.000Z",
@@ -388,6 +389,44 @@ account that started it. An address nobody confirmed goes to the Google owner, a
 was registered with stops working. Errors in the redirect: `google-failed`, `email-unverified`,
 `link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
 Google login). A `returnUrl` that is not a path on this site becomes `/account`.
+
+### Passkeys
+
+An account can sign in with a passkey (WebAuthn) on the website, and the phone app can too through
+`POST /device-tokens`. Every ceremony starts with a challenge: 32 random bytes kept only as their
+SHA-256, with the server's state, good for five minutes and one answer, for its own purpose and
+user. The relying party id is the host of `Website:SiteUrl`; an answer must come from that origin
+(never from inside another site's frame) or, for the Android app, from
+`android:apk-key-hash:<base64url SHA-256>` of a certificate listed in
+`Website:Passkeys:AndroidCertFingerprints`. Every passkey needs user verification (fingerprint, face
+or PIN), so a passkey sign-in never asks for a two-factor code.
+
+| Method | Path | Auth | Request | Responses |
+|---|---|---|---|---|
+| POST | `/api/v1/passkey-challenges` | Anonymous for `sign-in`; Account for `register` and `step-up` | `{ "purpose": "sign-in" \| "register" \| "step-up" }` | 201 `PasskeyChallengeDto`; 400; 401 (`register` or `step-up` signed out); 429 |
+| POST | `/api/v1/passkey-sign-ins` | Anonymous (with antiforgery) | `{ "challengeId": string, "credential": object }` | 204 and the session cookie; 400; 401 `unauthorized` (passkey not accepted); 403 `email-unverified`; 423 `account-locked`; 429 |
+| GET | `/api/v1/users/me/passkeys` | Account | none | 200 `{ "items": PasskeyDto[] }`, oldest first; 401 |
+| POST | `/api/v1/users/me/passkeys` | Account | `AddPasskeyRequest` | 201 `PasskeyDto`; 400 (step-up failed, name too long, or the answer not accepted); 401 |
+| PATCH | `/api/v1/users/me/passkeys/{id}` | Account | merge patch `{ "name": string }` (1 to 50) | 200 `PasskeyDto`; 400; 401; 404 not this account's |
+| DELETE | `/api/v1/users/me/passkeys/{id}` | Account | `StepUpRequest` | 204; 400 step-up failed; 401; 404 not this account's |
+
+`PasskeyChallengeDto`: `{ "id": string, "options": object, "expiresAt": time }`, where `options` is
+`PublicKeyCredentialCreationOptions` for `register` (the user handle is the account id, and the
+account's passkeys are excluded) or `PublicKeyCredentialRequestOptions` for `sign-in` (no
+`allowCredentials`, so the browser offers the passkeys it holds) and `step-up` (the account's
+passkeys), in the WebAuthn JSON form. `credential` is the answer in the form of
+`PublicKeyCredential.toJSON()`. `AddPasskeyRequest`: `{ "challengeId": string, "credential":
+object, "name": string | null (up to 50; empty becomes "Passkey") }` and the `StepUpRequest`
+fields. `PasskeyDto`: `{ "id": string (the credential id, base64url), "name": string, "createdAt":
+time, "synced": bool }`; the public key and the attestation stay on the server. A passkey sign-in is
+in the activity as `sign-in` with `method: "passkey"`; a refused answer for a passkey the site knows
+is `sign-in-failed` with `reason: "passkey"` on that account.
+
+The site also serves, for the phone apps, `GET /.well-known/assetlinks.json`
+(`delegate_permission/common.get_login_creds` for `com.runovahq.app` and the fingerprints in
+`Website:Passkeys:AndroidCertFingerprints`) and `GET /.well-known/apple-app-site-association`
+(`webcredentials.apps` from `Website:Passkeys:AppleAppIds`, such as `TEAMID.com.runovahq.app`). Each
+is 404 while its setting is empty. They are outside `/api/v1` and not in the OpenAPI document.
 
 ### Sign-in settings (Admin)
 
@@ -540,9 +579,13 @@ string | null, "deviceId": uuid | null }`. A phone's session has kind `mobile`, 
 `Runova app` and has the platform `Phone`, whatever the app sent. The code is 32 random bytes, kept only as its SHA-256, good for two
 minutes and one use.
 
-`DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token", "code": string | null,
-"codeVerifier": string | null, "redirectUri": string | null, "refreshToken": string | null }`. A
-code needs the verifier that matches its challenge and the same redirect URI. `DeviceTokenDto`:
+`DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token" | "passkey", "code":
+string | null, "codeVerifier": string | null, "redirectUri": string | null, "refreshToken": string |
+null, "challengeId": string | null, "credential": object | null, "platform": "android" | "ios" |
+null, "appVersion": string | null, "deviceId": uuid | null }`. A code needs the verifier that
+matches its challenge and the same redirect URI. The `passkey` grant is the phone app's: it answers
+a `sign-in` [passkey challenge](#passkeys) and gets a phone session (`mobile`, `Runova app`,
+`Phone`) as a browser approval would, with no two-factor code. `DeviceTokenDto`:
 `{ "accessToken": string, "refreshToken": string, "expiresIn": 900, "sessionId": number,
 "account": AccountDto }`.
 
@@ -1091,15 +1134,17 @@ the owner a "new sign-in" email (not for the very first session).
 "device": string | null, "at": time, "details": object | null }`. Actions: `sign-in`,
 `sign-in-failed`, `sign-out`, `device-sign-in`, `session-ended`, `sessions-ended`,
 `refresh-token-reused`, `email-verified`, `password-changed`, `password-reset`, `two-factor-on`,
-`two-factor-off`, `login-linked`, `login-unlinked`, `account-updated`, `key-set`, `key-changed`,
+`two-factor-off`, `login-linked`, `login-unlinked`, `passkey-added`, `passkey-removed`, `account-updated`, `key-set`, `key-changed`,
 `key-reset`, `sync-reset`, `sync-policy-changed`, `team-created`, `team-updated`, `team-deleted`, `member-invited`,
 `member-joined`, `member-removed`, `member-role-changed`, `team-left`. No entry holds a password,
 code, token or key.
 
-`StepUpRequest`: `{ "password": string | null, "code": string | null }`. An account with a password
-gives it; one with none but two-factor gives a current code; one with neither (Google only) must
-have signed in within the last 10 minutes. A failure is 400 `validation-failed` naming `password`,
-`code` or `signIn`.
+`StepUpRequest`: `{ "password": string | null, "code": string | null, "passkeyChallengeId": string
+| null, "passkeyCredential": object | null }`. An answer to a `step-up` [passkey
+challenge](#passkeys) from one of the account's passkeys is enough on its own. Without one, an
+account with a password gives it; one with none but two-factor gives a current code; one with
+neither (Google only) must have signed in within the last 10 minutes. A failure is 400
+`validation-failed` naming `passkey`, `password`, `code` or `signIn`.
 
 ### Audit entries (Admin)
 

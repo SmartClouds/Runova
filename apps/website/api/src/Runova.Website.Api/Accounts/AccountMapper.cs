@@ -18,9 +18,9 @@ internal sealed record SessionRow
 [Mapper]
 internal static partial class AccountMapper
 {
-    /// <summary>The password, the logins and the roles live in Identity's other tables, so the caller passes what they say.</summary>
+    /// <summary>The password, the logins, the passkeys and the roles live in Identity's other tables, so the caller passes what they say.</summary>
     [MapProperty(nameof(AppUser.Email), nameof(AccountDto.Email), Use = nameof(OrEmpty))]
-    public static partial AccountDto ToDto(AppUser user, bool hasPassword, IReadOnlyList<string> logins, bool staff);
+    public static partial AccountDto ToDto(AppUser user, bool hasPassword, IReadOnlyList<string> logins, bool staff, int passkeyCount);
 
     public static partial IQueryable<SessionDto> ProjectToDto(this IQueryable<SessionRow> rows);
 

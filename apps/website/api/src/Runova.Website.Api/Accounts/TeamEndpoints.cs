@@ -270,7 +270,11 @@ internal static class TeamEndpoints
             return Forbidden("Admins manage Members and Viewers; only Owners change Owners and Admins.");
         }
 
-        var stepUp = new StepUpRequest(body["password"]?.GetValue<string>(), body["code"]?.GetValue<string>());
+        var stepUp = new StepUpRequest(
+            body["password"]?.GetValue<string>(),
+            body["code"]?.GetValue<string>(),
+            body["passkeyChallengeId"]?.GetValue<string>(),
+            body["passkeyCredential"] is JsonObject passkey ? JsonSerializer.Deserialize<JsonElement>(passkey.ToJsonString()) : null);
         if (await StepUp.ProblemsAsync(users, (await users.GetUserAsync(http.User))!, stepUp, sessions, http, time) is { } problems)
         {
             return ApiProblems.Invalid(problems);

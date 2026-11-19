@@ -63,6 +63,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<QrSignIn> QrSignIns => Set<QrSignIn>();
 
+    public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
+
     public DbSet<SyncScope> SyncScopes => Set<SyncScope>();
 
     public DbSet<Team> Teams => Set<Team>();

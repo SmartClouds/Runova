@@ -303,8 +303,9 @@ internal sealed class ActivityLog(AppDbContext db, TimeProvider time, IHttpConte
 }
 
 /// <summary>
-/// Proof for a sensitive change: the password when the account has one, else a two-factor code,
-/// else (Google only, no two-factor) a sign-in in the last 10 minutes.
+/// Proof for a sensitive change: an answer to a step-up passkey challenge when one is sent (E115),
+/// else the password when the account has one, else a two-factor code, else (Google only, no
+/// two-factor) a sign-in in the last 10 minutes.
 /// </summary>
 internal static class StepUp
 {
@@ -313,6 +314,14 @@ internal static class StepUp
     public static async Task<Dictionary<string, string[]>?> ProblemsAsync(
         UserManager<AppUser> users, AppUser user, StepUpRequest? request, AccountSessions sessions, HttpContext http, TimeProvider time)
     {
+        if (request is { PasskeyChallengeId.Length: > 0 })
+        {
+            var ceremonies = http.RequestServices.GetRequiredService<PasskeyCeremonies>();
+            return await ceremonies.AssertAsync(request.PasskeyChallengeId, request.PasskeyCredential, PasskeyPurposes.StepUp, user, http) is { Succeeded: true }
+                ? null
+                : new() { ["passkey"] = ["The passkey did not confirm it is you. Try again, or use another way."] };
+        }
+
         if (await users.HasPasswordAsync(user))
         {
             return !string.IsNullOrEmpty(request?.Password) && await users.CheckPasswordAsync(user, request.Password)

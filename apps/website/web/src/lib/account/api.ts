@@ -24,6 +24,8 @@ export interface Account {
   hasPassword: boolean;
   twoFactorEnabled: boolean;
   logins: string[];
+  /** How many passkeys the account has (E115). */
+  passkeyCount: number;
   staff: boolean;
   createdAt: string;
   lastSignInAt: string | null;
@@ -119,6 +121,19 @@ export interface MyInvitation {
 export interface StepUp {
   password: string | null;
   code: string | null;
+  /** The answer to a step-up passkey challenge, sent instead of the password or code (E115). */
+  passkeyChallengeId?: string;
+  passkeyCredential?: Record<string, unknown>;
+}
+
+/** One of the account's passkeys, as the Security page lists them. */
+export interface Passkey {
+  /** The credential id, base64url. */
+  id: string;
+  name: string;
+  createdAt: string;
+  /** Whether the passkey syncs between devices (a password manager or a phone's cloud keychain). */
+  synced: boolean;
 }
 
 /** The names people see for the synced collections, matching the app's Sync screen. */

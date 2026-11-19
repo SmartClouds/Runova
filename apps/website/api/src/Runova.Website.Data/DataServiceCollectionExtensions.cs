@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Runova.Website.Data.Identity;
 
 namespace Runova.Website.Data;
 
@@ -14,10 +16,12 @@ public static class DataServiceCollectionExtensions
     /// sets it late (tests, for one) is still seen.
     /// </summary>
     public static IServiceCollection AddWebsiteData(this IServiceCollection services) =>
-        services.AddDbContext<AppDbContext>((provider, options) =>
-        {
-            var connectionString = provider.GetRequiredService<IConfiguration>().GetConnectionString(ConnectionStringName)
-                ?? throw new InvalidOperationException($"Set ConnectionStrings__{ConnectionStringName} to the PostgreSQL connection string.");
-            options.UseNpgsql(connectionString);
-        });
+        services
+            .Configure<IdentityOptions>(IdentitySchema.UseVersion)
+            .AddDbContext<AppDbContext>((provider, options) =>
+            {
+                var connectionString = provider.GetRequiredService<IConfiguration>().GetConnectionString(ConnectionStringName)
+                    ?? throw new InvalidOperationException($"Set ConnectionStrings__{ConnectionStringName} to the PostgreSQL connection string.");
+                options.UseNpgsql(connectionString);
+            });
 }

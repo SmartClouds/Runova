@@ -128,7 +128,7 @@ internal static class SessionEndpoints
         return TypedResults.NoContent();
     }
 
-    private static ProblemHttpResult Locked(AppUser user, TimeProvider time)
+    internal static ProblemHttpResult Locked(AppUser user, TimeProvider time)
     {
         var left = (user.LockoutEnd ?? time.GetUtcNow()) - time.GetUtcNow();
         var retryAfter = Math.Max(1, (int)Math.Ceiling(left.TotalSeconds));

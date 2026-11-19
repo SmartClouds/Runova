@@ -37,7 +37,22 @@ public sealed record DeviceAuthorizationRequest(
 
 public sealed record DeviceAuthorizationDto(string RedirectUrl, DateTimeOffset ExpiresAt);
 
-public sealed record DeviceTokenRequest(string? GrantType, string? Code, string? CodeVerifier, string? RedirectUri, string? RefreshToken);
+/// <summary>
+/// A token request. <c>authorization_code</c> sends the code, verifier and redirect;
+/// <c>refresh_token</c> the refresh token; <c>passkey</c> (the phone, E115) the answer to a
+/// <c>sign-in</c> passkey challenge with the phone's platform, app version and device id.
+/// </summary>
+public sealed record DeviceTokenRequest(
+    string? GrantType,
+    string? Code,
+    string? CodeVerifier,
+    string? RedirectUri,
+    string? RefreshToken,
+    string? ChallengeId = null,
+    System.Text.Json.JsonElement? Credential = null,
+    string? Platform = null,
+    string? AppVersion = null,
+    Guid? DeviceId = null);
 
 public sealed record DeviceTokenDto(string AccessToken, string RefreshToken, int ExpiresIn, long SessionId, AccountDto Account);
 
@@ -185,10 +200,12 @@ internal static partial class DeviceTokenEndpoints
         ActivityLog activity,
         EmailOutbox outbox,
         IConfiguration configuration,
+        PasskeyCeremonies passkeys,
         TimeProvider time)
     {
         http.Response.Headers.CacheControl = HttpCaching.Private;
         var now = time.GetUtcNow();
+        var start = new SessionStart(http, users, db, tokens, sessions, activity, outbox, configuration, now);
         switch (request.GrantType)
         {
             case "authorization_code":
@@ -221,52 +238,45 @@ internal static partial class DeviceTokenEndpoints
                         return Refused();
                     }
 
-                    if (approval.DeviceId is { } deviceId)
-                    {
-                        var previous = await db.AccountSessions
-                            .Where(s => s.UserId == user.Id && s.DeviceId == deviceId && s.RevokedAt == null)
-                            .Select(s => s.Id)
-                            .ToListAsync();
-                        foreach (var id in previous)
-                        {
-                            await sessions.RevokeAsync(user.Id, id);
-                        }
-                    }
-
-                    var refresh = DeviceTokens.NewRefreshToken();
                     var kind = approval.RedirectUri == PhoneRedirect ? AccountSessionKinds.Mobile : AccountSessionKinds.Desktop;
-                    var anyBefore = await db.AccountSessions.AnyAsync(s => s.UserId == user.Id && s.Kind == kind);
-                    var ip = http.Connection.RemoteIpAddress?.ToString();
-                    var session = new AccountSession
-                    {
-                        UserId = user.Id,
-                        Kind = kind,
-                        DeviceName = approval.DeviceName,
-                        Platform = approval.Platform,
-                        AppVersion = approval.AppVersion,
-                        DeviceId = approval.DeviceId,
-                        UserAgent = AccountSessions.Truncate(http.Request.Headers.UserAgent.ToString(), 300),
-                        CreatedIp = ip,
-                        LastIp = ip,
-                        CreatedAt = now,
-                        LastSeenAt = now,
-                        RefreshTokenHash = Hash(refresh),
-                        RefreshExpiresAt = now + RefreshLifetime,
-                    };
-                    db.AccountSessions.Add(session);
-                    await db.SaveChangesAsync();
+                    return TypedResults.Ok(await StartSessionAsync(start, user, kind, approval.DeviceName, approval.Platform, approval.AppVersion, approval.DeviceId));
+                }
 
-                    http.Items[ActivityLog.DeviceItem] = approval.DeviceName;
-                    http.User = DeviceTokens.Principal(user.Id, session.Id);
-                    activity.Add(user.Id, ActivityActions.DeviceSignIn, new { device = approval.DeviceName, platform = approval.Platform, reused = anyBefore });
-                    if (user.Email is { } email)
+            case "passkey":
+                {
+                    if (string.IsNullOrEmpty(request.ChallengeId) || request.Credential is not { ValueKind: System.Text.Json.JsonValueKind.Object })
                     {
-                        outbox.Add(email, EmailTemplates.NewSignIn(user.DisplayName, $"{approval.DeviceName} ({approval.Platform})", ip ?? "an unknown address", $"{SiteUrl.From(configuration)}/account/sessions"));
+                        return ApiProblems.Invalid("credential", "Send the challenge id and the passkey's answer.");
                     }
 
-                    await db.SaveChangesAsync();
-                    outbox.SendSoon();
-                    return TypedResults.Ok(new DeviceTokenDto(tokens.AccessToken(user.Id, session.Id), refresh, (int)DeviceTokens.AccessLifetime.TotalSeconds, session.Id, await users.ToAccountDtoAsync(user)));
+                    if (request.Platform is null || !PhonePlatforms.TryGetValue(request.Platform, out var platform))
+                    {
+                        return ApiProblems.Invalid("platform", "The passkey grant is for the phone app: platform is android or ios.");
+                    }
+
+                    if (request.AppVersion is { Length: > 32 })
+                    {
+                        return ApiProblems.Invalid("appVersion", "appVersion is up to 32 characters.");
+                    }
+
+                    var result = await passkeys.AssertAsync(request.ChallengeId, request.Credential, PasskeyPurposes.SignIn, null, http);
+                    if (result is not { Succeeded: true, User: { } user })
+                    {
+                        if (await passkeys.OwnerAsync(request.Credential) is { } owner)
+                        {
+                            await activity.SaveNowAsync(owner.Id, ActivityActions.SignInFailed, new { reason = "passkey" });
+                        }
+
+                        return Refused();
+                    }
+
+                    if (user.DisabledAt is not null || !user.EmailConfirmed || await users.IsLockedOutAsync(user))
+                    {
+                        return Refused();
+                    }
+
+                    await activity.MarkSignedInAsync(user.Id);
+                    return TypedResults.Ok(await StartSessionAsync(start, user, AccountSessionKinds.Mobile, PhoneDeviceName, platform, request.AppVersion, request.DeviceId));
                 }
 
             case "refresh_token":
@@ -323,8 +333,74 @@ internal static partial class DeviceTokenEndpoints
                 }
 
             default:
-                return ApiProblems.Invalid("grantType", "grantType is authorization_code or refresh_token.");
+                return ApiProblems.Invalid("grantType", "grantType is authorization_code, refresh_token or passkey.");
         }
+    }
+
+    private sealed record SessionStart(
+        HttpContext Http,
+        UserManager<AppUser> Users,
+        AppDbContext Db,
+        DeviceTokens Tokens,
+        AccountSessions Sessions,
+        ActivityLog Activity,
+        EmailOutbox Outbox,
+        IConfiguration Configuration,
+        DateTimeOffset Now);
+
+    /// <summary>
+    /// A new app session for the user: ends the same device's older one, records the session, logs
+    /// and emails the sign-in, and hands back the first access and refresh tokens.
+    /// </summary>
+    private static async Task<DeviceTokenDto> StartSessionAsync(
+        SessionStart start, AppUser user, string kind, string deviceName, string platform, string? appVersion, Guid? deviceId)
+    {
+        var (http, db, now) = (start.Http, start.Db, start.Now);
+        if (deviceId is { } device)
+        {
+            var previous = await db.AccountSessions
+                .Where(s => s.UserId == user.Id && s.DeviceId == device && s.RevokedAt == null)
+                .Select(s => s.Id)
+                .ToListAsync();
+            foreach (var id in previous)
+            {
+                await start.Sessions.RevokeAsync(user.Id, id);
+            }
+        }
+
+        var refresh = DeviceTokens.NewRefreshToken();
+        var anyBefore = await db.AccountSessions.AnyAsync(s => s.UserId == user.Id && s.Kind == kind);
+        var ip = http.Connection.RemoteIpAddress?.ToString();
+        var session = new AccountSession
+        {
+            UserId = user.Id,
+            Kind = kind,
+            DeviceName = deviceName,
+            Platform = platform,
+            AppVersion = appVersion,
+            DeviceId = deviceId,
+            UserAgent = AccountSessions.Truncate(http.Request.Headers.UserAgent.ToString(), 300),
+            CreatedIp = ip,
+            LastIp = ip,
+            CreatedAt = now,
+            LastSeenAt = now,
+            RefreshTokenHash = Hash(refresh),
+            RefreshExpiresAt = now + RefreshLifetime,
+        };
+        db.AccountSessions.Add(session);
+        await db.SaveChangesAsync();
+
+        http.Items[ActivityLog.DeviceItem] = deviceName;
+        http.User = DeviceTokens.Principal(user.Id, session.Id);
+        start.Activity.Add(user.Id, ActivityActions.DeviceSignIn, new { device = deviceName, platform, reused = anyBefore });
+        if (user.Email is { } email)
+        {
+            start.Outbox.Add(email, EmailTemplates.NewSignIn(user.DisplayName, $"{deviceName} ({platform})", ip ?? "an unknown address", $"{SiteUrl.From(start.Configuration)}/account/sessions"));
+        }
+
+        await db.SaveChangesAsync();
+        start.Outbox.SendSoon();
+        return new DeviceTokenDto(start.Tokens.AccessToken(user.Id, session.Id), refresh, (int)DeviceTokens.AccessLifetime.TotalSeconds, session.Id, await start.Users.ToAccountDtoAsync(user));
     }
 
     private static ProblemHttpResult Refused() =>

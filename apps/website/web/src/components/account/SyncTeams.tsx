@@ -156,6 +156,7 @@ function ScopeCard({ scope, account }: { scope: SyncScope; account: Account | nu
         destructive
         hasPassword={account?.hasPassword ?? true}
         twoFactor={account?.twoFactorEnabled ?? false}
+        passkeys={(account?.passkeyCount ?? 0) > 0}
         onClose={() => setResetting(false)}
         onConfirm={async (stepUp) => {
           const response = await apiRequest(`/sync-scopes/${scope.id}/keys/current`, {
@@ -180,6 +181,7 @@ function ScopeCard({ scope, account }: { scope: SyncScope; account: Account | nu
         destructive
         hasPassword={account?.hasPassword ?? true}
         twoFactor={account?.twoFactorEnabled ?? false}
+        passkeys={(account?.passkeyCount ?? 0) > 0}
         onClose={() => setWiping(false)}
         onConfirm={async (stepUp) => {
           const response = await apiRequest(`/sync-scopes/${scope.id}/records`, {
@@ -669,6 +671,7 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
         destructive={pending?.kind === 'delete' || pending?.kind === 'remove'}
         hasPassword={account.value?.hasPassword ?? true}
         twoFactor={account.value?.twoFactorEnabled ?? false}
+        passkeys={(account.value?.passkeyCount ?? 0) > 0}
         onClose={() => setPending(null)}
         onConfirm={async (stepUp) => {
           if (!pending) return null;
@@ -686,6 +689,12 @@ export function TeamDetail({ teamId, meId }: { teamId: number; meId: number }) {
                       role: pending.role,
                       ...(stepUp.password ? { password: stepUp.password } : {}),
                       ...(stepUp.code ? { code: stepUp.code } : {}),
+                      ...(stepUp.passkeyChallengeId
+                        ? {
+                            passkeyChallengeId: stepUp.passkeyChallengeId,
+                            passkeyCredential: stepUp.passkeyCredential,
+                          }
+                        : {}),
                     },
                   });
           if (!response.ok)
