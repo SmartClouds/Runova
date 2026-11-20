@@ -137,7 +137,7 @@ struct DeviceShell: View {
                                     if let error = view.error { ErrorLine(message: error) }
                                 }
                             case "deploy": DeployTab(view: view, intents: intents.deploy)
-                            case "cloudflare": CloudflareTab(view: view, intents: intents.cloudflare)
+                            case "cloudflare": CloudflareTabView(view: view, intents: intents.cloudflare)
                             case "studio": StudioTab(view: view, intents: intents.studio)
                             case "prompts": PromptsTab(view: view, intents: intents.prompts)
                             case "monitoring": MonitoringTab(view: view, intents: intents.monitoring)

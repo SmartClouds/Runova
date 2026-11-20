@@ -65,8 +65,20 @@ if (keepWindowsHidden && process.platform === 'darwin') app.dock?.hide();
  * it is hidden from the accessibility tree. `none` rather than a zero duration, because a zero
  * length animation still waits for that tick to send its animationend. Transitions stay, since
  * code can wait for transitionend.
+ *
+ * One animation stays on: an invisible pixel that never stops, as a frame clock. On Linux a hidden
+ * window with nothing animating gets no animation frames at all, and Playwright waits for two of
+ * them before every click. With every animation off, clicks sat out their 30 seconds on "waiting
+ * for element to be visible, enabled and stable" on a page that was otherwise fine; the app's own
+ * spinners had been keeping the frames coming. `html::after` is more specific than `*::after`, so
+ * it keeps its animation.
  */
-const E2E_NO_ANIMATIONS_CSS = '*, *::before, *::after { animation: none !important; }';
+const E2E_NO_ANIMATIONS_CSS = [
+  '*, *::before, *::after { animation: none !important; }',
+  '@keyframes runova-e2e-frame-clock { from { opacity: 0.01; } to { opacity: 0.02; } }',
+  "html::after { content: ''; position: fixed; top: 0; left: 0; width: 1px; height: 1px;",
+  '  pointer-events: none; animation: runova-e2e-frame-clock 1s linear infinite alternate !important; }',
+].join('\n');
 
 if (isE2E) {
   app.on('web-contents-created', (_event, contents) => {

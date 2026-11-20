@@ -275,6 +275,15 @@ jobs:
         with:
           bun-version: 1.4.4
 
+      # Not for installing: the site is Bun's. A unit test (tests/workspace.test.ts) runs pnpm ls
+      # at the repository root to prove the site stays outside the pnpm workspace.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        env:
+          pnpm_config_store_dir: ${{ runner.environment == 'self-hosted' && format('{0}/setup-pnpm/store', runner.tool_cache) || '' }}
+        with:
+          dest: ${{ runner.tool_cache }}/setup-pnpm
+
       - name: Start the job container
         if: ${{ runner.os == 'Linux' && runner.environment == 'self-hosted' }}
         shell: bash

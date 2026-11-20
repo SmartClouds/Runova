@@ -52,6 +52,7 @@ test('fits a phone, with a list to jump between sections', async ({ page }) => {
 
 test('is linked from the footer of the other pages', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'Privacy policy' }).click();
+  // In the footer: the home page also links it from its text.
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy policy' }).click();
   await expect(page).toHaveURL(/\/privacy$/);
 });

@@ -808,11 +808,17 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      # Kept apart from Mobile core's: coverage builds every crate with other flags.
+      # Kept apart from Mobile core's: coverage builds every crate with other flags. The folder
+      # outlives the job, and the workspace's test binaries and profiles from earlier commits went
+      # into the report next to the new ones: engine.rs counted 1558 lines (the file has 1243) and
+      # the total fell from 87% to 78% with no test removed. `llvm-cov clean --workspace` drops
+      # only the workspace's own artifacts, so the dependencies stay built.
       - name: Tests with a coverage floor
         env:
           CARGO_TARGET_DIR: ${{ runner.tool_cache }}/cargo-target/mobile-core-tests
-        run: cargo llvm-cov --workspace --locked --fail-under-lines 85
+        run: |
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --workspace --locked --fail-under-lines 85
 
   # On the Mac like the other mobile jobs. Gradle, the NDK and cargo-ndk run natively there, so the
   # job needs no container and no Docker. On the Linux runner the host core alone took 31 of its 40

@@ -205,7 +205,7 @@ struct CloudflareOverlay: View {
     }
 }
 
-struct CloudflareTab: View {
+struct CloudflareTabView: View {
     let view: AppView
     let intents: CloudflareIntents
 

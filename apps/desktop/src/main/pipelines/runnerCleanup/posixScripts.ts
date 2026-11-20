@@ -192,8 +192,8 @@ RV_HOMES=$({
   printf '%s\\n' "$RV_HOME"
   printf '%s\\n' "$RV_LIST" | while IFS= read -r rv_dir; do
     case "$rv_dir" in
-      /home/*/*|/Users/*/*) printf '%s\\n' "$rv_dir" | cut -d/ -f1-3 ;;
-      /root/*) echo /root ;;
+      (/home/*/*|/Users/*/*) printf '%s\\n' "$rv_dir" | cut -d/ -f1-3 ;;
+      (/root/*) echo /root ;;
     esac
   done
 } | awk 'NF && !seen[$0]++')

@@ -26,7 +26,7 @@ for (const service of ['api', 'web']) {
 test('the API image has the runtime but no SDK', () => {
   const runtimes = exec('api', ['dotnet', '--list-runtimes']);
   expect(runtimes.status, runtimes.stderr).toBe(0);
-  expect(runtimes.stdout).toContain('Microsoft.AspNetCore.App 10.');
+  expect(runtimes.stdout).toContain('Microsoft.AspNetCore.App 11.');
 
   const sdks = exec('api', ['dotnet', '--list-sdks']);
   expect(sdks.stdout.trim()).toBe('');

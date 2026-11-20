@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ChevronRight, HardDrive, Server } from '@/components/icons';
 import { breadcrumbs } from '@/lib/sftp/paths';
 import { cn } from '@/lib/utils';
@@ -44,14 +44,24 @@ export function PathBar({
   const label = side === 'remote' ? 'Folder on the server' : 'Folder on this computer';
 
   // Opening the field starts from where the pane is; the pane moving while it is open (another
-  // navigation won) leaves the typed text alone.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only opening the field resets it.
-  useEffect(() => {
+  // navigation won) leaves the typed text alone. Reset during the render that opens it, so the
+  // field never shows the old text.
+  const [wasEditing, setWasEditing] = useState(editing);
+  if (editing !== wasEditing) {
+    setWasEditing(editing);
+    if (editing) {
+      setText(path ?? '');
+      setProblem(null);
+    }
+  }
+
+  // Selecting the whole path lets the user type a new one straight away. In the same commit as
+  // the field: a select one frame later landed in the middle of fast typing and threw away the
+  // first characters.
+  useLayoutEffect(() => {
     if (!editing) return;
-    setText(path ?? '');
-    setProblem(null);
-    // Selecting the whole path lets the user type a new one straight away.
-    requestAnimationFrame(() => inputRef.current?.select());
+    inputRef.current?.focus();
+    inputRef.current?.select();
   }, [editing]);
 
   // A deep folder keeps its last crumbs in view; the root end scrolls away first.

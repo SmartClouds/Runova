@@ -99,6 +99,10 @@ function composerInstall() {
       '--no-interaction',
       '--no-progress',
       '--prefer-dist',
+      // The composer image only downloads; PHPUnit and phpcs run in the php:*-cli images. Newer
+      // composer images left out mbstring, which PHPUnit asks for, so the extension check
+      // belongs to the image that runs the code, not this one. PHP versions are still checked.
+      '--ignore-platform-req=ext-*',
     ]);
     status = result.status ?? 1;
   }
