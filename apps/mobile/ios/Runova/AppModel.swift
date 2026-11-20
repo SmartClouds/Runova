@@ -198,6 +198,31 @@ final class AppModel: NSObject, ObservableObject {
                 declineInvitation: { [weak self] in self?.engine?.accountDeclineInvitation(id: $0) },
                 setEncryption: { [weak self] in self?.engine?.setEncryption(item: $0, enabled: $1) }),
             forgetThisPhone: { [weak self] in self?.engine?.forgetThisPhone() },
+            notifications: NotificationIntents(
+                open: { [weak self] in self?.engine?.notificationOpen(id: $0) },
+                dismissBanner: { [weak self] in self?.engine?.notificationDismissBanner() },
+                markAllRead: { [weak self] in self?.engine?.notificationsMarkAllRead() },
+                openSettings: { [weak self] in self?.engine?.notificationsOpenSettings() },
+                closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
+                setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }),
+            remote: remoteIntents,
+            studio: studioIntents,
+            prompts: PromptIntents(
+                generate: { [weak self] request, type, target in
+                    self?.engine?.promptsGenerate(rawInput: request, promptType: type, target: target)
+                },
+                cancel: { [weak self] in self?.engine?.promptsCancel() },
+                taken: { [weak self] in self?.engine?.promptsTaken() },
+                send: { [weak self] prompt, cli, model, effort in
+                    self?.engine?.promptsSend(prompt: prompt, cliId: cli, model: model, effort: effort)
+                },
+                loadLibrary: { [weak self] in self?.engine?.promptsLoadLibrary(query: $0) },
+                saveTemplate: { [weak self] name, type, target, content in
+                    self?.engine?.promptsSaveTemplate(name: name, promptType: type, target: target, content: content)
+                },
+                deleteTemplate: { [weak self] in self?.engine?.promptsDeleteTemplate(id: $0) },
+                schedule: { [weak self] in self?.engine?.promptsSchedule(task: $0) },
+                cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }),
             lock: LockIntents(
                 key: { [weak self] in self?.engine?.lockKey(digit: $0) },
                 backspace: { [weak self] in self?.engine?.lockBackspace() },
@@ -225,31 +250,6 @@ final class AppModel: NSObject, ObservableObject {
                 unlockVault: { [weak self] in self?.engine?.phraseUnlockVault(id: $0) },
                 copy: { Self.copySensitive($0) },
                 save: { Self.savePhrase(fileName: $0, text: $1) }),
-            notifications: NotificationIntents(
-                open: { [weak self] in self?.engine?.notificationOpen(id: $0) },
-                dismissBanner: { [weak self] in self?.engine?.notificationDismissBanner() },
-                markAllRead: { [weak self] in self?.engine?.notificationsMarkAllRead() },
-                openSettings: { [weak self] in self?.engine?.notificationsOpenSettings() },
-                closeSettings: { [weak self] in self?.engine?.notificationsCloseSettings() },
-                setEnabled: { [weak self] in self?.engine?.notificationSetEnabled(category: $0, enabled: $1) }),
-            remote: remoteIntents,
-            studio: studioIntents,
-            prompts: PromptIntents(
-                generate: { [weak self] request, type, target in
-                    self?.engine?.promptsGenerate(rawInput: request, promptType: type, target: target)
-                },
-                cancel: { [weak self] in self?.engine?.promptsCancel() },
-                taken: { [weak self] in self?.engine?.promptsTaken() },
-                send: { [weak self] prompt, cli, model, effort in
-                    self?.engine?.promptsSend(prompt: prompt, cliId: cli, model: model, effort: effort)
-                },
-                loadLibrary: { [weak self] in self?.engine?.promptsLoadLibrary(query: $0) },
-                saveTemplate: { [weak self] name, type, target, content in
-                    self?.engine?.promptsSaveTemplate(name: name, promptType: type, target: target, content: content)
-                },
-                deleteTemplate: { [weak self] in self?.engine?.promptsDeleteTemplate(id: $0) },
-                schedule: { [weak self] in self?.engine?.promptsSchedule(task: $0) },
-                cancelScheduled: { [weak self] in self?.engine?.promptsCancelScheduled(id: $0) }),
             send: sendIntents,
             receive: ReceiveIntents(
                 answer: { [weak self] in self?.engine?.answerOffer(id: $0, accept: $1) },

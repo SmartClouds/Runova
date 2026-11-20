@@ -102,6 +102,77 @@ describe('savedServerEndpoint through the tunnel (E95)', () => {
   });
 });
 
+describe('routedServerEndpoint, a test connection over a route before it is on (E95)', () => {
+  it('goes through the tunnel even while SSH still goes straight to the host', async () => {
+    userData.writeData('ssh-servers.json', [
+      server({
+        cloudflareTunnel: {
+          hostname: 'ssh.example.com',
+          clientId: 'id.access',
+          clientSecret: await vault.encryptSecret('access secret'),
+          meshAddress: '100.96.0.12',
+        },
+      }),
+    ]);
+
+    expect(await saved.routedServerEndpoint('srv-1', 'cloudflare')).toMatchObject({
+      host: 'prod.example',
+      via: { kind: 'cloudflare', hostname: 'ssh.example.com', clientSecret: 'access secret' },
+    });
+    expect((await saved.routedServerEndpoint('srv-1', 'mesh')).host).toBe('100.96.0.12');
+  });
+
+  it('says what is missing when the tunnel has no SSH name or the server no Mesh address', async () => {
+    userData.writeData('ssh-servers.json', [
+      server({ cloudflareTunnel: { hostname: 'ssh.example.com' } }),
+    ]);
+
+    await expect(saved.routedServerEndpoint('srv-1', 'cloudflare')).rejects.toThrow(
+      'SSH has no name on the tunnel yet. Route the tunnel first.',
+    );
+    await expect(saved.routedServerEndpoint('srv-1', 'mesh')).rejects.toThrow(
+      'This server has no Mesh address yet. Add it to Mesh first.',
+    );
+  });
+
+  it('refuses a server that was removed', async () => {
+    userData.writeData('ssh-servers.json', [server()]);
+
+    await expect(saved.routedServerEndpoint('srv-gone', 'mesh')).rejects.toThrow(
+      'This saved server no longer exists.',
+    );
+  });
+});
+
+describe('reorderSshServers', () => {
+  it('saves the servers in the dragged order and returns them', async () => {
+    userData.writeData('ssh-servers.json', [
+      server(),
+      server({ id: 'srv-2', nickname: 'staging' }),
+      server({ id: 'srv-3', nickname: 'dev' }),
+    ]);
+
+    const reordered = await saved.reorderSshServers(['srv-3', 'srv-1', 'srv-2']);
+
+    expect(reordered.map((s) => s.id)).toEqual(['srv-3', 'srv-1', 'srv-2']);
+    expect(stored().map((s) => s.id)).toEqual(['srv-3', 'srv-1', 'srv-2']);
+  });
+
+  it('keeps a connect that finishes mid-drop, since both writes share one queue', async () => {
+    userData.writeData('ssh-servers.json', [server(), server({ id: 'srv-2' })]);
+
+    await Promise.all([
+      saved.updateSshServer('srv-1', (s) => ({ ...s, lastConnectedAt: 42 })),
+      saved.reorderSshServers(['srv-2', 'srv-1']),
+    ]);
+
+    expect(stored().map((s) => [s.id, s.lastConnectedAt])).toEqual([
+      ['srv-2', null],
+      ['srv-1', 42],
+    ]);
+  });
+});
+
 describe('savedServerEndpoint', () => {
   it('decrypts a saved login password', async () => {
     userData.writeData('ssh-servers.json', [

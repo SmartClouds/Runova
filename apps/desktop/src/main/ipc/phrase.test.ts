@@ -200,6 +200,45 @@ describe('phrase channels', () => {
     await invokeFrom(sender, IPC.phrase.protect, { on: false });
     expect(window.contentProtected).toBe(false);
   });
+
+  it('refuses a request that is not an object, without naming a field', async () => {
+    await expect(invokeFrom(sender, IPC.phrase.qr, 'not an object')).rejects.toThrow(
+      /^That request is not valid\.$/,
+    );
+  });
+
+  it('saves nothing when the save dialog gives back no path', async () => {
+    const made = await create();
+    queueDialog('showSaveDialog', { canceled: false });
+
+    expect(await invokeFrom(sender, IPC.phrase.save, { id: made.id })).toBeNull();
+  });
+
+  it('opens its dialogs on their own when the page has no window of its own', async () => {
+    const page = Object.assign(fakeWebContents(), { once: () => undefined });
+    const made = await invokeFrom<{ id: string }>(page, IPC.phrase.create, {
+      purpose: 'vault',
+      label: 'Vault',
+    });
+    const target = join(userData.dir, 'windowless.txt');
+    queueDialog('showSaveDialog', { canceled: false, filePath: target });
+
+    expect(await invokeFrom(page, IPC.phrase.save, { id: made.id })).toEqual({ path: target });
+    expect(electronState.dialogCalls.at(-1)?.args).toHaveLength(1);
+
+    writeFileSync(
+      target,
+      PHRASE.split(' ')
+        .map((w, i) => `${i + 1}. ${w}`)
+        .join('\n'),
+    );
+    queueDialog('showOpenDialog', { canceled: false, filePaths: [target] });
+    expect(await invokeFrom(page, IPC.phrase.open)).toEqual({ phrase: PHRASE });
+    expect(electronState.dialogCalls.at(-1)?.args).toHaveLength(1);
+
+    // With no window there is nothing to hide from screenshots, and nothing throws.
+    await expect(invokeFrom(page, IPC.phrase.protect, { on: true })).resolves.toBeUndefined();
+  });
 });
 
 expectChannelsCovered(IPC.phrase);

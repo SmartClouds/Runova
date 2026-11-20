@@ -171,4 +171,30 @@ describe('CloudflareGeolocation', () => {
 
     await expect(geolocation.status('srv')).rejects.toThrow(/locked/);
   });
+
+  it('says the role cannot list the sites when the core turns the call down', async () => {
+    const harness = await connectedService({ zones: [{ id: ZONE_ID, name: 'example.com' }] });
+    const refused = new Error("Failed to invoke 'ListSites' because user is unauthorized");
+    const geolocation = new CloudflareGeolocation({
+      cloudflare: harness.service,
+      links: { call: () => Promise.reject(refused) },
+    });
+
+    await expect(geolocation.status('srv')).rejects.toThrow(/Your role on this server cannot/);
+    await expect(geolocation.turnOn('srv', ZONE_ID)).rejects.toThrow(
+      /Your role on this server cannot/,
+    );
+    expect(harness.fake.writes()).toEqual([]);
+  });
+
+  it('leaves IP Geolocation unknown, with the reason, when the token may not read zone settings', async () => {
+    const { geolocation } = await setup({
+      token: { grants: { zone: 'read', transformRules: 'read' } },
+    });
+
+    const status = await geolocation.status('srv');
+    const blog = status.sites.find((entry) => entry.siteId === 'blog');
+    expect(blog).toMatchObject({ ipGeolocation: null, locationHeaders: false });
+    expect(blog?.problem).toMatch(/Zone Settings/);
+  });
 });

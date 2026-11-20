@@ -438,4 +438,36 @@ describe('DeployService with the core domain', () => {
 
     expect(opened.at(-1)).toBe('core-domain');
   });
+
+  it('makes a call over a new connection through the domain, never SSH, for work behind the tunnel (E95)', async () => {
+    const { service, shortOver, pool } = await setup();
+
+    await service.withCoreDomainHub('srv-1', (hub) => hub.ping());
+
+    expect(shortOver).toEqual(['core-domain']);
+    expect(pool.acquire).not.toHaveBeenCalled();
+  });
+
+  it('gives back only what the core said when a call through the domain is refused', async () => {
+    const { service } = await setup();
+
+    await expect(
+      service.withCoreDomainHub('srv-1', () =>
+        Promise.reject(
+          new Error(
+            "An unexpected error occurred invoking 'ApplyTunnelSsh' on the server. HubException: The phrase does not match.",
+          ),
+        ),
+      ),
+    ).rejects.toThrow(/^The phrase does not match\.$/);
+  });
+
+  it('says to turn the core domain on when this computer does not reach the server through it', async () => {
+    const { service, shortOver } = await setup({ domain: false });
+
+    await expect(service.withCoreDomainHub('srv-1', (hub) => hub.ping())).rejects.toThrow(
+      'This computer does not reach the server through its core domain. Turn the core domain on under Security, Connection first.',
+    );
+    expect(shortOver).toEqual([]);
+  });
 });

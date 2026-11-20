@@ -6,7 +6,8 @@ import {
   FAKE_TUNNEL_PORT,
   tunnelIdOf,
 } from '../../../shared/deploy/testing/fakeCloudflareTunnelCore';
-import { FakeCore } from '../../../shared/deploy/testing/fakeCore';
+import { FAKE_CORE_PASSWORD, FakeCore } from '../../../shared/deploy/testing/fakeCore';
+import { FAKE_GUARD_PHRASE } from '../../../shared/deploy/testing/fakeFirewall';
 import { CoreLinks } from '../live/coreLinks';
 import { fakeLiveHubs } from '../testing/fakeLiveHub';
 import { ALL_GRANTS, type FakeToken } from './testing/fakeCloudflare';
@@ -97,7 +98,7 @@ async function setup(
   let kept: StoredTunnelSsh = {};
   let route: SshRoute | undefined;
   const reset = vi.fn();
-  const sshConnection = { value: PUBLIC_SSH };
+  const sshConnection: { value: string | undefined } = { value: PUBLIC_SSH };
   const ops = new CloudflareTunnelOps({
     cloudflare: harness.service,
     links,
@@ -363,6 +364,41 @@ describe('CloudflareTunnelOps', () => {
     expect(preview.firewall?.guard.blocked).toBe(true);
   });
 
+  it('closes SSH over the core domain after a step-up and with the guard’s phrase', async () => {
+    const { ops, core } = await setup();
+    await ops.setUp({ serverId: 'srv-1', cloudflareAccountId: CF_ACCOUNT_ID, sshHostname: null });
+    await confirm(core, (await ops.closePorts('srv-1')).changeSet?.id ?? '');
+
+    const applied = await ops.applySsh({
+      serverId: 'srv-1',
+      mode: 'closed',
+      password: FAKE_CORE_PASSWORD,
+      overrideConfirmation: FAKE_GUARD_PHRASE,
+    });
+
+    expect(applied.changeSet?.state).toBe('awaitingConfirmation');
+    expect(core.stepUpUntil).toBeGreaterThan(Date.now());
+  });
+
+  it('asks for the guard’s phrase before closing SSH, and passes a refused code on', async () => {
+    const { ops, core } = await setup();
+    await ops.setUp({ serverId: 'srv-1', cloudflareAccountId: CF_ACCOUNT_ID, sshHostname: null });
+    await confirm(core, (await ops.closePorts('srv-1')).changeSet?.id ?? '');
+
+    await expect(ops.applySsh({ serverId: 'srv-1', mode: 'closed' })).rejects.toThrow(
+      /cut this computer off from SSH/,
+    );
+    await expect(
+      ops.applySsh({
+        serverId: 'srv-1',
+        mode: 'closed',
+        totpCode: '000000',
+        overrideConfirmation: FAKE_GUARD_PHRASE,
+      }),
+    ).rejects.toThrow(/not right/);
+    expect(core.firewall.pending).toBeUndefined();
+  });
+
   it('adds the server to Mesh in the tunnel account and tests SSH over its Mesh address', async () => {
     const { ops, fake, kept } = await setup({
       probe: async () => '100.96.0.40 50000 100.96.0.12 22',
@@ -379,6 +415,25 @@ describe('CloudflareTunnelOps', () => {
       meshAddress: '100.96.0.12',
     });
     expect(probe).toMatchObject({ ok: true, client: '100.96.0.40' });
+  });
+
+  it('shows what turning the tunnel off would open, with or without the SSH connection to check', async () => {
+    const { ops, core, sshConnection } = await setup();
+    await ops.setUp({ serverId: 'srv-1', cloudflareAccountId: CF_ACCOUNT_ID, sshHostname: null });
+    await confirm(core, (await ops.closePorts('srv-1')).changeSet?.id ?? '');
+    expect((await ops.status('srv-1')).state).toBe('connected');
+
+    const reopening = await ops.previewOff({ serverId: 'srv-1', reopenWeb: true });
+    sshConnection.value = undefined;
+    const keepingWebClosed = await ops.previewOff({ serverId: 'srv-1', reopenWeb: false });
+
+    const ports = (preview: typeof reopening) =>
+      preview.changes.flatMap((change) =>
+        change.kind === 'addRule' && change.rule ? [change.rule.port] : [],
+      );
+    expect(ports(reopening)).toEqual(expect.arrayContaining([80, 443]));
+    expect(ports(keepingWebClosed)).not.toContain(80);
+    expect(core.firewall.pending).toBeUndefined();
   });
 
   it('puts the names back, removes the tunnel and Access, and sends SSH straight again once off', async () => {
