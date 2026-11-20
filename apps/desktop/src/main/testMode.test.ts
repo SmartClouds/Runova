@@ -38,3 +38,26 @@ describe('the e2e home folder', () => {
     expect(app.getPath('desktop')).toBe(join(home, 'Desktop'));
   });
 });
+
+describe('hardware acceleration in e2e runs', () => {
+  async function load(env: Record<string, string>): Promise<ReturnType<typeof vi.fn>> {
+    vi.stubEnv('RUNOVA_E2E', '');
+    vi.stubEnv('RUNOVA_E2E_NO_GPU', '');
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    vi.resetModules();
+    // A fresh module registry has a fresh electron mock, and testMode gets that one.
+    const off = vi.fn();
+    Object.assign((await import('electron')).app, { disableHardwareAcceleration: off });
+    await import('./testMode');
+    return off;
+  }
+
+  it('is turned off when the run says the machine has no GPU', async () => {
+    expect(await load({ RUNOVA_E2E: '1', RUNOVA_E2E_NO_GPU: '1' })).toHaveBeenCalledOnce();
+  });
+
+  it('stays on in other e2e runs and outside e2e runs', async () => {
+    expect(await load({ RUNOVA_E2E: '1' })).not.toHaveBeenCalled();
+    expect(await load({ RUNOVA_E2E_NO_GPU: '1' })).not.toHaveBeenCalled();
+  });
+});

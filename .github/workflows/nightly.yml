@@ -252,6 +252,8 @@ jobs:
           RUNOVA_SYSTEM_TESTS: "1"
           RUNOVA_TEST_SERVER_IMAGES: ${{ matrix.image }}
           RUNOVA_E2E_NO_SANDBOX: "1"
+          # No GPU here; see the Linux Playwright step in test.yml.
+          RUNOVA_E2E_NO_GPU: "1"
         run: >-
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24"
           pnpm --filter @runova/desktop test:e2e deployFullStack.e2e.ts
@@ -363,6 +365,8 @@ jobs:
         env:
           RUNOVA_SYSTEM_TESTS: "1"
           RUNOVA_E2E_NO_SANDBOX: "1"
+          # No GPU here; see the Linux Playwright step in test.yml.
+          RUNOVA_E2E_NO_GPU: "1"
         run: >-
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24"
           pnpm --filter @runova/desktop test:e2e deployWordPress.e2e.ts

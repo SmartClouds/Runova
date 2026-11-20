@@ -1140,6 +1140,10 @@ jobs:
         # launcher drops it here rather than having Electron refuse to start.
         env:
           RUNOVA_E2E_NO_SANDBOX: "1"
+          # No GPU on these machines: with hardware acceleration on, Chromium relaunches its GPU
+          # process about five times at every start, and on a busy runner the first click after a
+          # launch got no animation frames for 30 seconds (src/main/testMode.ts).
+          RUNOVA_E2E_NO_GPU: "1"
           # Two spec files at a time, each with its own Electron. Global setup starts an Xvfb per
           # worker (e2e/displays.ts), since apps on one display share its clipboard and focus.
           RUNOVA_E2E_WORKERS: "2"

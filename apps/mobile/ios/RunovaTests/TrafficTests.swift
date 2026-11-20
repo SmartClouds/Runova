@@ -42,11 +42,18 @@ final class TrafficTests: XCTestCase {
                 change: TrafficChangeView(text: "-1.5%", trend: .down, tone: .good)),
         ]
         let chart = TrafficChartView(
-            points: (0..<7).map { i in
-                TrafficPointView(
-                    axis: "\(12 + i) Nov", visitors: Double(1000 + i * 100 + (i % 2) * 300),
-                    pageViews: Double(4000 + i * 500), previousVisitors: Double(900 + (i % 3) * 120),
-                    previousPageViews: Double(3500 + (i % 2) * 400), readout: "Day \(12 + i): visitors and page views",
+            points: (0..<7).map { (i: Int) -> TrafficPointView in
+                // Whole numbers worked out one step at a time: as one expression inside Double(),
+                // the literals took the type checker past its time limit.
+                let day: Int = 12 + i
+                let visitors: Int = 1000 + i * 100 + (i % 2) * 300
+                let pageViews: Int = 4000 + i * 500
+                let previousVisitors: Int = 900 + (i % 3) * 120
+                let previousPageViews: Int = 3500 + (i % 2) * 400
+                return TrafficPointView(
+                    axis: "\(day) Nov", visitors: Double(visitors),
+                    pageViews: Double(pageViews), previousVisitors: Double(previousVisitors),
+                    previousPageViews: Double(previousPageViews), readout: "Day \(day): visitors and page views",
                     previousReadout: "Period before: 900 visitors, 3,500 page views")
             },
             max: 10_000, yLabels: ["10K", "5,000", "0"])

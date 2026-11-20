@@ -49,6 +49,17 @@ if (homeOverride) {
 }
 
 /**
+ * Set where the e2e suite runs on a machine with no GPU (the Linux CI container). Chromium there
+ * starts a GPU process, finds no usable GL, quits it to fall back to SwiftShader, and does that
+ * about five times before it settles, after which the page's first GPU context fails as well. All
+ * of that lands in the app's first seconds, and on a busy runner it left a fresh window without
+ * animation frames: Playwright waits for two before every click, so the first click after a launch
+ * sat out its 30 seconds on "waiting for element to be visible, enabled and stable". Under load in
+ * that container, 8 of 96 runs did so, and none of 96 with hardware acceleration off.
+ */
+if (isE2E && process.env.RUNOVA_E2E_NO_GPU === '1') app.disableHardwareAcceleration();
+
+/**
  * Windows stay hidden during e2e runs so a test run doesn't pop apps up over whatever the
  * developer is doing. Set RUNOVA_E2E_SHOW=1 to watch a run.
  */
@@ -65,20 +76,8 @@ if (keepWindowsHidden && process.platform === 'darwin') app.dock?.hide();
  * it is hidden from the accessibility tree. `none` rather than a zero duration, because a zero
  * length animation still waits for that tick to send its animationend. Transitions stay, since
  * code can wait for transitionend.
- *
- * One animation stays on: an invisible pixel that never stops, as a frame clock. On Linux a hidden
- * window with nothing animating gets no animation frames at all, and Playwright waits for two of
- * them before every click. With every animation off, clicks sat out their 30 seconds on "waiting
- * for element to be visible, enabled and stable" on a page that was otherwise fine; the app's own
- * spinners had been keeping the frames coming. `html::after` is more specific than `*::after`, so
- * it keeps its animation.
  */
-const E2E_NO_ANIMATIONS_CSS = [
-  '*, *::before, *::after { animation: none !important; }',
-  '@keyframes runova-e2e-frame-clock { from { opacity: 0.01; } to { opacity: 0.02; } }',
-  "html::after { content: ''; position: fixed; top: 0; left: 0; width: 1px; height: 1px;",
-  '  pointer-events: none; animation: runova-e2e-frame-clock 1s linear infinite alternate !important; }',
-].join('\n');
+const E2E_NO_ANIMATIONS_CSS = '*, *::before, *::after { animation: none !important; }';
 
 if (isE2E) {
   app.on('web-contents-created', (_event, contents) => {
