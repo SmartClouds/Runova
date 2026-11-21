@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text.RegularExpressions;
 using Runova.ServerCore.Security;
 
 namespace Runova.ServerCore.Firewall;
@@ -33,10 +34,13 @@ internal interface IProcessTable
 
     /// <summary>The process's view of /proc/net/tcp and tcp6 (its own network namespace).</summary>
     IReadOnlyList<TcpEntry> TcpOf(int pid);
+
+    /// <summary>The full id of the Docker container the process runs in, or null for a process on the host.</summary>
+    string? ContainerIdOf(int pid);
 }
 
 /// <summary>/proc's formats: net/tcp lines and the parent in stat.</summary>
-internal static class ProcNet
+internal static partial class ProcNet
 {
     private const string Established = "01";
 
@@ -84,6 +88,29 @@ internal static class ProcNet
             : null;
     }
 
+    /// <summary>
+    /// The container id in /proc/&lt;pid&gt;/cgroup: "0::/system.slice/docker-&lt;id&gt;.scope" (cgroup v2
+    /// under systemd), "12:pids:/docker/&lt;id&gt;" (v1 or cgroupfs), or a deeper path ending in either,
+    /// as rootless Docker writes it. A host process has none.
+    /// </summary>
+    public static string? ContainerId(string? cgroup)
+    {
+        if (string.IsNullOrEmpty(cgroup))
+        {
+            return null;
+        }
+
+        foreach (var line in cgroup.Split('\n'))
+        {
+            if (ContainerPath().Match(line) is { Success: true } match)
+            {
+                return match.Groups["id"].Value;
+            }
+        }
+
+        return null;
+    }
+
     private static IPEndPoint? ParseEndpoint(string text)
     {
         var colon = text.IndexOf(':', StringComparison.Ordinal);
@@ -117,6 +144,9 @@ internal static class ProcNet
 
         return new IPEndPoint(FirewallAddresses.Normalize(new IPAddress(bytes)), port);
     }
+
+    [GeneratedRegex("""/docker[-/](?<id>[0-9a-f]{64})(?:\.scope)?(?:/|$)""", RegexOptions.CultureInvariant)]
+    private static partial Regex ContainerPath();
 }
 
 /// <summary>The real /proc. Reading another process's fd table needs root, which the core is.</summary>
@@ -155,6 +185,8 @@ internal sealed class LinuxProcessTable : IProcessTable
         var root = $"/proc/{pid.ToString(CultureInfo.InvariantCulture)}/net";
         return [.. ProcNet.ParseTcp(Read($"{root}/tcp")), .. ProcNet.ParseTcp(Read($"{root}/tcp6"))];
     }
+
+    public string? ContainerIdOf(int pid) => ProcNet.ContainerId(Read($"/proc/{pid.ToString(CultureInfo.InvariantCulture)}/cgroup"));
 
     private static string? Read(string path)
     {

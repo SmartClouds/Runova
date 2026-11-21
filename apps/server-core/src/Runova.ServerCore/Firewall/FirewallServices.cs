@@ -35,6 +35,7 @@ internal static class FirewallServices
         services.AddSingleton<IExposureSource>(provider => new ExposureInventorySource(
             provider.GetRequiredService<IProcessRunner>(),
             provider.GetRequiredService<IFirewallBackendSource>(),
+            provider.GetRequiredService<IProcessTable>(),
             provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<FirewallManager>();
         services.AddSingleton<FirewallHubServices>();

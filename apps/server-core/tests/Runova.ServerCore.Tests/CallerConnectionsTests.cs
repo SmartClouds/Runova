@@ -159,5 +159,7 @@ public sealed class CallerConnectionsTests
         public IReadOnlyCollection<long> SocketInodes(int pid) => _processes.TryGetValue(pid, out var process) ? process.Sockets : [];
 
         public IReadOnlyList<TcpEntry> TcpOf(int pid) => [.. ProcNet.ParseTcp(Tcp), .. ProcNet.ParseTcp(Tcp6)];
+
+        public string? ContainerIdOf(int pid) => null;
     }
 }

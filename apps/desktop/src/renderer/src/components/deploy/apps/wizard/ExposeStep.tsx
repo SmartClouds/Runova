@@ -36,7 +36,7 @@ function holders(conflict: PortConflict): string {
   return names.length <= 2 ? names.join(' and ') : `${names[0]} and ${names.length - 1} more`;
 }
 
-/** Ports another container on the server already holds, listed before any detail. */
+/** Ports a container or program on the server already holds, listed before any detail. */
 export function PortConflicts({
   conflicts,
 }: {
@@ -67,8 +67,8 @@ export function PortConflicts({
       </ul>
       <p className="pl-5.5 text-muted-foreground">
         Docker will refuse to start a service on a port that is taken, so the deploy would fail.
-        Change the host port in the compose file, or stop or remove the other container, before you
-        deploy.
+        Change the host port in the compose file, or stop the container or program that holds it,
+        before you deploy.
       </p>
     </div>
   );

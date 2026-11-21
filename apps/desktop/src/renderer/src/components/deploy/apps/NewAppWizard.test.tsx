@@ -459,6 +459,54 @@ describe('NewAppWizard configure and expose', () => {
     expect(await screen.findByRole('alert', { name: 'Ports already in use' })).toBeInTheDocument();
   });
 
+  it('names a container on the host network, which publishes no port but holds it', async () => {
+    const agent = {
+      id: 'f00d'.repeat(16),
+      name: 'agent',
+      image: 'node:22',
+      imageId: 'sha256:7',
+      state: 'running',
+      status: 'Up 3 days',
+      health: 'none',
+      createdAtUnixMs: 0,
+      ports: [],
+      composeProject: 'monitor',
+      composeService: 'agent',
+    };
+    const { user } = renderWizard({
+      'deployDocker.listContainers': { groups: [{ project: 'monitor', containers: [agent] }] },
+      'deployFirewall.exposure': {
+        sockets: [
+          {
+            protocol: 'tcp',
+            address: '*',
+            port: 8080,
+            scope: 'public',
+            firewall: 'closed',
+            process: 'node',
+            pid: 4100,
+            containerId: agent.id,
+          },
+        ],
+        containers: [],
+        dockerAvailable: true,
+        collectedAtUnixMs: 0,
+      },
+    });
+    await pickSource(user);
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('list', { name: 'Services to deploy' });
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    const warning = await screen.findByRole('alert', { name: 'Ports already in use' });
+    expect(warning).toHaveTextContent(
+      '8080/tcp for web is held by agent (app monitor, host network).',
+    );
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    expect(await screen.findByRole('alert', { name: 'Ports already in use' })).toHaveTextContent(
+      'agent (app monitor, host network)',
+    );
+  });
+
   it('says nothing about ports when no other container holds them', async () => {
     const { user } = renderWizard();
     await pickSource(user);

@@ -292,6 +292,12 @@ export function appsBridge(roles: string[] = ['owner']): Record<string, unknown>
     'deployJobs.watch': async () => 'log-1',
     'deployJobs.unwatch': async () => true,
     'deployDocker.listContainers': { groups: [] },
+    'deployFirewall.exposure': {
+      sockets: [],
+      containers: [],
+      dockerAvailable: true,
+      collectedAtUnixMs: 0,
+    },
     'deployDocker.status': sampleDockerStatus(),
     'deployDocker.listNetworks': sampleNetworks(),
     'deploySites.status': nginxStatus(),

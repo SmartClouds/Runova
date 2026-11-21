@@ -60,6 +60,19 @@ public sealed class FirewallMapperTests
     }
 
     [Fact]
+    public void A_listening_socket_reaches_the_app_with_how_it_was_judged_and_its_container()
+    {
+        var socket = new ListeningSocket(FirewallProtocol.Tcp, null, "*", 3000, "node", 4100);
+
+        var info = FirewallMapper.ToInfo(socket, ExposureScope.Public, ExposureFirewall.Closed, "abc123");
+
+        Assert.Equal(
+            new ListeningSocketInfo(FirewallProtocol.Tcp, "*", 3000, ExposureScope.Public, ExposureFirewall.Closed, "node", 4100, "abc123"),
+            info);
+        Assert.Null(FirewallMapper.ToInfo(socket with { Process = null, Pid = null }, ExposureScope.Public, ExposureFirewall.Off, null).ContainerId);
+    }
+
+    [Fact]
     public void A_backup_keeps_what_it_takes_to_add_a_rule_again()
     {
         var info = new FirewallRuleInfo("id", FirewallAction.Allow, FirewallProtocol.Tcp, FirewallFamilies.Both, "Allow 80/tcp", true, 80, 81, "10.0.0.0/8", "web", Service: "http");

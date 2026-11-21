@@ -106,7 +106,7 @@ public sealed class ExposureTests
         processes.Respond("ss", ["-tlnpH"], _ => FakeProcessRunner.Ok(Fixtures.Read("ss/tcp-ubuntu-24.04.txt")));
         processes.Respond("ss", ["-ulnpH"], _ => FakeProcessRunner.Ok(Fixtures.Read("ss/udp-ubuntu-24.04.txt")));
         processes.Respond("docker", ["ps"], _ => FakeProcessRunner.Ok(Fixtures.Read("docker/ps-json.txt")));
-        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw(rules: [Allow(22)])), new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1_800_000_000_000)));
+        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw(rules: [Allow(22)])), new Containers(), new FakeTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1_800_000_000_000)));
 
         var inventory = await source.ReadAsync(Cancel);
 
@@ -129,12 +129,50 @@ public sealed class ExposureTests
     }
 
     [Fact]
+    public async Task A_socket_held_by_a_container_on_the_host_network_names_the_container()
+    {
+        const string Host = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var processes = new FakeProcessRunner();
+        processes.Respond("ss", ["-tlnpH"], _ => FakeProcessRunner.Ok(
+            "LISTEN 0 511 *:3000 *:* users:((\"node\",pid=4100,fd=21))\n"
+            + "LISTEN 0 4096 0.0.0.0:8080 0.0.0.0:* users:((\"docker-proxy\",pid=4200,fd=7))\n"
+            + "LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:((\"sshd\",pid=88,fd=3))\n"));
+        processes.Respond("docker", ["ps"], _ => FakeProcessRunner.Ok());
+        var table = new Containers { [4100] = Host, [4200] = "should not be asked" };
+        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw()), table, TimeProvider.System);
+
+        var inventory = await source.ReadAsync(Cancel);
+
+        Assert.Equal(Host, inventory.Sockets.Single(socket => socket.Port == 3000).ContainerId);
+        Assert.Null(inventory.Sockets.Single(socket => socket.Port == 8080).ContainerId);
+        Assert.Null(inventory.Sockets.Single(socket => socket.Port == 22).ContainerId);
+        Assert.Equal([4100, 88], table.Asked);
+    }
+
+    [Theory]
+    [InlineData("0::/system.slice/docker-{0}.scope\n", true)]
+    [InlineData("12:pids:/docker/{0}\n11:memory:/docker/{0}\n", true)]
+    [InlineData("0::/docker/{0}\n", true)]
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/app.slice/docker.service/docker/{0}/init\n", true)]
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/user.slice/docker-{0}.scope\n", true)]
+    [InlineData("0::/system.slice/docker.service\n", false)]
+    [InlineData("0::/user.slice/user-1000.slice/session-3.scope\n", false)]
+    [InlineData("0::/docker/not-an-id\n", false)]
+    [InlineData("", false)]
+    public void The_cgroup_file_says_which_container_a_process_runs_in(string cgroup, bool inContainer)
+    {
+        const string Id = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+        Assert.Equal(inContainer ? Id : null, ProcNet.ContainerId(string.Format(System.Globalization.CultureInfo.InvariantCulture, cgroup, Id)));
+    }
+
+    [Fact]
     public async Task Without_docker_there_are_only_sockets()
     {
         var processes = new FakeProcessRunner();
         processes.Respond("ss", ["-tlnpH"], _ => FakeProcessRunner.Ok(Fixtures.Read("ss/tcp-ubuntu-24.04.txt")));
         processes.Respond("docker", ["ps"], _ => throw new ProcessStartException("docker is not installed (looked in /usr/bin)."));
-        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw(active: false)), TimeProvider.System);
+        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw(active: false)), new Containers(), TimeProvider.System);
 
         var inventory = await source.ReadAsync(Cancel);
 
@@ -151,7 +189,7 @@ public sealed class ExposureTests
         var processes = new FakeProcessRunner();
         processes.Respond("ss", ["-tlnpH"], _ => FakeProcessRunner.Ok(Fixtures.Read("ss/tcp-ubuntu-24.04.txt")));
         processes.Respond("docker", ["ps"], _ => FakeProcessRunner.Exit(1, error: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"));
-        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw()), TimeProvider.System);
+        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw()), new Containers(), TimeProvider.System);
 
         var inventory = await source.ReadAsync(Cancel);
 
@@ -166,12 +204,30 @@ public sealed class ExposureTests
         var processes = new FakeProcessRunner();
         processes.Respond("ss", [], _ => throw new ProcessStartException("ss is not installed (looked in /usr/bin)."));
         processes.Respond("docker", ["ps"], _ => FakeProcessRunner.Ok());
-        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw()), TimeProvider.System);
+        var source = new ExposureInventorySource(processes, new FixedFirewall(Ufw()), new Containers(), TimeProvider.System);
 
         var inventory = await source.ReadAsync(Cancel);
 
         Assert.Empty(inventory.Sockets);
         Assert.Contains("ss is not installed", inventory.SocketsError, StringComparison.Ordinal);
+    }
+
+    /// <summary>A process table that knows only which container each pid runs in.</summary>
+    private sealed class Containers : Dictionary<int, string>, IProcessTable
+    {
+        public List<int> Asked { get; } = [];
+
+        public int? ParentOf(int pid) => null;
+
+        public IReadOnlyCollection<long> SocketInodes(int pid) => [];
+
+        public IReadOnlyList<TcpEntry> TcpOf(int pid) => [];
+
+        public string? ContainerIdOf(int pid)
+        {
+            Asked.Add(pid);
+            return TryGetValue(pid, out var id) ? id : null;
+        }
     }
 
     private sealed class FixedFirewall(FirewallState state) : IFirewallBackendSource

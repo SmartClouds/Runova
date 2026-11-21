@@ -259,18 +259,35 @@ export function NewAppWizard({
   });
   const data = preview.data;
 
-  // What already runs on the server, so a port another container holds is caught before Docker
-  // refuses it mid-deploy. Without Docker or the list, there is simply no warning.
+  // What already runs on the server, so a port something else holds is caught before Docker
+  // refuses it mid-deploy. Docker's list names the containers that publish ports; the listening
+  // sockets add containers on the host network and other programs. Without Docker or the list,
+  // there is simply no warning.
+  const checkPorts = access.signedIn && (step === 'expose' || step === 'review');
   const containers = useQuery({
     queryKey: queryKeys.deployContainers(serverId),
     queryFn: () => window.runova.deployDocker.listContainers(serverId),
-    enabled: access.signedIn && (step === 'expose' || step === 'review'),
+    enabled: checkPorts,
+    retry: false,
+  });
+  const listening = useQuery({
+    queryKey: queryKeys.deployFirewallExposure(serverId),
+    queryFn: () => window.runova.deployFirewall.exposure(serverId),
+    enabled: checkPorts,
     retry: false,
   });
   const conflicts = useMemo(
     () =>
-      data ? findPortConflicts(data.bindings, allContainers(containers.data), source.name) : [],
-    [data, containers.data, source.name],
+      data
+        ? findPortConflicts(
+            data.bindings,
+            allContainers(containers.data),
+            source.name,
+            // Without the container list, this app's own sockets could not be told apart.
+            containers.data ? (listening.data?.sockets ?? []) : [],
+          )
+        : [],
+    [data, containers.data, listening.data, source.name],
   );
 
   // The first preview decides which services stay private; later ones follow the switches.

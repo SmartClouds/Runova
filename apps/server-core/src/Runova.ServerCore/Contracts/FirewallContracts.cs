@@ -270,6 +270,10 @@ public enum ExposureFirewall
     NotApplicable,
 }
 
+/// <summary>
+/// A listening socket. ContainerId names the Docker container whose process holds it, which is how
+/// a container on the host network shows up; Docker's own docker-proxy sockets carry none.
+/// </summary>
 [TranspilationSource]
 public sealed record ListeningSocketInfo(
     FirewallProtocol Protocol,
@@ -278,7 +282,8 @@ public sealed record ListeningSocketInfo(
     ExposureScope Scope,
     ExposureFirewall Firewall,
     string? Process = null,
-    int? Pid = null);
+    int? Pid = null,
+    string? ContainerId = null);
 
 [TranspilationSource]
 public sealed record ContainerPortInfo(

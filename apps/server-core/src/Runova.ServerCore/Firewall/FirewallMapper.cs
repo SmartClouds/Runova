@@ -28,6 +28,14 @@ internal static partial class FirewallMapper
     [MapProperty(nameof(FirewallChangeSet.RequestedByName), nameof(FirewallChangeSetInfo.RequestedBy))]
     public static partial FirewallChangeSetInfo ToInfo(FirewallChangeSet row);
 
+    /// <summary>A socket from `ss` as the app lists it, judged by the caller and named after its container if it has one.</summary>
+    [MapProperty(nameof(ListeningSocket.Shown), nameof(ListeningSocketInfo.Address))]
+    public static partial ListeningSocketInfo ToInfo(
+        ListeningSocket socket,
+        ExposureScope scope,
+        ExposureFirewall firewall,
+        string? containerId);
+
     private static string Describe(FirewallRule rule) => FirewallEvaluation.Describe(rule);
 
     private static int? PortOf(FirewallRule rule) => rule.Ports?.From;

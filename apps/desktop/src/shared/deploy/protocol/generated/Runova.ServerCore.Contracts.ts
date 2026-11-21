@@ -2243,6 +2243,8 @@ export type ListeningSocketInfo = {
     process?: string;
     /** Transpiled from int */
     pid?: number;
+    /** Transpiled from string? */
+    containerId?: string;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.ContainerPortInfo */

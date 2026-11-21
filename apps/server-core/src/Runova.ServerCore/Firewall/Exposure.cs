@@ -238,9 +238,16 @@ internal static partial class ExposureParsers
 /// The exposure inventory: `ss` for the listening sockets, `docker ps` for published container
 /// ports (none when Docker is not installed), and the firewall's rules to say what gets through.
 /// Ports Docker publishes bypass the host firewall, which is why they are flagged on their own.
+/// A socket a container's process holds (a container on the host network) names the container.
 /// </summary>
-internal sealed class ExposureInventorySource(IProcessRunner runner, IFirewallBackendSource firewall, TimeProvider time) : IExposureSource
+internal sealed class ExposureInventorySource(
+    IProcessRunner runner,
+    IFirewallBackendSource firewall,
+    IProcessTable processes,
+    TimeProvider time) : IExposureSource
 {
+    private const string DockerProxy = "docker-proxy";
+
     public async Task<ExposureInventory> ReadAsync(CancellationToken cancellationToken)
     {
         FirewallState? state;
@@ -264,16 +271,19 @@ internal sealed class ExposureInventorySource(IProcessRunner runner, IFirewallBa
                 continue;
             }
 
-            sockets.AddRange(ExposureParsers.ParseSockets(output, protocol).Select(socket => new ListeningSocketInfo(
-                socket.Protocol,
-                socket.Shown,
-                socket.Port,
-                ExposureParsers.Scope(socket.Address),
-                socket.Process == "docker-proxy" && ExposureParsers.Scope(socket.Address) != ExposureScope.Local
-                    ? ExposureFirewall.Bypassed
-                    : ExposureParsers.Judge(state, socket.Protocol, socket.Address, socket.Port),
-                socket.Process,
-                socket.Pid)));
+            sockets.AddRange(ExposureParsers.ParseSockets(output, protocol).Select(socket =>
+            {
+                var scope = ExposureParsers.Scope(socket.Address);
+                var proxy = socket.Process == DockerProxy;
+                return FirewallMapper.ToInfo(
+                    socket,
+                    scope,
+                    proxy && scope != ExposureScope.Local
+                        ? ExposureFirewall.Bypassed
+                        : ExposureParsers.Judge(state, socket.Protocol, socket.Address, socket.Port),
+                    // docker-proxy runs in the daemon's cgroup; its port is in Docker's own list.
+                    socket.Pid is int pid && !proxy ? processes.ContainerIdOf(pid) : null);
+            }));
         }
 
         var containers = new List<ContainerPortInfo>();
