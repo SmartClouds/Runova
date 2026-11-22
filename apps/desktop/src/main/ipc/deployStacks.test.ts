@@ -40,10 +40,14 @@ function harness(trusted = true) {
     ].map((name) => [name, vi.fn(async () => ({ ok: name }))]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   const releases = Object.fromEntries(
-    ['list', 'checkAccess', 'serverTokens', 'saveServerToken', 'removeServerToken'].map((name) => [
-      name,
-      vi.fn(async () => ({ ok: name })),
-    ]),
+    [
+      'list',
+      'checkAccess',
+      'serverTokens',
+      'saveServerToken',
+      'saveGhSignIn',
+      'removeServerToken',
+    ].map((name) => [name, vi.fn(async () => ({ ok: name }))]),
   ) as unknown as Record<string, ReturnType<typeof vi.fn>>;
   registerDeployStacksHandlers({
     ipc: { handle: (channel, listener) => handlers.set(channel, listener) },
@@ -424,5 +428,40 @@ describe('registerDeployStacksHandlers', () => {
     await expect(
       call(IPC.deployStacks.removeReleaseToken, { serverId: SERVER, tokenId: 'x' }),
     ).rejects.toThrow('token');
+  });
+
+  it("stores the GitHub CLI's sign-in only when the broader scopes were accepted", async () => {
+    const { call, releases } = harness();
+
+    await call(IPC.deployStacks.saveReleaseTokenFromGh, {
+      serverId: SERVER,
+      repository: 'acme/shop',
+      acceptBroaderScopes: true,
+      totpCode: '123456',
+    });
+
+    expect(releases.saveGhSignIn).toHaveBeenCalledWith({
+      serverId: SERVER,
+      repository: 'acme/shop',
+      acceptBroaderScopes: true,
+      totpCode: '123456',
+    });
+    for (const acceptBroaderScopes of [false, 'yes', undefined]) {
+      await expect(
+        call(IPC.deployStacks.saveReleaseTokenFromGh, {
+          serverId: SERVER,
+          repository: 'acme/shop',
+          acceptBroaderScopes,
+        }),
+      ).rejects.toThrow(/more than read/);
+    }
+    await expect(
+      call(IPC.deployStacks.saveReleaseTokenFromGh, {
+        serverId: SERVER,
+        repository: 'a/b/c',
+        acceptBroaderScopes: true,
+      }),
+    ).rejects.toThrow();
+    expect(releases.saveGhSignIn).toHaveBeenCalledTimes(1);
   });
 });

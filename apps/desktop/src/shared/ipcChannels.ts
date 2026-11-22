@@ -1722,6 +1722,8 @@ export const IPC = {
     releaseTokens: 'deployStacks:releaseTokens',
     /** (DeployReleaseTokenInput) -> ReleaseTokenInfo: stores a token on the server (Admin, step-up). */
     saveReleaseToken: 'deployStacks:saveReleaseToken',
+    /** (DeployReleaseGhTokenInput) -> ReleaseTokenInfo: stores the gh sign-in on the server (Admin, step-up). */
+    saveReleaseTokenFromGh: 'deployStacks:saveReleaseTokenFromGh',
     /** (DeployReleaseTokenRemoveInput) -> void (Admin, step-up). */
     removeReleaseToken: 'deployStacks:removeReleaseToken',
     /** main -> renderer: DeployStackUploadProgress while files go up. */

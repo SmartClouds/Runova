@@ -349,6 +349,20 @@ export function registerDeployStacksHandlers(deps: DeployStacksHandlerDeps): voi
       ...proof(input),
     });
   });
+  handle(IPC.deployStacks.saveReleaseTokenFromGh, (value) => {
+    const input = object(value, 'the GitHub CLI sign-in');
+    if (input.acceptBroaderScopes !== true) {
+      throw new Error(
+        'The GitHub CLI sign-in can do much more than read releases. Accept that first, or paste a read-only token.',
+      );
+    }
+    return releases.saveGhSignIn({
+      serverId: serverId(input.serverId),
+      repository: repository(input.repository),
+      acceptBroaderScopes: true,
+      ...proof(input),
+    });
+  });
   handle(IPC.deployStacks.removeReleaseToken, (value) => {
     const input = object(value, 'a release token');
     if (typeof input.tokenId !== 'string' || !GUID.test(input.tokenId)) {

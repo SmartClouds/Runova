@@ -181,6 +181,15 @@ The **New app** wizard has five steps: **Source**, **Configure**, **Expose**, **
 4. **Review.** Lists the findings of a safety check on the compose file, worst first (Critical, High, Medium, Low). Anything above Low gets a checkbox you must tick to deploy, and each one you accept is recorded in the server's audit trail. Low findings are listed as advice under "Worth fixing, nothing to accept". The checks look for things such as privileged containers, host networking, mounts of the Docker socket, dangerous capabilities, public port bindings and images tagged `latest`. A **Registry sign-in** card shows which sign-in each image's registry will use. Click **Deploy (app name)** (Operators only).
 5. **Deploy.** The app uploads the compose file and `.env` (and the project folder when a service builds from it, without what `.dockerignore` leaves out) with a progress bar. The server then checks the files as Docker Compose reads them. If it turns the file down, the revision is kept as **Invalid** with the reason, and you go back, fix the file in the project and deploy again. If the server finds more to accept, you tick those and click **Accept and deploy**. Then the deploy timeline runs. When it ends, click **Open the app**.
 
+#### Give the server access to GitHub releases
+
+When the images come from a **GitHub Release** of a private repository, the **Source** step shows whether the server can read the releases on its own. A deploy from this computer always works, since this computer gets the server a download link through your GitHub sign-in. For deploys without it, an Admin clicks **Give the server access** and picks one of two ways:
+
+- **A read-only token (safer).** Click **Open GitHub**. GitHub's new token page opens with the name, the owner and Contents: Read-only filled in. Under Repository access pick **Only select repositories** and choose the repository, generate the token, paste it in **Token** and click **Check and store**.
+- **Your GitHub CLI sign-in.** Click **Use my gh sign-in**. Runova reads the token `gh` is signed in with and sends it straight to the server, so it never shows in the window. That token can read and change every repository your account reaches, and it stops working if you run `gh auth logout`, so you must tick the warning before **Store the gh sign-in** is enabled. **Paste a token instead** goes back to the form.
+
+Either way the server checks the token with GitHub before it keeps it, encrypted, and nobody can read it back.
+
 ### Deploy timeline
 
 A deploy shows as five steps with a state, a duration that ticks while it runs, and the log lines it wrote: **Validate**, **Pull images**, **Build**, **Start containers** and **Health check**. The running or failed step opens by itself, and you can click any reached step to open or close its log. A failed step shows its reason, and a cancelled deploy says that what ran before keeps running. While a deploy runs, Operators can click **Cancel the deploy**.

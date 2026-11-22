@@ -180,7 +180,9 @@ describe('NewAppWizard image sources (E105)', () => {
     await user.click(within(access).getByRole('button', { name: /Check and store/ }));
 
     expect(bridge.$fn('shell.openExternal')).toHaveBeenCalledWith(
-      'https://github.com/settings/personal-access-tokens/new',
+      expect.stringMatching(
+        /^https:\/\/github\.com\/settings\/personal-access-tokens\/new\?.*contents=read/,
+      ),
     );
     await waitFor(() =>
       expect(bridge.$fn('deployStacks.saveReleaseToken')).toHaveBeenCalledWith({

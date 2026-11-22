@@ -510,6 +510,7 @@ import type {
   DeployComposeDiscovery,
   DeployLocalUploadInput,
   DeployLocalUploadPlan,
+  DeployReleaseGhTokenInput,
   DeployReleaseList,
   DeployReleaseListInput,
   DeployReleaseTokenInput,
@@ -2141,6 +2142,8 @@ const deployStacks = {
     ipcRenderer.invoke(IPC.deployStacks.releaseTokens, serverId),
   saveReleaseToken: (input: DeployReleaseTokenInput): Promise<ReleaseTokenInfo> =>
     ipcRenderer.invoke(IPC.deployStacks.saveReleaseToken, input),
+  saveReleaseTokenFromGh: (input: DeployReleaseGhTokenInput): Promise<ReleaseTokenInfo> =>
+    ipcRenderer.invoke(IPC.deployStacks.saveReleaseTokenFromGh, input),
   removeReleaseToken: (input: DeployReleaseTokenRemoveInput): Promise<void> =>
     ipcRenderer.invoke(IPC.deployStacks.removeReleaseToken, input),
   onUploadProgress: (cb: (event: DeployStackUploadProgress) => void): (() => void) =>

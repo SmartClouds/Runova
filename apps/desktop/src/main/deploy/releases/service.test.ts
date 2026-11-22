@@ -11,7 +11,13 @@ import { DeployReleases } from './service';
 const SERVER = 'srv-1';
 const TOKEN = 'github_pat_releaseReadOnly_123';
 
-function harness(remote: string | null = 'git@github.com:acme/shop.git', roles = ['admin']) {
+const GH_TOKEN = 'gho_cliSignIn_456';
+
+function harness(
+  remote: string | null = 'git@github.com:acme/shop.git',
+  roles = ['admin'],
+  ghToken: string | null = GH_TOKEN,
+) {
   const hub = {
     stepUp: vi.fn(async () => ({})),
     listReleaseTokens: vi.fn(async () => []),
@@ -29,13 +35,14 @@ function harness(remote: string | null = 'git@github.com:acme/shop.git', roles =
     })),
   };
   const api = vi.fn(async () => []);
+  const token = vi.fn(async () => ghToken);
   const releases = new DeployReleases({
     links: { call: (_serverId, work) => work(hub as unknown as ICoreHub) },
     roles: () => roles,
     remoteOf: vi.fn(async () => remote),
-    github: { api: api as never, token: async () => 'gho', fetch: vi.fn() as never },
+    github: { api: api as never, token, fetch: vi.fn() as never },
   });
-  return { releases, hub, api };
+  return { releases, hub, api, token };
 }
 
 describe('DeployReleases', () => {
@@ -86,6 +93,61 @@ describe('DeployReleases', () => {
       releases.saveServerToken({ serverId: SERVER, repository: 'acme', token: TOKEN }),
     ).rejects.toThrow('owner/name');
     expect(hub.saveReleaseToken).not.toHaveBeenCalled();
+  });
+
+  it("stores the GitHub CLI's sign-in on the server once the broader scopes are accepted", async () => {
+    const { releases, hub, token } = harness();
+
+    const saved = await releases.saveGhSignIn({
+      serverId: SERVER,
+      repository: 'Acme/Shop',
+      acceptBroaderScopes: true,
+      totpCode: '123456',
+    });
+
+    expect(token).toHaveBeenCalledTimes(1);
+    expect(hub.stepUp).toHaveBeenCalledWith({ totpCode: '123456' });
+    expect(hub.saveReleaseToken).toHaveBeenCalledWith({
+      repository: 'Acme/Shop',
+      token: GH_TOKEN,
+    });
+    expect(saved).not.toHaveProperty('token');
+  });
+
+  it('does not touch the gh sign-in until the broader scopes are accepted', async () => {
+    const { releases, hub, token } = harness();
+
+    await expect(
+      releases.saveGhSignIn({
+        serverId: SERVER,
+        repository: 'acme/shop',
+        acceptBroaderScopes: false,
+      }),
+    ).rejects.toThrow(/more than read/);
+    expect(token).not.toHaveBeenCalled();
+    expect(hub.saveReleaseToken).not.toHaveBeenCalled();
+  });
+
+  it('points at gh auth login when the GitHub CLI has no sign-in', async () => {
+    const { releases, hub } = harness(undefined, undefined, null);
+
+    await expect(
+      releases.saveGhSignIn({
+        serverId: SERVER,
+        repository: 'acme/shop',
+        acceptBroaderScopes: true,
+      }),
+    ).rejects.toThrow(/gh auth login/);
+    expect(hub.saveReleaseToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a repository that is not owner/name before asking gh', async () => {
+    const { releases, token } = harness();
+
+    await expect(
+      releases.saveGhSignIn({ serverId: SERVER, repository: 'acme', acceptBroaderScopes: true }),
+    ).rejects.toThrow('owner/name');
+    expect(token).not.toHaveBeenCalled();
   });
 
   it('asks the server how it reads a repository on its own', async () => {

@@ -93,6 +93,16 @@ export interface DeployReleaseTokenInput extends DeployStepUpProof {
   token: string;
 }
 
+/**
+ * Stores the GitHub CLI's sign-in on the server. It can do much more than read releases, so the
+ * person has to accept that first; main reads the token, and it never reaches the renderer.
+ */
+export interface DeployReleaseGhTokenInput extends DeployStepUpProof {
+  serverId: string;
+  repository: string;
+  acceptBroaderScopes: boolean;
+}
+
 export interface DeployReleaseTokenRemoveInput extends DeployStepUpProof {
   serverId: string;
   tokenId: string;

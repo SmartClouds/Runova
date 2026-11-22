@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import type {
+  DeployReleaseGhTokenInput,
   DeployReleaseList,
   DeployReleaseListInput,
   DeployReleaseTokenInput,
@@ -81,6 +82,30 @@ export class DeployReleases {
       return Promise.reject(new Error('Name the repository as owner/name, such as acme/shop.'));
     }
     return callCore(this.deps, serverId, (hub) => hub.checkReleaseAccess(repository));
+  }
+
+  /**
+   * Stores the GitHub CLI's sign-in as the server's token for the repository. The token is read
+   * here, sent once to the core and never returned; it carries repo and workflow, so the person
+   * must have accepted that.
+   */
+  async saveGhSignIn(input: DeployReleaseGhTokenInput): Promise<ReleaseTokenInfo> {
+    if (!isRepository(input.repository.trim())) {
+      throw new Error('Name the repository as owner/name, such as acme/shop.');
+    }
+    if (input.acceptBroaderScopes !== true) {
+      throw new Error(
+        'The GitHub CLI sign-in can do much more than read releases. Accept that first, or paste a read-only token.',
+      );
+    }
+    const token = await this.deps.github.token();
+    if (!token) {
+      throw new Error(
+        'The GitHub CLI is not signed in on this computer. Run "gh auth login" first, or paste a read-only token.',
+      );
+    }
+    const { acceptBroaderScopes: _accepted, ...rest } = input;
+    return this.saveServerToken({ ...rest, token });
   }
 
   saveServerToken(input: DeployReleaseTokenInput): Promise<ReleaseTokenInfo> {
