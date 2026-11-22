@@ -138,11 +138,12 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
             AuthState.STARTING -> StartingScreen()
             AuthState.SIGNED_OUT ->
                 if (view.showIntro) IntroScreen(intents.finishIntro) else SignInFlow(view, intents, adding = false)
-            AuthState.SIGNED_IN -> {
+            AuthState.SIGNED_IN -> Column(Modifier.fillMaxSize()) {
+                if (view.demo) DemoBanner()
                 val connection = view.connection
                 val remote = view.remote
                 val switching = view.accounts.switching
-                when {
+                Box(Modifier.weight(1f)) { when {
                     switching != null -> SwitchingScreen(switching)
                     // Adding an account: the sign-in screen over the account in use (E118).
                     view.accounts.adding -> SignInFlow(view, intents, adding = true)
@@ -154,7 +155,7 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
                     connection == null -> Shell(view, tab, onTab, intents)
                     connection.phase == ConnectionPhase.CONNECTED -> DeviceShell(view, connection, tab, onTab, intents)
                     else -> ConnectionScreen(connection, intents, view.phoneFingerprint)
-                }
+                } }
             }
         }
         view.notifications.banner?.let {
@@ -180,6 +181,19 @@ fun AppRoot(view: AppView, tab: String, onTab: (String) -> Unit, appIntents: App
         if (aboutOpen) AboutSheet(view.appVersion, { aboutOpen = false })
     }
     }
+}
+
+/** Over every screen of the demo account (E119), so no one mistakes it for their own computers. */
+@Composable
+private fun DemoBanner() {
+    val colors = RunovaTheme.colors
+    RunovaText(
+        "Demo. Nothing you do is saved.",
+        Modifier.fillMaxWidth().background(colors.warning).padding(horizontal = 16.dp, vertical = 6.dp),
+        style = RunovaType.labelStrong,
+        color = colors.warningForeground,
+        align = TextAlign.Center,
+    )
 }
 
 @Composable

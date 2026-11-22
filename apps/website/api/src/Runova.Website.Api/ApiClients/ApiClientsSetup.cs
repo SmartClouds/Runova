@@ -9,7 +9,7 @@ namespace Runova.Website.Api.ApiClients;
 
 internal static class ApiClientsSetup
 {
-    /// <summary>Picks the signature scheme for a signed request, the device scheme for a desktop bearer token, and the session cookie for any other.</summary>
+    /// <summary>Picks the signature scheme for a signed request, the device scheme for a desktop bearer token, the demo scheme for the phone's demo token, and the session cookie for any other.</summary>
     public const string Scheme = "RunovaSessionOrSignature";
 
     /// <summary>
@@ -32,6 +32,7 @@ internal static class ApiClientsSetup
             .AddPolicyScheme(Scheme, null, options => options.ForwardDefaultSelector = http =>
                 SignatureAuthentication.IsSigned(http) ? SignatureAuthenticationHandler.SchemeName
                 : DeviceTokenAuthenticationHandler.HasToken(http) ? DeviceTokenAuthenticationHandler.SchemeName
+                : DemoTokenAuthenticationHandler.HasToken(http) ? DemoTokenAuthenticationHandler.SchemeName
                 : RemoteAgentAuthenticationHandler.HasToken(http) ? RemoteAgentAuthenticationHandler.SchemeName
                 : IdentityConstants.ApplicationScheme)
             .AddScheme<AuthenticationSchemeOptions, SignatureAuthenticationHandler>(SignatureAuthenticationHandler.SchemeName, null);

@@ -25,6 +25,9 @@ internal static class AccountsSetup
         services.AddScoped<SyncTombstonesPurgeJob>();
         services.AddSingleton<DeviceTokens>();
         services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, DeviceTokenAuthenticationHandler>(DeviceTokenAuthenticationHandler.SchemeName, null);
+        services.AddOptions<DemoOptions>().BindConfiguration(DemoOptions.Section);
+        services.AddSingleton<DemoTokens>();
+        services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, DemoTokenAuthenticationHandler>(DemoTokenAuthenticationHandler.SchemeName, null);
         services.AddMemoryCache();
         services.AddHttpContextAccessor();
         services.AddScoped<AccountSessions>();

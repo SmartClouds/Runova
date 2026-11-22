@@ -1,0 +1,110 @@
+---
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import StoreBadges from '../components/StoreBadges.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { qrPath, qrViewBox } from '../lib/qr';
+import { breadcrumbList, type Crumb } from '../lib/seo';
+
+// Built once per deploy. The Runova app signs in to its demo account when the code it scans holds
+// exactly this page's address (no trailing slash, like every URL on the site). Someone who scans
+// the code with the phone's own camera lands here instead, so the page says how to use the app.
+export const prerender = true;
+
+const site = Astro.site ?? new URL('https://runovahq.com');
+const demoUrl = new URL('/demo', site).href;
+const { size, path } = qrPath(demoUrl);
+
+const crumbs: Crumb[] = [
+  { name: 'Home', path: '/' },
+  { name: 'Demo', path: '/demo' },
+];
+const description =
+  'Try the Runova phone app with a demo account. Scan the code from the sign-in screen of the app and look around with made-up data. Nothing is saved.';
+
+const step =
+  'inline-flex size-9 shrink-0 items-center justify-center rounded-full border bg-card font-mono font-semibold text-primary text-sm';
+---
+
+<BaseLayout title="Try the demo" description={description} jsonLd={[breadcrumbList(site, crumbs)]}>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <section
+    aria-labelledby="demo-title"
+    class="grid items-center gap-12 pt-8 pb-14 md:pt-12 md:pb-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-16"
+  >
+    <div>
+      <p class="font-mono text-primary text-xs uppercase tracking-[0.14em]">Demo</p>
+      <h1
+        id="demo-title"
+        class="mt-3 font-bold text-[clamp(2.25rem,6vw,3.75rem)] leading-[1.05] tracking-[-0.03em]"
+      >
+        Try the Runova app
+      </h1>
+      <p class="mt-5 max-w-[56ch] text-lg text-muted-foreground">
+        Scan this code from the Runova app on your phone and it opens a demo account. Everything in
+        it is made-up, every feature works, and nothing you do is saved.
+      </p>
+
+      <ol data-demo-steps class="mt-10 grid gap-6">
+        <li class="flex items-start gap-4">
+          <span class={step} aria-hidden="true">1</span>
+          <div class="pt-1.5">
+            <p class="font-semibold">Install the Runova app on your phone</p>
+            <p class="mt-1 text-muted-foreground text-sm">It is made for Android and iOS.</p>
+          </div>
+        </li>
+        <li class="flex items-start gap-4">
+          <span class={step} aria-hidden="true">2</span>
+          <div class="pt-1.5">
+            <p class="font-semibold">Open it and tap <strong>Scan QR code</strong></p>
+            <p class="mt-1 text-muted-foreground text-sm">
+              The button is on the sign-in screen. You don't need an account.
+            </p>
+          </div>
+        </li>
+        <li class="flex items-start gap-4">
+          <span class={step} aria-hidden="true">3</span>
+          <div class="pt-1.5">
+            <p class="font-semibold">Point the camera at this code</p>
+            <p class="mt-1 text-muted-foreground text-sm">
+              The app signs in to the demo right away.
+            </p>
+          </div>
+        </li>
+      </ol>
+
+      <StoreBadges class="mt-10" />
+    </div>
+
+    <figure class="w-full max-w-[22rem] justify-self-center rounded-box border bg-card p-5 lg:justify-self-end">
+      {/* Dark squares on white with four modules of quiet zone, so it scans on the dark theme too. */}
+      <svg
+        role="img"
+        aria-label="QR code that opens the Runova demo"
+        viewBox={qrViewBox(size)}
+        shape-rendering="crispEdges"
+        class="block aspect-square w-full rounded-inner bg-white"
+      >
+        <path d={path} fill="#000"></path>
+      </svg>
+      <figcaption class="mt-4 text-muted-foreground text-sm">
+        The code holds this address:
+        <code class="mt-1 block break-all font-mono text-foreground">{demoUrl}</code>
+        <span class="mt-3 block">
+          Reading this on your phone? Open the page on another screen and scan it from there.
+        </span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="demo-real-title" class="border-t py-12 md:py-16">
+    <h2 id="demo-real-title" class="font-semibold text-[clamp(1.5rem,3vw,2.25rem)]">
+      Your own computers
+    </h2>
+    <p class="mt-4 max-w-[70ch] text-muted-foreground">
+      The computer in the demo is pretend. To reach your real ones from the phone, they need Runova
+      installed and running. <a href="/download" class="link">Download Runova</a>, or read
+      about <a href="/help/phone" class="link">the phone apps</a>.
+    </p>
+  </section>
+</BaseLayout>

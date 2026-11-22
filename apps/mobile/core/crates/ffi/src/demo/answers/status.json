@@ -1,0 +1,126 @@
+{
+  "status.system": {
+    "result": {
+      "cpuModel": "AMD Ryzen 9 7950X",
+      "cpuCoreCount": 16,
+      "cpuPercent": 23.4,
+      "memPercent": 58.2,
+      "memUsedBytes": 19998441472,
+      "memTotalBytes": 34359738368,
+      "netRxBytesPerSec": 2411724,
+      "netTxBytesPerSec": 348160
+    }
+  },
+  "status.bar": {
+    "result": {
+      "agents": { "working": 1, "waiting": 1, "finished": 1, "idle": 0 },
+      "terminals": 4,
+      "relays": { "running": 1, "paused": 0, "scheduled": 2, "needsYou": 0 },
+      "transfers": 0,
+      "sync": { "needsSignIn": false, "conflicts": 0, "phase": "idle", "keysNeeded": 0 },
+      "github": { "login": "northwind-dev", "signedIn": true, "checkFailed": false },
+      "docker": { "running": 3 },
+      "android": { "running": 1, "booting": 0 },
+      "keepAwake": { "mode": "agent", "awake": true, "busy": ["agents", "terminals"] },
+      "windowOpen": true,
+      "runs": [
+        {
+          "id": "shop-dev",
+          "title": "pnpm dev",
+          "state": "running",
+          "cpuPercent": 6.2,
+          "memBytes": 412090368,
+          "urls": ["http://localhost:5173/"],
+          "device": "Pixel 8"
+        },
+        {
+          "id": "api-watch",
+          "title": "dotnet watch",
+          "state": "running",
+          "cpuPercent": 3.8,
+          "memBytes": 268435456,
+          "urls": ["http://localhost:5080/"],
+          "device": null
+        }
+      ],
+      "plans": [
+        {
+          "key": "split:gift-cards",
+          "kind": "split",
+          "projectName": "northwind-shop",
+          "status": "running",
+          "elapsedMs": 83000,
+          "error": null
+        }
+      ]
+    }
+  },
+  "status.usage": {
+    "result": {
+      "limits": [
+        {
+          "providerId": "claude-code",
+          "name": "Claude Code",
+          "plan": "Max",
+          "state": "ok",
+          "problem": null,
+          "windows": [
+            { "label": "5 hours", "percent": 42.0, "resetInMs": 7980000 },
+            { "label": "Week", "percent": 18.0, "resetInMs": 302400000 }
+          ]
+        },
+        {
+          "providerId": "codex",
+          "name": "Codex",
+          "plan": "Plus",
+          "state": "ok",
+          "problem": null,
+          "windows": [
+            { "label": "5 hours", "percent": 12.0, "resetInMs": 12600000 },
+            { "label": "Week", "percent": 31.0, "resetInMs": 221400000 }
+          ]
+        },
+        {
+          "providerId": "gemini-cli",
+          "name": "Gemini CLI",
+          "plan": null,
+          "state": "estimate",
+          "problem": null,
+          "windows": [{ "label": "Day", "percent": 7.0, "resetInMs": 39600000 }]
+        }
+      ],
+      "providers": [
+        {
+          "providerId": "claude-code",
+          "name": "Claude Code",
+          "status": "ok",
+          "error": null,
+          "todayUsd": 3.42,
+          "weekUsd": 21.87,
+          "monthUsd": 64.1,
+          "series": [2.1, 4.8, 3.3, 0.4, 0.0, 5.6, 6.2, 3.9, 2.7, 4.4, 1.2, 0.3, 3.1, 3.42]
+        },
+        {
+          "providerId": "codex",
+          "name": "Codex",
+          "status": "ok",
+          "error": null,
+          "todayUsd": 1.15,
+          "weekUsd": 8.4,
+          "monthUsd": 27.95,
+          "series": [0.8, 1.9, 0.0, 0.6, 0.0, 2.2, 1.4, 1.7, 0.9, 1.3, 0.0, 0.2, 0.75, 1.15]
+        },
+        {
+          "providerId": "gemini-cli",
+          "name": "Gemini CLI",
+          "status": "connect",
+          "error": null,
+          "todayUsd": null,
+          "weekUsd": null,
+          "monthUsd": null,
+          "series": []
+        }
+      ]
+    }
+  }
+}

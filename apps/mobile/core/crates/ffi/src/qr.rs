@@ -4,7 +4,7 @@
 use crate::engine::{Done, Engine, Runner, Task};
 use crate::secure::device_id;
 use crate::view::QrSignInView;
-use runova_api::auth::{AuthError, DeviceInfo, QrPoll, Session, read_qr_code};
+use runova_api::auth::{AuthError, DeviceInfo, QrPoll, Session, is_demo_code, read_qr_code};
 use runova_crypto::handshake::os_random;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,6 +18,7 @@ const NOT_OURS: &str = "That isn't a Runova sign-in code.";
 const NO_LONGER_VALID: &str = "This QR code is no longer valid. Show a new one and scan it again.";
 const DECLINED: &str = "Sign-in was declined on the other screen.";
 const FAILED: &str = "Couldn't sign in. Try again.";
+const DEMO_OFF: &str = "The demo isn't available right now.";
 
 enum Stop {
     Refused,
@@ -63,6 +64,10 @@ impl Runner {
     fn scan_sign_in(&mut self, text: String) {
         self.stop_qr();
         self.view.error = None;
+        if is_demo_code(&text, &self.deps.site) {
+            self.start_demo();
+            return;
+        }
         let Some(code) = read_qr_code(&text) else {
             self.view.error = Some(NOT_OURS.to_owned());
             return;
@@ -71,12 +76,7 @@ impl Runner {
         let generation = self.qr_generation;
         let done = self.done_tx.clone();
         let session: Arc<Session> = self.sign_in_session();
-        let device = DeviceInfo {
-            device_id: device_id(self.deps.secure.as_ref()),
-            name: "Runova app".to_owned(),
-            platform: self.deps.platform.clone(),
-            app_version: self.deps.app_version.clone(),
-        };
+        let device = self.qr_device();
         self.qr_task = Some(tokio::spawn(async move {
             let send = |task: Task| {
                 let _ = done.send(Done::Local(task));
@@ -113,6 +113,39 @@ impl Runner {
                 }
             }));
         }));
+    }
+
+    /// Signs in to the demo account (E119), which needs no one to approve it.
+    fn start_demo(&mut self) {
+        self.view.qr_sign_in = Some(QrSignInView { match_code: None });
+        let generation = self.qr_generation;
+        let done = self.done_tx.clone();
+        let session: Arc<Session> = self.sign_in_session();
+        let device = self.qr_device();
+        self.qr_task = Some(tokio::spawn(async move {
+            let outcome = session.start_demo(&device).await.map_err(stop_for);
+            let _ = done.send(Done::Local(Box::new(move |runner: &mut Runner| {
+                if runner.qr_generation != generation {
+                    return;
+                }
+                runner.view.qr_sign_in = None;
+                runner.qr_task = None;
+                match outcome {
+                    Ok(()) => runner.signed_in(),
+                    Err(Stop::Refused) => runner.view.error = Some(DEMO_OFF.to_owned()),
+                    Err(stop) => runner.view.error = Some(stop.message().to_owned()),
+                }
+            })));
+        }));
+    }
+
+    fn qr_device(&self) -> DeviceInfo {
+        DeviceInfo {
+            device_id: device_id(self.deps.secure.as_ref()),
+            name: "Runova app".to_owned(),
+            platform: self.deps.platform.clone(),
+            app_version: self.deps.app_version.clone(),
+        }
     }
 
     /// Makes anything the old attempt still has on its way count for nothing.

@@ -94,6 +94,7 @@ never carries a stack trace or exception text.
 | `two-factor-required` | 401 | Right password, but the account needs a TOTP or recovery code |
 | `forbidden` | 403 | Signed in, but the role or scope does not allow it |
 | `email-unverified` | 403 | Right password, but the account's email is not confirmed yet |
+| `demo-read-only` | 403 | The phone's [demo account](#demo-account) asked for a route it does not answer |
 | `not-found` | 404 | No such route or resource, or the resource is not published |
 | `conflict` | 409 | Duplicate slug or email, removing or demoting the last Admin |
 | `precondition-failed` | 412 | Stale `If-Match` |
@@ -122,6 +123,9 @@ Three ways in, named in the **Auth** column of every table below:
 - **Device token (desktop app).** `Authorization: Bearer rd1...` from the Runova desktop app (E48.5),
   got from [device tokens](#desktop-sign-in). It reaches `Account` routes only (never a staff route,
   even for staff) and needs no antiforgery header.
+- **Demo token (phone app).** `Authorization: Bearer rdm1...` for the phone's
+  [demo account](#demo-account). It works on `/api/v1` only, never on the hubs or the relay, passes
+  `Account` and nothing above it, and needs no antiforgery header.
 - **Signed request (API client).** For other systems that publish. See
   [Signed requests](#signed-requests). Scopes are `news:write` and `posts:write`. A signed request
   never uses cookies or antiforgery.
@@ -585,7 +589,7 @@ the code at `POST /device-tokens`.
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | POST | `/api/v1/device-authorizations` | Account (cookie, with antiforgery) | `DeviceAuthorizationRequest` | 201 `{ "redirectUrl": string, "expiresAt": time }`; 400; 401 |
-| POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid); 401 `two-factor-required` (`id_token`: finish in the browser); 403 `email-unverified` (`id_token`); 409 `conflict` (`id_token`: an account has that email); 429 |
+| POST | `/api/v1/device-tokens` | Anonymous (no cookie, no antiforgery) | `DeviceTokenRequest` | 200 `DeviceTokenDto`; 400; 401 `unauthorized` (code or token not valid, or the demo is off); 401 `two-factor-required` (`id_token`: finish in the browser); 403 `email-unverified` (`id_token`); 409 `conflict` (`id_token`: an account has that email); 429 |
 | POST | `/api/v1/sign-in-nonces` | Anonymous (no cookie, no antiforgery) | `{ "provider": "google" \| "apple" }` | 201 `{ "nonce": string, "expiresAt": time, "clientId": string \| null }`; 400; 404 not set up; 429 |
 | POST | `/api/v1/qr-sign-ins` | Account | none | 201 `QrSignInDto`; 401 |
 | GET | `/api/v1/qr-sign-ins/{id}` | Account | none | 200 `QrSignInStatusDto`; 401; 404 |
@@ -617,7 +621,7 @@ string | null, "deviceId": uuid | null }`. A phone's session has kind `mobile`, 
 minutes and one use.
 
 `DeviceTokenRequest`: `{ "grantType": "authorization_code" | "refresh_token" | "passkey" |
-"id_token", "code": string | null, "codeVerifier": string | null, "redirectUri": string | null,
+"id_token" | "demo", "code": string | null, "codeVerifier": string | null, "redirectUri": string | null,
 "refreshToken": string | null, "challengeId": string | null, "credential": object | null,
 "platform": "android" | "ios" | null, "appVersion": string | null, "deviceId": uuid | null,
 "provider": "google" | "apple" | null, "idToken": string | null, "nonce": string | null,
@@ -649,6 +653,31 @@ copied), and earlier than that it is only refused (a lost answer). A computer th
 with the same `deviceId` replaces its old session. Each new computer is in the activity
 (`device-sign-in`) and sends the owner a "new sign-in" email. Disabling a user ends all their
 sessions at once.
+
+### Demo account
+
+App store reviewers and anyone curious can try the phone app on a demo account. The `demo` grant
+of `POST /device-tokens` takes `{ "grantType": "demo", "platform": "android" | "ios",
+"appVersion": string | null, "deviceId": uuid | null }`, with no credentials, under the same
+per-address limit as the other grants (429 over it), and answers 200 with a `DeviceTokenDto` whose
+`sessionId` and `account.id` are -1 and whose account is `Demo`, `demo@runovahq.com`. The access
+token is `rdm1.` and the refresh token `rrm1.`, each a Data Protection seal of its expiry and
+nothing else: 15 minutes and 30 days. A `refresh_token` grant with an `rrm1.` token answers a fresh
+pair while it lasts, and can be used again until then, since nothing about it is stored. Any other
+platform is 400.
+
+The demo account is in no table. Its requests are answered after authorization, before any
+endpoint, so it never writes anything: no session, activity, email, push device, idempotency
+record or row of any kind. The routes the phone calls answer mock data in their usual DTOs (a team
+called Northwind with four members and a pending invitation, three sessions, recent activity and
+notifications, online monitors in mixed states, and three computers with remote ids from
+`000000001` to `000000003`, which a real one never has). Their changes answer as the real route
+would, with its status, body and validation problems, and are dropped, so reading again shows the
+mock data unchanged. A step-up takes any password or code. Every other `Account` route answers 403
+`demo-read-only`, a staff route 403 `forbidden`, and the hubs and the relay 401.
+
+`Demo:Enabled` (default `true`, `Demo__Enabled` in the environment) turns it off: the `demo` grant
+and an `rrm1.` refresh then answer 401 `unauthorized`, and an `rdm1.` token is refused with 401.
 
 ### Sync
 

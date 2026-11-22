@@ -1474,6 +1474,8 @@ pub struct AppView {
     pub receive: ReceiveScreen,
     /// The accounts on this phone (E118).
     pub accounts: AccountsView,
+    /// The account in use is the demo (E119): made-up data, and nothing done is kept.
+    pub demo: bool,
 }
 
 impl AppView {
@@ -1526,6 +1528,7 @@ impl AppView {
             send: SendScreen::default(),
             receive: ReceiveScreen::default(),
             accounts: AccountsView::default(),
+            demo: false,
         }
     }
 }

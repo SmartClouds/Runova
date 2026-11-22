@@ -212,3 +212,27 @@ These answers match the policy page and what the apps do today (no analytics, ad
 camera only for the sign-in QR code). Check them against each store's current form before you submit.
 When an app starts collecting something new, change the page (`apps/website/web/src/pages/privacy.astro`)
 and these answers in the same commit.
+
+## 13. Store review access
+
+Reviewers have no Runova account and no computer running Runova, so they use the demo (E119). It
+signs in to a demo account with made-up data and a pretend computer inside the app. Every screen
+works, and nothing anyone does is saved. Before you submit, open `https://runovahq.com/demo` and
+scan it with the app once, so you know the demo works on the live site.
+
+- App Store Connect, App Review Information: leave "Sign-in required" unticked, since the demo needs
+  no user name or password, and paste this into Notes:
+
+  ```
+  No account is needed. Open https://runovahq.com/demo on a computer or a second phone. In the
+  Runova app, tap "Scan QR code" on the sign-in screen and point the camera at the code on that
+  page. The app signs in to a demo account with made-up data and a pretend computer, so every
+  feature can be tried. Nothing done in the demo is saved. To leave it, sign out from the Account
+  tab.
+  ```
+
+- Play Console, App content, App access: choose "All or some functionality is restricted" and add
+  one set of instructions named "Demo", with no user name or password, and the same text.
+
+The demo needs a second screen, so Google's automated pre-launch report stops at the sign-in screen.
+That is expected. `Demo__Enabled=false` on the website turns the demo off if it ever needs to be.

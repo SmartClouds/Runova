@@ -28,7 +28,7 @@ test.describe('response headers', () => {
   const post = FIXTURE_POSTS[0].slug;
   const item = FIXTURE_NEWS[0].slug;
   const pages = ['/', '/features/relay', '/help/relay', '/download', '/blog', `/blog/${post}`];
-  pages.push('/news', `/news/${item}`, '/admin/sign-in');
+  pages.push('/news', `/news/${item}`, '/demo', '/admin/sign-in');
 
   for (const path of pages) {
     test(`${path} carries the CSP and the security headers`, async ({ request }) => {
@@ -126,6 +126,7 @@ test.describe('under the CSP', () => {
     '/features/ship',
     '/help/relay',
     '/download',
+    '/demo',
     '/blog',
     `/blog/${FIXTURE_POSTS[0].slug}`,
     `/news/${FIXTURE_NEWS[0].slug}`,

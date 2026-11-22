@@ -69,6 +69,21 @@ class ScreensTest {
     }
 
     @Test
+    fun theDemoSaysSoAboveEveryScreen() {
+        show(appView(systems = systems, demo = true))
+
+        compose.onNodeWithText("Demo. Nothing you do is saved.").assertExists()
+        snapshot("demo-banner")
+    }
+
+    @Test
+    fun aRealAccountHasNoDemoBanner() {
+        show(view())
+
+        compose.onNodeWithText("Demo. Nothing you do is saved.").assertDoesNotExist()
+    }
+
+    @Test
     fun signInRunsTheIntent() {
         var signedIn = false
         show(view(AuthState.SIGNED_OUT, emptyList()), AppIntents(signIn = { signedIn = true }))

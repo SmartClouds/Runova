@@ -232,10 +232,16 @@ const sectionTitle = 'font-bold text-[clamp(1.85rem,4.2vw,3rem)] tracking-[-0.03
         </ul>
         <div data-reveal class="mt-10 flex flex-col gap-5">
           <StoreBadges />
-          <a href="/help/phone" class="link group inline-flex items-center gap-1.5 self-start">
-            How the phone apps work
-            <Icon name="arrow-right" size={16} class="nudge" />
-          </a>
+          <div class="flex flex-wrap gap-x-8 gap-y-3">
+            <a href="/help/phone" class="link group inline-flex items-center gap-1.5">
+              How the phone apps work
+              <Icon name="arrow-right" size={16} class="nudge" />
+            </a>
+            <a href="/demo" class="link group inline-flex items-center gap-1.5">
+              Try the demo
+              <Icon name="arrow-right" size={16} class="nudge" />
+            </a>
+          </div>
         </div>
       </div>
       <div class="phones">

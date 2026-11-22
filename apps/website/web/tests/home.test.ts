@@ -211,6 +211,10 @@ describe('home page', () => {
       expect(phone).toContain('href="/help/phone"');
     });
 
+    it('links to the demo from the phone section', () => {
+      expect(section('phone')).toMatch(/<a[^>]* href="\/demo"[^>]*>\s*Try the demo/);
+    });
+
     it('shows real phone screens as AVIF and WebP, sized and lazy, with their alt text', () => {
       const pictures = section('phone').match(/<picture[\s\S]*?<\/picture>/g) ?? [];
       expect(pictures).toHaveLength(PHONE_SHOTS.length);

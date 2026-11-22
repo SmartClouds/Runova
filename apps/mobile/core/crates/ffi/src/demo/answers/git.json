@@ -1,0 +1,227 @@
+{
+  "git.state": {
+    "result": {
+      "isRepo": true,
+      "branch": "feature/gift-cards",
+      "detached": false,
+      "upstream": "origin/feature/gift-cards",
+      "ahead": 2,
+      "behind": 1,
+      "hasRemote": true,
+      "operation": null,
+      "conflicts": [],
+      "staged": [
+        { "path": "src/checkout/GiftCardInput.tsx", "status": "A", "additions": 86, "deletions": 0 },
+        { "path": "src/checkout/applyGiftCard.ts", "status": "M", "additions": 24, "deletions": 7 }
+      ],
+      "unstaged": [
+        { "path": "src/cart/total.ts", "status": "M", "additions": 9, "deletions": 1 },
+        { "path": "src/i18n/en.json", "status": "M", "additions": 6, "deletions": 1 },
+        { "path": "src/checkout/giftCardBalance.ts", "origPath": "src/checkout/balance.ts", "status": "R", "additions": 4, "deletions": 2 },
+        { "path": "src/checkout/legacyVoucher.ts", "status": "D", "additions": 0, "deletions": 41 }
+      ],
+      "untracked": [
+        { "path": "src/checkout/GiftCardInput.test.tsx", "status": "?" },
+        { "path": "public/images/gift-card.png", "status": "?", "binary": true }
+      ],
+      "untrackedTruncated": false
+    }
+  },
+  "git.diff": {
+    "result": {
+      "binary": false,
+      "tooLarge": false,
+      "lines": [
+        { "kind": "hunk", "text": "@@ -18,9 +18,13 @@ export function cartTotal(cart: Cart): Money {" },
+        { "kind": "ctx", "text": "  const subtotal = sumLines(cart.lines);" },
+        { "kind": "ctx", "text": "  const discount = applyDiscounts(subtotal, cart.coupons);" },
+        { "kind": "ctx", "text": "  const delivery = shipping(cart);" },
+        { "kind": "del", "text": "  return subtotal - discount + delivery;" },
+        { "kind": "add", "text": "  const beforeGiftCards = subtotal - discount + delivery;" },
+        { "kind": "add", "text": "  const giftCards = cart.giftCards.reduce((sum, card) => sum + card.applied, 0);" },
+        { "kind": "add", "text": "" },
+        { "kind": "add", "text": "  // A gift card can pay for the whole order, never more than that." },
+        { "kind": "add", "text": "  return Math.max(beforeGiftCards - giftCards, 0);" },
+        { "kind": "ctx", "text": "}" },
+        { "kind": "ctx", "text": "" },
+        { "kind": "hunk", "text": "@@ -44,6 +48,11 @@ export function formatTotal(total: Money, locale: string): string {" },
+        { "kind": "ctx", "text": "  return new Intl.NumberFormat(locale, { style: 'currency', currency: total.currency })" },
+        { "kind": "ctx", "text": "    .format(total.amount / 100);" },
+        { "kind": "ctx", "text": "}" },
+        { "kind": "add", "text": "" },
+        { "kind": "add", "text": "export function giftCardsLeft(cart: Cart): number {" },
+        { "kind": "add", "text": "  return cart.giftCards.filter((card) => card.balance > card.applied).length;" },
+        { "kind": "add", "text": "}" }
+      ]
+    }
+  },
+  "git.branches": {
+    "result": [
+      { "name": "feature/gift-cards", "current": true, "local": true },
+      { "name": "main", "current": false, "local": true },
+      { "name": "fix/coupon-rounding", "current": false, "local": true },
+      { "name": "chore/upgrade-astro", "current": false, "local": true },
+      { "name": "origin/main", "current": false, "local": false },
+      { "name": "origin/feature/gift-cards", "current": false, "local": false },
+      { "name": "origin/feature/saved-carts", "current": false, "local": false },
+      { "name": "origin/release/1.4", "current": false, "local": false }
+    ]
+  },
+  "git.stashes": {
+    "result": [
+      { "ref": "stash@{0}", "message": "On feature/gift-cards: half done balance tooltip" },
+      { "ref": "stash@{1}", "message": "On main: try a smaller hero image" }
+    ]
+  },
+  "git.stage": { "result": { "ok": true, "message": "Staged." } },
+  "git.unstage": { "result": { "ok": true, "message": "Unstaged." } },
+  "git.discard": { "result": { "ok": true, "message": "Discarded." } },
+  "git.commit": { "result": { "ok": true, "message": "Committed to feature/gift-cards." } },
+  "git.fetch": { "result": { "ok": true, "message": "Fetched from origin. main has 1 new commit." } },
+  "git.pull": { "result": { "ok": true, "message": "Pulled 1 commit from origin/feature/gift-cards." } },
+  "git.push": { "result": { "ok": true, "message": "Pushed to origin/feature/gift-cards." } },
+  "git.checkout": { "result": { "ok": true, "message": "This is the demo, so you stay on feature/gift-cards." } },
+  "git.createBranch": { "result": { "ok": true, "message": "Branch created. The demo stays on feature/gift-cards." } },
+  "git.deleteBranch": { "result": { "ok": true, "message": "Branch deleted." } },
+  "git.stashPush": { "result": { "ok": true, "message": "Your changes are stashed." } },
+  "git.stashPop": { "result": { "ok": true, "message": "The stash is back in your changes." } },
+  "git.stashDrop": { "result": { "ok": true, "message": "Stash dropped." } },
+  "git.resolve": { "result": { "ok": true, "message": "Kept that side. Stage the file when it looks right." } },
+  "git.abort": { "result": { "ok": true, "message": "Stopped. The repository is back where it was." } },
+  "git.tags": {
+    "result": {
+      "latest": "v1.4.2",
+      "recent": ["v1.4.2", "v1.4.1", "v1.4.0", "v1.3.3", "v1.3.2"],
+      "commitsSince": 9,
+      "hasRemote": true,
+      "channels": [
+        {
+          "channel": "stable",
+          "options": [
+            { "kind": "patch", "tag": "v1.4.3" },
+            { "kind": "minor", "tag": "v1.5.0" },
+            { "kind": "major", "tag": "v2.0.0" }
+          ]
+        },
+        {
+          "channel": "beta",
+          "options": [
+            { "kind": "patch", "tag": "v1.4.3-beta.1" },
+            { "kind": "minor", "tag": "v1.5.0-beta.1" }
+          ]
+        }
+      ]
+    }
+  },
+  "git.suggestTag": {
+    "result": {
+      "ok": true,
+      "tag": "v1.5.0",
+      "reason": "Gift cards are a new feature and nothing that worked before changes, so this is a minor release.",
+      "message": "Gift cards\n\n- Pay with a gift card at checkout\n- Check what is left on a card from the cart\n- Coupons and gift cards now add up correctly",
+      "cliName": "Claude Code",
+      "error": null,
+      "cancelled": false
+    }
+  },
+  "git.createTag": { "result": { "ok": true, "message": "Tag created." } },
+  "git.deleteTag": { "result": { "ok": true, "message": "Tag deleted." } },
+  "git.suggestCommitMessage": {
+    "result": {
+      "ok": true,
+      "text": "feat(checkout): let shoppers pay with a gift card\n\nAdds the gift card field to checkout and takes what is on the card off the total. A card can pay for the whole order but never more than that.",
+      "cliName": "Claude Code",
+      "error": null,
+      "cancelled": false
+    }
+  },
+  "git.suggestBranchName": {
+    "result": { "ok": true, "text": "feature/gift-card-balance", "cliName": "Codex", "error": null, "cancelled": false }
+  },
+  "git.resolveWithAi": {
+    "result": {
+      "ok": true,
+      "message": "Resolved.",
+      "summary": "Kept both sides: the gift card line from this branch and the coupon rounding fix from main.",
+      "cancelled": false
+    }
+  },
+  "git.cancelAi": { "result": { "cancelled": true } },
+  "git.pr": {
+    "result": {
+      "cliAvailable": true,
+      "authenticated": true,
+      "repo": "northwind/shop",
+      "branch": "feature/gift-cards",
+      "defaultBranch": "main",
+      "onDefaultBranch": false,
+      "ahead": 2,
+      "dirty": true,
+      "pr": {
+        "number": 214,
+        "title": "Pay with gift cards at checkout",
+        "url": "https://example.com/northwind/shop/pull/214",
+        "state": "OPEN",
+        "isDraft": false,
+        "review": "REVIEW_REQUIRED",
+        "additions": 412,
+        "deletions": 38,
+        "checksTotal": 6,
+        "checksFailed": 0,
+        "checksRunning": 1,
+        "unresolved": 2
+      },
+      "error": null
+    }
+  },
+  "git.suggestPrText": {
+    "result": {
+      "ok": true,
+      "title": "Pay with gift cards at checkout",
+      "body": "## What changes\n\n- A gift card field on the checkout page\n- The card's balance comes off the order total, and never takes it below zero\n- The cart shows how much is left on each card\n\n## How to try it\n\nUse the test card GIFT-DEMO-0000 on the staging shop. It has 25.00 on it.",
+      "text": null,
+      "cliName": "Claude Code",
+      "error": null,
+      "cancelled": false
+    }
+  },
+  "git.createPr": {
+    "result": { "ok": true, "url": "https://example.com/northwind/shop/pull/214", "error": null, "usedFallback": false }
+  },
+  "git.reviewPr": {
+    "result": {
+      "ok": true,
+      "title": null,
+      "body": null,
+      "text": "Looks good overall. Two things before this goes in:\n\n1. applyGiftCard.ts rounds each card on its own, so two cards can be a cent off. Round once, after adding them up.\n2. GiftCardInput accepts spaces and dashes but the API doesn't. Strip them before sending.\n\nThe new tests cover the happy path well. A test for an expired card would be nice.",
+      "cliName": "Claude Code",
+      "error": null,
+      "cancelled": false
+    }
+  },
+  "git.prComment": { "result": { "ok": true, "message": "Posted." } },
+  "git.applyVersion": { "result": { "ok": true } },
+  "git.versionRun": {
+    "result": {
+      "status": "done",
+      "lines": [
+        "Looking for where the version is written",
+        "Found 1.4.2 in package.json, src/version.ts and CHANGELOG.md",
+        "Set package.json to 1.5.0",
+        "Set src/version.ts to 1.5.0",
+        "Added a 1.5.0 section to CHANGELOG.md",
+        "Done. Nothing is committed yet."
+      ],
+      "changes": [
+        { "path": "package.json", "kind": "modified", "additions": 1, "deletions": 1, "kept": true },
+        { "path": "src/version.ts", "kind": "modified", "additions": 1, "deletions": 1, "kept": true },
+        { "path": "CHANGELOG.md", "kind": "modified", "additions": 7, "deletions": 0, "kept": true }
+      ],
+      "warning": null,
+      "error": null,
+      "committedByCli": false
+    }
+  },
+  "git.cancelVersion": { "result": { "cancelled": true } },
+  "git.versionToggle": { "result": { "ok": true, "message": "Done." } }
+}

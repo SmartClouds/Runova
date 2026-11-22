@@ -1,0 +1,130 @@
+{
+  "monitoring.list": {
+    "result": [
+      { "id": "mon-shop-home", "name": "northwind.shop homepage", "state": "pass", "paused": false, "latencyMs": 184, "uptime24h": 100, "headline": "200 OK in 184 ms", "samples": [176, 181, 190, 172, 185, 201, 179, 183, 188, 174, 192, 180, 177, 186, 195, 182, 178, 184] },
+      { "id": "mon-checkout-api", "name": "Checkout API health", "state": "pass", "paused": false, "latencyMs": 92, "uptime24h": 99.98, "headline": "200 OK, database and Redis reachable", "samples": [88, 91, 95, 87, 90, 412, 93, 89, 94, 91, 86, 92, 90, 95, 88, 93, 91, 92] },
+      { "id": "mon-staging", "name": "staging.northwind.shop", "state": "warn", "paused": false, "latencyMs": 2380, "uptime24h": 98.6, "headline": "Slow: answered in 2.4 s, warns over 1.5 s", "samples": [640, 710, 690, 820, 1150, 1480, 1720, 1910, 2050, 2240, 2190, 2310, 2280, 2400, 2350, 2420, 2390, 2380] },
+      { "id": "mon-postgres", "name": "Postgres on shop-prod-1", "state": "pass", "paused": false, "latencyMs": 3, "uptime24h": 100, "headline": "Accepting connections, 14 of 100 in use", "samples": [3, 2, 3, 4, 3, 3, 2, 3, 5, 3, 3, 2, 3, 3, 4, 3, 3, 3] },
+      { "id": "mon-cert-dev", "name": "TLS certificate for northwind.dev", "state": "pass", "paused": false, "latencyMs": null, "uptime24h": 100, "headline": "Valid for 61 more days", "samples": [] },
+      { "id": "mon-status-page", "name": "northwind-status.com", "state": "fail", "paused": true, "latencyMs": null, "uptime24h": null, "headline": "Paused while the domain moves to Cloudflare", "samples": [] }
+    ]
+  },
+  "monitoring.check": {
+    "result": { "ok": true, "message": "Checked just now." }
+  },
+  "monitoring.pause": {
+    "result": { "ok": true, "message": "Saved on the computer." }
+  },
+  "pipelines.status": {
+    "result": {
+      "problem": null,
+      "workflows": [
+        { "id": 61840211, "name": "CI", "canDispatch": true, "inputs": [],
+          "run": { "id": 19873450112, "title": "Add gift cards to checkout", "branch": "main", "number": 482, "status": "completed", "conclusion": "success" } },
+        { "id": 61840212, "name": "Deploy", "canDispatch": true,
+          "run": { "id": 19873511890, "title": "Deploy v1.42.0 to production", "branch": "main", "number": 131, "status": "in_progress", "conclusion": null },
+          "inputs": [
+            { "name": "environment", "description": "Where it goes", "required": true, "type": "choice", "default": "staging", "options": ["staging", "production"] },
+            { "name": "version", "description": "The tag to deploy, like v1.42.0", "required": true, "type": "string", "default": "", "options": [] },
+            { "name": "skip_migrations", "description": "Leave the database as it is", "required": false, "type": "boolean", "default": "false", "options": [] }
+          ] },
+        { "id": 61840213, "name": "Nightly e2e", "canDispatch": true, "inputs": [],
+          "run": { "id": 19869004417, "title": "Nightly e2e", "branch": "main", "number": 77, "status": "completed", "conclusion": "failure" } },
+        { "id": 61840214, "name": "Lighthouse", "canDispatch": true, "inputs": [],
+          "run": { "id": 19873598003, "title": "Add gift cards to checkout", "branch": "main", "number": 58, "status": "queued", "conclusion": null } },
+        { "id": 61840215, "name": "Dependabot updates", "canDispatch": false, "inputs": [],
+          "run": { "id": 19861122750, "title": "Bump vite from 7.1.2 to 7.1.4", "branch": "dependabot/npm_and_yarn/vite-7.1.4", "number": 214, "status": "completed", "conclusion": "success" } }
+      ]
+    }
+  },
+  "pipelines.run": {
+    "result": {
+      "jobs": [
+        { "id": 55210011, "name": "Install and lint", "status": "completed", "conclusion": "success" },
+        { "id": 55210012, "name": "Unit tests", "status": "completed", "conclusion": "success" },
+        { "id": 55210013, "name": "e2e (chromium)", "status": "completed", "conclusion": "failure" },
+        { "id": 55210014, "name": "e2e (webkit)", "status": "completed", "conclusion": "success" },
+        { "id": 55210015, "name": "Upload report", "status": "completed", "conclusion": "skipped" }
+      ]
+    }
+  },
+  "pipelines.jobLog": {
+    "result": {
+      "truncated": false,
+      "lines": [
+        { "text": "2026-11-22T02:14:03Z Run pnpm exec playwright test --project=chromium", "error": false },
+        { "text": "2026-11-22T02:14:05Z Running 46 tests using 4 workers", "error": false },
+        { "text": "2026-11-22T02:14:19Z   ok  1 [chromium] home.spec.ts:8 shows the featured products (2.1s)", "error": false },
+        { "text": "2026-11-22T02:14:22Z   ok  2 [chromium] product.spec.ts:12 adds the oak desk to the cart (3.4s)", "error": false },
+        { "text": "2026-11-22T02:14:26Z   ok  3 [chromium] cart.spec.ts:20 changes a quantity (1.9s)", "error": false },
+        { "text": "2026-11-22T02:14:41Z   x   4 [chromium] checkout.spec.ts:31 pays with a gift card (15.0s)", "error": true },
+        { "text": "2026-11-22T02:14:58Z   ok  5 [chromium] account.spec.ts:9 signs in and sees past orders (2.7s)", "error": false },
+        { "text": "2026-11-22T02:15:40Z   ...", "error": false },
+        { "text": "2026-11-22T02:16:12Z   1) [chromium] checkout.spec.ts:31 pays with a gift card", "error": true },
+        { "text": "2026-11-22T02:16:12Z     Error: Timed out 15000ms waiting for expect(locator).toHaveText(expected)", "error": true },
+        { "text": "2026-11-22T02:16:12Z     Locator: getByTestId('order-total')", "error": true },
+        { "text": "2026-11-22T02:16:12Z     Expected string: \"$0.00\"", "error": true },
+        { "text": "2026-11-22T02:16:12Z     Received string: \"$24.00\"", "error": true },
+        { "text": "2026-11-22T02:16:12Z       at checkout.spec.ts:44:41", "error": true },
+        { "text": "2026-11-22T02:16:13Z   1 failed", "error": true },
+        { "text": "2026-11-22T02:16:13Z   45 passed (2.1m)", "error": false },
+        { "text": "2026-11-22T02:16:13Z Error: Process completed with exit code 1.", "error": true }
+      ]
+    }
+  },
+  "pipelines.dispatch": {
+    "result": { "ok": true, "message": "Started. GitHub shows the new run in a few seconds." }
+  },
+  "pipelines.cancel": {
+    "result": { "ok": true, "message": "Asked GitHub to cancel the run." }
+  },
+  "errors.list": {
+    "result": {
+      "linked": true,
+      "truncated": false,
+      "problems": [
+        { "label": "infra", "message": "Sentry turned the token down. Paste a new one on the computer." }
+      ],
+      "issues": [
+        { "connectionId": "sentry-northwind", "id": "6021448731", "shortId": "NORTHWIND-SHOP-4K", "title": "TypeError: Cannot read properties of undefined (reading 'price')", "culprit": "src/cart/lineTotal.ts in lineTotal", "level": "error", "status": "unresolved", "count": 214, "userCount": 63, "isNew": true, "projectId": "northwind-shop", "remoteProject": "northwind-shop", "lastSeenAgoMs": 540000 },
+        { "connectionId": "sentry-northwind", "id": "6019903322", "shortId": "NORTHWIND-API-2C", "title": "PostgresException: 40P01: deadlock detected", "culprit": "Orders.ReserveStock", "level": "error", "status": "unresolved", "count": 37, "userCount": 12, "isNew": false, "projectId": "northwind-api", "remoteProject": "northwind-api", "lastSeenAgoMs": 10800000 },
+        { "connectionId": "sentry-northwind", "id": "6017720045", "shortId": "NORTHWIND-API-29", "title": "PaymentProviderTimeout: no answer from the payment provider in 10 s", "culprit": "Checkout.CapturePayment", "level": "warning", "status": "unresolved", "count": 18, "userCount": 18, "isNew": false, "projectId": "northwind-api", "remoteProject": "northwind-api", "lastSeenAgoMs": 93600000 },
+        { "connectionId": "sentry-northwind", "id": "6012285519", "shortId": "NORTHWIND-SHOP-3Z", "title": "ChunkLoadError: Loading chunk 812 failed", "culprit": "app/router", "level": "error", "status": "unresolved", "count": 9, "userCount": 7, "isNew": false, "projectId": "northwind-shop", "remoteProject": "northwind-shop", "lastSeenAgoMs": 172800000 },
+        { "connectionId": "sentry-northwind", "id": "6009917784", "shortId": "MARKETING-SITE-7", "title": "Hydration failed because the server HTML didn't match the client", "culprit": "src/components/PriceTag.astro", "level": "warning", "status": "unresolved", "count": 4, "userCount": 3, "isNew": false, "projectId": "marketing-site", "remoteProject": "marketing-site", "lastSeenAgoMs": 345600000 }
+      ]
+    }
+  },
+  "errors.show": {
+    "result": {
+      "canChange": true,
+      "issue": { "connectionId": "sentry-northwind", "id": "6021448731", "shortId": "NORTHWIND-SHOP-4K", "title": "TypeError: Cannot read properties of undefined (reading 'price')", "culprit": "src/cart/lineTotal.ts in lineTotal", "level": "error", "status": "unresolved", "count": 214, "userCount": 63, "isNew": true, "projectId": "northwind-shop", "remoteProject": "northwind-shop", "lastSeenAgoMs": 540000 },
+      "event": {
+        "message": null,
+        "environment": "production",
+        "release": "northwind-shop@1.42.0",
+        "request": "GET https://northwind.shop/cart",
+        "exceptions": [
+          {
+            "type": "TypeError",
+            "value": "Cannot read properties of undefined (reading 'price')",
+            "handled": false,
+            "frames": [
+              { "file": "src/cart/lineTotal.ts", "function": "lineTotal", "line": 18 },
+              { "file": "src/cart/CartSummary.tsx", "function": "CartSummary", "line": 42 },
+              { "file": "src/pages/cart.tsx", "function": "CartPage", "line": 27 }
+            ]
+          }
+        ],
+        "tags": [
+          { "key": "browser", "value": "Safari 18.2" },
+          { "key": "os", "value": "iOS 18.1" },
+          { "key": "url", "value": "https://northwind.shop/cart" },
+          { "key": "gift_card", "value": "yes" }
+        ]
+      }
+    }
+  },
+  "errors.setStatus": {
+    "result": { "ok": true, "message": "Saved in Sentry." }
+  }
+}

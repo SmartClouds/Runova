@@ -11,6 +11,7 @@ use runova_api::auth::Session;
 use runova_api::http::{HttpError, HttpReply, HttpTransport};
 use runova_crypto::handshake::{Identity, Mode, base64url, derive_password_secret, os_random};
 use runova_ffi::backend::{Backend, BackendError, PhoneRegistration, SystemEntry};
+use runova_ffi::demo::DemoSwitch;
 use runova_ffi::engine::{Dependencies, Engine, HubConnector};
 use runova_ffi::notifications::{FeedConnector, FeedEvent};
 use runova_ffi::secure::{AccountTokens, SecureStore};
@@ -957,6 +958,13 @@ pub async fn start_signed_in(store: Arc<MemoryStore>, unattended: bool) -> World
         Box::new(|| 1_000),
     ));
     let kept = store.clone();
+    // Every test goes through the demo switch, so a real account is shown to reach the live side.
+    let switch = DemoSwitch::new(
+        Arc::new(FakeConnector(computer.clone())),
+        feed.clone(),
+        Arc::new(MemoryTransports(computer.clone())),
+        store.clone(),
+    );
     let engine = Engine::start(Dependencies {
         site: "https://runovahq.test".into(),
         platform: "android".into(),
@@ -966,9 +974,9 @@ pub async fn start_signed_in(store: Arc<MemoryStore>, unattended: bool) -> World
         session,
         tokens,
         backend: backend.clone(),
-        feed: feed.clone(),
-        hub: Arc::new(FakeConnector(computer.clone())),
-        transports: Arc::new(MemoryTransports(computer.clone())),
+        feed: switch.clone(),
+        hub: switch.clone(),
+        transports: switch,
         refresh_every: Duration::from_millis(20),
     });
     let world = World {
@@ -1003,4 +1011,118 @@ pub async fn connected() -> World {
         )
         .await;
     world
+}
+
+/// The website's token endpoint as the demo sees it: every demo grant gets a demo pair.
+#[derive(Default)]
+pub struct DemoGrants {
+    pub bodies: Mutex<Vec<Value>>,
+}
+
+#[async_trait]
+impl HttpTransport for DemoGrants {
+    async fn post_json(&self, _url: &str, body: Value) -> Result<HttpReply, HttpError> {
+        self.bodies.lock().unwrap().push(body);
+        Ok(HttpReply {
+            status: 200,
+            body: json!({
+                "accessToken": "rdm1.demo",
+                "refreshToken": "rrm1.demo",
+                "expiresIn": 900,
+                "sessionId": -1,
+                "account": {"id": -1, "email": "demo@runovahq.com"},
+            })
+            .to_string(),
+        })
+    }
+}
+
+pub struct DemoWorld {
+    pub world: World,
+    pub grants: Arc<DemoGrants>,
+}
+
+/// An app signed out, with the live hub, feed and links faked so a test can see they are unused.
+pub async fn demo_world() -> DemoWorld {
+    let store = Arc::new(MemoryStore::default());
+    store.set(
+        "identity-seed".to_owned(),
+        URL_SAFE_NO_PAD.encode(PHONE_SEED),
+    );
+    let views = Arc::new(Views::default());
+    let computer = Arc::new(Computer::default());
+    let backend = Arc::new(FakeBackend::default());
+    let feed = Arc::new(FakeFeed::default());
+    let grants = Arc::new(DemoGrants::default());
+    let tokens = AccountTokens::new(store.clone());
+    let session = Arc::new(Session::new(
+        "https://runovahq.test",
+        grants.clone(),
+        tokens.clone(),
+        Box::new(|| 1_000),
+    ));
+    let switch = DemoSwitch::new(
+        Arc::new(FakeConnector(computer.clone())),
+        feed.clone(),
+        Arc::new(MemoryTransports(computer.clone())),
+        store.clone(),
+    );
+    let engine = Engine::start(Dependencies {
+        site: "https://runovahq.test".into(),
+        platform: "android".into(),
+        app_version: "1.0.0".into(),
+        secure: store.clone(),
+        listener: views.clone(),
+        session,
+        tokens,
+        backend: backend.clone(),
+        feed: switch.clone(),
+        hub: switch.clone(),
+        transports: switch,
+        refresh_every: Duration::from_millis(20),
+    });
+    let world = World {
+        store,
+        views,
+        computer,
+        backend,
+        feed,
+        engine,
+    };
+    world
+        .until(|v| v.auth == AuthState::SignedOut, "signed out")
+        .await;
+    DemoWorld { world, grants }
+}
+
+/// The demo, signed in and looking at its computers.
+pub async fn in_demo() -> DemoWorld {
+    let demo = demo_world().await;
+    demo.world
+        .engine
+        .scan_sign_in("https://runovahq.test/demo".into());
+    demo.world
+        .until(
+            |v| v.auth == AuthState::SignedIn && v.demo && !v.systems.is_empty(),
+            "the demo",
+        )
+        .await;
+    demo
+}
+
+/// The demo, connected to its computer.
+pub async fn connected_demo() -> DemoWorld {
+    let demo = in_demo().await;
+    demo.world.engine.connect(5);
+    demo.world
+        .until(
+            |v| {
+                v.connection
+                    .as_ref()
+                    .is_some_and(|c| c.phase == ConnectionPhase::Connected)
+            },
+            "connected to the demo computer",
+        )
+        .await;
+    demo
 }

@@ -176,7 +176,10 @@ fn cloud_of(dto: CloudDto) -> MonitorView {
         ),
         detail: status.and_then(|s| s.problem.clone()),
         latency_label: latency_label(status.and_then(|s| s.latency_ms)),
-        uptime_label: status.and_then(|s| s.uptime24h).map(percent_label),
+        // The website gives a fraction of the day's checks; the computer gives a percent.
+        uptime_label: status
+            .and_then(|s| s.uptime24h)
+            .map(|fraction| percent_label(fraction * 100.0)),
         id: dto.id,
         name: dto.name,
         source: MonitorSource::Cloud,

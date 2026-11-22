@@ -20,7 +20,8 @@ use crate::view::{
 };
 use async_trait::async_trait;
 use runova_api::auth::{
-    AuthError, DeviceInfo, Session, SignInRequest, begin_sign_in_with_provider, read_callback,
+    AuthError, DeviceInfo, Session, SignInRequest, begin_sign_in_with_provider, is_demo_token,
+    read_callback,
 };
 use runova_crypto::handshake::os_random;
 use runova_rpc::{ManageClient, RpcError};
@@ -141,6 +142,8 @@ pub(crate) struct Booted {
     systems: Vec<SystemEntry>,
     /// Whose account this is, when the website said.
     me: Option<Me>,
+    /// It is the demo account (E119), served by the computer inside the app.
+    demo: bool,
 }
 
 pub(crate) enum BootError {
@@ -814,6 +817,7 @@ impl Runner {
     /// Drops everything that belongs to the account in use, before another takes over.
     pub(crate) fn reset_account_state(&mut self) {
         self.accounts.generation += 1;
+        self.view.demo = false;
         self.view.monitoring = MonitoringScreen::default();
         self.view.account = Default::default();
         self.view.notifications = Default::default();
@@ -967,6 +971,7 @@ impl Runner {
                 if let Some(me) = booted.me.take() {
                     self.identified(me);
                 }
+                self.view.demo = booted.demo;
                 self.hub = Some(booted.hub);
                 self.hub_events = Some(booted.events);
                 self.feed_events = booted.feed;
@@ -1220,7 +1225,7 @@ async fn run_boot(
         .await
         .map_err(BootError::Failed)?;
     // The app works without live delivery, so this failing is not a failed start.
-    let feed = feed.connect(token).await.ok();
+    let feed = feed.connect(token.clone()).await.ok();
     let seed = identity_seed(secure.as_ref());
     let device_id = backend
         .register_phone(PhoneRegistration {
@@ -1233,6 +1238,7 @@ async fn run_boot(
         .map_err(from_backend)?;
     let systems = backend.systems().await.map_err(from_backend)?;
     Ok(Booted {
+        demo: is_demo_token(&token),
         hub,
         events,
         feed,

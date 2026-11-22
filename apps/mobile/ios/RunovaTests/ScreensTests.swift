@@ -59,6 +59,10 @@ final class ScreensTests: XCTestCase {
 
     func testSystemsDark() throws { try render(view(), "systems-dark") }
 
+    func testDemoBanner() throws {
+        try render(fixtureView(systems: systems, demo: true), "demo-banner")
+    }
+
     func testSystemsLight() throws { try render(view(), "systems-light", dark: false) }
 
     func testWaitingForApproval() throws {

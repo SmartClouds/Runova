@@ -25,6 +25,11 @@ const QR_PREFIX: &str = "rq1.";
 /// 32 random bytes in base64url.
 const QR_CODE_LENGTH: usize = 43;
 
+/// The page on the website whose address is the demo code (E119).
+const DEMO_PATH: &str = "/demo";
+/// What a demo account's access tokens start with. Its refresh tokens start with `rrm1.`.
+const DEMO_TOKEN_PREFIX: &str = "rdm1.";
+
 /// A token this close to its end is replaced before use, seconds.
 const EXPIRY_MARGIN: u64 = 60;
 
@@ -208,6 +213,19 @@ pub fn read_qr_code(text: &str) -> Option<String> {
     valid.then(|| code.to_owned())
 }
 
+/// Whether a scanned QR holds this site's demo page, which signs in to the demo account (E119).
+pub fn is_demo_code(text: &str, site: &str) -> bool {
+    let text = text.trim();
+    let text = text.strip_suffix('/').unwrap_or(text);
+    text.strip_prefix(site.trim_end_matches('/'))
+        .is_some_and(|path| path == DEMO_PATH)
+}
+
+/// Whether an access token belongs to the demo account, which only ever sees made-up data.
+pub fn is_demo_token(token: &str) -> bool {
+    token.starts_with(DEMO_TOKEN_PREFIX)
+}
+
 /// A QR code this phone has claimed: the digits to show, and the proof that it was this phone.
 #[derive(Debug)]
 pub struct QrClaim {
@@ -369,6 +387,32 @@ impl Session {
                     "codeVerifier": verifier,
                     "redirectUri": PHONE_REDIRECT,
                     "refreshToken": null,
+                }),
+            )
+            .await
+            .map_err(|e| AuthError::Network(e.0))?;
+        match reply.status {
+            200 => {
+                state.loaded = true;
+                self.accept(&mut state, &reply)
+            }
+            401 => Err(AuthError::SignedOut),
+            status => Err(AuthError::Network(format!("status {status}"))),
+        }
+    }
+
+    /// Signs in to the demo account. The website keeps nothing of it, so anyone may.
+    pub async fn start_demo(&self, device: &DeviceInfo) -> Result<(), AuthError> {
+        let mut state = self.state.lock().await;
+        let reply = self
+            .http
+            .post_json(
+                &self.token_url,
+                json!({
+                    "grantType": "demo",
+                    "platform": device.platform,
+                    "appVersion": device.app_version,
+                    "deviceId": device.device_id,
                 }),
             )
             .await
