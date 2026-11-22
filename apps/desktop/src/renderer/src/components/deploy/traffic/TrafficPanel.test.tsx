@@ -218,22 +218,29 @@ describe('TrafficPanel', () => {
     );
   });
 
-  it('takes a custom range of days, refusing one that ends in the future', async () => {
+  it('takes a custom range of days from the calendar, refusing one that runs backwards', async () => {
     const { user, bridge } = renderPanel();
     await screen.findByRole('group', { name: 'Unique visitors' });
 
     await user.click(screen.getByRole('radio', { name: 'Custom' }));
-    const first = screen.getByLabelText('First day');
-    const last = screen.getByLabelText('Last day');
-    await user.clear(last);
-    await user.type(last, '2999-01-01');
-    expect(screen.getByText('The last day is in the future.')).toBeInTheDocument();
+    const pickDay = async (field: string, label: RegExp) => {
+      await user.click(screen.getByRole('button', { name: field }));
+      await user.click(await screen.findByRole('button', { name: 'Choose month and year' }));
+      while (screen.getByRole('button', { name: 'Back to days' }).textContent !== '2026') {
+        await user.click(screen.getByRole('button', { name: 'Previous year' }));
+      }
+      await user.click(screen.getByRole('button', { name: 'Jan' }));
+      await user.click(screen.getByRole('button', { name: label }));
+    };
+
+    await pickDay('First day', /January 3, 2026/);
+    await pickDay('Last day', /January 1, 2026/);
+    expect(screen.getByText('The first day comes after the last.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
 
-    await user.clear(first);
-    await user.type(first, '2026-01-01');
-    await user.clear(last);
-    await user.type(last, '2026-01-03');
+    await pickDay('First day', /January 1, 2026/);
+    await pickDay('Last day', /January 3, 2026/);
+    expect(screen.getByRole('button', { name: 'Last day' })).toHaveTextContent('Jan 3, 2026');
     await user.click(screen.getByRole('button', { name: 'Show' }));
     await waitFor(() =>
       expect(bridge.$fn('deployTraffic.report')).toHaveBeenLastCalledWith(

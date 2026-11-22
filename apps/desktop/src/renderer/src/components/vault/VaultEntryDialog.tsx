@@ -10,6 +10,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Spinner, Trash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -545,11 +546,12 @@ export function VaultEntryDialog({
                   />
                   <div className="space-y-1.5">
                     <Label htmlFor={ids.expires}>Expires</Label>
-                    <Input
+                    <DatePicker
                       id={ids.expires}
-                      type="date"
                       value={draft.expiresOn}
-                      onChange={(e) => set('expiresOn', e.target.value)}
+                      onChange={(day) => set('expiresOn', day)}
+                      placeholder="Never"
+                      clearable
                     />
                   </div>
                 </div>

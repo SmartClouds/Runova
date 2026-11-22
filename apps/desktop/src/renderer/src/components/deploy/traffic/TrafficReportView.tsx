@@ -35,7 +35,7 @@ import {
   segmentClass,
 } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -150,6 +150,7 @@ export function TrafficReportView({
     timeZone,
   });
   const draftProblem = customRangeProblem(draft.from, draft.to, Date.now(), timeZone);
+  const todayInZone = dateInZone(Date.now(), timeZone);
 
   useEffect(() => {
     if (focusSecurity && report.data) {
@@ -227,22 +228,26 @@ export function TrafficReportView({
           >
             <label className="flex items-center gap-1.5">
               From
-              <Input
-                type="date"
+              <DatePicker
                 aria-label="First day"
                 value={draft.from}
-                onChange={(event) => setDraft((d) => ({ ...d, from: event.target.value }))}
-                className="h-7 w-36"
+                onChange={(from) => setDraft((d) => ({ ...d, from }))}
+                rangeWith={draft.to}
+                max={todayInZone}
+                today={todayInZone}
+                className="h-7 w-40 text-xs"
               />
             </label>
             <label className="flex items-center gap-1.5">
               to
-              <Input
-                type="date"
+              <DatePicker
                 aria-label="Last day"
                 value={draft.to}
-                onChange={(event) => setDraft((d) => ({ ...d, to: event.target.value }))}
-                className="h-7 w-36"
+                onChange={(to) => setDraft((d) => ({ ...d, to }))}
+                rangeWith={draft.from}
+                max={todayInZone}
+                today={todayInZone}
+                className="h-7 w-40 text-xs"
               />
             </label>
             <Button type="submit" size="sm" variant="soft" disabled={draftProblem !== null}>
