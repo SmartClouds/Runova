@@ -1,0 +1,62 @@
+# A Runova monitoring node in production (docs/epics/54-monitoring-nodes.md), deployed as an app on a
+# server Runova manages (Deploy, Apps). Its settings come from the project's Production environment
+# in Runova (a copy of .env.production next to this file), which the deploy writes to the app's .env
+# on the server. Nothing else is uploaded.
+#
+# Each server runs one node, and each node needs its own token: on runovahq.com,
+# /admin/monitoring-nodes, press Add node and paste the token into NODE_ENROLLMENT_TOKEN before the
+# first deploy. The token works once, within 24 hours.
+#
+# The node makes its own key, enrolls once with the token, and from then on only opens one outbound
+# connection to the gateway at nodes.runovahq.com. It publishes no port, so nothing goes behind the
+# proxy and no nginx site is needed. Its key, certificate and the results waiting to be sent live in
+# the node-data volume: keep it across deploys, or the node has to enroll again with a new token.
+#
+# The image is the one CD pushes to GitHub Container Registry on every release. "latest" is pulled
+# on every deploy, so redeploying the app picks up the newest release.
+name: runova-monitoring-node
+
+services:
+  node:
+    image: ${IMAGE_REGISTRY:-ghcr.io/smartclouds}/runova-website-monitoring-node:${IMAGE_TAG:-latest}
+    pull_policy: always
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      RUNOVA_API_URL: ${RUNOVA_API_URL:-https://runovahq.com}
+      # Only read until the node has enrolled; it is useless afterwards.
+      NODE_ENROLLMENT_TOKEN: ${NODE_ENROLLMENT_TOKEN:-}
+      NODE_CONCURRENCY: ${NODE_CONCURRENCY:-64}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-runova-monitoring-node}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    volumes:
+      - node-data:/data
+    # Locked down: a non-root user, a read-only file system, no Linux capabilities, no way to gain
+    # privileges, and no published port.
+    user: "1654:1654"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: ${NODE_MEMORY:-512m}
+    cpus: ${NODE_CPUS:-1.0}
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "dotnet", "Runova.Monitoring.Node.dll", "healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  node-data:

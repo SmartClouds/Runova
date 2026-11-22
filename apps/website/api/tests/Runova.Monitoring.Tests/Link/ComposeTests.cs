@@ -78,7 +78,7 @@ public sealed partial class ComposeTests
     public void Every_compose_file_is_found()
     {
         Assert.Equal(
-            ["compose.test.yaml", "compose.yaml", "docker-compose.production.yaml", "monitoring-node.compose.yaml"],
+            ["compose.test.yaml", "compose.yaml", "docker-compose.production.yaml", "monitoring-node.compose.yaml", "monitoring-node.docker-compose.production.yaml"],
             Directory.GetFiles(_folder, "*.yaml").Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
@@ -140,9 +140,10 @@ public sealed partial class ComposeTests
     public void The_node_and_the_gateway_run_locked_down()
     {
         var node = Services("monitoring-node.compose.yaml")["node"];
+        var productionNode = Services("monitoring-node.docker-compose.production.yaml")["node"];
         var gateway = Services("docker-compose.production.yaml")["monitoring-gateway"];
 
-        foreach (var service in new[] { node, gateway })
+        foreach (var service in new[] { node, productionNode, gateway })
         {
             Assert.Contains(service, line => line.Trim() == "read_only: true");
             Assert.Contains(service, line => line.Trim() == "cap_drop: [ALL]");

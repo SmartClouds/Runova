@@ -28,5 +28,6 @@
     <!-- The compose files, so a test can check no broker or database port is published (E54). -->
     <None Include="..\..\..\compose.yaml;..\..\..\compose.test.yaml;..\..\..\docker-compose.production.yaml;..\..\..\Caddyfile" LinkBase="Compose" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\monitoring-node\compose.yaml" Link="Compose\monitoring-node.compose.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\monitoring-node\docker-compose.production.yaml" Link="Compose\monitoring-node.docker-compose.production.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
