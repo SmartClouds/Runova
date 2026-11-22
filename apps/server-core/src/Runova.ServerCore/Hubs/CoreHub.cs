@@ -438,7 +438,25 @@ internal sealed partial class CoreHub(
             result,
             UserId,
             DeviceId,
-            PeerCredentials.UidOf(Context.GetHttpContext()),
+            PeerUid(),
             target,
             parameters));
+
+    private int? _peerUid;
+    private bool _peerUidRead;
+
+    /// <summary>
+    /// Read once per call and kept: a stream audits again after the connection has gone (a
+    /// cancelled command), and by then the HttpContext is disposed and can't be read.
+    /// </summary>
+    private int? PeerUid()
+    {
+        if (!_peerUidRead)
+        {
+            _peerUid = PeerCredentials.UidOf(Context.GetHttpContext());
+            _peerUidRead = true;
+        }
+
+        return _peerUid;
+    }
 }
