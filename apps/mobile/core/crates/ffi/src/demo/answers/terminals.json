@@ -1,0 +1,30 @@
+{
+  "terminals.list": {
+    "result": [
+      { "sessionId": "term-shop-dev", "title": "pnpm dev", "projectId": "northwind-shop", "cliId": null, "status": null, "createdAt": 1795392000000 },
+      { "sessionId": "term-shop-claude", "title": "Claude Code", "projectId": "northwind-shop", "cliId": "claude", "status": "working", "createdAt": 1795391400000 },
+      { "sessionId": "term-api-tests", "title": "dotnet watch test", "projectId": "northwind-api", "cliId": null, "status": null, "createdAt": 1795390800000 },
+      { "sessionId": "term-infra-codex", "title": "Codex", "projectId": "infra", "cliId": "codex", "status": "needs-input", "createdAt": 1795389000000 }
+    ]
+  },
+  "terminals.follow": {
+    "events": [
+      {
+        "snapshot": {
+          "data": "\u001b[32m$\u001b[0m pnpm test\r\n\r\n \u001b[34mRUN\u001b[0m  v3.2.0  northwind-shop\r\n\r\n \u001b[32mPASS\u001b[0m src/cart/total.test.ts (12 tests) 38ms\r\n \u001b[32mPASS\u001b[0m src/cart/discounts.test.ts (8 tests) 21ms\r\n \u001b[32mPASS\u001b[0m src/checkout/pay.test.ts (15 tests) 64ms\r\n\r\n Test Files  3 passed (3)\r\n      Tests  35 passed (35)\r\n\r\n\u001b[32m$\u001b[0m ",
+          "cols": 80,
+          "rows": 24
+        }
+      }
+    ],
+    "end": false
+  },
+  "terminals.write": { "result": null },
+  "terminals.processes": {
+    "result": [
+      { "name": "node", "cpuPercent": 12.5, "memBytes": 214958080 },
+      { "name": "esbuild", "cpuPercent": 3.1, "memBytes": 48234496 },
+      { "name": "pnpm", "cpuPercent": 0.4, "memBytes": 61865984 }
+    ]
+  }
+}

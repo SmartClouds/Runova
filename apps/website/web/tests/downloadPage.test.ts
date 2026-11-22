@@ -178,6 +178,10 @@ describe('download page with the API', () => {
     expect(requirements).toContain('iOS 16 or later');
   });
 
+  it('links the phone section to the demo', () => {
+    expect(section(page.html, 'phone')).toMatch(/<a[^>]* href="\/demo"[^>]*>\s*Try the demo/);
+  });
+
   it('puts the shown version and the downloads in the SoftwareApplication JSON-LD', () => {
     const app = softwareApplication(page.html);
     expect(app).toMatchObject({

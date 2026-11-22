@@ -201,6 +201,7 @@ fun appView(
     send: SendScreen = noSends,
     receive: ReceiveScreen = noReceives,
     accounts: AccountsView = noAccounts,
+    demo: Boolean = false,
 ) = AppView(
     auth,
     true,
@@ -249,4 +250,5 @@ fun appView(
     send,
     receive,
     accounts,
+    demo,
 )

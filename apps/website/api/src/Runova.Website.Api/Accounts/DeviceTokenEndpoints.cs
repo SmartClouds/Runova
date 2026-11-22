@@ -43,7 +43,8 @@ public sealed record DeviceAuthorizationDto(string RedirectUrl, DateTimeOffset E
 /// <c>sign-in</c> passkey challenge with the phone's platform, app version and device id;
 /// <c>id_token</c> (the phone, E117) the provider, the ID token Google's or Apple's own sheet
 /// gave the app, the nonce from <c>/sign-in-nonces</c> it carries and, for Apple, the
-/// authorization code and the name Apple gives only the first time.
+/// authorization code and the name Apple gives only the first time. <c>demo</c> (the phone) the
+/// phone's platform, app version and device id, for the demo account (<see cref="DemoTokens"/>).
 /// </summary>
 public sealed record DeviceTokenRequest(
     string? GrantType,
@@ -210,6 +211,8 @@ internal static partial class DeviceTokenEndpoints
         IConfiguration configuration,
         PasskeyCeremonies passkeys,
         IdTokenGrant idTokens,
+        DemoTokens demoTokens,
+        IOptionsSnapshot<DemoOptions> demo,
         TimeProvider time)
     {
         http.Response.Headers.CacheControl = HttpCaching.Private;
@@ -325,11 +328,38 @@ internal static partial class DeviceTokenEndpoints
                     return TypedResults.Ok(await StartSessionAsync(start, user, AccountSessionKinds.Mobile, PhoneDeviceName, platform, request.AppVersion, request.DeviceId));
                 }
 
+            case "demo":
+                {
+                    if (!demo.Value.Enabled)
+                    {
+                        return Refused();
+                    }
+
+                    if (request.Platform is null || !PhonePlatforms.ContainsKey(request.Platform))
+                    {
+                        return ApiProblems.Invalid("platform", "The demo grant is for the phone app: platform is android or ios.");
+                    }
+
+                    if (request.AppVersion is { Length: > 32 })
+                    {
+                        return ApiProblems.Invalid("appVersion", "appVersion is up to 32 characters.");
+                    }
+
+                    // Nothing is stored for the demo: no session, activity or email.
+                    return TypedResults.Ok(demoTokens.Issue());
+                }
+
             case "refresh_token":
                 {
                     if (string.IsNullOrEmpty(request.RefreshToken))
                     {
                         return ApiProblems.Invalid("refreshToken", "Send the refresh token.");
+                    }
+
+                    // A demo refresh token is read before any lookup, so the demo never touches the database.
+                    if (request.RefreshToken.StartsWith(DemoTokens.RefreshPrefix, StringComparison.Ordinal))
+                    {
+                        return demo.Value.Enabled && demoTokens.IsRefreshToken(request.RefreshToken) ? TypedResults.Ok(demoTokens.Issue()) : Refused();
                     }
 
                     var hash = Hash(request.RefreshToken);
@@ -379,7 +409,7 @@ internal static partial class DeviceTokenEndpoints
                 }
 
             default:
-                return ApiProblems.Invalid("grantType", "grantType is authorization_code, refresh_token, passkey or id_token.");
+                return ApiProblems.Invalid("grantType", "grantType is authorization_code, refresh_token, passkey, id_token or demo.");
         }
     }
 

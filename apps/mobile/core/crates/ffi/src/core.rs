@@ -1,6 +1,7 @@
 //! The object native code holds. It owns the small runtime everything runs on.
 
 use crate::backend::LiveBackend;
+use crate::demo::DemoSwitch;
 use crate::engine::{AppLifecycle, Dependencies, Engine, HubConnector};
 use crate::notifications::{FeedConnector, FeedEvent};
 use crate::secure::{AccountTokens, SecureStore};
@@ -128,6 +129,19 @@ impl RunovaCore {
         ));
         let backend = LiveBackend::new(config.site.clone(), session.clone())
             .map_err(|_| CoreError::StartFailed)?;
+        // The demo account gets the computer inside the app instead of the live hub, feed and links.
+        let switch = DemoSwitch::new(
+            Arc::new(LiveHub {
+                site: config.site.clone(),
+            }),
+            Arc::new(LiveFeed {
+                site: config.site.clone(),
+            }),
+            Arc::new(LiveTransports {
+                site: config.site.clone(),
+            }),
+            secure.clone(),
+        );
         let engine = {
             let _inside = runtime.enter();
             Engine::start(Dependencies {
@@ -139,13 +153,9 @@ impl RunovaCore {
                 listener,
                 session,
                 backend: Arc::new(backend),
-                feed: Arc::new(LiveFeed {
-                    site: config.site.clone(),
-                }),
-                hub: Arc::new(LiveHub {
-                    site: config.site.clone(),
-                }),
-                transports: Arc::new(LiveTransports { site: config.site }),
+                feed: switch.clone(),
+                hub: switch.clone(),
+                transports: switch,
                 refresh_every: REFRESH_EVERY,
             })
         };

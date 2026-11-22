@@ -1,0 +1,181 @@
+{
+  "autofix.list": {
+    "result": [
+      {
+        "id": "autofix-nightly-e2e",
+        "projectId": "northwind-shop",
+        "workflowId": 61840213,
+        "workflowName": "Nightly e2e",
+        "branch": "main",
+        "phase": "fixing",
+        "blocker": null,
+        "message": "checkout.spec.ts: paying with a gift card times out waiting for the new total.",
+        "maxAttempts": 3,
+        "runNumber": 77,
+        "agentSession": "term-shop-claude",
+        "attempts": [{ "n": 1, "runNumber": 77, "nextRunNumber": null, "commit": null, "outcome": "fixing" }]
+      },
+      {
+        "id": "autofix-ci",
+        "projectId": "northwind-shop",
+        "workflowId": 61840211,
+        "workflowName": "CI",
+        "branch": "main",
+        "phase": "succeeded",
+        "blocker": null,
+        "message": null,
+        "maxAttempts": 3,
+        "runNumber": 481,
+        "agentSession": null,
+        "attempts": [{ "n": 1, "runNumber": 481, "nextRunNumber": 482, "commit": "8d2f1ab", "outcome": "passed" }]
+      },
+      {
+        "id": "autofix-lighthouse",
+        "projectId": "northwind-shop",
+        "workflowId": 61840214,
+        "workflowName": "Lighthouse",
+        "branch": "main",
+        "phase": "attention",
+        "blocker": "dirty-tree",
+        "message": "There are changes on this computer that aren't committed. Commit or stash them, then try again.",
+        "maxAttempts": 3,
+        "runNumber": 57,
+        "agentSession": null,
+        "attempts": [{ "n": 1, "runNumber": 57, "nextRunNumber": null, "commit": null, "outcome": "no-change" }]
+      }
+    ]
+  },
+  "autofix.start": { "result": { "ok": true, "message": "Auto-fix is on." } },
+  "autofix.stop": { "result": { "ok": true, "message": "Stopped." } },
+  "autofix.retry": { "result": { "ok": true, "message": "Trying again." } },
+  "autofix.commitNow": { "result": { "ok": true, "message": "Committing the fix." } },
+  "autofix.dismiss": { "result": { "ok": true, "message": "Cleared." } },
+  "agents.fixRun": { "result": { "sessionId": "term-shop-claude", "title": "Claude Code, fixing the failed run" } },
+  "agents.runPrompt": { "result": { "sessionId": "term-shop-claude", "title": "Claude Code, from your phone" } },
+  "prompts.options": {
+    "result": {
+      "types": [
+        "Frontend",
+        "Backend",
+        "Full Stack",
+        "API",
+        "Database",
+        "Testing",
+        "Security",
+        "Performance",
+        "DevOps",
+        "Documentation",
+        "Refactoring",
+        "Bug Fix",
+        "Code Review",
+        "Custom"
+      ],
+      "targets": [
+        {
+          "id": "claude-code",
+          "name": "Claude Code CLI",
+          "models": [
+            { "value": "opus", "label": "Opus 5.5", "tier": "Deep", "efforts": ["low", "medium", "high"] },
+            { "value": "sonnet", "label": "Sonnet 5.5", "tier": "Balanced", "efforts": ["low", "medium", "high"] },
+            { "value": "haiku", "label": "Haiku", "tier": "Fast", "efforts": [] }
+          ]
+        },
+        {
+          "id": "codex-cli",
+          "name": "Codex CLI",
+          "models": [
+            { "value": "gpt-5-codex", "label": "GPT-5 Codex", "tier": "Balanced", "efforts": ["low", "medium", "high"] }
+          ]
+        },
+        {
+          "id": "gemini-cli",
+          "name": "Gemini CLI",
+          "models": [{ "value": "gemini-2.5-pro", "label": "Gemini 2.5 Pro", "tier": "Deep", "efforts": [] }]
+        }
+      ],
+      "defaultTarget": "Claude Code CLI"
+    }
+  },
+  "prompts.generate": {
+    "result": {
+      "ok": true,
+      "text": "You are working in northwind-shop, a React and TypeScript online shop.\n\nProblem: the gift card field at checkout accepts spaces and dashes (for example \"GIFT 1234-5678\"), but the API only takes the bare code, so a pasted card is turned down.\n\nWhat to do:\n1. Find where GiftCardInput sends the code (src/checkout/GiftCardInput.tsx and applyGiftCard.ts).\n2. Strip spaces and dashes and upper-case the code before it is sent. Keep what the shopper typed on screen.\n3. Add tests in GiftCardInput.test.tsx for a pasted code with spaces, with dashes, and in lower case.\n4. Run pnpm test and make sure everything passes.\n\nDon't change the API. Keep the change small and explain it in one or two sentences when you're done.",
+      "error": null,
+      "cancelled": false
+    }
+  },
+  "prompts.cancel": { "result": { "cancelled": true } },
+  "prompts.templates": {
+    "result": [
+      {
+        "id": "template-repro-fix",
+        "name": "Reproduce, then fix",
+        "promptType": "Bug Fix",
+        "targetAI": "Claude Code CLI",
+        "content": "First write a failing test that shows the bug. Then fix it with the smallest change you can, and run the whole test suite before you finish."
+      },
+      {
+        "id": "template-tests",
+        "name": "Cover it with tests",
+        "promptType": "Testing",
+        "targetAI": "Codex CLI",
+        "content": "Read the module and list the cases it should handle. Add a test for each one that isn't covered yet, including the edge cases. Don't change the code under test."
+      },
+      {
+        "id": "template-review",
+        "name": "Review before merge",
+        "promptType": "Code Review",
+        "targetAI": "Claude Code CLI",
+        "content": "Review the changes on this branch against main. Point out bugs, missing tests and anything that will be hard to change later. Be specific and keep it short."
+      }
+    ]
+  },
+  "prompts.saveTemplate": { "result": { "ok": true, "message": "Template saved." } },
+  "prompts.deleteTemplate": { "result": { "ok": true, "message": "Template deleted." } },
+  "prompts.history": {
+    "result": [
+      {
+        "id": "history-gift-field",
+        "rawInput": "the gift card field accepts spaces and dashes but the api doesn't",
+        "promptType": "Bug Fix",
+        "targetAI": "Claude Code CLI",
+        "content": "You are working in northwind-shop, a React and TypeScript online shop. Problem: the gift card field at checkout accepts spaces and dashes...",
+        "agoMs": 2400000
+      },
+      {
+        "id": "history-balance-endpoint",
+        "rawInput": "add an endpoint to check a gift card balance",
+        "promptType": "API",
+        "targetAI": "Codex CLI",
+        "content": "In northwind-api, add GET /gift-cards/{code}/balance. It returns the balance in cents and the currency, and 404 for a card that doesn't exist...",
+        "agoMs": 18000000
+      },
+      {
+        "id": "history-checkout-speed",
+        "rawInput": "checkout feels slow on phones",
+        "promptType": "Performance",
+        "targetAI": "Claude Code CLI",
+        "content": "Profile the checkout page on a mid-range phone. Find what blocks the first paint and what runs on every key press, then fix the worst two...",
+        "agoMs": 172800000
+      }
+    ]
+  },
+  "prompts.scheduled": {
+    "result": [
+      {
+        "id": "scheduled-e2e",
+        "summary": "Run the full e2e suite and fix anything flaky",
+        "targetAI": "Claude Code CLI",
+        "runsInMs": 5400000
+      },
+      {
+        "id": "scheduled-deps",
+        "summary": "Update dependencies and check that the build still passes",
+        "targetAI": "Codex CLI",
+        "runsInMs": 64800000
+      }
+    ]
+  },
+  "prompts.schedule": { "result": { "ok": true, "message": "Scheduled." } },
+  "prompts.cancelScheduled": { "result": { "ok": true, "message": "Cancelled." } }
+}

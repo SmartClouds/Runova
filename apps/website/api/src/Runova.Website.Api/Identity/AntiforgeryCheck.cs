@@ -77,9 +77,10 @@ internal static class AntiforgeryCheck
             return false;
         }
 
-        // A signed request and a desktop or agent bearer token carry no cookie a page could ride on.
+        // A signed request and a desktop, demo or agent bearer token carry no cookie a page could ride on.
         if (ApiClientPrincipal.IsApiClient(http.User)
             || DeviceTokenAuthenticationHandler.IsDevice(http.User)
+            || DemoAccount.IsDemo(http.User)
             || http.User.Identity?.AuthenticationType == Remote.RemoteAgentAuthenticationHandler.SchemeName)
         {
             return false;

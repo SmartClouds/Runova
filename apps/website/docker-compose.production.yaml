@@ -69,6 +69,8 @@ services:
       Admin__Email: ${ADMIN_EMAIL:-}
       Admin__Password: ${ADMIN_PASSWORD:-}
       Admin__DisplayName: ${ADMIN_NAME:-}
+      # The phone app's demo account for app store reviewers: mock data, nothing stored. false turns it off.
+      Demo__Enabled: ${DEMO_ENABLED:-true}
       # The RunovaHQ Telegram bot for dependency alerts (E51). Without a token Telegram is off.
       Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
       Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}

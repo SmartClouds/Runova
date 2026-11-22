@@ -4,7 +4,8 @@ use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use runova_api::auth::{
-    AuthError, DeviceInfo, QrPoll, Session, StoredTokens, TokenStore, read_qr_code,
+    AuthError, DeviceInfo, QrPoll, Session, StoredTokens, TokenStore, is_demo_code, is_demo_token,
+    read_qr_code,
 };
 use runova_api::http::{HttpError, HttpReply, HttpTransport};
 use serde_json::{Value, json};
@@ -696,4 +697,94 @@ async fn a_sibling_keeps_time_with_the_session_s_clock() {
 
     assert_eq!(sibling.access_token().await.unwrap(), "rd1.access-5");
     assert_eq!(other.load().unwrap().refresh_token, "rr1.refresh-5");
+}
+
+const SITE: &str = "https://runovahq.com";
+
+#[test]
+fn the_demo_code_is_this_site_s_demo_page_and_nothing_else() {
+    assert!(is_demo_code("https://runovahq.com/demo", SITE));
+    assert!(is_demo_code(
+        "  https://runovahq.com/demo/
+",
+        SITE
+    ));
+    assert!(is_demo_code(
+        "https://runovahq.com/demo",
+        "https://runovahq.com/"
+    ));
+    assert!(!is_demo_code("https://staging.runovahq.com/demo", SITE));
+    assert!(!is_demo_code("http://runovahq.com/demo", SITE));
+    assert!(!is_demo_code("https://runovahq.com/demo/x", SITE));
+    assert!(!is_demo_code("https://runovahq.com/demos", SITE));
+    assert!(!is_demo_code("https://runovahq.com/demo?x=1", SITE));
+    assert!(!is_demo_code(&format!("rq1.{QR_CODE}"), SITE));
+    assert!(!is_demo_code("", SITE));
+}
+
+#[test]
+fn a_demo_token_is_told_by_its_prefix() {
+    assert!(is_demo_token("rdm1.abc"));
+    assert!(!is_demo_token("rd1.abc"));
+    assert!(!is_demo_token("rrm1.abc"));
+    assert!(!is_demo_token(""));
+}
+
+fn demo_tokens_body(number: u32) -> Value {
+    json!({
+        "accessToken": format!("rdm1.access-{number}"),
+        "refreshToken": format!("rrm1.refresh-{number}"),
+        "expiresIn": 900,
+        "sessionId": -1,
+        "account": {"id": -1, "email": "demo@runovahq.com"},
+    })
+}
+
+#[tokio::test]
+async fn the_demo_sign_in_posts_the_demo_grant_with_the_phone_s_details() {
+    let world = world();
+    world.http.answer(200, demo_tokens_body(1));
+
+    world.session.start_demo(&phone()).await.expect("signed in");
+
+    let (url, body) = world.http.calls().remove(0);
+    assert_eq!(url, "https://runovahq.com/api/v1/device-tokens");
+    assert_eq!(body["grantType"], "demo");
+    assert_eq!(body["platform"], "android");
+    assert_eq!(body["appVersion"], "3.4.0");
+    assert_eq!(body["deviceId"], "4b2c0c0e-1111-4222-8333-944444444444");
+    assert_eq!(world.session.access_token().await.unwrap(), "rdm1.access-1");
+    assert_eq!(world.session.session_id().await, Some(-1));
+}
+
+#[tokio::test]
+async fn a_refused_demo_is_signed_out_and_saves_nothing() {
+    let world = world();
+    world.http.answer(401, json!({}));
+    world.http.answer(503, json!({}));
+
+    assert_eq!(
+        world.session.start_demo(&phone()).await,
+        Err(AuthError::SignedOut)
+    );
+    assert_eq!(
+        world.session.start_demo(&phone()).await,
+        Err(AuthError::Network("status 503".into()))
+    );
+    assert!(world.store.load().is_none());
+}
+
+#[tokio::test]
+async fn the_demo_refreshes_like_any_session() {
+    let world = world();
+    world.http.answer(200, demo_tokens_body(1));
+    world.session.start_demo(&phone()).await.unwrap();
+    world.now.fetch_add(860, Ordering::SeqCst);
+    world.http.answer(200, demo_tokens_body(2));
+
+    assert_eq!(world.session.access_token().await.unwrap(), "rdm1.access-2");
+
+    let (_, body) = world.http.calls().remove(1);
+    assert_eq!(body["grantType"], "refresh_token");
+    assert_eq!(body["refreshToken"], "rrm1.refresh-1");
 }

@@ -135,8 +135,9 @@ internal static class IdentitySetup
 
     /// <summary>
     /// Authentication, the 401 for a failed signature, the per-client rate limit, the antiforgery
-    /// check (which needs the user), authorization, and then <c>Idempotency-Key</c>, which keeps
-    /// answers only for a caller that was allowed in.
+    /// check (which needs the user), authorization, the demo account (which answers everything
+    /// itself, so it never reaches an endpoint or the database), and then <c>Idempotency-Key</c>,
+    /// which keeps answers only for a caller that was allowed in.
     /// </summary>
     public static WebApplication UseWebsiteIdentity(this WebApplication app)
     {
@@ -145,6 +146,7 @@ internal static class IdentitySetup
         app.UseRateLimiter();
         app.UseWebsiteAntiforgery();
         app.UseAuthorization();
+        app.UseDemoAccount();
         app.UseIdempotencyKeys();
         return app;
     }

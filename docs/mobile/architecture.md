@@ -105,6 +105,18 @@ an index under `accounts` and each account's tokens under `tokens:{id}`; a sign-
 `tokens:pending` until the website says whose it is. Every account registers the push token with
 its own tag, so pushes say whose they are and a tap switches to the right account.
 
+## Demo mode
+
+The demo (E119) lets store reviewers and anyone curious try every screen without an account or a
+computer. The QR code on the website's `/demo` page holds that page's own address, and the app's
+scanner treats `{site}/demo` as the demo code. The website answers the `demo` grant with stateless
+`rdm1.` tokens and serves the account screens from mock data, keeping nothing. In the core,
+`demo::DemoSwitch` stands between the engine and the live hub, feed and links: while the account in
+use has a demo token, it hands out an in-app hub and memory links that reach a pretend computer
+(`ffi/src/demo/`). That computer runs the real handshake with a fixed key, answers management calls
+from `demo/answers/*.json`, shows `demo/screen.jpg` on the remote screen and throws away files sent
+to it. A test fails when the app calls a method the demo does not answer.
+
 ## Tests
 
 Work is test-first: every epic starts with failing tests.

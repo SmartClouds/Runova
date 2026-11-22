@@ -3,6 +3,7 @@
 //! messages and checks as the desktop's `FileTransferManager` and send batches, so a phone and a
 //! computer each take either part.
 
+pub mod discard;
 pub mod receiver;
 pub mod sender;
 pub mod source;

@@ -290,7 +290,8 @@ func fixtureView(
     recoveryPhrases: RecoveryPhrasesScreen = noPhrases,
     send: SendScreen = noSends,
     receive: ReceiveScreen = noReceives,
-    accounts: AccountsView = noAccounts
+    accounts: AccountsView = noAccounts,
+    demo: Bool = false
 ) -> AppView {
     AppView(
         auth: auth, hubConnected: true, systems: systems, systemsLoading: false, connection: connection,
@@ -302,7 +303,7 @@ func fixtureView(
         busy: false, notice: notice, confirm: confirm, error: error, showIntro: showIntro, appVersion: appVersion, studio: studio, gitTools: gitTools, autoFix: autoFix, prompts: prompts, studioTools: studioTools, gitMore: gitMore, encryption: encryption, qrSignIn: qrSignIn,
         passkeySignIn: passkeySignIn, providerSignIn: providerSignIn, continueInBrowser: continueInBrowser,
         lock: lock, passcode: passcode, recoveryPhrases: recoveryPhrases, send: send, receive: receive,
-        accounts: accounts)
+        accounts: accounts, demo: demo)
 }
 
 /// Nothing sent to the phone, and it takes files once it knows where (E114).

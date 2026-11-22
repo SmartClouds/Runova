@@ -12,7 +12,7 @@ fn local() -> Value {
 
 fn cloud() -> Value {
     json!({"items": [{"id": "m1", "name": "Shop", "paused": false, "canWrite": true,
-        "status": {"verdict": "down", "latencyMs": null, "uptime24h": 90.0, "problem": "Timed out"}}]})
+        "status": {"verdict": "down", "latencyMs": null, "uptime24h": 0.9, "problem": "Timed out"}}]})
 }
 
 const CLOUD: &str = "/api/v1/cloud-monitors";
@@ -41,6 +41,8 @@ async fn local_and_cloud_monitors_are_both_listed_and_labeled() {
     assert_eq!(there.source, MonitorSource::Cloud);
     assert_eq!(there.state, MonitorState::Down);
     assert_eq!(there.detail.as_deref(), Some("Timed out"));
+    // The website gives cloud uptime as a fraction of the day's checks.
+    assert_eq!(there.uptime_label.as_deref(), Some("90.0%"));
 }
 
 #[tokio::test(flavor = "multi_thread")]

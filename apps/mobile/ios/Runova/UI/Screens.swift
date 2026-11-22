@@ -107,7 +107,11 @@ struct AppRoot: View {
                 } else {
                     SignInFlow(view: view, intents: intents, adding: false)
                 }
-            case .signedIn: signedIn
+            case .signedIn:
+                VStack(spacing: 0) {
+                    if view.demo { DemoBanner() }
+                    signedIn.frame(maxHeight: .infinity)
+                }
             }
             if let banner = view.notifications.banner {
                 VStack {
@@ -511,3 +515,18 @@ struct ConnectionScreen: View {
     }
 }
 
+/// Over every screen of the demo account (E119), so no one mistakes it for their own computers.
+struct DemoBanner: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        RunovaText(
+            "Demo. Nothing you do is saved.", style: RunovaType.labelStrong, color: palette.warningForeground,
+            alignment: .center
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(palette.warning)
+    }
+}

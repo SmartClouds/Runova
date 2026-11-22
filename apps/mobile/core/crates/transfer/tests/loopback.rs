@@ -6,6 +6,7 @@ use runova_link::secure::{ControllerConfig, HostConfig, LinkEvent, SecureLink};
 use runova_link::testing::memory_pair;
 use runova_protocol::file::{FileMessage, decode_chunk, transfer_key};
 use runova_protocol::send::{AnswerReason, SendFile, SendMessage, parse_send_message};
+use runova_transfer::discard::discard_batch;
 use runova_transfer::receiver::{
     ReceiveOutcome, ReceiveState, Waited, receive_batch, receive_batch_with, wait_for_answer,
 };
@@ -884,4 +885,69 @@ async fn no_answer_in_time_is_said_so() {
 
     assert!(matches!(waited, Waited::Timeout));
     pinging.abort();
+}
+
+#[tokio::test]
+async fn a_batch_sent_to_be_thrown_away_finishes_as_if_it_were_saved() {
+    let picked = Folder::new("discard");
+    let report = picked.write("report.pdf", &bytes(150_000, 1));
+    let notes = picked.write("Holiday/notes.txt", b"beach day");
+    let empty = picked.write("empty.txt", b"");
+    let (plan, opener) = plan(&[
+        ("report.pdf", report),
+        ("Holiday/notes.txt", notes),
+        ("empty.txt", empty),
+    ]);
+    let (mut phone, mut desk) = linked().await;
+    let receiver = tokio::spawn(async move {
+        let offer = loop {
+            if let LinkEvent::Text(text) = timeout(WAIT, desk.next()).await.unwrap().unwrap()
+                && let Some(offer @ SendMessage::SendOffer { .. }) = parse_send_message(&text)
+            {
+                break offer;
+            }
+        };
+        discard_batch(&mut desk, &offer, never()).await
+    });
+
+    let mut finished = HashSet::new();
+    let outcome = send_batch(&mut phone, &plan, &opener, &mut finished, &|_| {}, never()).await;
+
+    assert_eq!(outcome, SendOutcome::Done { failed: 0 });
+    assert_eq!(finished.len(), 3);
+    assert_eq!(
+        timeout(WAIT, receiver).await.unwrap().unwrap(),
+        ReceiveOutcome::Done
+    );
+}
+
+#[tokio::test]
+async fn a_batch_to_throw_away_that_the_sender_cancels_ends_cancelled() {
+    let (mut phone, mut desk) = linked().await;
+    let offer = SendMessage::SendOffer {
+        batch_id: "batch-9".into(),
+        files: vec![SendFile {
+            transfer_id: "file-0".into(),
+            path: "a.txt".into(),
+            size: 3,
+        }],
+        note: None,
+        v: 1,
+    };
+    let receiver = tokio::spawn(async move { discard_batch(&mut desk, &offer, never()).await });
+    hear_text(&mut phone).await;
+
+    say(
+        &mut phone,
+        &SendMessage::SendCancel {
+            batch_id: "batch-9".into(),
+            reason: None,
+        },
+    )
+    .await;
+
+    assert_eq!(
+        timeout(WAIT, receiver).await.unwrap().unwrap(),
+        ReceiveOutcome::Cancelled
+    );
 }

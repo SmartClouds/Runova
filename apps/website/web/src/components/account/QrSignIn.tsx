@@ -1,8 +1,8 @@
 import { QrCode as QrIcon } from 'lucide-react';
-import { create } from 'qrcode';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { apiRequest, type Problem } from '@/lib/account/api';
+import { qrPath, qrViewBox } from '@/lib/qr';
 import { Card, CardHeader, Notice } from './ui';
 
 type Status = 'waiting' | 'scanned' | 'approved' | 'declined' | 'expired';
@@ -21,21 +21,12 @@ const FINISHED: Status[] = ['approved', 'declined', 'expired'];
 
 /** Drawn as one SVG path, so it needs no inline HTML and no image the site's CSP would refuse. */
 function QrImage({ text }: { text: string }) {
-  const { size, path } = useMemo(() => {
-    const { modules } = create(text, { errorCorrectionLevel: 'M' });
-    let squares = '';
-    for (let y = 0; y < modules.size; y++) {
-      for (let x = 0; x < modules.size; x++) {
-        if (modules.get(y, x)) squares += `M${x} ${y}h1v1h-1z`;
-      }
-    }
-    return { size: modules.size, path: squares };
-  }, [text]);
+  const { size, path } = useMemo(() => qrPath(text), [text]);
   return (
     <svg
       role="img"
       aria-label="QR code to sign in"
-      viewBox={`-2 -2 ${size + 4} ${size + 4}`}
+      viewBox={qrViewBox(size, 2)}
       className="size-44 shrink-0 rounded-inner bg-white"
     >
       <path d={path} fill="#000" />

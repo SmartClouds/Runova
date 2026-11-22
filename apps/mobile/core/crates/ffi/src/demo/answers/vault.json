@@ -1,0 +1,139 @@
+{
+  "vault.status": { "result": { "state": "unlocked", "retryAfterMs": 0 } },
+  "vault.unlock": { "result": { "ok": true } },
+  "vault.lock": { "result": null },
+  "vault.list": {
+    "result": [
+      {
+        "id": "demo-github",
+        "type": "login",
+        "title": "GitHub",
+        "username": "northwind-dev",
+        "service": "",
+        "host": "github.com",
+        "favorite": true,
+        "hasPassword": true,
+        "hasTotp": true,
+        "hasSecret": false,
+        "hasNotes": false,
+        "fields": [{ "id": "demo-github-codes", "label": "Recovery codes", "concealed": true, "hasValue": true }]
+      },
+      {
+        "id": "demo-stripe",
+        "type": "apiKey",
+        "title": "Stripe (test mode)",
+        "username": "",
+        "service": "Stripe",
+        "host": "",
+        "favorite": true,
+        "hasPassword": false,
+        "hasTotp": false,
+        "hasSecret": true,
+        "hasNotes": false,
+        "fields": [{ "id": "demo-stripe-webhook", "label": "Webhook signing secret", "concealed": true, "hasValue": true }]
+      },
+      {
+        "id": "demo-db-staging",
+        "type": "login",
+        "title": "Shop database (staging)",
+        "username": "shop_app",
+        "service": "",
+        "host": "db.staging.northwind.example",
+        "favorite": false,
+        "hasPassword": true,
+        "hasTotp": false,
+        "hasSecret": false,
+        "hasNotes": true,
+        "fields": [{ "id": "demo-db-port", "label": "Port", "concealed": false, "hasValue": true }]
+      },
+      {
+        "id": "demo-cloudflare",
+        "type": "apiKey",
+        "title": "Cloudflare API token",
+        "username": "",
+        "service": "Cloudflare",
+        "host": "",
+        "favorite": false,
+        "hasPassword": false,
+        "hasTotp": false,
+        "hasSecret": true,
+        "hasNotes": false,
+        "fields": []
+      },
+      {
+        "id": "demo-smtp",
+        "type": "login",
+        "title": "Order emails (SMTP)",
+        "username": "orders@northwind.example",
+        "service": "",
+        "host": "smtp.northwind.example",
+        "favorite": false,
+        "hasPassword": true,
+        "hasTotp": false,
+        "hasSecret": false,
+        "hasNotes": false,
+        "fields": []
+      },
+      {
+        "id": "demo-figma",
+        "type": "login",
+        "title": "Figma",
+        "username": "design@northwind.example",
+        "service": "",
+        "host": "figma.com",
+        "favorite": false,
+        "hasPassword": true,
+        "hasTotp": true,
+        "hasSecret": false,
+        "hasNotes": false,
+        "fields": []
+      },
+      {
+        "id": "demo-deploy-ssh",
+        "type": "custom",
+        "title": "Deploy server SSH",
+        "username": "deploy",
+        "service": "",
+        "host": "deploy.northwind.example",
+        "favorite": false,
+        "hasPassword": false,
+        "hasTotp": false,
+        "hasSecret": false,
+        "hasNotes": true,
+        "fields": [{ "id": "demo-ssh-passphrase", "label": "Key passphrase", "concealed": true, "hasValue": true }]
+      },
+      {
+        "id": "demo-wifi",
+        "type": "note",
+        "title": "Office Wi-Fi",
+        "username": "",
+        "service": "",
+        "host": "",
+        "favorite": false,
+        "hasPassword": false,
+        "hasTotp": false,
+        "hasSecret": false,
+        "hasNotes": true,
+        "fields": []
+      }
+    ]
+  },
+  "vault.reveal": { "result": { "value": "demo-password-not-real" } },
+  "vault.save": {
+    "result": {
+      "id": "demo-github",
+      "type": "login",
+      "title": "GitHub",
+      "username": "northwind-dev",
+      "service": "",
+      "host": "github.com",
+      "favorite": true,
+      "hasPassword": true,
+      "hasTotp": true,
+      "hasSecret": false,
+      "hasNotes": false,
+      "fields": []
+    }
+  },
+  "vault.remove": { "result": 1 }
+}

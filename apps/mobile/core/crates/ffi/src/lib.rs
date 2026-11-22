@@ -13,6 +13,7 @@ pub mod backend;
 pub mod cloudflare;
 pub(crate) mod cloudflare_view;
 pub mod core;
+pub mod demo;
 pub mod deploy;
 pub mod encryption;
 pub mod engine;

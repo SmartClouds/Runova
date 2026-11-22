@@ -1,0 +1,286 @@
+{
+  "studio.list": {
+    "result": [
+      {
+        "id": "gift-cards-launch",
+        "title": "Gift cards launch",
+        "pinned": true,
+        "missing": false,
+        "openedAgoMs": 1500000,
+        "render": {
+          "id": "render-gift-cards-2",
+          "fileName": "Gift cards launch.mp4",
+          "status": "done",
+          "phase": null,
+          "done": 0,
+          "total": 0,
+          "durationSeconds": 30.0,
+          "finished": true,
+          "error": null
+        }
+      },
+      {
+        "id": "spring-sale-teaser",
+        "title": "Spring sale teaser",
+        "pinned": false,
+        "missing": false,
+        "openedAgoMs": 10800000,
+        "render": {
+          "id": "render-spring-1",
+          "fileName": "Spring sale teaser.mp4",
+          "status": "running",
+          "phase": "encode",
+          "done": 62,
+          "total": 100,
+          "durationSeconds": 15.0,
+          "finished": false,
+          "error": null
+        }
+      },
+      {
+        "id": "checkout-walkthrough",
+        "title": "How checkout works",
+        "pinned": false,
+        "missing": false,
+        "openedAgoMs": 172800000,
+        "render": null
+      },
+      {
+        "id": "meet-the-team",
+        "title": "Meet the Northwind team",
+        "pinned": false,
+        "missing": false,
+        "openedAgoMs": 777600000,
+        "render": {
+          "id": "render-team-1",
+          "fileName": "Meet the Northwind team.mp4",
+          "status": "failed",
+          "phase": null,
+          "done": 0,
+          "total": 0,
+          "durationSeconds": 45.0,
+          "finished": false,
+          "error": "The disk was full, so the render stopped."
+        }
+      }
+    ]
+  },
+  "studio.video": {
+    "by": "videoId",
+    "cases": {
+      "spring-sale-teaser": { "id": "spring-sale-teaser", "title": "Spring sale teaser", "aspect": "9:16", "canUndo": false, "undoLabel": null },
+      "checkout-walkthrough": { "id": "checkout-walkthrough", "title": "How checkout works", "canUndo": false, "undoLabel": null },
+      "meet-the-team": { "id": "meet-the-team", "title": "Meet the Northwind team", "canUndo": false, "undoLabel": null }
+    },
+    "result": {
+      "id": "gift-cards-launch",
+      "title": "Gift cards launch",
+      "aspect": "16:9",
+      "quality": "standard",
+      "resolution": "1080p",
+      "fps": 30,
+      "canUndo": true,
+      "undoLabel": "Edit scene 3",
+      "language": "en",
+      "scenes": [
+        {
+          "id": "scene-hook",
+          "title": "The last-minute present",
+          "narration": "Forgot a birthday? It happens to all of us.",
+          "flicks": 2822400000,
+          "thumbnail": "thumb-hook",
+          "voiced": true
+        },
+        {
+          "id": "scene-gift",
+          "title": "A gift card in seconds",
+          "narration": "With Northwind gift cards, you pick an amount, add a note, and it lands in their inbox right away.",
+          "flicks": 5644800000,
+          "thumbnail": "thumb-gift",
+          "voiced": true
+        },
+        {
+          "id": "scene-checkout",
+          "title": "Paying with a card",
+          "narration": "At checkout they type the code, and the card's balance comes straight off the total.",
+          "flicks": 4233600000,
+          "thumbnail": "thumb-checkout",
+          "voiced": true
+        },
+        {
+          "id": "scene-balance",
+          "title": "What's left",
+          "narration": "Anything they don't spend stays on the card for next time.",
+          "flicks": 4939200000,
+          "thumbnail": "thumb-balance",
+          "voiced": false
+        },
+        {
+          "id": "scene-end",
+          "title": "Out now",
+          "narration": "Northwind gift cards. Out now.",
+          "flicks": 3528000000,
+          "thumbnail": "thumb-end",
+          "voiced": false
+        }
+      ],
+      "run": null,
+      "failedRun": null,
+      "proposal": null,
+      "renders": [
+        {
+          "id": "render-gift-cards-2",
+          "fileName": "Gift cards launch.mp4",
+          "status": "done",
+          "phase": null,
+          "done": 0,
+          "total": 0,
+          "durationSeconds": 30.0,
+          "finished": true,
+          "error": null
+        },
+        {
+          "id": "render-gift-cards-1",
+          "fileName": "Gift cards launch (draft).mp4",
+          "status": "done",
+          "phase": null,
+          "done": 0,
+          "total": 0,
+          "durationSeconds": 30.0,
+          "finished": true,
+          "error": null
+        }
+      ],
+      "animatingAll": false,
+      "stopped": null,
+      "narration": null
+    }
+  },
+  "studio.thumbnail": {
+    "result": {
+      "png": "iVBORw0KGgoAAAANSUhEUgAAAGAAAAA2CAIAAAC3LQuFAAAC1UlEQVR42u3VeTsTcBwAcG+mSG6SI7mTHDvMNjOzw83ScszMbJjbI3I9khi5j2atWcx9zDUauY+EnEkllTz69SZ6Hv9838Lnn4/ONdbRdeaBHmNfn7FnQN81CtwxCdw2o21ZBHy0DNi0om7YUNdt/dfsKKv2lGVHvyVn8qIrecGNNO9OmvMgznr5ajG+73CEabyPhuAzRcRPknETFNwYFaumYUfpmBGm91CQ92CI10CYZ3+4Z1+kRw/bQxX9oJvj3hXjroy738l1U/Dc3vDvyQWuMqFrh8hFmurySuzcluHUmuXUkuPYnOfQlO/QUGBf/9S+rvjuy1K7mjI7Sfmd6grbqkrbF1U2zyXWFbXWz+qsyhusyppul7ZYlrRZFrffKpJaFMosCuTmTxTm+UqzvC7TXJVpTq9Jdr9x1qBxxrBR+oihWG2YNm6QMmkg0twUzugna/UFczf483qJi3q8Zd2EVV2uDgABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAABEAAB0JUCeeUi7xyEzUb4bETIQsRMRM5ElAxETUe0dEQXI6YYsdJQcCoKTUXhKShShNiiv9HCS47wIib5T5zgnCv4zUv6mcg/S+L/SE48FfG+p/K+ihNOMhK+ZHGPc+KP8uIP8+MOCmL3C2P3imI+lcTslD3eLudsVXA2Kx99qIrekESv1z5cq2OvNLCXG6OWmqMWWyPn2yPeSyPmZOGz8jCtImxGGTrdFapRhUz1Bk/0BY8PBI0NsdQjrFE1c3icMTTJGNTQB2bofdrA3jlazzxNtRDQvUR9u0JVrvl3bvgrNinyLb/XO36yXXLHPkl6SGr/TGw79m098W35Rmg6JTSe+TT8wtef4+sucLWX2BqElSBMNcJUARAAARAAXSkQLAbNAxAAARAAARAAARAAARAAARAAARAAARAAARAAAdD/AvoHuINXlTnH5S0AAAAASUVORK5CYII="
+    }
+  },
+  "studio.leave": { "result": { "ok": true, "message": "" } },
+  "studio.options": {
+    "result": {
+      "languages": [
+        { "code": "en", "name": "English", "native": "English" },
+        { "code": "de", "name": "German", "native": "Deutsch" },
+        { "code": "fr", "name": "French", "native": "Français" },
+        { "code": "es", "name": "Spanish", "native": "Español" },
+        { "code": "fa", "name": "Persian", "native": "فارسی" }
+      ],
+      "styles": [
+        {
+          "id": "clean",
+          "name": "Clean",
+          "summary": "Lots of white space, one accent colour and calm type.",
+          "colors": ["#ffffff", "#111827", "#2563eb"]
+        },
+        {
+          "id": "bold",
+          "name": "Bold",
+          "summary": "Big type, strong colours and quick cuts.",
+          "colors": ["#111827", "#facc15", "#db2777"]
+        },
+        {
+          "id": "paper",
+          "name": "Paper",
+          "summary": "Soft, hand-drawn shapes on a warm paper background.",
+          "colors": ["#fdf6e3", "#7c4a1e", "#16a34a"]
+        }
+      ]
+    }
+  },
+  "studio.create": { "result": { "videoId": "gift-cards-launch" } },
+  "studio.ask": { "result": { "ok": true, "message": "Asked the AI. Its changes show here when they're ready." } },
+  "studio.applyProposal": { "result": { "ok": true, "message": "Applied." } },
+  "studio.discardProposal": { "result": { "ok": true, "message": "Discarded." } },
+  "studio.undo": { "result": { "ok": true, "message": "Undone." } },
+  "studio.animate": { "result": { "ok": true, "message": "Animating the scene." } },
+  "studio.animateAll": { "result": { "ok": true, "message": "Animating every scene." } },
+  "studio.cancelRun": { "result": { "ok": true, "message": "Stopped." } },
+  "studio.renderEstimate": {
+    "result": {
+      "ok": true,
+      "problems": [],
+      "width": 1920,
+      "height": 1080,
+      "durationSeconds": 30.0,
+      "outputBytes": 31457280,
+      "seconds": 95.0,
+      "warnings": []
+    }
+  },
+  "studio.render": { "result": { "ok": true, "message": "Rendering on this computer." } },
+  "studio.cancelRender": { "result": { "ok": true, "message": "Render stopped." } },
+  "studio.voiceEngines": {
+    "result": [
+      { "id": "openai", "label": "OpenAI", "problem": null, "locked": false, "local": false, "nonCommercial": false },
+      {
+        "id": "elevenlabs",
+        "label": "ElevenLabs",
+        "problem": "Add an ElevenLabs key to the vault on this computer first.",
+        "locked": true,
+        "local": false,
+        "nonCommercial": false
+      },
+      { "id": "piper", "label": "Piper (on this computer)", "problem": null, "locked": false, "local": true, "nonCommercial": false }
+    ]
+  },
+  "studio.voices": {
+    "result": [
+      { "id": "alloy", "label": "Alloy", "ref": "openai:alloy", "nonCommercial": false },
+      { "id": "nova", "label": "Nova", "ref": "openai:nova", "nonCommercial": false },
+      { "id": "onyx", "label": "Onyx", "ref": "openai:onyx", "nonCommercial": false },
+      { "id": "shimmer", "label": "Shimmer", "ref": "openai:shimmer", "nonCommercial": false }
+    ]
+  },
+  "studio.voiceEstimate": { "result": { "chars": 89, "usd": 0.04, "costKnown": true } },
+  "studio.speak": { "result": { "ok": true, "message": "Speaking the scenes." } },
+  "studio.cancelSpeak": { "result": { "ok": true, "message": "Stopped the voice." } },
+  "studio.captionScene": { "result": { "ok": true, "message": "Captions added." } },
+  "studio.media": {
+    "result": [
+      { "hash": "music-bright-morning", "name": "Bright Morning", "kind": "audio", "duration": 67032000000, "preparing": false, "problem": null },
+      { "hash": "music-city-walk", "name": "City Walk", "kind": "audio", "duration": 90316800000, "preparing": false, "problem": null },
+      { "hash": "music-soft-keys", "name": "Soft Keys", "kind": "audio", "duration": 52214400000, "preparing": false, "problem": null }
+    ]
+  },
+  "studio.timeline": {
+    "result": {
+      "seq": 12,
+      "lengthFlicks": 21168000000,
+      "truncated": false,
+      "tracks": [
+        { "id": "track-scenes", "kind": "video", "name": "Scenes", "muted": false, "solo": false, "locked": false, "volume": 1 },
+        { "id": "track-voice", "kind": "voice", "name": "Voice", "muted": false, "solo": false, "locked": false, "volume": 1 },
+        { "id": "track-music", "kind": "music", "name": "Music", "muted": false, "solo": false, "locked": false, "volume": 1 }
+      ],
+      "clips": [
+        { "id": "clip-hook", "trackId": "track-scenes", "start": 0, "duration": 2822400000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "The last-minute present" },
+        { "id": "clip-gift", "trackId": "track-scenes", "start": 2822400000, "duration": 5644800000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "A gift card in seconds" },
+        { "id": "clip-checkout", "trackId": "track-scenes", "start": 8467200000, "duration": 4233600000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Paying with a card" },
+        { "id": "clip-balance", "trackId": "track-scenes", "start": 12700800000, "duration": 4939200000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "What's left" },
+        { "id": "clip-end", "trackId": "track-scenes", "start": 17640000000, "duration": 3528000000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Out now" },
+        { "id": "clip-voice-hook", "trackId": "track-voice", "start": 352800000, "duration": 2116800000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 1" },
+        { "id": "clip-voice-gift", "trackId": "track-voice", "start": 3175200000, "duration": 4939200000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 2" },
+        { "id": "clip-voice-checkout", "trackId": "track-voice", "start": 8820000000, "duration": 3528000000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 3" },
+        { "id": "clip-music", "trackId": "track-music", "start": 0, "duration": 21168000000, "gain": 0.35, "fadeIn": 1411200000, "fadeOut": 2116800000, "label": "Bright Morning" }
+      ]
+    }
+  },
+  "studio.clipEdit": { "result": { "ok": true, "message": "Timeline updated." } },
+  "studio.addMusic": { "result": { "ok": true, "message": "Music added." } },
+  "studio.trackSet": { "result": { "ok": true, "message": "Track updated." } },
+  "studio.downloadOpen": {
+    "result": { "downloadId": "download-gift-cards", "fileName": "Gift cards launch (demo).txt", "bytes": 155, "nonCommercial": [] }
+  },
+  "studio.downloadRead": {
+    "bytes": [
+      "This is the Runova demo, so there is no real video here.\nWhen you use Runova with your own computer, the finished film comes to your phone just like this.\n"
+    ]
+  },
+  "studio.downloadClose": { "result": { "ok": true, "message": "" } }
+}
