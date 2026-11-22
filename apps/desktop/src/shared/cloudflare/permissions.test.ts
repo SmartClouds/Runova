@@ -5,6 +5,7 @@ import {
   cloudflarePermission,
   missingPermissionLabels,
   permissionDeniedMessage,
+  permissionRows,
   TOKEN_PAGE,
   tokenProblem,
   tokenTemplateUrl,
@@ -102,6 +103,44 @@ describe('the permission catalog', () => {
     expect(url.searchParams.get('accountId')).toBe('*');
     expect(url.searchParams.get('zoneId')).toBe('all');
     expect(url.searchParams.get('name')).toBe('Runova');
+  });
+});
+
+describe('permissionRows', () => {
+  it('splits a label into the three drop-downs of the token page', () => {
+    expect(permissionRows(cloudflarePermission('tunnel'))).toEqual([
+      { group: 'Account', item: 'Cloudflare Tunnel', level: 'Edit' },
+    ]);
+    expect(permissionRows(cloudflarePermission('cachePurge'))).toEqual([
+      { group: 'Zone', item: 'Cache Purge', level: 'Purge' },
+    ]);
+  });
+
+  it('gives each permission in a two-part label its own row, sharing the group', () => {
+    expect(permissionRows(cloudflarePermission('access'))).toEqual([
+      { group: 'Account', item: 'Access: Apps and Policies', level: 'Edit' },
+      { group: 'Account', item: 'Access: Service Tokens', level: 'Edit' },
+    ]);
+  });
+
+  it('keeps ", and" inside an item name', () => {
+    expect(permissionRows(cloudflarePermission('accessLogin'))).toEqual([
+      {
+        group: 'Account',
+        item: 'Access: Organizations, Identity Providers, and Groups',
+        level: 'Edit',
+      },
+    ]);
+  });
+
+  it('reads every label in the catalog as rows with all three parts', () => {
+    for (const permission of [...CLOUDFLARE_PERMISSIONS, ...CLOUDFLARE_EXTRA_PERMISSIONS]) {
+      for (const row of permissionRows(permission)) {
+        expect(['Account', 'Zone', 'User']).toContain(row.group);
+        expect(row.item).not.toBe('');
+        expect(['Read', 'Edit', 'Purge']).toContain(row.level);
+      }
+    }
   });
 });
 

@@ -182,6 +182,35 @@ export function cloudflarePermission(
   return permission;
 }
 
+/** One row of the Permissions section on Cloudflare's token page: its three drop-downs. */
+export interface CloudflarePermissionRow {
+  /** The first drop-down: Account, Zone or User. */
+  group: string;
+  /** The second drop-down, such as Cloudflare Tunnel. */
+  item: string;
+  /** The third drop-down: Read, Edit or Purge. */
+  level: string;
+}
+
+/**
+ * The rows to add on the token page for a permission, read from its label. A label can hold more
+ * than one row ("A > B > Edit, and C > Edit"); a row without its own group shares the one before.
+ * Item names can have ", and " in them too, so a label splits only after an access level.
+ */
+export function permissionRows(
+  permission: Pick<CloudflarePermission<CloudflareAnyPermissionId>, 'label'>,
+): CloudflarePermissionRow[] {
+  const rows: CloudflarePermissionRow[] = [];
+  for (const part of permission.label.split(/(?<=> (?:Read|Edit|Purge)), and /)) {
+    const pieces = part.split(' > ');
+    const level = pieces.pop() ?? '';
+    const item = pieces.pop() ?? '';
+    const group = pieces.pop() ?? rows.at(-1)?.group ?? '';
+    rows.push({ group, item, level });
+  }
+  return rows;
+}
+
 /** The token page with Runova's permissions, all zones and a name filled in. */
 export function tokenTemplateUrl(): string {
   const keys = CLOUDFLARE_PERMISSIONS.flatMap(({ template }) =>
