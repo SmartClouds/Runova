@@ -409,6 +409,7 @@ export const IPC = {
     saveFileAs: 'fs:saveFileAs',
     watchFile: 'fs:watchFile',
     unwatchFile: 'fs:unwatchFile',
+    allowDroppedFiles: 'fs:allowDroppedFiles',
     onFileChanged: 'fs:onFileChanged',
   },
   explorer: {

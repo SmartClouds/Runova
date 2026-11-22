@@ -4,6 +4,7 @@ import { app, dialog, ipcMain } from 'electron';
 import type { DirectoryEntry, ImageFileData } from '../../shared/apiTypes';
 import { imageMimeType } from '../../shared/imageFiles';
 import { IPC } from '../../shared/ipcChannels';
+import { allowDroppedFiles, assertFileAllowed } from '../fs/droppedFiles';
 import { openFiles } from '../fs/openFileWatcher';
 import { assertPathWithinRoots } from '../pathGuard';
 import { store } from '../store';
@@ -26,12 +27,12 @@ export async function allowedRoots(): Promise<string[]> {
 
 export function registerFileSystemHandlers(): void {
   ipcMain.handle(IPC.fs.readFile, async (_event, path: string): Promise<string> => {
-    const safePath = await assertPathWithinRoots(path, await allowedRoots());
+    const safePath = await assertFileAllowed(path, await allowedRoots());
     return readFile(safePath, 'utf-8');
   });
 
   ipcMain.handle(IPC.fs.readImage, async (_event, path: string): Promise<ImageFileData> => {
-    const safePath = await assertPathWithinRoots(path, await allowedRoots());
+    const safePath = await assertFileAllowed(path, await allowedRoots());
     const mime = imageMimeType(safePath);
     if (!mime) throw new Error('That file is not an image this viewer can show.');
     const info = await stat(safePath);
@@ -43,7 +44,7 @@ export function registerFileSystemHandlers(): void {
   });
 
   ipcMain.handle(IPC.fs.writeFile, async (_event, path: string, content: string): Promise<void> => {
-    const safePath = await assertPathWithinRoots(path, await allowedRoots());
+    const safePath = await assertFileAllowed(path, await allowedRoots());
     await mkdir(dirname(safePath), { recursive: true });
     await writeFile(safePath, content, 'utf-8');
   });
@@ -51,9 +52,16 @@ export function registerFileSystemHandlers(): void {
   // An editor tab watches its file, so a change made outside the app (an agent, another editor)
   // reaches it. The push carries the path exactly as the tab sent it.
   ipcMain.handle(IPC.fs.watchFile, async (event, path: string): Promise<void> => {
-    const safePath = await assertPathWithinRoots(path, await allowedRoots());
+    const safePath = await assertFileAllowed(path, await allowedRoots());
     openFiles.watch(path, safePath, event.sender);
   });
+
+  // Files dragged in from the OS open in the editor wherever they live. See droppedFiles.ts.
+  ipcMain.handle(
+    IPC.fs.allowDroppedFiles,
+    (_event, paths: string[]): Promise<string[]> =>
+      allowDroppedFiles(Array.isArray(paths) ? paths.filter((p) => typeof p === 'string') : []),
+  );
 
   ipcMain.handle(IPC.fs.unwatchFile, (event, path: string): void => {
     openFiles.unwatch(path, event.sender);

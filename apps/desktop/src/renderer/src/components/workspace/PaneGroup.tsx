@@ -1,6 +1,7 @@
 import { agentSessionTitle, type PaneGroupNode, type Project } from '@runova/core';
 import { isImagePath } from '@shared/imageFiles';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CliLogo } from '@/components/cliLogos';
 import {
   ArrowLeft,
@@ -215,6 +216,15 @@ function readDraggedTab(event: React.DragEvent): DraggedTab | null {
 
 function isTabDrag(event: React.DragEvent): boolean {
   return event.dataTransfer.types.includes(TAB_MIME);
+}
+
+/**
+ * Files dragged in from the OS, which open in the editor. A terminal takes its own (it pastes
+ * their paths), so a drag over one is left alone.
+ */
+function isEditorFileDrag(event: React.DragEvent): boolean {
+  if (!event.dataTransfer.types.includes('Files') || isTabDrag(event)) return false;
+  return !(event.target as Element | null)?.closest?.('[data-terminal-slot]');
 }
 
 type DropZone = 'center' | 'left' | 'right' | 'top' | 'bottom';
@@ -744,6 +754,8 @@ export function PaneGroup({
   const stripRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
+  // Files from the OS held over the pane, which open here when dropped.
+  const [fileDropping, setFileDropping] = useState(false);
   const tabs = group.tabIds.flatMap((tabId) => {
     const tab = workspace.tabs[tabId];
     return tab ? [tab] : [];
@@ -922,7 +934,42 @@ export function PaneGroup({
     if (!sameStripDrag(stripDragRef.current, next)) setStripDrag(next);
   }
 
+  function holdFiles(event: React.DragEvent): void {
+    event.preventDefault();
+    // Kept from the editor underneath, which would otherwise paste the drop in as text.
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+    setFileDropping(true);
+  }
+
+  /** Opens files dropped from the OS in pinned editor tabs in this pane, the way VS Code does. */
+  function dropFiles(event: React.DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    setFileDropping(false);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) void openDroppedFiles(files);
+  }
+
+  async function openDroppedFiles(files: File[]): Promise<void> {
+    try {
+      const paths = await window.runova.fs.allowDroppedFiles(files);
+      if (paths.length === 0) return;
+      const state = store.getState();
+      state.focusGroup(projectId, group.id);
+      for (const path of paths) state.openFile(projectId, path, { pin: true });
+    } catch (error) {
+      toast.error('Could not open the dropped files', {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   function dropOnStrip(event: React.DragEvent): void {
+    if (isEditorFileDrag(event)) {
+      dropFiles(event);
+      return;
+    }
     const dragged = readDraggedTab(event);
     const at = stripDragRef.current?.at ?? group.tabIds.length;
     setStripDrag(null);
@@ -972,13 +1019,19 @@ export function PaneGroup({
         {/* The whole stretch up to the pane buttons takes a dropped tab, not only the tabs. */}
         <div
           onDragOver={(event) => {
+            if (isEditorFileDrag(event)) {
+              holdFiles(event);
+              return;
+            }
             if (!isTabDrag(event)) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
             trackStripDrag(event);
           }}
           onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) setStripDrag(null);
+            if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+            setStripDrag(null);
+            setFileDropping(false);
           }}
           onDrop={dropOnStrip}
           className="flex h-full min-w-0 flex-1 items-center gap-0.5"
@@ -1091,7 +1144,15 @@ export function PaneGroup({
 
       <div
         ref={bodyRef}
+        data-pane-body=""
         className="relative min-h-0 flex-1"
+        // Caught on the way down, so the editor never sees a file drop.
+        onDragOverCapture={(event) => {
+          if (isEditorFileDrag(event)) holdFiles(event);
+        }}
+        onDropCapture={(event) => {
+          if (isEditorFileDrag(event)) dropFiles(event);
+        }}
         onDragOver={(event) => {
           if (!isTabDrag(event) || !bodyRef.current) return;
           event.preventDefault();
@@ -1099,7 +1160,9 @@ export function PaneGroup({
           setDropZone(zoneAt(event, bodyRef.current));
         }}
         onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropZone(null);
+          if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+          setDropZone(null);
+          setFileDropping(false);
         }}
         onDrop={dropOnBody}
       >
@@ -1182,6 +1245,12 @@ export function PaneGroup({
           />
         )}
 
+        {fileDropping ? (
+          // A dashed outline, since the global border colour would grey out a dashed border.
+          <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl bg-primary/10 text-xs font-medium text-primary outline-2 -outline-offset-2 outline-dashed outline-primary/60">
+            Drop to open in the editor
+          </div>
+        ) : null}
         {dropZone ? (
           <div
             className={cn(

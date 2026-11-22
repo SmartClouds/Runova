@@ -1311,6 +1311,16 @@ const fs = {
   /** Pushes through onFileChanged whenever the file changes on disk. Call once per open tab. */
   watchFile: (path: string): Promise<void> => ipcRenderer.invoke(IPC.fs.watchFile, path),
   unwatchFile: (path: string): Promise<void> => ipcRenderer.invoke(IPC.fs.unwatchFile, path),
+  /**
+   * Lets the editor open files dropped into the window, wherever they are on disk, and returns
+   * the paths of the ones it can open (folders are left out). The paths are read off the dropped
+   * files here, so the page can't slip in a path of its own.
+   */
+  allowDroppedFiles: (files: File[]): Promise<string[]> =>
+    ipcRenderer.invoke(
+      IPC.fs.allowDroppedFiles,
+      files.map((file) => webUtils.getPathForFile(file)).filter(Boolean),
+    ),
   onFileChanged: (callback: (path: string, change: FileDiskChange) => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

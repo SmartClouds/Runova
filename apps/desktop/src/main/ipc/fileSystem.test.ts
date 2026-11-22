@@ -217,3 +217,57 @@ describe('fs:watchFile', () => {
     );
   });
 });
+
+describe('fs:allowDroppedFiles', () => {
+  it('opens a dropped file from outside every root for reading, writing and watching', async () => {
+    const outside = writeTree(tempDir('runova-fs-dropped-'), { 'notes.md': 'from the desktop' });
+    const dropped = join(outside, 'notes.md');
+
+    expect(await invoke<string[]>(IPC.fs.allowDroppedFiles, [dropped])).toEqual([dropped]);
+
+    expect(await invoke<string>(IPC.fs.readFile, dropped)).toBe('from the desktop');
+    await invoke(IPC.fs.writeFile, dropped, 'edited in Runova');
+    expect(readFileSync(dropped, 'utf-8')).toBe('edited in Runova');
+    await expect(invoke(IPC.fs.watchFile, dropped)).resolves.toBeUndefined();
+    await invoke(IPC.fs.unwatchFile, dropped);
+  });
+
+  it('shows a dropped image from outside every root', async () => {
+    const outside = tempDir('runova-fs-dropped-');
+    const image = join(outside, 'shot.png');
+    writeFileSync(image, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await invoke(IPC.fs.allowDroppedFiles, [image]);
+    const data = await invoke<ImageFileData>(IPC.fs.readImage, image);
+    expect(data.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('leaves the files next to a dropped one out of reach', async () => {
+    const outside = writeTree(tempDir('runova-fs-dropped-'), {
+      'notes.md': 'dropped',
+      'secret.txt': 'not dropped',
+    });
+    await invoke(IPC.fs.allowDroppedFiles, [join(outside, 'notes.md')]);
+    await expect(invoke(IPC.fs.readFile, join(outside, 'secret.txt'))).rejects.toThrow(
+      'outside of the allowed directories',
+    );
+    await expect(invoke(IPC.fs.writeFile, join(outside, 'new.txt'), 'x')).rejects.toThrow(
+      'outside of the allowed directories',
+    );
+    await expect(invoke(IPC.fs.listDirectory, outside)).rejects.toThrow(
+      'outside of the allowed directories',
+    );
+  });
+
+  it('skips dropped folders and paths that are not on disk', async () => {
+    const outside = writeTree(tempDir('runova-fs-dropped-'), { 'a.txt': 'a', 'sub/b.txt': 'b' });
+    const answer = await invoke<string[]>(IPC.fs.allowDroppedFiles, [
+      join(outside, 'sub'),
+      join(outside, 'gone.txt'),
+      join(outside, 'a.txt'),
+    ]);
+    expect(answer).toEqual([join(outside, 'a.txt')]);
+    await expect(invoke(IPC.fs.readFile, join(outside, 'sub', 'b.txt'))).rejects.toThrow(
+      'outside of the allowed directories',
+    );
+  });
+});

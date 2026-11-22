@@ -432,3 +432,101 @@ describe('PaneGroup tab hover card context', () => {
     },
   );
 });
+
+describe('PaneGroup files dropped from the OS', () => {
+  const elsewhere = (name: string): string => `D:\\elsewhere\\${name}`;
+  const dropBridge = {
+    'fs.allowDroppedFiles': (files: File[]) => files.map((file) => elsewhere(file.name)),
+  };
+
+  function fileDrag(type: string, files: File[]): Event {
+    return Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+      dataTransfer: { types: ['Files'], files, dropEffect: '', getData: () => '' },
+      clientX: 0,
+      clientY: 0,
+    });
+  }
+
+  function paneBody(): HTMLElement {
+    return screen.getByRole('region', { name: 'App pane' }).querySelector('[data-pane-body]')!;
+  }
+
+  function fileTabNames(): string[] {
+    const ws = useWorkspaceStore.getState().workspaces.p1;
+    return Object.values(ws?.tabs ?? {}).flatMap((tab) => (tab.kind === 'file' ? [tab.path] : []));
+  }
+
+  it('opens a dropped file in a pinned editor tab, wherever it lives on disk', async () => {
+    const { bridge } = renderWithProviders(<Harness />, { bridge: dropBridge });
+    const file = new File(['# notes'], 'notes.md');
+
+    fireEvent(paneBody(), fileDrag('dragover', [file]));
+    expect(screen.getByText('Drop to open in the editor')).toBeInTheDocument();
+    fireEvent(paneBody(), fileDrag('drop', [file]));
+
+    expect(bridge.$fn('fs.allowDroppedFiles')).toHaveBeenCalledWith([file]);
+    expect(await screen.findByRole('tab', { name: /notes\.md/ })).toBeInTheDocument();
+    expect(screen.queryByText('Drop to open in the editor')).not.toBeInTheDocument();
+    const ws = useWorkspaceStore.getState().workspaces.p1;
+    const tab = Object.values(ws?.tabs ?? {}).find(
+      (t) => t.kind === 'file' && t.path === elsewhere('notes.md'),
+    );
+    expect(tab).toMatchObject({ preview: false });
+  });
+
+  it('opens every file of a multi-file drop', async () => {
+    renderWithProviders(<Harness />, { bridge: dropBridge });
+    const files = [new File(['a'], 'a.ts'), new File(['b'], 'b.ts')];
+    fireEvent(paneBody(), fileDrag('dragover', files));
+    fireEvent(paneBody(), fileDrag('drop', files));
+    await vi.waitFor(() =>
+      expect(fileTabNames()).toEqual(
+        expect.arrayContaining([elsewhere('a.ts'), elsewhere('b.ts')]),
+      ),
+    );
+  });
+
+  it('opens a file dropped on the tab strip too', async () => {
+    renderWithProviders(<Harness />, { bridge: dropBridge });
+    const file = new File(['x'], 'strip.txt');
+    const tablist = screen.getByRole('tablist', { name: 'Tabs' });
+    fireEvent(tablist, fileDrag('dragover', [file]));
+    fireEvent(tablist, fileDrag('drop', [file]));
+    expect(await screen.findByRole('tab', { name: /strip\.txt/ })).toBeInTheDocument();
+  });
+
+  it('leaves a file dropped on a terminal to the terminal, which pastes its path', () => {
+    const terminal = Object.values(useWorkspaceStore.getState().workspaces.p1?.tabs ?? {}).find(
+      (tab) => tab.kind === 'terminal',
+    );
+    useWorkspaceStore.getState().activateTab('p1', terminal!.id);
+    const allowDroppedFiles = vi.fn(dropBridge['fs.allowDroppedFiles']);
+    renderWithProviders(<Harness />, {
+      bridge: {
+        'fs.allowDroppedFiles': allowDroppedFiles,
+        'shell.pathForFile': (file: File) => elsewhere(file.name),
+      },
+    });
+    const slot = paneBody().querySelector('[data-terminal-slot] > div')!;
+    const file = new File(['x'], 'run.sh');
+
+    fireEvent(slot, fileDrag('dragover', [file]));
+    expect(screen.queryByText('Drop to open in the editor')).not.toBeInTheDocument();
+    fireEvent(slot, fileDrag('drop', [file]));
+
+    expect(allowDroppedFiles).not.toHaveBeenCalled();
+    expect(fileTabNames()).not.toContain(elsewhere('run.sh'));
+  });
+
+  it('opens nothing when the drop held only folders', async () => {
+    const { bridge } = renderWithProviders(<Harness />, {
+      bridge: { 'fs.allowDroppedFiles': () => [] },
+    });
+    const before = fileTabNames();
+    const folder = new File([], 'src');
+    fireEvent(paneBody(), fileDrag('dragover', [folder]));
+    fireEvent(paneBody(), fileDrag('drop', [folder]));
+    await vi.waitFor(() => expect(bridge.$fn('fs.allowDroppedFiles')).toHaveBeenCalled());
+    expect(fileTabNames()).toEqual(before);
+  });
+});
