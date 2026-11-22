@@ -209,10 +209,7 @@ export class CoreSessions {
   private keep(serverId: string, response: SignedInResponse, askedAt: number): void {
     this.signedIn.set(serverId, {
       token: response.accessToken,
-      expiresAt: Math.min(
-        response.accessTokenExpiresAtUnixMs,
-        askedAt + ACCESS_TOKEN_LIFETIME_MS,
-      ),
+      expiresAt: Math.min(response.accessTokenExpiresAtUnixMs, askedAt + ACCESS_TOKEN_LIFETIME_MS),
       user: response.user,
     });
   }
