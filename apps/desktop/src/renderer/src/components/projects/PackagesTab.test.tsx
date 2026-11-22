@@ -155,9 +155,12 @@ describe('PackagesTab', () => {
     const ai = within(dart).getByRole('button', { name: 'Update with AI' });
     expect(ai).toBeEnabled();
     await user.click(ai);
+    // Not ticked, so not in the prompt.
     expect(
-      await screen.findByRole('switch', { name: 'Include the runtime upgrade' }),
-    ).toBeChecked();
+      await screen.findByText(
+        'Nothing is in the prompt. Tick a package or runtime in the list to add it.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('keeps the runtime rows under the Outdated filter and hides them while searching', async () => {
@@ -196,6 +199,133 @@ describe('PackagesTab', () => {
     await user.click(screen.getByRole('button', { name: 'Show all packages' }));
     expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
     expect(screen.queryByText('Everything is up to date')).not.toBeInTheDocument();
+  });
+});
+
+describe('selecting what goes in the AI prompt', () => {
+  const outdatedPkg = (name: string, from: string, to: string) =>
+    pkg({ name, currentVersion: from, latestVersion: to, isOutdated: true });
+  const react = outdatedPkg('react', '18.3.1', '19.1.0');
+  const zod = outdatedPkg('zod', '3.22.0', '3.24.1');
+  const vite = outdatedPkg('vite', '6.0.0', '6.0.3');
+  const bunPin: RuntimeTarget = {
+    kind: 'bun',
+    source: 'packageManager',
+    declared: 'bun@1.1.0',
+    currentVersion: '1.1.0',
+    latestVersion: '1.3.2',
+    isOutdated: true,
+    nextDeclared: 'bun@1.3.2',
+    requires: null,
+    manifestPath: 'C:\\work\\bitiron\\web\\package.json',
+    projectLabel: 'bitiron-web',
+  };
+  const outdatedBun: PackageManagerSection = {
+    ...bunSection,
+    packages: [react, zod, vite],
+    runtimes: [bunPin],
+    toolchain: null,
+  };
+
+  function renderOutdated() {
+    return renderWithProviders(<PackagesTab project={project()} />, {
+      bridge: { 'packages.list': { projectId: 'p1', sections: [outdatedBun] } },
+    });
+  }
+
+  function promptText(): string {
+    return screen.getByRole('region', { name: 'Prompt for your agent' }).textContent ?? '';
+  }
+
+  it('counts only the ticked packages and puts only them in the prompt', async () => {
+    const { user } = renderOutdated();
+    await screen.findByText('Bun', { selector: 'p' });
+    await user.click(screen.getByRole('radio', { name: /Outdated/ }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select zod' }));
+    expect(screen.getByRole('button', { name: 'Update 1' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Clear 1 selected' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Update with AI' }));
+    await screen.findByRole('dialog');
+    expect(screen.getByText('1 selected package')).toBeInTheDocument();
+    expect(screen.queryByText(/All 3 outdated/)).not.toBeInTheDocument();
+    expect(promptText()).toContain('Update 1 outdated bun package ');
+    expect(promptText()).toContain('- zod: 3.22.0 -> 3.24.1');
+    expect(promptText()).not.toContain('react');
+    expect(promptText()).not.toContain('vite');
+    // The runtime is outdated, but it is not ticked.
+    expect(promptText()).not.toContain('bun@1.3.2');
+  });
+
+  it('adds a runtime to the prompt only once its row is ticked', async () => {
+    const { user } = renderOutdated();
+    await screen.findByText('Bun', { selector: 'p' });
+    await user.click(screen.getByRole('radio', { name: /Outdated/ }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select zod' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bun (packageManager)' }));
+    // Update N runs package updates, so it counts the packages only.
+    expect(screen.getByRole('button', { name: 'Update 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear 2 selected' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Update with AI' }));
+    await screen.findByRole('dialog');
+    expect(promptText()).toContain('Runtime (current -> target):');
+    expect(promptText()).toContain('bun@1.1.0 -> bun@1.3.2');
+    expect(promptText()).toContain('- zod: 3.22.0 -> 3.24.1');
+    expect(promptText()).not.toContain('react');
+  });
+
+  it('copies a prompt with only the ticked packages and runtimes', async () => {
+    const { user } = renderOutdated();
+    await screen.findByText('Bun', { selector: 'p' });
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select vite' }));
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copy 1 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: /AI update prompt/ }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const first = writeText.mock.calls.at(-1)?.[0] ?? '';
+    expect(first).toContain('- vite: 6.0.0 -> 6.0.3');
+    expect(first).not.toContain('react');
+    expect(first).not.toContain('Runtime (current -> target):');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bun (packageManager)' }));
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copy 2 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: /AI update prompt/ }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    const second = writeText.mock.calls.at(-1)?.[0] ?? '';
+    expect(second).toContain('bun@1.1.0 -> bun@1.3.2');
+    expect(second).toContain('- vite: 6.0.0 -> 6.0.3');
+    expect(second).not.toContain('zod');
+  });
+
+  it('copies every outdated package and no runtime when nothing is ticked', async () => {
+    const { user } = renderOutdated();
+    await screen.findByText('Bun', { selector: 'p' });
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copy 3 outdated')).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: /AI update prompt/ }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls.at(-1)?.[0] ?? '';
+    expect(copied).toContain('Update 3 outdated bun packages');
+    expect(copied).not.toContain('Runtime (current -> target):');
+  });
+
+  it('clears the ticked runtime with the packages', async () => {
+    const { user } = renderOutdated();
+    await screen.findByText('Bun', { selector: 'p' });
+    await user.click(screen.getByRole('checkbox', { name: 'Select react' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bun (packageManager)' }));
+
+    await user.click(screen.getByRole('button', { name: 'Clear 2 selected' }));
+    expect(screen.getByRole('checkbox', { name: 'Select Bun (packageManager)' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select react' })).not.toBeChecked();
   });
 });
 

@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowRight, Check, Cpu, ExternalLink, Spinner } from '@/components/icons';
-import { bumpKind, runtimeLabel } from '@/components/projects/packagesCopy';
+import { bumpKind, runtimeKey, runtimeLabel } from '@/components/projects/packagesCopy';
 import {
   devSetupLink,
   toolchainName,
@@ -12,8 +12,10 @@ import {
 } from '@/components/projects/useToolchainStatus';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { queryKeys } from '@/lib/queryKeys';
+import { cn } from '@/lib/utils';
 
 /**
  * The runtime part of a Packages section: the tool this machine builds the section with, and the
@@ -119,11 +121,13 @@ function RuntimeTargetRow({
   showProject,
   busy,
   onUpdate,
+  selection,
 }: {
   target: RuntimeTarget;
   showProject: boolean;
   busy: boolean;
   onUpdate: () => void;
+  selection?: RuntimeSelection | undefined;
 }): React.JSX.Element {
   const toolchain = useToolchainStatus(target.requires?.toolchain ?? null);
   const bump =
@@ -132,11 +136,29 @@ function RuntimeTargetRow({
       : null;
   const blocked = target.isOutdated ? blockedReason(target, toolchain.installedVersion) : null;
   const checking = target.requires !== null && toolchain.detection === undefined;
+  // The same rule as outdatedRuntimes: only a target with a known newer version can go in a prompt.
+  const selectable = selection !== undefined && target.isOutdated && Boolean(target.latestVersion);
+  const selected = selectable && selection.selectedKeys.has(runtimeKey(target));
 
   return (
-    <div className={ROW}>
+    <div
+      className={cn(
+        ROW,
+        'transition-colors',
+        selected && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/20',
+      )}
+    >
       {target.isOutdated && <OutdatedEdge />}
-      <span className="w-[18px] shrink-0" aria-hidden="true" />
+      {selectable ? (
+        <Checkbox
+          checked={selected}
+          disabled={selection.disabled}
+          aria-label={`Select ${runtimeLabel(target)}`}
+          onCheckedChange={() => selection.onToggle(target)}
+        />
+      ) : (
+        <span className="w-[18px] shrink-0" aria-hidden="true" />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <span className="truncate text-sm font-medium">{runtimeLabel(target)}</span>
@@ -203,10 +225,6 @@ function RuntimeTargetRow({
   );
 }
 
-function runtimeKey(target: RuntimeTarget): string {
-  return `${target.manifestPath}::${target.source}::${target.kind}`;
-}
-
 /**
  * The scan as it will read once `updated` has been rewritten in its file. A rescan covers every
  * ecosystem in the project and can take a long time, so the row is flipped from this instead of
@@ -234,15 +252,26 @@ function withRuntimeUpdated(scan: PackageScanResult, updated: RuntimeTarget): Pa
   };
 }
 
+/** Ticking runtime rows, so the AI prompt and Copy take only the ones the user picked. */
+export interface RuntimeSelection {
+  /** `runtimeKey` of each ticked target. */
+  selectedKeys: Set<string>;
+  onToggle: (target: RuntimeTarget) => void;
+  disabled?: boolean;
+}
+
 export function RuntimeBlock({
   projectId,
   section,
   onlyOutdated,
+  selection,
 }: {
   projectId: string;
   section: PackageManagerSection;
   /** The Outdated filter: show only targets with a newer version, and leave the toolchain out. */
   onlyOutdated: boolean;
+  /** Leave out to show the rows without checkboxes. */
+  selection?: RuntimeSelection;
 }): React.JSX.Element | null {
   const queryClient = useQueryClient();
   const mutation = useMutation({
@@ -289,6 +318,7 @@ export function RuntimeBlock({
           showProject={showProject}
           busy={busyKey === runtimeKey(target)}
           onUpdate={() => mutation.mutate(target)}
+          selection={selection}
         />
       ))}
     </div>

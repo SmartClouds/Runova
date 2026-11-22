@@ -122,6 +122,11 @@ export function runtimeLabel(target: RuntimeTarget): string {
   }
 }
 
+/** Names one runtime target across rescans, for its row and for the tab's selection. */
+export function runtimeKey(target: RuntimeTarget): string {
+  return `${target.manifestPath}::${target.source}::${target.kind}`;
+}
+
 /** The runtime targets that have a newer version, the ones an update or the prompt is about. */
 export function outdatedRuntimes(section: PackageManagerSection): RuntimeTarget[] {
   return section.runtimes.filter((target) => target.isOutdated && target.latestVersion);
@@ -144,8 +149,8 @@ export interface PackageUpdatePromptOptions {
   commit?: PackageCommitMode;
   /** Free text from the user, added as is. */
   notes?: string;
-  /** Put the section's outdated runtime targets in the prompt too. On unless turned off. */
-  includeRuntimes?: boolean;
+  /** The runtime targets to move as well, the ones the user ticked. None when left out. */
+  runtimes?: RuntimeTarget[];
 }
 
 function runtimeLine(target: RuntimeTarget): string {
@@ -257,7 +262,7 @@ export function buildPackageUpdatePrompt(
   }
 
   const count = packages.length;
-  const runtimes = options.includeRuntimes === false ? [] : outdatedRuntimes(section);
+  const runtimes = options.runtimes ?? [];
   const runtimeNames = [...new Set(runtimes.map(runtimeLabel))].join(', ');
   const steps = [
     runtimes.length > 0 ? runtimeStep(runtimes) : null,

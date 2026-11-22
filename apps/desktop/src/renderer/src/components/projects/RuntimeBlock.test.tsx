@@ -14,6 +14,8 @@ vi.mock('react-router-dom', async (original) => ({
 }));
 
 const { RuntimeBlock } = await import('./RuntimeBlock');
+const { runtimeKey } = await import('./packagesCopy');
+type RuntimeSelection = import('./RuntimeBlock').RuntimeSelection;
 
 const PUBSPEC = 'C:\\work\\app\\pubspec.yaml';
 
@@ -55,9 +57,19 @@ interface Machine {
   runtimeResult?: { ok: boolean; message: string };
 }
 
-function renderBlock(shown: PackageManagerSection, machine: Machine = {}, onlyOutdated = false) {
+function renderBlock(
+  shown: PackageManagerSection,
+  machine: Machine = {},
+  onlyOutdated = false,
+  selection?: RuntimeSelection,
+) {
   return renderWithProviders(
-    <RuntimeBlock projectId="p1" section={shown} onlyOutdated={onlyOutdated} />,
+    <RuntimeBlock
+      projectId="p1"
+      section={shown}
+      onlyOutdated={onlyOutdated}
+      {...(selection ? { selection } : {})}
+    />,
     {
       bridge: {
         'devSetup.detect': async (id: string) => machine.detections?.[id] ?? { state: 'absent' },
@@ -324,5 +336,58 @@ describe('the Outdated filter', () => {
       true,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('selecting runtime rows', () => {
+  const flutterCurrent = target({
+    source: 'pubspec-flutter',
+    kind: 'flutter',
+    isOutdated: false,
+    nextDeclared: null,
+    requires: null,
+  });
+
+  it('puts a checkbox on an outdated row only, and reports the tick', async () => {
+    const onToggle = vi.fn();
+    const { user } = renderBlock(
+      section({ runtimes: [target(), flutterCurrent] }),
+      { detections: { flutter: found('3.47.7') } },
+      false,
+      { selectedKeys: new Set(), onToggle },
+    );
+
+    const box = await screen.findByRole('checkbox', { name: 'Select Dart SDK' });
+    expect(box).not.toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: 'Select Flutter SDK' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+
+    await user.click(box);
+    expect(onToggle).toHaveBeenCalledWith(target());
+  });
+
+  it('shows a selected row as ticked', async () => {
+    renderBlock(section({ toolchain: null }), {}, false, {
+      selectedKeys: new Set([runtimeKey(target())]),
+      onToggle: vi.fn(),
+    });
+    expect(await screen.findByRole('checkbox', { name: 'Select Dart SDK' })).toBeChecked();
+  });
+
+  it('has no checkbox for a row whose latest version is unknown', async () => {
+    renderBlock(
+      section({ toolchain: null, runtimes: [target({ latestVersion: null })] }),
+      {},
+      false,
+      { selectedKeys: new Set(), onToggle: vi.fn() },
+    );
+    expect(await screen.findByText('Dart SDK')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('shows no checkboxes without a selection', async () => {
+    renderBlock(section({ toolchain: null }));
+    expect(await screen.findByText('Dart SDK')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });

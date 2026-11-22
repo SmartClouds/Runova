@@ -90,10 +90,10 @@ describe('runtime rows of the newer ecosystems', () => {
     ['android', 'android-target-sdk', 'behavior changes'],
     ['swift', 'swift-tools', 'language mode'],
   ] as const)('warns the agent about what moving %s involves', (kind, source, hint) => {
-    const prompt = buildPackageUpdatePrompt(
-      section({ runtimes: [runtime({ kind, source })], toolchain: null }),
-      [],
-    );
+    const moved = runtime({ kind, source });
+    const prompt = buildPackageUpdatePrompt(section({ runtimes: [moved], toolchain: null }), [], {
+      runtimes: [moved],
+    });
 
     expect(prompt).toContain(hint);
   });
@@ -140,7 +140,7 @@ describe('outdatedRuntimes', () => {
 
 describe('buildPackageUpdatePrompt with runtimes', () => {
   it('puts the runtime first and asks for it to move before any package', () => {
-    const prompt = buildPackageUpdatePrompt(section(), [pkg()]);
+    const prompt = buildPackageUpdatePrompt(section(), [pkg()], { runtimes: [runtime()] });
 
     expect(prompt).toMatch(
       /^Move this project to the latest Dart SDK, then update 1 outdated pub package to their latest versions\./,
@@ -156,21 +156,17 @@ describe('buildPackageUpdatePrompt with runtimes', () => {
   });
 
   it('asks for the same style when Runova would not rewrite the value itself', () => {
+    const engines = runtime({
+      kind: 'node',
+      source: 'engines',
+      declared: '>=18 <22',
+      latestVersion: '24.11.1',
+      nextDeclared: null,
+    });
     const prompt = buildPackageUpdatePrompt(
-      section({
-        ecosystem: 'node',
-        manager: 'npm',
-        runtimes: [
-          runtime({
-            kind: 'node',
-            source: 'engines',
-            declared: '>=18 <22',
-            latestVersion: '24.11.1',
-            nextDeclared: null,
-          }),
-        ],
-      }),
+      section({ ecosystem: 'node', manager: 'npm', runtimes: [engines] }),
       [],
+      { runtimes: [engines] },
     );
 
     expect(prompt).toContain(
@@ -180,22 +176,17 @@ describe('buildPackageUpdatePrompt with runtimes', () => {
   });
 
   it('works for a runtime move with no outdated package', () => {
+    const framework = runtime({
+      kind: 'dotnet',
+      source: 'target-framework',
+      declared: 'net8.0',
+      nextDeclared: 'net10.0',
+      projectLabel: 'Api',
+    });
     const prompt = buildPackageUpdatePrompt(
-      section({
-        ecosystem: 'dotnet',
-        manager: 'nuget',
-        packages: [],
-        runtimes: [
-          runtime({
-            kind: 'dotnet',
-            source: 'target-framework',
-            declared: 'net8.0',
-            nextDeclared: 'net10.0',
-            projectLabel: 'Api',
-          }),
-        ],
-      }),
+      section({ ecosystem: 'dotnet', manager: 'nuget', packages: [], runtimes: [framework] }),
       [],
+      { runtimes: [framework] },
     );
 
     expect(prompt).toMatch(/^Move this project to the latest \.NET target framework\./);
@@ -204,11 +195,31 @@ describe('buildPackageUpdatePrompt with runtimes', () => {
     expect(prompt).toContain('move the Microsoft.* and System.* packages');
   });
 
-  it('leaves the runtime out when asked to, and reads as before', () => {
-    const prompt = buildPackageUpdatePrompt(section(), [pkg()], { includeRuntimes: false });
+  it("leaves the section's outdated runtime out unless it is passed in", () => {
+    const prompt = buildPackageUpdatePrompt(section(), [pkg()]);
 
     expect(prompt).toMatch(/^Update 1 outdated pub package in this project/);
     expect(prompt).not.toContain('Runtime');
+    expect(prompt).not.toContain('^3.13.5');
     expect(prompt).toContain('Only touch the packages listed here.');
+  });
+
+  it('lists only the runtimes passed in, not every outdated one of the section', () => {
+    const dart = runtime();
+    const flutter = runtime({
+      kind: 'flutter',
+      source: 'pubspec-flutter',
+      declared: '>=3.40.0',
+      latestVersion: '3.47.7',
+      nextDeclared: '>=3.47.7',
+    });
+    const prompt = buildPackageUpdatePrompt(section({ runtimes: [dart, flutter] }), [], {
+      runtimes: [flutter],
+    });
+
+    expect(prompt).toMatch(/^Move this project to the latest Flutter SDK\./);
+    expect(prompt).toContain('>=3.40.0 -> >=3.47.7');
+    expect(prompt).not.toContain('Dart SDK');
+    expect(prompt).not.toContain('Packages (current -> latest)');
   });
 });

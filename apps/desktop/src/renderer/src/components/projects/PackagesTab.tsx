@@ -1,5 +1,10 @@
 import type { Project } from '@runova/core';
-import type { PackageInfo, PackageManagerSection, PackageUpdateRequest } from '@shared/apiTypes';
+import type {
+  PackageInfo,
+  PackageManagerSection,
+  PackageUpdateRequest,
+  RuntimeTarget,
+} from '@shared/apiTypes';
 import { type DependencyFinding, findingRowKey, packageRowKey } from '@shared/dependencyAlerts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -27,6 +32,7 @@ import {
   buildPackageUpdatePrompt,
   bumpKind,
   outdatedRuntimes,
+  runtimeKey,
 } from '@/components/projects/packagesCopy';
 import { RuntimeBlock } from '@/components/projects/RuntimeBlock';
 import { Badge } from '@/components/ui/badge';
@@ -401,22 +407,23 @@ function PackageRow({
 }
 
 /**
- * Copies either an agent-ready update prompt or just the names. Works on the selected packages
- * when there is a selection, otherwise on every outdated package in the section.
+ * Copies either an agent-ready update prompt or just the names. Works on exactly what is ticked
+ * (packages and runtime rows) when anything is, otherwise on every outdated package in the
+ * section. A runtime goes in only when its row is ticked.
  */
 function PackagesCopyMenu({
   section,
   selectedPackages,
+  selectedRuntimes,
 }: {
   section: PackageManagerSection;
   selectedPackages: PackageInfo[];
+  selectedRuntimes: RuntimeTarget[];
 }): React.JSX.Element {
+  const selectedCount = selectedPackages.length + selectedRuntimes.length;
   const targets =
-    selectedPackages.length > 0
-      ? selectedPackages
-      : section.packages.filter((pkg) => pkg.isOutdated);
-  const scope =
-    selectedPackages.length > 0 ? `${targets.length} selected` : `${targets.length} outdated`;
+    selectedCount > 0 ? selectedPackages : section.packages.filter((pkg) => pkg.isOutdated);
+  const scope = selectedCount > 0 ? `${selectedCount} selected` : `${targets.length} outdated`;
 
   async function copy(label: string, text: string): Promise<void> {
     try {
@@ -434,7 +441,7 @@ function PackagesCopyMenu({
           variant="outline"
           size="sm"
           className="gap-1.5"
-          disabled={targets.length === 0 && outdatedRuntimes(section).length === 0}
+          disabled={targets.length === 0 && selectedRuntimes.length === 0}
         >
           <Copy className="h-3.5 w-3.5" />
           Copy
@@ -444,7 +451,12 @@ function PackagesCopyMenu({
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>Copy {scope}</DropdownMenuLabel>
         <DropdownMenuItem
-          onClick={() => void copy('Update prompt', buildPackageUpdatePrompt(section, targets))}
+          onClick={() =>
+            void copy(
+              'Update prompt',
+              buildPackageUpdatePrompt(section, targets, { runtimes: selectedRuntimes }),
+            )
+          }
         >
           <Sparkles className="h-4 w-4" />
           <span className="flex flex-col">
@@ -454,7 +466,10 @@ function PackagesCopyMenu({
             </span>
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => void copy('Package names', buildPackageNames(targets))}>
+        <DropdownMenuItem
+          disabled={targets.length === 0}
+          onClick={() => void copy('Package names', buildPackageNames(targets))}
+        >
           <ListUnordered className="h-4 w-4" />
           <span className="flex flex-col">
             <span>Package names</span>
@@ -486,6 +501,10 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
   });
   const [selected, setSelected] = useProjectUiState<Set<string>>(
     'packages.selected',
+    () => new Set(),
+  );
+  const [selectedRuntimes, setSelectedRuntimes] = useProjectUiState<Set<string>>(
+    'packages.selectedRuntimes',
     () => new Set(),
   );
   const [filter, setFilter] = useProjectUiState<PackageFilter>('packages.filter', 'all');
@@ -544,6 +563,30 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
       else next.add(key);
       return next;
     });
+  }
+
+  function toggleRuntime(target: RuntimeTarget): void {
+    setSelectedRuntimes((prev) => {
+      const next = new Set(prev);
+      const key = runtimeKey(target);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function clearSection(section: PackageManagerSection): void {
+    toggleVisibleOutdated(section.packages, false);
+    setSelectedRuntimes((prev) => {
+      const next = new Set(prev);
+      for (const target of section.runtimes) next.delete(runtimeKey(target));
+      return next;
+    });
+  }
+
+  /** The section's ticked runtime rows that can still go in a prompt. */
+  function selectedRuntimesOf(section: PackageManagerSection): RuntimeTarget[] {
+    return outdatedRuntimes(section).filter((target) => selectedRuntimes.has(runtimeKey(target)));
   }
 
   function toggleVisibleOutdated(packages: PackageInfo[], checked: boolean): void {
@@ -753,6 +796,8 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
         const visibleOutdated = visiblePackages.filter(canUpdatePackage);
         const sectionSelected = section.packages.filter((pkg) => selected.has(packageKey(pkg)));
         const sectionSelectedCount = sectionSelected.length;
+        const sectionSelectedRuntimes = selectedRuntimesOf(section);
+        const sectionTickedCount = sectionSelectedCount + sectionSelectedRuntimes.length;
         const allVisibleOutdatedSelected =
           visibleOutdated.length > 0 &&
           visibleOutdated.every((pkg) => selected.has(packageKey(pkg)));
@@ -826,7 +871,11 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
               </div>
               {section.status === 'ok' && (section.packages.length > 0 || runtimesOutdated > 0) && (
                 <div className="flex items-center gap-2">
-                  <PackagesCopyMenu section={section} selectedPackages={sectionSelected} />
+                  <PackagesCopyMenu
+                    section={section}
+                    selectedPackages={sectionSelected}
+                    selectedRuntimes={sectionSelectedRuntimes}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
@@ -859,6 +908,11 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
                 projectId={projectId}
                 section={section}
                 onlyOutdated={filter === 'outdated'}
+                selection={{
+                  selectedKeys: selectedRuntimes,
+                  onToggle: toggleRuntime,
+                  disabled: updateMutation.isPending,
+                }}
               />
             )}
 
@@ -915,13 +969,13 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
                       ? `Select ${visibleOutdated.length} outdated`
                       : 'No outdated packages'}
                   </label>
-                  {sectionSelectedCount > 0 && (
+                  {sectionTickedCount > 0 && (
                     <button
                       type="button"
                       className="cursor-pointer py-1 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => toggleVisibleOutdated(section.packages, false)}
+                      onClick={() => clearSection(section)}
                     >
-                      Clear {sectionSelectedCount} selected
+                      Clear {sectionTickedCount} selected
                     </button>
                   )}
                 </div>
@@ -972,6 +1026,7 @@ export function PackagesTab({ project }: { project: Project }): React.JSX.Elemen
           section={aiSection}
           sectionLabel={ecosystemLabel(aiSection)}
           selectedPackages={aiSection.packages.filter((pkg) => selected.has(packageKey(pkg)))}
+          selectedRuntimes={selectedRuntimesOf(aiSection)}
         />
       )}
 

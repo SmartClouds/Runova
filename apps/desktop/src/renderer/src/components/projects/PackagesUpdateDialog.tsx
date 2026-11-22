@@ -1,5 +1,5 @@
 import type { Project } from '@runova/core';
-import type { PackageInfo, PackageManagerSection } from '@shared/apiTypes';
+import type { PackageInfo, PackageManagerSection, RuntimeTarget } from '@shared/apiTypes';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Field, FormSection } from '@/components/health/formParts';
 import { TextPane, useSendToAgent } from '@/components/health/promptParts';
@@ -11,6 +11,7 @@ import {
   outdatedRuntimes,
   type PackageCommitMode,
   promptPackages,
+  runtimeKey,
   runtimeLabel,
 } from '@/components/projects/packagesCopy';
 import { Button } from '@/components/ui/button';
@@ -28,13 +29,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 /**
- * "Update with AI" for one package manager section: choose which packages go in and how the
- * agent should go about it, and get the prompt that has the project's agent (Claude Code, say)
- * do the updates. The prompt is built here as the choices change, the same way the Health
- * "Build with AI" dialog builds its own.
+ * "Update with AI" for one package manager section: choose how the agent should go about it, and
+ * get the prompt that has the project's agent (Claude Code, say) do the updates. What goes in is
+ * what the user ticked in the tab (packages and runtime rows), or every outdated package when
+ * nothing is ticked. A runtime goes in only when its row is ticked. The prompt is built here as
+ * the choices change, the same way the Health "Build with AI" dialog builds its own.
  */
-
-type Scope = 'selected' | 'outdated';
 
 const COMMIT_MODES: { mode: PackageCommitMode; label: string }[] = [
   { mode: 'none', label: "Don't" },
@@ -111,6 +111,7 @@ export function PackagesUpdateDialog({
   section,
   sectionLabel,
   selectedPackages,
+  selectedRuntimes,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -118,41 +119,41 @@ export function PackagesUpdateDialog({
   section: PackageManagerSection;
   /** The section's name as the tab shows it ("pnpm", "NuGet (.NET)"). */
   sectionLabel: string;
+  /** The packages ticked in the tab. */
   selectedPackages: PackageInfo[];
+  /** The outdated runtime rows ticked in the tab. */
+  selectedRuntimes: RuntimeTarget[];
 }): React.JSX.Element {
   const baseId = useId();
   const id = (name: string) => `${baseId}-${name}`;
-  const hasSelection = selectedPackages.length > 0;
-  const [scope, setScope] = useState<Scope>(hasSelection ? 'selected' : 'outdated');
+  const hasSelection = selectedPackages.length > 0 || selectedRuntimes.length > 0;
   const [skipMajor, setSkipMajor] = useState(false);
   const [runChecks, setRunChecks] = useState(true);
   const [commit, setCommit] = useState<PackageCommitMode>('none');
   const [notes, setNotes] = useState('');
-  const [includeRuntimes, setIncludeRuntimes] = useState(true);
 
-  // Each opening starts from the tab's current selection, not from what was picked last time.
+  // Each opening starts from the defaults, not from what was picked last time.
   useEffect(() => {
     if (!open) return;
-    setScope(hasSelection ? 'selected' : 'outdated');
     setSkipMajor(false);
     setRunChecks(true);
     setCommit('none');
     setNotes('');
-    setIncludeRuntimes(true);
-  }, [open, hasSelection]);
+  }, [open]);
 
   const outdated = useMemo(
     () => section.packages.filter((pkg) => pkg.isOutdated),
     [section.packages],
   );
-  const targets = scope === 'selected' && hasSelection ? selectedPackages : outdated;
+  const targets = hasSelection ? selectedPackages : outdated;
   const majorCount = targets.filter(
     (pkg) => pkg.latestVersion && bumpKind(pkg.currentVersion, pkg.latestVersion) === 'major',
   ).length;
-  const runtimes = useMemo(() => outdatedRuntimes(section), [section]);
-  const options = { skipMajor, runChecks, commit, notes, includeRuntimes };
+  const outdatedRuntimeCount = useMemo(() => outdatedRuntimes(section).length, [section]);
+  const runtimes = hasSelection ? selectedRuntimes : [];
+  const options = { skipMajor, runChecks, commit, notes, runtimes };
   const included = promptPackages(targets, options);
-  const runtimeCount = includeRuntimes ? runtimes.length : 0;
+  const runtimeCount = runtimes.length;
   const prompt =
     included.length > 0 || runtimeCount > 0
       ? buildPackageUpdatePrompt(section, targets, options)
@@ -181,27 +182,20 @@ export function PackagesUpdateDialog({
         <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto px-5 py-4 md:grid-cols-[17rem_minmax(0,1fr)]">
           <div className="min-w-0 space-y-5">
             <FormSection title="Packages">
-              <div className="space-y-1.5">
-                <span id={id('scope')} className="text-sm font-medium">
-                  Which
-                </span>
-                <Segments
-                  labelId={id('scope')}
-                  value={hasSelection ? scope : 'outdated'}
-                  onChange={setScope}
-                  options={[
-                    ...(hasSelection
-                      ? [
-                          {
-                            value: 'selected' as const,
-                            label: `Selected (${selectedPackages.length})`,
-                          },
-                        ]
-                      : []),
-                    { value: 'outdated' as const, label: `All outdated (${outdated.length})` },
-                  ]}
-                />
-              </div>
+              {hasSelection ? (
+                <p className="text-sm">
+                  {targets.length} selected package{targets.length === 1 ? '' : 's'}
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-sm">
+                    All {targets.length} outdated package{targets.length === 1 ? '' : 's'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Tick packages in the list to pick fewer.
+                  </p>
+                </div>
+              )}
               <SwitchRow
                 id={id('skip-major')}
                 label="Skip major bumps"
@@ -216,20 +210,21 @@ export function PackagesUpdateDialog({
               />
             </FormSection>
 
-            {runtimes.length > 0 && (
+            {outdatedRuntimeCount > 0 && (
               <FormSection title="Runtime">
-                <SwitchRow
-                  id={id('runtimes')}
-                  label="Include the runtime upgrade"
-                  hint={runtimes
-                    .map(
-                      (t) =>
-                        `${runtimeLabel(t)} ${t.declared} to ${t.nextDeclared ?? t.latestVersion}`,
-                    )
-                    .join(', ')}
-                  checked={includeRuntimes}
-                  onCheckedChange={setIncludeRuntimes}
-                />
+                {runtimes.length > 0 ? (
+                  <ul className="space-y-1 text-sm">
+                    {runtimes.map((t) => (
+                      <li key={runtimeKey(t)}>
+                        {`${runtimeLabel(t)} ${t.declared} to ${t.nextDeclared ?? t.latestVersion}`}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Not in the prompt. Tick a runtime in the list to add its upgrade.
+                  </p>
+                )}
               </FormSection>
             )}
 
@@ -295,11 +290,8 @@ export function PackagesUpdateDialog({
                   'flex min-h-40 items-center justify-center text-center text-sm text-muted-foreground',
                 )}
               >
-                {runtimes.length > 0 &&
-                !includeRuntimes &&
-                included.length === 0 &&
-                targets.length === 0
-                  ? 'Nothing is in the prompt. Turn on "Include the runtime upgrade" to add it.'
+                {targets.length === 0
+                  ? 'Nothing is in the prompt. Tick a package or runtime in the list to add it.'
                   : 'Every package here is a major bump. Turn off "Skip major bumps" to include them.'}
               </div>
             )}

@@ -326,7 +326,8 @@ The Packages section lists the dependencies of the project and which are outdate
 - **Search packages** and the filters **All**, **Outdated** and **Dev** narrow the lists.
 - Each ecosystem has its own block. Each row shows the name, **Dev**, **Not installed** or **Latest unknown** badges where they apply, the current and latest version and whether the change is major, minor or patch.
 - Click **Update** on a row, or tick rows (or **Select N outdated**) and click **Update N**, to update them. A progress line shows "Updating 2 of 5", and rows show a tick or a warning.
-- **Copy** gives an **AI update prompt** (versions and steps, ready to paste at an agent) or just the **Package names**, for the selected packages or for all outdated ones.
+- An outdated runtime row (an SDK constraint, a target framework, a `packageManager` pin) can be ticked too. **Update N** counts only the ticked packages.
+- **Copy** gives an **AI update prompt** (versions and steps, ready to paste at an agent) or just the **Package names**. **Update with AI** builds the same prompt with more options and sends it to the project's agent. Both use only what you ticked. With nothing ticked they take every outdated package. A runtime goes in only when its row is ticked.
 
 If the package manager is not installed, the block says so.
 

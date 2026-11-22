@@ -1,4 +1,4 @@
-import type { PackageInfo, PackageManagerSection } from '@shared/apiTypes';
+import type { PackageInfo, PackageManagerSection, RuntimeTarget } from '@shared/apiTypes';
 import { screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../../test/renderer/renderWithProviders';
@@ -58,6 +58,7 @@ const section: PackageManagerSection = {
 function renderDialog(
   selectedPackages: PackageInfo[] = [],
   shown: PackageManagerSection = section,
+  selectedRuntimes: RuntimeTarget[] = [],
 ) {
   const onOpenChange = vi.fn();
   const view = renderWithProviders(
@@ -68,6 +69,7 @@ function renderDialog(
       section={shown}
       sectionLabel="pnpm"
       selectedPackages={selectedPackages}
+      selectedRuntimes={selectedRuntimes}
     />,
   );
   return { ...view, onOpenChange };
@@ -81,25 +83,37 @@ describe('PackagesUpdateDialog', () => {
   it('lists every outdated package when nothing is selected', async () => {
     renderDialog();
     await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
-    expect(screen.queryByRole('button', { name: /Selected/ })).not.toBeInTheDocument();
+    expect(screen.getByText('All 3 outdated packages')).toBeInTheDocument();
     expect(prompt()).toContain('Update 3 outdated pnpm packages');
     expect(prompt()).toContain('- react: 18.3.1 -> 19.1.0 (major)');
     expect(prompt()).toContain('- vite: 6.0.0 -> 6.0.3 (patch, dev)');
     expect(prompt()).not.toContain('clsx');
   });
 
-  it('starts from the selection and can widen to every outdated package', async () => {
+  it('puts only the selected packages in the prompt and counts only them', async () => {
+    renderDialog([zod, vite]);
+    await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
+    expect(screen.getByText('2 selected packages')).toBeInTheDocument();
+    expect(screen.queryByText(/All 3 outdated/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /All outdated/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/^2 packages in the prompt/)).toBeInTheDocument();
+    expect(prompt()).toContain('Update 2 outdated pnpm packages');
+    expect(prompt()).toContain('- zod: 3.22.0 -> 3.24.1');
+    expect(prompt()).toContain('- vite: 6.0.0 -> 6.0.3');
+    expect(prompt()).not.toContain('react');
+  });
+
+  it('sends only the selected package', async () => {
     const { user } = renderDialog([zod]);
     await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
-    expect(screen.getByRole('button', { name: 'Selected (1)' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(prompt()).toContain('Update 1 outdated pnpm package ');
-    expect(prompt()).not.toContain('react');
-
-    await user.click(screen.getByRole('button', { name: 'All outdated (3)' }));
-    expect(prompt()).toContain('Update 3 outdated pnpm packages');
+    expect(screen.getByText('1 selected package')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Send to Claude Code' }));
+    const options = launchPromptTab.mock.calls.at(-1)?.[1] as { prompt: string } | undefined;
+    const sent = options?.prompt ?? '';
+    expect(sent).toMatch(/^Update 1 outdated pnpm package /);
+    expect(sent).toContain('- zod: 3.22.0 -> 3.24.1');
+    expect(sent).not.toContain('react');
+    expect(sent).not.toContain('vite');
   });
 
   it('puts the options into the prompt', async () => {
@@ -170,41 +184,61 @@ describe('PackagesUpdateDialog', () => {
       toolchain: 'bun',
     };
 
-    it('includes the runtime by default and can leave it out', async () => {
-      const { user } = renderDialog([], withRuntime);
+    const bunRuntime = withRuntime.runtimes[0]!;
+
+    it('leaves an unselected runtime out of the prompt and says how to add it', async () => {
+      renderDialog([], withRuntime);
       await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
-      const toggle = screen.getByRole('switch', { name: 'Include the runtime upgrade' });
-      expect(toggle).toBeChecked();
+      expect(
+        screen.getByText('Not in the prompt. Tick a runtime in the list to add its upgrade.'),
+      ).toBeInTheDocument();
+      expect(prompt()).not.toContain('Runtime (current -> target):');
+      expect(prompt()).not.toContain('bun@1.3.2');
+      expect(screen.getByText(/^3 packages in the prompt/)).toBeInTheDocument();
+    });
+
+    it('leaves the runtime out when only packages are selected', async () => {
+      renderDialog([zod], withRuntime);
+      await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
+      expect(prompt()).not.toContain('Runtime (current -> target):');
+      expect(prompt()).toContain('Update 1 outdated bun package ');
+    });
+
+    it('includes a selected runtime with the selected packages', async () => {
+      renderDialog([zod], withRuntime, [bunRuntime]);
+      await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
       expect(screen.getByText('Bun (packageManager) bun@1.1.0 to bun@1.3.2')).toBeInTheDocument();
       expect(prompt()).toContain('Runtime (current -> target):');
       expect(prompt()).toContain('bun@1.1.0 -> bun@1.3.2');
-      expect(
-        screen.getByText(/3 packages and 1 runtime setting in the prompt/),
-      ).toBeInTheDocument();
-
-      await user.click(toggle);
-      expect(prompt()).not.toContain('Runtime (current -> target):');
-      expect(screen.getByText(/3 packages in the prompt/)).toBeInTheDocument();
+      expect(prompt()).toContain('- zod: 3.22.0 -> 3.24.1');
+      expect(prompt()).not.toContain('react');
+      expect(screen.getByText(/1 package and 1 runtime setting in the prompt/)).toBeInTheDocument();
     });
 
-    it('can send a prompt for the runtime alone', async () => {
-      const runtimeOnly = { ...withRuntime, packages: [current] };
-      const { user } = renderDialog([], runtimeOnly);
+    it('builds a runtime-only prompt when only the runtime is selected', async () => {
+      renderDialog([], withRuntime, [bunRuntime]);
       await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
+      expect(screen.getByText('0 selected packages')).toBeInTheDocument();
       expect(prompt()).toContain('Move this project to the latest Bun (packageManager).');
       expect(prompt()).not.toContain('Packages (current -> latest)');
+      expect(prompt()).not.toContain('zod');
+    });
 
-      await user.click(screen.getByRole('switch', { name: 'Include the runtime upgrade' }));
-      expect(screen.getByText(/Turn on "Include the runtime upgrade"/)).toBeInTheDocument();
+    it('has nothing to send when only the runtime is outdated and it is not selected', async () => {
+      renderDialog([], { ...withRuntime, packages: [current] });
+      await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
+      expect(
+        screen.getByText(
+          'Nothing is in the prompt. Tick a package or runtime in the list to add it.',
+        ),
+      ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeDisabled();
     });
 
-    it('has no runtime switch when the runtime is current', async () => {
+    it('has no runtime section when the runtime is current', async () => {
       renderDialog();
       await screen.findByRole('dialog', { name: 'Update pnpm packages with AI' });
-      expect(
-        screen.queryByRole('switch', { name: 'Include the runtime upgrade' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Tick a runtime in the list/)).not.toBeInTheDocument();
     });
   });
 });
