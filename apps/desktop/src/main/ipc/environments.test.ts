@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
@@ -12,6 +12,7 @@ import type {
   StoredProjectEnvironment,
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
+import { queueDialog } from '../../test/main/electronMock';
 import { initGitRepo, tempDir } from '../../test/main/fixtures';
 import {
   electronState,
@@ -38,7 +39,8 @@ let environmentsModule: typeof import('./environments');
 const PROJECT_ID = 'p1';
 const SECRET = 'API_TOKEN=do-not-log-me\n';
 
-expectChannelsCovered(IPC.environments);
+// onChanged is a push from main; the link manager's own tests cover when it fires.
+expectChannelsCovered(IPC.environments, [IPC.environments.onChanged]);
 
 function storedEnvironments(): StoredProjectEnvironment[] {
   return JSON.parse(
@@ -726,6 +728,234 @@ describe('the project folder', () => {
     expect(
       await invoke<EnvWriteResult>(IPC.environments.writeToFolder, environment.id, exposedId, true),
     ).toMatchObject({ status: 'written', notIgnored: true });
+  });
+});
+
+describe('env files linked to a file in the project', () => {
+  async function savedFile(content = 'A=1\n', fileName = '.env.prod') {
+    const environment = await newEnvironment();
+    const saved = await invoke<ProjectEnvironment>(IPC.environments.saveFile, {
+      environmentId: environment.id,
+      fileName,
+      content,
+    });
+    return { environment, fileId: saved.files[0].id };
+  }
+
+  function link(environmentId: string, fileId: string, path: string) {
+    return invoke<ProjectEnvironment>(IPC.environments.linkFile, { environmentId, fileId, path });
+  }
+
+  function history(environmentId: string, fileId: string): Promise<EnvFileVersionSummary[]> {
+    return invoke<EnvFileVersionSummary[]>(IPC.environments.fileHistory, environmentId, fileId);
+  }
+
+  async function service() {
+    return import('../environments/service');
+  }
+
+  it('takes the contents of the linked file and keeps what it replaced in the history', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    writeFileSync(join(project.dir, '.env.prod'), 'A=2\nB=3\n', 'utf-8');
+
+    const linked = await link(environment.id, fileId, '.env.prod');
+    expect(linked.files[0]).toMatchObject({
+      origin: 'linked',
+      keyCount: 2,
+      versionCount: 1,
+      link: { path: '.env.prod', state: 'watching' },
+    });
+    expect(await invoke<string>(IPC.environments.readFile, environment.id, fileId)).toBe(
+      'A=2\nB=3\n',
+    );
+    expect(storedEnvironments()[0].files[0].link).toEqual({
+      path: '.env.prod',
+      linkedAt: expect.any(Number),
+    });
+    // The linked contents are a secret like any other: sealed on disk.
+    expect(readFileSync(userData.dataFile('project-environments.json'), 'utf-8')).not.toContain(
+      'B=3',
+    );
+    expect(await history(environment.id, fileId)).toEqual([
+      expect.objectContaining({ origin: 'created', keyCount: 1 }),
+    ]);
+  });
+
+  it('links a file in a subfolder given by its full path, adding no version when it matches', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    mkdirSync(join(project.dir, 'apps', 'api'), { recursive: true });
+    const path = join(project.dir, 'apps', 'api', '.env');
+    writeFileSync(path, 'A=1\n', 'utf-8');
+
+    const linked = await link(environment.id, fileId, path);
+    expect(linked.files[0]).toMatchObject({
+      origin: 'created',
+      versionCount: 0,
+      link: { path: 'apps/api/.env', state: 'watching' },
+    });
+  });
+
+  it('refuses a file outside the project, a folder, a missing file and a huge one', async () => {
+    const { environment, fileId } = await savedFile();
+    const outside = join(tempDir('runova-env-outside-'), '.env');
+    writeFileSync(outside, 'A=1\n', 'utf-8');
+    mkdirSync(join(project.dir, 'config'));
+    writeFileSync(join(project.dir, '.env.big'), 'A'.repeat(1024 * 1024 + 1), 'utf-8');
+
+    await expect(link(environment.id, fileId, outside)).rejects.toThrow(
+      'Pick a file inside the project folder.',
+    );
+    await expect(link(environment.id, fileId, '../.env')).rejects.toThrow(
+      'Pick a file inside the project folder.',
+    );
+    await expect(link(environment.id, fileId, 'config')).rejects.toThrow('config is a folder.');
+    await expect(link(environment.id, fileId, '.env.gone')).rejects.toThrow(
+      '.env.gone is not in the project folder.',
+    );
+    await expect(link(environment.id, fileId, '.env.big')).rejects.toThrow(
+      'That file is larger than 1 MB.',
+    );
+    expect(storedEnvironments()[0].files[0].link).toBeUndefined();
+  });
+
+  it('previews what a link would do before making it', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    writeFileSync(join(project.dir, '.env.prod'), 'A=1\n', 'utf-8');
+    writeFileSync(join(project.dir, '.env.other'), 'A=1\nB=2\n', 'utf-8');
+
+    expect(
+      await invoke(IPC.environments.inspectLinkFile, environment.id, fileId, '.env.prod'),
+    ).toEqual({ path: '.env.prod', keyCount: 1, sameAsSaved: true });
+    expect(
+      await invoke(IPC.environments.inspectLinkFile, environment.id, fileId, '.env.other'),
+    ).toEqual({ path: '.env.other', keyCount: 2, sameAsSaved: false });
+  });
+
+  it('picks the file with a dialog that opens in the project folder', async () => {
+    const inside = join(project.dir, '.env.prod');
+    queueDialog('showOpenDialog', { canceled: false, filePaths: [inside] });
+    expect(await invoke(IPC.environments.pickLinkFile, PROJECT_ID)).toBe('.env.prod');
+    expect(electronState.dialogCalls.at(-1)?.args.at(-1)).toMatchObject({
+      defaultPath: project.dir,
+      properties: expect.arrayContaining(['openFile', 'showHiddenFiles']),
+    });
+
+    queueDialog('showOpenDialog', { canceled: true, filePaths: [] });
+    expect(await invoke(IPC.environments.pickLinkFile, PROJECT_ID)).toBeNull();
+
+    queueDialog('showOpenDialog', {
+      canceled: false,
+      filePaths: [join(tempDir('runova-env-outside-'), '.env')],
+    });
+    await expect(invoke(IPC.environments.pickLinkFile, PROJECT_ID)).rejects.toThrow(
+      'Pick a file inside the project folder.',
+    );
+  });
+
+  it('unlinks without touching the contents or the history', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    writeFileSync(join(project.dir, '.env.prod'), 'A=2\n', 'utf-8');
+    await link(environment.id, fileId, '.env.prod');
+
+    const unlinked = await invoke<ProjectEnvironment>(
+      IPC.environments.unlinkFile,
+      environment.id,
+      fileId,
+    );
+    expect(unlinked.files[0].link).toBeUndefined();
+    expect(unlinked.files[0]).toMatchObject({ keyCount: 1, versionCount: 1 });
+    expect(storedEnvironments()[0].files[0].link).toBeUndefined();
+  });
+
+  it('writes the linked file when the saved copy is edited or restored, through a rename too', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    const path = join(project.dir, '.env.prod');
+    writeFileSync(path, 'A=1\n', 'utf-8');
+    await link(environment.id, fileId, '.env.prod');
+
+    const edited = await invoke<ProjectEnvironment>(IPC.environments.saveFile, {
+      environmentId: environment.id,
+      id: fileId,
+      fileName: '.env.production',
+      content: 'A=edited\n',
+    });
+    expect(edited.files[0]).toMatchObject({
+      fileName: '.env.production',
+      link: { path: '.env.prod', state: 'watching' },
+    });
+    expect(readFileSync(path, 'utf-8')).toBe('A=edited\n');
+
+    const [first] = await history(environment.id, fileId);
+    await invoke(IPC.environments.restoreFileVersion, environment.id, fileId, first.id);
+    expect(readFileSync(path, 'utf-8')).toBe('A=1\n');
+  });
+
+  it('keeps the save but says so when the linked file cannot be written', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    const path = join(project.dir, '.env.prod');
+    writeFileSync(path, 'A=1\n', 'utf-8');
+    await link(environment.id, fileId, '.env.prod');
+    // A folder where the file was: writing to it fails on every platform.
+    rmSync(path);
+    mkdirSync(path);
+
+    await expect(
+      invoke(IPC.environments.saveFile, {
+        environmentId: environment.id,
+        id: fileId,
+        fileName: '.env.prod',
+        content: 'A=2\n',
+      }),
+    ).rejects.toThrow("Saved in Runova, but couldn't write .env.prod");
+    expect(await invoke<string>(IPC.environments.readFile, environment.id, fileId)).toBe('A=2\n');
+    const [listed] = await invoke<ProjectEnvironment[]>(IPC.environments.list, PROJECT_ID);
+    expect(listed.files[0].link?.state).toBe('error');
+  });
+
+  it('follows changes made on disk, and lists the links for the watcher', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    const path = join(project.dir, '.env.prod');
+    writeFileSync(path, 'A=1\n', 'utf-8');
+    await link(environment.id, fileId, '.env.prod');
+    const environments = await service();
+
+    const [linkedFile] = await environments.linkedEnvFiles();
+    expect(linkedFile).toEqual({
+      projectId: PROJECT_ID,
+      environmentId: environment.id,
+      fileId,
+      path,
+    });
+
+    writeFileSync(path, 'A=1\nB=2\n', 'utf-8');
+    expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('updated');
+    const [listed] = await invoke<ProjectEnvironment[]>(IPC.environments.list, PROJECT_ID);
+    expect(listed.files[0]).toMatchObject({ origin: 'fileChanged', keyCount: 2, versionCount: 1 });
+    // The link survives the update, and the item's own name is untouched.
+    expect(listed.files[0]).toMatchObject({ fileName: '.env.prod', link: { path: '.env.prod' } });
+
+    expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('unchanged');
+    rmSync(path);
+    expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('missing');
+    writeFileSync(path, 'A'.repeat(1024 * 1024 + 1), 'utf-8');
+    expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('tooLarge');
+
+    await invoke(IPC.environments.unlinkFile, environment.id, fileId);
+    expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('gone');
+    expect(await environments.linkedEnvFiles()).toEqual([]);
+  });
+
+  it('imports files linked to where they came from when asked', async () => {
+    writeFileSync(join(project.dir, '.env'), 'A=1\n', 'utf-8');
+    writeFileSync(join(project.dir, '.env.production'), 'B=1\n', 'utf-8');
+
+    await invoke(IPC.environments.importFromFolder, PROJECT_ID, [
+      { fileName: '.env', newEnvironment: { name: 'Local', kind: 'development' }, link: true },
+      { fileName: '.env.production', newEnvironment: { name: 'Local', kind: 'development' } },
+    ]);
+    const [listed] = await invoke<ProjectEnvironment[]>(IPC.environments.list, PROJECT_ID);
+    expect(listed.files[0].link).toEqual({ path: '.env', state: 'watching' });
+    expect(listed.files[1].link).toBeUndefined();
   });
 });
 

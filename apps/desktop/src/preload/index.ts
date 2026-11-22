@@ -191,6 +191,7 @@ import type {
   EnvFolderFile,
   EnvImportPick,
   EnvImportResult,
+  EnvLinkPreview,
   EnvWriteResult,
   ExplorerDeleteResult,
   ExplorerFileIndex,
@@ -249,6 +250,7 @@ import type {
   KeepAwakeStatus,
   KillProcessResult,
   LastRunInfoByCli,
+  LinkEnvFileInput,
   LocalSkillFolderPreview,
   MergePullRequestIpcInput,
   MergePullRequestResult,
@@ -2986,6 +2988,23 @@ const environments = {
     overwrite: boolean,
   ): Promise<EnvWriteResult> =>
     ipcRenderer.invoke(IPC.environments.writeToFolder, environmentId, fileId, overwrite),
+  /** Opens a file dialog in the project folder. The pick comes back relative to it, or null. */
+  pickLinkFile: (projectId: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.environments.pickLinkFile, projectId),
+  inspectLinkFile: (environmentId: string, fileId: string, path: string): Promise<EnvLinkPreview> =>
+    ipcRenderer.invoke(IPC.environments.inspectLinkFile, environmentId, fileId, path),
+  /** The saved copy takes the file's contents now and follows the file from then on. */
+  linkFile: (input: LinkEnvFileInput): Promise<ProjectEnvironment> =>
+    ipcRenderer.invoke(IPC.environments.linkFile, input),
+  unlinkFile: (environmentId: string, fileId: string): Promise<ProjectEnvironment> =>
+    ipcRenderer.invoke(IPC.environments.unlinkFile, environmentId, fileId),
+  /** A linked file changed a project's environments. Returns a function that stops listening. */
+  onChanged: (callback: (event: { projectId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: { projectId: string }): void =>
+      callback(payload);
+    ipcRenderer.on(IPC.environments.onChanged, listener);
+    return () => ipcRenderer.removeListener(IPC.environments.onChanged, listener);
+  },
 };
 
 const rdp = {

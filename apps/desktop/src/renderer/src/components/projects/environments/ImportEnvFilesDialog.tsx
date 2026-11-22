@@ -64,6 +64,7 @@ export function ImportEnvFilesDialog({
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [keepLinked, setKeepLinked] = useState(true);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scan once per open; the environment list is read for defaults only
   useEffect(() => {
@@ -71,6 +72,7 @@ export function ImportEnvFilesDialog({
     setRows(null);
     setError(null);
     setSubmitting(false);
+    setKeepLinked(true);
     let cancelled = false;
     window.runova.environments
       .scanFolder(projectId)
@@ -117,11 +119,12 @@ export function ImportEnvFilesDialog({
     if (selected.length === 0 || submitting) return;
     const picks: EnvImportPick[] = selected.map(({ file, target }) => {
       if (target.startsWith('env:'))
-        return { fileName: file.fileName, environmentId: target.slice(4) };
+        return { fileName: file.fileName, environmentId: target.slice(4), link: keepLinked };
       const kind = target.slice(4) as EnvironmentKind;
       return {
         fileName: file.fileName,
         newEnvironment: { name: newEnvironmentName(kind, file.fileName), kind },
+        link: keepLinked,
       };
     });
 
@@ -205,6 +208,31 @@ export function ImportEnvFilesDialog({
               </li>
             ))}
           </ul>
+        )}
+
+        {rows && rows.length > 0 && (
+          <label
+            htmlFor="env-import-keep-linked"
+            className="flex cursor-pointer items-start gap-3 rounded-md px-1 py-1"
+          >
+            <Checkbox
+              id="env-import-keep-linked"
+              className="mt-0.5"
+              checked={keepLinked}
+              onCheckedChange={(checked) => setKeepLinked(checked === true)}
+              aria-labelledby="env-import-keep-linked-label"
+              aria-describedby="env-import-keep-linked-hint"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span id="env-import-keep-linked-label" className="text-sm font-medium">
+                Keep the copies linked to these files
+              </span>
+              <span id="env-import-keep-linked-hint" className="text-xs text-muted-foreground">
+                When a file changes, its copy saves the new contents as a new version. Saving a copy
+                in Runova writes its file.
+              </span>
+            </span>
+          </label>
         )}
 
         <DialogFooter>

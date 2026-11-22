@@ -115,6 +115,24 @@ async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
   const tmpPath = `${filePath}.${randomUUID()}.tmp`;
   await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
   await renameWithRetry(tmpPath, filePath);
+  for (const listener of writeListeners) {
+    try {
+      listener(fileName);
+    } catch {
+      // A listener's failure is its own; the write already happened.
+    }
+  }
+}
+
+const writeListeners = new Set<(fileName: string) => void>();
+
+/**
+ * Runs `listener` with the file name (such as `projects.json`) after each store write, whoever
+ * made it: a page, a sync pull, a startup prune. Returns a function that stops it.
+ */
+export function onStoreWrite(listener: (fileName: string) => void): () => void {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
 }
 
 async function readSettings(): Promise<AppSettings> {
@@ -463,6 +481,15 @@ export const store = {
     readJsonFile('project-environments.json', []),
   setProjectEnvironments: (environments: StoredProjectEnvironment[]): Promise<void> =>
     writeJsonFile('project-environments.json', environments),
+
+  /**
+   * What each linked env file looked like on disk when last seen here, by file id. Only on this
+   * computer: it tells a file changed while the app was closed from one that was not.
+   */
+  getEnvFileLinkMarks: (): Promise<Record<string, { mtimeMs: number; size: number }>> =>
+    readJsonFile('env-file-link-marks.json', {}),
+  setEnvFileLinkMarks: (marks: Record<string, { mtimeMs: number; size: number }>): Promise<void> =>
+    writeJsonFile('env-file-link-marks.json', marks),
 
   getSshVault: (): Promise<SshVaultRecord | null> => readJsonFile('ssh-vault.json', null),
   setSshVault: (vault: SshVaultRecord | null): Promise<void> =>

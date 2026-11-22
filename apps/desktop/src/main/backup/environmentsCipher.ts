@@ -7,6 +7,7 @@ import {
   MAX_ENV_FILE_BYTES,
 } from '@runova/core';
 import type {
+  EnvFileLink,
   EnvFileOrigin,
   SecretEnvelope,
   StoredEnvCredential,
@@ -226,7 +227,22 @@ const ENV_FILE_ORIGINS: readonly EnvFileOrigin[] = [
   'imported',
   'restored',
   'renamed',
+  'linked',
+  'fileChanged',
 ];
+
+/**
+ * A file's link to the project, when it is a plain relative path that stays inside the folder.
+ * Anything else is dropped (the file itself is kept), since the path is later joined onto the
+ * project folder and written to.
+ */
+function link(value: unknown): EnvFileLink | undefined {
+  if (!isRecord(value) || typeof value.path !== 'string') return undefined;
+  const path = value.path;
+  if (!path || path.length > 1000 || /^[\\/]|^[A-Za-z]:/.test(path)) return undefined;
+  if (path.split(/[\\/]/).some((part) => part === '..' || part === '')) return undefined;
+  return { path, linkedAt: time(value.linkedAt) };
+}
 
 function origin(value: unknown): EnvFileOrigin | undefined {
   return (ENV_FILE_ORIGINS as readonly unknown[]).includes(value)
@@ -257,6 +273,8 @@ async function buildFile(entry: unknown): Promise<StoredEnvFile | null> {
   };
   const fileOrigin = origin(entry.origin);
   if (fileOrigin) file.origin = fileOrigin;
+  const fileLink = link(entry.link);
+  if (fileLink) file.link = fileLink;
   return file;
 }
 

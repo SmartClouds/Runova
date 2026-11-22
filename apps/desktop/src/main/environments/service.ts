@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   countDotenvKeys,
   type DotenvEntry,
@@ -20,7 +20,9 @@ import type {
   EnvFolderFile,
   EnvImportPick,
   EnvImportResult,
+  EnvLinkPreview,
   EnvWriteResult,
+  LinkEnvFileInput,
   ProjectEnvironment,
   SaveEnvCredentialInput,
   SaveEnvFileInput,
@@ -36,6 +38,8 @@ import { gitOrNull, isGitRepo } from '../git/plumbing';
 import { pruneOrphanHealthTargets } from '../health/store';
 import { decryptSecret, encryptSecret } from '../ssh/vault';
 import { store } from '../store';
+import type { LinkedEnvFile, LinkUpdateOutcome } from './fileLinks';
+import { envFileLinkState, setEnvFileLinkState } from './linkStates';
 
 /**
  * A project's environments: named sets of env files and credentials, kept encrypted in
@@ -50,9 +54,10 @@ export function toPublicEnvironment(environment: StoredProjectEnvironment): Proj
   const versionCounts = envFileHistoryDb.countByFile(environment.files.map((file) => file.id));
   return {
     ...environment,
-    files: environment.files.map(({ contentEnvelope: _content, ...file }) => ({
+    files: environment.files.map(({ contentEnvelope: _content, link, ...file }) => ({
       ...file,
       versionCount: versionCounts.get(file.id) ?? 0,
+      ...(link ? { link: { path: link.path, state: envFileLinkState(file.id) } } : {}),
     })),
     credentials: environment.credentials.map(
       ({ secretEnvelope, notesEnvelope, ...credential }) => ({
@@ -72,11 +77,13 @@ let updateQueue: Promise<unknown> = Promise.resolve();
 
 function mutate<T>(
   change: (environments: StoredProjectEnvironment[]) => Promise<T> | T,
+  /** Says whether the change touched anything worth writing; a check that found nothing doesn't. */
+  changed: (result: T) => boolean = () => true,
 ): Promise<T> {
   const next = updateQueue.then(async () => {
     const environments = await store.getProjectEnvironments();
     const result = await change(environments);
-    await store.setProjectEnvironments(environments);
+    if (changed(result)) await store.setProjectEnvironments(environments);
     return result;
   });
   updateQueue = next.catch(() => undefined);
@@ -220,6 +227,8 @@ async function writeFileRecord(
     origin: nextOrigin,
     contentEnvelope: await encryptSecret(content),
     updatedAt: Date.now(),
+    // A linked file stays linked through every save, whatever caused it.
+    ...(existing?.link ? { link: existing.link } : {}),
   };
   if (existing) {
     keepVersion(environment, existing, record.updatedAt);
@@ -346,8 +355,8 @@ export function reorderEnvironments(projectId: string, orderedIds: string[]): Pr
   });
 }
 
-export function saveEnvFile(input: SaveEnvFileInput): Promise<ProjectEnvironment> {
-  return mutate(async (environments) => {
+export async function saveEnvFile(input: SaveEnvFileInput): Promise<ProjectEnvironment> {
+  const { saved, write } = await mutate(async (environments) => {
     const environment = findEnvironment(environments, input.environmentId);
     assertFileName(input.fileName);
     assertContentSize(input.content);
@@ -362,8 +371,13 @@ export function saveEnvFile(input: SaveEnvFileInput): Promise<ProjectEnvironment
       input.content,
       index >= 0 ? 'edited' : 'created',
     );
-    return toPublicEnvironment(environment);
+    const record = environment.files[index >= 0 ? index : environment.files.length - 1];
+    return {
+      saved: toPublicEnvironment(environment),
+      write: await linkedWriteFor(environment, record, input.content),
+    };
   });
+  return write ? afterLinkedWrite(input.environmentId, write) : saved;
 }
 
 export function removeEnvFile(environmentId: string, fileId: string): Promise<void> {
@@ -372,6 +386,7 @@ export function removeEnvFile(environmentId: string, fileId: string): Promise<vo
     environment.files = environment.files.filter((f) => f.id !== fileId);
     environment.updatedAt = Date.now();
     envFileHistoryDb.removeForFile(fileId);
+    setEnvFileLinkState(fileId, undefined);
   });
 }
 
@@ -399,12 +414,12 @@ export async function readEnvFileVersion(
   return decryptSecret(findVersion(fileId, versionId).contentEnvelope);
 }
 
-export function restoreEnvFileVersion(
+export async function restoreEnvFileVersion(
   environmentId: string,
   fileId: string,
   versionId: string,
 ): Promise<ProjectEnvironment> {
-  return mutate(async (environments) => {
+  const { saved, write } = await mutate(async (environments) => {
     const environment = findEnvironment(environments, environmentId);
     const index = environment.files.findIndex((f) => f.id === fileId);
     if (index < 0) throw new Error('That env file no longer exists.');
@@ -412,8 +427,12 @@ export function restoreEnvFileVersion(
     // The contents come back; the file keeps the name it has today.
     const { fileName } = environment.files[index];
     await writeFileRecord(environment, index, fileName, content, 'restored');
-    return toPublicEnvironment(environment);
+    return {
+      saved: toPublicEnvironment(environment),
+      write: await linkedWriteFor(environment, environment.files[index], content),
+    };
   });
+  return write ? afterLinkedWrite(environmentId, write) : saved;
 }
 
 export function saveEnvCredential(input: SaveEnvCredentialInput): Promise<ProjectEnvironment> {
@@ -529,6 +548,10 @@ export async function importEnvFromFolder(
         }
 
         await upsertFileByName(target, pick.fileName, content);
+        if (pick.link) {
+          const record = target.files.find((f) => f.fileName === pick.fileName);
+          if (record) record.link = { path: pick.fileName, linkedAt: Date.now() };
+        }
         imported++;
       } catch (error) {
         errors.push(`${pick.fileName}: ${error instanceof Error ? error.message : String(error)}`);
@@ -562,4 +585,206 @@ export async function writeEnvToFolder(
     (await isGitRepo(project.folderPath)) &&
     (await gitOrNull(project.folderPath, ['check-ignore', '-q', '--', file.fileName])) === null;
   return { status: 'written', path, notIgnored };
+}
+
+/* Linked files: a saved env file that follows a file in the project folder (see fileLinks.ts). */
+
+/** The link's path and where it points, checked to stay inside the project folder. */
+function resolveInProject(folder: string, path: string): { absolute: string; relative: string } {
+  const absolute = resolve(folder, String(path ?? ''));
+  const inside = relative(folder, absolute);
+  if (!inside || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
+    throw new Error('Pick a file inside the project folder.');
+  }
+  return { absolute, relative: inside.split(sep).join('/') };
+}
+
+async function projectFolderOf(projectId: string): Promise<string> {
+  const { folderPath } = await requireProject(projectId);
+  if (!folderPath) throw new Error('This project has no folder on this computer.');
+  return folderPath;
+}
+
+/** The contents of a file about to be linked, with a message fit to show when it won't do. */
+async function readLinkTarget(absolute: string, shown: string): Promise<string> {
+  const info = await stat(absolute).catch(() => null);
+  if (!info) throw new Error(`${shown} is not in the project folder.`);
+  if (info.isDirectory()) throw new Error(`${shown} is a folder.`);
+  if (info.size > MAX_ENV_FILE_BYTES) throw new Error('That file is larger than 1 MB.');
+  return readFile(absolute, 'utf-8');
+}
+
+/** A path picked anywhere, as the link would keep it, or an error when it is outside the project. */
+export async function envLinkPathFor(projectId: string, absolutePath: string): Promise<string> {
+  return resolveInProject(await projectFolderOf(projectId), absolutePath).relative;
+}
+
+export async function inspectEnvLinkFile(
+  environmentId: string,
+  fileId: string,
+  path: string,
+): Promise<EnvLinkPreview> {
+  const environment = await readEnvironment(environmentId);
+  const file = findFile(environment, fileId);
+  const target = resolveInProject(await projectFolderOf(environment.projectId), path);
+  const content = await readLinkTarget(target.absolute, target.relative);
+  return {
+    path: target.relative,
+    keyCount: countDotenvKeys(content),
+    sameAsSaved: (await decryptSecret(file.contentEnvelope)) === content,
+  };
+}
+
+/**
+ * Links a saved env file to a file in the project. The saved copy takes the file's contents right
+ * away (what it held goes into the history) and follows the file from then on.
+ */
+export function linkEnvFile(input: LinkEnvFileInput): Promise<ProjectEnvironment> {
+  return mutate(async (environments) => {
+    const environment = findEnvironment(environments, input.environmentId);
+    const index = environment.files.findIndex((f) => f.id === input.fileId);
+    if (index < 0) throw new Error('That env file no longer exists.');
+    const target = resolveInProject(await projectFolderOf(environment.projectId), input.path);
+    const content = await readLinkTarget(target.absolute, target.relative);
+    const { fileName } = environment.files[index];
+    await writeFileRecord(environment, index, fileName, content, 'linked');
+    environment.files[index].link = { path: target.relative, linkedAt: Date.now() };
+    environment.updatedAt = Date.now();
+    setEnvFileLinkState(input.fileId, 'watching');
+    return toPublicEnvironment(environment);
+  });
+}
+
+/** Stops following the file. The saved contents and their history stay as they are. */
+export function unlinkEnvFile(environmentId: string, fileId: string): Promise<ProjectEnvironment> {
+  return mutate((environments) => {
+    const environment = findEnvironment(environments, environmentId);
+    const file = findFile(environment, fileId);
+    delete file.link;
+    environment.updatedAt = Date.now();
+    setEnvFileLinkState(fileId, undefined);
+    return toPublicEnvironment(environment);
+  });
+}
+
+/** Every linked file of every project, where it sits on this computer. */
+export async function linkedEnvFiles(): Promise<LinkedEnvFile[]> {
+  const [projects, environments] = await Promise.all([
+    store.getProjects(),
+    store.getProjectEnvironments(),
+  ]);
+  const folders = new Map(projects.map((project) => [project.id, project.folderPath]));
+  const linked: LinkedEnvFile[] = [];
+  for (const environment of environments) {
+    if (!folders.has(environment.projectId)) continue;
+    const folder = folders.get(environment.projectId);
+    for (const file of environment.files) {
+      if (!file.link) continue;
+      let path: string | null = null;
+      if (folder) {
+        try {
+          path = resolveInProject(folder, file.link.path).absolute;
+        } catch {
+          // A link that points outside the folder (from a damaged sync) is never followed.
+          continue;
+        }
+      }
+      linked.push({
+        projectId: environment.projectId,
+        environmentId: environment.id,
+        fileId: file.id,
+        path,
+      });
+    }
+  }
+  return linked;
+}
+
+/**
+ * Reads a linked file into its saved copy, keeping what it replaces in the history. Throws while
+ * the vault is locked, so the link manager can wait for the unlock.
+ */
+export function updateEnvFileFromDisk(linked: LinkedEnvFile): Promise<LinkUpdateOutcome> {
+  return mutate<LinkUpdateOutcome>(
+    async (environments) => {
+      const environment = environments.find((e) => e.id === linked.environmentId);
+      const index = environment?.files.findIndex((f) => f.id === linked.fileId) ?? -1;
+      const record = environment?.files[index];
+      if (!environment || !record?.link) return 'gone';
+      const project = (await store.getProjects()).find((p) => p.id === environment.projectId);
+      if (!project?.folderPath) return 'gone';
+      const { absolute } = resolveInProject(project.folderPath, record.link.path);
+
+      const info = await stat(absolute).catch(() => null);
+      if (!info || info.isDirectory()) return 'missing';
+      if (info.size > MAX_ENV_FILE_BYTES) return 'tooLarge';
+      const content = await readFile(absolute, 'utf-8');
+      await writeFileRecord(environment, index, record.fileName, content, 'fileChanged');
+      return environment.files[index] === record ? 'unchanged' : 'updated';
+    },
+    (outcome) => outcome === 'updated',
+  );
+}
+
+interface LinkedWrite {
+  fileId: string;
+  /** Absolute. */
+  path: string;
+  /** As the link keeps it, for messages. */
+  shown: string;
+  content: string;
+}
+
+/** Where a save of a linked file has to go, or null for a file that isn't linked. */
+async function linkedWriteFor(
+  environment: StoredProjectEnvironment,
+  file: StoredEnvFile,
+  content: string,
+): Promise<LinkedWrite | null> {
+  if (!file.link) return null;
+  const target = resolveInProject(await projectFolderOf(environment.projectId), file.link.path);
+  return { fileId: file.id, path: target.absolute, shown: file.link.path, content };
+}
+
+function writeFailure(error: unknown): string {
+  switch ((error as NodeJS.ErrnoException)?.code) {
+    case 'EISDIR':
+      return 'a folder has that name';
+    case 'ENOENT':
+      return 'its folder is gone';
+    case 'EACCES':
+    case 'EPERM':
+      return 'permission denied';
+    case 'EBUSY':
+      return 'another program has it open';
+    default:
+      return error instanceof Error ? error.message : String(error);
+  }
+}
+
+const linkedWriteListeners = new Set<(fileId: string) => void>();
+
+/** Runs `listener` after Runova itself wrote a linked file, so its watcher can take note. */
+export function onLinkedFileWritten(listener: (fileId: string) => void): () => void {
+  linkedWriteListeners.add(listener);
+  return () => linkedWriteListeners.delete(listener);
+}
+
+/**
+ * Writes a saved linked file out to the project. The save itself already happened; a failed
+ * write says so, and the link shows the error until the next good write or change on disk.
+ */
+async function afterLinkedWrite(
+  environmentId: string,
+  write: LinkedWrite,
+): Promise<ProjectEnvironment> {
+  try {
+    await writeFile(write.path, write.content, 'utf-8');
+  } catch (error) {
+    setEnvFileLinkState(write.fileId, 'error');
+    throw new Error(`Saved in Runova, but couldn't write ${write.shown}: ${writeFailure(error)}.`);
+  }
+  setEnvFileLinkState(write.fileId, 'watching');
+  for (const listener of linkedWriteListeners) listener(write.fileId);
+  return toPublicEnvironment(await readEnvironment(environmentId));
 }

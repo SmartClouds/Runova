@@ -19,6 +19,7 @@ import { configureBrowserSession, setupBrowserGuests } from './browser/guestSess
 import { registerDeployIpc } from './deploy';
 import { pruneOrphanFileSites } from './deploy/files/store';
 import { disposeDevSetup } from './devSetup/runtime';
+import { startEnvFileLinks, stopEnvFileLinks } from './environments/linkWatching';
 import { pruneOrphanErrorLinks } from './errorTracking/store';
 import { seedExampleRepositoryIfEmpty } from './exampleSkillRepo';
 import { shutdownLocalServer } from './grammar/localServer';
@@ -569,6 +570,8 @@ app.whenReady().then(async () => {
   void migrateInlineProjectIcons();
   void pruneOrphanBlueprints();
   void pruneOrphanEnvironments();
+  // Env files linked to a file in a project follow it from here on, with or without a window.
+  startEnvFileLinks();
   void pruneOrphanHealthTargets();
   void pruneOrphanRelays();
   void pruneOrphanErrorLinks();
@@ -658,6 +661,7 @@ app.on('before-quit', (event) => {
     .then((settings) => stopEmulatorsOnQuit(settings.androidStopEmulatorsOnQuit === true));
   petManager.close();
   stopAiAccess();
+  stopEnvFileLinks();
   stopHookServer();
   stopResetAlertWatcher();
   stopThresholdAlertWatcher();

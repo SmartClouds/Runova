@@ -96,3 +96,125 @@ describe('EnvironmentsTab file history', () => {
     expect(await screen.findByRole('dialog')).not.toHaveAccessibleName(/^History of/);
   });
 });
+
+describe('EnvironmentsTab linked files', () => {
+  const linkedEnvironment: ProjectEnvironment = {
+    ...environment,
+    files: [
+      envFile({
+        id: 'f1',
+        fileName: '.env.production',
+        origin: 'fileChanged',
+        link: { path: 'apps/api/.env.prod', state: 'watching' },
+      }),
+      envFile({ id: 'f2', fileName: '.env', link: { path: '.env', state: 'missing' } }),
+      envFile({
+        id: 'f3',
+        fileName: '.env.local',
+        link: { path: '.env.local', state: 'waitingForUnlock' },
+      }),
+      envFile({ id: 'f4', fileName: '.env.test' }),
+    ],
+  };
+
+  function renderLinked(bridge: Record<string, unknown> = {}) {
+    return renderTab({ 'environments.list': [linkedEnvironment], ...bridge });
+  }
+
+  it('shows which project file each linked copy follows, and how that is going', async () => {
+    renderLinked();
+    await screen.findByText('.env.production', { selector: 'p' });
+
+    expect(row('.env.production')).toHaveTextContent('apps/api/.env.prod');
+    expect(row('.env.production')).toHaveTextContent('Watching for changes');
+    expect(row('.env.production')).toHaveTextContent('updated from the file');
+    expect(row('.env')).toHaveTextContent('File not found, showing the last saved copy');
+    expect(row('.env.local')).toHaveTextContent('Locked, unlock to pick up changes');
+    expect(within(row('.env.local')).getByRole('button', { name: 'Unlock' })).toBeInTheDocument();
+    expect(row('.env.test')).not.toHaveTextContent('Watching');
+  });
+
+  it('offers a link on unlinked rows, and drops the folder write on linked ones', async () => {
+    renderLinked();
+    await screen.findByText('.env.production', { selector: 'p' });
+
+    expect(
+      within(row('.env.test')).getByRole('button', { name: 'Link to a project file' }),
+    ).toBeInTheDocument();
+    expect(
+      within(row('.env.test')).getByRole('button', { name: /to the project folder/ }),
+    ).toBeInTheDocument();
+    // A linked copy already writes its file on every save.
+    expect(
+      within(row('.env.production')).queryByRole('button', { name: /to the project folder/ }),
+    ).toBeNull();
+    expect(
+      within(row('.env.production')).queryByRole('button', { name: 'Link to a project file' }),
+    ).toBeNull();
+  });
+
+  it('opens the link dialog from an unlinked row', async () => {
+    const { user } = renderLinked({ 'environments.scanFolder': [] });
+    await screen.findByText('.env.test', { selector: 'p' });
+
+    await user.click(
+      within(row('.env.test')).getByRole('button', { name: 'Link to a project file' }),
+    );
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Link .env.test to a project file' }),
+    ).toBeInTheDocument();
+  });
+
+  it('unlinks and shows the file in its folder from the link menu', async () => {
+    const { user, bridge } = renderLinked();
+    await screen.findByText('.env.production', { selector: 'p' });
+
+    await user.click(within(row('.env.production')).getByRole('button', { name: 'Linked file' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Show in folder' }));
+    expect(bridge.$fn('explorer.revealInOs')).toHaveBeenCalledWith(
+      'p1',
+      String.raw`C:\work\storefront\apps\api\.env.prod`,
+    );
+
+    await user.click(within(row('.env.production')).getByRole('button', { name: 'Linked file' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unlink' }));
+    await waitFor(() =>
+      expect(bridge.$fn('environments.unlinkFile')).toHaveBeenCalledWith('e1', 'f1'),
+    );
+  });
+
+  it('refetches when a linked file changes this project on disk', async () => {
+    const { bridge } = renderLinked();
+    await screen.findByText('.env.production', { selector: 'p' });
+    const list = bridge.$fn('environments.list');
+    const before = list.mock.calls.length;
+
+    bridge.$emit('environments.onChanged', { projectId: 'other' });
+    bridge.$emit('environments.onChanged', { projectId: 'p1' });
+
+    await waitFor(() => expect(list.mock.calls.length).toBe(before + 1));
+  });
+
+  it('lights up a row its file just changed, then lets it go even when the list comes again', async () => {
+    const before = envFile({ id: 'f1', origin: 'linked', updatedAt: 1_000 });
+    const after = envFile({ id: 'f1', origin: 'fileChanged', updatedAt: 2_000, keyCount: 4 });
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([{ ...environment, files: [before] }])
+      .mockResolvedValue([{ ...environment, files: [after] }]);
+    const { bridge } = renderTab({ 'environments.list': list });
+    await screen.findByText('.env.production', { selector: 'p' });
+    expect(row('.env.production')).not.toHaveClass('bg-primary/15');
+
+    bridge.$emit('environments.onChanged', { projectId: 'p1' });
+    await waitFor(() => expect(row('.env.production')).toHaveClass('bg-primary/15'));
+    // A second refetch while it is lit, which used to keep the highlight on for good.
+    bridge.$emit('environments.onChanged', { projectId: 'p1' });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(3));
+
+    await waitFor(() => expect(row('.env.production')).not.toHaveClass('bg-primary/15'), {
+      timeout: 5_000,
+    });
+  });
+});

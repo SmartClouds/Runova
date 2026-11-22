@@ -6,16 +6,19 @@ import {
 } from '@runova/core';
 import type { EnvCredentialSummary, EnvFileSummary, ProjectEnvironment } from '@shared/apiTypes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   ChevronDown,
   Copy,
   Download,
+  ExternalLink,
   FileText,
+  FolderOpen,
   History,
   Key,
   Link,
+  LinkOff,
   Pencil,
   Plus,
   Trash2,
@@ -43,10 +46,15 @@ import { confirmDialog } from '@/stores/confirmStore';
 import { EnvCredentialDialog } from './EnvCredentialDialog';
 import { EnvFileDialog } from './EnvFileDialog';
 import { EnvFileHistoryDialog } from './EnvFileHistoryDialog';
+import { EnvFileLinkStatus, linkedFilePath } from './EnvFileLinkStatus';
 import { EnvironmentFormDialog } from './EnvironmentFormDialog';
 import { EnvironmentKindBadge, EnvironmentKindDot } from './EnvironmentKindBadge';
 import { ImportEnvFilesDialog } from './ImportEnvFilesDialog';
 import { ipcErrorMessage } from './ipcError';
+import { LinkEnvFileDialog } from './LinkEnvFileDialog';
+
+/** How long a row stays lit after its linked file changed on disk. */
+const LIVE_UPDATE_HIGHLIGHT_MS = 2400;
 
 function updatedLabel(updatedAt: number): string {
   return `updated ${timeAgo(new Date(updatedAt).toISOString())}`;
@@ -55,7 +63,9 @@ function updatedLabel(updatedAt: number): string {
 function fileDetails(file: EnvFileSummary): string {
   const parts = [
     `${file.keyCount} ${file.keyCount === 1 ? 'key' : 'keys'}`,
-    updatedLabel(file.updatedAt),
+    file.origin === 'fileChanged'
+      ? `updated from the file ${timeAgo(new Date(file.updatedAt).toISOString())}`
+      : updatedLabel(file.updatedAt),
   ];
   if (file.versionCount > 0) {
     parts.push(`${file.versionCount} earlier ${file.versionCount === 1 ? 'version' : 'versions'}`);
@@ -110,6 +120,44 @@ function IconAction({
   );
 }
 
+/** What can be done with a linked file: see it, open it, point the link elsewhere, or drop it. */
+function LinkedFileMenu({
+  onReveal,
+  onOpenInEditor,
+  onRelink,
+  onUnlink,
+}: {
+  onReveal: () => void;
+  onOpenInEditor: () => void;
+  onRelink: () => void;
+  onUnlink: () => void;
+}): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label="Linked file" title="Linked file">
+          <Link className="h-3.5 w-3.5 text-primary" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onReveal}>
+          <FolderOpen className="h-3.5 w-3.5" /> Show in folder
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenInEditor}>
+          <ExternalLink className="h-3.5 w-3.5" /> Open in VS Code
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRelink}>
+          <Link className="h-3.5 w-3.5" /> Link a different file
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onUnlink}>
+          <LinkOff className="h-3.5 w-3.5" /> Unlink
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function EnvironmentsTab({ project }: { project: Project }): React.JSX.Element {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useProjectUiState<string | null>(
@@ -133,6 +181,10 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
     open: boolean;
     credential?: EnvCredentialSummary;
   }>({ open: false });
+  // By id, like the history, so the dialog keeps its file across a refetch.
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; fileId?: string }>({
+    open: false,
+  });
   const [importOpen, setImportOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockMode, setUnlockMode] = useState<'unlock' | 'set'>('unlock');
@@ -145,10 +197,61 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
   const environments = environmentsQuery.data ?? [];
   const selected = environments.find((e) => e.id === selectedId) ?? environments[0];
   const historyFile = selected?.files.find((file) => file.id === historyDialog.fileId);
+  const linkFile = selected?.files.find((file) => file.id === linkDialog.fileId);
 
   function refresh(): void {
     void queryClient.invalidateQueries({ queryKey: queryKeys.projectEnvironments(project.id) });
   }
+
+  // A linked file that changes on disk changes the saved copy without anyone clicking here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh only reads the project id
+  useEffect(
+    () =>
+      window.runova.environments.onChanged(({ projectId }) => {
+        if (projectId === project.id) refresh();
+      }),
+    [project.id],
+  );
+
+  // Rows updated from their file since the last list light up for a moment, so a change made in
+  // another editor is noticed here. The first list lights nothing.
+  const seenUpdates = useRef<Map<string, number> | null>(null);
+  const [liveUpdated, setLiveUpdated] = useState<ReadonlySet<string>>(new Set());
+  // One timer per lit row, kept apart from the list: a refetch in the meantime must not cut a
+  // highlight short or leave it on for good.
+  const highlightTimers = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (!environmentsQuery.data) return;
+    const files = environmentsQuery.data.flatMap((environment) => environment.files);
+    const previous = seenUpdates.current;
+    seenUpdates.current = new Map(files.map((file) => [file.id, file.updatedAt]));
+    if (!previous) return;
+    const fresh = files.filter(
+      (file) =>
+        file.origin === 'fileChanged' &&
+        previous.has(file.id) &&
+        (previous.get(file.id) ?? 0) < file.updatedAt,
+    );
+    for (const { id } of fresh) {
+      window.clearTimeout(highlightTimers.current.get(id));
+      highlightTimers.current.set(
+        id,
+        window.setTimeout(() => {
+          highlightTimers.current.delete(id);
+          setLiveUpdated((current) => new Set([...current].filter((one) => one !== id)));
+        }, LIVE_UPDATE_HIGHLIGHT_MS),
+      );
+    }
+    if (fresh.length > 0) {
+      setLiveUpdated((current) => new Set([...current, ...fresh.map((file) => file.id)]));
+    }
+  }, [environmentsQuery.data]);
+  useEffect(() => {
+    const timers = highlightTimers.current;
+    return () => {
+      for (const timer of timers.values()) window.clearTimeout(timer);
+    };
+  }, []);
 
   /** Runs `action` now, or after the user unlocks the vault when a passkey is set and locked. */
   async function withVault(action: () => void): Promise<void> {
@@ -237,6 +340,25 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
         await window.runova.environments.copyCredentialSecret(environment.id, credential.id);
         toast.success('Password copied to the clipboard.');
       }, 'Could not copy the password.'),
+    );
+  }
+
+  function unlinkFile(environment: ProjectEnvironment, file: EnvFileSummary): void {
+    void run(async () => {
+      await window.runova.environments.unlinkFile(environment.id, file.id);
+      toast.success(`${file.fileName} no longer follows ${file.link?.path ?? 'its file'}.`);
+      refresh();
+    }, 'Could not unlink that file.');
+  }
+
+  function openLinkedFile(path: string, how: 'reveal' | 'editor'): void {
+    const absolute = linkedFilePath(project.folderPath, path);
+    void run(
+      () =>
+        how === 'reveal'
+          ? window.runova.explorer.revealInOs(project.id, absolute)
+          : window.runova.shell.openInEditor(absolute),
+      'Could not open that file.',
     );
   }
 
@@ -379,7 +501,10 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <FileText className="h-4 w-4 text-primary" /> Env files
                   </CardTitle>
-                  <CardDescription>Saved copies you can write back to the folder.</CardDescription>
+                  <CardDescription>
+                    Saved copies you can write back to the folder, or link to a project file so they
+                    follow its changes.
+                  </CardDescription>
                 </div>
                 <Button
                   size="sm"
@@ -397,7 +522,13 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                     {selected.files.map((file) => (
                       <li
                         key={file.id}
-                        className="flex items-center gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2"
+                        className={cn(
+                          'flex items-center gap-3 rounded-md border px-3 py-2',
+                          // Lights up at once, then fades back slowly.
+                          liveUpdated.has(file.id)
+                            ? 'bg-primary/15 ring-1 ring-primary/60'
+                            : 'border-border bg-secondary/30 transition-colors duration-1000 motion-reduce:transition-none',
+                        )}
                       >
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
@@ -405,6 +536,16 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                           <p className="truncate text-xs text-muted-foreground">
                             {fileDetails(file)}
                           </p>
+                          {file.link && (
+                            <EnvFileLinkStatus
+                              link={file.link}
+                              absolutePath={linkedFilePath(project.folderPath, file.link.path)}
+                              onUnlock={() => {
+                                setUnlockMode('unlock');
+                                setUnlockOpen(true);
+                              }}
+                            />
+                          )}
                         </div>
                         <IconAction
                           label="Edit"
@@ -423,12 +564,37 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                         <IconAction label="Copy contents" onClick={() => copyFile(selected, file)}>
                           <Copy className="h-3.5 w-3.5" />
                         </IconAction>
-                        <IconAction
-                          label={`Write ${file.fileName} to the project folder`}
-                          onClick={() => writeToFolder(selected, file)}
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                        </IconAction>
+                        {file.link ? (
+                          <>
+                            <LinkedFileMenu
+                              onReveal={() => openLinkedFile(file.link?.path ?? '', 'reveal')}
+                              onOpenInEditor={() => openLinkedFile(file.link?.path ?? '', 'editor')}
+                              onRelink={() =>
+                                void withVault(() => setLinkDialog({ open: true, fileId: file.id }))
+                              }
+                              onUnlink={() => unlinkFile(selected, file)}
+                            />
+                            {/* Holds the folder write's place, so every row's buttons line up. */}
+                            <span aria-hidden className="h-9 w-9 shrink-0" />
+                          </>
+                        ) : (
+                          <>
+                            <IconAction
+                              label="Link to a project file"
+                              onClick={() =>
+                                void withVault(() => setLinkDialog({ open: true, fileId: file.id }))
+                              }
+                            >
+                              <Link className="h-3.5 w-3.5" />
+                            </IconAction>
+                            <IconAction
+                              label={`Write ${file.fileName} to the project folder`}
+                              onClick={() => writeToFolder(selected, file)}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                            </IconAction>
+                          </>
+                        )}
                         <IconAction label="Delete" onClick={() => void removeFile(selected, file)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </IconAction>
@@ -541,6 +707,16 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
               environment={selected}
               file={historyFile}
               onRestored={refresh}
+            />
+          )}
+          {linkFile && (
+            <LinkEnvFileDialog
+              open={linkDialog.open}
+              onOpenChange={(open) => setLinkDialog((current) => ({ ...current, open }))}
+              projectId={project.id}
+              environment={selected}
+              file={linkFile}
+              onLinked={refresh}
             />
           )}
           <EnvCredentialDialog

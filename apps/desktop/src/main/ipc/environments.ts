@@ -1,6 +1,7 @@
-import { clipboard, ipcMain } from 'electron';
+import { BrowserWindow, clipboard, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import type {
   EnvImportPick,
+  LinkEnvFileInput,
   SaveEnvCredentialInput,
   SaveEnvFileInput,
   SaveEnvironmentInput,
@@ -9,7 +10,10 @@ import { IPC } from '../../shared/ipcChannels';
 import {
   envCredentialSecret,
   envFileHistory,
+  envLinkPathFor,
   importEnvFromFolder,
+  inspectEnvLinkFile,
+  linkEnvFile,
   listEnvironments,
   readEnvFile,
   readEnvFileVersion,
@@ -23,8 +27,10 @@ import {
   saveEnvFile,
   saveEnvironment,
   scanEnvFolder,
+  unlinkEnvFile,
   writeEnvToFolder,
 } from '../environments/service';
+import { store } from '../store';
 
 /**
  * The Environments tab's side of a project's environments. The work lives in
@@ -105,5 +111,33 @@ export function registerEnvironmentHandlers(): void {
     IPC.environments.writeToFolder,
     (_event, environmentId: string, fileId: string, overwrite: boolean) =>
       writeEnvToFolder(environmentId, fileId, overwrite),
+  );
+  ipcMain.handle(IPC.environments.pickLinkFile, async (event, projectId: string) => {
+    const project = (await store.getProjects()).find((p) => p.id === projectId);
+    if (!project) throw new Error('That project no longer exists.');
+    const options: OpenDialogOptions = {
+      title: 'Link a file in this project',
+      buttonLabel: 'Link',
+      defaultPath: project.folderPath,
+      // Env files start with a dot, which macOS and Linux hide by default.
+      properties: ['openFile', 'showHiddenFiles'],
+    };
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    const picked = result.canceled ? undefined : result.filePaths[0];
+    return picked ? envLinkPathFor(projectId, picked) : null;
+  });
+  ipcMain.handle(
+    IPC.environments.inspectLinkFile,
+    (_event, environmentId: string, fileId: string, path: string) =>
+      inspectEnvLinkFile(environmentId, fileId, path),
+  );
+  ipcMain.handle(IPC.environments.linkFile, (_event, input: LinkEnvFileInput) =>
+    linkEnvFile(input),
+  );
+  ipcMain.handle(IPC.environments.unlinkFile, (_event, environmentId: string, fileId: string) =>
+    unlinkEnvFile(environmentId, fileId),
   );
 }

@@ -292,3 +292,53 @@ describe('EnvFileHistoryDialog', () => {
     expect(screen.queryByRole('button', { name: /Restore this version/ })).not.toBeInTheDocument();
   });
 });
+
+describe('EnvFileHistoryDialog for a linked file', () => {
+  const linkedFile: EnvFileSummary = {
+    ...file,
+    origin: 'fileChanged',
+    link: { path: 'apps/api/.env.prod', state: 'watching' },
+  };
+
+  function renderLinked() {
+    return renderWithProviders(
+      <EnvFileHistoryDialog
+        open
+        onOpenChange={vi.fn()}
+        environment={{ ...environment, files: [linkedFile] }}
+        file={linkedFile}
+        onRestored={vi.fn()}
+      />,
+      {
+        bridge: {
+          'environments.fileHistory': [{ ...newer, origin: 'linked' }, older],
+          'environments.readFile': () => Promise.resolve(CURRENT),
+          'environments.readFileVersion': (_e: string, _f: string, versionId: string) =>
+            Promise.resolve(CONTENTS[versionId]),
+          'environments.restoreFileVersion': environment,
+        },
+      },
+    );
+  }
+
+  it('names the versions the linked file made', async () => {
+    renderLinked();
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(options()[0]).toHaveTextContent('Updated from the file');
+    expect(options()[1]).toHaveTextContent('Linked to a project file');
+  });
+
+  it('says a restore writes the project file too', async () => {
+    const { user } = renderLinked();
+    await screen.findByTestId('diff');
+    confirm.mockResolvedValueOnce(false);
+
+    await user.click(screen.getByRole('button', { name: /Restore this version/ }));
+
+    expect(confirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining('apps/api/.env.prod in the project is written too'),
+      }),
+    );
+  });
+});

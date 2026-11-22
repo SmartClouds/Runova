@@ -3,7 +3,7 @@ import type { EnvFileSummary, ProjectEnvironment } from '@shared/apiTypes';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
-import { Spinner } from '@/components/icons';
+import { Link, Spinner } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -90,7 +90,11 @@ export function EnvFileDialog({
         fileName: trimmedName,
         content,
       });
-      toast.success(`${trimmedName} saved.`);
+      toast.success(
+        file?.link
+          ? `${trimmedName} saved and written to ${file.link.path}.`
+          : `${trimmedName} saved.`,
+      );
       onOpenChange(false);
       onSaved();
     } catch (error) {
@@ -100,7 +104,9 @@ export function EnvFileDialog({
     }
   }
 
-  let nameHint = 'Saved encrypted in Runova. Nothing is written to the project folder.';
+  let nameHint = file?.link
+    ? `Linked to ${file.link.path}. Saving also writes that file.`
+    : 'Saved encrypted in Runova. Nothing is written to the project folder.';
   if (trimmedName && !nameValid) nameHint = 'Use a name like .env or .env.production.';
   else if (nameTaken) nameHint = `${trimmedName} is already saved in ${environment.name}.`;
 
@@ -128,9 +134,12 @@ export function EnvFileDialog({
               className={
                 (trimmedName && !nameValid) || nameTaken
                   ? 'text-xs text-destructive'
-                  : 'text-xs text-muted-foreground'
+                  : file?.link
+                    ? 'flex items-center gap-1.5 text-xs text-primary'
+                    : 'text-xs text-muted-foreground'
               }
             >
+              {file?.link && nameValid && !nameTaken && <Link className="h-3 w-3 shrink-0" />}
               {nameHint}
             </p>
           </div>
@@ -159,7 +168,7 @@ export function EnvFileDialog({
           </Button>
           <Button disabled={!canSubmit} onClick={() => void handleSubmit()}>
             {submitting && <Spinner className="h-4 w-4 animate-spin" />}
-            Save file
+            {file?.link ? 'Save and write file' : 'Save file'}
           </Button>
         </DialogFooter>
       </DialogContent>

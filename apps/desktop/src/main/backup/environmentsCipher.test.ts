@@ -272,6 +272,16 @@ describe('sealing and unsealing', () => {
     ]);
     expect(rows[1].files[0].history).toEqual([]);
   });
+
+  it("carries a file's link to the project", async () => {
+    const base = environment();
+    const link = { path: '.env.prod', linkedAt: 9 };
+    writeEnvironments([environment({ files: [{ ...base.files[0], link }] })]);
+    const rows = (await unsealEnvironments(await sealEnvironments('password'), 'password')) as {
+      files: { link?: unknown }[];
+    }[];
+    expect(rows[0].files[0].link).toEqual(link);
+  });
 });
 
 describe('readEnvironmentsSection', () => {
@@ -502,6 +512,30 @@ describe('toStoredEnvironments', () => {
     );
     expect(environments[0].createdAt).toBeGreaterThanOrEqual(before);
     expect(environments[0].updatedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("keeps a file's link to the project, and the new origins", async () => {
+    const link = { path: 'apps/api/.env.prod', linkedAt: 7 };
+    const { environments } = await toStoredEnvironments(
+      [{ ...row, files: [{ ...row.files[0], origin: 'fileChanged', link }] }],
+      projects,
+    );
+    expect(environments[0].files[0]).toMatchObject({ origin: 'fileChanged', link });
+  });
+
+  it.each([
+    ['a path out of the folder', { path: '../outside/.env', linkedAt: 7 }],
+    ['an absolute path', { path: '/etc/.env', linkedAt: 7 }],
+    ['a Windows drive path', { path: 'C:/Users/.env', linkedAt: 7 }],
+    ['no path', { linkedAt: 7 }],
+    ['not an object', 'apps/.env'],
+  ])('keeps the file but drops a link with %s', async (_label, link) => {
+    const { environments, skipped } = await toStoredEnvironments(
+      [{ ...row, files: [{ ...row.files[0], link }] }],
+      projects,
+    );
+    expect(skipped).toBe(0);
+    expect(environments[0].files[0]).not.toHaveProperty('link');
   });
 
   it('trims and caps the text fields', async () => {

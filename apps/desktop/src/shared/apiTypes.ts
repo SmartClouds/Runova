@@ -2684,7 +2684,48 @@ export interface StoredRdpServer extends Omit<RdpSavedServer, 'hasSecret'> {
  * How a version of an env file came to be. Files saved before history existed have none, and
  * show as plainly saved.
  */
-export type EnvFileOrigin = 'created' | 'edited' | 'imported' | 'restored' | 'renamed';
+export type EnvFileOrigin =
+  | 'created'
+  | 'edited'
+  | 'imported'
+  | 'restored'
+  | 'renamed'
+  /** Took the contents of the file it was just linked to. */
+  | 'linked'
+  /** The linked file changed on disk and the saved copy followed. */
+  | 'fileChanged';
+
+/**
+ * An env file saved in Runova that follows a file in the project folder. Kept with the file, so
+ * it syncs (sealed) with it; the path is relative because each computer has its own folder.
+ */
+export interface EnvFileLink {
+  /** Relative to the project folder, with forward slashes, such as `apps/api/.env.prod`. */
+  path: string;
+  linkedAt: number;
+}
+
+/**
+ * How the link is doing on this computer:
+ * - watching: changes on disk are saved as they happen
+ * - missing: the file isn't there, so the last saved contents stay
+ * - waitingForUnlock: the file changed while the vault was locked, saved once it opens
+ * - tooLarge: the file grew past 1 MB, so changes are not picked up
+ * - noFolder: the project has no folder on this computer
+ * - error: reading or writing the file failed
+ */
+export type EnvFileLinkState =
+  | 'watching'
+  | 'missing'
+  | 'waitingForUnlock'
+  | 'tooLarge'
+  | 'noFolder'
+  | 'error';
+
+export interface EnvFileLinkSummary {
+  path: string;
+  state: EnvFileLinkState;
+}
 
 /** An env file saved for one environment. The contents stay in the main process until asked for. */
 export interface EnvFileSummary {
@@ -2696,6 +2737,24 @@ export interface EnvFileSummary {
   updatedAt: number;
   /** How many earlier versions the file's history keeps. */
   versionCount: number;
+  /** Set while the file follows a file in the project folder. */
+  link?: EnvFileLinkSummary;
+}
+
+export interface LinkEnvFileInput {
+  environmentId: string;
+  fileId: string;
+  /** Relative to the project folder, or absolute inside it. */
+  path: string;
+}
+
+/** What linking a file would do, shown before the link is made. */
+export interface EnvLinkPreview {
+  /** Relative to the project folder, with forward slashes. */
+  path: string;
+  keyCount: number;
+  /** The file holds exactly what is saved, so linking adds no version. */
+  sameAsSaved: boolean;
 }
 
 /** One earlier version of an env file. Its contents stay in the main process until asked for. */
@@ -2781,6 +2840,8 @@ export interface EnvImportPick {
   fileName: string;
   environmentId?: string;
   newEnvironment?: { name: string; kind: EnvironmentKind };
+  /** Keep the saved copy linked to the file it came from, so later changes follow. */
+  link?: boolean;
 }
 
 export interface EnvImportResult {
@@ -2795,8 +2856,9 @@ export interface EnvWriteResult {
   notIgnored?: boolean;
 }
 
-export interface StoredEnvFile extends Omit<EnvFileSummary, 'versionCount'> {
+export interface StoredEnvFile extends Omit<EnvFileSummary, 'versionCount' | 'link'> {
   contentEnvelope: SecretEnvelope;
+  link?: EnvFileLink;
 }
 
 /** Main-process-only shape of one earlier version, as the history database keeps it. */

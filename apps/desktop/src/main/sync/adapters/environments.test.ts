@@ -73,6 +73,19 @@ describe('environmentsAdapter', () => {
     expect(store.get()).toEqual([environment()]);
   });
 
+  it("carries a file's link to its project file, as a path inside the folder", async () => {
+    const base = environment();
+    const link = { path: 'apps/api/.env.prod', linkedAt: 4 };
+    const linked = environment({ files: [{ ...base.files[0], link }] });
+    const store = memoryStore();
+    const [opened] = await environmentsAdapter(memoryStore([linked]), memorySecrets()).list();
+
+    // The link travels inside the files list, which only syncs sealed (policy.ts).
+    expect(opened?.value.files).toEqual([expect.objectContaining({ link })]);
+    await environmentsAdapter(store, memorySecrets()).apply(opened as never);
+    expect(store.get()[0].files[0].link).toEqual(link);
+  });
+
   it('starts an environment with no files or logins when they stayed on the other computer', async () => {
     const store = memoryStore();
     const { files: _files, credentials: _credentials, ...shared } = environment();

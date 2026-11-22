@@ -45,6 +45,8 @@ const ORIGIN_LABELS: Record<EnvFileOrigin, string> = {
   imported: 'Imported from folder',
   restored: 'Restored',
   renamed: 'Renamed',
+  linked: 'Linked to a project file',
+  fileChanged: 'Updated from the file',
 };
 
 function originLabel(origin: EnvFileOrigin | undefined): string {
@@ -254,7 +256,7 @@ export function EnvFileHistoryDialog({
     const renamed = selectedVersion.fileName !== file.fileName;
     const confirmed = await confirmDialog({
       title: `Restore the version from ${when}?`,
-      description: `${file.fileName} gets the contents it had then. The current contents are kept in the history, so you can undo this.${renamed ? ` The file keeps its name, ${file.fileName}.` : ''}`,
+      description: `${file.fileName} gets the contents it had then. The current contents are kept in the history, so you can undo this.${renamed ? ` The file keeps its name, ${file.fileName}.` : ''}${file.link ? ` ${file.link.path} in the project is written too.` : ''}`,
       confirmLabel: 'Restore',
     });
     if (!confirmed) return;
@@ -347,8 +349,9 @@ export function EnvFileHistoryDialog({
             <History className="h-6 w-6 text-muted-foreground" />
             <p className="text-sm font-medium">No earlier versions yet</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Each time you save, import over, rename or restore this file, the version it replaces
-              is kept here.
+              {file.link
+                ? 'Each time the linked file changes, or you save, rename or restore this file, the version it replaces is kept here.'
+                : 'Each time you save, import over, rename or restore this file, the version it replaces is kept here.'}
             </p>
           </div>
         )}

@@ -3,7 +3,7 @@ title: Projects
 category: Getting started
 order: 50
 summary: Add and organise your projects, then use each project's page for its prompts and Blueprint, git, token usage and cost, security scans, packages, Docker, bootstrap files, skills, MCP servers, hooks and environments.
-keywords: projects, project, ai audit, security audit, cloudflare, new project, folder, pin, archive, tags, icon, run command, create with ai, placeholder, run input, bootstrap, blueprint, standing prompt, git, tag version, security scan, packages, environments, hooks, diffray, drafts, usage, cost, tokens, spend, pause, resume, freeze, hot reload, clone, clone from github, private repo, task board, relay
+keywords: projects, project, ai audit, security audit, cloudflare, new project, folder, pin, archive, tags, icon, run command, create with ai, placeholder, run input, bootstrap, blueprint, standing prompt, git, tag version, security scan, packages, environments, link env file, linked file, hooks, diffray, drafts, usage, cost, tokens, spend, pause, resume, freeze, hot reload, clone, clone from github, private repo, task board, relay
 route: /projects
 ---
 
@@ -394,8 +394,9 @@ For each card, turn the switch on, choose the **Installed agent**, edit the mess
 The Environments section keeps this project's env files and logins for each stage in one place, stored encrypted on this computer and included in a password-protected backup.
 
 - **Add environment** creates a stage: Development, Test, Staging, Production, or **Custom...** with a name such as QA or Demo.
-- **Import from folder** copies the `.env` files in the project root into Runova. It guesses each file's stage, lets you choose the target environment, skips files over 1 MB and never changes the files in the folder.
-- Select an environment from the list. Its **Env files** card has **Add file** (paste or type the contents) and icons to edit, copy the contents, write it back to the project folder and delete it. Writing a file to the folder asks before replacing one that exists, and warns if the file is not in `.gitignore`.
+- **Import from folder** copies the `.env` files in the project root into Runova. It guesses each file's stage, lets you choose the target environment and skips files over 1 MB. **Keep the copies linked to these files** is on by default, so each copy follows its file from then on (see below).
+- Select an environment from the list. Its **Env files** card has **Add file** (paste or type the contents) and icons to edit, see the history, copy the contents, link it to a project file, write it back to the project folder and delete it. Writing a file to the folder asks before replacing one that exists, and warns if the file is not in `.gitignore`.
+- **Link to a project file** keeps a saved copy in step with a file in the project, such as `.env.prod` or `apps/api/.env`. The dialog offers the `.env` files in the project root (the one with the same name first) and **Choose another file...** for any file in the project, and says whether linking changes the saved copy. Once linked, a change to the file on disk is saved as a new version without you doing anything, with the old contents kept in History, and saving or restoring the copy in Runova writes the file. The row shows which file it follows and how that is going: watching for changes, file not found, waiting for the vault to be unlocked, or a file over 1 MB. The link button's menu has **Show in folder**, **Open in VS Code**, **Link a different file** and **Unlink**, which keeps the saved contents and their history.
 - Its **Credentials** card has **Add credential** (a label, username, URL or host, password, token or key, and notes) with icons to open the URL, copy the password, edit and delete.
 - **Protect with a passkey** encrypts saved passwords and environment secrets with a passkey instead of only the OS keychain. When set, **Unlock vault** is needed before using them, and you can change or remove the passkey.
 

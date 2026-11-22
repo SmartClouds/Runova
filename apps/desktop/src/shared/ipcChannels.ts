@@ -185,6 +185,16 @@ export const IPC = {
     scanFolder: 'environments:scanFolder',
     importFromFolder: 'environments:importFromFolder',
     writeToFolder: 'environments:writeToFolder',
+    // (projectId) -> string | null; a file picked inside the project folder, relative to it
+    pickLinkFile: 'environments:pickLinkFile',
+    // (environmentId, fileId, path) -> EnvLinkPreview; what linking that file would do
+    inspectLinkFile: 'environments:inspectLinkFile',
+    // (LinkEnvFileInput) -> ProjectEnvironment; the saved copy takes the file's contents and follows it
+    linkFile: 'environments:linkFile',
+    // (environmentId, fileId) -> ProjectEnvironment
+    unlinkFile: 'environments:unlinkFile',
+    /** main -> renderer: { projectId }, after a linked file changed a project's environments. */
+    onChanged: 'environments:onChanged',
   },
   vault: {
     status: 'vault:status',
