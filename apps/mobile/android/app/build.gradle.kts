@@ -90,6 +90,9 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.biometric:biometric:1.1.0")
+    // biometric 1.1.0 brings Fragment 1.2.5, which predates registerForActivityResult in a
+    // FragmentActivity. The release lint (only run by CD) stops the build on that.
+    implementation("androidx.fragment:fragment:1.8.9")
     // Passkey sign-in (E115); play-services-auth brings Google Password Manager's passkeys on Android 13 and older.
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
