@@ -37,12 +37,20 @@ export interface CoreSessionsDeps {
 
 interface SignedIn {
   token: string;
+  /** When the token runs out, on this computer's clock. */
   expiresAt: number;
   user: SignedInUser;
 }
 
 /** Renew this long before the token would run out, so a call never goes out with a dying one. */
 const RENEW_MARGIN_MS = 60_000;
+
+/**
+ * How long the core's access tokens last (AccessTokens.Lifetime). The core states the expiry on
+ * its own clock, which can be well ahead of this one when the server does not sync its time, so
+ * a token is never trusted for longer than this from the moment the app asked for it.
+ */
+const ACCESS_TOKEN_LIFETIME_MS = 15 * 60_000;
 
 /** Turns the core's JSON refusal into an error that keeps its code across IPC. */
 export async function coded<T>(request: Promise<T>): Promise<T> {
@@ -83,7 +91,7 @@ export class CoreSessions {
     return next;
   }
 
-  /** When the token in hand runs out (the core's clock), or null when there is none. */
+  /** When the token in hand runs out (this computer's clock), or null when there is none. */
   expiresAt(serverId: string): number | null {
     return this.signedIn.get(serverId)?.expiresAt ?? null;
   }
@@ -96,6 +104,7 @@ export class CoreSessions {
   async signIn(serverId: string, input: SignInInput): Promise<SignedInUser> {
     const device = await this.enrolled(serverId);
     const privateKey = await this.deps.unseal(device.privateKey);
+    const askedAt = this.now();
     const response = await this.deps.withCore(serverId, async (core) => {
       const challenge = await coded(
         core.post<ChallengeResponse>('/api/v1/auth/challenge', {
@@ -123,7 +132,7 @@ export class CoreSessions {
       );
     });
     await this.deps.state.setDevice(serverId, { ...device, sessionId: response.sessionId });
-    this.keep(serverId, response);
+    this.keep(serverId, response, askedAt);
     return response.user;
   }
 
@@ -145,6 +154,7 @@ export class CoreSessions {
       throw new Error(encodeCoreError('sessionExpired', 'Sign in to this server core again.'));
     }
     const privateKey = await this.deps.unseal(device.privateKey);
+    const askedAt = this.now();
     try {
       const response = await this.deps.withCore(serverId, async (core) => {
         const challenge = await coded(
@@ -169,7 +179,7 @@ export class CoreSessions {
           }),
         );
       });
-      this.keep(serverId, response);
+      this.keep(serverId, response, askedAt);
       return response.accessToken;
     } catch (error) {
       const code = coreErrorCode(error);
@@ -192,10 +202,17 @@ export class CoreSessions {
     return device;
   }
 
-  private keep(serverId: string, response: SignedInResponse): void {
+  /**
+   * Keeps a fresh token. The core issued it after `askedAt`, so it lasts at least the lifetime
+   * from then; the core's own expiry only counts when it is sooner (a clock behind this one).
+   */
+  private keep(serverId: string, response: SignedInResponse, askedAt: number): void {
     this.signedIn.set(serverId, {
       token: response.accessToken,
-      expiresAt: response.accessTokenExpiresAtUnixMs,
+      expiresAt: Math.min(
+        response.accessTokenExpiresAtUnixMs,
+        askedAt + ACCESS_TOKEN_LIFETIME_MS,
+      ),
       user: response.user,
     });
   }

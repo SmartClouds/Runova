@@ -21,8 +21,11 @@ import { authMessage, createDeviceKey } from './deviceKey';
 
 const MINUTE = 60_000;
 
-/** Enough of the core's sign-in to check what the app sends, signatures included. */
-function fakeCore(publicKey: string, clock: { now: number }) {
+/**
+ * Enough of the core's sign-in to check what the app sends, signatures included. Its clock runs
+ * `coreAheadMs` ahead of this computer's (behind when negative).
+ */
+function fakeCore(publicKey: string, clock: { now: number; coreAheadMs: number }) {
   const issued = new Map<
     string,
     { nonce: string; deviceId: string; purpose: string; sessionId: string | null }
@@ -75,7 +78,7 @@ function fakeCore(publicKey: string, clock: { now: number }) {
         return {
           challengeId,
           nonce: issued.get(challengeId)!.nonce,
-          expiresAtUnixMs: clock.now + MINUTE,
+          expiresAtUnixMs: clock.now + clock.coreAheadMs + MINUTE,
         } as T;
       }
       tokenCount += 1;
@@ -83,7 +86,7 @@ function fakeCore(publicKey: string, clock: { now: number }) {
         ({
           sessionId,
           accessToken: `token-${tokenCount}`,
-          accessTokenExpiresAtUnixMs: clock.now + 15 * MINUTE,
+          accessTokenExpiresAtUnixMs: clock.now + clock.coreAheadMs + 15 * MINUTE,
           user: { id: 'u1', userName: 'maria', roles: ['owner'], twoFactorEnabled: totpRequired },
         }) as T;
       if (path === '/api/v1/auth/login') {
@@ -134,7 +137,7 @@ function fakeCore(publicKey: string, clock: { now: number }) {
 
 async function setup(options: { enrolled?: boolean; sessionId?: string } = {}) {
   const key = createDeviceKey();
-  const clock = { now: 1_700_000_000_000 };
+  const clock = { now: 1_700_000_000_000, coreAheadMs: 0 };
   let content: unknown = null;
   const state = new DeployState({
     read: async () => content,
@@ -298,6 +301,30 @@ describe('CoreSessions.expiresAt', () => {
 
     sessions.forget('srv-1');
     expect(sessions.expiresAt('srv-1')).toBeNull();
+  });
+
+  it('times the token on this computer when the core clock runs ahead', async () => {
+    const { sessions, core, clock } = await setup();
+    clock.coreAheadMs = 40_000;
+    const signedInAt = clock.now;
+
+    await sessions.signIn('srv-1', { password: PASSWORD });
+    expect(sessions.expiresAt('srv-1')).toBe(signedInAt + 15 * MINUTE);
+
+    // Within a minute of the real expiry it renews, even though the core's stated expiry is later.
+    clock.now += 14 * MINUTE + 5_000;
+    expect(await sessions.accessToken('srv-1')).toBe('token-2');
+    expect(core.seen.at(-1)?.path).toBe('/api/v1/auth/renew');
+  });
+
+  it('keeps the core expiry when the core clock runs behind', async () => {
+    const { sessions, clock } = await setup();
+    clock.coreAheadMs = -40_000;
+    const signedInAt = clock.now;
+
+    await sessions.signIn('srv-1', { password: PASSWORD });
+
+    expect(sessions.expiresAt('srv-1')).toBe(signedInAt + 15 * MINUTE - 40_000);
   });
 });
 
