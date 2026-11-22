@@ -25,9 +25,9 @@
       },
       "Microsoft.Extensions.TimeProvider.Testing": {
         "type": "Direct",
-        "requested": "[11.0.0, )",
-        "resolved": "11.0.0",
-        "contentHash": "GMXLbXAPI1GrcNQJQCHr0jgH/5fdPAGI4easP0KwMeJ6neSeWFeZcd8PhxDlII8TVXO1UctHl/4OC0sYZS4iuA=="
+        "requested": "[11.0.1, )",
+        "resolved": "11.0.1",
+        "contentHash": "2lLxpcMnu31ZrNwJ3ypqNKlavMvkJ8LhSn9YMgSTxfuyXxJGCvDHdGEyAtlc9NrXVLDA7lcIDqv0T+RnWc4nsg=="
       },
       "Microsoft.Testing.Extensions.TrxReport": {
         "type": "Direct",
@@ -641,7 +641,7 @@
           "System.IO.Hashing": "[11.0.0, )",
           "Tapper.Attributes": "[1.15.1, )",
           "TypedSignalR.Client.TypeScript.Attributes": "[1.18.0, )",
-          "WTelegramClient": "[4.4.10, )"
+          "WTelegramClient": "[4.4.11, )"
         }
       },
       "Cronos": {
@@ -808,9 +808,9 @@
       },
       "WTelegramClient": {
         "type": "CentralTransitive",
-        "requested": "[4.4.10, )",
-        "resolved": "4.4.10",
-        "contentHash": "1L/3ntiWiKnD743XMjthJIdL01WpHTE/WlRKqpF3dAorGgsabU+EZpq2j9q7H/Yb0PfXUoMaWxkrYYSg0brm0Q=="
+        "requested": "[4.4.11, )",
+        "resolved": "4.4.11",
+        "contentHash": "SVfz436xnZ+H0diNlnUZL1+rp3KMWF8EfPlBsb5Sm7UEjvZYi+LG0nkzmCqNbPTbY0g2It+vJOgzajhLKt55uA=="
       }
     }
   }

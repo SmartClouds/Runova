@@ -43,7 +43,7 @@
     <PackageVersion Include="FluentFTP" Version="55.1.0" />
     <PackageVersion Include="SSH.NET" Version="2026.0.1" />
     <!-- A Telegram user account over MTProto (Wiz0u, MIT), for backups sent in parts. -->
-    <PackageVersion Include="WTelegramClient" Version="4.4.10" />
+    <PackageVersion Include="WTelegramClient" Version="4.4.11" />
   </ItemGroup>
   <ItemGroup Label="Error reporting">
     <!-- Error reporting (E29): the core sends its warnings and errors to a Sentry project as OpenTelemetry
@@ -64,7 +64,7 @@
   <ItemGroup Label="Tests">
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="11.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.1" />
     <!-- Writes the TRX results file dotnet test asks for, at the platform version xunit.v3 brings. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.3" />
     <PackageVersion Include="xunit.v3" Version="4.0.3" />

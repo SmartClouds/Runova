@@ -153,9 +153,9 @@
       },
       "WTelegramClient": {
         "type": "Direct",
-        "requested": "[4.4.10, )",
-        "resolved": "4.4.10",
-        "contentHash": "1L/3ntiWiKnD743XMjthJIdL01WpHTE/WlRKqpF3dAorGgsabU+EZpq2j9q7H/Yb0PfXUoMaWxkrYYSg0brm0Q=="
+        "requested": "[4.4.11, )",
+        "resolved": "4.4.11",
+        "contentHash": "SVfz436xnZ+H0diNlnUZL1+rp3KMWF8EfPlBsb5Sm7UEjvZYi+LG0nkzmCqNbPTbY0g2It+vJOgzajhLKt55uA=="
       },
       "BouncyCastle.Cryptography": {
         "type": "Transitive",
