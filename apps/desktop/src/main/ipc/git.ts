@@ -112,6 +112,7 @@ import {
   parseSuggestedTag,
   rejectSuggestedVersion,
 } from '../git/versioning';
+import { syncCargoLocks } from '../git/versionLockSync';
 import {
   compareSnapshots,
   repoRoot,
@@ -626,8 +627,25 @@ async function applyVersion(
 
   // The CLI may edit anything, so every file it touched is listed for the user to keep
   // or revert, rather than guessing up front which ones belong to this release.
-  const after = await snapshotChangedFiles(root);
-  const changes = await compareSnapshots(root, before, after);
+  let after = await snapshotChangedFiles(root);
+  let changes = await compareSnapshots(root, before, after);
+
+  // The CLI leaves lockfiles alone, but Cargo.lock holds each workspace crate's own version
+  // and CI's `--locked` builds fail on a stale one (that is how 4.0.0 and 4.1.0 broke). The
+  // lock goes through the same review as the rest, so the snapshot is taken again after it.
+  let lockWarnings: string[] = [];
+  if (!result.cancelled) {
+    const edited = changes.filter((change) => change.kind !== 'deleted').map((c) => c.path);
+    const synced = await syncCargoLocks(root, edited);
+    for (const path of synced.updated) log.push(`Updated ${path} to the new crate versions.`);
+    for (const warning of synced.warnings) log.push(warning);
+    log.flush();
+    lockWarnings = synced.warnings;
+    if (synced.updated.length > 0) {
+      after = await snapshotChangedFiles(root);
+      changes = await compareSnapshots(root, before, after);
+    }
+  }
 
   // Despite the prompt telling it not to, a CLI occasionally reaches for a tool like
   // `npm version` that commits (and tags) by itself; that leaves no working-tree diff to
@@ -652,6 +670,7 @@ async function applyVersion(
     // A run that wrote files but ended badly is a partial success, not a failure: say
     // what went wrong without burying the edits the user now has to deal with.
     warning: landed && !result.ok ? result.error : undefined,
+    lockWarnings: lockWarnings.length > 0 ? lockWarnings : undefined,
     error: result.ok || landed ? undefined : result.error,
     cancelled: result.cancelled,
   };

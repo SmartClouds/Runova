@@ -3252,6 +3252,22 @@ function ApplyVersionDialog({
             </div>
           )}
 
+          {/* A lock that still names the old version makes `cargo build --locked` fail in CI,
+              so this stays on screen until the dialog closes rather than going by as a toast. */}
+          {result?.lockWarnings && result.lockWarnings.length > 0 && (
+            <div className="space-y-1.5 rounded-xl border border-warning/30 bg-warning/10 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-warning" /> A lockfile still has
+                the old version
+              </p>
+              {result.lockWarnings.map((line) => (
+                <p key={line} className="text-xs text-muted-foreground">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
+
           {result && changes.length > 0 && (
             <div className="space-y-2">
               <VersionChangeReview

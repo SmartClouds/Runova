@@ -1825,6 +1825,11 @@ export interface ApplyVersionResult {
   cliName?: string | null;
   /** Set when files were edited but the CLI still ended badly (timed out, exited non-zero). */
   warning?: string;
+  /**
+   * Lockfiles that record the project's own version but could not be brought in line, for
+   * example a Cargo.lock when cargo is not installed. Committing as is breaks `--locked` builds.
+   */
+  lockWarnings?: string[];
   error?: string;
   cancelled?: boolean;
 }
