@@ -448,7 +448,7 @@ internal sealed partial class WebSites(
         var field = $"sites[{settings.Id}]";
         if (settings.Upstream is null || !Enum.IsDefined(settings.Upstream.Kind))
         {
-            return new NginxProblem(field + ".upstream", "A site needs an upstream: a service port or a URL.");
+            return new NginxProblem(field + ".upstream", "A site needs an upstream: a service port, a URL or a redirect.");
         }
 
         var security = settings.SecurityHeaders ?? new SiteSecurityHeaders();

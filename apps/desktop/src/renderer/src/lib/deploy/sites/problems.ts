@@ -30,7 +30,7 @@ export interface PlacedProblem {
 const FIELD = /^(sites|streams)\[([^\]]*)\]\.?(.*)$/;
 
 const TABS: ReadonlyArray<[RegExp, SiteTab]> = [
-  [/^(id|domains)\b/, 'domains'],
+  [/^(id|domains|redirectDomains)\b/, 'domains'],
   [/^(upstream|websocket)\b/, 'proxy'],
   [/^(certificate|hsts|redirectToHttps|http2)\b/, 'ssl'],
   [/^(gzip|proxyCache|clientMaxBodySizeMegabytes|timeouts)\b/, 'performance'],

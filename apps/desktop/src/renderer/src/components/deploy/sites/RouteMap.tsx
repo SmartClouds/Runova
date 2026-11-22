@@ -1,5 +1,5 @@
 import type { SiteInfo } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
-import { Lock, LockOpen, Route, Server } from '@/components/icons';
+import { ArrowRight, Lock, LockOpen, Route, Server } from '@/components/icons';
 import { Chip } from '@/components/pageKit';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { certificateBadge } from '@/lib/deploy/sites/certificates';
@@ -15,13 +15,19 @@ const TONE = { ok: 'text-success', warn: 'text-warning', bad: 'text-destructive'
 
 export function upstreamLabel(site: SiteInfo): string {
   const upstream = site.settings.upstream;
-  if (upstream.kind === 'url' || upstream.kind === 'endpoint') return upstream.address ?? '';
+  if (upstream.kind === 'url' || upstream.kind === 'endpoint' || upstream.kind === 'redirect') {
+    return upstream.address ?? '';
+  }
   return `${upstream.service ?? 'local'}:${upstream.port ?? ''}`;
 }
 
 /** What nginx does to the site's traffic, as short words. */
 export function siteChips(site: SiteInfo): string[] {
   const s = site.settings;
+  if (s.upstream.kind === 'redirect') {
+    return [`redirect ${s.upstream.permanent === false ? 302 : 301}`];
+  }
+  const redirected = s.redirectDomains?.length ?? 0;
   return [
     s.proxyCache ? 'cache' : null,
     s.websocket ? 'websocket' : null,
@@ -31,6 +37,7 @@ export function siteChips(site: SiteInfo): string[] {
     s.ipRules && s.ipRules.allow.length > 0 ? 'ip allowlist' : null,
     s.rateLimit ? 'rate limit' : null,
     site.serverSnippet || site.locationSnippet ? 'custom' : null,
+    redirected > 0 ? `${redirected} redirected` : null,
   ].filter((chip): chip is string => chip !== null);
 }
 
@@ -88,6 +95,7 @@ export function RouteMap({
   const domain = site.settings.domains[0] ?? site.settings.id;
   const more = site.settings.domains.length - 1;
   const chips = siteChips(site);
+  const redirect = site.settings.upstream.kind === 'redirect';
   return (
     <div
       role="group"
@@ -127,11 +135,19 @@ export function RouteMap({
       </Stop>
       <Wire />
       <Stop
-        label={`Upstream ${upstreamLabel(site)}. Edit the proxy`}
-        tooltip="Where requests go"
+        label={
+          redirect
+            ? `Redirects to ${upstreamLabel(site)}. Edit where visitors go`
+            : `Upstream ${upstreamLabel(site)}. Edit the proxy`
+        }
+        tooltip={redirect ? 'Where visitors are sent' : 'Where requests go'}
         onOpen={() => onOpen('proxy')}
       >
-        <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        {redirect ? (
+          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-primary" />
+        ) : (
+          <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
         <span className="truncate font-mono text-foreground">{upstreamLabel(site)}</span>
       </Stop>
     </div>

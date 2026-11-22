@@ -209,6 +209,35 @@ describe('deploy tools', () => {
     expect(JSON.stringify(data)).not.toContain('secret');
   });
 
+  it('says where a redirect sends visitors and which names redirect to a site', async () => {
+    sites.sites.mockResolvedValueOnce([
+      {
+        settings: {
+          id: 'moved',
+          domains: ['old.example.com'],
+          upstream: { kind: 'redirect', address: 'https://example.com', permanent: false },
+          redirectToHttps: true,
+          redirectDomains: ['www.old.example.com'],
+        },
+        applied: true,
+        createdAtUnixMs: 1,
+        updatedAtUnixMs: 2,
+      },
+    ] as never);
+    const data = (await run('hosting_websites', { server: 'Prod' })).data;
+    expect(data).toEqual([
+      expect.objectContaining({
+        upstream: {
+          kind: 'redirect',
+          address: 'https://example.com',
+          permanent: false,
+          keepPath: true,
+        },
+        redirectDomains: ['www.old.example.com'],
+      }),
+    ]);
+  });
+
   it("reads a container's recent log lines by name", async () => {
     const text = (await run('hosting_container_logs', { server: 'Prod', container: 'shop-web-1' }))
       .text;

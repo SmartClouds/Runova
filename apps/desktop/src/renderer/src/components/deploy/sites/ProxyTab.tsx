@@ -1,9 +1,12 @@
-import { useId } from 'react';
-import { cn } from '@/lib/utils';
-import { FieldError, Section, TextField, ToggleRow } from './fields';
+import { ArrowRight } from '@/components/icons';
+import { redirectExample } from '@/lib/deploy/sites/redirects';
+import { ChoiceCards, FieldError, Section, TextField, ToggleRow } from './fields';
 import type { SiteTabProps } from './tabTypes';
 
-/** Where nginx sends the site's visitors: a port on this server, or another address. */
+/**
+ * What the site does with a visit: pass it to a port on this server or to another address, or
+ * send the visitor somewhere else altogether.
+ */
 
 const KINDS = [
   {
@@ -16,53 +19,91 @@ const KINDS = [
     label: 'An address',
     description: 'Any http:// or https:// URL nginx can reach.',
   },
+  {
+    value: 'redirect',
+    label: 'Redirect to another address',
+    description: 'Send visitors somewhere else, such as an old domain to a new one.',
+  },
 ] as const;
 
-export function ProxyTab({ draft, set, error, readOnly }: SiteTabProps): React.JSX.Element {
-  const group = useId();
+const REDIRECT_KINDS = [
+  {
+    value: 'permanent',
+    label: 'Permanent (301)',
+    description: 'Browsers and search engines remember the new address. Best for moved domains.',
+  },
+  {
+    value: 'temporary',
+    label: 'Temporary (302)',
+    description: 'Nothing is remembered. For a short while, or while you test.',
+  },
+] as const;
+
+function RedirectFields({ draft, set, error, readOnly }: SiteTabProps): React.JSX.Element {
+  const example = redirectExample(draft.domains[0] ?? '', draft.redirectTo, draft.redirectKeepPath);
+  return (
+    <>
+      <TextField
+        label="Send visitors to"
+        value={draft.redirectTo}
+        onChange={(redirectTo) => set({ redirectTo })}
+        error={error('upstream')}
+        hint="The full address, such as https://example.com or https://example.com/blog."
+        placeholder="https://example.com"
+        inputMode="url"
+        disabled={readOnly}
+        mono
+      />
+      <ChoiceCards
+        label="Kind of redirect"
+        options={REDIRECT_KINDS}
+        value={draft.redirectPermanent ? 'permanent' : 'temporary'}
+        onChange={(kind) => set({ redirectPermanent: kind === 'permanent' })}
+        disabled={readOnly}
+        className="sm:grid-cols-2"
+      />
+      <ToggleRow
+        label="Keep the path and query"
+        description="A visit to /pricing?plan=pro lands on the same page at the new address. Off sends everyone to the address exactly as written."
+        checked={draft.redirectKeepPath}
+        onChange={(redirectKeepPath) => set({ redirectKeepPath })}
+        disabled={readOnly}
+      />
+      <div
+        role="group"
+        aria-label="Example"
+        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-foreground/[0.03] px-3 py-2 font-mono text-xs ring-1 ring-inset ring-foreground/[0.07]"
+      >
+        <span className="font-sans text-muted-foreground">For example</span>
+        <span className="min-w-0 break-all text-foreground">{example.from}</span>
+        <ArrowRight aria-hidden className="h-3 w-3 shrink-0 text-primary" />
+        <span className="sr-only">goes to</span>
+        <span className="min-w-0 break-all text-foreground">{example.to}</span>
+      </div>
+    </>
+  );
+}
+
+export function ProxyTab(props: SiteTabProps): React.JSX.Element {
+  const { draft, set, error, readOnly } = props;
+  const redirect = draft.upstreamKind === 'redirect';
   return (
     <div className="space-y-2">
-      <Section title="Upstream" description="Where nginx passes each request it receives.">
-        <div role="radiogroup" aria-labelledby={group} className="grid gap-2 sm:grid-cols-2">
-          <span id={group} className="sr-only">
-            Upstream kind
-          </span>
-          {KINDS.map((kind) => {
-            const chosen = draft.upstreamKind === kind.value;
-            return (
-              <button
-                key={kind.value}
-                type="button"
-                role="radio"
-                aria-checked={chosen}
-                disabled={readOnly}
-                onClick={() => set({ upstreamKind: kind.value })}
-                className={cn(
-                  // Inset rings, since a tinted border would lose to the global border colour.
-                  'cursor-pointer rounded-xl p-3 text-left ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
-                  chosen
-                    ? 'bg-primary/12 ring-primary/40'
-                    : 'bg-background/40 ring-foreground/[0.08] hover:bg-foreground/[0.06]',
-                )}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'h-3 w-3 rounded-full ring-1 ring-inset',
-                      chosen
-                        ? 'bg-primary ring-primary shadow-[0_0_8px_hsl(var(--primary)/0.6)]'
-                        : 'ring-muted-foreground/60',
-                    )}
-                  />
-                  {kind.label}
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">{kind.description}</span>
-              </button>
-            );
-          })}
-        </div>
-        {draft.upstreamKind === 'servicePort' ? (
+      <Section
+        title="Where visitors go"
+        description="Pass each request on to an app, or send visitors to another address."
+      >
+        <ChoiceCards
+          label="Upstream kind"
+          options={KINDS}
+          value={draft.upstreamKind}
+          onChange={(upstreamKind) => set({ upstreamKind })}
+          disabled={readOnly}
+          className="sm:grid-cols-3"
+        />
+        {redirect ? (
+          <RedirectFields {...props} />
+        ) : draft.upstreamKind === 'servicePort' ? (
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <TextField
               label="Service name"
@@ -94,7 +135,7 @@ export function ProxyTab({ draft, set, error, readOnly }: SiteTabProps): React.J
             mono
           />
         )}
-        <FieldError message={error('upstream')} />
+        {!redirect && <FieldError message={error('upstream')} />}
         {draft.upstreamKind === 'url' && (
           <>
             <ToggleRow
@@ -114,15 +155,17 @@ export function ProxyTab({ draft, set, error, readOnly }: SiteTabProps): React.J
           </>
         )}
       </Section>
-      <Section title="Connections">
-        <ToggleRow
-          label="WebSockets"
-          description="Lets live connections (chat, dashboards, hot reload) through to the app."
-          checked={draft.websocket}
-          onChange={(websocket) => set({ websocket })}
-          disabled={readOnly}
-        />
-      </Section>
+      {!redirect && (
+        <Section title="Connections">
+          <ToggleRow
+            label="WebSockets"
+            description="Lets live connections (chat, dashboards, hot reload) through to the app."
+            checked={draft.websocket}
+            onChange={(websocket) => set({ websocket })}
+            disabled={readOnly}
+          />
+        </Section>
+      )}
     </div>
   );
 }

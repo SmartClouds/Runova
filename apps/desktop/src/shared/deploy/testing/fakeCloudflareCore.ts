@@ -12,6 +12,7 @@ import type {
   OriginLockResult,
   OriginLockStatus,
 } from '../protocol/generated/Runova.ServerCore.Contracts';
+import { siteNames } from '../siteNames';
 import type { FakeFirewall, FakeFirewallCaller } from './fakeFirewall';
 import type { FakeNginx } from './fakeNginx';
 
@@ -130,7 +131,7 @@ export class FakeCloudflareCore {
     const request: OriginCertificateRequestInfo = {
       siteId,
       csrPem: `-----BEGIN CERTIFICATE REQUEST-----\nZmFrZSBjc3IgZm9yICR7c2l0ZUlkfQ==\n-----END CERTIFICATE REQUEST-----\n`,
-      hostnames: [...site.settings.domains],
+      hostnames: siteNames(site.settings),
       requestType: 'origin-ecc',
       createdAtUnixMs: this.host.now(),
     };

@@ -201,6 +201,15 @@ describe('CloudflareTunnelOps', () => {
     expect(plan.status.state).toBe('off');
   });
 
+  it('routes names redirected to a site through the tunnel as well', async () => {
+    const { ops, core } = await setup();
+    core.nginx.saveSite({ ...site('apex', ['example.com']), redirectDomains: ['old.example.com'] });
+
+    const plan = await ops.plan('srv-1');
+
+    expect(plan.accounts[0]?.domains).toEqual(expect.arrayContaining(['old.example.com']));
+  });
+
   it('makes the tunnel at Cloudflare and hands the core only the tunnel token', async () => {
     const { ops, core, fake } = await setup();
 

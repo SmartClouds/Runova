@@ -12,6 +12,7 @@ import { GLASS_PANEL } from '@/components/pageKit';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { uncoveredNames } from '@/lib/deploy/sites/certificates';
 import { blankDraft, draftFromSite, type SiteDraft, suggestId } from '@/lib/deploy/sites/draft';
 import { problemsByTab, problemsFor, type SiteTab, tabOf } from '@/lib/deploy/sites/problems';
 import { type DraftErrors, settingsFromDraft } from '@/lib/deploy/sites/settings';
@@ -217,7 +218,7 @@ export function SiteEditor({
         </TabsList>
         <div className="p-3">
           <TabsContent value="domains" className="mt-0">
-            <DomainsTab {...tabProps} />
+            <DomainsTab {...tabProps} uncovered={site ? uncoveredNames(site) : []} />
           </TabsContent>
           <TabsContent value="proxy" className="mt-0">
             <ProxyTab {...tabProps} />

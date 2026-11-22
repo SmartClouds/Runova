@@ -83,6 +83,9 @@ internal static class NginxVariants
         "stream-udp",
         "cloudflare-origin-lock",
         "cloudflare-tunnel",
+        "redirect-site",
+        "redirect-temporary",
+        "redirect-domains",
     ];
 
     /// <summary>The layout a variant renders with, starting from the server's own.</summary>
@@ -198,6 +201,21 @@ internal static class NginxVariants
         {
             Tunnel = new NginxTunnel(18080),
         },
+        "redirect-site" => Sites(Site("moved", "moved.test") with
+        {
+            Upstream = new NginxRedirectUpstream("https://plain.test/"),
+            Certificate = _certificate,
+        }),
+        "redirect-temporary" => Sites(Site("promo", "promo.test") with
+        {
+            Upstream = new NginxRedirectUpstream("http://plain.test/landing?from=promo", Permanent: false, KeepPath: false),
+        }),
+        "redirect-domains" => Sites(Site("apex", "apex.test") with
+        {
+            RedirectDomains = ["www.apex.test"],
+            Certificate = _certificate,
+            Hsts = new NginxHsts(),
+        }),
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "No such variant."),
     };
 

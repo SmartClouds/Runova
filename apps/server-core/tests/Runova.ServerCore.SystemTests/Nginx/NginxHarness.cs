@@ -93,7 +93,7 @@ internal sealed class NginxHarness : IAsyncDisposable
         await DockerCli.CheckedAsync(["build", "-q", "-t", "runova-nginx-upstream:harness", Path.Combine(testServers, "nginx-upstream")], _buildTimeout, cancellationToken);
         await DockerCli.CheckedAsync(["build", "-q", "-t", $"runova-nginx-harness:{distro}", Path.Combine(testServers, $"nginx-{distro}")], _buildTimeout, cancellationToken);
 
-        var siteNames = NginxVariants.All().Sites.Where(s => s.Certificate is not null).SelectMany(s => s.Domains).ToList();
+        var siteNames = NginxVariants.All().Sites.Where(s => s.Certificate is not null).SelectMany(s => s.Domains.Concat(s.RedirectDomains)).ToList();
         var layout = distro.StartsWith("rocky", StringComparison.Ordinal) ? NginxLayout.Rhel : NginxLayout.Debian;
         var harness = new NginxHarness(distro, layout, HarnessCertificates.Create(siteNames, NginxVariants.RemoteHost));
         try

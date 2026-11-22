@@ -22,12 +22,20 @@ public enum UpstreamKind
     /// the core makes itself; a site saved through the Websites calls cannot use it.
     /// </summary>
     RunovaCore,
+
+    /// <summary>
+    /// No upstream: every visitor is sent on to the http:// or https:// address in Address. Sites
+    /// only. Appended last so the stored kinds keep their values.
+    /// </summary>
+    Redirect,
 }
 
 /// <summary>Where a site or stream proxy sends its traffic.</summary>
 /// <param name="Service">A label for the service on that port, shown in the app.</param>
 /// <param name="VerifyCertificate">For an https:// URL, check the upstream's certificate.</param>
 /// <param name="SendUpstreamHost">For a URL, send the upstream's own host name instead of the visitor's.</param>
+/// <param name="Permanent">For a redirect, a permanent one (301) that browsers and search engines remember; false for 302. Null reads as true.</param>
+/// <param name="KeepPath">For a redirect, add the path and query the visitor asked for to the address. Null reads as true.</param>
 [TranspilationSource]
 public sealed record UpstreamTarget(
     UpstreamKind Kind,
@@ -35,7 +43,9 @@ public sealed record UpstreamTarget(
     string? Address = null,
     string? Service = null,
     bool VerifyCertificate = true,
-    bool SendUpstreamHost = false);
+    bool SendUpstreamHost = false,
+    bool? Permanent = null,
+    bool? KeepPath = null);
 
 [TranspilationSource]
 public sealed record SiteProxyCache(int TtlSeconds = 600, int MaxSizeMegabytes = 1024, string[]? BypassCookies = null);
@@ -106,6 +116,10 @@ public sealed record SiteTimeouts(int? ConnectSeconds = null, int? ReadSeconds =
 /// </summary>
 /// <param name="Domains">ASCII names (xn-- for international ones); a leading *. makes a wildcard.</param>
 /// <param name="ClientMaxBodySizeMegabytes">0 for no limit, null for nginx's 1 MB.</param>
+/// <param name="RedirectDomains">
+/// More names that send visitors on to the first of Domains (www to the bare domain, say), keeping
+/// the path. They share the site's certificate. Not for a site whose upstream is a redirect.
+/// </param>
 [TranspilationSource]
 public sealed record SiteSettings(
     string Id,
@@ -123,7 +137,8 @@ public sealed record SiteSettings(
     SiteBasicAuth? BasicAuth = null,
     SiteRateLimit? RateLimit = null,
     int? ClientMaxBodySizeMegabytes = null,
-    SiteTimeouts? Timeouts = null);
+    SiteTimeouts? Timeouts = null,
+    string[]? RedirectDomains = null);
 
 /// <summary>Custom directives for a site, Owner only. Null or empty removes a snippet.</summary>
 [TranspilationSource]

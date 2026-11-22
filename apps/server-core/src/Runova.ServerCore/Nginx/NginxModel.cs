@@ -36,6 +36,12 @@ internal sealed record NginxSite
 
     public required NginxUpstream Upstream { get; init; }
 
+    /// <summary>
+    /// More names (ASCII, like <see cref="Domains"/>) that send visitors on to the first domain,
+    /// keeping the path. The site's certificate covers them too.
+    /// </summary>
+    public IReadOnlyList<string> RedirectDomains { get; init; } = [];
+
     /// <summary>Null until a certificate exists; the site is served over plain HTTP until then.</summary>
     public NginxCertificate? Certificate { get; init; }
 
@@ -88,6 +94,11 @@ internal sealed record NginxServiceUpstream(string Service, int Port) : NginxUps
 /// <param name="VerifyCertificate">For https://, check the upstream's certificate against the system's trusted CAs.</param>
 /// <param name="SendUpstreamHost">Send the upstream's own host name as Host instead of the visitor's.</param>
 internal sealed record NginxUrlUpstream(string Url, bool VerifyCertificate = true, bool SendUpstreamHost = false) : NginxUpstream;
+
+/// <summary>No upstream: every visitor is sent on to <paramref name="Url"/>.</summary>
+/// <param name="Permanent">301, which browsers and search engines remember; otherwise 302.</param>
+/// <param name="KeepPath">Add the path and query the visitor asked for to the address.</param>
+internal sealed record NginxRedirectUpstream(string Url, bool Permanent = true, bool KeepPath = true) : NginxUpstream;
 
 /// <summary>
 /// The Runova core itself on its loopback port for nginx (E44). Only the reserved core domain site

@@ -17,6 +17,7 @@ import type {
   OriginLockStatus,
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
+import { siteNames } from '../../../shared/deploy/siteNames';
 import { ADMIN_ROLES, callCore } from '../coreCalls';
 import type { CoreLinks } from '../live/coreLinks';
 import type { CloudflareService } from './service';
@@ -306,7 +307,7 @@ export class CloudflareServerOps {
     const coreDomain = await this.core(serverId, (hub) => hub.getCoreDomain()).catch(() => null);
     const domains = [
       ...new Set([
-        ...sites.flatMap((site) => site.settings.domains.map((d) => d.toLowerCase())),
+        ...sites.flatMap((site) => siteNames(site.settings).map((d) => d.toLowerCase())),
         ...(coreDomain?.enabled && coreDomain.domain ? [coreDomain.domain.toLowerCase()] : []),
       ]),
     ];

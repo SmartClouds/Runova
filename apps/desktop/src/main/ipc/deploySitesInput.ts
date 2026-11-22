@@ -77,12 +77,18 @@ function port(value: unknown): number {
 function upstream(value: unknown): UpstreamTarget {
   const input = object(value, 'an upstream');
   return defined({
-    kind: oneOf(input.kind, ['servicePort', 'url', 'endpoint'] as const, 'upstream kind'),
+    kind: oneOf(
+      input.kind,
+      ['servicePort', 'url', 'endpoint', 'redirect'] as const,
+      'upstream kind',
+    ),
     port: maybe(input.port, port),
     address: maybe(input.address, (item) => bounded(item, 2048, 'address')),
     service: maybe(input.service, (item) => bounded(item, 63, 'service name')),
     verifyCertificate: flag(input.verifyCertificate, 'checking the upstream certificate'),
     sendUpstreamHost: flag(input.sendUpstreamHost, "sending the upstream's host name"),
+    permanent: maybe(input.permanent, (item) => flag(item, 'a permanent redirect')),
+    keepPath: maybe(input.keepPath, (item) => flag(item, 'keeping the path')),
   });
 }
 
@@ -98,6 +104,9 @@ export function siteSettings(value: unknown): SiteSettings {
   return defined({
     id: siteId(input.id),
     domains: texts(input.domains, MAX_DOMAINS, 253, 'domains'),
+    redirectDomains: maybe(input.redirectDomains, (list) =>
+      texts(list, MAX_DOMAINS, 253, 'redirected names'),
+    ),
     upstream: upstream(input.upstream),
     websocket: flag(input.websocket, 'websockets'),
     gzip: flag(input.gzip, 'compression'),

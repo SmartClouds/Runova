@@ -1,0 +1,70 @@
+==> http.conf <==
+# Managed by Runova. Each apply writes a new release, so change this in the app instead.
+
+# Every site's access log: nginx's combined fields, then what traffic statistics read (E109).
+log_format runova_main '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" '
+    '"$host" $request_time "$sent_http_content_type" $scheme $realip_remote_addr "$http_cf_ipcountry" "$http_cf_ipcity" "$http_cf_region"';
+
+# Addresses blocked under Traffic (E110). The file is outside the releases, so blocking needs no apply.
+geo $runova_blocked {
+    default 0;
+    include /etc/nginx/runova/blocked.conf;
+}
+
+# WebSocket requests ask the upstream to switch protocols; other requests close as usual.
+map $http_upgrade $runova_connection_upgrade {
+    default upgrade;
+    "" close;
+}
+
+# Requests for names no site claims get no answer at all, and TLS handshakes for them
+# are refused before any certificate is shown.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+    return 444;
+}
+
+include /etc/nginx/runova/releases/1/sites/promo.conf;
+
+==> sites/promo.conf <==
+# Site promo: promo.test
+
+# Answers ACME challenges and sends every other visitor on to http://plain.test/landing?from=promo.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name promo.test;
+    server_tokens off;
+    root /var/www/runova/sites/promo;
+    access_log /var/log/nginx/runova-promo.access.log runova_main;
+    error_log /var/log/nginx/runova-promo.error.log;
+
+    if ($runova_blocked) {
+        return 444;
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/runova/acme;
+        default_type text/plain;
+        try_files $uri =404;
+        allow all;
+        auth_basic off;
+    }
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        return 302 http://plain.test/landing?from=promo;
+    }
+}
+
+==> stream.conf <==
+# Managed by Runova. Each apply writes a new release, so change this in the app instead.
+# TCP and UDP ports passed straight through to a service; nginx.conf includes this in its stream block.

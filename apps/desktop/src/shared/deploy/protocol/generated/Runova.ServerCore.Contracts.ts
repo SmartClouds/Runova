@@ -3700,7 +3700,7 @@ export type ResetUserPasswordRequest = {
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.UpstreamKind */
-export type UpstreamKind = "servicePort" | "url" | "endpoint" | "runovaCore";
+export type UpstreamKind = "servicePort" | "url" | "endpoint" | "runovaCore" | "redirect";
 
 /** Transpiled from Runova.ServerCore.Contracts.UpstreamTarget */
 export type UpstreamTarget = {
@@ -3716,6 +3716,10 @@ export type UpstreamTarget = {
     verifyCertificate: boolean;
     /** Transpiled from bool */
     sendUpstreamHost: boolean;
+    /** Transpiled from bool */
+    permanent?: boolean;
+    /** Transpiled from bool */
+    keepPath?: boolean;
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.SiteProxyCache */
@@ -3845,6 +3849,8 @@ export type SiteSettings = {
     clientMaxBodySizeMegabytes?: number;
     /** Transpiled from Runova.ServerCore.Contracts.SiteTimeouts? */
     timeouts?: SiteTimeouts;
+    /** Transpiled from string[]? */
+    redirectDomains?: string[];
 }
 
 /** Transpiled from Runova.ServerCore.Contracts.SiteSnippets */

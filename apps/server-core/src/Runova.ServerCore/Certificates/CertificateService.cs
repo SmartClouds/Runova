@@ -89,7 +89,7 @@ internal sealed partial class CertificateService(
         ArgumentNullException.ThrowIfNull(request);
         var site = await RequireSiteAsync(request.SiteId, cancellationToken);
         var problems = new List<string>();
-        var checkedUpload = CertificateUpload.Check(request.CertificatePem, request.PrivateKeyPem, site.Settings.Domains, time.GetUtcNow(), problems);
+        var checkedUpload = CertificateUpload.Check(request.CertificatePem, request.PrivateKeyPem, SiteNames.All(site.Settings), time.GetUtcNow(), problems);
         if (problems.Count > 0)
         {
             return new CertificateUploadResult([.. problems]);
@@ -196,7 +196,7 @@ internal sealed partial class CertificateService(
     private async Task IssueAsync(CertificateIssueRequest request, Requester who, JobContext job, CancellationToken cancellationToken)
     {
         var site = await RequireSiteAsync(request.SiteId, cancellationToken);
-        var domains = site.Settings.Domains;
+        var domains = SiteNames.All(site.Settings);
         var wildcard = domains.Any(domain => domain.StartsWith("*.", StringComparison.Ordinal));
         if ((wildcard || request.PreferDns01) && !await issuers.CanAnswerDns01Async(domains, cancellationToken))
         {

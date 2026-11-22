@@ -145,6 +145,18 @@ describe('SslTab actions', () => {
     ).toBeInTheDocument();
   });
 
+  it('names the redirected names too, since one certificate covers them all', async () => {
+    const { user } = renderTab({
+      ...SHOP,
+      settings: { ...SHOP.settings, redirectDomains: ['www.shop.example.com'] },
+    });
+    await user.click(screen.getByRole('button', { name: /Issue a certificate/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Issue a certificate' });
+    expect(
+      within(dialog).getByText(/shop\.example\.com, www\.shop\.example\.com reach this server/),
+    ).toBeInTheDocument();
+  });
+
   it('says why an order was refused', async () => {
     const { user } = renderTab(SHOP, {
       'deployCerts.issue': () =>

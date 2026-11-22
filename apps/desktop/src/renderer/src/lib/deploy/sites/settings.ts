@@ -1,6 +1,7 @@
 import { validateDomain, validateIpOrCidr, validatePort } from '@runova/core';
 import type { SiteSettings } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { SiteDraft } from './draft';
+import { redirectProblem } from './redirects';
 
 /**
  * Turns an editor's draft into the core's `SiteSettings`, with the mistakes that can be seen
@@ -56,6 +57,36 @@ function networks(value: string, path: string, errors: DraftErrors): string[] {
   return list;
 }
 
+/**
+ * The names that send visitors on to the first domain, in ASCII, with each mistake keyed like the
+ * core keys it. Empty rows are dropped; a redirect site has none.
+ */
+function redirectedNames(
+  draft: SiteDraft,
+  domains: readonly string[],
+  errors: DraftErrors,
+): string[] {
+  if (draft.upstreamKind === 'redirect') return [];
+  const rows = draft.redirectDomains.map((name) => name.trim()).filter((name) => name !== '');
+  if (rows.length > 0 && domains[0]?.startsWith('*.')) {
+    errors.redirectDomains =
+      'Names can only be redirected to a site whose first domain is a plain name, not a wildcard.';
+  }
+  const seen = new Set(domains.map((domain) => domain.toLowerCase()));
+  return rows.map((name, index) => {
+    const checked = validateDomain(name, { allowWildcard: true });
+    if (!checked.ok) {
+      errors[`redirectDomains[${index}]`] = checked.reason;
+      return name;
+    }
+    if (seen.has(checked.value)) {
+      errors[`redirectDomains[${index}]`] = `${checked.value} is already one of this site's names.`;
+    }
+    seen.add(checked.value);
+    return checked.value;
+  });
+}
+
 export function settingsFromDraft(draft: SiteDraft): {
   settings: SiteSettings;
   errors: DraftErrors;
@@ -76,8 +107,22 @@ export function settingsFromDraft(draft: SiteDraft): {
     return checked.value;
   });
 
+  const redirectDomains = redirectedNames(draft, ascii, errors);
+
   let upstream: SiteSettings['upstream'];
-  if (draft.upstreamKind === 'servicePort') {
+  if (draft.upstreamKind === 'redirect') {
+    const address = draft.redirectTo.trim();
+    const problem = redirectProblem(address, draft.redirectKeepPath, ascii);
+    if (problem) errors.upstream = problem;
+    upstream = {
+      kind: 'redirect',
+      address,
+      permanent: draft.redirectPermanent,
+      keepPath: draft.redirectKeepPath,
+      verifyCertificate: true,
+      sendUpstreamHost: false,
+    };
+  } else if (draft.upstreamKind === 'servicePort') {
     const port = validatePort(draft.port.trim());
     if (!port.ok) errors.upstream = port.reason;
     upstream = {
@@ -99,15 +144,18 @@ export function settingsFromDraft(draft: SiteDraft): {
     };
   }
 
+  // A redirect site passes nothing to an app, so the options that shape proxying stay out.
+  const proxies = draft.upstreamKind !== 'redirect';
   const settings: SiteSettings = {
     id: draft.id,
     domains: ascii,
     upstream,
-    websocket: draft.websocket,
+    websocket: proxies && draft.websocket,
     gzip: draft.gzip,
     http2: draft.http2,
     redirectToHttps: draft.redirectToHttps,
   };
+  if (proxies && redirectDomains.length > 0) settings.redirectDomains = redirectDomains;
 
   if (draft.hsts) {
     settings.hsts = {
@@ -116,7 +164,7 @@ export function settingsFromDraft(draft: SiteDraft): {
       preload: draft.hstsPreload,
     };
   }
-  if (draft.cache) {
+  if (draft.cache && proxies) {
     const bypassCookies = splitList(draft.cacheBypass);
     settings.proxyCache = {
       ttlSeconds: required(draft.cacheTtl, 'proxyCache', errors, { min: 1, label: 'Lifetime' }),

@@ -117,6 +117,22 @@ public sealed class CertificateServiceTests
     }
 
     [Fact]
+    public async Task The_certificate_covers_the_names_that_redirect_to_the_site_too()
+    {
+        await using var ca = await StartAsync();
+        var withWww = WebHubTests.Blog() with { RedirectDomains = ["www.blog.example.com"] };
+        Assert.Empty((await ca.Hub.InvokeAsync<SiteSaveResult>(nameof(ICoreHub.SaveSite), withWww, Cancel)).Problems);
+
+        var job = await IssueAsync(ca);
+
+        Assert.True(job.State == JobState.Succeeded, job.Error);
+        var certificate = Assert.Single(await ca.Hub.InvokeAsync<CertificateInfo[]>(nameof(ICoreHub.ListCertificates), Cancel));
+        Assert.Equal(["blog.example.com", "www.blog.example.com"], certificate.Domains.Order(StringComparer.Ordinal));
+        var site = ca.Harness.Services.GetRequiredService<SimulatedNginxMachine>().Text("/etc/nginx/runova/current/sites/blog.conf");
+        Assert.Contains("return 301 https://blog.example.com$request_uri;", site, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task The_account_and_certificate_keys_are_stored_sealed()
     {
         await using var ca = await StartAsync();

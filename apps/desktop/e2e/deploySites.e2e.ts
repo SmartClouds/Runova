@@ -39,8 +39,8 @@ async function finishJob(page: Page): Promise<void> {
   await expect(dialog).toBeHidden();
 }
 
-test('sets up nginx, adds a site, applies it and issues a certificate', async () => {
-  test.setTimeout(240_000);
+/** Signs in to the DevHost and opens Websites with nginx set up for Runova. */
+async function openWebsites(): Promise<Page> {
   if (!devHost) throw new Error('DevHost did not start');
   launched = await launchApp({
     settings: {},
@@ -68,6 +68,20 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
     await finishJob(page);
   }
   await expect(page.getByText('Managed by Runova')).toBeVisible({ timeout: 30_000 });
+  return page;
+}
+
+/** Puts every saved change live. */
+async function apply(page: Page): Promise<void> {
+  const bar = page.getByRole('region', { name: 'Apply changes' });
+  await expect(bar.getByText(/Saved changes are waiting/)).toBeVisible({ timeout: 30_000 });
+  await bar.getByRole('button', { name: /Apply changes/ }).click();
+  await expect(bar).toBeHidden({ timeout: 60_000 });
+}
+
+test('sets up nginx, adds a site, applies it and issues a certificate', async () => {
+  test.setTimeout(240_000);
+  const page = await openWebsites();
 
   // A new site on a port of this server.
   await page.getByRole('button', { name: /Add a site/ }).click();
@@ -83,10 +97,7 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
   await expect(page.getByRole('switch', { name: 'Force HTTPS' })).toBeDisabled();
 
   // Saved is not live: apply it.
-  const bar = page.getByRole('region', { name: 'Apply changes' });
-  await expect(bar.getByText(/Saved changes are waiting/)).toBeVisible({ timeout: 30_000 });
-  await bar.getByRole('button', { name: /Apply changes/ }).click();
-  await expect(bar).toBeHidden({ timeout: 60_000 });
+  await apply(page);
 
   // A certificate from the pretend CA.
   await page.getByRole('button', { name: 'Issue a certificate' }).click();
@@ -106,4 +117,50 @@ test('sets up nginx, adds a site, applies it and issues a certificate', async ()
   await expect(row.getByText('websocket')).toBeVisible();
   await expect(row.getByText('shop:3000')).toBeVisible();
   await expect(row.getByText('Live')).toBeVisible({ timeout: 30_000 });
+});
+
+test('redirects www to the bare domain, and an old domain to a new address', async () => {
+  test.setTimeout(240_000);
+  const page = await openWebsites();
+  const sites = page.getByRole('list', { name: 'Sites' });
+
+  // The bare domain serves the app; www sends its visitors there in one click.
+  await page.getByRole('button', { name: /Add a site/ }).click();
+  await page.getByRole('textbox', { name: 'Domain 1' }).fill('example.org');
+  const redirected = page.getByRole('region', { name: 'Redirected here' });
+  await redirected.getByRole('button', { name: 'Redirect www.example.org here' }).click();
+  await expect(redirected.getByRole('textbox', { name: 'Redirected name 1' })).toHaveValue(
+    'www.example.org',
+  );
+  await page.getByRole('tab', { name: 'Proxy' }).click();
+  await page.getByLabel('Port').fill('3000');
+  await page.getByRole('button', { name: /Save the site/ }).click();
+  await expect(page.getByRole('tab', { name: 'SSL', selected: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await apply(page);
+  await page.getByRole('button', { name: /All sites/ }).click();
+  const apex = sites.getByRole('listitem', { name: 'example.org' });
+  await expect(apex.getByText('1 redirected')).toBeVisible({ timeout: 30_000 });
+  await expect(apex.getByText('Live')).toBeVisible({ timeout: 30_000 });
+
+  // A site of its own that sends an old domain to the new address.
+  await page.getByRole('button', { name: /Add a site/ }).click();
+  await page.getByRole('textbox', { name: 'Domain 1' }).fill('old-example.org');
+  await page.getByRole('tab', { name: 'Proxy' }).click();
+  await page.getByRole('radio', { name: /Redirect to another address/ }).click();
+  await page.getByLabel('Send visitors to').fill('https://example.org');
+  await expect(page.getByRole('group', { name: 'Example' })).toContainText(
+    'https://example.org/pricing?plan=pro',
+  );
+  await page.getByRole('button', { name: /Save the site/ }).click();
+  await expect(page.getByRole('tab', { name: 'SSL', selected: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await apply(page);
+  await page.getByRole('button', { name: /All sites/ }).click();
+  const moved = sites.getByRole('listitem', { name: 'old-example.org' });
+  await expect(moved.getByText('redirect 301')).toBeVisible({ timeout: 30_000 });
+  await expect(moved.getByText('https://example.org')).toBeVisible();
+  await expect(moved.getByText('Live')).toBeVisible({ timeout: 30_000 });
 });

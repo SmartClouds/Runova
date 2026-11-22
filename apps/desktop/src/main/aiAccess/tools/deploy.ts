@@ -144,7 +144,14 @@ function shapeSite(site: SiteInfo) {
       ...(settings.upstream.service ? { service: settings.upstream.service } : {}),
       ...(settings.upstream.address ? { address: settings.upstream.address } : {}),
       ...(settings.upstream.port === undefined ? {} : { port: settings.upstream.port }),
+      ...(settings.upstream.kind === 'redirect'
+        ? {
+            permanent: settings.upstream.permanent ?? true,
+            keepPath: settings.upstream.keepPath ?? true,
+          }
+        : {}),
     },
+    ...(settings.redirectDomains?.length ? { redirectDomains: settings.redirectDomains } : {}),
     redirectToHttps: settings.redirectToHttps,
     applied: site.applied,
     certificate: certificate

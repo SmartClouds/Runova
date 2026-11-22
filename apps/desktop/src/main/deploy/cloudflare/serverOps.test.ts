@@ -197,6 +197,21 @@ describe('the origin lock', () => {
     });
   });
 
+  it('checks the names redirected to a site, which the lock reaches too', async () => {
+    const { ops, core } = await setup();
+    core.nginx.saveSite({ ...site('apex', ['example.com']), redirectDomains: ['old.example.com'] });
+
+    const plan = await ops.previewOriginLock({
+      serverId: 'srv-1',
+      enabled: true,
+      authenticatedOriginPulls: false,
+    });
+
+    expect(plan.domains.map((check) => check.domain)).toEqual(
+      expect.arrayContaining(['example.com', 'old.example.com']),
+    );
+  });
+
   it('turns client certificates on at Cloudflare before the core asks for them', async () => {
     const { ops, fake, core } = await setup();
 

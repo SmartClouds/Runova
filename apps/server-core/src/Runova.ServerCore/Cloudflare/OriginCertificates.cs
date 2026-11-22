@@ -33,7 +33,7 @@ internal sealed class OriginCertificates(
     public async Task<OriginCertificateRequestInfo> CreateRequestAsync(string? siteId, CancellationToken cancellationToken)
     {
         var site = await RequireSiteAsync(siteId, cancellationToken);
-        var hostnames = site.Settings.Domains.Select(domain => domain.ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToArray();
+        var hostnames = SiteNames.All(site.Settings).Select(domain => domain.ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToArray();
         if (hostnames.Length == 0)
         {
             throw new ArgumentException("The site has no domains to put on a certificate.", nameof(siteId));

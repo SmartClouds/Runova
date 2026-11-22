@@ -219,6 +219,27 @@ public abstract class NginxHarnessTests(NginxHarnessFixture fixture)
         Assert.Equal("gzip", everything.Header("Content-Encoding"));
         Assert.Contains("X-Everything: yes\n", everything.Body, StringComparison.Ordinal);
 
+        // redirect-site: both schemes go straight to the destination, path and query kept, and
+        // ACME challenges are still answered.
+        var moved = await nginx.CurlAsync(ct, Http("moved.test", "/x?y=1"));
+        Assert.Equal((301, "https://plain.test/x?y=1"), (moved.Status, moved.Header("Location")));
+        Assert.Equal("https://plain.test/x?y=1", (await nginx.CurlAsync(ct, Https("moved.test", "/x?y=1"))).Header("Location"));
+        Assert.Equal(NginxHarness.AcmeContent, (await nginx.CurlAsync(ct, Http("moved.test", _acmePath))).Body);
+
+        // redirect-temporary: a 302 to one fixed page, whatever was asked for.
+        var promo = await nginx.CurlAsync(ct, Http("promo.test", "/anything?x=1"));
+        Assert.Equal((302, "http://plain.test/landing?from=promo"), (promo.Status, promo.Header("Location")));
+
+        // redirect-domains: www goes to the bare domain over HTTPS, with HSTS on the HTTPS answer,
+        // and the bare domain is served as usual.
+        var www = await nginx.CurlAsync(ct, Http("www.apex.test", "/p?q=1"));
+        Assert.Equal((301, "https://apex.test/p?q=1"), (www.Status, www.Header("Location")));
+        var wwwTls = await nginx.CurlAsync(ct, Https("www.apex.test", "/p"));
+        Assert.Equal((301, "https://apex.test/p"), (wwwTls.Status, wwwTls.Header("Location")));
+        Assert.Equal("max-age=31536000", wwwTls.Header("Strict-Transport-Security"));
+        Assert.Equal(NginxHarness.AcmeContent, (await nginx.CurlAsync(ct, Http("www.apex.test", _acmePath))).Body);
+        Assert.Equal(200, (await nginx.CurlAsync(ct, Https("apex.test"))).Status);
+
         // stream-tcp: bytes pass straight through; the allowlisted port shuts 127.0.0.1 out.
         var tcp = await nginx.CurlAsync(ct, $"http://127.0.0.1:{NginxVariants.TcpPort}/through");
         Assert.Contains("GET /through HTTP/1.1\n", tcp.Body, StringComparison.Ordinal);

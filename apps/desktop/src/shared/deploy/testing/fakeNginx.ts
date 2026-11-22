@@ -17,6 +17,7 @@ import type {
   StreamProxySaveResult,
   StreamProxySettings,
 } from '../protocol/generated/Runova.ServerCore.Contracts';
+import { siteNames } from '../siteNames';
 
 /**
  * nginx and its certificates inside a `FakeCore` (E10, E11), with the core's rules where the
@@ -272,7 +273,7 @@ export class FakeNginx {
       siteId,
       source,
       state: 'valid',
-      domains: [...site.settings.domains],
+      domains: siteNames(site.settings),
       issuer: staging ? '(STAGING) Pretend CA' : 'Pretend CA',
       notBeforeUnixMs: now,
       notAfterUnixMs: now + 90 * DAY,

@@ -135,8 +135,44 @@ describe('site settings', () => {
     expect(saved.proxyCache.bypassCookies).toEqual(['session']);
   });
 
+  it('keeps a redirect and the names redirected to a site', async () => {
+    const { call, sites } = harness();
+    await call(IPC.deploySites.save, 'srv-1', {
+      ...SITE,
+      upstream: {
+        kind: 'redirect',
+        address: 'https://runovahq.com',
+        permanent: false,
+        keepPath: true,
+        verifyCertificate: true,
+        sendUpstreamHost: false,
+      },
+      redirectDomains: ['www.example.com'],
+    });
+    const [, saved] = sites.saveSite.mock.calls[0];
+    expect(saved.upstream).toMatchObject({
+      kind: 'redirect',
+      permanent: false,
+      keepPath: true,
+    });
+    expect(saved.redirectDomains).toEqual(['www.example.com']);
+  });
+
   it.each([
     ['no object', null, /Expected site settings/],
+    [
+      'too many redirected names',
+      { ...SITE, redirectDomains: Array(51).fill('a.example') },
+      /at most 50 redirected names/,
+    ],
+    [
+      'a redirect flag that is not one',
+      {
+        ...SITE,
+        upstream: { ...UPSTREAM, kind: 'redirect', permanent: 'yes' },
+      },
+      /yes or no for a permanent redirect/,
+    ],
     ['too many domains', { ...SITE, domains: Array(51).fill('a.example') }, /at most 50 domains/],
     ['a domain that is not text', { ...SITE, domains: [7] }, /domain must be text/],
     [

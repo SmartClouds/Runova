@@ -28,10 +28,16 @@ export interface SiteDraft {
   isNew: boolean;
   id: string;
   domains: string[];
-  upstreamKind: 'servicePort' | 'url';
+  /** Names that send visitors on to the first domain, as rows. */
+  redirectDomains: string[];
+  /** A redirect sends every visitor to `redirectTo` instead of passing requests to an app. */
+  upstreamKind: 'servicePort' | 'url' | 'redirect';
   service: string;
   port: string;
   url: string;
+  redirectTo: string;
+  redirectPermanent: boolean;
+  redirectKeepPath: boolean;
   verifyCertificate: boolean;
   sendUpstreamHost: boolean;
   websocket: boolean;
@@ -74,10 +80,14 @@ export function blankDraft(): SiteDraft {
     isNew: true,
     id: '',
     domains: [''],
+    redirectDomains: [],
     upstreamKind: 'servicePort',
     service: '',
     port: '',
     url: '',
+    redirectTo: '',
+    redirectPermanent: true,
+    redirectKeepPath: true,
     verifyCertificate: true,
     sendUpstreamHost: false,
     websocket: false,
@@ -119,15 +129,20 @@ const text = (value: number | undefined): string => (value === undefined ? '' : 
 export function draftFromSite(site: SiteInfo): SiteDraft {
   const s = site.settings;
   const blank = blankDraft();
+  const redirect = s.upstream.kind === 'redirect';
   return {
     ...blank,
     isNew: false,
     id: s.id,
     domains: s.domains.length > 0 ? [...s.domains] : [''],
-    upstreamKind: s.upstream.kind === 'url' ? 'url' : 'servicePort',
-    service: s.upstream.kind === 'url' ? '' : (s.upstream.service ?? ''),
-    port: s.upstream.kind === 'url' ? '' : text(s.upstream.port),
+    redirectDomains: [...(s.redirectDomains ?? [])],
+    upstreamKind: redirect ? 'redirect' : s.upstream.kind === 'url' ? 'url' : 'servicePort',
+    service: s.upstream.kind === 'url' || redirect ? '' : (s.upstream.service ?? ''),
+    port: s.upstream.kind === 'url' || redirect ? '' : text(s.upstream.port),
     url: s.upstream.kind === 'url' ? (s.upstream.address ?? '') : '',
+    redirectTo: redirect ? (s.upstream.address ?? '') : '',
+    redirectPermanent: redirect ? (s.upstream.permanent ?? true) : true,
+    redirectKeepPath: redirect ? (s.upstream.keepPath ?? true) : true,
     verifyCertificate: s.upstream.verifyCertificate,
     sendUpstreamHost: s.upstream.sendUpstreamHost,
     websocket: s.websocket,

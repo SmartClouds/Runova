@@ -1,4 +1,9 @@
-import type { CertificateInfo } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import type {
+  CertificateInfo,
+  SiteInfo,
+} from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import { siteNames } from '@shared/deploy/siteNames';
+import { covers } from './redirects';
 
 /**
  * A certificate in words: how long it has left, whether it renews by itself and how its last
@@ -104,4 +109,19 @@ export function relative(unixMs: number, now: number): string {
           ? plural(Math.round(minutes / 60), 'hour')
           : plural(Math.round(minutes / (24 * 60)), 'day');
   return delta >= 0 ? `in ${amount}` : `${amount} ago`;
+}
+
+/**
+ * The saved names of a site that its certificate does not cover, such as a www name redirected to
+ * it after the certificate was issued. Empty while the site has no certificate.
+ */
+export function uncoveredNames(site: SiteInfo): string[] {
+  const certificate = site.certificate;
+  if (!certificate) return [];
+  return siteNames(site.settings).filter(
+    (name) =>
+      !certificate.domains.some(
+        (covered) => covers(covered, name.toLowerCase()) || covered === name,
+      ),
+  );
 }

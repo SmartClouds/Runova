@@ -8,7 +8,7 @@ import {
   EMAIL_GATE_PLAN,
   SITE_HOST,
 } from '../../cloudflare/testing/fixtures';
-import { SERVER, SHOP, site, sitesBridge } from './testing/fixtures';
+import { certificate, SERVER, SHOP, site, sitesBridge } from './testing/fixtures';
 
 /**
  * The site editor: every tab's fields, checks made before the core is asked, the core's problems
@@ -321,5 +321,142 @@ describe('SiteEditor traffic', () => {
   it('has no Traffic tab for a site not saved yet', () => {
     renderEditor();
     expect(screen.queryByRole('tab', { name: 'Traffic' })).toBeNull();
+  });
+});
+
+describe('SiteEditor redirects', () => {
+  const APEX = site(
+    { certificate: certificate({ domains: ['runovahq.com'] }) },
+    { id: 'apex', domains: ['runovahq.com'] },
+  );
+  const MOVED = site(
+    { certificate: undefined },
+    {
+      id: 'moved',
+      domains: ['old.example.com'],
+      upstream: {
+        kind: 'redirect',
+        address: 'https://runovahq.com',
+        verifyCertificate: true,
+        sendUpstreamHost: false,
+      },
+      proxyCache: undefined,
+    },
+  );
+
+  it('sends a whole site to another address, temporarily and without the path', async () => {
+    const { user, bridge } = renderEditor({
+      bridge: { 'deploySites.save': { problems: [], site: MOVED } },
+    });
+    await user.type(screen.getByRole('textbox', { name: 'Domain 1' }), 'old.example.com');
+    await user.click(screen.getByRole('tab', { name: 'Proxy' }));
+    await user.click(screen.getByRole('radio', { name: /Redirect to another address/ }));
+    expect(screen.queryByRole('switch', { name: 'WebSockets' })).toBeNull();
+    await user.type(screen.getByLabelText('Send visitors to'), 'https://runovahq.com');
+    const example = screen.getByRole('group', { name: 'Example' });
+    expect(within(example).getByText('old.example.com/pricing?plan=pro')).toBeInTheDocument();
+    expect(within(example).getByText('https://runovahq.com/pricing?plan=pro')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Permanent \(301\)/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('radio', { name: /Temporary \(302\)/ }));
+    await user.click(screen.getByRole('switch', { name: 'Keep the path and query' }));
+    expect(within(example).getByText('https://runovahq.com')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Save the site/ }));
+    await waitFor(() =>
+      expect(bridge.$fn('deploySites.save')).toHaveBeenCalledWith(
+        SERVER.id,
+        expect.objectContaining({
+          domains: ['old.example.com'],
+          upstream: expect.objectContaining({
+            kind: 'redirect',
+            address: 'https://runovahq.com',
+            permanent: false,
+            keepPath: false,
+          }),
+        }),
+      ),
+    );
+  });
+
+  it('catches a redirect that would loop before asking the core', async () => {
+    const { user, bridge } = renderEditor();
+    await user.type(screen.getByRole('textbox', { name: 'Domain 1' }), 'old.example.com');
+    await user.click(screen.getByRole('tab', { name: 'Proxy' }));
+    await user.click(screen.getByRole('radio', { name: /Redirect to another address/ }));
+    await user.type(screen.getByLabelText('Send visitors to'), 'https://old.example.com/new');
+    await user.click(screen.getByRole('button', { name: /Save the site/ }));
+    expect(await screen.findByText(/loop back/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Proxy, one problem/ })).toBeInTheDocument();
+    expect(() => bridge.$fn('deploySites.save')).toThrow(/has not been touched/);
+  });
+
+  it('redirects www to the first domain in one click', async () => {
+    const { user, bridge } = renderEditor({
+      site: APEX,
+      bridge: { 'deploySites.save': { problems: [], site: APEX } },
+    });
+    const section = screen.getByRole('region', { name: 'Redirected here' });
+    await user.click(
+      within(section).getByRole('button', {
+        name: 'Redirect www.runovahq.com here',
+      }),
+    );
+    expect(within(section).getByRole('textbox', { name: 'Redirected name 1' })).toHaveValue(
+      'www.runovahq.com',
+    );
+    expect(within(section).queryByRole('button', { name: /Redirect www/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Save changes/ }));
+    await waitFor(() =>
+      expect(bridge.$fn('deploySites.save')).toHaveBeenCalledWith(
+        SERVER.id,
+        expect.objectContaining({
+          domains: ['runovahq.com'],
+          redirectDomains: ['www.runovahq.com'],
+        }),
+      ),
+    );
+  });
+
+  it('turns a served www into a redirect, and adds any other name by hand', async () => {
+    const { user } = renderEditor({
+      site: site({}, { domains: ['runovahq.com', 'www.runovahq.com'] }),
+    });
+    const section = screen.getByRole('region', { name: 'Redirected here' });
+    await user.click(
+      within(section).getByRole('button', {
+        name: 'Redirect www.runovahq.com here instead of serving it',
+      }),
+    );
+    expect(screen.queryByRole('textbox', { name: 'Domain 2' })).toBeNull();
+    await user.click(within(section).getByRole('button', { name: /Add a name/ }));
+    await user.type(
+      within(section).getByRole('textbox', { name: 'Redirected name 2' }),
+      'old-runova.com',
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove www.runovahq.com' }));
+    expect(within(section).getByRole('textbox', { name: 'Redirected name 1' })).toHaveValue(
+      'old-runova.com',
+    );
+  });
+
+  it('says when the certificate does not cover every name yet', () => {
+    renderEditor({
+      site: {
+        ...APEX,
+        settings: { ...APEX.settings, redirectDomains: ['www.runovahq.com'] },
+      },
+    });
+    expect(screen.getByText(/does not cover www\.runovahq\.com yet/)).toBeInTheDocument();
+  });
+
+  it('keeps proxy-only settings out of a redirect site', async () => {
+    const { user } = renderEditor({ site: MOVED, tab: 'performance' });
+    expect(screen.queryByRole('switch', { name: 'Cache responses' })).toBeNull();
+    expect(screen.queryByLabelText('Read timeout')).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Gzip' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Domains' }));
+    expect(screen.queryByRole('region', { name: 'Redirected here' })).toBeNull();
   });
 });

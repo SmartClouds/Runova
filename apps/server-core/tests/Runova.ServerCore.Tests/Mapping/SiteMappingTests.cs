@@ -82,6 +82,35 @@ public sealed class SiteMappingTests
     }
 
     [Fact]
+    public void A_redirect_site_and_redirected_names_reach_the_model()
+    {
+        var settings = new SiteSettings(
+            "moved",
+            ["old.example.com"],
+            new UpstreamTarget(UpstreamKind.Redirect, Address: "https://runovahq.com", Permanent: false, KeepPath: false),
+            RedirectDomains: ["www.old.example.com"]);
+
+        var site = SiteMapping.ToModel(settings, new Dictionary<string, string>(), null, null, null);
+
+        Assert.Equal(new NginxRedirectUpstream("https://runovahq.com", false, false), site.Upstream);
+        Assert.Equal(["www.old.example.com"], site.RedirectDomains);
+        Assert.Empty(SiteMapping.ToModel(settings with { RedirectDomains = null }, new Dictionary<string, string>(), null, null, null).RedirectDomains);
+        Assert.Equal(new NginxRedirectUpstream(string.Empty, true, true), SiteMapping.ToModel(settings with { Upstream = new UpstreamTarget(UpstreamKind.Redirect) }, new Dictionary<string, string>(), null, null, null).Upstream);
+    }
+
+    [Fact]
+    public void Redirected_names_are_stored_trimmed_and_in_lowercase()
+    {
+        var settings = new SiteSettings("app", [" App.Example.com "], new UpstreamTarget(UpstreamKind.ServicePort, Port: 3000), RedirectDomains: [" WWW.Example.com "]);
+
+        var normalized = SiteMapping.Normalize(settings);
+
+        Assert.Equal(["app.example.com"], normalized.Domains);
+        Assert.Equal(["www.example.com"], normalized.RedirectDomains!);
+        Assert.Null(SiteMapping.Normalize(settings with { RedirectDomains = null }).RedirectDomains);
+    }
+
+    [Fact]
     public void A_stream_proxy_reaches_the_model()
     {
         var proxy = SiteMapping.ToModel(new StreamProxySettings("dns", StreamProxyProtocol.Udp, 53, new UpstreamTarget(UpstreamKind.Endpoint, Address: "10.0.0.2:53"), ["10.0.0.0/8"], 5, 60));

@@ -21,6 +21,7 @@ import type {
   JobInfo,
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
+import { siteNames } from '../../../shared/deploy/siteNames';
 import { ADMIN_ROLES, callCore } from '../coreCalls';
 import type { CoreLinks } from '../live/coreLinks';
 import { planChanges, type ServerAddresses } from './pointDomain';
@@ -615,7 +616,7 @@ export class CloudflareTunnelOps {
     const coreDomain = await this.core(serverId, (hub) => hub.getCoreDomain()).catch(() => null);
     const named = new Map<string, CloudflareTunnelDomain['role']>();
     for (const site of sites) {
-      for (const domain of site.settings.domains) named.set(domain.toLowerCase(), 'site');
+      for (const domain of siteNames(site.settings)) named.set(domain.toLowerCase(), 'site');
     }
     if (coreDomain?.enabled && coreDomain.domain)
       named.set(coreDomain.domain.toLowerCase(), 'core');

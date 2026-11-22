@@ -137,6 +137,8 @@ internal static class NginxValidator
             }
         }
 
+        ValidateRedirectDomains(site, domains, Add);
+
         switch (site.Upstream)
         {
             case NginxServiceUpstream service:
@@ -156,8 +158,15 @@ internal static class NginxValidator
             case NginxCoreUpstream core:
                 ValidateCoreSite(site, core, Add);
                 break;
+            case NginxRedirectUpstream redirect:
+                if (NginxRedirect.Problem(redirect, site.Domains.Concat(site.RedirectDomains).Where(name => name is not null)) is { } redirectProblem)
+                {
+                    Add("upstream", redirectProblem);
+                }
+
+                break;
             default:
-                Add("upstream", "A site's upstream is a stack service's port or an http:// or https:// URL.");
+                Add("upstream", "A site's upstream is a stack service's port, an http:// or https:// URL, or a redirect.");
                 break;
         }
 
@@ -242,6 +251,64 @@ internal static class NginxValidator
         var snippetRules = new NginxSnippetRules(layout.SiteFolder(site.Id), upstreams);
         ValidateSnippet(site.ServerSnippet, NginxSnippetContext.Server, "serverSnippet", snippetRules, Add);
         ValidateSnippet(site.LocationSnippet, NginxSnippetContext.Location, "locationSnippet", snippetRules, Add);
+    }
+
+    /// <summary>
+    /// Names that send visitors on to the site's first domain. Each is a domain like any other and
+    /// belongs to one site only, so it cannot also be served, here or by another site.
+    /// </summary>
+    private static void ValidateRedirectDomains(NginxSite site, Dictionary<string, string> domains, Action<string, string, int?> add)
+    {
+        void Add(string name, string message) => add(name, message, null);
+        var redirected = site.RedirectDomains;
+        if (redirected.Count == 0)
+        {
+            return;
+        }
+
+        if (site.Upstream is NginxRedirectUpstream)
+        {
+            Add("redirectDomains", "Every name of a redirect site is redirected already; add these to its domains instead.");
+            return;
+        }
+
+        if (site.Upstream is NginxCoreUpstream)
+        {
+            Add("redirectDomains", "The server core's domain takes no other names.");
+            return;
+        }
+
+        if (site.Domains.Count + redirected.Count > MaxDomainsPerSite)
+        {
+            Add("redirectDomains", $"A site has at most {MaxDomainsPerSite} names, its domains and the names redirected to it together.");
+        }
+
+        if (site.Domains.Count > 0 && site.Domains[0]?.StartsWith("*.", StringComparison.Ordinal) == true)
+        {
+            Add("redirectDomains", "Names can only be redirected to a site whose first domain is a plain name, not a wildcard.");
+        }
+
+        for (var i = 0; i < redirected.Count; i++)
+        {
+            var domain = redirected[i] ?? string.Empty;
+            if (NginxNames.DomainProblem(domain) is { } problem)
+            {
+                Add($"redirectDomains[{i}]", problem);
+                continue;
+            }
+
+            var name = domain.ToLowerInvariant();
+            if (domains.TryGetValue(name, out var owner))
+            {
+                Add($"redirectDomains[{i}]", owner == site.Id
+                    ? $"{name} is already one of this site's names."
+                    : $"{name} already belongs to the site {owner}.");
+            }
+            else
+            {
+                domains[name] = site.Id;
+            }
+        }
     }
 
     /// <summary>

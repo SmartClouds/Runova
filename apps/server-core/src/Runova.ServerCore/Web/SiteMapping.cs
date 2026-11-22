@@ -28,11 +28,14 @@ internal static partial class SiteMapping
     /// <summary>The settings as stored and shown: no passwords, domains in lowercase.</summary>
     public static SiteSettings Normalize(SiteSettings settings) => settings with
     {
-        Domains = [.. (settings.Domains ?? []).Select(domain => (domain ?? string.Empty).Trim().ToLowerInvariant())],
+        Domains = [.. (settings.Domains ?? []).Select(Name)],
+        RedirectDomains = settings.RedirectDomains is { } redirected ? [.. redirected.Select(Name)] : null,
         BasicAuth = settings.BasicAuth is { } auth
             ? auth with { Users = [.. (auth.Users ?? []).Select(user => new SiteBasicAuthUser(user?.Name ?? string.Empty))] }
             : null,
     };
+
+    private static string Name(string? domain) => (domain ?? string.Empty).Trim().ToLowerInvariant();
 
     /// <summary>
     /// The hashes to store: a new password is hashed, a missing one keeps the hash stored for that
@@ -127,6 +130,7 @@ internal static partial class SiteMapping
     [MapperIgnoreTarget(nameof(NginxSite.OcspStapling))]
     [MapProperty(nameof(SiteSettings.Id), nameof(NginxSite.Id), Use = nameof(OrEmpty))]
     [MapProperty(nameof(SiteSettings.Domains), nameof(NginxSite.Domains), Use = nameof(OrNone))]
+    [MapProperty(nameof(SiteSettings.RedirectDomains), nameof(NginxSite.RedirectDomains), Use = nameof(OrNone))]
     [MapProperty(nameof(SiteSettings.Upstream), nameof(NginxSite.Upstream), Use = nameof(SiteUpstream))]
     [MapProperty(nameof(SiteSettings.SecurityHeaders), nameof(NginxSite.SecurityHeaders), Use = nameof(SecurityHeadersOf))]
     [MapProperty(nameof(SiteSettings.ResponseHeaders), nameof(NginxSite.ResponseHeaders), Use = nameof(ResponseHeadersOf))]
@@ -199,6 +203,7 @@ internal static partial class SiteMapping
         { Kind: UpstreamKind.ServicePort } service => new NginxServiceUpstream(Label(service), service.Port ?? 0),
         { Kind: UpstreamKind.Url } url => new NginxUrlUpstream(url.Address ?? string.Empty, url.VerifyCertificate, url.SendUpstreamHost),
         { Kind: UpstreamKind.RunovaCore } core => new NginxCoreUpstream(core.Port ?? 0),
+        { Kind: UpstreamKind.Redirect } redirect => new NginxRedirectUpstream(redirect.Address ?? string.Empty, redirect.Permanent ?? true, redirect.KeepPath ?? true),
         _ => new Unsupported(),
     };
 

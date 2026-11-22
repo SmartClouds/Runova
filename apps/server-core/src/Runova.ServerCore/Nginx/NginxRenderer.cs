@@ -208,7 +208,7 @@ internal static class NginxRenderer
         writer.Section($"include {directory}/{NginxCloudflare.TunnelRealIpFile};");
         WriteBlocked(writer, layout);
         WriteAcmeLocation(writer, layout);
-        if (site.Certificate is not null && site.RedirectToHttps)
+        if (site.Certificate is not null && site.RedirectToHttps && site.Upstream is not NginxRedirectUpstream)
         {
             writer.Open($"if ({TunnelSchemeVariable(layout)} = \"http\")");
             writer.Section("return 301 https://$host$request_uri;");
@@ -241,7 +241,8 @@ internal static class NginxRenderer
         writer.Section($"# Site {site.Id}: {domains}");
 
         var zones = new List<string>();
-        if (site.ProxyCache is { } cache)
+        var sendsOn = site.Upstream is NginxRedirectUpstream;
+        if (site.ProxyCache is { } cache && !sendsOn)
         {
             var inactive = Math.Max(cache.TtlSeconds, 3600);
             zones.Add(
@@ -258,9 +259,15 @@ internal static class NginxRenderer
         writer.Section(zones);
 
         var tls = site.Certificate is not null;
-        var redirect = tls && site.RedirectToHttps;
 
-        writer.Open("server", redirect ? ["# Plain HTTP answers ACME challenges and sends everything else to HTTPS."] : []);
+        // A redirect site sends plain HTTP straight to its destination, not to HTTPS first.
+        var redirect = tls && site.RedirectToHttps && !sendsOn;
+
+        writer.Open(
+            "server",
+            redirect ? ["# Plain HTTP answers ACME challenges and sends everything else to HTTPS."]
+            : site.Upstream is NginxRedirectUpstream sendTo ? [$"# Answers ACME challenges and sends every other visitor on to {sendTo.Url}."]
+            : []);
         writer.Section(Listen(layout, "80").Concat(
         [
             $"server_name {domains};",
@@ -295,30 +302,7 @@ internal static class NginxRenderer
                 "server_tokens off;",
                 $"root {layout.SiteFolder(site.Id)};",
             ]).Concat(Logs(site, layout)));
-            writer.Section(
-            [
-                $"ssl_certificate {certificate.CertificatePath};",
-                $"ssl_certificate_key {certificate.KeyPath};",
-                "ssl_protocols TLSv1.2 TLSv1.3;",
-                $"ssl_ciphers {Ciphers};",
-                $"ssl_session_cache shared:{layout.NamePrefix}_tls:10m;",
-                "ssl_session_timeout 1d;",
-                "ssl_session_tickets off;",
-                .. site.OcspStapling ? (string[])["ssl_stapling on;", "ssl_stapling_verify on;"] : ["ssl_stapling off;"],
-            ]);
-            if (originLock is not null)
-            {
-                writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
-            }
-
-            if (originLock is { AuthenticatedOriginPulls: true })
-            {
-                writer.Section(
-                    "# Authenticated Origin Pulls: HTTPS only for Cloudflare's client certificate.",
-                    $"ssl_client_certificate {directory}/{NginxCloudflare.OriginPullCaFile};",
-                    "ssl_verify_client on;");
-            }
-
+            WriteTls(writer, site, certificate, layout, directory, originLock);
             WriteBlocked(writer, layout);
             WriteServerBody(writer, site, layout, upstreams, directory, overTls: true);
             writer.Close();
@@ -329,7 +313,94 @@ internal static class NginxRenderer
             WriteTunnelSite(writer, site, layout, upstreams, directory, tunnel, domains);
         }
 
+        if (site.RedirectDomains.Count > 0)
+        {
+            WriteRedirectedNames(writer, site, layout, directory, originLock, tunnel);
+        }
+
         return writer.ToString();
+    }
+
+    private static void WriteTls(ConfigWriter writer, NginxSite site, NginxCertificate certificate, NginxLayout layout, string directory, NginxOriginLock? originLock)
+    {
+        writer.Section(
+        [
+            $"ssl_certificate {certificate.CertificatePath};",
+            $"ssl_certificate_key {certificate.KeyPath};",
+            "ssl_protocols TLSv1.2 TLSv1.3;",
+            $"ssl_ciphers {Ciphers};",
+            $"ssl_session_cache shared:{layout.NamePrefix}_tls:10m;",
+            "ssl_session_timeout 1d;",
+            "ssl_session_tickets off;",
+            .. site.OcspStapling ? (string[])["ssl_stapling on;", "ssl_stapling_verify on;"] : ["ssl_stapling off;"],
+        ]);
+        if (originLock is not null)
+        {
+            writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
+        }
+
+        if (originLock is { AuthenticatedOriginPulls: true })
+        {
+            writer.Section(
+                "# Authenticated Origin Pulls: HTTPS only for Cloudflare's client certificate.",
+                $"ssl_client_certificate {directory}/{NginxCloudflare.OriginPullCaFile};",
+                "ssl_verify_client on;");
+        }
+    }
+
+    /// <summary>
+    /// The names that send visitors on to the site's first domain, keeping the path: over HTTPS
+    /// once the site has a certificate (which covers these names too), with the site's HSTS so a
+    /// browser remembers to use HTTPS for them as well. ACME challenges are answered over HTTP,
+    /// so the names can be validated for that certificate.
+    /// </summary>
+    private static void WriteRedirectedNames(ConfigWriter writer, NginxSite site, NginxLayout layout, string directory, NginxOriginLock? originLock, NginxTunnel? tunnel)
+    {
+        var names = string.Join(' ', site.RedirectDomains.Select(d => d.ToLowerInvariant()));
+        var primary = site.Domains[0].ToLowerInvariant();
+        var scheme = site.Certificate is null ? "http" : "https";
+
+        writer.Open("server", $"# Names that send visitors on to {primary}, keeping the path.");
+        writer.Section(Listen(layout, "80").Concat([$"server_name {names};", "server_tokens off;"]).Concat(Logs(site, layout)));
+        if (originLock is not null)
+        {
+            writer.Section($"include {directory}/{NginxCloudflare.RealIpFile};");
+        }
+
+        WriteBlocked(writer, layout);
+        WriteAcmeLocation(writer, layout);
+        WriteReturn(writer, 301, $"{scheme}://{primary}$request_uri");
+        writer.Close();
+
+        if (site.Certificate is { } certificate)
+        {
+            writer.Open("server");
+            writer.Section(Listen(layout, "443 ssl").Concat(site.Http2 ? ["http2 on;"] : []).Concat([$"server_name {names};", "server_tokens off;"]).Concat(Logs(site, layout)));
+            WriteTls(writer, site, certificate, layout, directory, originLock);
+            WriteBlocked(writer, layout);
+            writer.Section(ResponseHeaders(site, overTls: true).Where(line => line.StartsWith("add_header Strict-Transport-Security ", StringComparison.Ordinal)));
+            WriteReturn(writer, 301, $"https://{primary}$request_uri");
+            writer.Close();
+        }
+
+        if (tunnel is not null)
+        {
+            var tunnelScheme = site.Certificate is not null && site.RedirectToHttps ? "https" : TunnelSchemeVariable(layout);
+            writer.Open("server", "# Through the Cloudflare Tunnel: only cloudflared on this machine reaches this listener.");
+            writer.Section(new[] { $"listen {TunnelListen(tunnel)};", $"server_name {names};", "server_tokens off;" }.Concat(Logs(site, layout)));
+            writer.Section($"include {directory}/{NginxCloudflare.TunnelRealIpFile};");
+            WriteBlocked(writer, layout);
+            WriteAcmeLocation(writer, layout);
+            WriteReturn(writer, 301, $"{tunnelScheme}://{primary}$request_uri");
+            writer.Close();
+        }
+    }
+
+    private static void WriteReturn(ConfigWriter writer, int status, string target)
+    {
+        writer.Open("location /");
+        writer.Section($"return {Number(status)} {target};");
+        writer.Close();
     }
 
     /// <summary>
@@ -539,9 +610,18 @@ internal static class NginxRenderer
         }
 
         writer.Open("location /");
-        writer.Section(ProxyLines(site, layout, upstreams, scheme, port));
+        var sendTo = site.Upstream as NginxRedirectUpstream;
+        if (sendTo is not null)
+        {
+            writer.Section($"return {Number(NginxRedirect.Status(sendTo))} {NginxRedirect.Target(sendTo)};");
+        }
+        else
+        {
+            writer.Section(ProxyLines(site, layout, upstreams, scheme, port));
+        }
 
-        if (site.ProxyCache is { } cache)
+        var cached = sendTo is null && site.ProxyCache is not null;
+        if (cached && site.ProxyCache is { } cache)
         {
             List<string> skip = ["$http_authorization", .. site.Websocket ? ["$http_upgrade"] : Array.Empty<string>()];
             skip.AddRange(cache.BypassCookies.Select(cookie => "$cookie_" + cookie));
@@ -559,7 +639,7 @@ internal static class NginxRenderer
 
         // A location with an add_header of its own (the cache status, or one in the location
         // snippet) inherits none of the server's, so they are repeated there.
-        if (headers.Count > 0 && (site.ProxyCache is not null || !string.IsNullOrWhiteSpace(site.LocationSnippet)))
+        if (headers.Count > 0 && (cached || !string.IsNullOrWhiteSpace(site.LocationSnippet)))
         {
             writer.Section(["# nginx drops the server's add_header lines in a location that has its own, so they repeat here.", .. headers]);
         }

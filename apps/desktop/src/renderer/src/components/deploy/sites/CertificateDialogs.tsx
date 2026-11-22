@@ -5,6 +5,7 @@ import type {
   JobInfo,
   SiteInfo,
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
+import { siteNames } from '@shared/deploy/siteNames';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 import { Spinner } from '@/components/icons';
@@ -51,8 +52,9 @@ export function IssueDialog({
     enabled: open,
     retry: false,
   });
+  const names = siteNames(site.settings);
   const coverage = dns01Coverage(
-    site.settings.domains,
+    names,
     (tokens.data ?? []).map((token) => token.zone),
   );
   const useDns01 = coverage.covered && (dns01 || coverage.wildcard);
@@ -91,8 +93,8 @@ export function IssueDialog({
         <DialogHeader>
           <DialogTitle>Issue a certificate</DialogTitle>
           <DialogDescription>
-            Let's Encrypt checks that {site.settings.domains.join(', ')} reach this server over port
-            80, then issues one certificate for all of them. It renews by itself.
+            Let's Encrypt checks that {names.join(', ')} reach this server over port 80, then issues
+            one certificate for all of them. It renews by itself.
           </DialogDescription>
         </DialogHeader>
         <TextField

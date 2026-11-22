@@ -120,6 +120,67 @@ export function TextField({
   );
 }
 
+/** A choice between a few options, each a card with a line saying what it does. */
+export function ChoiceCards<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  disabled,
+  className,
+}: {
+  /** Read by screen readers as the group's name. */
+  label: string;
+  options: ReadonlyArray<{ value: T; label: string; description: string }>;
+  value: T;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+  className?: string;
+}): React.JSX.Element {
+  const group = useId();
+  return (
+    <div role="radiogroup" aria-labelledby={group} className={cn('grid gap-2', className)}>
+      <span id={group} className="sr-only">
+        {label}
+      </span>
+      {options.map((option) => {
+        const chosen = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={chosen}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              // Inset rings, since a tinted border would lose to the global border colour.
+              'cursor-pointer rounded-xl p-3 text-left ring-1 ring-inset transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
+              chosen
+                ? 'bg-primary/12 ring-primary/40'
+                : 'bg-background/40 ring-foreground/[0.08] hover:bg-foreground/[0.06]',
+            )}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <span
+                aria-hidden
+                className={cn(
+                  'h-3 w-3 shrink-0 rounded-full ring-1 ring-inset',
+                  chosen
+                    ? 'bg-primary ring-primary shadow-[0_0_8px_hsl(var(--primary)/0.6)]'
+                    : 'ring-muted-foreground/60',
+                )}
+              />
+              {option.label}
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">{option.description}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** A titled group of fields inside a tab. */
 export function Section({
   title,
@@ -130,10 +191,13 @@ export function Section({
   description?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
+  const id = useId();
   return (
-    <section className={cn(SECTION_WELL, 'space-y-3 p-4')}>
+    <section aria-labelledby={id} className={cn(SECTION_WELL, 'space-y-3 p-4')}>
       <div className="space-y-0.5">
-        <h4 className="text-[13px] font-semibold text-foreground">{title}</h4>
+        <h4 id={id} className="text-[13px] font-semibold text-foreground">
+          {title}
+        </h4>
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       {children}
