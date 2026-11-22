@@ -92,15 +92,15 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     // biometric 1.1.0 brings Fragment 1.2.5, which predates registerForActivityResult in a
     // FragmentActivity. The release lint (only run by CD) stops the build on that.
-    implementation("androidx.fragment:fragment:1.8.9")
+    implementation("androidx.fragment:fragment:1.9.1")
     // Passkey sign-in (E115); play-services-auth brings Google Password Manager's passkeys on Android 13 and older.
-    implementation("androidx.credentials:credentials:1.5.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     // Sign in with Google through Credential Manager (E117).
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
-    implementation("androidx.camera:camera-camera2:1.6.2")
-    implementation("androidx.camera:camera-lifecycle:1.6.2")
-    implementation("androidx.camera:camera-view:1.6.2")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
+    implementation("androidx.camera:camera-camera2:1.7.0")
+    implementation("androidx.camera:camera-lifecycle:1.7.0")
+    implementation("androidx.camera:camera-view:1.7.0")
     implementation("com.google.zxing:core:3.5.4")
     implementation("com.google.firebase:firebase-messaging:26.0.2")
     implementation("net.java.dev.jna:jna:5.19.1@aar")
@@ -110,7 +110,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test.ext:junit:1.3.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
-    testImplementation("org.robolectric:robolectric:4.18")
+    testImplementation("org.robolectric:robolectric:4.18.1")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.79.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.79.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
