@@ -507,6 +507,137 @@ describe('NewAppWizard configure and expose', () => {
     );
   });
 
+  /** A container of another app, as Docker lists it. */
+  function listed(
+    name: string,
+    project: string,
+    ports: { hostIp: string; hostPort: number }[] = [],
+    id = `id-${name}`,
+  ) {
+    return {
+      id,
+      name,
+      image: 'node:22',
+      imageId: 'sha256:7',
+      state: 'running',
+      status: 'Up 3 days',
+      health: 'none',
+      createdAtUnixMs: 0,
+      ports: ports.map((port) => ({ privatePort: 80, protocol: 'tcp', ...port })),
+      composeProject: project,
+      composeService: name,
+    };
+  }
+
+  function listening(
+    sockets: { address: string; process?: string; pid?: number; containerId?: string }[],
+  ) {
+    return {
+      sockets: sockets.map((one) => ({
+        protocol: 'tcp',
+        port: 8080,
+        scope: 'public',
+        firewall: 'closed',
+        ...one,
+      })),
+      containers: [],
+      dockerAvailable: true,
+      collectedAtUnixMs: 0,
+    };
+  }
+
+  async function toExpose(user: ReturnType<typeof renderWizard>['user'], again = false) {
+    if (again) await user.click(await screen.findByRole('button', { name: /Next/ }));
+    else {
+      await pickSource(user);
+      await user.click(screen.getByRole('button', { name: /Next/ }));
+    }
+    await screen.findByRole('list', { name: 'Services to deploy' });
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('list', { name: 'Exposure' });
+  }
+
+  it('deploying an app again, counts another app on the host network but never its own', async () => {
+    // The app's own web container publishes 8080 (with docker-proxy) and its own agent runs on the
+    // host network; both go away with the deploy. Another app's agent on the host network stays.
+    const ownWeb = listed('shop-web-1', 'shop', [{ hostIp: '127.0.0.1', hostPort: 8080 }]);
+    const ownAgent = listed('shop-agent-1', 'shop', [], 'a1'.repeat(32));
+    const other = listed('agent', 'monitor', [], 'b2'.repeat(32));
+    const { user } = renderWizard(
+      {
+        'deployDocker.listContainers': {
+          groups: [
+            { project: 'shop', containers: [ownWeb, ownAgent] },
+            { project: 'monitor', containers: [other] },
+          ],
+        },
+        'deployFirewall.exposure': listening([
+          { address: '127.0.0.1', process: 'docker-proxy', pid: 7 },
+          { address: '*', process: 'node', pid: 4100, containerId: ownAgent.id },
+          { address: '[::]', process: 'node', pid: 5200, containerId: other.id },
+        ]),
+      },
+      { existing: sampleDetails() },
+    );
+    expect(screen.getByRole('heading', { name: 'Deploy shop again' })).toBeInTheDocument();
+    await toExpose(user, true);
+    const warning = await screen.findByRole('alert', { name: 'Ports already in use' });
+    expect(warning).toHaveTextContent(
+      '8080/tcp for web is held by agent (app monitor, host network).',
+    );
+    expect(warning).not.toHaveTextContent('shop-');
+    expect(warning).not.toHaveTextContent('docker-proxy');
+  });
+
+  it('names a program outside Docker that holds the port', async () => {
+    const { user } = renderWizard({
+      'deployFirewall.exposure': listening([{ address: '0.0.0.0', process: 'node', pid: 4100 }]),
+    });
+    await toExpose(user);
+    expect(await screen.findByRole('alert', { name: 'Ports already in use' })).toHaveTextContent(
+      '8080/tcp for web is held by the program node (pid 4100).',
+    );
+    const ports = within(screen.getByRole('listitem', { name: 'web' })).getByRole('table', {
+      name: 'Ports of web',
+    });
+    expect(ports).toHaveTextContent('In use by the program node (pid 4100)');
+  });
+
+  it('still warns from Docker list when the listening sockets cannot be read', async () => {
+    const { user } = renderWizard({
+      'deployDocker.listContainers': {
+        groups: [
+          {
+            project: 'blog',
+            containers: [listed('blog-web-1', 'blog', [{ hostIp: '0.0.0.0', hostPort: 8080 }])],
+          },
+        ],
+      },
+      'deployFirewall.exposure': async () => {
+        throw new Error('ss is not installed');
+      },
+    });
+    await toExpose(user);
+    expect(await screen.findByRole('alert', { name: 'Ports already in use' })).toHaveTextContent(
+      '8080/tcp for web is held by blog-web-1 (app blog).',
+    );
+  });
+
+  it('does not guess from the sockets while Docker list is missing', async () => {
+    // Without the list, the app's own docker-proxy could not be told from someone else's.
+    const { user, bridge } = renderWizard({
+      'deployDocker.listContainers': async () => {
+        throw new Error('Docker is not running');
+      },
+      'deployFirewall.exposure': listening([
+        { address: '127.0.0.1', process: 'docker-proxy', pid: 7 },
+      ]),
+    });
+    await toExpose(user);
+    await waitFor(() => expect(bridge.$fn('deployFirewall.exposure')).toHaveBeenCalled());
+    expect(screen.queryByRole('alert', { name: 'Ports already in use' })).not.toBeInTheDocument();
+  });
+
   it('says nothing about ports when no other container holds them', async () => {
     const { user } = renderWizard();
     await pickSource(user);

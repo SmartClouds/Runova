@@ -236,26 +236,35 @@ internal sealed class FakeCallerConnections : ICallerConnections
 /// <summary>
 /// What listens on the pretend server, judged against the pretend firewall as it is now, and the
 /// ports the pretend Docker Engine publishes: its seeded projects and whatever the simulated
-/// compose started, so "make private" can be seen to work.
+/// compose started, so "make private" can be seen to work. The node program on 3000 is the shop's
+/// worker running on the host network: it publishes nothing, and only its socket says it holds
+/// the port, which is what the New App wizard has to catch.
 /// </summary>
 internal sealed class FakeExposure(FakeFirewall firewall, InMemoryDockerEngine engine, TimeProvider time) : IExposureSource
 {
-    private static readonly (FirewallProtocol Protocol, string Address, int Port, string Process, int Pid)[] _sockets =
+    /// <summary>The seeded container whose program holds the node socket, on the host network.</summary>
+    public const string HostNetworkContainer = "shop-worker-1";
+
+    private static readonly (FirewallProtocol Protocol, string Address, int Port, string Process, int Pid, string? Container)[] _sockets =
     [
-        (FirewallProtocol.Tcp, "0.0.0.0", 22, "sshd", 812),
-        (FirewallProtocol.Tcp, "::", 22, "sshd", 812),
-        (FirewallProtocol.Tcp, "0.0.0.0", 80, "nginx", 1403),
-        (FirewallProtocol.Tcp, "0.0.0.0", 443, "nginx", 1403),
-        (FirewallProtocol.Tcp, "0.0.0.0", 3000, "node", 2240),
-        (FirewallProtocol.Tcp, "127.0.0.1", 5432, "postgres", 1188),
-        (FirewallProtocol.Tcp, "::1", 6379, "redis-server", 1210),
-        (FirewallProtocol.Udp, "127.0.0.53", 53, "systemd-resolve", 640),
-        (FirewallProtocol.Udp, "0.0.0.0", 51820, "wg-quick", 1702),
+        (FirewallProtocol.Tcp, "0.0.0.0", 22, "sshd", 812, null),
+        (FirewallProtocol.Tcp, "::", 22, "sshd", 812, null),
+        (FirewallProtocol.Tcp, "0.0.0.0", 80, "nginx", 1403, null),
+        (FirewallProtocol.Tcp, "0.0.0.0", 443, "nginx", 1403, null),
+        (FirewallProtocol.Tcp, "0.0.0.0", 3000, "node", 2240, HostNetworkContainer),
+        (FirewallProtocol.Tcp, "127.0.0.1", 5432, "postgres", 1188, null),
+        (FirewallProtocol.Tcp, "::1", 6379, "redis-server", 1210, null),
+        (FirewallProtocol.Udp, "127.0.0.53", 53, "systemd-resolve", 640, null),
+        (FirewallProtocol.Udp, "0.0.0.0", 51820, "wg-quick", 1702, null),
     ];
 
     public async Task<ExposureInventory> ReadAsync(CancellationToken cancellationToken)
     {
         var state = firewall.State;
+        var running = (await engine.ListContainersAsync(cancellationToken))
+            .Select(container => container.Summary)
+            .Where(container => container.State == ContainerState.Running)
+            .ToList();
         ListeningSocketInfo[] sockets =
         [
             .. _sockets.Select(socket =>
@@ -268,12 +277,10 @@ internal sealed class FakeExposure(FakeFirewall firewall, InMemoryDockerEngine e
                     ExposureParsers.Scope(address),
                     ExposureParsers.Judge(state, socket.Protocol, address, socket.Port),
                     socket.Process,
-                    socket.Pid);
+                    socket.Pid,
+                    running.FirstOrDefault(container => container.Name == socket.Container)?.Id);
             }),
         ];
-        var running = (await engine.ListContainersAsync(cancellationToken))
-            .Select(container => container.Summary)
-            .Where(container => container.State == ContainerState.Running);
         ContainerPortInfo[] containers =
         [
             .. running.SelectMany(container => container.Ports

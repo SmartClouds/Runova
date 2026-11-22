@@ -10,20 +10,24 @@ import { type DevHost, dotnetAvailable, startDevHost } from './devHost';
  * shows as a timeline of steps, a second revision follows, and a rollback brings the first one
  * back as a third. The DevHost's docker compose is simulated on its pretend engine, so this runs
  * wherever the .NET SDK does.
+ *
+ * A port something on the server already holds is named on the Expose step, even when Docker
+ * does not list it as published: the DevHost's shop worker runs on the host network and listens
+ * on 3000, so only the server's listening sockets give it away.
  */
 
 test.skip(!dotnetAvailable(), 'needs the .NET SDK to build the server core DevHost');
 
 const DEV_PASSWORD = 'runova-local-password';
 
-const compose = (image: string) => `services:
+const compose = (image: string, port = 8080) => `services:
   web:
     image: ${image}
     restart: unless-stopped
     environment:
       GREETING: \${GREETING}
     ports:
-      - "8080:80"
+      - "${port}:80"
     healthcheck:
       test: ["CMD", "true"]
 `;
@@ -62,15 +66,24 @@ async function throughTheWizard(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Next' }).click();
 }
 
-test('deploys an app from a project, follows its timeline and rolls back', async () => {
-  test.setTimeout(240_000);
+/**
+ * Launches the app against the DevHost with a project whose compose file is `composeText` and a
+ * Production environment, signs in to the core and opens the New App wizard on Source, with the
+ * project, compose file and environment picked and the app named `name`. The first app checks
+ * that the server had none.
+ */
+async function openNewApp(
+  composeText: string,
+  name: string,
+  { firstApp = false }: { firstApp?: boolean } = {},
+): Promise<LaunchedApp> {
   if (!devHost) throw new Error('DevHost did not start');
   launched = await launchApp({
     settings: {},
     env: { RUNOVA_DEPLOY_DEV_CORE: String(devHost.port) },
   });
   const { page, projectDir } = launched;
-  writeFileSync(join(projectDir, 'compose.yaml'), compose('nginx:1.29'));
+  writeFileSync(join(projectDir, 'compose.yaml'), composeText);
   const projectId = await createProject(launched);
   await page.evaluate(async (id) => {
     const api = (
@@ -104,8 +117,11 @@ test('deploys an app from a project, follows its timeline and rolls back', async
     .getByRole('navigation', { name: 'Server sections' })
     .getByRole('button', { name: 'Apps' })
     .click();
-  await expect(page.getByText('No apps on this server yet')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'New app' }).click();
+  // The DevHost is shared by the tests in this file, so only the first one finds no apps.
+  if (firstApp) {
+    await expect(page.getByText('No apps on this server yet')).toBeVisible({ timeout: 30_000 });
+  }
+  await page.getByRole('button', { name: 'New app' }).click({ timeout: 30_000 });
 
   // Source: the project, its compose file and its environment, and a name.
   await page.getByRole('combobox', { name: 'Project', exact: true }).click();
@@ -113,7 +129,15 @@ test('deploys an app from a project, follows its timeline and rolls back', async
   await page.getByRole('radio', { name: /compose\.yaml/ }).check();
   await page.getByRole('combobox', { name: 'Environment', exact: true }).click();
   await page.getByRole('option', { name: /^Production/ }).click();
-  await page.getByLabel('App name').fill('e2e-site');
+  await page.getByLabel('App name').fill(name);
+  return launched;
+}
+
+test('deploys an app from a project, follows its timeline and rolls back', async () => {
+  test.setTimeout(240_000);
+  const { page, projectDir } = await openNewApp(compose('nginx:1.29'), 'e2e-site', {
+    firstApp: true,
+  });
   await throughTheWizard(page);
   await page.getByRole('button', { name: 'Deploy e2e-site' }).click();
 
@@ -144,4 +168,27 @@ test('deploys an app from a project, follows its timeline and rolls back', async
   await page.getByRole('dialog').getByRole('button', { name: 'Roll back' }).click();
   await expect(page.getByText('Revision 3 is live.')).toBeVisible({ timeout: 90_000 });
   await expect(revisions.getByRole('listitem', { name: 'Revision 3' })).toContainText(/1/);
+});
+
+test('names a container on the host network that already holds a port the app publishes', async () => {
+  test.setTimeout(180_000);
+  const { page } = await openNewApp(compose('nginx:1.29', 3000), 'e2e-port');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('list', { name: 'Env keys' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  // shop-worker-1 publishes no port; its node program listens on 3000 on the host network.
+  const warning = page.getByRole('alert', { name: 'Ports already in use' });
+  await expect(warning).toContainText(
+    '3000/tcp for web is held by shop-worker-1 (app shop, host network).',
+    { timeout: 30_000 },
+  );
+  await expect(page.getByRole('table', { name: 'Ports of web' })).toContainText(
+    'In use by shop-worker-1 (app shop, host network)',
+  );
+  // Still only a warning: the review repeats it.
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('alert', { name: 'Ports already in use' })).toContainText(
+    'shop-worker-1 (app shop, host network)',
+  );
 });
