@@ -11,11 +11,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { CliLogo } from '@/components/cliLogos';
 import { Paperclip, Play, Send, StopCircle, TriangleAlert } from '@/components/icons';
+import { AgentPromptField } from '@/components/terminal/AgentPromptField';
 import { AttachmentChip } from '@/components/ui/attachment-chip';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { queryKeys } from '@/lib/queryKeys';
 import { isMacPlatform } from '@/lib/shortcuts';
@@ -34,7 +34,8 @@ import {
  * a model with effort levels offers those after it, so the row only grows as far as the choice
  * goes. The pick is kept for the next run. A CLI can also work in one of the user's projects (the
  * code that runs on the server), reading it or, when they say so, editing it; that choice is kept
- * per server. While a run goes, the box sends it a message (read at
+ * per server. The box is the shared AI task box, so it takes dictation, Persian with a translation
+ * to English, and "Write it for me". While a run goes, the box sends it a message (read at
  * its next step) and Stop ends it; once it is over, the same box asks a follow-up on the same
  * server and context, and a stopped run can be carried on from where it was.
  */
@@ -296,6 +297,11 @@ export function AssistantComposer({
   const locked = running || disabled;
   // A question waits for its answer in the box above, which a message would not give.
   const asking = phase === 'needs-input' || phase === 'needs-password';
+  const label = running
+    ? 'Message the AI'
+    : followUp
+      ? 'Ask a follow-up'
+      : 'What should the AI look into?';
   const mod = isMacPlatform() ? 'Cmd' : 'Ctrl';
   const hint = !running
     ? `${mod}+Enter to ${followUp ? 'ask' : 'start'}`
@@ -308,11 +314,7 @@ export function AssistantComposer({
   return (
     <div className="space-y-2">
       <Label htmlFor="deploy-assistant-task" className="text-xs">
-        {running
-          ? 'Message the AI'
-          : followUp
-            ? 'Ask a follow-up'
-            : 'What should the AI look into?'}
+        {label}
       </Label>
       {attachment}
       {attachments.length > 0 && (
@@ -333,7 +335,6 @@ export function AssistantComposer({
         </ul>
       )}
       <div
-        className="relative"
         onPaste={onPaste}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes('Files')) return;
@@ -343,46 +344,48 @@ export function AssistantComposer({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
-        <Textarea
+        <AgentPromptField
           id="deploy-assistant-task"
           value={prompt}
-          onChange={(event) => {
-            setPrompt(event.target.value);
+          onChange={(text) => {
+            setPrompt(text);
             setNote(null);
           }}
+          purpose={running ? 'message' : 'task'}
+          target="ssh"
+          ariaLabel={label}
           placeholder={
             running
               ? 'e.g. Leave the database alone, or check the api container too'
               : 'e.g. Find out why the sender keeps restarting'
           }
-          className={cn(
-            'min-h-20 resize-none pr-10 text-sm',
-            dragging && 'border-primary ring-1 ring-primary/40',
-          )}
+          submitOn="mod-enter"
+          onSubmit={submit}
+          readOnly={starting}
           disabled={disabled || (running && asking)}
           maxLength={running ? MAX_SSH_AGENT_MESSAGE_CHARS : undefined}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              submit();
-            }
-          }}
+          minHeight={80}
+          maxHeight={240}
+          textClassName="text-sm"
+          className={cn(dragging && 'border-primary ring-1 ring-primary/40')}
+          trailing={
+            !running && (
+              <SimpleTooltip label="Attach files or images. You can also paste or drop them here.">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Attach files"
+                  disabled={disabled}
+                  className="h-7 w-7 p-0 text-muted-foreground"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                </Button>
+              </SimpleTooltip>
+            )
+          }
         />
-        {!running && (
-          <SimpleTooltip label="Attach files or images. You can also paste or drop them here.">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label="Attach files"
-              disabled={disabled}
-              className="absolute bottom-1.5 right-1.5 h-7 w-7 p-0 text-muted-foreground"
-              onClick={() => fileInput.current?.click()}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-            </Button>
-          </SimpleTooltip>
-        )}
         <input
           ref={fileInput}
           type="file"

@@ -115,6 +115,17 @@ Turning on **Auto-run diagnostics** asks for your password (or a code from your 
 
 The drawer remembers the AI, model and effort you picked, for the next run and the next time you open it. If the CLI you used last is no longer installed, it goes back to **AI provider (Settings)**.
 
+### Dictate, translate and tidy up the task
+
+The bar under the text box has the same tools as Ask AI in an SSH terminal:
+
+- **Dictate** (the microphone): speak instead of typing. The chip next to it sets the language it listens for.
+- **English**: shows up when the text has Persian in it, and translates it to English.
+- **Write it for me**: the AI turns a rough note into a clear task, or, while a run goes, into a short message to it.
+- **Undo**: puts back what you wrote, until you edit the new text.
+
+Press `Escape` to cancel a translation or a rewrite that is still going. These tools work on the task, a follow-up and a message to a running AI.
+
 ### Paste long text, images and files
 
 The task box takes text of any length, so you can paste a whole log, a plan or another AI's analysis as it is.

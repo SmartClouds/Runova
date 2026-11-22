@@ -40,6 +40,8 @@ interface AgentPromptFieldOptions {
   onEscape?: () => void;
   /** Set while the caller sends, so the text cannot change under it. */
   readOnly?: boolean;
+  /** The box takes nothing at all for now, such as while a question waits for its answer elsewhere. */
+  disabled?: boolean;
   autoFocus?: boolean;
   /** The text box's height before it grows, and the most it grows to before it scrolls. */
   minHeight?: number;
@@ -74,6 +76,7 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
       onSubmit,
       onEscape,
       readOnly = false,
+      disabled = false,
       autoFocus = false,
       minHeight = 36,
       maxHeight = 112,
@@ -139,7 +142,7 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
     }, [value, minHeight, maxHeight]);
 
     const busy = assist.busy;
-    const locked = readOnly || busy !== null;
+    const locked = readOnly || disabled || busy !== null;
     const hasText = value.trim().length > 0;
     const persian = containsPersian(value);
     const recording = voice.status === 'recording';
@@ -200,6 +203,7 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
             rows={1}
             value={value}
             readOnly={locked}
+            disabled={disabled}
             maxLength={maxLength}
             aria-label={ariaLabel}
             aria-busy={busy !== null}
@@ -240,7 +244,13 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
                     voice={voice}
                     idleText="Dictate"
                     idleLabel="Dictate instead of typing"
-                    blockedReason={locked ? 'Wait for the text to finish first' : null}
+                    blockedReason={
+                      disabled
+                        ? 'Not available right now'
+                        : locked
+                          ? 'Wait for the text to finish first'
+                          : null
+                    }
                     iconOnly
                     className="h-7"
                   />
@@ -250,7 +260,7 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
                     <SpeechLanguageChip
                       language={speechLanguage}
                       modelKey={speechModel}
-                      disabled={voice.status !== 'idle' || saveVoiceSettings.isPending}
+                      disabled={disabled || voice.status !== 'idle' || saveVoiceSettings.isPending}
                       onLanguageChange={(code) =>
                         saveVoiceSettings.mutate({ speechLanguage: code })
                       }
@@ -273,7 +283,7 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
                         type="button"
                         size="sm"
                         variant="ghost"
-                        disabled={readOnly}
+                        disabled={readOnly || disabled}
                         aria-label="Translate to English"
                         className="h-7 gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                         onClick={() => void assist.translate()}
@@ -289,13 +299,13 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
                         ? `${rewriteHint}${rewriteKey ? ` (${rewriteKey})` : ''}`
                         : 'Type or dictate a rough note first'
                     }
-                    wrapTrigger={!hasText || readOnly}
+                    wrapTrigger={!hasText || readOnly || disabled}
                   >
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
-                      disabled={!hasText || readOnly}
+                      disabled={!hasText || readOnly || disabled}
                       aria-label="Write it for me"
                       className="h-7 gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                       onClick={() => void assist.rewrite()}

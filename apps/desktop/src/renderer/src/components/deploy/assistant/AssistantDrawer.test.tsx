@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GONE_MESSAGE, SETTINGS_AI, useDeployAssistantStore } from '@/stores/deployAssistantStore';
+import { installFakeMicrophone } from '../../../../../test/renderer/fakeMicrophone';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { SERVER, STEP_UP_REFUSAL } from '../overview/testing/fixtures';
 import { signedIn } from '../security/testing/fixtures';
@@ -755,6 +756,29 @@ describe('AssistantComposer', () => {
     );
     await user.click(within(drawer).getByRole('button', { name: 'Clear' }));
     expect(within(drawer).queryByLabelText('Context')).not.toBeInTheDocument();
+  });
+
+  it('has the task box tools: dictation, translation to English and a rewrite', async () => {
+    installFakeMicrophone();
+    const { user, bridge: fake } = renderWithProviders(<Page />, {
+      bridge: bridge({ 'translate.text': async () => 'Why does the sender restart?' }),
+    });
+    act(() => useDeployAssistantStore.getState().open(SERVER.id));
+    const drawer = await screen.findByRole('complementary', { name: 'Deploy AI' });
+    const box = within(drawer).getByLabelText('What should the AI look into?');
+    expect(within(drawer).getByRole('button', { name: 'Dictate' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: 'Write it for me' })).toBeDisabled();
+
+    await waitFor(() => expect(box).toBeEnabled());
+    await user.type(box, 'چرا ریستارت می‌شود؟');
+    await user.click(within(drawer).getByRole('button', { name: /Translate to English/ }));
+    await waitFor(() => expect(box).toHaveValue('Why does the sender restart?'));
+    expect(fake.$fn('translate.text')).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'چرا ریستارت می‌شود؟', targetLang: 'en' }),
+    );
+    await user.click(within(drawer).getByRole('button', { name: 'Undo' }));
+    expect(box).toHaveValue('چرا ریستارت می‌شود؟');
+    expect(within(drawer).getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
   });
 
   it('keeps the task when the start is refused and picks up a run already going', async () => {
