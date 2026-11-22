@@ -6,6 +6,7 @@ import { useChartColors } from '@/lib/chartColors';
 import { donutSegments } from '@/lib/deploy/traffic/geometry';
 import { cn } from '@/lib/utils';
 import { DeployCard } from '../deployKit';
+import { FILL_BODY, FILL_CARD } from './BreakdownCard';
 import { DEVICE_LABELS, TEXT } from './messages';
 
 /** Desktop, mobile and tablet always keep their colour, whatever the order of the counts. */
@@ -44,7 +45,14 @@ export function DevicesCard({ breakdown }: { breakdown: TrafficBreakdown }): Rea
   const label = (value: string) => DEVICE_LABELS[value] ?? 'Other';
 
   return (
-    <DeployCard icon={<Monitor />} title="Devices" description="By page views">
+    <DeployCard
+      icon={<Monitor />}
+      title="Devices"
+      description="By page views"
+      className={FILL_CARD}
+      // Beside the taller map, the donut sits in the middle of the spare height.
+      bodyClassName={cn(FILL_BODY, 'justify-center')}
+    >
       {total === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">{TEXT.nothingHere}</p>
       ) : (

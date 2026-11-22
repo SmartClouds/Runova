@@ -294,7 +294,7 @@ export function TrafficReportView({
             <>
               <KpiTiles report={data} />
               <TrafficChartCard report={data} />
-              <div className="grid items-start gap-2 @3xl/traffic:grid-cols-2">
+              <div className="grid gap-2 @3xl/traffic:grid-cols-2">
                 <BreakdownCard
                   serverId={serverId}
                   siteId={siteId}
@@ -310,7 +310,7 @@ export function TrafficReportView({
                   icon={<Route />}
                 />
               </div>
-              <div className="grid items-start gap-2 @5xl/traffic:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="grid gap-2 @5xl/traffic:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                 <CountriesCard
                   serverId={serverId}
                   report={data}
@@ -318,7 +318,7 @@ export function TrafficReportView({
                 />
                 <DevicesCard breakdown={breakdownOf(data, 'device')} />
               </div>
-              <div className="grid items-start gap-2 @3xl/traffic:grid-cols-3">
+              <div className="grid gap-2 @3xl/traffic:grid-cols-3">
                 <BreakdownCard
                   serverId={serverId}
                   siteId={siteId}
@@ -341,7 +341,7 @@ export function TrafficReportView({
                   icon={<Layers />}
                 />
               </div>
-              <div className="grid items-start gap-2 @3xl/traffic:grid-cols-2">
+              <div className="grid gap-2 @3xl/traffic:grid-cols-2">
                 <HourHeatmap values={data.hourOfWeek} timeZone={data.timeZone} />
                 <ResponseCard report={data} />
               </div>
@@ -358,7 +358,7 @@ export function TrafficReportView({
             {...(onOpenDetection ? { onOpenSettings: onOpenDetection } : {})}
           />
           {!empty && (
-            <div className="grid items-start gap-2 @3xl/traffic:grid-cols-2">
+            <div className="grid gap-2 @3xl/traffic:grid-cols-2">
               <BreakdownCard
                 serverId={serverId}
                 siteId={siteId}

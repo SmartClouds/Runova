@@ -174,6 +174,21 @@ describe('TrafficPanel', () => {
     expect(screen.getByText(/Unique visitors are estimates/)).toBeInTheDocument();
   });
 
+  it('gives the cards in one row the same height, with "See all" at each foot', async () => {
+    renderPanel();
+
+    const row = (await screen.findByRole('heading', { name: 'Referrers' })).closest('section')!
+      .parentElement!;
+    // A grid stretches its items unless told otherwise; items-start left a thin card beside a tall one.
+    expect(row).toHaveClass('grid');
+    expect(row).not.toHaveClass('items-start');
+    for (const title of ['Referrers', 'Browsers', 'Operating systems', 'Devices']) {
+      const card = screen.getByRole('heading', { name: title }).closest('section')!;
+      expect(card).toHaveClass('flex', 'flex-col');
+      expect(card.lastElementChild).toHaveClass('flex-1');
+    }
+  });
+
   it('asks for a new report when the range, buckets or comparison change', async () => {
     const { user, bridge } = renderPanel();
     await screen.findByRole('group', { name: 'Unique visitors' });

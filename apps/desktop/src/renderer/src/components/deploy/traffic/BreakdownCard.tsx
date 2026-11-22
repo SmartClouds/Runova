@@ -20,6 +20,13 @@ const DimensionDialog = lazy(() =>
 
 /** How many rows a card shows before "See all". */
 const SHOWN = 8;
+
+/**
+ * Cards side by side in a report row share the tallest one's height. The card and its body are
+ * flex columns, so the body takes the spare room and "See all" stays at the foot.
+ */
+export const FILL_CARD = 'flex flex-col';
+export const FILL_BODY = 'flex flex-1 flex-col';
 const MONO: ReadonlySet<TrafficDimension> = new Set([
   'page',
   'entryPage',
@@ -176,7 +183,8 @@ export function BreakdownCard({
       icon={icon}
       title={title}
       description={`By ${DIMENSION_UNITS[dimension]}`}
-      className={className}
+      className={cn(FILL_CARD, className)}
+      bodyClassName={FILL_BODY}
     >
       {rows.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">{TEXT.nothingHere}</p>
@@ -184,7 +192,7 @@ export function BreakdownCard({
         <>
           <BreakdownRows dimension={dimension} rows={rows} label={title} />
           {/* At the foot of the list, so a narrow card keeps its title on one line. */}
-          <div className="-mb-1.5 mt-1.5 flex justify-end">
+          <div className="-mb-1.5 mt-auto flex justify-end pt-1.5">
             <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
               {TEXT.seeAll} <ChevronRight />
             </Button>
