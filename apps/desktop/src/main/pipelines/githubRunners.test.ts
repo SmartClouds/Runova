@@ -17,6 +17,12 @@ const proc = vi.hoisted(() => ({
   reply: null as null | ((file: string, args: string[]) => Promise<ExecReply>),
 }));
 
+// gh is looked up on PATH before it starts on Windows; these tests must not need it installed.
+vi.mock('../devSetup/probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../devSetup/probe')>()),
+  findExecutable: async (command: string) => `C:/Program Files/GitHub CLI/${command}.exe`,
+}));
+
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   const { promisify } = await import('node:util');
@@ -24,7 +30,9 @@ vi.mock('node:child_process', async (importOriginal) => {
     throw new Error('callback execFile is not used by these modules');
   }) as unknown as typeof actual.execFile;
   Object.defineProperty(execFile, promisify.custom, {
-    value: async (file: string, args: string[]): Promise<ExecReply> => {
+    value: async (spawned: string, args: string[]): Promise<ExecReply> => {
+      // On Windows gh is started by its full path on PATH, never by its bare name.
+      const file = /[\\/]gh\.exe$/i.test(spawned) ? 'gh' : spawned;
       proc.calls.push({ file, args });
       if (!proc.reply) throw new Error(`no exec reply configured for ${file} ${args.join(' ')}`);
       return proc.reply(file, args);

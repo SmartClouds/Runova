@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { findExecutable, isExecutableFile } from '../devSetup/probe';
+import { pathKey } from '../windowsPath';
 
 const execFileAsync = promisify(execFile);
 const GH_TIMEOUT_MS = 20000;
@@ -63,6 +65,33 @@ function releaseGhSlot(): void {
   else ghActive -= 1;
 }
 
+let ghLookup: { path: string; found: string } | null = null;
+
+/**
+ * The command to start gh with. On Windows, a spawn without a shell looks in the child's working
+ * directory before PATH (and only the app's own environment can turn that off), and gh runs with
+ * cwd set to a project folder, so a repository that commits gh.exe would run instead. There gh is
+ * started by its full path on PATH, and not at all when there is none.
+ */
+async function ghCommand(): Promise<string> {
+  if (process.platform !== 'win32') return 'gh';
+  const path = process.env[pathKey(process.env)] ?? '';
+  if (ghLookup?.path === path) return ghLookup.found;
+  // gh ships as gh.exe; execFile could not start a .cmd or .bat anyway.
+  const found = await findExecutable('gh', {
+    env: { ...process.env, PATHEXT: '.EXE' },
+    os: 'win32',
+    exists: isExecutableFile,
+  });
+  if (!found) {
+    throw Object.assign(new Error('spawn gh ENOENT: the GitHub CLI is not on PATH'), {
+      code: 'ENOENT',
+    });
+  }
+  ghLookup = { path, found };
+  return found;
+}
+
 export interface RunGhOptions {
   cwd?: string;
   timeout?: number;
@@ -83,7 +112,7 @@ export async function runGh(
   for (let attempt = 0; ; attempt += 1) {
     await acquireGhSlot();
     try {
-      return await execFileAsync('gh', args, {
+      return await execFileAsync(await ghCommand(), args, {
         cwd: options.cwd,
         timeout: options.timeout ?? GH_TIMEOUT_MS,
         maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
@@ -110,7 +139,7 @@ export function parseGithubRemote(url: string): { owner: string; repo: string } 
 
 export async function isGhCliAvailable(): Promise<boolean> {
   try {
-    await execFileAsync('gh', ['--version'], { timeout: 5000, windowsHide: true });
+    await execFileAsync(await ghCommand(), ['--version'], { timeout: 5000, windowsHide: true });
     return true;
   } catch {
     return false;
