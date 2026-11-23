@@ -161,7 +161,13 @@ function stripAnsi(text: string): string {
  */
 async function runSkillsCli(args: string[], cwd: string): Promise<void> {
   try {
-    await execFileAsync('npx', args, { cwd, shell: process.platform === 'win32' });
+    // cwd can be a project folder, and cmd.exe would otherwise run a repository's own npx.cmd
+    // before the one on PATH.
+    await execFileAsync('npx', args, {
+      cwd,
+      shell: process.platform === 'win32',
+      env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1' },
+    });
   } catch (error) {
     const stderr = (error as NodeJS.ErrnoException & { stderr?: string }).stderr;
     const message = stderr?.trim() || (error instanceof Error ? error.message : String(error));

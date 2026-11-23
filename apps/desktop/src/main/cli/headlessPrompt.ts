@@ -412,8 +412,12 @@ export async function prepareHeadlessRun(
   // on Windows that can flash open a visible console mid-run. This is a no-op env var for every
   // other CLI we shell out to. The extra tool folders let a CLI that a native installer put in
   // ~/.local/bin (or pip in a Scripts folder) run even though the app's own PATH lacks them.
+  // On Windows the CLI starts under cmd.exe with cwd set to a project folder, and cmd.exe looks in
+  // the current directory before PATH, so a repository that commits claude.cmd would run instead
+  // of the real CLI. This variable turns that lookup off (for the CLI's own .cmd shim too).
   const env = await withToolPath({
     ...process.env,
+    NoDefaultCurrentDirectoryInExePath: '1',
     CLINE_NO_AUTO_UPDATE: '1',
     ...imageInput.env,
     ...(options.trustCwd ? cli.promptTrustEnv : {}),

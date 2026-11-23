@@ -65,6 +65,8 @@ const exec = vi.hoisted(() => ({
   cloneIndex: null as unknown,
   /** stderr for the next `npx skills` call, which makes it fail. */
   skillsCliError: null as string | null,
+  /** Environment the last `npx skills` call got. */
+  npxEnv: null as NodeJS.ProcessEnv | null,
 }));
 
 vi.mock('node:child_process', async () => {
@@ -77,6 +79,7 @@ vi.mock('node:child_process', async () => {
         result: { stdout: string; stderr: string },
       ) => void;
       exec.calls.push({ file, args });
+      if (file === 'npx') exec.npxEnv = (rest[0] as { env?: NodeJS.ProcessEnv }).env ?? null;
 
       if (file === 'git' && args[0] === 'clone') {
         const target = args[args.length - 1];
@@ -696,6 +699,8 @@ describe('skills.sh', () => {
       file: 'npx',
       args: ['skills', 'remove', 'pdf', '--agent', 'claude-code', 'cursor', '-y', '--global'],
     });
+    // cmd.exe must not pick a repository's own npx.cmd from the scope folder over PATH.
+    expect(exec.npxEnv?.NoDefaultCurrentDirectoryInExePath).toBe('1');
     expect(await invoke<InstalledSkillRecord[]>(IPC.skills.listInstalled, null)).toEqual([]);
   });
 
