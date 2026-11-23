@@ -121,3 +121,49 @@ async fn cancelling_before_an_answer_stops_waiting() {
         .unwrap();
     assert!(result.is_err());
 }
+
+/// A hub that puts a fingerprint line str0m skips (it has a trailing space) ahead of the real one
+/// in every answer it relays, naming a certificate the answerer never had.
+fn pair_with_padded_answer() -> (Arc<RtcDirect>, Arc<RtcDirect>) {
+    let (to_answerer, mut from_controller) = mpsc::channel::<String>(64);
+    let (to_controller, mut from_answerer) = mpsc::channel::<String>(64);
+    let controller = Arc::new(RtcDirect::new(Role::Controller, options(), to_answerer));
+    let answerer = Arc::new(RtcDirect::new(Role::Answerer, options(), to_controller));
+    let target = answerer.clone();
+    tokio::spawn(async move {
+        while let Some(signal) = from_controller.recv().await {
+            target.deliver_signal(signal).await;
+        }
+    });
+    let target = controller.clone();
+    tokio::spawn(async move {
+        while let Some(signal) = from_answerer.recv().await {
+            let mut value: serde_json::Value = serde_json::from_str(&signal).unwrap();
+            if value["type"] == "answer" {
+                let sdp = value["sdp"].as_str().unwrap().to_owned();
+                let fake = format!("a=fingerprint:sha-256 {} ", vec!["00"; 32].join(":"));
+                let at = sdp
+                    .find("a=fingerprint:")
+                    .expect("the answer has a fingerprint");
+                value["sdp"] = format!("{}{fake}\r\n{}", &sdp[..at], &sdp[at..]).into();
+            }
+            target.deliver_signal(value.to_string()).await;
+        }
+    });
+    (controller, answerer)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_remote_fingerprint_is_the_one_dtls_checked_not_a_line_it_skipped() {
+    let (controller, answerer) = pair_with_padded_answer();
+    let (a, b) = timeout(Duration::from_secs(20), async {
+        tokio::join!(controller.connect(), answerer.connect())
+    })
+    .await
+    .unwrap();
+    let (_a, a_fp) = a.expect("the controller connects");
+    let (_b, b_fp) = b.expect("the answerer connects");
+
+    assert_eq!(a_fp.remote, b_fp.local);
+    assert!(!a_fp.remote.contains("00:00:00"));
+}

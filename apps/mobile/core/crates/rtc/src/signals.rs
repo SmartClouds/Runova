@@ -36,6 +36,12 @@ impl Signal {
     }
 }
 
+/// A certificate digest written the way both sides write fingerprints: `sha-256 AB:CD:...`.
+pub fn written_fingerprint(hash_func: &str, bytes: &[u8]) -> String {
+    let hex: Vec<String> = bytes.iter().map(|byte| format!("{byte:02X}")).collect();
+    format!("{} {}", hash_func.to_lowercase(), hex.join(":"))
+}
+
 /// The DTLS fingerprint in an SDP, written the same way on both sides: `sha-256 AB:CD:...`.
 pub fn fingerprint_of(sdp: &str) -> String {
     sdp.lines()

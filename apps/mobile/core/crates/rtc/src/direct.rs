@@ -3,7 +3,7 @@
 //! str0m does no I/O of its own, so one task owns the `Rtc` and the sockets. Every change to the
 //! `Rtc` is followed by draining its output, which is the contract str0m asks for.
 
-use crate::signals::{Signal, fingerprint_of};
+use crate::signals::{Signal, written_fingerprint};
 use crate::stun::{binding_request, read_mapped_address};
 use async_trait::async_trait;
 use runova_link::opener::Direct;
@@ -339,9 +339,18 @@ impl Engine {
             Event::ChannelOpen(id, label) if label == LABEL => {
                 self.channel = Some(id);
                 if let Some(opened) = self.opened.take() {
+                    // The remote SDP came through the hub, and str0m skips lines it can not
+                    // parse, so its text may name another certificate than the one DTLS checked.
+                    // The handshake binds the one str0m verified the peer against.
+                    let direct = self.rtc.direct_api();
+                    let remote = direct
+                        .remote_dtls_fingerprint()
+                        .map(|fp| written_fingerprint(&fp.hash_func, &fp.bytes))
+                        .unwrap_or_default();
+                    let local = direct.local_dtls_fingerprint();
                     let _ = opened.send(Fingerprints {
-                        local: fingerprint_of(&self.local_sdp),
-                        remote: fingerprint_of(&self.remote_sdp),
+                        local: written_fingerprint(&local.hash_func, &local.bytes),
+                        remote,
                     });
                 }
                 true
