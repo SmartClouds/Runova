@@ -164,9 +164,16 @@ describe('the Anywhere WebRTC link peer', () => {
     await flush();
 
     peer.channel?.open();
+    // The other side may speak first; main gets that frame only after it hears the link is open.
+    peer.channel?.onmessage?.({ data: new Uint8Array([5]).buffer });
+    await flush();
     bridge.$emit('anywhere.onLinkFrame', { sessionId: 's4', frame: new Uint8Array([1, 2]) });
     peer.channel?.onmessage?.({ data: new Uint8Array([3, 4]).buffer });
 
+    expect(bridge.$fn('anywhere.linkFrame')).toHaveBeenNthCalledWith(1, 's4', new Uint8Array([5]));
+    expect(bridge.$fn('anywhere.linkFrame').mock.invocationCallOrder[0]).toBeGreaterThan(
+      bridge.$fn('anywhere.linkOpened').mock.invocationCallOrder[0],
+    );
     expect(bridge.$fn('anywhere.linkOpened')).toHaveBeenCalledWith('s4', {
       local: 'sha-256 AA:BB:CC',
       remote: 'sha-256 11:22:33',
@@ -228,9 +235,92 @@ describe('the Anywhere WebRTC link peer', () => {
   });
 });
 
+describe('a hub that tampers with the signaling', () => {
+  it('never answers an offer as the controller, which makes the offer itself', async () => {
+    const bridge = currentBridge();
+    bridge.$emit('anywhere.onLinkStart', { sessionId: 'c1', role: 'controller', iceServers: [] });
+    await flush();
+    const peer = FakePeer.all[0];
+
+    bridge.$emit('anywhere.onLinkSignal', {
+      sessionId: 'c1',
+      payload: JSON.stringify({
+        k: 'sdp',
+        type: 'offer',
+        sdp: 'v=0\r\na=fingerprint:sha-256 ee\r\n',
+      }),
+    });
+    await flush();
+    await flush();
+
+    expect(peer.remoteDescription).toBeNull();
+    expect(signals().filter((s) => s.payload.type === 'answer')).toEqual([]);
+    expect(bridge.$fn('anywhere.linkClosed')).toHaveBeenCalledWith('c1', expect.any(String));
+  });
+
+  it('never takes an answer as the host, which only answers', async () => {
+    const bridge = currentBridge();
+    bridge.$emit('anywhere.onLinkStart', { sessionId: 'h1', role: 'host', iceServers: [] });
+    bridge.$emit('anywhere.onLinkSignal', {
+      sessionId: 'h1',
+      payload: JSON.stringify({
+        k: 'sdp',
+        type: 'answer',
+        sdp: 'v=0\r\na=fingerprint:sha-256 ee\r\n',
+      }),
+    });
+    await flush();
+    await flush();
+
+    expect(FakePeer.all[0].remoteDescription).toBeNull();
+    expect(bridge.$fn('anywhere.linkClosed')).toHaveBeenCalledWith('h1', expect.any(String));
+  });
+
+  it('reports the certificate DTLS verified, not a fingerprint placed first in the SDP', async () => {
+    const bridge = currentBridge();
+    bridge.$emit('anywhere.onLinkStart', { sessionId: 'c2', role: 'controller', iceServers: [] });
+    await flush();
+    const peer = FakePeer.all[0];
+    // The hub's own certificate terminates DTLS, while an extra first section names the peer's.
+    const hubCertificate = new Uint8Array([1, 2, 3, 4]).buffer;
+    (peer as unknown as { sctp: unknown }).sctp = {
+      transport: { getRemoteCertificates: () => [hubCertificate] },
+    };
+    bridge.$emit('anywhere.onLinkSignal', {
+      sessionId: 'c2',
+      payload: JSON.stringify({
+        k: 'sdp',
+        type: 'answer',
+        sdp: 'v=0\r\nm=audio\r\na=fingerprint:sha-256 11:22:33\r\nm=application\r\na=fingerprint:sha-256 99:99\r\n',
+      }),
+    });
+    await flush();
+
+    peer.channel?.open();
+    await flush();
+    await flush();
+
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', hubCertificate));
+    const expected = [...digest].map((b) => b.toString(16).padStart(2, '0').toUpperCase());
+    expect(bridge.$fn('anywhere.linkOpened')).toHaveBeenCalledWith('c2', {
+      local: 'sha-256 AA:BB:CC',
+      remote: `sha-256 ${expected.join(':')}`,
+    });
+  });
+});
+
 describe('fingerprintOf', () => {
   it('reads the DTLS fingerprint from an SDP the same way on both sides', () => {
     expect(fingerprintOf('v=0\r\na=fingerprint:SHA-256 ab:cd\r\n')).toBe('sha-256 AB:CD');
     expect(fingerprintOf('v=0\r\n')).toBe('');
+  });
+
+  it('trusts no fingerprint when the sections of an SDP name different ones', () => {
+    const sdp =
+      'v=0\r\na=fingerprint:sha-256 aa:aa\r\nm=application\r\na=fingerprint:sha-256 bb:bb\r\n';
+    expect(fingerprintOf(sdp)).toBe('');
+    const same =
+      'v=0\r\na=fingerprint:sha-256 aa:aa\r\nm=application\r\na=fingerprint:SHA-256 AA:AA\r\n';
+    expect(fingerprintOf(same)).toBe('sha-256 AA:AA');
   });
 });

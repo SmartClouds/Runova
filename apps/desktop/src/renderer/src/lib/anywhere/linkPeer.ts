@@ -13,21 +13,54 @@ type Signal =
   | { k: 'ice'; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null };
 
 interface Session {
+  role: 'controller' | 'host';
   pc: RTCPeerConnection;
   channel: RTCDataChannel | null;
   remoteSet: boolean;
   pendingIce: RTCIceCandidateInit[];
   opened: boolean;
+  /** Frames that arrived before main heard the link is open, sent on once it has. */
+  early: Uint8Array[] | null;
   closed: boolean;
   bufferedTimer: ReturnType<typeof setInterval> | null;
 }
 
 const BUFFERED_EVERY_MS = 200;
 
-/** The DTLS fingerprint in an SDP, written the same way on both sides: `sha-256 AB:CD:...`. */
+/**
+ * The DTLS fingerprint in an SDP, written the same way on both sides: `sha-256 AB:CD:...`.
+ * Sections that name different fingerprints leave open which one DTLS checks, so then none is.
+ */
 export function fingerprintOf(sdp: string | undefined): string {
-  const match = /a=fingerprint:(\S+) (\S+)/i.exec(sdp ?? '');
-  return match ? `${match[1].toLowerCase()} ${match[2].toUpperCase()}` : '';
+  const all = new Set(
+    [...(sdp ?? '').matchAll(/^a=fingerprint:(\S+) (\S+)\s*$/gim)].map(
+      (match) => `${match[1].toLowerCase()} ${match[2].toUpperCase()}`,
+    ),
+  );
+  return all.size === 1 ? [...all][0] : '';
+}
+
+const DIGESTS: Record<string, string> = {
+  'sha-1': 'SHA-1',
+  'sha-256': 'SHA-256',
+  'sha-384': 'SHA-384',
+  'sha-512': 'SHA-512',
+};
+
+/**
+ * The fingerprint of the certificate DTLS actually checked, which is what the handshake binds.
+ * The remote SDP comes through the website's hub, so a line in it proves nothing on its own: it is
+ * only the fallback for a browser that can not show the transport's certificate.
+ */
+async function verifiedRemoteFingerprint(pc: RTCPeerConnection): Promise<string> {
+  const announced = fingerprintOf(pc.remoteDescription?.sdp);
+  const certificates = pc.sctp?.transport?.getRemoteCertificates?.() ?? [];
+  if (certificates.length === 0) return announced;
+  const named = announced.split(' ')[0];
+  const algorithm = named && DIGESTS[named] ? named : 'sha-256';
+  const digest = new Uint8Array(await crypto.subtle.digest(DIGESTS[algorithm], certificates[0]));
+  const hex = [...digest].map((byte) => byte.toString(16).padStart(2, '0').toUpperCase());
+  return `${algorithm} ${hex.join(':')}`;
 }
 
 export function initAnywhereLinks(
@@ -60,18 +93,29 @@ export function initAnywhereLinks(
     channel.binaryType = 'arraybuffer';
     channel.onopen = () => {
       session.opened = true;
-      api.linkOpened(sessionId, {
-        local: fingerprintOf(session.pc.localDescription?.sdp),
-        remote: fingerprintOf(session.pc.remoteDescription?.sdp),
-      });
-      session.bufferedTimer = setInterval(
-        () => api.linkBuffered(sessionId, channel.bufferedAmount),
-        BUFFERED_EVERY_MS,
+      session.early = [];
+      void verifiedRemoteFingerprint(session.pc).then(
+        (remote) => {
+          if (session.closed) return;
+          api.linkOpened(sessionId, {
+            local: fingerprintOf(session.pc.localDescription?.sdp),
+            remote,
+          });
+          for (const frame of session.early ?? []) api.linkFrame(sessionId, frame);
+          session.early = null;
+          session.bufferedTimer = setInterval(
+            () => api.linkBuffered(sessionId, channel.bufferedAmount),
+            BUFFERED_EVERY_MS,
+          );
+        },
+        () => closed(sessionId, session, 'the DTLS certificate could not be read'),
       );
     };
     channel.onmessage = (event) => {
       const data = event.data as ArrayBuffer | Uint8Array;
-      api.linkFrame(sessionId, data instanceof Uint8Array ? data : new Uint8Array(data));
+      const frame = data instanceof Uint8Array ? data : new Uint8Array(data);
+      if (session.early) session.early.push(frame);
+      else api.linkFrame(sessionId, frame);
     };
     channel.onclose = () => closed(sessionId, session, 'the data channel closed');
   }
@@ -83,11 +127,13 @@ export function initAnywhereLinks(
   }): Promise<void> {
     const pc = createPeer({ iceServers: input.iceServers });
     const session: Session = {
+      role: input.role,
       pc,
       channel: null,
       remoteSet: false,
       pendingIce: [],
       opened: false,
+      early: null,
       closed: false,
       bufferedTimer: null,
     };
@@ -133,6 +179,13 @@ export function initAnywhereLinks(
       };
       if (session.remoteSet) await session.pc.addIceCandidate(candidate).catch(() => undefined);
       else session.pendingIce.push(candidate);
+      return;
+    }
+    // The controller makes the one offer and the host answers it. A description of the other kind,
+    // or a second one, can only come from a hub trying to sit in the middle of the DTLS link.
+    const expected = session.role === 'controller' ? 'answer' : 'offer';
+    if (message.type !== expected || session.remoteSet) {
+      closed(sessionId, session, `the other side sent an unexpected ${message.type}`);
       return;
     }
     await session.pc.setRemoteDescription({ type: message.type, sdp: message.sdp });
