@@ -138,7 +138,13 @@ export async function spawnStreaming(
   // Tools installed by pip live in a Scripts folder that is off PATH on Windows, and Semgrep in
   // particular re-execs `pysemgrep` by name, so the folder has to be on the child's PATH and not
   // merely resolved into an absolute command.
-  const env = await withToolPath(options.env);
+  // cwd is often a project folder (a scanned repository, say), and cmd.exe looks in the current
+  // directory before PATH, so a repository that commits semgrep.cmd would run in place of the
+  // real tool. This turns that lookup off; a caller that means a file in cwd names its path.
+  const env = {
+    ...(await withToolPath(options.env)),
+    NoDefaultCurrentDirectoryInExePath: '1',
+  };
   // A cancel that lands while PATH is being resolved has no child to kill yet, so honour it here
   // rather than starting something nobody is waiting for.
   if (options.token.cancelled) {

@@ -257,4 +257,27 @@ describe('spawnStreaming', () => {
       }),
     ).rejects.toThrow(/quote/);
   });
+
+  it('never runs a same-named script the folder it runs in ships, on Windows', async () => {
+    if (process.platform !== 'win32') return;
+    // A repository being scanned that commits semgrep.cmd, while Semgrep itself is not installed.
+    await script('semgrep.cmd', '@echo PLANTED\r\n');
+    const inherited = process.env.NoDefaultCurrentDirectoryInExePath;
+    // A parent that already sets it (some terminals do) would hide the bug.
+    delete process.env.NoDefaultCurrentDirectoryInExePath;
+    try {
+      const result = await spawnStreaming({
+        command: 'semgrep',
+        args: ['scan'],
+        cwd: dir,
+        env: { ...process.env, PATH: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32') },
+        timeoutMs: 20_000,
+        token: { cancelled: false, child: null },
+      });
+      expect(result.log).not.toContain('PLANTED');
+      expect(result.notFound).toBe(true);
+    } finally {
+      if (inherited !== undefined) process.env.NoDefaultCurrentDirectoryInExePath = inherited;
+    }
+  });
 });
