@@ -11,13 +11,24 @@
       "operation": null,
       "conflicts": [],
       "staged": [
-        { "path": "src/checkout/GiftCardInput.tsx", "status": "A", "additions": 86, "deletions": 0 },
+        {
+          "path": "src/checkout/GiftCardInput.tsx",
+          "status": "A",
+          "additions": 86,
+          "deletions": 0
+        },
         { "path": "src/checkout/applyGiftCard.ts", "status": "M", "additions": 24, "deletions": 7 }
       ],
       "unstaged": [
         { "path": "src/cart/total.ts", "status": "M", "additions": 9, "deletions": 1 },
         { "path": "src/i18n/en.json", "status": "M", "additions": 6, "deletions": 1 },
-        { "path": "src/checkout/giftCardBalance.ts", "origPath": "src/checkout/balance.ts", "status": "R", "additions": 4, "deletions": 2 },
+        {
+          "path": "src/checkout/giftCardBalance.ts",
+          "origPath": "src/checkout/balance.ts",
+          "status": "R",
+          "additions": 4,
+          "deletions": 2
+        },
         { "path": "src/checkout/legacyVoucher.ts", "status": "D", "additions": 0, "deletions": 41 }
       ],
       "untracked": [
@@ -32,25 +43,43 @@
       "binary": false,
       "tooLarge": false,
       "lines": [
-        { "kind": "hunk", "text": "@@ -18,9 +18,13 @@ export function cartTotal(cart: Cart): Money {" },
+        {
+          "kind": "hunk",
+          "text": "@@ -18,9 +18,13 @@ export function cartTotal(cart: Cart): Money {"
+        },
         { "kind": "ctx", "text": "  const subtotal = sumLines(cart.lines);" },
         { "kind": "ctx", "text": "  const discount = applyDiscounts(subtotal, cart.coupons);" },
         { "kind": "ctx", "text": "  const delivery = shipping(cart);" },
         { "kind": "del", "text": "  return subtotal - discount + delivery;" },
         { "kind": "add", "text": "  const beforeGiftCards = subtotal - discount + delivery;" },
-        { "kind": "add", "text": "  const giftCards = cart.giftCards.reduce((sum, card) => sum + card.applied, 0);" },
+        {
+          "kind": "add",
+          "text": "  const giftCards = cart.giftCards.reduce((sum, card) => sum + card.applied, 0);"
+        },
         { "kind": "add", "text": "" },
-        { "kind": "add", "text": "  // A gift card can pay for the whole order, never more than that." },
+        {
+          "kind": "add",
+          "text": "  // A gift card can pay for the whole order, never more than that."
+        },
         { "kind": "add", "text": "  return Math.max(beforeGiftCards - giftCards, 0);" },
         { "kind": "ctx", "text": "}" },
         { "kind": "ctx", "text": "" },
-        { "kind": "hunk", "text": "@@ -44,6 +48,11 @@ export function formatTotal(total: Money, locale: string): string {" },
-        { "kind": "ctx", "text": "  return new Intl.NumberFormat(locale, { style: 'currency', currency: total.currency })" },
+        {
+          "kind": "hunk",
+          "text": "@@ -44,6 +48,11 @@ export function formatTotal(total: Money, locale: string): string {"
+        },
+        {
+          "kind": "ctx",
+          "text": "  return new Intl.NumberFormat(locale, { style: 'currency', currency: total.currency })"
+        },
         { "kind": "ctx", "text": "    .format(total.amount / 100);" },
         { "kind": "ctx", "text": "}" },
         { "kind": "add", "text": "" },
         { "kind": "add", "text": "export function giftCardsLeft(cart: Cart): number {" },
-        { "kind": "add", "text": "  return cart.giftCards.filter((card) => card.balance > card.applied).length;" },
+        {
+          "kind": "add",
+          "text": "  return cart.giftCards.filter((card) => card.balance > card.applied).length;"
+        },
         { "kind": "add", "text": "}" }
       ]
     }
@@ -77,17 +106,29 @@
   "git.unstage": { "result": { "ok": true, "message": "Unstaged." } },
   "git.discard": { "result": { "ok": true, "message": "Discarded." } },
   "git.commit": { "result": { "ok": true, "message": "Committed to feature/gift-cards." } },
-  "git.fetch": { "result": { "ok": true, "message": "Fetched from origin. main has 1 new commit." } },
-  "git.pull": { "result": { "ok": true, "message": "Pulled 1 commit from origin/feature/gift-cards." } },
+  "git.fetch": {
+    "result": { "ok": true, "message": "Fetched from origin. main has 1 new commit." }
+  },
+  "git.pull": {
+    "result": { "ok": true, "message": "Pulled 1 commit from origin/feature/gift-cards." }
+  },
   "git.push": { "result": { "ok": true, "message": "Pushed to origin/feature/gift-cards." } },
-  "git.checkout": { "result": { "ok": true, "message": "This is the demo, so you stay on feature/gift-cards." } },
-  "git.createBranch": { "result": { "ok": true, "message": "Branch created. The demo stays on feature/gift-cards." } },
+  "git.checkout": {
+    "result": { "ok": true, "message": "This is the demo, so you stay on feature/gift-cards." }
+  },
+  "git.createBranch": {
+    "result": { "ok": true, "message": "Branch created. The demo stays on feature/gift-cards." }
+  },
   "git.deleteBranch": { "result": { "ok": true, "message": "Branch deleted." } },
   "git.stashPush": { "result": { "ok": true, "message": "Your changes are stashed." } },
   "git.stashPop": { "result": { "ok": true, "message": "The stash is back in your changes." } },
   "git.stashDrop": { "result": { "ok": true, "message": "Stash dropped." } },
-  "git.resolve": { "result": { "ok": true, "message": "Kept that side. Stage the file when it looks right." } },
-  "git.abort": { "result": { "ok": true, "message": "Stopped. The repository is back where it was." } },
+  "git.resolve": {
+    "result": { "ok": true, "message": "Kept that side. Stage the file when it looks right." }
+  },
+  "git.abort": {
+    "result": { "ok": true, "message": "Stopped. The repository is back where it was." }
+  },
   "git.tags": {
     "result": {
       "latest": "v1.4.2",
@@ -136,7 +177,13 @@
     }
   },
   "git.suggestBranchName": {
-    "result": { "ok": true, "text": "feature/gift-card-balance", "cliName": "Codex", "error": null, "cancelled": false }
+    "result": {
+      "ok": true,
+      "text": "feature/gift-card-balance",
+      "cliName": "Codex",
+      "error": null,
+      "cancelled": false
+    }
   },
   "git.resolveWithAi": {
     "result": {
@@ -186,7 +233,12 @@
     }
   },
   "git.createPr": {
-    "result": { "ok": true, "url": "https://example.com/northwind/shop/pull/214", "error": null, "usedFallback": false }
+    "result": {
+      "ok": true,
+      "url": "https://example.com/northwind/shop/pull/214",
+      "error": null,
+      "usedFallback": false
+    }
   },
   "git.reviewPr": {
     "result": {
@@ -213,8 +265,20 @@
         "Done. Nothing is committed yet."
       ],
       "changes": [
-        { "path": "package.json", "kind": "modified", "additions": 1, "deletions": 1, "kept": true },
-        { "path": "src/version.ts", "kind": "modified", "additions": 1, "deletions": 1, "kept": true },
+        {
+          "path": "package.json",
+          "kind": "modified",
+          "additions": 1,
+          "deletions": 1,
+          "kept": true
+        },
+        {
+          "path": "src/version.ts",
+          "kind": "modified",
+          "additions": 1,
+          "deletions": 1,
+          "kept": true
+        },
         { "path": "CHANGELOG.md", "kind": "modified", "additions": 7, "deletions": 0, "kept": true }
       ],
       "warning": null,

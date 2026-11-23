@@ -1,11 +1,51 @@
 {
   "projects.list": {
     "result": [
-      { "id": "northwind-shop", "name": "northwind-shop", "tags": ["web", "client"], "pinned": true, "hasRepository": true, "iconBgColor": "#2563eb", "iconColor": "#ffffff" },
-      { "id": "northwind-api", "name": "northwind-api", "tags": ["api"], "pinned": true, "hasRepository": true, "iconBgColor": "#16a34a", "iconColor": "#ffffff" },
-      { "id": "marketing-site", "name": "marketing-site", "tags": ["web"], "pinned": false, "hasRepository": true, "iconBgColor": "#db2777", "iconColor": "#ffffff" },
-      { "id": "infra", "name": "infra", "tags": ["ops"], "pinned": false, "hasRepository": true, "iconBgColor": "#9333ea", "iconColor": "#ffffff" },
-      { "id": "design-notes", "name": "design-notes", "tags": [], "pinned": false, "hasRepository": false, "iconBgColor": "#ea580c", "iconColor": "#ffffff" }
+      {
+        "id": "northwind-shop",
+        "name": "northwind-shop",
+        "tags": ["web", "client"],
+        "pinned": true,
+        "hasRepository": true,
+        "iconBgColor": "#2563eb",
+        "iconColor": "#ffffff"
+      },
+      {
+        "id": "northwind-api",
+        "name": "northwind-api",
+        "tags": ["api"],
+        "pinned": true,
+        "hasRepository": true,
+        "iconBgColor": "#16a34a",
+        "iconColor": "#ffffff"
+      },
+      {
+        "id": "marketing-site",
+        "name": "marketing-site",
+        "tags": ["web"],
+        "pinned": false,
+        "hasRepository": true,
+        "iconBgColor": "#db2777",
+        "iconColor": "#ffffff"
+      },
+      {
+        "id": "infra",
+        "name": "infra",
+        "tags": ["ops"],
+        "pinned": false,
+        "hasRepository": true,
+        "iconBgColor": "#9333ea",
+        "iconColor": "#ffffff"
+      },
+      {
+        "id": "design-notes",
+        "name": "design-notes",
+        "tags": [],
+        "pinned": false,
+        "hasRepository": false,
+        "iconBgColor": "#ea580c",
+        "iconColor": "#ffffff"
+      }
     ]
   },
   "phone.forget": { "result": null },

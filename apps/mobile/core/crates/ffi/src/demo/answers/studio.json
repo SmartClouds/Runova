@@ -68,9 +68,25 @@
   "studio.video": {
     "by": "videoId",
     "cases": {
-      "spring-sale-teaser": { "id": "spring-sale-teaser", "title": "Spring sale teaser", "aspect": "9:16", "canUndo": false, "undoLabel": null },
-      "checkout-walkthrough": { "id": "checkout-walkthrough", "title": "How checkout works", "canUndo": false, "undoLabel": null },
-      "meet-the-team": { "id": "meet-the-team", "title": "Meet the Northwind team", "canUndo": false, "undoLabel": null }
+      "spring-sale-teaser": {
+        "id": "spring-sale-teaser",
+        "title": "Spring sale teaser",
+        "aspect": "9:16",
+        "canUndo": false,
+        "undoLabel": null
+      },
+      "checkout-walkthrough": {
+        "id": "checkout-walkthrough",
+        "title": "How checkout works",
+        "canUndo": false,
+        "undoLabel": null
+      },
+      "meet-the-team": {
+        "id": "meet-the-team",
+        "title": "Meet the Northwind team",
+        "canUndo": false,
+        "undoLabel": null
+      }
     },
     "result": {
       "id": "gift-cards-launch",
@@ -194,7 +210,9 @@
     }
   },
   "studio.create": { "result": { "videoId": "gift-cards-launch" } },
-  "studio.ask": { "result": { "ok": true, "message": "Asked the AI. Its changes show here when they're ready." } },
+  "studio.ask": {
+    "result": { "ok": true, "message": "Asked the AI. Its changes show here when they're ready." }
+  },
   "studio.applyProposal": { "result": { "ok": true, "message": "Applied." } },
   "studio.discardProposal": { "result": { "ok": true, "message": "Discarded." } },
   "studio.undo": { "result": { "ok": true, "message": "Undone." } },
@@ -217,7 +235,14 @@
   "studio.cancelRender": { "result": { "ok": true, "message": "Render stopped." } },
   "studio.voiceEngines": {
     "result": [
-      { "id": "openai", "label": "OpenAI", "problem": null, "locked": false, "local": false, "nonCommercial": false },
+      {
+        "id": "openai",
+        "label": "OpenAI",
+        "problem": null,
+        "locked": false,
+        "local": false,
+        "nonCommercial": false
+      },
       {
         "id": "elevenlabs",
         "label": "ElevenLabs",
@@ -226,7 +251,14 @@
         "local": false,
         "nonCommercial": false
       },
-      { "id": "piper", "label": "Piper (on this computer)", "problem": null, "locked": false, "local": true, "nonCommercial": false }
+      {
+        "id": "piper",
+        "label": "Piper (on this computer)",
+        "problem": null,
+        "locked": false,
+        "local": true,
+        "nonCommercial": false
+      }
     ]
   },
   "studio.voices": {
@@ -243,9 +275,30 @@
   "studio.captionScene": { "result": { "ok": true, "message": "Captions added." } },
   "studio.media": {
     "result": [
-      { "hash": "music-bright-morning", "name": "Bright Morning", "kind": "audio", "duration": 67032000000, "preparing": false, "problem": null },
-      { "hash": "music-city-walk", "name": "City Walk", "kind": "audio", "duration": 90316800000, "preparing": false, "problem": null },
-      { "hash": "music-soft-keys", "name": "Soft Keys", "kind": "audio", "duration": 52214400000, "preparing": false, "problem": null }
+      {
+        "hash": "music-bright-morning",
+        "name": "Bright Morning",
+        "kind": "audio",
+        "duration": 67032000000,
+        "preparing": false,
+        "problem": null
+      },
+      {
+        "hash": "music-city-walk",
+        "name": "City Walk",
+        "kind": "audio",
+        "duration": 90316800000,
+        "preparing": false,
+        "problem": null
+      },
+      {
+        "hash": "music-soft-keys",
+        "name": "Soft Keys",
+        "kind": "audio",
+        "duration": 52214400000,
+        "preparing": false,
+        "problem": null
+      }
     ]
   },
   "studio.timeline": {
@@ -254,20 +307,125 @@
       "lengthFlicks": 21168000000,
       "truncated": false,
       "tracks": [
-        { "id": "track-scenes", "kind": "video", "name": "Scenes", "muted": false, "solo": false, "locked": false, "volume": 1 },
-        { "id": "track-voice", "kind": "voice", "name": "Voice", "muted": false, "solo": false, "locked": false, "volume": 1 },
-        { "id": "track-music", "kind": "music", "name": "Music", "muted": false, "solo": false, "locked": false, "volume": 1 }
+        {
+          "id": "track-scenes",
+          "kind": "video",
+          "name": "Scenes",
+          "muted": false,
+          "solo": false,
+          "locked": false,
+          "volume": 1
+        },
+        {
+          "id": "track-voice",
+          "kind": "voice",
+          "name": "Voice",
+          "muted": false,
+          "solo": false,
+          "locked": false,
+          "volume": 1
+        },
+        {
+          "id": "track-music",
+          "kind": "music",
+          "name": "Music",
+          "muted": false,
+          "solo": false,
+          "locked": false,
+          "volume": 1
+        }
       ],
       "clips": [
-        { "id": "clip-hook", "trackId": "track-scenes", "start": 0, "duration": 2822400000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "The last-minute present" },
-        { "id": "clip-gift", "trackId": "track-scenes", "start": 2822400000, "duration": 5644800000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "A gift card in seconds" },
-        { "id": "clip-checkout", "trackId": "track-scenes", "start": 8467200000, "duration": 4233600000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Paying with a card" },
-        { "id": "clip-balance", "trackId": "track-scenes", "start": 12700800000, "duration": 4939200000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "What's left" },
-        { "id": "clip-end", "trackId": "track-scenes", "start": 17640000000, "duration": 3528000000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Out now" },
-        { "id": "clip-voice-hook", "trackId": "track-voice", "start": 352800000, "duration": 2116800000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 1" },
-        { "id": "clip-voice-gift", "trackId": "track-voice", "start": 3175200000, "duration": 4939200000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 2" },
-        { "id": "clip-voice-checkout", "trackId": "track-voice", "start": 8820000000, "duration": 3528000000, "gain": 1, "fadeIn": 0, "fadeOut": 0, "label": "Voice, scene 3" },
-        { "id": "clip-music", "trackId": "track-music", "start": 0, "duration": 21168000000, "gain": 0.35, "fadeIn": 1411200000, "fadeOut": 2116800000, "label": "Bright Morning" }
+        {
+          "id": "clip-hook",
+          "trackId": "track-scenes",
+          "start": 0,
+          "duration": 2822400000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "The last-minute present"
+        },
+        {
+          "id": "clip-gift",
+          "trackId": "track-scenes",
+          "start": 2822400000,
+          "duration": 5644800000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "A gift card in seconds"
+        },
+        {
+          "id": "clip-checkout",
+          "trackId": "track-scenes",
+          "start": 8467200000,
+          "duration": 4233600000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "Paying with a card"
+        },
+        {
+          "id": "clip-balance",
+          "trackId": "track-scenes",
+          "start": 12700800000,
+          "duration": 4939200000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "What's left"
+        },
+        {
+          "id": "clip-end",
+          "trackId": "track-scenes",
+          "start": 17640000000,
+          "duration": 3528000000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "Out now"
+        },
+        {
+          "id": "clip-voice-hook",
+          "trackId": "track-voice",
+          "start": 352800000,
+          "duration": 2116800000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "Voice, scene 1"
+        },
+        {
+          "id": "clip-voice-gift",
+          "trackId": "track-voice",
+          "start": 3175200000,
+          "duration": 4939200000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "Voice, scene 2"
+        },
+        {
+          "id": "clip-voice-checkout",
+          "trackId": "track-voice",
+          "start": 8820000000,
+          "duration": 3528000000,
+          "gain": 1,
+          "fadeIn": 0,
+          "fadeOut": 0,
+          "label": "Voice, scene 3"
+        },
+        {
+          "id": "clip-music",
+          "trackId": "track-music",
+          "start": 0,
+          "duration": 21168000000,
+          "gain": 0.35,
+          "fadeIn": 1411200000,
+          "fadeOut": 2116800000,
+          "label": "Bright Morning"
+        }
       ]
     }
   },
@@ -275,7 +433,12 @@
   "studio.addMusic": { "result": { "ok": true, "message": "Music added." } },
   "studio.trackSet": { "result": { "ok": true, "message": "Track updated." } },
   "studio.downloadOpen": {
-    "result": { "downloadId": "download-gift-cards", "fileName": "Gift cards launch (demo).txt", "bytes": 155, "nonCommercial": [] }
+    "result": {
+      "downloadId": "download-gift-cards",
+      "fileName": "Gift cards launch (demo).txt",
+      "bytes": 155,
+      "nonCommercial": []
+    }
   },
   "studio.downloadRead": {
     "bytes": [

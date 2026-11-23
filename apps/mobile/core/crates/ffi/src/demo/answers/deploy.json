@@ -1,9 +1,27 @@
 {
   "deploy.servers": {
     "result": [
-      { "id": "shop-prod-1", "name": "shop-prod-1", "host": "203.0.113.10", "state": "online", "problem": null },
-      { "id": "staging", "name": "staging", "host": "198.51.100.24", "state": "online", "problem": null },
-      { "id": "build-box", "name": "build-box", "host": "192.0.2.15", "state": "needs-sign-in", "problem": "Its sign-in ran out. Sign in again under Deploy on the computer." }
+      {
+        "id": "shop-prod-1",
+        "name": "shop-prod-1",
+        "host": "203.0.113.10",
+        "state": "online",
+        "problem": null
+      },
+      {
+        "id": "staging",
+        "name": "staging",
+        "host": "198.51.100.24",
+        "state": "online",
+        "problem": null
+      },
+      {
+        "id": "build-box",
+        "name": "build-box",
+        "host": "192.0.2.15",
+        "state": "needs-sign-in",
+        "problem": "Its sign-in ran out. Sign in again under Deploy on the computer."
+      }
     ]
   },
   "deploy.overview": {
@@ -11,39 +29,142 @@
       "reachable": true,
       "version": "1.42.0",
       "containers": [
-        { "id": "3f9c1a2b7d10", "name": "shop-web", "image": "ghcr.io/northwind/shop-web:1.42.0", "state": "running", "status": "Up 3 days (healthy)", "health": "healthy" },
-        { "id": "8b24e6c0f1a3", "name": "shop-api", "image": "ghcr.io/northwind/shop-api:1.42.0", "state": "running", "status": "Up 3 days (healthy)", "health": "healthy" },
-        { "id": "c71d09e4a582", "name": "shop-worker", "image": "ghcr.io/northwind/shop-api:1.42.0", "state": "running", "status": "Up 2 hours (unhealthy)", "health": "unhealthy" },
-        { "id": "1e5f7a9b3c20", "name": "postgres", "image": "postgres:17.2", "state": "running", "status": "Up 12 days (healthy)", "health": "healthy" },
-        { "id": "a40b8d2e6f19", "name": "redis", "image": "redis:7.4-alpine", "state": "running", "status": "Up 12 days", "health": null },
-        { "id": "5d3c2b1a0e98", "name": "mailer", "image": "ghcr.io/northwind/mailer:0.9.3", "state": "exited", "status": "Exited (0) 2 days ago", "health": null }
+        {
+          "id": "3f9c1a2b7d10",
+          "name": "shop-web",
+          "image": "ghcr.io/northwind/shop-web:1.42.0",
+          "state": "running",
+          "status": "Up 3 days (healthy)",
+          "health": "healthy"
+        },
+        {
+          "id": "8b24e6c0f1a3",
+          "name": "shop-api",
+          "image": "ghcr.io/northwind/shop-api:1.42.0",
+          "state": "running",
+          "status": "Up 3 days (healthy)",
+          "health": "healthy"
+        },
+        {
+          "id": "c71d09e4a582",
+          "name": "shop-worker",
+          "image": "ghcr.io/northwind/shop-api:1.42.0",
+          "state": "running",
+          "status": "Up 2 hours (unhealthy)",
+          "health": "unhealthy"
+        },
+        {
+          "id": "1e5f7a9b3c20",
+          "name": "postgres",
+          "image": "postgres:17.2",
+          "state": "running",
+          "status": "Up 12 days (healthy)",
+          "health": "healthy"
+        },
+        {
+          "id": "a40b8d2e6f19",
+          "name": "redis",
+          "image": "redis:7.4-alpine",
+          "state": "running",
+          "status": "Up 12 days",
+          "health": null
+        },
+        {
+          "id": "5d3c2b1a0e98",
+          "name": "mailer",
+          "image": "ghcr.io/northwind/mailer:0.9.3",
+          "state": "exited",
+          "status": "Exited (0) 2 days ago",
+          "health": null
+        }
       ],
       "stacks": [
-        { "id": "shop", "name": "shop", "status": "running", "running": 3, "total": 3, "canRedeploy": true },
-        { "id": "data", "name": "data", "status": "running", "running": 2, "total": 2, "canRedeploy": false },
-        { "id": "mailer", "name": "mailer", "status": "exited", "running": 0, "total": 1, "canRedeploy": true }
+        {
+          "id": "shop",
+          "name": "shop",
+          "status": "running",
+          "running": 3,
+          "total": 3,
+          "canRedeploy": true
+        },
+        {
+          "id": "data",
+          "name": "data",
+          "status": "running",
+          "running": 2,
+          "total": 2,
+          "canRedeploy": false
+        },
+        {
+          "id": "mailer",
+          "name": "mailer",
+          "status": "exited",
+          "running": 0,
+          "total": 1,
+          "canRedeploy": true
+        }
       ],
       "problems": [
-        { "id": "worker-unhealthy", "severity": "warning", "title": "shop-worker is unhealthy", "detail": "Its health check failed 3 times in a row. The order queue is 412 jobs behind." },
-        { "id": "disk-space", "severity": "warning", "title": "Disk 81% full", "detail": "/var/lib/docker holds 64 GB of 80 GB. Old images take up 11 GB of it." }
+        {
+          "id": "worker-unhealthy",
+          "severity": "warning",
+          "title": "shop-worker is unhealthy",
+          "detail": "Its health check failed 3 times in a row. The order queue is 412 jobs behind."
+        },
+        {
+          "id": "disk-space",
+          "severity": "warning",
+          "title": "Disk 81% full",
+          "detail": "/var/lib/docker holds 64 GB of 80 GB. Old images take up 11 GB of it."
+        }
       ],
       "lastBackup": { "state": "succeeded", "planName": "Nightly database", "error": null }
     }
   },
   "deploy.containerLogs": {
     "result": [
-      { "text": "2026-11-22T10:02:11Z info  worker started, 4 threads, queue orders", "error": false },
-      { "text": "2026-11-22T10:02:12Z info  connected to postgres at postgres:5432", "error": false },
+      {
+        "text": "2026-11-22T10:02:11Z info  worker started, 4 threads, queue orders",
+        "error": false
+      },
+      {
+        "text": "2026-11-22T10:02:12Z info  connected to postgres at postgres:5432",
+        "error": false
+      },
       { "text": "2026-11-22T10:02:12Z info  connected to redis at redis:6379", "error": false },
-      { "text": "2026-11-22T10:14:37Z info  order 58213 paid, sending confirmation", "error": false },
-      { "text": "2026-11-22T10:14:38Z info  order 58213 confirmation queued for mailer", "error": false },
-      { "text": "2026-11-22T10:19:02Z warn  order 58217 payment webhook arrived twice, ignoring the second", "error": false },
-      { "text": "2026-11-22T10:21:45Z error mailer not reachable at mailer:2525 (connection refused), retry 1 of 5 in 30 s", "error": true },
-      { "text": "2026-11-22T10:22:15Z error mailer not reachable at mailer:2525 (connection refused), retry 2 of 5 in 60 s", "error": true },
-      { "text": "2026-11-22T10:23:15Z info  order 58221 paid, sending confirmation", "error": false },
+      {
+        "text": "2026-11-22T10:14:37Z info  order 58213 paid, sending confirmation",
+        "error": false
+      },
+      {
+        "text": "2026-11-22T10:14:38Z info  order 58213 confirmation queued for mailer",
+        "error": false
+      },
+      {
+        "text": "2026-11-22T10:19:02Z warn  order 58217 payment webhook arrived twice, ignoring the second",
+        "error": false
+      },
+      {
+        "text": "2026-11-22T10:21:45Z error mailer not reachable at mailer:2525 (connection refused), retry 1 of 5 in 30 s",
+        "error": true
+      },
+      {
+        "text": "2026-11-22T10:22:15Z error mailer not reachable at mailer:2525 (connection refused), retry 2 of 5 in 60 s",
+        "error": true
+      },
+      {
+        "text": "2026-11-22T10:23:15Z info  order 58221 paid, sending confirmation",
+        "error": false
+      },
       { "text": "2026-11-22T10:24:02Z warn  queue orders is 412 jobs behind", "error": false },
-      { "text": "2026-11-22T10:24:15Z error mailer not reachable at mailer:2525 (connection refused), retry 3 of 5 in 120 s", "error": true },
-      { "text": "2026-11-22T10:26:40Z info  stock for oak-desk-140 reserved for order 58224", "error": false }
+      {
+        "text": "2026-11-22T10:24:15Z error mailer not reachable at mailer:2525 (connection refused), retry 3 of 5 in 120 s",
+        "error": true
+      },
+      {
+        "text": "2026-11-22T10:26:40Z info  stock for oak-desk-140 reserved for order 58224",
+        "error": false
+      }
     ]
   },
   "deploy.containerAction": {
@@ -53,7 +174,10 @@
     "result": { "ok": true, "message": "Done. The server took it." }
   },
   "deploy.stackRedeploy": {
-    "result": { "ok": true, "message": "Redeploying. The new containers take a minute or two to come up." }
+    "result": {
+      "ok": true,
+      "message": "Redeploying. The new containers take a minute or two to come up."
+    }
   },
   "deploy.traffic": {
     "result": {
@@ -64,8 +188,18 @@
       "granularities": [
         { "value": "hour", "label": "Hour", "enabled": true, "reason": null },
         { "value": "day", "label": "Day", "enabled": true, "reason": null },
-        { "value": "week", "label": "Week", "enabled": false, "reason": "Pick four weeks or more to see weeks." },
-        { "value": "month", "label": "Month", "enabled": false, "reason": "Pick two months or more to see months." }
+        {
+          "value": "week",
+          "label": "Week",
+          "enabled": false,
+          "reason": "Pick four weeks or more to see weeks."
+        },
+        {
+          "value": "month",
+          "label": "Month",
+          "enabled": false,
+          "reason": "Pick two months or more to see months."
+        }
       ],
       "fromUnixMs": 1794787200000,
       "toUnixMs": 1795391999999,
@@ -77,25 +211,87 @@
         { "id": "marketing", "label": "northwind.dev" }
       ],
       "totals": {
-        "visitors": 6940, "visits": 9120, "pageViews": 38760, "requests": 142300, "botRequests": 21800,
-        "bytes": 10522669875, "bounces": 3870, "visitSeconds": 1076160,
-        "status2xx": 121000, "status3xx": 14700, "status4xx": 6480, "status5xx": 120,
-        "averageResponseMs": 48.0, "p95ResponseMs": 212.0
+        "visitors": 6940,
+        "visits": 9120,
+        "pageViews": 38760,
+        "requests": 142300,
+        "botRequests": 21800,
+        "bytes": 10522669875,
+        "bounces": 3870,
+        "visitSeconds": 1076160,
+        "status2xx": 121000,
+        "status3xx": 14700,
+        "status4xx": 6480,
+        "status5xx": 120,
+        "averageResponseMs": 48.0,
+        "p95ResponseMs": 212.0
       },
       "previous": {
-        "visitors": 6210, "visits": 8300, "pageViews": 34100, "requests": 131000, "botRequests": 24500,
-        "bytes": 9663676416, "bounces": 3650, "visitSeconds": 904700,
-        "status2xx": 112400, "status3xx": 12100, "status4xx": 6300, "status5xx": 200,
-        "averageResponseMs": 51.0, "p95ResponseMs": 240.0
+        "visitors": 6210,
+        "visits": 8300,
+        "pageViews": 34100,
+        "requests": 131000,
+        "botRequests": 24500,
+        "bytes": 9663676416,
+        "bounces": 3650,
+        "visitSeconds": 904700,
+        "status2xx": 112400,
+        "status3xx": 12100,
+        "status4xx": 6300,
+        "status5xx": 200,
+        "averageResponseMs": 51.0,
+        "p95ResponseMs": 240.0
       },
       "series": [
-        { "at": 1794787200000, "axis": "16 Nov", "label": "Mon 16 Nov", "visitors": 1050, "pageViews": 4800 },
-        { "at": 1794873600000, "axis": "17 Nov", "label": "Tue 17 Nov", "visitors": 1120, "pageViews": 5100 },
-        { "at": 1794960000000, "axis": "18 Nov", "label": "Wed 18 Nov", "visitors": 1210, "pageViews": 5600 },
-        { "at": 1795046400000, "axis": "19 Nov", "label": "Thu 19 Nov", "visitors": 1180, "pageViews": 5400 },
-        { "at": 1795132800000, "axis": "20 Nov", "label": "Fri 20 Nov", "visitors": 1340, "pageViews": 6200 },
-        { "at": 1795219200000, "axis": "21 Nov", "label": "Sat 21 Nov", "visitors": 1490, "pageViews": 6900 },
-        { "at": 1795305600000, "axis": "22 Nov", "label": "Sun 22 Nov", "visitors": 1022, "pageViews": 4760 }
+        {
+          "at": 1794787200000,
+          "axis": "16 Nov",
+          "label": "Mon 16 Nov",
+          "visitors": 1050,
+          "pageViews": 4800
+        },
+        {
+          "at": 1794873600000,
+          "axis": "17 Nov",
+          "label": "Tue 17 Nov",
+          "visitors": 1120,
+          "pageViews": 5100
+        },
+        {
+          "at": 1794960000000,
+          "axis": "18 Nov",
+          "label": "Wed 18 Nov",
+          "visitors": 1210,
+          "pageViews": 5600
+        },
+        {
+          "at": 1795046400000,
+          "axis": "19 Nov",
+          "label": "Thu 19 Nov",
+          "visitors": 1180,
+          "pageViews": 5400
+        },
+        {
+          "at": 1795132800000,
+          "axis": "20 Nov",
+          "label": "Fri 20 Nov",
+          "visitors": 1340,
+          "pageViews": 6200
+        },
+        {
+          "at": 1795219200000,
+          "axis": "21 Nov",
+          "label": "Sat 21 Nov",
+          "visitors": 1490,
+          "pageViews": 6900
+        },
+        {
+          "at": 1795305600000,
+          "axis": "22 Nov",
+          "label": "Sun 22 Nov",
+          "visitors": 1022,
+          "pageViews": 4760
+        }
       ],
       "previousSeries": [
         { "visitors": 980, "pageViews": 4400 },
@@ -107,45 +303,69 @@
         { "visitors": 1190, "pageViews": 4100 }
       ],
       "breakdowns": [
-        { "dimension": "page", "total": 38760, "top": [
-          { "value": "/", "count": 9840 },
-          { "value": "/products/oak-desk", "count": 4210 },
-          { "value": "/cart", "count": 3560 },
-          { "value": "/checkout", "count": 2180 },
-          { "value": "/journal/caring-for-oak", "count": 1930 }
-        ] },
-        { "dimension": "referrer", "total": 38760, "top": [
-          { "value": "", "count": 15200 },
-          { "value": "google.com", "count": 12400 },
-          { "value": "instagram.com", "count": 4100 },
-          { "value": "duckduckgo.com", "count": 1870 },
-          { "value": "news.ycombinator.com", "count": 940 }
-        ] },
-        { "dimension": "browser", "total": 38760, "top": [
-          { "value": "Chrome", "count": 18900 },
-          { "value": "Safari", "count": 12300 },
-          { "value": "Firefox", "count": 3400 },
-          { "value": "Edge", "count": 2700 }
-        ] },
-        { "dimension": "device", "total": 38760, "top": [
-          { "value": "desktop", "count": 21300 },
-          { "value": "mobile", "count": 15900 },
-          { "value": "tablet", "count": 1560 }
-        ] },
-        { "dimension": "country", "total": 38760, "top": [
-          { "value": "US", "count": 14100, "name": "United States" },
-          { "value": "GB", "count": 6200, "name": "United Kingdom" },
-          { "value": "DE", "count": 4300, "name": "Germany" },
-          { "value": "NL", "count": 2900, "name": "Netherlands" },
-          { "value": "CA", "count": 2400, "name": "Canada" }
-        ] },
-        { "dimension": "statusCode", "total": 142300, "top": [
-          { "value": "200", "count": 121000 },
-          { "value": "304", "count": 12400 },
-          { "value": "404", "count": 6100 },
-          { "value": "301", "count": 2300 },
-          { "value": "500", "count": 120 }
-        ] }
+        {
+          "dimension": "page",
+          "total": 38760,
+          "top": [
+            { "value": "/", "count": 9840 },
+            { "value": "/products/oak-desk", "count": 4210 },
+            { "value": "/cart", "count": 3560 },
+            { "value": "/checkout", "count": 2180 },
+            { "value": "/journal/caring-for-oak", "count": 1930 }
+          ]
+        },
+        {
+          "dimension": "referrer",
+          "total": 38760,
+          "top": [
+            { "value": "", "count": 15200 },
+            { "value": "google.com", "count": 12400 },
+            { "value": "instagram.com", "count": 4100 },
+            { "value": "duckduckgo.com", "count": 1870 },
+            { "value": "news.ycombinator.com", "count": 940 }
+          ]
+        },
+        {
+          "dimension": "browser",
+          "total": 38760,
+          "top": [
+            { "value": "Chrome", "count": 18900 },
+            { "value": "Safari", "count": 12300 },
+            { "value": "Firefox", "count": 3400 },
+            { "value": "Edge", "count": 2700 }
+          ]
+        },
+        {
+          "dimension": "device",
+          "total": 38760,
+          "top": [
+            { "value": "desktop", "count": 21300 },
+            { "value": "mobile", "count": 15900 },
+            { "value": "tablet", "count": 1560 }
+          ]
+        },
+        {
+          "dimension": "country",
+          "total": 38760,
+          "top": [
+            { "value": "US", "count": 14100, "name": "United States" },
+            { "value": "GB", "count": 6200, "name": "United Kingdom" },
+            { "value": "DE", "count": 4300, "name": "Germany" },
+            { "value": "NL", "count": 2900, "name": "Netherlands" },
+            { "value": "CA", "count": 2400, "name": "Canada" }
+          ]
+        },
+        {
+          "dimension": "statusCode",
+          "total": 142300,
+          "top": [
+            { "value": "200", "count": 121000 },
+            { "value": "304", "count": 12400 },
+            { "value": "404", "count": 6100 },
+            { "value": "301", "count": 2300 },
+            { "value": "500", "count": 120 }
+          ]
+        }
       ],
       "countrySources": "91% from Cloudflare, 9% from DB-IP"
     }
@@ -170,10 +390,62 @@
   "deploy.trafficAttacks": {
     "result": {
       "events": [
-        { "id": 4121, "siteId": "shop", "kind": "bruteForce", "kindLabel": "Password guessing", "address": "198.51.100.23", "country": "NL", "countryName": "Netherlands", "firstSeen": 1795336200000, "lastSeen": 1795342320000, "count": 862, "samplePaths": ["/account/login", "/admin/login"], "blocked": true },
-        { "id": 4117, "siteId": "shop", "kind": "scan", "kindLabel": "Scans", "address": "203.0.113.199", "country": "SG", "countryName": "Singapore", "firstSeen": 1795337400000, "lastSeen": 1795338300000, "count": 412, "samplePaths": ["/.env", "/.git/config", "/wp-login.php"], "blocked": false },
-        { "id": 4102, "siteId": "marketing", "kind": "injection", "kindLabel": "Injection probes", "address": "192.0.2.61", "country": "US", "countryName": "United States", "firstSeen": 1795298400000, "lastSeen": 1795300800000, "count": 57, "samplePaths": ["/search?q=%27%20OR%201%3D1--", "/journal?page=../../etc/passwd"], "blocked": false },
-        { "id": 4088, "siteId": "shop", "kind": "flood", "kindLabel": "Floods", "address": "2001:db8::4f", "country": null, "countryName": null, "firstSeen": 1795183200000, "lastSeen": 1795184100000, "count": 9120, "samplePaths": ["/"], "blocked": false }
+        {
+          "id": 4121,
+          "siteId": "shop",
+          "kind": "bruteForce",
+          "kindLabel": "Password guessing",
+          "address": "198.51.100.23",
+          "country": "NL",
+          "countryName": "Netherlands",
+          "firstSeen": 1795336200000,
+          "lastSeen": 1795342320000,
+          "count": 862,
+          "samplePaths": ["/account/login", "/admin/login"],
+          "blocked": true
+        },
+        {
+          "id": 4117,
+          "siteId": "shop",
+          "kind": "scan",
+          "kindLabel": "Scans",
+          "address": "203.0.113.199",
+          "country": "SG",
+          "countryName": "Singapore",
+          "firstSeen": 1795337400000,
+          "lastSeen": 1795338300000,
+          "count": 412,
+          "samplePaths": ["/.env", "/.git/config", "/wp-login.php"],
+          "blocked": false
+        },
+        {
+          "id": 4102,
+          "siteId": "marketing",
+          "kind": "injection",
+          "kindLabel": "Injection probes",
+          "address": "192.0.2.61",
+          "country": "US",
+          "countryName": "United States",
+          "firstSeen": 1795298400000,
+          "lastSeen": 1795300800000,
+          "count": 57,
+          "samplePaths": ["/search?q=%27%20OR%201%3D1--", "/journal?page=../../etc/passwd"],
+          "blocked": false
+        },
+        {
+          "id": 4088,
+          "siteId": "shop",
+          "kind": "flood",
+          "kindLabel": "Floods",
+          "address": "2001:db8::4f",
+          "country": null,
+          "countryName": null,
+          "firstSeen": 1795183200000,
+          "lastSeen": 1795184100000,
+          "count": 9120,
+          "samplePaths": ["/"],
+          "blocked": false
+        }
       ],
       "series": [
         { "startUnixMs": 1795132800000, "scan": 2, "bruteForce": 0, "flood": 1, "injection": 0 },
@@ -186,20 +458,55 @@
   },
   "deploy.trafficBlocked": {
     "result": [
-      { "id": 61, "network": "198.51.100.23", "reason": "Password guessing on /account/login", "automatic": true, "createdAt": 1795338360000, "siteId": "shop", "createdBy": null, "expiresAt": 1795424760000 },
-      { "id": 58, "network": "203.0.113.128/25", "reason": "Card testing at checkout", "automatic": false, "createdAt": 1795105200000, "siteId": null, "createdBy": "ana", "expiresAt": null },
-      { "id": 55, "network": "192.0.2.200", "reason": "Scans", "automatic": true, "createdAt": 1795302000000, "siteId": "marketing", "createdBy": null, "expiresAt": 1795388400000 }
+      {
+        "id": 61,
+        "network": "198.51.100.23",
+        "reason": "Password guessing on /account/login",
+        "automatic": true,
+        "createdAt": 1795338360000,
+        "siteId": "shop",
+        "createdBy": null,
+        "expiresAt": 1795424760000
+      },
+      {
+        "id": 58,
+        "network": "203.0.113.128/25",
+        "reason": "Card testing at checkout",
+        "automatic": false,
+        "createdAt": 1795105200000,
+        "siteId": null,
+        "createdBy": "ana",
+        "expiresAt": null
+      },
+      {
+        "id": 55,
+        "network": "192.0.2.200",
+        "reason": "Scans",
+        "automatic": true,
+        "createdAt": 1795302000000,
+        "siteId": "marketing",
+        "createdBy": null,
+        "expiresAt": 1795388400000
+      }
     ]
   },
   "deploy.trafficBlock": {
-    "result": { "ok": true, "message": "Blocked. nginx refuses it on every site within a few seconds." }
+    "result": {
+      "ok": true,
+      "message": "Blocked. nginx refuses it on every site within a few seconds."
+    }
   },
   "deploy.trafficUnblock": {
     "result": { "ok": true, "message": "Let back in. nginx answers it again within a few seconds." }
   },
   "deploy.trafficStatus": {
     "result": {
-      "statistics": { "enabled": true, "countries": true, "hourlyRetentionDays": 30, "dailyRetentionDays": 365 },
+      "statistics": {
+        "enabled": true,
+        "countries": true,
+        "hourlyRetentionDays": 30,
+        "dailyRetentionDays": 365
+      },
       "detection": { "enabled": true },
       "autoBlock": { "enabled": true, "kinds": ["bruteForce", "scan"], "minutes": 1440 },
       "storageBytes": 50331648

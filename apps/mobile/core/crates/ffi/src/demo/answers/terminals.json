@@ -1,10 +1,38 @@
 {
   "terminals.list": {
     "result": [
-      { "sessionId": "term-shop-dev", "title": "pnpm dev", "projectId": "northwind-shop", "cliId": null, "status": null, "createdAt": 1795392000000 },
-      { "sessionId": "term-shop-claude", "title": "Claude Code", "projectId": "northwind-shop", "cliId": "claude", "status": "working", "createdAt": 1795391400000 },
-      { "sessionId": "term-api-tests", "title": "dotnet watch test", "projectId": "northwind-api", "cliId": null, "status": null, "createdAt": 1795390800000 },
-      { "sessionId": "term-infra-codex", "title": "Codex", "projectId": "infra", "cliId": "codex", "status": "needs-input", "createdAt": 1795389000000 }
+      {
+        "sessionId": "term-shop-dev",
+        "title": "pnpm dev",
+        "projectId": "northwind-shop",
+        "cliId": null,
+        "status": null,
+        "createdAt": 1795392000000
+      },
+      {
+        "sessionId": "term-shop-claude",
+        "title": "Claude Code",
+        "projectId": "northwind-shop",
+        "cliId": "claude",
+        "status": "working",
+        "createdAt": 1795391400000
+      },
+      {
+        "sessionId": "term-api-tests",
+        "title": "dotnet watch test",
+        "projectId": "northwind-api",
+        "cliId": null,
+        "status": null,
+        "createdAt": 1795390800000
+      },
+      {
+        "sessionId": "term-infra-codex",
+        "title": "Codex",
+        "projectId": "infra",
+        "cliId": "codex",
+        "status": "needs-input",
+        "createdAt": 1795389000000
+      }
     ]
   },
   "terminals.follow": {

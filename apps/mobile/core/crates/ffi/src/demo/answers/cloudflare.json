@@ -4,8 +4,28 @@
       "configured": true,
       "locked": false,
       "accounts": [
-        { "id": "acct-northwind", "label": "Northwind", "locked": false, "state": "active", "expiresOn": null, "zoneCount": 3, "checkedAt": 1795338000000, "missing": [], "unverified": [] },
-        { "id": "acct-personal", "label": "Personal", "locked": false, "state": "expired", "expiresOn": "2026-11-01T00:00:00Z", "zoneCount": null, "checkedAt": 1795338000000, "missing": [], "unverified": [] }
+        {
+          "id": "acct-northwind",
+          "label": "Northwind",
+          "locked": false,
+          "state": "active",
+          "expiresOn": null,
+          "zoneCount": 3,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        },
+        {
+          "id": "acct-personal",
+          "label": "Personal",
+          "locked": false,
+          "state": "expired",
+          "expiresOn": "2026-11-01T00:00:00Z",
+          "zoneCount": null,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        }
       ]
     }
   },
@@ -14,8 +34,28 @@
       "configured": true,
       "locked": false,
       "accounts": [
-        { "id": "acct-northwind", "label": "Northwind", "locked": false, "state": "active", "expiresOn": null, "zoneCount": 3, "checkedAt": 1795338000000, "missing": [], "unverified": [] },
-        { "id": "acct-personal", "label": "Personal", "locked": false, "state": "expired", "expiresOn": "2026-11-01T00:00:00Z", "zoneCount": null, "checkedAt": 1795338000000, "missing": [], "unverified": [] }
+        {
+          "id": "acct-northwind",
+          "label": "Northwind",
+          "locked": false,
+          "state": "active",
+          "expiresOn": null,
+          "zoneCount": 3,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        },
+        {
+          "id": "acct-personal",
+          "label": "Personal",
+          "locked": false,
+          "state": "expired",
+          "expiresOn": "2026-11-01T00:00:00Z",
+          "zoneCount": null,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        }
       ]
     }
   },
@@ -24,8 +64,28 @@
       "configured": true,
       "locked": false,
       "accounts": [
-        { "id": "acct-northwind", "label": "Northwind", "locked": false, "state": "active", "expiresOn": null, "zoneCount": 3, "checkedAt": 1795338000000, "missing": [], "unverified": [] },
-        { "id": "acct-personal", "label": "Personal", "locked": false, "state": "expired", "expiresOn": "2026-11-01T00:00:00Z", "zoneCount": null, "checkedAt": 1795338000000, "missing": [], "unverified": [] }
+        {
+          "id": "acct-northwind",
+          "label": "Northwind",
+          "locked": false,
+          "state": "active",
+          "expiresOn": null,
+          "zoneCount": 3,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        },
+        {
+          "id": "acct-personal",
+          "label": "Personal",
+          "locked": false,
+          "state": "expired",
+          "expiresOn": "2026-11-01T00:00:00Z",
+          "zoneCount": null,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        }
       ]
     }
   },
@@ -34,49 +94,230 @@
       "configured": true,
       "locked": false,
       "accounts": [
-        { "id": "acct-northwind", "label": "Northwind", "locked": false, "state": "active", "expiresOn": null, "zoneCount": 3, "checkedAt": 1795338000000, "missing": [], "unverified": [] },
-        { "id": "acct-personal", "label": "Personal", "locked": false, "state": "expired", "expiresOn": "2026-11-01T00:00:00Z", "zoneCount": null, "checkedAt": 1795338000000, "missing": [], "unverified": [] }
+        {
+          "id": "acct-northwind",
+          "label": "Northwind",
+          "locked": false,
+          "state": "active",
+          "expiresOn": null,
+          "zoneCount": 3,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        },
+        {
+          "id": "acct-personal",
+          "label": "Personal",
+          "locked": false,
+          "state": "expired",
+          "expiresOn": "2026-11-01T00:00:00Z",
+          "zoneCount": null,
+          "checkedAt": 1795338000000,
+          "missing": [],
+          "unverified": []
+        }
       ]
     }
   },
   "cloudflare.zones": {
     "result": [
-      { "id": "zone-northwind-shop", "accountId": "acct-northwind", "cloudflareAccountId": "cf-northwind", "name": "northwind.shop", "status": "active", "paused": false, "plan": "Pro Website", "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"] },
-      { "id": "zone-northwind-dev", "accountId": "acct-northwind", "cloudflareAccountId": "cf-northwind", "name": "northwind.dev", "status": "active", "paused": false, "plan": "Free Website", "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"] },
-      { "id": "zone-northwind-status", "accountId": "acct-northwind", "cloudflareAccountId": "cf-northwind", "name": "northwind-status.com", "status": "pending", "paused": false, "plan": "Free Website", "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"] }
+      {
+        "id": "zone-northwind-shop",
+        "accountId": "acct-northwind",
+        "cloudflareAccountId": "cf-northwind",
+        "name": "northwind.shop",
+        "status": "active",
+        "paused": false,
+        "plan": "Pro Website",
+        "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"]
+      },
+      {
+        "id": "zone-northwind-dev",
+        "accountId": "acct-northwind",
+        "cloudflareAccountId": "cf-northwind",
+        "name": "northwind.dev",
+        "status": "active",
+        "paused": false,
+        "plan": "Free Website",
+        "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"]
+      },
+      {
+        "id": "zone-northwind-status",
+        "accountId": "acct-northwind",
+        "cloudflareAccountId": "cf-northwind",
+        "name": "northwind-status.com",
+        "status": "pending",
+        "paused": false,
+        "plan": "Free Website",
+        "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"]
+      }
     ]
   },
   "cloudflare.accounts": {
-    "result": [
-      { "id": "cf-northwind", "name": "Northwind" }
-    ]
+    "result": [{ "id": "cf-northwind", "name": "Northwind" }]
   },
   "cloudflare.createZone": {
-    "result": { "id": "zone-northwind-store", "accountId": "acct-northwind", "cloudflareAccountId": "cf-northwind", "name": "northwind.store", "status": "pending", "paused": false, "plan": "Free Website", "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"] }
+    "result": {
+      "id": "zone-northwind-store",
+      "accountId": "acct-northwind",
+      "cloudflareAccountId": "cf-northwind",
+      "name": "northwind.store",
+      "status": "pending",
+      "paused": false,
+      "plan": "Free Website",
+      "nameServers": ["ada.ns.cloudflare.com", "rex.ns.cloudflare.com"]
+    }
   },
   "cloudflare.checkActivation": {
-    "result": { "ok": true, "message": "Asked Cloudflare to look at the name servers again. It can take a few hours after you change them." }
+    "result": {
+      "ok": true,
+      "message": "Asked Cloudflare to look at the name servers again. It can take a few hours after you change them."
+    }
   },
   "cloudflare.records": {
     "result": [
-      { "id": "rec-apex", "type": "A", "name": "northwind.shop", "content": "203.0.113.10", "ttl": 1, "proxied": true, "proxiable": true, "comment": "shop-prod-1", "editable": true },
-      { "id": "rec-www", "type": "CNAME", "name": "www.northwind.shop", "content": "northwind.shop", "ttl": 1, "proxied": true, "proxiable": true, "editable": true },
-      { "id": "rec-api", "type": "A", "name": "api.northwind.shop", "content": "203.0.113.10", "ttl": 1, "proxied": true, "proxiable": true, "editable": true },
-      { "id": "rec-admin", "type": "A", "name": "admin.northwind.shop", "content": "203.0.113.10", "ttl": 1, "proxied": true, "proxiable": true, "comment": "Behind the email code", "editable": true },
-      { "id": "rec-core", "type": "A", "name": "core.northwind.shop", "content": "203.0.113.10", "ttl": 1, "proxied": true, "proxiable": true, "comment": "Runova core", "editable": true },
-      { "id": "rec-staging", "type": "A", "name": "staging.northwind.shop", "content": "198.51.100.24", "ttl": 300, "proxied": false, "proxiable": true, "comment": "DNS only until the new certificate is in", "editable": true },
-      { "id": "rec-ssh", "type": "CNAME", "name": "ssh.northwind.shop", "content": "d3m0-0000-tunnel.cfargotunnel.com", "ttl": 1, "proxied": true, "proxiable": true, "editable": true },
-      { "id": "rec-mx", "type": "MX", "name": "northwind.shop", "content": "route1.mx.cloudflare.net", "ttl": 1, "proxied": false, "proxiable": false, "priority": 10, "editable": true },
-      { "id": "rec-spf", "type": "TXT", "name": "northwind.shop", "content": "v=spf1 include:_spf.mx.cloudflare.net ~all", "ttl": 1, "proxied": false, "proxiable": false, "editable": true },
-      { "id": "rec-dmarc", "type": "TXT", "name": "_dmarc.northwind.shop", "content": "v=DMARC1; p=quarantine; rua=mailto:dmarc@northwind.shop", "ttl": 3600, "proxied": false, "proxiable": false, "editable": true },
-      { "id": "rec-caa", "type": "CAA", "name": "northwind.shop", "content": "0 issue \"letsencrypt.org\"", "ttl": 86400, "proxied": false, "proxiable": false, "caa": { "flags": 0, "tag": "issue", "value": "letsencrypt.org" }, "editable": true }
+      {
+        "id": "rec-apex",
+        "type": "A",
+        "name": "northwind.shop",
+        "content": "203.0.113.10",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "comment": "shop-prod-1",
+        "editable": true
+      },
+      {
+        "id": "rec-www",
+        "type": "CNAME",
+        "name": "www.northwind.shop",
+        "content": "northwind.shop",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "editable": true
+      },
+      {
+        "id": "rec-api",
+        "type": "A",
+        "name": "api.northwind.shop",
+        "content": "203.0.113.10",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "editable": true
+      },
+      {
+        "id": "rec-admin",
+        "type": "A",
+        "name": "admin.northwind.shop",
+        "content": "203.0.113.10",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "comment": "Behind the email code",
+        "editable": true
+      },
+      {
+        "id": "rec-core",
+        "type": "A",
+        "name": "core.northwind.shop",
+        "content": "203.0.113.10",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "comment": "Runova core",
+        "editable": true
+      },
+      {
+        "id": "rec-staging",
+        "type": "A",
+        "name": "staging.northwind.shop",
+        "content": "198.51.100.24",
+        "ttl": 300,
+        "proxied": false,
+        "proxiable": true,
+        "comment": "DNS only until the new certificate is in",
+        "editable": true
+      },
+      {
+        "id": "rec-ssh",
+        "type": "CNAME",
+        "name": "ssh.northwind.shop",
+        "content": "d3m0-0000-tunnel.cfargotunnel.com",
+        "ttl": 1,
+        "proxied": true,
+        "proxiable": true,
+        "editable": true
+      },
+      {
+        "id": "rec-mx",
+        "type": "MX",
+        "name": "northwind.shop",
+        "content": "route1.mx.cloudflare.net",
+        "ttl": 1,
+        "proxied": false,
+        "proxiable": false,
+        "priority": 10,
+        "editable": true
+      },
+      {
+        "id": "rec-spf",
+        "type": "TXT",
+        "name": "northwind.shop",
+        "content": "v=spf1 include:_spf.mx.cloudflare.net ~all",
+        "ttl": 1,
+        "proxied": false,
+        "proxiable": false,
+        "editable": true
+      },
+      {
+        "id": "rec-dmarc",
+        "type": "TXT",
+        "name": "_dmarc.northwind.shop",
+        "content": "v=DMARC1; p=quarantine; rua=mailto:dmarc@northwind.shop",
+        "ttl": 3600,
+        "proxied": false,
+        "proxiable": false,
+        "editable": true
+      },
+      {
+        "id": "rec-caa",
+        "type": "CAA",
+        "name": "northwind.shop",
+        "content": "0 issue \"letsencrypt.org\"",
+        "ttl": 86400,
+        "proxied": false,
+        "proxiable": false,
+        "caa": { "flags": 0, "tag": "issue", "value": "letsencrypt.org" },
+        "editable": true
+      }
     ]
   },
   "cloudflare.createRecord": {
-    "result": { "id": "rec-preview", "type": "A", "name": "preview.northwind.shop", "content": "203.0.113.10", "ttl": 1, "proxied": true, "proxiable": true, "editable": true }
+    "result": {
+      "id": "rec-preview",
+      "type": "A",
+      "name": "preview.northwind.shop",
+      "content": "203.0.113.10",
+      "ttl": 1,
+      "proxied": true,
+      "proxiable": true,
+      "editable": true
+    }
   },
   "cloudflare.updateRecord": {
-    "result": { "id": "rec-staging", "type": "A", "name": "staging.northwind.shop", "content": "198.51.100.24", "ttl": 300, "proxied": false, "proxiable": true, "comment": "DNS only until the new certificate is in", "editable": true }
+    "result": {
+      "id": "rec-staging",
+      "type": "A",
+      "name": "staging.northwind.shop",
+      "content": "198.51.100.24",
+      "ttl": 300,
+      "proxied": false,
+      "proxiable": true,
+      "comment": "DNS only until the new certificate is in",
+      "editable": true
+    }
   },
   "cloudflare.deleteRecord": {
     "result": { "ok": true, "message": "Deleted the record." }
@@ -114,45 +355,160 @@
     "result": { "aiBots": "block", "aiLabyrinth": true, "preferenceSync": false, "fightMode": true }
   },
   "cloudflare.purgeCache": {
-    "result": { "ok": true, "message": "Purged. Cloudflare fetches fresh copies from the server as visitors ask for them." }
+    "result": {
+      "ok": true,
+      "message": "Purged. Cloudflare fetches fresh copies from the server as visitors ask for them."
+    }
   },
   "cloudflare.customRules": {
     "result": [
-      { "id": "rule-countries", "description": "Block countries we don't ship to", "expression": "(ip.src.country in {\"KP\" \"IR\"})", "action": "block", "enabled": true, "lastUpdated": "2026-10-03T14:12:00Z" },
-      { "id": "rule-wp-login", "description": "Challenge /wp-login.php (we don't run WordPress)", "expression": "(http.request.uri.path eq \"/wp-login.php\")", "action": "managed_challenge", "enabled": true, "lastUpdated": "2026-09-18T08:40:00Z" },
-      { "id": "rule-office", "description": "Let the office skip the other rules", "expression": "(ip.src in {203.0.113.0/24})", "action": "skip", "enabled": false, "lastUpdated": "2026-11-12T17:05:00Z" }
+      {
+        "id": "rule-countries",
+        "description": "Block countries we don't ship to",
+        "expression": "(ip.src.country in {\"KP\" \"IR\"})",
+        "action": "block",
+        "enabled": true,
+        "lastUpdated": "2026-10-03T14:12:00Z"
+      },
+      {
+        "id": "rule-wp-login",
+        "description": "Challenge /wp-login.php (we don't run WordPress)",
+        "expression": "(http.request.uri.path eq \"/wp-login.php\")",
+        "action": "managed_challenge",
+        "enabled": true,
+        "lastUpdated": "2026-09-18T08:40:00Z"
+      },
+      {
+        "id": "rule-office",
+        "description": "Let the office skip the other rules",
+        "expression": "(ip.src in {203.0.113.0/24})",
+        "action": "skip",
+        "enabled": false,
+        "lastUpdated": "2026-11-12T17:05:00Z"
+      }
     ]
   },
   "cloudflare.createCustomRule": {
     "result": [
-      { "id": "rule-countries", "description": "Block countries we don't ship to", "expression": "(ip.src.country in {\"KP\" \"IR\"})", "action": "block", "enabled": true, "lastUpdated": "2026-10-03T14:12:00Z" },
-      { "id": "rule-wp-login", "description": "Challenge /wp-login.php (we don't run WordPress)", "expression": "(http.request.uri.path eq \"/wp-login.php\")", "action": "managed_challenge", "enabled": true, "lastUpdated": "2026-09-18T08:40:00Z" },
-      { "id": "rule-office", "description": "Let the office skip the other rules", "expression": "(ip.src in {203.0.113.0/24})", "action": "skip", "enabled": false, "lastUpdated": "2026-11-12T17:05:00Z" }
+      {
+        "id": "rule-countries",
+        "description": "Block countries we don't ship to",
+        "expression": "(ip.src.country in {\"KP\" \"IR\"})",
+        "action": "block",
+        "enabled": true,
+        "lastUpdated": "2026-10-03T14:12:00Z"
+      },
+      {
+        "id": "rule-wp-login",
+        "description": "Challenge /wp-login.php (we don't run WordPress)",
+        "expression": "(http.request.uri.path eq \"/wp-login.php\")",
+        "action": "managed_challenge",
+        "enabled": true,
+        "lastUpdated": "2026-09-18T08:40:00Z"
+      },
+      {
+        "id": "rule-office",
+        "description": "Let the office skip the other rules",
+        "expression": "(ip.src in {203.0.113.0/24})",
+        "action": "skip",
+        "enabled": false,
+        "lastUpdated": "2026-11-12T17:05:00Z"
+      }
     ]
   },
   "cloudflare.setCustomRuleEnabled": {
     "result": [
-      { "id": "rule-countries", "description": "Block countries we don't ship to", "expression": "(ip.src.country in {\"KP\" \"IR\"})", "action": "block", "enabled": true, "lastUpdated": "2026-10-03T14:12:00Z" },
-      { "id": "rule-wp-login", "description": "Challenge /wp-login.php (we don't run WordPress)", "expression": "(http.request.uri.path eq \"/wp-login.php\")", "action": "managed_challenge", "enabled": true, "lastUpdated": "2026-09-18T08:40:00Z" },
-      { "id": "rule-office", "description": "Let the office skip the other rules", "expression": "(ip.src in {203.0.113.0/24})", "action": "skip", "enabled": false, "lastUpdated": "2026-11-12T17:05:00Z" }
+      {
+        "id": "rule-countries",
+        "description": "Block countries we don't ship to",
+        "expression": "(ip.src.country in {\"KP\" \"IR\"})",
+        "action": "block",
+        "enabled": true,
+        "lastUpdated": "2026-10-03T14:12:00Z"
+      },
+      {
+        "id": "rule-wp-login",
+        "description": "Challenge /wp-login.php (we don't run WordPress)",
+        "expression": "(http.request.uri.path eq \"/wp-login.php\")",
+        "action": "managed_challenge",
+        "enabled": true,
+        "lastUpdated": "2026-09-18T08:40:00Z"
+      },
+      {
+        "id": "rule-office",
+        "description": "Let the office skip the other rules",
+        "expression": "(ip.src in {203.0.113.0/24})",
+        "action": "skip",
+        "enabled": false,
+        "lastUpdated": "2026-11-12T17:05:00Z"
+      }
     ]
   },
   "cloudflare.deleteCustomRule": {
     "result": [
-      { "id": "rule-countries", "description": "Block countries we don't ship to", "expression": "(ip.src.country in {\"KP\" \"IR\"})", "action": "block", "enabled": true, "lastUpdated": "2026-10-03T14:12:00Z" },
-      { "id": "rule-wp-login", "description": "Challenge /wp-login.php (we don't run WordPress)", "expression": "(http.request.uri.path eq \"/wp-login.php\")", "action": "managed_challenge", "enabled": true, "lastUpdated": "2026-09-18T08:40:00Z" },
-      { "id": "rule-office", "description": "Let the office skip the other rules", "expression": "(ip.src in {203.0.113.0/24})", "action": "skip", "enabled": false, "lastUpdated": "2026-11-12T17:05:00Z" }
+      {
+        "id": "rule-countries",
+        "description": "Block countries we don't ship to",
+        "expression": "(ip.src.country in {\"KP\" \"IR\"})",
+        "action": "block",
+        "enabled": true,
+        "lastUpdated": "2026-10-03T14:12:00Z"
+      },
+      {
+        "id": "rule-wp-login",
+        "description": "Challenge /wp-login.php (we don't run WordPress)",
+        "expression": "(http.request.uri.path eq \"/wp-login.php\")",
+        "action": "managed_challenge",
+        "enabled": true,
+        "lastUpdated": "2026-09-18T08:40:00Z"
+      },
+      {
+        "id": "rule-office",
+        "description": "Let the office skip the other rules",
+        "expression": "(ip.src in {203.0.113.0/24})",
+        "action": "skip",
+        "enabled": false,
+        "lastUpdated": "2026-11-12T17:05:00Z"
+      }
     ]
   },
   "cloudflare.accessRules": {
     "result": [
-      { "id": "access-office", "mode": "whitelist", "target": "ip_range", "value": "203.0.113.0/24", "notes": "Office", "createdOn": "2026-06-02T09:30:00Z" },
-      { "id": "access-scraper", "mode": "block", "target": "ip", "value": "198.51.100.77", "notes": "Scraper hammering /search", "createdOn": "2026-11-20T21:14:00Z" },
-      { "id": "access-vps", "mode": "managed_challenge", "target": "asn", "value": "AS64500", "notes": "Cheap VPS host, lots of card testing from there", "createdOn": "2026-10-28T11:02:00Z" }
+      {
+        "id": "access-office",
+        "mode": "whitelist",
+        "target": "ip_range",
+        "value": "203.0.113.0/24",
+        "notes": "Office",
+        "createdOn": "2026-06-02T09:30:00Z"
+      },
+      {
+        "id": "access-scraper",
+        "mode": "block",
+        "target": "ip",
+        "value": "198.51.100.77",
+        "notes": "Scraper hammering /search",
+        "createdOn": "2026-11-20T21:14:00Z"
+      },
+      {
+        "id": "access-vps",
+        "mode": "managed_challenge",
+        "target": "asn",
+        "value": "AS64500",
+        "notes": "Cheap VPS host, lots of card testing from there",
+        "createdOn": "2026-10-28T11:02:00Z"
+      }
     ]
   },
   "cloudflare.createAccessRule": {
-    "result": { "id": "access-new", "mode": "block", "target": "ip", "value": "192.0.2.44", "notes": "Added from the phone", "createdOn": "2026-11-22T10:30:00Z" }
+    "result": {
+      "id": "access-new",
+      "mode": "block",
+      "target": "ip",
+      "value": "192.0.2.44",
+      "notes": "Added from the phone",
+      "createdOn": "2026-11-22T10:30:00Z"
+    }
   },
   "cloudflare.deleteAccessRule": {
     "result": { "ok": true, "message": "Deleted the access rule." }
@@ -160,41 +516,151 @@
   "cloudflare.emailGatePlan": {
     "result": {
       "cloudflareAccountId": "cf-northwind",
-      "readiness": { "organization": true, "teamDomain": "northwind.cloudflareaccess.com", "oneTimePin": true },
+      "readiness": {
+        "organization": true,
+        "teamDomain": "northwind.cloudflareaccess.com",
+        "oneTimePin": true
+      },
       "hosts": [
-        { "hostname": "core.northwind.shop", "proxied": true, "recordId": "rec-core", "role": "core", "serverId": "shop-prod-1", "serverName": "shop-prod-1", "siteName": null, "gate": { "kind": "on", "appId": "app-core", "emails": ["ana@northwind.shop", "sam@northwind.shop"], "emailDomains": [], "session": "24h" }, "thisComputerPass": true },
-        { "hostname": "admin.northwind.shop", "proxied": true, "recordId": "rec-admin", "role": "other", "serverId": "shop-prod-1", "serverName": "shop-prod-1", "siteName": null, "gate": { "kind": "on", "appId": "app-admin", "emails": [], "emailDomains": ["northwind.shop"], "session": "168h" }, "thisComputerPass": false },
-        { "hostname": "northwind.shop", "proxied": true, "recordId": "rec-apex", "role": "site", "serverId": "shop-prod-1", "serverName": "shop-prod-1", "siteName": "shop", "gate": { "kind": "off" }, "thisComputerPass": false },
-        { "hostname": "staging.northwind.shop", "proxied": false, "recordId": "rec-staging", "role": "site", "serverId": "staging", "serverName": "staging", "siteName": "staging", "gate": { "kind": "off" }, "thisComputerPass": false },
-        { "hostname": "ssh.northwind.shop", "proxied": true, "recordId": "rec-ssh", "role": "ssh", "serverId": "shop-prod-1", "serverName": "shop-prod-1", "siteName": null, "gate": { "kind": "elsewhere", "appId": "app-ssh", "name": "SSH for shop-prod-1" }, "thisComputerPass": false }
+        {
+          "hostname": "core.northwind.shop",
+          "proxied": true,
+          "recordId": "rec-core",
+          "role": "core",
+          "serverId": "shop-prod-1",
+          "serverName": "shop-prod-1",
+          "siteName": null,
+          "gate": {
+            "kind": "on",
+            "appId": "app-core",
+            "emails": ["ana@northwind.shop", "sam@northwind.shop"],
+            "emailDomains": [],
+            "session": "24h"
+          },
+          "thisComputerPass": true
+        },
+        {
+          "hostname": "admin.northwind.shop",
+          "proxied": true,
+          "recordId": "rec-admin",
+          "role": "other",
+          "serverId": "shop-prod-1",
+          "serverName": "shop-prod-1",
+          "siteName": null,
+          "gate": {
+            "kind": "on",
+            "appId": "app-admin",
+            "emails": [],
+            "emailDomains": ["northwind.shop"],
+            "session": "168h"
+          },
+          "thisComputerPass": false
+        },
+        {
+          "hostname": "northwind.shop",
+          "proxied": true,
+          "recordId": "rec-apex",
+          "role": "site",
+          "serverId": "shop-prod-1",
+          "serverName": "shop-prod-1",
+          "siteName": "shop",
+          "gate": { "kind": "off" },
+          "thisComputerPass": false
+        },
+        {
+          "hostname": "staging.northwind.shop",
+          "proxied": false,
+          "recordId": "rec-staging",
+          "role": "site",
+          "serverId": "staging",
+          "serverName": "staging",
+          "siteName": "staging",
+          "gate": { "kind": "off" },
+          "thisComputerPass": false
+        },
+        {
+          "hostname": "ssh.northwind.shop",
+          "proxied": true,
+          "recordId": "rec-ssh",
+          "role": "ssh",
+          "serverId": "shop-prod-1",
+          "serverName": "shop-prod-1",
+          "siteName": null,
+          "gate": { "kind": "elsewhere", "appId": "app-ssh", "name": "SSH for shop-prod-1" },
+          "thisComputerPass": false
+        }
       ]
     }
   },
   "cloudflare.emailGatePrepare": {
-    "result": { "organization": true, "teamDomain": "northwind.cloudflareaccess.com", "oneTimePin": true }
+    "result": {
+      "organization": true,
+      "teamDomain": "northwind.cloudflareaccess.com",
+      "oneTimePin": true
+    }
   },
   "cloudflare.emailGateSave": {
-    "result": { "kind": "on", "appId": "app-admin", "emails": [], "emailDomains": ["northwind.shop"], "session": "24h" }
+    "result": {
+      "kind": "on",
+      "appId": "app-admin",
+      "emails": [],
+      "emailDomains": ["northwind.shop"],
+      "session": "24h"
+    }
   },
   "cloudflare.emailGateRemove": {
     "result": { "ok": true, "message": "The email code is off. Anyone can open it again." }
   },
   "cloudflare.emailGateProxy": {
-    "result": { "ok": true, "message": "It goes through Cloudflare's proxy now, so it can have an email code." }
+    "result": {
+      "ok": true,
+      "message": "It goes through Cloudflare's proxy now, so it can have an email code."
+    }
   },
   "cloudflare.emailGateLetThrough": {
-    "result": { "ok": true, "message": "This computer has its own pass now and gets through without a code." }
+    "result": {
+      "ok": true,
+      "message": "This computer has its own pass now and gets through without a code."
+    }
   },
   "cloudflare.ipLimits": {
     "result": [
-      { "id": "limit-admin", "enabled": true, "hostname": "northwind.shop", "path": "/admin", "match": "prefix", "ips": ["203.0.113.0/24", "198.51.100.42"] },
-      { "id": "limit-metrics", "enabled": false, "hostname": "api.northwind.shop", "path": "/metrics", "match": "exact", "ips": ["203.0.113.0/24"] }
+      {
+        "id": "limit-admin",
+        "enabled": true,
+        "hostname": "northwind.shop",
+        "path": "/admin",
+        "match": "prefix",
+        "ips": ["203.0.113.0/24", "198.51.100.42"]
+      },
+      {
+        "id": "limit-metrics",
+        "enabled": false,
+        "hostname": "api.northwind.shop",
+        "path": "/metrics",
+        "match": "exact",
+        "ips": ["203.0.113.0/24"]
+      }
     ]
   },
   "cloudflare.saveIpLimit": {
     "result": [
-      { "id": "limit-admin", "enabled": true, "hostname": "northwind.shop", "path": "/admin", "match": "prefix", "ips": ["203.0.113.0/24", "198.51.100.42"] },
-      { "id": "limit-metrics", "enabled": false, "hostname": "api.northwind.shop", "path": "/metrics", "match": "exact", "ips": ["203.0.113.0/24"] }
+      {
+        "id": "limit-admin",
+        "enabled": true,
+        "hostname": "northwind.shop",
+        "path": "/admin",
+        "match": "prefix",
+        "ips": ["203.0.113.0/24", "198.51.100.42"]
+      },
+      {
+        "id": "limit-metrics",
+        "enabled": false,
+        "hostname": "api.northwind.shop",
+        "path": "/metrics",
+        "match": "exact",
+        "ips": ["203.0.113.0/24"]
+      }
     ]
   },
   "cloudflare.publicAddress": {
@@ -202,18 +668,62 @@
   },
   "cloudflare.turnstileWidgets": {
     "result": [
-      { "sitekey": "0x4AAAAAAADemoCheckout01", "name": "Checkout", "domains": ["northwind.shop"], "mode": "managed", "clearance": "no_clearance", "region": "world", "offlabel": false, "ephemeralId": false, "createdOn": "2026-08-14T10:00:00Z", "modifiedOn": "2026-10-02T16:20:00Z" },
-      { "sitekey": "0x4AAAAAAADemoNewsletter1", "name": "Newsletter signup", "domains": ["northwind.shop", "northwind.dev"], "mode": "invisible", "clearance": "jschallenge", "region": "world", "offlabel": false, "ephemeralId": false, "createdOn": "2026-09-30T12:45:00Z", "modifiedOn": "2026-09-30T12:45:00Z" }
+      {
+        "sitekey": "0x4AAAAAAADemoCheckout01",
+        "name": "Checkout",
+        "domains": ["northwind.shop"],
+        "mode": "managed",
+        "clearance": "no_clearance",
+        "region": "world",
+        "offlabel": false,
+        "ephemeralId": false,
+        "createdOn": "2026-08-14T10:00:00Z",
+        "modifiedOn": "2026-10-02T16:20:00Z"
+      },
+      {
+        "sitekey": "0x4AAAAAAADemoNewsletter1",
+        "name": "Newsletter signup",
+        "domains": ["northwind.shop", "northwind.dev"],
+        "mode": "invisible",
+        "clearance": "jschallenge",
+        "region": "world",
+        "offlabel": false,
+        "ephemeralId": false,
+        "createdOn": "2026-09-30T12:45:00Z",
+        "modifiedOn": "2026-09-30T12:45:00Z"
+      }
     ]
   },
   "cloudflare.createTurnstileWidget": {
     "result": {
-      "widget": { "sitekey": "0x4AAAAAAADemoContact001", "name": "Contact form", "domains": ["northwind.shop"], "mode": "managed", "clearance": "no_clearance", "region": "world", "offlabel": false, "ephemeralId": false, "createdOn": "2026-11-22T10:30:00Z", "modifiedOn": "2026-11-22T10:30:00Z" },
+      "widget": {
+        "sitekey": "0x4AAAAAAADemoContact001",
+        "name": "Contact form",
+        "domains": ["northwind.shop"],
+        "mode": "managed",
+        "clearance": "no_clearance",
+        "region": "world",
+        "offlabel": false,
+        "ephemeralId": false,
+        "createdOn": "2026-11-22T10:30:00Z",
+        "modifiedOn": "2026-11-22T10:30:00Z"
+      },
       "secret": "0x4AAAAAAADemoNotARealSecretContact"
     }
   },
   "cloudflare.updateTurnstileWidget": {
-    "result": { "sitekey": "0x4AAAAAAADemoCheckout01", "name": "Checkout", "domains": ["northwind.shop"], "mode": "managed", "clearance": "no_clearance", "region": "world", "offlabel": false, "ephemeralId": false, "createdOn": "2026-08-14T10:00:00Z", "modifiedOn": "2026-11-22T10:30:00Z" }
+    "result": {
+      "sitekey": "0x4AAAAAAADemoCheckout01",
+      "name": "Checkout",
+      "domains": ["northwind.shop"],
+      "mode": "managed",
+      "clearance": "no_clearance",
+      "region": "world",
+      "offlabel": false,
+      "ephemeralId": false,
+      "createdOn": "2026-08-14T10:00:00Z",
+      "modifiedOn": "2026-11-22T10:30:00Z"
+    }
   },
   "cloudflare.deleteTurnstileWidget": {
     "result": { "ok": true, "message": "Deleted the widget." }
@@ -223,7 +733,18 @@
   },
   "cloudflare.rotateTurnstileSecret": {
     "result": {
-      "widget": { "sitekey": "0x4AAAAAAADemoCheckout01", "name": "Checkout", "domains": ["northwind.shop"], "mode": "managed", "clearance": "no_clearance", "region": "world", "offlabel": false, "ephemeralId": false, "createdOn": "2026-08-14T10:00:00Z", "modifiedOn": "2026-11-22T10:30:00Z" }
+      "widget": {
+        "sitekey": "0x4AAAAAAADemoCheckout01",
+        "name": "Checkout",
+        "domains": ["northwind.shop"],
+        "mode": "managed",
+        "clearance": "no_clearance",
+        "region": "world",
+        "offlabel": false,
+        "ephemeralId": false,
+        "createdOn": "2026-08-14T10:00:00Z",
+        "modifiedOn": "2026-11-22T10:30:00Z"
+      }
     }
   },
   "cloudflare.servers": {
@@ -239,7 +760,10 @@
     ]
   },
   "cloudflare.provisionDnsToken": {
-    "result": { "ok": true, "message": "The server has a DNS token now, so its wildcard certificates renew by themselves." }
+    "result": {
+      "ok": true,
+      "message": "The server has a DNS token now, so its wildcard certificates renew by themselves."
+    }
   },
   "cloudflare.removeDnsToken": {
     "result": { "ok": true, "message": "The server no longer holds a DNS token for this domain." }
@@ -250,7 +774,13 @@
       "names": ["beta.northwind.shop"],
       "addresses": { "ipv4": ["203.0.113.10"], "ipv6": [] },
       "changes": [
-        { "action": "create", "type": "A", "name": "beta.northwind.shop", "content": "203.0.113.10", "proxied": true }
+        {
+          "action": "create",
+          "type": "A",
+          "name": "beta.northwind.shop",
+          "content": "203.0.113.10",
+          "proxied": true
+        }
       ],
       "upToDate": false
     }
@@ -262,7 +792,13 @@
         "names": ["beta.northwind.shop"],
         "addresses": { "ipv4": ["203.0.113.10"], "ipv6": [] },
         "changes": [
-          { "action": "create", "type": "A", "name": "beta.northwind.shop", "content": "203.0.113.10", "proxied": true }
+          {
+            "action": "create",
+            "type": "A",
+            "name": "beta.northwind.shop",
+            "content": "203.0.113.10",
+            "proxied": true
+          }
         ],
         "upToDate": false
       },
@@ -274,16 +810,33 @@
       "role": "owner",
       "signedIn": true,
       "lock": {
-        "enabled": false, "authenticatedOriginPulls": false, "state": "off",
-        "missingRules": [], "openRules": [], "staleRules": [], "warnings": [],
-        "ipv4Ranges": 15, "ipv6Ranges": 7, "rangesFetchedAt": 1795320000000, "lastRefreshError": null
+        "enabled": false,
+        "authenticatedOriginPulls": false,
+        "state": "off",
+        "missingRules": [],
+        "openRules": [],
+        "staleRules": [],
+        "warnings": [],
+        "ipv4Ranges": 15,
+        "ipv6Ranges": 7,
+        "rangesFetchedAt": 1795320000000,
+        "lastRefreshError": null
       },
       "lockProblem": null,
       "tunnel": {
-        "enabled": true, "state": "connected", "sshMode": "cloudflare", "connections": 4,
-        "tunnelName": "shop-prod-1", "sshHostname": "ssh.northwind.shop", "meshAddress": null,
-        "cloudflaredVersion": "2026.11.0", "openRules": [], "warnings": [], "lastError": null,
-        "breakGlassEnabled": true, "breakGlassDelayMinutes": 30
+        "enabled": true,
+        "state": "connected",
+        "sshMode": "cloudflare",
+        "connections": 4,
+        "tunnelName": "shop-prod-1",
+        "sshHostname": "ssh.northwind.shop",
+        "meshAddress": null,
+        "cloudflaredVersion": "2026.11.0",
+        "openRules": [],
+        "warnings": [],
+        "lastError": null,
+        "breakGlassEnabled": true,
+        "breakGlassDelayMinutes": 30
       },
       "tunnelProblem": null,
       "pending": null
@@ -294,7 +847,11 @@
       "domains": [
         { "domain": "northwind.shop", "text": "Proxied through Cloudflare", "ok": true },
         { "domain": "api.northwind.shop", "text": "Proxied through Cloudflare", "ok": true },
-        { "domain": "staging.northwind.shop", "text": "DNS only: visitors would no longer reach it", "ok": false }
+        {
+          "domain": "staging.northwind.shop",
+          "text": "DNS only: visitors would no longer reach it",
+          "ok": false
+        }
       ],
       "commands": [
         "ufw allow from 173.245.48.0/20 to any port 80,443 proto tcp",
@@ -307,7 +864,11 @@
     }
   },
   "cloudflare.originLockApply": {
-    "result": { "ok": true, "message": "Applied. Keep the firewall change within 5 minutes, or it rolls back by itself.", "changeSetId": "change-demo-1" }
+    "result": {
+      "ok": true,
+      "message": "Applied. Keep the firewall change within 5 minutes, or it rolls back by itself.",
+      "changeSetId": "change-demo-1"
+    }
   },
   "cloudflare.firewallKeep": {
     "result": { "ok": true, "message": "Kept the firewall change." }
@@ -319,10 +880,34 @@
     "result": {
       "accounts": [{ "id": "cf-northwind", "label": "Northwind" }],
       "domains": [
-        { "domain": "northwind.shop", "role": "site", "cloudflareAccountId": "cf-northwind", "routed": true, "inAccount": true },
-        { "domain": "api.northwind.shop", "role": "site", "cloudflareAccountId": "cf-northwind", "routed": true, "inAccount": true },
-        { "domain": "core.northwind.shop", "role": "core", "cloudflareAccountId": "cf-northwind", "routed": true, "inAccount": true },
-        { "domain": "ssh.northwind.shop", "role": "ssh", "cloudflareAccountId": "cf-northwind", "routed": true, "inAccount": true }
+        {
+          "domain": "northwind.shop",
+          "role": "site",
+          "cloudflareAccountId": "cf-northwind",
+          "routed": true,
+          "inAccount": true
+        },
+        {
+          "domain": "api.northwind.shop",
+          "role": "site",
+          "cloudflareAccountId": "cf-northwind",
+          "routed": true,
+          "inAccount": true
+        },
+        {
+          "domain": "core.northwind.shop",
+          "role": "core",
+          "cloudflareAccountId": "cf-northwind",
+          "routed": true,
+          "inAccount": true
+        },
+        {
+          "domain": "ssh.northwind.shop",
+          "role": "ssh",
+          "cloudflareAccountId": "cf-northwind",
+          "routed": true,
+          "inAccount": true
+        }
       ],
       "coreDirect": null,
       "commands": [],
@@ -333,13 +918,23 @@
     }
   },
   "cloudflare.tunnelSetUp": {
-    "result": { "ok": true, "message": "Setting up the tunnel: installing cloudflared and connecting." }
+    "result": {
+      "ok": true,
+      "message": "Setting up the tunnel: installing cloudflared and connecting."
+    }
   },
   "cloudflare.tunnelRoute": {
-    "result": { "routed": ["northwind.shop", "api.northwind.shop", "core.northwind.shop"], "skipped": [] }
+    "result": {
+      "routed": ["northwind.shop", "api.northwind.shop", "core.northwind.shop"],
+      "skipped": []
+    }
   },
   "cloudflare.tunnelClosePorts": {
-    "result": { "ok": true, "message": "Ports 80 and 443 are closed. Keep the firewall change within 5 minutes, or it rolls back by itself.", "changeSetId": "change-demo-2" }
+    "result": {
+      "ok": true,
+      "message": "Ports 80 and 443 are closed. Keep the firewall change within 5 minutes, or it rolls back by itself.",
+      "changeSetId": "change-demo-2"
+    }
   },
   "cloudflare.tunnelPreviewSsh": {
     "result": {
@@ -354,10 +949,17 @@
     "result": { "ok": true, "message": "SSH answered through the tunnel in 0.4 s." }
   },
   "cloudflare.tunnelJoinMesh": {
-    "result": { "ok": true, "message": "Joining Cloudflare Mesh. Its address shows up here in a minute." }
+    "result": {
+      "ok": true,
+      "message": "Joining Cloudflare Mesh. Its address shows up here in a minute."
+    }
   },
   "cloudflare.tunnelApplySsh": {
-    "result": { "ok": true, "message": "Applied. Keep the firewall change within 5 minutes, or it rolls back by itself.", "changeSetId": "change-demo-3" }
+    "result": {
+      "ok": true,
+      "message": "Applied. Keep the firewall change within 5 minutes, or it rolls back by itself.",
+      "changeSetId": "change-demo-3"
+    }
   },
   "cloudflare.tunnelPreviewOff": {
     "result": {
@@ -368,7 +970,11 @@
     }
   },
   "cloudflare.tunnelTurnOff": {
-    "result": { "ok": true, "message": "Turning the tunnel off. Keep the firewall change within 5 minutes, or it rolls back by itself.", "changeSetId": "change-demo-4" }
+    "result": {
+      "ok": true,
+      "message": "Turning the tunnel off. Keep the firewall change within 5 minutes, or it rolls back by itself.",
+      "changeSetId": "change-demo-4"
+    }
   },
   "cloudflare.tunnelCleanUp": {
     "result": { "ok": true, "message": "The tunnel is off and removed at Cloudflare." }

@@ -16,7 +16,14 @@
         "hasTotp": true,
         "hasSecret": false,
         "hasNotes": false,
-        "fields": [{ "id": "demo-github-codes", "label": "Recovery codes", "concealed": true, "hasValue": true }]
+        "fields": [
+          {
+            "id": "demo-github-codes",
+            "label": "Recovery codes",
+            "concealed": true,
+            "hasValue": true
+          }
+        ]
       },
       {
         "id": "demo-stripe",
@@ -30,7 +37,14 @@
         "hasTotp": false,
         "hasSecret": true,
         "hasNotes": false,
-        "fields": [{ "id": "demo-stripe-webhook", "label": "Webhook signing secret", "concealed": true, "hasValue": true }]
+        "fields": [
+          {
+            "id": "demo-stripe-webhook",
+            "label": "Webhook signing secret",
+            "concealed": true,
+            "hasValue": true
+          }
+        ]
       },
       {
         "id": "demo-db-staging",
@@ -100,7 +114,14 @@
         "hasTotp": false,
         "hasSecret": false,
         "hasNotes": true,
-        "fields": [{ "id": "demo-ssh-passphrase", "label": "Key passphrase", "concealed": true, "hasValue": true }]
+        "fields": [
+          {
+            "id": "demo-ssh-passphrase",
+            "label": "Key passphrase",
+            "concealed": true,
+            "hasValue": true
+          }
+        ]
       },
       {
         "id": "demo-wifi",
