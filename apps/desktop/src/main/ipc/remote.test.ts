@@ -17,6 +17,8 @@ const manager = vi.hoisted(() => ({
   listSavedServers: vi.fn(() => [{ id: 'srv-1' }]),
   renameSavedServer: vi.fn(),
   removeSavedServer: vi.fn(),
+  listPairedDevices: vi.fn(() => [{ id: 'dev-1', deviceName: 'Phone' }]),
+  revokePairedDevice: vi.fn(),
   openSessionWindow: vi.fn(),
   sendClipboard: vi.fn(),
   sendFile: vi.fn(),
@@ -50,6 +52,7 @@ const code = encodePairingCode({
   port: 7900,
   token: 't',
   deviceName: 'Desk',
+  hostKey: 'host-key',
 });
 
 beforeEach(async () => {
@@ -108,6 +111,17 @@ describe('remote handlers signed out', () => {
   it('lists no saved computers', async () => {
     await expect(invoke(IPC.remote.listSavedServers)).resolves.toEqual([]);
     expect(manager.listSavedServers).not.toHaveBeenCalled();
+  });
+
+  it('still lists paired devices and revokes one, so access can always be taken away', async () => {
+    await expect(invoke(IPC.remote.listPairedDevices)).resolves.toEqual([
+      { id: 'dev-1', deviceName: 'Phone' },
+    ]);
+    await invoke(IPC.remote.revokePairedDevice, 'dev-1');
+    await invoke(IPC.remote.revokePairedDevice, { not: 'an id' });
+
+    expect(manager.revokePairedDevice).toHaveBeenCalledOnce();
+    expect(manager.revokePairedDevice).toHaveBeenCalledWith('dev-1');
   });
 
   it('still lets hosting be stopped and the state be read', async () => {

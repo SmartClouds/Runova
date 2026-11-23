@@ -348,6 +348,31 @@ describe('RemotePage hosting', () => {
   });
 });
 
+describe('RemotePage paired devices', () => {
+  it('lists the devices that paired here and revokes one after confirming', async () => {
+    const { user, bridge } = renderWithProviders(<RemotePage />, {
+      route: '/remote?tab=host',
+      bridge: {
+        ...SIGNED_IN,
+        'remote.listPairedDevices': [
+          { id: 'dev-1', deviceName: 'Pixel 8', createdAt: Date.now(), lastSeenAt: Date.now() },
+        ],
+      },
+    });
+
+    const row = (await screen.findByText('Pixel 8')).closest('li');
+    if (!row) throw new Error('The paired device has no row');
+    await user.click(within(row).getByRole('button', { name: 'Revoke Pixel 8' }));
+
+    await waitFor(() =>
+      expect(bridge.$fn('remote.revokePairedDevice')).toHaveBeenCalledWith('dev-1'),
+    );
+    expect(confirm.confirmDialog).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Remove "Pixel 8"?', variant: 'destructive' }),
+    );
+  });
+});
+
 describe('RemotePage saved servers', () => {
   it('forgets a paired device after confirming', async () => {
     const { user, bridge } = renderWithProviders(<RemotePage />, {

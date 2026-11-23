@@ -100,6 +100,7 @@ export function bridgeDefaults(): Record<string, unknown> {
     'ssh.listServers': [],
     'ssh.vaultStatus': { hasPasskey: false, unlocked: false },
     'remote.listSavedServers': [],
+    'remote.listPairedDevices': [],
     'skills.listRepositories': [],
     'skills.checkForUpdates': [],
     'mcp.listRepositories': [],

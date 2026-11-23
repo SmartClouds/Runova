@@ -432,6 +432,7 @@ describe('pairing codes', () => {
     port: 41234,
     token: 'one-time-token-abc',
     deviceName: "Amin's PC",
+    hostKey: 'm9QX1d3w0rU8nYH9hQh2kq4p2s0d1Zt8VZ3eXgq7cJQ',
     v: 4,
   };
 
@@ -462,15 +463,16 @@ describe('pairing codes', () => {
     expect(decodePairingCode(body)).toEqual(payload);
   });
 
-  it('defaults a missing version to 1', () => {
-    // Codes minted before `v` existed have to stay pairable.
+  it('refuses a code without a host key', () => {
+    // Codes minted before the LAN link was encrypted carry no key to check the host against, and
+    // dialing one would send the token to whoever answers.
     const legacy = `RUNOVA1:${bytesToBase64(
-      asciiBytes(JSON.stringify({ ip: '10.0.0.5', port: 1, token: 't', deviceName: 'old' })),
+      asciiBytes(JSON.stringify({ ip: '10.0.0.5', port: 1, token: 't', deviceName: 'old', v: 4 })),
     )
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')}`;
-    expect(decodePairingCode(legacy)?.v).toBe(1);
+    expect(decodePairingCode(legacy)).toBeNull();
   });
 
   it('returns null for a tampered code instead of throwing', () => {
@@ -488,12 +490,14 @@ describe('pairing codes', () => {
     // A hand-edited or partially-built code must not produce a payload the
     // controller then dials with `undefined` as the host.
     const broken: Record<string, unknown>[] = [
-      { port: 1, token: 't', deviceName: 'd' },
-      { ip: '10.0.0.1', token: 't', deviceName: 'd' },
-      { ip: '10.0.0.1', port: 1, deviceName: 'd' },
-      { ip: '10.0.0.1', port: 1, token: 't' },
-      { ip: '10.0.0.1', port: '1', token: 't', deviceName: 'd' },
-      { ip: 42, port: 1, token: 't', deviceName: 'd' },
+      { port: 1, token: 't', deviceName: 'd', hostKey: 'k' },
+      { ip: '10.0.0.1', token: 't', deviceName: 'd', hostKey: 'k' },
+      { ip: '10.0.0.1', port: 1, deviceName: 'd', hostKey: 'k' },
+      { ip: '10.0.0.1', port: 1, token: 't', hostKey: 'k' },
+      { ip: '10.0.0.1', port: '1', token: 't', deviceName: 'd', hostKey: 'k' },
+      { ip: 42, port: 1, token: 't', deviceName: 'd', hostKey: 'k' },
+      { ip: '10.0.0.1', port: 1, token: 't', deviceName: 'd', hostKey: '' },
+      { ip: '10.0.0.1', port: 1, token: 't', deviceName: 'd', hostKey: 7 },
     ];
     for (const value of broken) {
       const body = bytesToBase64(asciiBytes(JSON.stringify(value)))

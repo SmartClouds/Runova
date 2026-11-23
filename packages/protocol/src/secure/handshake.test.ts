@@ -40,7 +40,7 @@ interface RunOptions {
   hostPrs?: Uint8Array;
   controllerPrs?: Uint8Array;
   expectedHostKey?: Uint8Array;
-  expectedControllerKey?: Uint8Array;
+  expectedControllerKey?: Uint8Array | null;
   hostIdentity?: IdentityKeyPair;
   controllerIdentity?: IdentityKeyPair;
   hostSeesRemoteFingerprint?: string;
@@ -65,7 +65,10 @@ function run(options: RunOptions = {}) {
     sessionId: SESSION,
     mode,
     identity: options.hostIdentity ?? host,
-    expectedControllerKey: options.expectedControllerKey ?? controller.publicKey,
+    expectedControllerKey:
+      options.expectedControllerKey === undefined
+        ? controller.publicKey
+        : options.expectedControllerKey,
     ...(options.hostPrs ? { passwordSecret: options.hostPrs } : {}),
     localFingerprint: FP_HOST,
     remoteFingerprint: options.hostSeesRemoteFingerprint ?? FP_CONTROLLER,
@@ -149,6 +152,22 @@ describe('anywhere handshake', { timeout: 60_000 }, () => {
 
   it('refuses a controller that is not the one the server announced', () => {
     expect(reasonOf(() => run({ controllerIdentity: stranger }))).toBe('identity');
+  });
+
+  it('takes any controller key when the host checks the controller some other way', () => {
+    const { controllerKeys, hostKeys } = run({
+      controllerIdentity: stranger,
+      expectedControllerKey: null,
+    });
+
+    expect(hostKeys.receive).toEqual(controllerKeys.send);
+    expect(hostKeys.safetyCode).toBe(controllerKeys.safetyCode);
+  });
+
+  it('still checks the host key when any controller key is taken', () => {
+    expect(reasonOf(() => run({ hostIdentity: stranger, expectedControllerKey: null }))).toBe(
+      'identity',
+    );
   });
 
   it('notices a swapped DTLS fingerprint, so the signaling server can not sit in the middle', () => {

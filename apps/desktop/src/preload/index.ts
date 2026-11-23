@@ -292,6 +292,7 @@ import type {
   RemoteFileProgress,
   RemoteLogEvent,
   RemoteNetworkInterface,
+  RemotePairedDevice,
   RemotePairingInfo,
   RemoteSavedServer,
   RemoteScreenSize,
@@ -2751,6 +2752,10 @@ const remote = {
     ipcRenderer.invoke(IPC.remote.renameSavedServer, id, nickname),
   removeSavedServer: (id: string): Promise<void> =>
     ipcRenderer.invoke(IPC.remote.removeSavedServer, id),
+  listPairedDevices: (): Promise<RemotePairedDevice[]> =>
+    ipcRenderer.invoke(IPC.remote.listPairedDevices),
+  revokePairedDevice: (id: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.remote.revokePairedDevice, id),
   openSessionWindow: (): Promise<void> => ipcRenderer.invoke(IPC.remote.openSessionWindow),
   sendClipboard: (): Promise<void> => ipcRenderer.invoke(IPC.remote.sendClipboard),
   sendFile: (): Promise<void> => ipcRenderer.invoke(IPC.remote.sendFile),

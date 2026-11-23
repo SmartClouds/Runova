@@ -381,6 +381,11 @@ export interface PairingPayload {
   token: string;
   /** Friendly host name shown to the operator before connecting. */
   deviceName: string;
+  /**
+   * The host's LAN identity key (Ed25519, base64url). The controller pins it and checks it in the
+   * secure handshake, so no token is sent until the host has proven it holds the matching key.
+   */
+  hostKey: string;
   v: number;
 }
 
@@ -397,13 +402,16 @@ export function decodePairingCode(code: string): PairingPayload | null {
       typeof parsed.ip === 'string' &&
       typeof parsed.port === 'number' &&
       typeof parsed.token === 'string' &&
-      typeof parsed.deviceName === 'string'
+      typeof parsed.deviceName === 'string' &&
+      typeof parsed.hostKey === 'string' &&
+      parsed.hostKey.length > 0
     ) {
       return {
         ip: parsed.ip,
         port: parsed.port,
         token: parsed.token,
         deviceName: parsed.deviceName,
+        hostKey: parsed.hostKey,
         v: parsed.v ?? 1,
       };
     }

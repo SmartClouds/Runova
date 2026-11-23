@@ -1,9 +1,11 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { b64u } from '@runova/protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { setElectronPath } from '../../test/main/electronMock';
+import { electronState, setElectronPath } from '../../test/main/electronMock';
 import { tempDir } from '../../test/main/fixtures';
-import { type PairedDevice, TokenStore } from './tokens';
+import { DEVICE_TOKEN_IDLE_MS, type PairedDevice, TokenStore } from './tokens';
 
 /**
  * These tokens are the only thing between a phone on the same network and full control of the
@@ -27,6 +29,10 @@ function storeFile(): string {
 
 function readStoreFile(): PairedDevice[] {
   return JSON.parse(readFileSync(storeFile(), 'utf-8')) as PairedDevice[];
+}
+
+function sha256(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
 }
 
 describe('pairing tokens', () => {
@@ -91,7 +97,7 @@ describe('pairing tokens', () => {
   it('drops pending codes on clear but leaves paired devices alone', () => {
     const tokens = new TokenStore();
     const pairing = tokens.issue().token;
-    const device = tokens.issueDeviceToken('Pixel');
+    const device = tokens.issueDeviceToken('Pixel').token;
     tokens.clear();
     expect(tokens.consume(pairing)).toBe(false);
     expect(tokens.validateDeviceToken(device)?.deviceName).toBe('Pixel');
@@ -101,7 +107,7 @@ describe('pairing tokens', () => {
 describe('device tokens', () => {
   it('mints a durable token and validates it without consuming it', () => {
     const tokens = new TokenStore();
-    const token = tokens.issueDeviceToken('Pixel 8');
+    const { token } = tokens.issueDeviceToken('Pixel 8');
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(tokens.validateDeviceToken(token)?.deviceName).toBe('Pixel 8');
     expect(tokens.validateDeviceToken(token)?.deviceName).toBe('Pixel 8');
@@ -115,7 +121,7 @@ describe('device tokens', () => {
   });
 
   it('survives a restart, so a paired phone reconnects without a new code', () => {
-    const token = new TokenStore().issueDeviceToken('iPad');
+    const { token } = new TokenStore().issueDeviceToken('iPad');
     // A brand new instance stands in for the next app launch: nothing in memory, only the file.
     const reloaded = new TokenStore();
     expect(reloaded.listDevices()).toHaveLength(1);
@@ -124,26 +130,48 @@ describe('device tokens', () => {
 
   it('keeps several devices side by side', () => {
     const tokens = new TokenStore();
-    const phone = tokens.issueDeviceToken('Phone');
-    const tablet = tokens.issueDeviceToken('Tablet');
+    const phone = tokens.issueDeviceToken('Phone').token;
+    const tablet = tokens.issueDeviceToken('Tablet').token;
     expect(new TokenStore().listDevices().map((d) => d.deviceName)).toEqual(['Phone', 'Tablet']);
     expect(tokens.validateDeviceToken(phone)).not.toBeNull();
     expect(tokens.validateDeviceToken(tablet)).not.toBeNull();
   });
 
-  it('refreshes last seen and the name the controller reports', () => {
+  it('refreshes last seen but keeps the name the device paired with', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     const tokens = new TokenStore();
-    const token = tokens.issueDeviceToken('Old name');
+    const { token } = tokens.issueDeviceToken('Old name');
     const createdAt = tokens.listDevices()[0].createdAt;
 
     vi.advanceTimersByTime(90_000);
-    const device = tokens.validateDeviceToken(token, 'New name');
-    expect(device?.deviceName).toBe('New name');
+    const device = tokens.validateDeviceToken(token);
+    expect(device?.deviceName).toBe('Old name');
     expect(device?.createdAt).toBe(createdAt);
     expect(device?.lastSeenAt).toBe(createdAt + 90_000);
-    expect(readStoreFile()[0].deviceName).toBe('New name');
+    expect(readStoreFile()[0].deviceName).toBe('Old name');
+  });
+
+  it('stops accepting a token left unused for too long, and forgets the device', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    const tokens = new TokenStore();
+    const { token } = tokens.issueDeviceToken('Old phone');
+
+    vi.advanceTimersByTime(DEVICE_TOKEN_IDLE_MS - 1000);
+    expect(tokens.validateDeviceToken(token)).not.toBeNull();
+
+    // Using it restarted the clock; now leave it alone for longer than the limit.
+    vi.advanceTimersByTime(DEVICE_TOKEN_IDLE_MS + 1);
+    expect(tokens.validateDeviceToken(token)).toBeNull();
+    expect(tokens.listDevices()).toEqual([]);
+    expect(readStoreFile()).toEqual([]);
+  });
+
+  it('never writes the token itself to disk', () => {
+    const { token } = new TokenStore().issueDeviceToken('Phone');
+    expect(readFileSync(storeFile(), 'utf-8')).not.toContain(token);
+    expect(readStoreFile()[0].tokenHash).toBe(sha256(token));
   });
 
   it('hands out a copy of the list, so a caller cannot edit the store', () => {
@@ -155,8 +183,8 @@ describe('device tokens', () => {
 
   it('revokes a device and keeps it revoked after a restart', () => {
     const tokens = new TokenStore();
-    const doomed = tokens.issueDeviceToken('Lost phone');
-    const kept = tokens.issueDeviceToken('Laptop');
+    const doomed = tokens.issueDeviceToken('Lost phone').token;
+    const kept = tokens.issueDeviceToken('Laptop').token;
     tokens.revokeDeviceToken(doomed);
 
     expect(tokens.validateDeviceToken(doomed)).toBeNull();
@@ -167,10 +195,22 @@ describe('device tokens', () => {
 
   it('does nothing when revoking a token it never issued', () => {
     const tokens = new TokenStore();
-    const token = tokens.issueDeviceToken('Phone');
+    const { token } = tokens.issueDeviceToken('Phone');
     tokens.revokeDeviceToken('some-other-token');
     expect(tokens.listDevices()).toHaveLength(1);
     expect(tokens.validateDeviceToken(token)).not.toBeNull();
+  });
+
+  it('revokes a device by the id the settings screen shows', () => {
+    const tokens = new TokenStore();
+    const doomed = tokens.issueDeviceToken('Lost phone');
+    const kept = tokens.issueDeviceToken('Laptop');
+
+    expect(tokens.revokeDevice(doomed.id)).toBe(true);
+    expect(tokens.revokeDevice(doomed.id)).toBe(false);
+    expect(tokens.validateDeviceToken(doomed.token)).toBeNull();
+    expect(tokens.validateDeviceToken(kept.token)).not.toBeNull();
+    expect(new TokenStore().listDevices().map((d) => d.id)).toEqual([kept.id]);
   });
 });
 
@@ -193,26 +233,95 @@ describe('the devices file on disk', () => {
   });
 
   it('keeps only the entries that look like devices', () => {
+    const now = Date.now();
     writeFileSync(
       storeFile(),
       JSON.stringify([
-        { token: 'good', deviceName: 'Phone', createdAt: 1, lastSeenAt: 1 },
-        { token: 42, deviceName: 'Bad token type' },
+        {
+          tokenHash: sha256('good'),
+          deviceName: 'Phone',
+          createdAt: now,
+          lastSeenAt: now,
+        },
+        { tokenHash: 42, deviceName: 'Bad hash type' },
         { deviceName: 'No token' },
+        { tokenHash: 'not-hex', deviceName: 'Bad hash' },
         null,
         'a string',
       ]),
       'utf-8',
     );
     const tokens = new TokenStore();
-    expect(tokens.listDevices().map((d) => d.token)).toEqual(['good']);
+    expect(tokens.listDevices().map((d) => d.deviceName)).toEqual(['Phone']);
     expect(tokens.validateDeviceToken('good')).not.toBeNull();
+  });
+
+  it('forgets devices an older version saved with the raw token, since it went over the wire', () => {
+    const now = Date.now();
+    writeFileSync(
+      storeFile(),
+      JSON.stringify([
+        { token: 'old-raw-token', deviceName: 'Phone', createdAt: now, lastSeenAt: now },
+        { tokenHash: sha256('kept'), deviceName: 'Laptop', createdAt: now, lastSeenAt: now },
+      ]),
+      'utf-8',
+    );
+    const tokens = new TokenStore();
+    expect(tokens.listDevices().map((d) => d.deviceName)).toEqual(['Laptop']);
+
+    expect(readFileSync(storeFile(), 'utf-8')).not.toContain('old-raw-token');
+    expect(readStoreFile().map((d) => d.deviceName)).toEqual(['Laptop']);
+    expect(tokens.validateDeviceToken('old-raw-token')).toBeNull();
+    expect(new TokenStore().validateDeviceToken('old-raw-token')).toBeNull();
   });
 
   it('overwrites a corrupt file when a device pairs', () => {
     writeFileSync(storeFile(), 'garbage', 'utf-8');
     const tokens = new TokenStore();
-    const token = tokens.issueDeviceToken('Phone');
-    expect(readStoreFile().map((d) => d.token)).toEqual([token]);
+    const { token } = tokens.issueDeviceToken('Phone');
+    expect(readStoreFile().map((d) => d.tokenHash)).toEqual([sha256(token)]);
+  });
+
+  it.skipIf(process.platform === 'win32')('is readable by this user only', () => {
+    // A file an older version made with the default mode is tightened on the next write.
+    writeFileSync(storeFile(), '[]', { mode: 0o644 });
+    new TokenStore().issueDeviceToken('Phone');
+    expect(statSync(storeFile()).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe('the host identity key', () => {
+  function keyFile(): string {
+    return join(userData.dir, 'remote-host-key.json');
+  }
+
+  it('keeps the same key across restarts, sealed by the keychain', () => {
+    const first = new TokenStore().hostIdentity();
+    const second = new TokenStore().hostIdentity();
+
+    expect(second.publicKey).toEqual(first.publicKey);
+    const raw = readFileSync(keyFile(), 'utf-8');
+    expect(raw).not.toContain(b64u(first.secretKey));
+    expect(raw).not.toContain(b64u(first.publicKey));
+  });
+
+  it('writes nothing without a keychain, so the key never sits on disk in the clear', () => {
+    electronState.encryptionAvailable = false;
+    try {
+      const tokens = new TokenStore();
+      const key = tokens.hostIdentity();
+      expect(tokens.hostIdentity()).toBe(key);
+      expect(existsSync(keyFile())).toBe(false);
+    } finally {
+      electronState.encryptionAvailable = true;
+    }
+  });
+
+  it('replaces a key that no longer opens', () => {
+    writeFileSync(keyFile(), JSON.stringify({ sealed: Buffer.from('junk').toString('base64') }));
+    const key = new TokenStore().hostIdentity();
+
+    expect(key.publicKey).toHaveLength(32);
+    expect(new TokenStore().hostIdentity().publicKey).toEqual(key.publicKey);
   });
 });

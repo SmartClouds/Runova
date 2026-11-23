@@ -2468,6 +2468,14 @@ export interface RemoteState {
   interfaces: RemoteNetworkInterface[];
 }
 
+/** A LAN controller that paired with this host and can reconnect without a new code. */
+export interface RemotePairedDevice {
+  id: string;
+  deviceName: string;
+  createdAt: number;
+  lastSeenAt: number;
+}
+
 /**
  * A remembered host, keyed by the durable per-device token the host issues on
  * first pairing (see `auth-ok`'s `deviceToken`). Lets the controller reconnect
@@ -2480,6 +2488,11 @@ export interface RemoteSavedServer {
   port: number;
   deviceName: string;
   deviceToken: string;
+  /**
+   * The host's LAN identity key from the pairing code, checked on every connect. Missing on a
+   * server saved before the LAN link was encrypted, which has to pair again.
+   */
+  hostKey?: string;
   createdAt: number;
   lastConnectedAt: number;
 }

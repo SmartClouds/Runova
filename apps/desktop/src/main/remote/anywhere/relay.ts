@@ -66,7 +66,15 @@ createRelayOpener.urlFor = (siteUrl: string, path: string, ticket: string): stri
   return url.toString();
 };
 
-function socketTransport(socket: WebSocket): LinkTransport {
+/**
+ * Carries link frames over a WebSocket: the relay's, or a LAN connection between two computers.
+ * Text messages are dropped, since every link frame is binary. `closedReason` is what a plain
+ * close reports.
+ */
+export function socketTransport(
+  socket: WebSocket,
+  closedReason = 'the relay closed',
+): LinkTransport {
   const frameListeners: ((frame: Uint8Array) => void)[] = [];
   const closeListeners: ((reason: string) => void)[] = [];
   let closed = false;
@@ -82,7 +90,7 @@ function socketTransport(socket: WebSocket): LinkTransport {
   });
   socket.on('close', (code, reason) => {
     // 1008 is the relay turning the session away, and its reason is written for the person.
-    shut(code === 1008 && reason.length > 0 ? reason.toString() : 'the relay closed');
+    shut(code === 1008 && reason.length > 0 ? reason.toString() : closedReason);
   });
   socket.on('error', (error) => shut(error.message));
   return {

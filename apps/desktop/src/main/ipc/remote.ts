@@ -75,6 +75,13 @@ export function registerRemoteHandlers(): void {
     signedInOnly((id: string) => remoteManager.removeSavedServer(id)),
   );
 
+  // No sign-in needed: taking a device's access away has to work whatever the account state.
+  ipcMain.handle(IPC.remote.listPairedDevices, () => remoteManager.listPairedDevices());
+
+  ipcMain.handle(IPC.remote.revokePairedDevice, (_e, id: unknown) => {
+    if (typeof id === 'string') remoteManager.revokePairedDevice(id);
+  });
+
   ipcMain.handle(
     IPC.remote.openSessionWindow,
     signedInOnly(() => {

@@ -122,8 +122,12 @@ export interface ControllerOptions extends CommonOptions {
 }
 
 export interface HostOptions extends CommonOptions {
-  /** The controller's identity key, as the server announced it with the request. */
-  expectedControllerKey: Uint8Array;
+  /**
+   * The controller's identity key, as the server announced it with the request. Null takes any
+   * key, for a caller that checks who the controller is some other way once the link is open (a
+   * LAN device token, which then only ever crosses the encrypted link).
+   */
+  expectedControllerKey: Uint8Array | null;
 }
 
 export function identityFromSeed(seed: Uint8Array): IdentityKeyPair {
@@ -245,7 +249,10 @@ export function hostHandshake(options: HostOptions): {
       const controllerEph = key32(hello.eph);
       const controllerId = key32(hello.id);
       const controllerNonce = bytes(hello.nonce, 16);
-      if (!equalBytes(controllerId, options.expectedControllerKey))
+      if (
+        options.expectedControllerKey !== null &&
+        !equalBytes(controllerId, options.expectedControllerKey)
+      )
         throw new HandshakeError('identity');
       if (hello.fp !== (options.remoteFingerprint ?? '')) throw new HandshakeError('fingerprint');
       if ((options.mode === 'password') !== (hello.cpace !== undefined))

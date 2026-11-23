@@ -44,6 +44,7 @@ describe('@shared/remoteProtocol', () => {
       port: 44444,
       token: 'tok',
       deviceName: 'Host',
+      hostKey: 'host-key',
       v: shared.REMOTE_PROTOCOL_VERSION,
     });
     expect(shared.decodePairingCode(code)?.ip).toBe('10.0.0.7');

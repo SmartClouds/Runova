@@ -203,6 +203,7 @@ export const queryKeys = {
   uiProPrerequisites: ['ui-ux-pro-max-prerequisites'] as const,
   uiProUpdate: ['ui-ux-pro-max-update'] as const,
   remoteSavedServers: ['remote-saved-servers'] as const,
+  remotePairedDevices: ['remote-paired-devices'] as const,
   sshServers: ['ssh-servers'] as const,
   /** A terminal's AI task history, refetched as the running task reports progress. */
   sshAgentHistory: (sessionId: string) => ['ssh-agent-history', sessionId] as const,

@@ -43,6 +43,8 @@ Once hosting, a **Pairing code** card appears.
 
 Each code works once and expires after 5 minutes. Generating a new code cancels the old one. A device that paired successfully is remembered by the host, so it can reconnect later without a new code. Stopping and starting hosting does not forget paired devices.
 
+The code also carries this computer's key. The other device checks it before it sends anything, and the whole connection is encrypted, so nobody else on the network can read the code or take over the session. The **Paired devices** card lists every remembered device with a **Remove** button. A device that has not connected for 30 days has to pair again. A computer saved by an older Runova version has to pair again once too.
+
 ### Connected controllers
 
 The **Connected controllers** card lists each device that is connected, with its name and address. When at least one device is connected you also get:

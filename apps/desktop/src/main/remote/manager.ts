@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, powerSaveBlocker, screen } from 'electron';
 import QRCode from 'qrcode';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -7,6 +8,7 @@ import type {
   RemoteConnectionInfo,
   RemoteFileProgress,
   RemoteLogLevel,
+  RemotePairedDevice,
   RemotePairingInfo,
   RemotePeerInfo,
   RemoteSavedServer,
@@ -15,8 +17,12 @@ import type {
 import { IPC } from '../../shared/ipcChannels';
 import {
   BIN_SCREEN_TILE,
+  b64u,
   binaryKind,
   encodePairingCode,
+  fromB64u,
+  HandshakeError,
+  newIdentity,
   REMOTE_PROTOCOL_VERSION,
   type RemoteControlMessage,
   type RemoteInputEvent,
@@ -25,8 +31,9 @@ import {
 import { sendToWindow } from '../ipc/send';
 import { store } from '../store';
 import { FileManagerOps } from './fileManagerOps';
-import { FileTransferManager } from './fileTransfer';
+import { type FileTransferCallbacks, FileTransferManager } from './fileTransfer';
 import { InputInjector } from './inputInjector';
+import { LAN_MAX_FRAME, LAN_SESSION_ID, lanLink } from './lanLink';
 import { listNetworkInterfaces } from './networkInterfaces';
 import { type PeerSocket, SOCKET_OPEN } from './peerSocket';
 import { sessionWindow } from './sessionWindow';
@@ -57,6 +64,38 @@ export interface PeerPermissions {
 
 const FULL_PERMISSIONS: PeerPermissions = { control: true, clipboard: true, files: true };
 
+/**
+ * Requests that only make sense from the controller to the host. The controller is the side that
+ * browses, so when a host sends one of these it is asking to read or change files on the
+ * controller's own disk, which it never gets to do.
+ */
+const HOST_TO_CONTROLLER_REFUSED = new Set<RemoteControlMessage['t']>([
+  'fm-roots',
+  'fm-list',
+  'fm-mkdir',
+  'fm-delete',
+  'fm-rename',
+  'file-request',
+]);
+
+/** What a controller takes from a host before the host has let it in with auth-ok. */
+const CONTROLLER_PRE_AUTH = new Set<RemoteControlMessage['t']>([
+  'auth-ok',
+  'auth-fail',
+  'bye',
+  'pong',
+]);
+
+/** Where a controller dials on the LAN, and what it signs in with there. */
+interface LanTarget {
+  ip: string;
+  port: number;
+  token: string;
+  deviceName: string;
+  /** The host's LAN identity key from the pairing code, which the handshake checks. */
+  hostKey: string;
+}
+
 /** A connection the caller set up and authenticated already, with its own message and close events. */
 export interface AttachableSocket extends PeerSocket {
   onMessage(listener: (data: Buffer, isBinary: boolean) => void): void;
@@ -72,6 +111,8 @@ interface HostPeer {
   address: string;
   connectedAt: number;
   authed: boolean;
+  /** The paired LAN device this peer signed in as, so revoking that device ends its session. */
+  pairedDeviceId?: string;
   /** What this peer connected for; a `'files'` peer never receives capture/tiles. */
   intent: RemoteConnectIntent;
   /**
@@ -130,18 +171,24 @@ export class RemoteManager {
     intent: null,
   };
   /** Credentials behind the in-flight/most recent `connect()` call, used to save/refresh a saved-server entry once `auth-ok` arrives, and to redial on an auto-reconnect. */
-  private pendingConnect: { ip: string; port: number; token: string; deviceName: string } | null =
-    null;
+  private pendingConnect: LanTarget | null = null;
   private connectIntent: RemoteConnectIntent = 'control';
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt = 0;
   private reconnectDeadline = 0;
 
-  private readonly files = new FileTransferManager({
-    sendControl: (ws, msg) => this.sendControl(ws, msg),
-    sendBinary: (ws, data) => this.sendBinary(ws, data),
-    log: (level, message) => this.log(level, message),
-    emitProgress: (progress) => this.emitFileProgress(progress),
+  /** Transfers with the controllers connected to this host. */
+  private readonly files = new FileTransferManager(this.fileCallbacks());
+  /**
+   * Transfers with the host this machine controls. It saves whatever the host sends into Downloads,
+   * whatever folder the host names, and never serves a path the host asks for.
+   */
+  private readonly controllerFiles = new FileTransferManager(this.fileCallbacks(), {
+    role: 'receiver',
+    acceptOffer: async () => {
+      const downloads = app.getPath('downloads');
+      return { destDir: downloads, partDir: join(downloads, '.runova-tmp') };
+    },
   });
   private readonly fmOps = new FileManagerOps({
     sendControl: (ws, msg) => this.sendControl(ws, msg),
@@ -149,6 +196,20 @@ export class RemoteManager {
 
   private cursorTimer: NodeJS.Timeout | null = null;
   private lastCursor: { x: number; y: number } | null = null;
+
+  private fileCallbacks(): FileTransferCallbacks {
+    return {
+      sendControl: (ws, msg) => this.sendControl(ws, msg),
+      sendBinary: (ws, data) => this.sendBinary(ws, data),
+      log: (level, message) => this.log(level, message),
+      emitProgress: (progress) => this.emitFileProgress(progress),
+    };
+  }
+
+  /** The transfer manager for a connection: the controller's own for the host it dialed. */
+  private filesFor(ws: PeerSocket): FileTransferManager {
+    return ws === this.client ? this.controllerFiles : this.files;
+  }
 
   init(window: BrowserWindow): void {
     this.mainWindow = window;
@@ -187,24 +248,48 @@ export class RemoteManager {
     this.stopHost();
     this.hostIp = ip;
     this.hostPort = port;
-    const server = new WebSocketServer({ host: '0.0.0.0', port });
+    const identity = this.tokens.hostIdentity();
+    const server = new WebSocketServer({ host: '0.0.0.0', port, maxPayload: LAN_MAX_FRAME });
     server.on('connection', (ws, req) => {
       const address = req.socket.remoteAddress ?? 'unknown';
-      const peer: HostPeer = {
-        id: randomUUID(),
-        ws,
-        deviceName: address,
-        address,
-        connectedAt: Date.now(),
-        authed: false,
-        intent: 'control',
-        wantsTiles: true,
-        permissions: FULL_PERMISSIONS,
-      };
-      this.peers.set(peer.id, peer);
-      ws.on('message', (data, isBinary) => this.onHostMessage(peer, data as Buffer, isBinary));
-      ws.on('close', () => this.onPeerGone(peer));
-      ws.on('error', () => this.onPeerGone(peer));
+      ws.binaryType = 'nodebuffer';
+      // Nothing from this address is read until the secure handshake is through, and the pairing
+      // code or device token the controller then sends only ever crosses the encrypted link.
+      const link = lanLink(ws);
+      link
+        .runAsHost({
+          sessionId: LAN_SESSION_ID,
+          mode: 'ask',
+          identity,
+          // Any controller may try; the token it sends next decides whether it gets in.
+          expectedControllerKey: null,
+        })
+        .then(() => {
+          if (this.server !== server || link.readyState !== SOCKET_OPEN) {
+            link.close();
+            return;
+          }
+          const peer: HostPeer = {
+            id: randomUUID(),
+            ws: link,
+            deviceName: address,
+            address,
+            connectedAt: Date.now(),
+            authed: false,
+            intent: 'control',
+            wantsTiles: true,
+            permissions: FULL_PERMISSIONS,
+          };
+          this.peers.set(peer.id, peer);
+          link.onMessage((data, isBinary) => this.onHostMessage(peer, data, isBinary));
+          link.onClose(() => this.onPeerGone(peer));
+        })
+        .catch(() => {
+          link.close();
+          if (this.server === server) {
+            this.log('warning', `A connection from ${address} failed the secure handshake.`);
+          }
+        });
     });
     server.on('error', (err) => {
       this.log('error', `Host server error: ${err.message}`);
@@ -260,6 +345,7 @@ export class RemoteManager {
       port: this.hostPort,
       token,
       deviceName: this.deviceName(),
+      hostKey: b64u(this.tokens.hostIdentity().publicKey),
       v: REMOTE_PROTOCOL_VERSION,
     });
     const qrDataUrl = await QRCode.toDataURL(code, {
@@ -388,12 +474,18 @@ export class RemoteManager {
 
   private onHostMessage(peer: HostPeer, data: Buffer, isBinary: boolean): void {
     if (isBinary) {
-      this.onBinary(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+      this.onBinary(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), this.files);
       return;
     }
     const msg = this.parseControl(data);
     if (!msg) return;
-    if (peer.authed && !peer.permissions.files && this.refuseFiles(peer, msg)) return;
+    if (
+      peer.authed &&
+      !peer.permissions.files &&
+      this.refuseFiles(peer.ws, msg, 'Files are turned off for this session.')
+    ) {
+      return;
+    }
     if (
       peer.authed &&
       (this.files.handleControl(peer.ws, msg) || this.fmOps.handleControl(peer.ws, msg))
@@ -410,11 +502,14 @@ export class RemoteManager {
         // A fresh pairing code pairs the device and mints a durable token for
         // it; a durable token from an earlier pairing reconnects directly.
         const paired = this.tokens.consume(msg.token);
-        const known = paired ? null : this.tokens.validateDeviceToken(msg.token, peer.deviceName);
+        const known = paired ? null : this.tokens.validateDeviceToken(msg.token);
         if (paired || known) {
-          const deviceToken = paired ? this.tokens.issueDeviceToken(peer.deviceName) : undefined;
+          const issued = paired ? this.tokens.issueDeviceToken(peer.deviceName) : undefined;
           if (paired) this.pairing = null; // code was single-use
-          this.admit(peer, deviceToken);
+          // A reconnecting device goes by the name it paired with, not whatever it calls itself now.
+          if (known) peer.deviceName = known.deviceName;
+          peer.pairedDeviceId = issued?.id ?? known?.id;
+          this.admit(peer, issued?.token);
           this.log(
             'success',
             paired
@@ -516,17 +611,16 @@ export class RemoteManager {
    * Answers a file or file-manager request from a session that may not touch files, so the other
    * side shows a clear refusal instead of waiting. Returns whether the message was one of those.
    */
-  private refuseFiles(peer: HostPeer, msg: RemoteControlMessage): boolean {
-    const reason = 'Files are turned off for this session.';
+  private refuseFiles(ws: PeerSocket, msg: RemoteControlMessage, reason: string): boolean {
     switch (msg.t) {
       case 'file-offer':
       case 'file-resume':
       case 'file-part-done':
       case 'file-complete':
-        this.sendControl(peer.ws, { t: 'file-error', transferId: msg.transferId, message: reason });
+        this.sendControl(ws, { t: 'file-error', transferId: msg.transferId, message: reason });
         return true;
       case 'file-request':
-        this.sendControl(peer.ws, {
+        this.sendControl(ws, {
           t: 'file-request-ack',
           reqId: msg.reqId,
           ok: false,
@@ -534,10 +628,10 @@ export class RemoteManager {
         });
         return true;
       case 'fm-roots':
-        this.sendControl(peer.ws, { t: 'fm-roots-reply', reqId: msg.reqId, roots: [] });
+        this.sendControl(ws, { t: 'fm-roots-reply', reqId: msg.reqId, roots: [] });
         return true;
       case 'fm-list':
-        this.sendControl(peer.ws, {
+        this.sendControl(ws, {
           t: 'fm-list-reply',
           reqId: msg.reqId,
           path: msg.path ?? '',
@@ -548,7 +642,7 @@ export class RemoteManager {
       case 'fm-mkdir':
       case 'fm-delete':
       case 'fm-rename':
-        this.sendControl(peer.ws, { t: 'fm-ack', reqId: msg.reqId, ok: false, error: reason });
+        this.sendControl(ws, { t: 'fm-ack', reqId: msg.reqId, ok: false, error: reason });
         return true;
       default:
         return false;
@@ -589,6 +683,28 @@ export class RemoteManager {
     this.log('success', `${peer.deviceName} connected through Runova Anywhere.`);
     this.emitState();
     return peer.id;
+  }
+
+  /** Host role: the LAN devices that paired with this machine and may reconnect without a code. */
+  listPairedDevices(): RemotePairedDevice[] {
+    return this.tokens.listDevices().map(({ id, deviceName, createdAt, lastSeenAt }) => ({
+      id,
+      deviceName,
+      createdAt,
+      lastSeenAt,
+    }));
+  }
+
+  /** Host role: forgets a paired device so its token stops working, and ends its open sessions. */
+  revokePairedDevice(id: string): void {
+    const removed = this.tokens.revokeDevice(id);
+    for (const peer of [...this.peers.values()]) {
+      if (peer.pairedDeviceId !== id) continue;
+      this.safeClose(peer.ws, 'this device was removed from the paired devices');
+      this.onPeerGone(peer);
+    }
+    if (removed) this.log('info', 'Removed a paired device.');
+    this.emitState();
   }
 
   /** Host role: the person here ends one session. */
@@ -670,15 +786,19 @@ export class RemoteManager {
 
   // --- Controller role ---------------------------------------------------------
 
-  connect(
-    payload: { ip: string; port: number; token: string; deviceName: string },
-    intent: RemoteConnectIntent = 'control',
-  ): void {
+  connect(payload: LanTarget, intent: RemoteConnectIntent = 'control'): void {
     this.disconnect();
-    this.pendingConnect = payload;
+    const target: LanTarget = {
+      ip: payload.ip,
+      port: payload.port,
+      token: payload.token,
+      deviceName: payload.deviceName,
+      hostKey: payload.hostKey,
+    };
+    this.pendingConnect = target;
     this.connectIntent = intent;
     this.reconnectAttempt = 0;
-    this.dial(payload);
+    this.dial(target);
   }
 
   /**
@@ -687,7 +807,7 @@ export class RemoteManager {
    * `connect()`'s teardown of the previous session, which would cancel the
    * very transfers reconnect exists to resume.
    */
-  private dial(payload: { ip: string; port: number; token: string; deviceName: string }): void {
+  private dial(payload: LanTarget): void {
     this.connection = {
       status: 'connecting',
       remoteDeviceName: payload.deviceName,
@@ -696,23 +816,47 @@ export class RemoteManager {
     };
     this.emitState();
 
-    const ws = new WebSocket(`ws://${payload.ip}:${payload.port}`);
+    const ws = new WebSocket(`ws://${payload.ip}:${payload.port}`, { maxPayload: LAN_MAX_FRAME });
     ws.binaryType = 'nodebuffer';
-    this.client = ws;
+    // Added before the link's own listeners, so a socket error reaches the person with its message.
+    ws.on('error', (err) => this.onClientGone(link, err));
+    const link = lanLink(ws);
+    this.client = link;
+    let opened = false;
+    let secured = false;
+    link.onMessage((data, isBinary) => this.onClientMessage(data, isBinary));
+    // A close during the handshake is reported by the handshake's own failure below.
+    link.onClose(() => {
+      if (secured || !opened) this.onClientGone(link);
+    });
 
     ws.on('open', () => {
-      this.sendControl(ws, {
-        t: 'hello',
-        role: 'controller',
-        deviceName: this.deviceName(),
-        protocolVersion: REMOTE_PROTOCOL_VERSION,
-        intent: this.connectIntent,
-      });
-      this.sendControl(ws, { t: 'auth', token: payload.token });
+      opened = true;
+      // The host proves it holds the key from the pairing code before the token goes anywhere.
+      link
+        .runAsController({
+          sessionId: LAN_SESSION_ID,
+          mode: 'ask',
+          identity: newIdentity(),
+          expectedHostKey: fromB64u(payload.hostKey),
+        })
+        .then(() => {
+          secured = true;
+          if (this.client !== link) return;
+          this.sendControl(link, {
+            t: 'hello',
+            role: 'controller',
+            deviceName: this.deviceName(),
+            protocolVersion: REMOTE_PROTOCOL_VERSION,
+            intent: this.connectIntent,
+          });
+          this.sendControl(link, { t: 'auth', token: payload.token });
+        })
+        .catch((error: unknown) => {
+          link.close();
+          this.onClientGone(link, handshakeProblem(error));
+        });
     });
-    ws.on('message', (data, isBinary) => this.onClientMessage(data as Buffer, isBinary));
-    ws.on('close', () => this.onClientGone(ws));
-    ws.on('error', (err) => this.onClientGone(ws, err));
   }
 
   /**
@@ -723,8 +867,8 @@ export class RemoteManager {
   private onClientGone(ws: PeerSocket, err?: Error): void {
     if (this.client !== ws) return; // already superseded by a newer socket
     this.client = null;
-    if (this.pendingConnect && this.files.hasActiveTransfers()) {
-      this.files.onConnectionLost(ws);
+    if (this.pendingConnect && this.controllerFiles.hasActiveTransfers()) {
+      this.controllerFiles.onConnectionLost(ws);
       this.connection = { ...this.connection, status: 'connecting' };
       this.log(
         'warning',
@@ -775,7 +919,7 @@ export class RemoteManager {
   }
 
   private giveUpReconnect(): void {
-    void this.files.cancelAll('Gave up trying to reconnect.');
+    void this.controllerFiles.cancelAll('Gave up trying to reconnect.');
     this.connection = {
       status: 'error',
       remoteDeviceName: this.connection.remoteDeviceName,
@@ -804,7 +948,7 @@ export class RemoteManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    void this.files.cancelAll('Disconnected.');
+    void this.controllerFiles.cancelAll('Disconnected.');
     if (this.client) {
       this.safeClose(this.client, 'controller disconnected');
       this.client = null;
@@ -834,12 +978,20 @@ export class RemoteManager {
     const servers = await store.getRemoteServers();
     const server = servers.find((s) => s.id === id);
     if (!server) return { ok: false, error: 'That saved server no longer exists.' };
+    if (!server.hostKey) {
+      // Saved before the LAN link was encrypted, so there is no key to check that computer against.
+      return {
+        ok: false,
+        error: 'Pair with this computer again: generate a new pairing code on it and enter that.',
+      };
+    }
     this.connect(
       {
         ip: server.ip,
         port: server.port,
         token: server.deviceToken,
         deviceName: server.deviceName,
+        hostKey: server.hostKey,
       },
       intent,
     );
@@ -875,7 +1027,12 @@ export class RemoteManager {
     );
     const now = Date.now();
     if (idx >= 0) {
-      servers[idx] = { ...servers[idx], deviceToken: token, lastConnectedAt: now };
+      servers[idx] = {
+        ...servers[idx],
+        deviceToken: token,
+        hostKey: pending.hostKey,
+        lastConnectedAt: now,
+      };
     } else if (freshDeviceToken) {
       servers.push({
         id: randomUUID(),
@@ -884,6 +1041,7 @@ export class RemoteManager {
         port: pending.port,
         deviceName: pending.deviceName,
         deviceToken: freshDeviceToken,
+        hostKey: pending.hostKey,
         createdAt: now,
         lastConnectedAt: now,
       });
@@ -918,16 +1076,32 @@ export class RemoteManager {
   }
 
   private onClientMessage(data: Buffer, isBinary: boolean): void {
+    const client = this.client;
+    if (!client) return;
+    // Until the host lets this machine in, it is just an address that answered. Nothing it says
+    // besides the auth reply is acted on.
+    const authed = this.connection.status === 'connected';
     if (isBinary) {
-      this.onBinary(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+      if (authed) {
+        this.onBinary(
+          new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+          this.controllerFiles,
+        );
+      }
       return;
     }
     const msg = this.parseControl(data);
     if (!msg) return;
-    if (
-      this.client &&
-      (this.files.handleControl(this.client, msg) || this.fmOps.handleControl(this.client, msg))
-    ) {
+    if (HOST_TO_CONTROLLER_REFUSED.has(msg.t)) {
+      this.refuseFiles(
+        client,
+        msg,
+        'A host cannot reach the files on the computer controlling it.',
+      );
+      return;
+    }
+    if (!authed && !CONTROLLER_PRE_AUTH.has(msg.t)) return;
+    if (this.controllerFiles.handleControl(client, msg) || this.fmOps.handleControl(client, msg)) {
       return;
     }
     switch (msg.t) {
@@ -955,7 +1129,7 @@ export class RemoteManager {
           this.pendingConnect = { ...this.pendingConnect, token: msg.deviceToken };
         }
         void this.rememberServer(msg.deviceToken);
-        if (this.client) this.files.resumeAfterReconnect(this.client);
+        if (this.client) this.controllerFiles.resumeAfterReconnect(this.client);
         sessionWindow.setTitle(`Runova Remote - ${msg.deviceName}`);
         this.emitState();
         break;
@@ -1028,7 +1202,7 @@ export class RemoteManager {
 
   /** Snapshot of in-flight/recent transfers, for a newly-opened file-manager window to populate its list from. */
   getFileProgress(): RemoteFileProgress[] {
-    return this.files.listProgress();
+    return [...this.files.listProgress(), ...this.controllerFiles.listProgress()];
   }
 
   /** Prompt for a file and send it to the connected peer's default downloads folder. */
@@ -1040,14 +1214,15 @@ export class RemoteManager {
     }
     const picked = await dialog.showOpenDialog({ properties: ['openFile'] });
     if (picked.canceled || picked.filePaths.length === 0) return;
-    await this.files.startUpload(target, picked.filePaths[0]);
+    await this.filesFor(target).startUpload(target, picked.filePaths[0]);
   }
 
   /** Remote file manager: prompt for a local file and upload it into a specific remote folder. */
   async uploadFileTo(destDir: string): Promise<void> {
     const picked = await dialog.showOpenDialog({ properties: ['openFile'] });
     if (picked.canceled || picked.filePaths.length === 0) return;
-    await this.files.startUpload(this.requireTarget(), picked.filePaths[0], destDir);
+    const target = this.requireTarget();
+    await this.filesFor(target).startUpload(target, picked.filePaths[0], destDir);
   }
 
   /** Remote file manager: ask the peer to push a file it has at `path`. */
@@ -1089,14 +1264,14 @@ export class RemoteManager {
     return target;
   }
 
-  private onBinary(buf: Uint8Array): void {
+  private onBinary(buf: Uint8Array, files: FileTransferManager): void {
     const kind = binaryKind(buf);
     if (kind === BIN_SCREEN_TILE) {
       // Controller side: hand the raw tile to the renderer to paint.
       this.send(IPC.remote.onFrameTile, buf);
       return;
     }
-    this.files.handleBinary(buf);
+    files.handleBinary(buf);
   }
 
   // --- Plumbing ----------------------------------------------------------------
@@ -1157,8 +1332,19 @@ export class RemoteManager {
 
   shutdown(): void {
     this.disconnect();
+    void this.files.cancelAll('Closed.');
     this.stopHost();
   }
 }
 
 export const remoteManager = new RemoteManager();
+
+/** What the person sees when the LAN handshake fails. */
+function handshakeProblem(error: unknown): Error {
+  if (error instanceof HandshakeError && error.reason === 'identity') {
+    return new Error(
+      'That computer is not the one you paired with, or its key changed. Pair again with a new code from it.',
+    );
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}

@@ -20,6 +20,7 @@ import { describeHostQuality, formatMbps } from '@/lib/remoteQuality';
 import { type HostQualitySnapshot, subscribeHostQuality } from '@/lib/rtcHost';
 import { cn } from '@/lib/utils';
 import { useRemoteStore } from '@/stores/remoteStore';
+import { PairedDevicesCard } from './PairedDevicesCard';
 import { REMOTE_CARD, RemoteCardHeader, RemoteRow } from './remoteCard';
 
 export function HostPanel(): React.JSX.Element {
@@ -256,6 +257,8 @@ export function HostPanel(): React.JSX.Element {
           </div>
         </section>
       )}
+
+      <PairedDevicesCard />
     </div>
   );
 }

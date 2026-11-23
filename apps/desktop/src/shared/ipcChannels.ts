@@ -663,6 +663,8 @@ export const IPC = {
     connectSavedFiles: 'remote:connectSavedFiles',
     renameSavedServer: 'remote:renameSavedServer',
     removeSavedServer: 'remote:removeSavedServer',
+    listPairedDevices: 'remote:listPairedDevices',
+    revokePairedDevice: 'remote:revokePairedDevice',
     /** Opens (or focuses) the standalone, resizable session window. */
     openSessionWindow: 'remote:openSessionWindow',
     sendInput: 'remote:sendInput',
