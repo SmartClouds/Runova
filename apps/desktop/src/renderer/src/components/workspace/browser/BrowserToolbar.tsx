@@ -151,7 +151,11 @@ function AddressBar({
         onFocus={(event) => {
           setDraft(url);
           const input = event.currentTarget;
-          requestAnimationFrame(() => input.select());
+          // Select on the next frame so the click's mouseup does not undo it. By then a quick
+          // typist may already have typed, and selecting that would let the next key replace it.
+          requestAnimationFrame(() => {
+            if (document.activeElement === input && input.value === url) input.select();
+          });
         }}
         onBlur={() => setDraft(null)}
         onChange={(event) => setDraft(event.target.value)}

@@ -76,6 +76,26 @@ describe('address bar', () => {
     expect(props.onNavigate).toHaveBeenCalledWith('http://localhost:3000/');
   });
 
+  it('keeps what was typed before the focus frame selects the address', async () => {
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      const { user, props } = setup();
+      const input = screen.getByRole('textbox', { name: 'Address' });
+      await user.click(input);
+      await user.clear(input);
+      await user.type(input, 'lo');
+      for (const frame of frames.splice(0)) frame(0);
+      await user.keyboard('calhost:3000{Enter}');
+      expect(props.onNavigate).toHaveBeenCalledWith('http://localhost:3000/');
+    } finally {
+      raf.mockRestore();
+    }
+  });
+
   it('puts the address back on Esc', async () => {
     const { user, props } = setup();
     const input = screen.getByRole('textbox', { name: 'Address' });
