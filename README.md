@@ -20,6 +20,16 @@
 
 ---
 
+## Like it? Give it a star
+
+Runova is free and open source. If it saves you time, a star on GitHub is the quickest way to say so: it helps other people find the project, and it tells us the work is worth carrying on.
+
+<p align="center">
+  <a href="https://github.com/SmartClouds/Runova/stargazers">
+    <img src=".github/assets/github-star.webp" alt="Click Star at the top of the Runova repository on GitHub" width="720" />
+  </a>
+</p>
+
 ## Screenshots
 
 <table>
@@ -31,18 +41,26 @@
   </tr>
   <tr>
     <td width="50%"><img src=".github/assets/screenshot-projects.png" alt="Projects" /></td>
-    <td width="50%"><img src=".github/assets/screenshot-usage.png" alt="Token Usage" /></td>
+    <td width="50%"><img src=".github/assets/screenshot-project.png" alt="A project's page" /></td>
   </tr>
   <tr>
     <td align="center"><em>Projects: one card per repo, with its agent, tags, and a Run button</em></td>
-    <td align="center"><em>Token Usage: tokens, cost, quotas, and per-project spend</em></td>
+    <td align="center"><em>A project's page: the prompt every agent starts from, notes, and a tab for each tool</em></td>
   </tr>
   <tr>
+    <td width="50%"><img src=".github/assets/screenshot-usage.png" alt="Token Usage" /></td>
     <td width="50%"><img src=".github/assets/screenshot-relay.png" alt="Relay task board" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Token Usage: tokens, cost, quotas, and per-project spend</em></td>
+    <td align="center"><em>Relay: a task board where every card fits one agent session</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src=".github/assets/screenshot-pipelines.png" alt="Pipelines" /></td>
     <td width="50%"><img src=".github/assets/screenshot-monitoring.png" alt="Monitoring" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Relay: a task board where every card fits one agent session</em></td>
+    <td align="center"><em>Pipelines: GitHub Actions runs across your repos, with a fix from an agent one click away</em></td>
     <td align="center"><em>Monitoring: what is up, what is failing, and how it has been doing</em></td>
   </tr>
   <tr>
@@ -54,11 +72,11 @@
     <td align="center"><em>AI CLIs in Dev Tools: detect, install, update, and set launch arguments</em></td>
   </tr>
   <tr>
-    <td width="50%"><img src=".github/assets/screenshot-dashboard.png" alt="Dashboard" /></td>
+    <td width="50%"><img src=".github/assets/screenshot-skill-security.png" alt="Skill Security" /></td>
     <td width="50%"><img src=".github/assets/screenshot-themes.png" alt="The same workspace in Dark, VS 2026, VS Code Dark and Light" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Dashboard: system health, network, and token usage at a glance</em></td>
+    <td align="center"><em>Skill Security: what a skill really does, checked before an agent reads it</em></td>
     <td align="center"><em>Themes: Dark (the default, green), VS 2026, VS Code Dark, and Light</em></td>
   </tr>
   <tr>
@@ -87,7 +105,7 @@ An IDE is built around a person typing code. An ADE is built around agents writi
 
 ## Features
 
-The menu is grouped the way the work goes: **Build** (Prompt Builder, Ask AI, API Client), **Agents** (Token Usage, Skills, Dev Tools), **Ship** (Pipelines, Deploy, Monitoring, Docker, Android) and **Connect** (Remote, Vault), with Dashboard, Workspace and Projects above them and Help and Settings below. Prefer a bar along the top? Settings has a switch for that.
+The menu is grouped the way the work goes: **Build** (Prompt Builder, Ask AI, API Client, Studio), **Agents** (Token Usage, Skills, Dev Tools), **Ship** (Pipelines, Deploy, Monitoring, Docker, Android) and **Connect** (Remote, Vault), with Dashboard, Workspace and Projects above them and Account, Help and Settings below. Prefer a bar along the top? Settings has a switch for that.
 
 Seven things make up the core:
 
@@ -119,9 +137,11 @@ Everything else is support around that, so you don't leave the app to go and get
 - **Run commands**: a command can leave a value open with `{{port=3000}}`, and Runova asks for it in a short form before it runs. Pause freezes a dev server and everything it started so the CPU is free for something else, and Resume picks up every file change at once. Stopping a run offers to stop its Docker containers too, and an agent can propose run commands for you to approve.
 - **WordPress projects**: make a project from a connected WordPress site. Runova pulls the themes and plugins you pick into a folder that keeps the site's layout (`wp-content/themes/...`), so agents work on them like any other code. Review and deploy shows every file that will go, any conflicts with changes made on the site, and what stays behind: agent settings, skills and Runova's own files never leave your computer.
 - **Git and releases**: status, branches, tags, and branch history with the tags on each commit. Bump the version in your files with a headless CLI run, review the bump file by file (or hunk by hunk), then commit, tag and push from the app. Runova warns before you tag a version you never bumped, and monorepo workspaces get scoped tag prefixes.
-- **Security**: scan the project with Semgrep, Trivy, Bearer, SonarQube, CodeQL or Strix. See [Project security scanning](#project-security-scanning).
-- **Packages**: see and update dependencies for npm, pnpm, Yarn, NuGet and Dart/Flutter pub, with an outdated-only view.
-- **Environments**: keep development, test, staging, production and custom environments per project, each with its own env files and credentials, encrypted on this machine behind the vault's master password. Import existing `.env` files, copy values out when you need them, and keep the whole thing out of the repo.
+- **Security**: scan the project with Semgrep, Trivy, Bearer, SonarQube, CodeQL or Strix, or run an AI audit with your own agent. See [Project security scanning](#project-security-scanning).
+- **Packages**: see and update dependencies for npm, pnpm, Yarn, NuGet, Dart/Flutter pub, Python, Rust, Kotlin Android and Swift iOS projects, with an outdated-only view, and update a project's runtime and toolchain from the same tab.
+- **Dependency alerts**: when you are signed in, Runova checks every project's packages once a day and tells you about security advisories, deprecated packages and new releases, in the app, on runovahq.com and on Telegram. Pick the severity and the kinds of release you care about, and mute a project you don't.
+- **Cleanup**: every project shows its size on the Projects page and how much of it can go. The Cleanup section offers only folders a tool can rebuild (`node_modules`, build output, caches, the Studio render cache), never anything git tracks, and names the command that brings each one back.
+- **Environments**: keep development, test, staging, production and custom environments per project, each with its own env files and credentials, encrypted on this machine behind the vault's master password. Import existing `.env` files, link an env file to a file in the project, copy values out when you need them, go back to an earlier version, and keep the whole thing out of the repo.
 - **Setup**: attach skills, MCP servers and hooks, edit the agent config files, and schedule prompts.
 
 ### Build
@@ -131,6 +151,7 @@ Everything else is support around that, so you don't leave the app to go and get
 - **Prompt History**: every prompt you have generated or translated, searchable, with tags and proper Persian / RTL rendering.
 - **Scheduled prompts**: run a prompt in an agent CLI later, either when you press Run or at a set time, and follow it from the project's Prompts section and from Telegram.
 - **Writing check**: grammar, spelling, and style checking in the app's text boxes, powered by LanguageTool. Issues are underlined as you type, right-click one for its fix (or to check the text on the spot), and the counter in the corner opens the full list with one-click fixes. Uses LanguageTool's public API by default; drop the LanguageTool download into the app's tools folder and Runova runs the server itself, so nothing you write leaves the machine.
+- **Studio**: make videos for your projects (a launch teaser, a feature walkthrough, a short) with an AI CLI you already have. It writes the scenario from your brief, animates each scene as motion graphics, gives it a voice (OpenAI, Gemini, ElevenLabs, Azure, your own microphone, or voices that run offline), and adds captions and music. Every edit is a step you can undo, and the history is never thrown away. A Pictures step captures the project's own screens or makes pictures for it.
 - **Ask AI**: a chat with OpenAI, Gemini or a local Ollama model, as a full page or a quick popup from any screen.
 - **API Client**: build, send and save HTTP requests in tabs, and read the status, headers, timing and body of the response. Collections (with folders) are stored as Postman files, and request scripts run in a process of their own, so a runaway script from an imported collection cannot freeze the app.
 
@@ -141,23 +162,35 @@ Everything else is support around that, so you don't leave the app to go and get
 - **Skill Marketplace**: install agent skills from configurable repositories or skills.sh, including into a project's agent folders, with favorites, usage tracking, and update detection.
 - **Skill Security**: check what a skill actually does before you let an agent read it. A static scan over 14 risk categories, an optional deep review by an installed agent CLI, and a saved history of every check. See [Skill security](#skill-security).
 - **MCP Marketplace**: a tab of Dev Tools that installs MCP servers into a project from configurable repositories.
+- **AI access**: Runova's own MCP server, so an agent can do the work in Runova for you ("update the staging env with this file", "add a login request to the API Client", "what changed in git"). You choose which agents may connect (Runova's own tabs, other apps, or both) and what runs without asking: everything, everything but sensitive actions (the default), or nothing at all. Runova asks in its own dialog or right in the agent's session.
 - **Dev Tools**: the page that holds the AI CLIs tab, a Dev Setup checklist that finds and installs what a machine needs to build (Git, Node.js, the .NET SDK, Flutter with the Android tools, Docker), a Disk Cleanup tab that finds the caches package managers keep (NuGet, npm, pnpm, Bun, Cargo, Gradle and more) and clears out old versions, plus curated third-party tools that cut agent token spend or improve code quality, including Diffray, the security scanners, and LanguageTool for offline writing checks.
 
 ### Ship
 
-- **Pipelines**: a page for GitHub Actions across the repos you connected. Run and stop workflows by hand, read run annotations without leaving the app, and hand a failed run to an agent with "Fix with AI".
+- **Pipelines**: a page for GitHub Actions across the repos you connected. Run, stop and re-run workflows, read run annotations and per-step logs without leaving the app, see how long a run, job or step should take from the earlier runs, and hand a failed run to an agent with "Fix with AI". Turn on auto-fix for a run and an agent fixes it when it fails, Runova commits and pushes the fix, and follows the new run, up to the number of tries you set. The runners panel has an AI install a self-hosted runner on this computer or a saved server, and frees the disk space old jobs, logs and caches take on a runner machine, now or on a schedule.
 - **Deploy**: a server panel for your own Linux servers, from install to apps, containers, websites, certificates, the firewall and an AI that can look at logs, plus FTP, SFTP and WordPress sites that have no SSH. Choose which servers it lists and drag them into the order you want. See [Deploy](#deploy).
-- **Monitoring**: a page (and a tab per project) that watches each environment and server of a project through a private, key-protected endpoint in your app. It shows every service with its status and the full error of the ones that fail, charts availability by day and response time, checks each target on its own schedule, notifies you when an incident opens or resolves, runs a read-only AI diagnosis, and hands the failure to an agent with "Fix with AI". Build with AI gives Claude Code (or any agent) a prompt with the Runova Health Protocol, so it can add the endpoint to any stack. The Errors tab shows what Sentry recorded for each project (Sentry.io, self-hosted Sentry, or GlitchTip as a best effort) with the stack trace, ready to copy or hand to an agent.
+- **Monitoring**: a page (and a tab per project) that watches each environment and server of a project through a private, key-protected endpoint in your app. It shows every service with its status and the full error of the ones that fail, charts availability by day and response time, checks each target on its own schedule, notifies you when an incident opens or resolves, runs a read-only AI diagnosis, and hands the failure to an agent with "Auto fix". A monitor can run on this computer or on Runova Cloud, which keeps checking while your computer is off and sends alerts to the app, your phone and Telegram. Build with AI gives Claude Code (or any agent) a prompt with the Runova Health Protocol, so it can add the endpoint to any stack. The Errors tab shows what Sentry recorded for each project (Sentry.io, self-hosted Sentry, or GlitchTip as a best effort) with the stack trace, ready to copy or hand to an agent.
 - **Docker**: a Docker tab per project and a Docker page for the machine, grouped by compose project. Start, stop, restart, remove, bulk-stop, and jump to a container from the status bar. The Dashboard also lists the containers nobody has touched for a while, so you can stop them.
 - **Android**: start and stop emulators, create and edit virtual devices, and work with connected phones (screenshots, screen recording, APK install, `adb shell`), using the Android SDK you already have.
 
 ### Connect
 
 - **Remote**: control another Runova over your local network, over WebSockets, with a remote file manager and resumable transfers.
+- **Runova Anywhere**: every signed-in computer gets a nine-digit Runova ID, so you can reach it over the internet the way you would with AnyDesk or TeamViewer. Your own computers and the ones teammates share with your team connect without typing anything, others need the computer's unattended-access password, which never leaves your machine. The link is direct when it can be and goes through the Runova relay when it has to, encrypted end to end either way, and a safety code on both screens shows that no one is in between. A small background agent keeps a Windows, macOS or Linux computer reachable while it is locked or nobody is signed in.
+- **The phone app**: Runova for Android and iOS is a remote for your computers. Sign in by scanning a QR code, approve the phone on each computer and choose what it may do there. From the phone you follow and answer agents, commit and push, deploy, watch traffic, monitors and pipelines, start a Studio video, send files, and open the Vault behind your fingerprint or face. The work still runs on the computer.
 - **Send files**: send files and whole folders to your other computers and your teammates, straight from one computer to the other and encrypted the whole way. The other side sees who sends what and accepts, and a dropped connection picks up where it stopped. The phone app sends to your computers too, takes shares from other Android apps, and receives from your own computers while it is open. The website only passes things on and keeps nothing.
 - **SSH**: saved servers in the vault, terminal sessions in the drawer, a two-pane SFTP file manager (upload and download files and whole folders, change permissions, edit text files on the server, and keep an eye on transfers from the status bar), and an AI task runner that prompts an agent in a RUN / FINISHED / NEEDS_INPUT loop, executes the commands in the live session, and stops for your approval on anything risky.
 - **RDP**: saved Remote Desktop servers and full sessions in their own window, built on Devolutions Iron Remote Desktop, with a shared clipboard, file copy, full screen, and an AI that can do tasks on the remote desktop for you.
-- **Vault**: passwords, API keys, and private notes, encrypted on this computer behind a master password. Ranked search, type tabs, tags and favorites, a password generator, custom fields, CSV import with column matching and duplicate handling, export behind the master password, auto-lock, clipboard clearing on a countdown, and locking with the computer. The same vault backs the SSH, RDP, and environment credentials, and every decrypted value leaves the app's cache the moment it locks.
+- **Vault**: passwords, API keys, and private notes, encrypted on this computer behind a master password. Ranked search, categories, tags and favorites, one-click login, a password generator, custom fields, CSV import with column matching and duplicate handling, export behind the master password, auto-lock, clipboard clearing on a countdown, and locking with the computer. The same vault backs the SSH, RDP, and environment credentials, and every decrypted value leaves the app's cache the moment it locks.
+
+### Account
+
+Everything works signed out. A Runova account is there for keeping several computers alike and for working with other people.
+
+- **Sync**: sign in on each computer (email, Google, Apple, Microsoft or a passkey, always in the browser) and your projects, servers, Vault entries, environments, monitors, API Client collections, database connections and settings follow you. A project's folder stays per computer, so the same project can live in `C:\src\shop` on Windows and `~/shop` on a Mac.
+- **End-to-end encryption**: passwords, keys, tokens and environment values leave a computer only sealed with a key only your computers hold. Paid plans can seal notifications and the rest of sync too.
+- **Teams**: invite people by email and share chosen items with them: a server list, a password, a project's environments, a monitor.
+- **Recovery phrases**: anywhere Runova locks data with a secret you choose (the sync and team keys, the Vault, server and core backups), it can make the secret for you as 24 random words, which you copy, save to a file or scan into the phone app as a QR code.
 
 ### The rest
 
@@ -166,7 +199,7 @@ Everything else is support around that, so you don't leave the app to go and get
 - **Notifications**: GitHub Actions failures, background CLI activity, and tool updates, folded into one recent-messages list, with optional Telegram delivery.
 - **Help center**: press `F1` for a guide to every part of the app. Search works offline, and an "Ask the guide" chat answers in your own words from the same articles.
 - **AI Pet**: an optional desktop companion. Click it for a token report, double-click to bring Runova to the front, drag it around, and let it tell you when a pipeline fails, the network drops, an agent changes status, or a project finishes. Right-click for a menu (open the app, stop it wandering, snooze it for 15 minutes to 3 hours, or send it away), and it reappears on its own when the snooze ends. Built-in characters, custom nicknames, or add your own GIF / PNG / WebP.
-- **Settings**: tabbed General, Agents, Shortcuts, AI Pet, AI, Notifications, Network, Vault, and Data. Five themes (Light, Dark, System, VS Code Dark and VS 2026), a main menu down the left or along the top, a translucent window on Windows 11 and macOS, rebindable global and workspace shortcuts, backup and restore of your projects and settings (with environments and the Vault if you choose), and updates from GitHub Releases. Update downloads run in chunks and can be paused and resumed, so a dropped connection doesn't cost you the bytes you already have.
+- **Settings**: tabbed General, Agents, Shortcuts, AI Pet, AI, AI access, Notifications, Network, Vault, and Data. Five themes (Light, Dark, System, VS Code Dark and VS 2026), a main menu down the left or along the top, a translucent window on Windows 11 and macOS, rebindable global and workspace shortcuts, backup and restore of your projects and settings (with environments and the Vault if you choose), and updates from GitHub Releases. Update downloads run in chunks and can be paused and resumed, so a dropped connection doesn't cost you the bytes you already have.
 - **Proxy**: one setting under Settings > Network decides how the whole app reaches the internet: straight out, through this machine's own proxy (PAC scripts included), or through an HTTP, HTTPS, or SOCKS server you type in, with a username and password if it wants one. It covers the AI providers, the skill and package registries, Telegram, update checks, and the CLIs and git commands Runova runs for you. Test connection checks a server before you save it and reports the address the internet saw you from.
 - **Also in the app**: a command palette (Ctrl+K / Cmd+K), a tabbed terminal drawer (Ctrl+backtick), and a searchable history of toasts.
 
@@ -232,6 +265,8 @@ Skill security checks the instructions you hand an agent. The project Security t
 
 Runova checks the prerequisites before a run and walks you through whatever is missing. Every scanner's output is normalized into one report, so severity, scoring, and filtering work the same whichever one you ran. Findings are redacted before they are stored, per-scanner logs are kept with the run, and a scan keeps going in the main process if you navigate away, so a reopened tab rejoins it instead of starting over. CodeQL is downloaded, verified, and unpacked into Runova's own tools folder when it is not already on PATH. Any finding can be copied to an agent as a prompt.
 
+The other half of the tab is an **AI audit**. It runs Cloudflare's open source security-audit skill with an agent you already have (Claude Code, Codex, OpenCode, Gemini CLI or Cursor): the agent maps the project, works through each entry point, and tries to prove every candidate it finds, then a fresh agent tries to disprove each finding. Runova installs the skill, follows the run's phases, and shows the report as confirmed, needs validation, fixed and rejected findings, each with its trace from entry point to sink. The results are written outside the project, and "Fix with agent" hands the confirmed ones back to an agent.
+
 ## Deploy
 
 Deploy turns a Linux server you can SSH into into one you can manage from Runova, a bit like aaPanel but without a web panel open to the internet. Pick a saved SSH server, click Install, and Runova puts a small service on it (the server core, a .NET 10 program under systemd). From then on the Deploy page shows that server's sections:
@@ -241,15 +276,17 @@ Deploy turns a Linux server you can SSH into into one you can manage from Runova
 | Overview | Live CPU, memory, disk and network, a health score, alerts, package updates and reboots |
 | Apps | Deploy a project's compose file with its environment, follow each deploy step by step, roll back to an earlier revision, and sign in to private registries (GitHub Packages, Docker Hub, your own) |
 | Containers | Docker's containers, images, volumes and networks, with live stats, logs and a console. Docker itself installs from here |
+| Files | A two-pane file manager on the server's disk, inside a container or in a Docker volume: upload, download, rename, change permissions and edit text files |
 | App Store | Nineteen ready-made apps (databases, WordPress, Kafka, monitoring and more), pinned by image digest, installed from one sheet |
-| Websites | nginx sites and TCP or UDP proxies in front of your apps, checked with `nginx -t` before they go live, and Let's Encrypt certificates that renew themselves |
+| Websites | nginx sites and TCP or UDP proxies in front of your apps, checked with `nginx -t` before they go live, and Let's Encrypt certificates that renew themselves. A site can also redirect, or send `www` to the bare domain |
+| Traffic | How each website is used, read from the logs nginx already writes: visitors, page views, referrers, browsers, countries, status codes, response times, bandwidth and bots. The core also watches for attacks (scanners, login brute force, floods, injection probes), tells you in the app and on Telegram while they happen, and blocks an address with one click or by itself if you let it |
 | Firewall | ufw or firewalld rules, a list of containers that publish ports past the firewall with a "make private" fix, and a change that rolls itself back unless you confirm it |
 | Logs | A problems feed (crash loops, failed deploys, expiring certificates, exposed ports), any log on the server, and the Deploy AI drawer to diagnose a problem |
 | Security | A checklist with a score and previewed fixes, users and roles, devices and sessions, the audit trail, encrypted backups, error reporting (the core's warnings and errors sent to your Sentry project over OpenTelemetry), and the connection (SSH or direct TLS) |
 | Database | Every database container on the server as a card with one Connect button: Runova reads the engine and sign-in from the container and connects over the server's SSH connection. Browse and edit rows, run queries, design tables, manage users and their access, change settings, back up and restore with each engine's own tools, and ask the AI for queries (writes wait for your yes). PostgreSQL, MySQL, MariaDB, MongoDB, Redis, SQLite, Cassandra and SQL Server. The same works for the databases in Docker on your own computer |
 | Backups | Back up the whole server (the panel, its settings, the stacks, every Docker volume, the images in use, the firewall rules) now or on a schedule, encrypted with a secret key only you know, to several places at once: a folder on the server, FTP or FTPS, SFTP, Google Drive, OneDrive, or a Telegram account (sent in parts when it is big). Each plan keeps its newest N backups. Restore to the same server, or to a new one with a new address, and the settings that named the old address move with it |
 
-Cloudflare has its own dialog: connect one or more accounts with scoped API tokens, manage DNS records, zone settings and WAF rules, issue Origin CA certificates for a server, and lock a server's web ports to Cloudflare's addresses.
+Cloudflare has its own view in Deploy: connect one or more accounts with scoped API tokens, add a domain and check its name servers, and manage DNS records, SSL, caching and other zone settings, WAF rules, AI bot access, Turnstile widgets and reCAPTCHA keys. Issue Origin CA certificates for a server, and keep visitors from going around Cloudflare, either by allowing the web ports only from Cloudflare's addresses or by running a Cloudflare Tunnel so the web ports close to everyone. Any name can sit behind an email code gate (only the people you list get in), and a name, a path or a whole zone can be limited to the IP addresses you list.
 
 **Hosting with only FTP or SFTP**
 
@@ -298,8 +335,8 @@ The delivery plan, each epic's notes and what is still unverified are in [`docs/
 
 The public site for [runovahq.com](https://runovahq.com) lives in this repository too, in `apps/website`, and is not part of the desktop app:
 
-- **`apps/website/web`**: the site, Astro on bun with React islands, MDX and Tailwind CSS 4. A home page with a three.js hero, a page per feature group with real screenshots of the app, the help center (built from the app's own help articles), download links from the latest GitHub release, a blog, a news feed, and a small admin area where staff write the blog and the news. It sits outside the pnpm workspace and has its own `biome.json` and `bun.lock`.
-- **`apps/website/api`**: the API behind it, .NET 10 and EF Core on PostgreSQL. Staff sign in with ASP.NET Core Identity (Admin and Editor roles, two-factor, no public sign-up), and other programs publish news and posts with HMAC-SHA256 signed requests from API clients. It serves news, posts, media, the latest desktop release, and uses Sentry, OpenTelemetry and Hangfire. Every endpoint, status code and the signing scheme are in [`docs/website/api-contract.md`](docs/website/api-contract.md), and a test holds the OpenAPI document to it.
+- **`apps/website/web`**: the site, Astro on bun with React islands, MDX and Tailwind CSS 4. A home page with a three.js hero, a page per feature group with real screenshots of the app, the help center (built from the app's own help articles), download links from the latest GitHub release, a blog, a news feed, pricing, the account panel (devices and sessions, teams, plans, notifications), and a small admin area where staff write the blog and the news. It sits outside the pnpm workspace and has its own `biome.json` and `bun.lock`.
+- **`apps/website/api`**: the API behind it, .NET 10 and EF Core on PostgreSQL. People sign in with ASP.NET Core Identity (a password, Google, Apple, Microsoft or a passkey, with two-factor), staff get Admin and Editor roles, and other programs publish news and posts with HMAC-SHA256 signed requests from API clients. It serves news, posts, media and the latest desktop release, and runs accounts, sync, teams, plans (Stripe and NOWPayments), dependency alerts, cloud monitors, and the SignalR hub and relay behind Runova Anywhere and the phone app. It uses Sentry, OpenTelemetry and Hangfire. Every endpoint, status code and the signing scheme are in [`docs/website/api-contract.md`](docs/website/api-contract.md), and a test holds the OpenAPI document to it.
 - **`apps/website/compose.yaml`**: the whole stack behind Caddy on one origin (`/api/`, `/media/` and `/hangfire` go to the API, everything else to the site), so cookies are first-party and no CORS is set up.
 
 The news the API serves is the same news the Dashboard's News card shows. The specs are [`docs/epics/40-website.md`](docs/epics/40-website.md), [`41-website-api.md`](docs/epics/41-website-api.md), [`42-dashboard-news.md`](docs/epics/42-dashboard-news.md) and the [design spec](docs/website/design.md). Working on the site needs [bun](https://bun.sh), the API needs the .NET 10 SDK, and the full-stack tests need Docker.
@@ -320,6 +357,8 @@ The news the API serves is the same news the Dashboard's News card shows. The sp
 | Server core | .NET 10, ASP.NET Core, SignalR over a Unix socket, xUnit v3; Tapper and TypedSignalR.Client.TypeScript generate the desktop's typed client |
 | WordPress connector | A PHP plugin (PHP 7.4+, WordPress 6.0+), tested with PHPUnit and checked for PHP and WordPress compatibility with PHP_CodeSniffer |
 | Website | Astro on bun, React islands, MDX, Tailwind CSS 4, Vitest and Playwright; the API on .NET 10, ASP.NET Core Identity, EF Core on PostgreSQL, Hangfire, Sentry and OpenTelemetry, tested with xUnit v3 and Testcontainers; Caddy in front |
+| Runova Anywhere agent | .NET 10, a Windows service and a macOS or Linux background agent that keep a computer reachable while it is locked, tested with xUnit v3 |
+| Phone app | A Rust core shared through UniFFI, Kotlin with Jetpack Compose on Android, SwiftUI on iOS |
 | Tooling | pnpm workspaces, Biome |
 
 ## Project structure
@@ -328,15 +367,18 @@ The news the API serves is the same news the Dashboard's News card shows. The sp
 Runova/
 ├── apps/
 │   ├── desktop/     Electron app (main, preload, renderer), the primary product
+│   ├── mobile/      The phone app: a Rust core (core/), Android (android/) and iOS (ios/)
+│   ├── remote-agent/ .NET 10 background agent that keeps a computer reachable through Runova Anywhere
 │   ├── server-core/ .NET 10 service the Deploy section installs on your servers
 │   ├── website/     runovahq.com: the Astro site (web/), its .NET 10 API (api/) and the compose stack
 │   └── wordpress-connector/  PHP plugin that lets a WordPress site talk to Deploy and WordPress projects
-├── docs/            Delivery plan: roadmap, risks, status and one file per epic (Deploy, WordPress,
-│                    Monitoring, FTP and SFTP, error tracking, the SFTP file manager, Relay, the
-│                    website), the website's API contract and design spec, and the Relay task files
+├── docs/            Delivery plan: roadmap, risks, status and one file per epic, the website's API
+│                    contract and design spec, the phone app's architecture and release notes, and
+│                    the Relay task files
 ├── packages/
 │   ├── core/        Shared business logic (@runova/core)
-│   └── protocol/    Shared types and wire protocol (@runova/protocol)
+│   ├── protocol/    Shared types and wire protocol (@runova/protocol)
+│   └── studio/      Studio's video logic and Node services, no Electron or React (@runova/studio)
 └── patches/         pnpm patches for third-party packages
 ```
 
@@ -360,7 +402,7 @@ apps/desktop/src/renderer/src/components/deploy/   The Deploy screens, one folde
 
 `apps/wordpress-connector` is a Composer project rather than a pnpm package, and the root `wordpress-connector:*` scripts drive it. `test`, `lint` and `compat` run in Docker, so PHP is not a local requirement, and `build` writes the zip that is attached to every release.
 
-`packages/core` holds the logic that does not need Electron, grouped by feature: `android`, `apiClient`, `blueprint`, `cli`, `deploy`, `devSetup`, `env`, `errorTracking`, `git`, `grammar`, `health`, `mcp`, `models`, `network`, `projectBootstrap`, `promptBuilder`, `relay`, `resourceActivity`, `run`, `security`, `skills`, `system`, `testing`, `tools`, `usage`, `vault`, and `workspace`.
+`packages/core` holds the logic that does not need Electron, grouped by feature: `android`, `apiClient`, `blueprint`, `cli`, `database`, `deploy`, `devSetup`, `env`, `errorTracking`, `git`, `grammar`, `health`, `mcp`, `models`, `network`, `projectBootstrap`, `promptBuilder`, `relay`, `resourceActivity`, `run`, `security`, `skills`, `sync`, `system`, `systemCleanup`, `testing`, `tools`, `usage`, `vault`, and `workspace`.
 
 ## Getting started
 
@@ -399,6 +441,7 @@ On Windows you can also just run `run.bat`, which installs dependencies, verifie
 | `pnpm server-core:format` | Format the server core with `dotnet format` (`server-core:format:check` only verifies) |
 | `pnpm server-core:contracts` | Regenerate the desktop's TypeScript contracts from the server core's C# ones |
 | `pnpm server-core:publish linux-x64` | Publish the server core for a platform, which the Deploy system tests install on their servers |
+| `pnpm remote-agent:test` | The Runova Anywhere agent's tests (xUnit v3; `remote-agent:build`, `remote-agent:format` and `remote-agent:publish` as for the server core) |
 | `pnpm wordpress-connector:test` | The WordPress connector's PHPUnit suite, in Docker (`:lint` and `:compat` check PHP syntax and compatibility, `:build` writes the plugin zip) |
 | `pnpm catalog:refresh-digests` | Refresh the image digests that the Deploy App Store pins |
 | `pnpm website:dev` | Run the website's Astro dev server (`website:build` type-checks and builds it, `website:test` lints it and runs its unit tests, `website:e2e` runs its Playwright suite) |
@@ -420,6 +463,8 @@ Tests live next to the code they cover (`foo.ts` has `foo.test.ts` beside it). E
 | WordPress connector | `apps/wordpress-connector/tests` | PHPUnit in Docker, plus a smoke test of the plugin zip and a sync test of the desktop engine, both on a real WordPress |
 | Website API | `apps/website/api/tests` | xUnit v3 on Microsoft.Testing.Platform; integration tests run the API with `WebApplicationFactory` over PostgreSQL in Testcontainers |
 | Website | `apps/website/web/tests`, `apps/website/web/e2e` | Vitest; Playwright against a fake API, and against the whole compose stack (`bun run e2e:stack`, including a check that no secret reaches logs, Sentry or spans); Lighthouse budgets |
+| Runova Anywhere agent | `apps/remote-agent/tests` | xUnit v3 on Microsoft.Testing.Platform |
+| Phone app | `apps/mobile` | `cargo llvm-cov` over the Rust core (85% line coverage or the job fails), Android unit tests through Gradle, iOS tests through `xcodebuild` on a simulator |
 
 The desktop suite is split into two Vitest projects, configured in `apps/desktop/vitest.config.mts`:
 
@@ -441,7 +486,7 @@ The Deploy system tests boot whole Linux machines, so they only run when asked. 
 
 ### CI
 
-Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), and the end-to-end tests. `ci.yml` also runs the website: `Website API` (format, build and tests, in three shards), `Website` (lint, types, unit tests and the build) and `Website end-to-end` (both Playwright suites, the compose stack and Lighthouse). The CircleCI config ([`.circleci/config.yml`](.circleci/config.yml)) is still in the repo, but its workflows only run when started by hand, and nothing waits for them. CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build and the unit suites) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core, the website and the Linux end-to-end shards. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
+Every push and pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): Biome (formatting, lint, import order), the two deprecation gates above, a type-check of every package, a real build of the desktop app, and the test suites in [`.github/workflows/test.yml`](.github/workflows/test.yml). That reusable workflow covers unit and integration with coverage (the desktop suite runs in three shards and the coverage thresholds are checked once they are merged), the server core (locked restore, `dotnet format`, build, tests, and a check that the generated TypeScript contracts are current), the WordPress connector (unit tests, lint on every supported PHP, compatibility sniffs, the plugin zip, and a smoke test and a desktop sync test on a real WordPress), the Runova Anywhere agent, the phone app (the Rust core with coverage, the Android build and unit tests, and the iOS tests on the Mac mini), and the end-to-end tests. `ci.yml` also runs the website: `Website API` (format, build and tests, in three shards), `Website` (lint, types, unit tests and the build) and `Website end-to-end` (both Playwright suites, the compose stack and Lighthouse). The CircleCI config ([`.circleci/config.yml`](.circleci/config.yml)) is still in the repo, but its workflows only run when started by hand, and nothing waits for them. CI runs all of it, the end-to-end tests and the Deploy system tests on the Ubuntu and Rocky test servers included, on every push to `master` and every pull request from a branch of this repository, on our two self-hosted runners. The jobs that do not depend on the OS (lint, types, the build and the unit suites) run on the Mac mini, which is much faster, and the Linux runner keeps the Docker jobs, the server core, the website and the Linux end-to-end shards. The end-to-end tests run on macOS on the Mac mini too. GitHub's hosted runners are used by CD ([`.github/workflows/cd.yml`](.github/workflows/cd.yml)), which does not run the tests again: it waits for CI to pass on the tagged commit and only then builds and publishes the release. The end-to-end tests run on Windows only when the Tests workflow is run by hand with `github-hosted` ticked. Pull requests from forks get no CI, so outside code never runs on our machines. `All checks passed` is the single status to require in branch protection. Running `pnpm check && pnpm check:deprecated-code && pnpm check:deprecated-deps && pnpm typecheck && pnpm build && pnpm test:unit` reproduces most of it locally.
 
 A deprecated dependency you cannot drop yet goes in [`.github/deprecated-deps-allowlist.json`](.github/deprecated-deps-allowlist.json) with a reason for keeping it.
 
