@@ -338,9 +338,6 @@ export function registerSshHandlers(): void {
           {
             onData: forwardData,
             onExit: forwardExit,
-            onHostKeyTrusted: (_id, fingerprint) => {
-              void updateSshServer(server.id, (s) => ({ ...s, hostKeyFingerprint: fingerprint }));
-            },
           },
         );
       } catch (error) {

@@ -6,9 +6,12 @@
 // Each node is typed as the leaf type its `@type` names (`BlogPostingLeaf` for a BlogPosting)
 // rather than as `Thing`. Checking a value against `Thing` makes the compiler resolve nearly every
 // type schema.org has, about a second of work, while a leaf type takes a few milliseconds.
+//
+// It needs the compiler API, which TypeScript 7 does not ship, so it uses TypeScript 6 from
+// @typescript/typescript6.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+import ts from '@typescript/typescript6';
 
 export interface JsonLdBlock {
   /** The page the block is on, used to name it in problems. */

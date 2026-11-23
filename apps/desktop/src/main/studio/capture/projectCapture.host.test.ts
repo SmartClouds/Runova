@@ -212,6 +212,7 @@ afterEach(() => {
 const route = (over: Partial<CaptureRouteInput> = {}): CaptureRouteInput => ({
   partition: 'persist:studio-p1',
   url: 'http://localhost:5173/settings',
+  appOrigin: 'http://localhost:5173',
   width: 1280,
   height: 720,
   scale: 1.5,
@@ -280,6 +281,19 @@ describe('captureRoute', () => {
     win.listeners['will-navigate']?.({ preventDefault }, 'https://example.com/');
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(win.openHandler?.()).toEqual({ action: 'deny' });
+  });
+
+  it('never opens a page on another host than the app', async () => {
+    for (const url of [
+      'http://attacker.example/c',
+      'https://localhost:5173/',
+      'http://localhost:9/',
+    ]) {
+      await expect(drive(capture.captureRoute(route({ url })))).rejects.toThrow(
+        "A screenshot can only open the app's own pages.",
+      );
+    }
+    expect(page.windows).toHaveLength(0);
   });
 
   it('refuses the page every permission, and sets a session up once', async () => {

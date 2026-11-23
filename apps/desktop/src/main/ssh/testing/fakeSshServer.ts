@@ -63,6 +63,8 @@ export interface FakeSshServer {
   /** Replaces the host key on the same port, as if the server had been reinstalled. */
   rotateHostKey: () => Promise<void>;
   execRequests: ExecRequest[];
+  /** The method of every login attempt the server received ('none', 'password', 'publickey'). */
+  authAttempts: string[];
   /** Server-side shells, so a test can drive the far end of a session. */
   shells: ServerChannel[];
   close: () => Promise<void>;
@@ -108,6 +110,7 @@ export async function startFakeSshServer(
   const password = options.password ?? 'correct horse battery staple';
   const authorizedKey = options.authorizedKey ? parseKey(options.authorizedKey) : null;
   const execRequests: ExecRequest[] = [];
+  const authAttempts: string[] = [];
   const shells: ServerChannel[] = [];
   const clients = new Set<Connection>();
   let hostKey = generateKeyPair();
@@ -118,6 +121,7 @@ export async function startFakeSshServer(
       client.on('close', () => clients.delete(client));
       client.on('error', () => undefined);
       client.on('authentication', (context) => {
+        authAttempts.push(context.method);
         if (context.username !== username) return context.reject(['password', 'publickey']);
         if (context.method === 'password' && context.password === password) return context.accept();
         if (context.method === 'publickey' && authorizedKey) {
@@ -203,6 +207,7 @@ export async function startFakeSshServer(
       await listen(server, port);
     },
     execRequests,
+    authAttempts,
     shells,
     close: () => closeServer(server),
   };

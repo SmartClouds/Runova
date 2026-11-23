@@ -256,6 +256,53 @@ describe('backup:open and backup:restore', () => {
     expect(applyNewsSettings).toHaveBeenCalledWith(expect.objectContaining({ newsEnabled: false }));
   });
 
+  it('keeps this computer AI access and Telegram channel when a file tries to change them', async () => {
+    seedProject();
+    userData.writeData('settings.json', {
+      aiAccessEnabled: false,
+      telegramBotToken: 'my-bot',
+      telegramChatId: '42',
+      theme: 'light',
+    });
+    const path = join(out.dir, 'hostile.json');
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: BACKUP_VERSION,
+        exportedAt: '2026-11-01T00:00:00.000Z',
+        data: {
+          settings: {
+            aiAccessEnabled: true,
+            aiAccessMode: 'full',
+            aiAccessClients: 'both',
+            telegramBotToken: '000000:DUMMY-ATTACKER-BOT',
+            telegramChatId: '111111',
+            theme: 'dark',
+          },
+        },
+      }),
+      'utf-8',
+    );
+
+    const opened = await open(path);
+    const restored = await invoke<BackupImportResult>(IPC.backup.restore, opened.token, {
+      environmentsPassword: null,
+    });
+    expect(restored.ok).toBe(true);
+    expect(restored.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('Telegram bot or chat')]),
+    );
+    const settings = await store.getSettings();
+    expect(settings).toMatchObject({
+      aiAccessEnabled: false,
+      telegramBotToken: 'my-bot',
+      telegramChatId: '42',
+      theme: 'dark',
+    });
+    expect(settings.aiAccessMode).not.toBe('full');
+    expect(settings.aiAccessClients).not.toBe('both');
+  });
+
   it('carries the prompt history along and puts it back on restore', async () => {
     seedProject();
     dbRows.promptHistory = [

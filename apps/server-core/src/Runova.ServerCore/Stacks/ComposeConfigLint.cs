@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Hosting;
 
@@ -15,7 +16,7 @@ namespace Runova.ServerCore.Stacks;
 /// symbolic links in a bind mount's source, so every check also looks at where the source really
 /// leads on this server.
 /// </summary>
-internal static class ComposeConfigLint
+internal static partial class ComposeConfigLint
 {
     private static readonly (string Key, string Rule, StackRiskSeverity Severity, string Message)[] _hostSettings =
     [
@@ -101,12 +102,61 @@ internal static class ComposeConfigLint
         var realCore = Clean(resolveLinks(core));
         var risks = new List<StackRisk>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        void Add(string rule, StackRiskSeverity severity, string service, string? subject, string message)
+        void Add(string rule, StackRiskSeverity severity, string? service, string? subject, string message)
         {
-            var id = subject is null ? $"{rule}:{service}" : $"{rule}:{service}:{subject}";
+            // A finding for the file as a whole has "-" for its service, as in the app's ids.
+            var id = subject is null ? $"{rule}:{service ?? "-"}" : $"{rule}:{service ?? "-"}:{subject}";
             if (seen.Add(id))
             {
                 risks.Add(new StackRisk(id, rule, severity, message, service));
+            }
+        }
+
+        // A file Compose reads from the server for the project (a secret or config file, or what a
+        // build sends to the builder) is a read-only bind mount by another name: refused inside
+        // the core's data, and anywhere outside the app's files a finding to acknowledge. Null
+        // when it is the app's own; otherwise whether it reaches the server's root, the Docker
+        // socket or the core's files, and where a link in it leads.
+        (StackRiskSeverity Severity, string Leads)? HostRead(string path, string what)
+        {
+            var real = path.StartsWith('/') ? Clean(resolveLinks(path)) : path;
+            var writtenInProject = StackRules.Within(path, project);
+            if (writtenInProject && StackRules.Within(real, realProject))
+            {
+                return null;
+            }
+
+            var leads = real == path ? string.Empty : $" (a link to {real})";
+            if (StackRules.Within(real, realCore) || StackRules.Within(real, core) || (!writtenInProject && StackRules.Within(path, core)))
+            {
+                throw new ComposeConfigException(
+                    $"{what} reads {path}{leads}, which is inside the core's own data. Keep it inside the app's files.");
+            }
+
+            var found = (writtenInProject ? null : Classify(path, readOnly: true)) ?? (real == path ? null : Classify(real, readOnly: true));
+            var severe = found?.Rule is "host-root" or "docker-socket" or "core-data";
+            return (severe ? StackRiskSeverity.Critical : StackRiskSeverity.High, leads);
+        }
+
+        foreach (var kind in (string[])["secrets", "configs"])
+        {
+            if (!config.Root.TryGetProperty(kind, out var section) || section.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var item in section.EnumerateObject())
+            {
+                if (item.Value.ValueKind != JsonValueKind.Object || ComposeConfig.Text(item.Value, "file") is not { Length: > 0 } file)
+                {
+                    continue;
+                }
+
+                var what = $"The {(kind == "secrets" ? "secret" : "config")} {item.Name}";
+                if (HostRead(Anchored(file, project), what) is { } read)
+                {
+                    Add("host-file", read.Severity, null, $"{kind}.{item.Name}:{file}", $"{what} reads {file}{read.Leads} from the server.");
+                }
             }
         }
 
@@ -159,6 +209,14 @@ internal static class ComposeConfigLint
                         "core-data" => $"{service.Name} mounts {path}{leads}{through}, which holds Runova's own server files.",
                         _ => $"{service.Name} mounts the server folder {path}{leads}{(mount.ReadOnly ? " read-only" : string.Empty)}{through}.",
                     });
+                }
+            }
+
+            foreach (var source in BuildSources(definition, project, resolveLinks))
+            {
+                if (HostRead(source.Path, $"{service.Name}'s build") is { } read)
+                {
+                    Add("build-outside", read.Severity, service.Name, source.Written, $"{service.Name} builds from {source.Written}{read.Leads}, outside the app's files.");
                 }
             }
 
@@ -222,8 +280,81 @@ internal static class ComposeConfigLint
 
     private sealed record Mount(string Source, bool ReadOnly, string? Volume);
 
+    /// <summary>A path a build reads from the server: as Compose wrote it (for the id) and in full.</summary>
+    private sealed record BuildSource(string Written, string Path);
+
     private static string Clean(string path) =>
         StackRules.CleanPath(OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path);
+
+    /// <summary><paramref name="path"/> in full, a relative one taken from <paramref name="folder"/>.</summary>
+    private static string Anchored(string path, string folder) =>
+        Clean(Clean(path).StartsWith('/') ? path : $"{folder}/{path}");
+
+    /// <summary>
+    /// What a service's build reads from the server: the context, the Dockerfile and every
+    /// additional context that is a folder (not an image, a service, a stage or a URL). Compose
+    /// writes the folders in full; a relative Dockerfile is taken from the context, and one that
+    /// stays inside it is covered by the context's own check. Build secrets name root-level
+    /// secrets, which are checked with the others.
+    /// </summary>
+    private static IEnumerable<BuildSource> BuildSources(JsonElement definition, string project, Func<string, string> resolveLinks)
+    {
+        if (!definition.TryGetProperty("build", out var build))
+        {
+            yield break;
+        }
+
+        var context = build.ValueKind switch
+        {
+            JsonValueKind.String => build.GetString(),
+            JsonValueKind.Object => ComposeConfig.Text(build, "context"),
+            _ => null,
+        };
+        string? contextPath = null;
+        if (context is { Length: > 0 } && !Remote().IsMatch(context))
+        {
+            contextPath = Anchored(context, project);
+            yield return new BuildSource(context, contextPath);
+        }
+
+        if (build.ValueKind != JsonValueKind.Object)
+        {
+            yield break;
+        }
+
+        if (ComposeConfig.Text(build, "dockerfile") is { Length: > 0 } dockerfile && !Remote().IsMatch(dockerfile))
+        {
+            var absolute = Clean(dockerfile).StartsWith('/');
+            if (absolute || contextPath is not null)
+            {
+                var path = Anchored(dockerfile, contextPath ?? project);
+                var insideContext = contextPath is not null && StackRules.Within(path, contextPath)
+                    && StackRules.Within(Clean(resolveLinks(path)), Clean(resolveLinks(contextPath)));
+                if (!insideContext)
+                {
+                    yield return new BuildSource(dockerfile, path);
+                }
+            }
+        }
+
+        if (build.TryGetProperty("additional_contexts", out var extra) && extra.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var entry in extra.EnumerateObject())
+            {
+                if (entry.Value.ValueKind == JsonValueKind.String && entry.Value.GetString() is { Length: > 0 } value
+                    && !Remote().IsMatch(value) && !NotAFolder().IsMatch(value))
+                {
+                    yield return new BuildSource(value, Anchored(value, project));
+                }
+            }
+        }
+    }
+
+    [GeneratedRegex("^([a-z][a-z0-9+.-]*://|git@|github\\.com/)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Remote();
+
+    [GeneratedRegex("^(docker-image|oci-layout|service|target):", RegexOptions.CultureInvariant)]
+    private static partial Regex NotAFolder();
 
     /// <summary>
     /// <paramref name="path"/> with every symbolic link in it followed, one component at a time,

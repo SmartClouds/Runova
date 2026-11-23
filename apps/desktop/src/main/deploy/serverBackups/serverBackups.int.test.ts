@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import { tempDir } from '../../../test/main/fixtures';
+import { probeHostKey } from '../../ssh/connectConfig';
 import { SshConnectionPool } from '../../ssh/pool';
 import { localArtifactSource } from '../bootstrap/releaseSource';
 import { DeployService } from '../service';
@@ -119,11 +120,11 @@ async function install(owner: string, image: TestServerImage, address: string): 
     endpoint: async () => ({
       host: server.host,
       port: server.port,
+      storedFingerprint: await probeHostKey(server.host, server.port),
       username: 'root',
       authMethod: 'password',
       password: TEST_LOGINS.root.password,
     }),
-    trustHostKey: async () => undefined,
   });
   let file: unknown = null;
   const service = new DeployService({

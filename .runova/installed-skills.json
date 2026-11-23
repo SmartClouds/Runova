@@ -4,20 +4,51 @@
     "repositoryId": "skills-sh-directory",
     "version": "2026-08-13",
     "installedAt": "2026-08-13T09:39:22.487Z",
-    "agents": ["claude-code", "codex", "cursor", "opencode", "gemini-cli"]
+    "agents": [
+      "claude-code",
+      "codex",
+      "cursor",
+      "opencode",
+      "gemini-cli"
+    ]
   },
   {
     "skillId": "vercel-labs/skills/find-skills",
     "repositoryId": "skills-sh-directory",
     "version": "2026-08-13",
     "installedAt": "2026-08-13T09:39:28.399Z",
-    "agents": ["claude-code", "codex", "cursor", "opencode", "gemini-cli"]
+    "agents": [
+      "claude-code",
+      "codex",
+      "cursor",
+      "opencode",
+      "gemini-cli"
+    ]
   },
   {
     "skillId": "vercel-labs/agent-skills/vercel-react-best-practices",
     "repositoryId": "skills-sh-directory",
     "version": "2026-08-13",
     "installedAt": "2026-08-13T09:39:34.568Z",
-    "agents": ["claude-code", "codex", "cursor", "opencode", "gemini-cli"]
+    "agents": [
+      "claude-code",
+      "codex",
+      "cursor",
+      "opencode",
+      "gemini-cli"
+    ]
+  },
+  {
+    "skillId": "cloudflare/security-audit-skill/security-audit",
+    "repositoryId": "skills-sh-directory",
+    "version": "2026-11-23",
+    "installedAt": "2026-11-23T05:35:45.814Z",
+    "agents": [
+      "claude-code",
+      "codex",
+      "opencode",
+      "gemini-cli",
+      "cursor"
+    ]
   }
 ]

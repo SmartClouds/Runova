@@ -81,6 +81,86 @@ public sealed class StackLibraryTests
         Assert.Empty(ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, path => path));
     }
 
+    [Theory]
+    [InlineData("secrets")]
+    [InlineData("configs")]
+    public void A_secret_or_config_file_inside_the_core_data_is_refused(string kind)
+    {
+        using var config = ComposeConfig.Parse(
+            """{"services":{"web":{"image":"busybox:1.37"}},"KIND":{"db":{"name":"q_db","file":"/var/lib/runova-core/core.db"}}}""".Replace("KIND", kind, StringComparison.Ordinal));
+
+        var error = Assert.Throws<ComposeConfigException>(() => ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, path => path));
+
+        Assert.Contains("/var/lib/runova-core/core.db", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_secret_file_that_links_into_the_core_data_is_refused_and_one_in_the_apps_files_is_not_a_finding()
+    {
+        using var config = ComposeConfig.Parse("""{"services":{"web":{"image":"busybox:1.37"}},"secrets":{"db":{"file":"/srv/app/files/db.txt"}}}""");
+
+        Assert.Empty(ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, path => path));
+        Assert.Throws<ComposeConfigException>(
+            () => ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, Links(("/srv/app/files/db.txt", CoreData + "/core.db"))));
+    }
+
+    [Fact]
+    public void A_secret_file_outside_the_apps_files_needs_an_acknowledgment_and_the_docker_socket_is_critical()
+    {
+        using var config = ComposeConfig.Parse("""
+            {"services":{"web":{"image":"busybox:1.37"}},
+             "secrets":{"key":{"file":"/root/.ssh/id_ed25519"}},
+             "configs":{"sock":{"file":"/var/run/docker.sock"},"inline":{"content":"x"}}}
+            """);
+
+        var risks = ComposeConfigLint.Lint(config, [], ProjectDirectory, CoreData, path => path);
+
+        Assert.Equal(2, risks.Count);
+        var key = Assert.Single(risks, risk => risk.Id == "host-file:-:secrets.key:/root/.ssh/id_ed25519");
+        Assert.Equal(StackRiskSeverity.High, key.Severity);
+        Assert.Null(key.Service);
+        Assert.Equal(StackRiskSeverity.Critical, Assert.Single(risks, risk => risk.Id == "host-file:-:configs.sock:/var/run/docker.sock").Severity);
+        Assert.Single(StackOperations.Unacknowledged(risks, ["host-file:-:secrets.key:/root/.ssh/id_ed25519"]));
+    }
+
+    [Fact]
+    public void A_build_outside_the_apps_files_needs_an_acknowledgment_and_one_in_the_core_data_is_refused()
+    {
+        static ComposeConfig Build(string build) =>
+            ComposeConfig.Parse("""{"services":{"web":{"image":"q-web","build":""" + build + "}}}");
+
+        using (var inside = Build("""{"context":"/srv/app/files","dockerfile":"Dockerfile","additional_contexts":{"img":"docker-image://alpine:3.22","site":"service:site"}}"""))
+        {
+            Assert.Empty(ComposeConfigLint.Lint(inside, [], ProjectDirectory, CoreData, path => path));
+        }
+
+        using (var root = Build("""{"context":"/root","dockerfile":"Dockerfile"}"""))
+        {
+            var risk = Assert.Single(ComposeConfigLint.Lint(root, [], ProjectDirectory, CoreData, path => path));
+            Assert.Equal("build-outside:web:/root", risk.Id);
+            Assert.Equal(StackRiskSeverity.High, risk.Severity);
+        }
+
+        using (var dockerfile = Build("""{"context":"/srv/app/files","dockerfile":"../../../../etc/shadow"}"""))
+        {
+            Assert.Equal(
+                "build-outside:web:../../../../etc/shadow",
+                Assert.Single(ComposeConfigLint.Lint(dockerfile, [], ProjectDirectory, CoreData, path => path)).Id);
+        }
+
+        using (var socket = Build("""{"context":"/srv/app/files","additional_contexts":{"s":"/var/run"}}"""))
+        {
+            var risk = Assert.Single(ComposeConfigLint.Lint(socket, [], ProjectDirectory, CoreData, path => path));
+            Assert.Equal(("build-outside:web:/var/run", StackRiskSeverity.Critical), (risk.Id, risk.Severity));
+        }
+
+        using var keys = Build("""{"context":"/srv/app/files","additional_contexts":{"k":"/var/lib/runova-core/keys"}}""");
+        Assert.Throws<ComposeConfigException>(() => ComposeConfigLint.Lint(keys, [], ProjectDirectory, CoreData, path => path));
+        using var context = Build(@"""/srv/app/files/linked""");
+        Assert.Throws<ComposeConfigException>(
+            () => ComposeConfigLint.Lint(context, [], ProjectDirectory, CoreData, Links(("/srv/app/files/linked", CoreData))));
+    }
+
     [Fact]
     public void A_link_in_the_apps_files_is_judged_by_where_it_leads()
     {

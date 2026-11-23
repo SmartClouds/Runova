@@ -1,4 +1,4 @@
-import { type PostmanCollection, syncCollection } from '@runova/core';
+import { canonicalJson, type PostmanCollection, syncCollection } from '@runova/core';
 import type { CollectionMeta } from '../../apiClient/collectionStore';
 import { fromAnotherComputer } from './copyName';
 import { recordStoreAdapter } from './recordStore';
@@ -23,6 +23,19 @@ function bytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf-8');
 }
 
+/** Every script in a collection (its own, its folders' and its requests'), in order. */
+function scriptsOf(node: unknown, found: unknown[] = []): unknown[] {
+  if (!node || typeof node !== 'object') return found;
+  const { event, item } = node as { event?: unknown; item?: unknown };
+  if (Array.isArray(event) && event.length) found.push(event);
+  if (Array.isArray(item)) for (const child of item) scriptsOf(child, found);
+  return found;
+}
+
+function sameScripts(a: PostmanCollection, b: PostmanCollection): boolean {
+  return canonicalJson(scriptsOf(a)) === canonicalJson(scriptsOf(b));
+}
+
 /**
  * API Client collections (E48). Each collection is one item: its metadata and its Postman content
  * together. One too big for a record stays on this computer only. Whether its scripts may run is
@@ -38,10 +51,14 @@ export function apiCollectionsAdapter(store: ApiCollectionsPort) {
     remove: (id) => store.remove(id),
     id: (item) => item.id,
     syncs: (item) => bytes(item) <= MAX_COLLECTION_BYTES,
-    fromValue: (value, existing) => ({
-      ...(value as unknown as SyncedCollection),
-      scriptsTrusted: existing?.scriptsTrusted ?? false,
-    }),
+    fromValue: (value, existing) => {
+      const next = value as unknown as SyncedCollection;
+      // Trust covers the scripts the person trusted here. New or changed scripts from somewhere
+      // else wait until the person trusts the collection again.
+      const trusted =
+        existing?.scriptsTrusted === true && sameScripts(existing.collection, next.collection);
+      return { ...next, scriptsTrusted: trusted };
+    },
     duplicate: (value) => ({ ...value, name: fromAnotherComputer(value.name, 120) }),
   });
 }

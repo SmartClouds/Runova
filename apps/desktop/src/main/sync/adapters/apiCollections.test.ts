@@ -1,4 +1,4 @@
-import { createCollection, type PostmanCollection } from '@runova/core';
+import { createCollection, type PostmanCollection, type PostmanEvent } from '@runova/core';
 import { describe, expect, it } from 'vitest';
 import type { CollectionMeta } from '../../apiClient/collectionStore';
 import { apiCollectionsAdapter, MAX_COLLECTION_BYTES } from './apiCollections';
@@ -33,6 +33,21 @@ function memoryCollections(
     },
     get: () => entries,
   };
+}
+
+function script(line: string): PostmanEvent {
+  return { listen: 'prerequest', script: { type: 'text/javascript', exec: [line] } };
+}
+
+/** The collection with one request that runs these test lines. */
+function withScripts(collection: PostmanCollection, lines: string[]): PostmanCollection {
+  collection.item.push({
+    id: 'r1',
+    name: 'Charge',
+    request: { method: 'POST', url: 'https://billing.invalid' },
+    event: lines.map((line) => ({ ...script(line), listen: 'test' })),
+  } as never);
+  return collection;
 }
 
 describe('apiCollectionsAdapter', () => {
@@ -88,21 +103,57 @@ describe('apiCollectionsAdapter', () => {
     ]);
   });
 
-  it('keeps the trust given on this computer on an update', async () => {
-    const store = memoryCollections([
-      { meta: meta(), collection: createCollection('Billing API') },
-    ]);
+  it('keeps the trust given on this computer on an update that leaves the scripts alone', async () => {
+    const before = withScripts(createCollection('Billing API'), ['pm.test("ok")']);
+    const store = memoryCollections([{ meta: meta(), collection: before }]);
+    const after = withScripts(createCollection('Billing'), ['pm.test("ok")']);
+    after.item.push({
+      id: 'r2',
+      name: 'New request',
+      request: { method: 'GET', url: 'x' },
+    } as never);
 
     await apiCollectionsAdapter(store).apply({
       id: 'a1',
       teamId: null,
-      value: {
-        ...meta({ name: 'Billing', scriptsTrusted: false }),
-        collection: createCollection('Billing'),
-      },
+      // The engine joins this computer's own fields back in, trust included.
+      value: { ...meta({ name: 'Billing' }), collection: after },
     });
 
     expect(store.get()[0]?.meta).toMatchObject({ name: 'Billing', scriptsTrusted: true });
+  });
+
+  it('asks again before running scripts that changed somewhere else', async () => {
+    const before = withScripts(createCollection('Billing API'), ['pm.test("ok")']);
+    const changes: ((collection: PostmanCollection) => void)[] = [
+      (c) => {
+        c.event = [script('pm.sendRequest("http://elsewhere.invalid")')];
+      },
+      (c) => {
+        (c.item[0] as { event?: unknown }).event = [script('pm.sendRequest("x")')];
+      },
+      (c) => {
+        c.item.push({
+          id: 'f1',
+          name: 'Folder',
+          item: [],
+          event: [script('pm.sendRequest("y")')],
+        } as never);
+      },
+    ];
+    for (const change of changes) {
+      const store = memoryCollections([{ meta: meta(), collection: before }]);
+      const after = structuredClone(before);
+      change(after);
+
+      await apiCollectionsAdapter(store).apply({
+        id: 'a1',
+        teamId: 7,
+        value: { ...meta(), collection: after },
+      });
+
+      expect(store.get()[0]?.meta.scriptsTrusted).toBe(false);
+    }
   });
 
   it('removes a collection', async () => {

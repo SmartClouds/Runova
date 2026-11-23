@@ -30,14 +30,74 @@ public static class AgentPolicy
     }
 }
 
-/// <summary>The same slow-down as the app: 1, 2, 4... seconds after each wrong password, at most a minute, and 15 minutes locked after 10.</summary>
+/// <summary>
+/// The same slow-down as the app: 1, 2, 4... seconds after each wrong password, at most a minute, and
+/// 15 minutes locked after 10. Requests are served at the same time, so every call takes one lock.
+/// </summary>
 public sealed class PasswordLockout(Func<DateTimeOffset> now)
 {
+    private readonly Lock _gate = new();
     private int _count;
     private DateTimeOffset _last;
     private DateTimeOffset? _until;
 
+    /// <summary>
+    /// Counts a guess as wrong before it is checked, unless the lockout is on; false when it is.
+    /// The host's handshake reply already tells the controller whether its guess was right, so a
+    /// guess has to count from the start and only <see cref="Succeeded"/> takes it back. Checking
+    /// and counting together also keeps requests that arrive at once from all getting past.
+    /// </summary>
+    public bool TryBegin()
+    {
+        lock (_gate)
+        {
+            if (WaitLocked() > TimeSpan.Zero)
+            {
+                return false;
+            }
+
+            FailedLocked();
+            return true;
+        }
+    }
+
     public void Failed()
+    {
+        lock (_gate)
+        {
+            FailedLocked();
+        }
+    }
+
+    public void Succeeded()
+    {
+        lock (_gate)
+        {
+            _count = 0;
+            _until = null;
+        }
+    }
+
+    public TimeSpan Wait()
+    {
+        lock (_gate)
+        {
+            return WaitLocked();
+        }
+    }
+
+    public bool Locked() => Wait() > TimeSpan.Zero;
+
+    public DateTimeOffset? LockedUntil()
+    {
+        lock (_gate)
+        {
+            Expire();
+            return _until;
+        }
+    }
+
+    private void FailedLocked()
     {
         _count++;
         _last = now();
@@ -47,13 +107,7 @@ public sealed class PasswordLockout(Func<DateTimeOffset> now)
         }
     }
 
-    public void Succeeded()
-    {
-        _count = 0;
-        _until = null;
-    }
-
-    public TimeSpan Wait()
+    private TimeSpan WaitLocked()
     {
         Expire();
         if (_until is { } until)
@@ -68,14 +122,6 @@ public sealed class PasswordLockout(Func<DateTimeOffset> now)
 
         var wait = TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, _count - 1)));
         return Max(_last + wait - now());
-    }
-
-    public bool Locked() => Wait() > TimeSpan.Zero;
-
-    public DateTimeOffset? LockedUntil()
-    {
-        Expire();
-        return _until;
     }
 
     private void Expire()

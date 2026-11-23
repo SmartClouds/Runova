@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { DB_ENGINES } from '@runova/core';
+import { DB_ENGINES, type DbTlsMode } from '@runova/core';
 import { z } from 'zod';
 import type { SecretEnvelope } from '../../shared/apiTypes';
 import type {
@@ -79,6 +79,7 @@ const storedSchema = z.object({
   database: shortText.nullable(),
   authDatabase: shortText.nullable(),
   tls: z.boolean(),
+  tlsMode: z.enum(['verify-full', 'verify-ca', 'require']).optional(),
   srv: z.boolean(),
   readOnly: z.boolean(),
   passwordEnvelope: envelopeSchema.nullable(),
@@ -95,6 +96,22 @@ function summary(stored: StoredDatabaseConnection): DatabaseConnection {
     hasPassword: passwordEnvelope !== null,
     locked: passwordEnvelope ? isLockedEnvelope(passwordEnvelope) : false,
   };
+}
+
+/**
+ * How a saved connection checks the server's certificate. A connection saved before modes
+ * existed has none. For a direct one it is read the way the URL parser reads `ssl=true`, so it
+ * now checks the certificate and the host name: a self-signed server then fails with a message
+ * that says how to opt out. One reached through a server's SSH tunnel or a local container keeps
+ * the unchecked TLS it always had, since the tunnel already protects that path and the server's
+ * certificate rarely names the address the container is reached by.
+ */
+export function effectiveTlsMode(
+  connection: Pick<StoredDatabaseConnection, 'tls' | 'tlsMode' | 'target'>,
+): DbTlsMode | null {
+  if (!connection.tls) return null;
+  if (connection.tlsMode) return connection.tlsMode;
+  return connection.target.kind === 'direct' ? 'verify-full' : 'require';
 }
 
 function cleanText(value: string | null | undefined): string | null {
@@ -165,6 +182,11 @@ export class DatabaseConnectionStore {
     return this.mutate((state) => {
       const existing = input.id ? state.connections.find((one) => one.id === input.id) : undefined;
       if (input.id && !existing) throw new Error('There is no saved connection with that id.');
+      // A new TLS connection checks the certificate unless it says otherwise. One saved before
+      // modes existed keeps having none, so effectiveTlsMode still treats it as it did.
+      const tlsMode = input.tls
+        ? (input.tlsMode ?? (existing ? existing.tlsMode : 'verify-full'))
+        : undefined;
       const next: StoredDatabaseConnection = {
         id: existing?.id ?? randomUUID(),
         name: name.slice(0, 200),
@@ -174,6 +196,7 @@ export class DatabaseConnectionStore {
         database: cleanText(input.database),
         authDatabase: cleanText(input.authDatabase),
         tls: input.tls ?? false,
+        ...(tlsMode ? { tlsMode } : {}),
         srv: input.srv ?? false,
         readOnly: input.readOnly ?? false,
         passwordEnvelope:

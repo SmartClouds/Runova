@@ -122,6 +122,34 @@ describe('key service', () => {
     expect(after?.key.equals(before?.key as Buffer)).toBe(false);
   });
 
+  it('keeps a held key when the server lists no key or an older one', async () => {
+    const state = memoryState();
+    const service = createKeyService({ api: memoryServer().api, state, cost: FAST });
+    await state.putKey(1, 2, Buffer.alloc(32, 1));
+
+    await service.forgetIfStale(1, 1);
+    expect((await service.key(1))?.version).toBe(2);
+
+    await service.forgetIfStale(1, null);
+    await service.forgetIfStale(1, null);
+    expect(await service.key(1)).toMatchObject({ version: 2, suspended: true });
+  });
+
+  it('drops a held key for a newer version, or for any key listed after none', async () => {
+    const state = memoryState();
+    const service = createKeyService({ api: memoryServer().api, state, cost: FAST });
+    await state.putKey(1, 1, Buffer.alloc(32, 1));
+    await state.putKey(2, 1, Buffer.alloc(32, 2));
+
+    await service.forgetIfStale(1, 2);
+    // Reset on another computer, then a new key there: it starts again at version 1.
+    await service.forgetIfStale(2, null);
+    await service.forgetIfStale(2, 1);
+
+    expect(await service.key(1)).toBeNull();
+    expect(await service.key(2)).toBeNull();
+  });
+
   it('forgets a key that the server no longer has', async () => {
     const server = memoryServer();
     const service = createKeyService({ api: server.api, state: memoryState(), cost: FAST });

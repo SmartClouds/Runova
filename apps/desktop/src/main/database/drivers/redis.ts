@@ -13,7 +13,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
-import { describeError } from './shared';
+import { describeError, nodeTlsOptions } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -90,19 +90,25 @@ function replyToResult(
   return rows(['value'], [[toCell(reply)]], statement, started);
 }
 
-export async function openRedis(options: DriverConnectOptions): Promise<DbDriver> {
-  const base: RedisOptions = {
+/** The ioredis options every client of one connection shares. */
+export function redisOptions(options: DriverConnectOptions): RedisOptions {
+  const tls = nodeTlsOptions(options);
+  return {
     host: options.host,
     port: options.port ?? 6379,
     ...(options.user ? { username: options.user } : {}),
     ...(options.password ? { password: options.password } : {}),
-    ...(options.tls ? { tls: { rejectUnauthorized: false } } : {}),
+    ...(tls ? { tls } : {}),
     connectTimeout: options.connectTimeoutMs ?? 15_000,
     lazyConnect: true,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
     retryStrategy: () => null,
   };
+}
+
+export async function openRedis(options: DriverConnectOptions): Promise<DbDriver> {
+  const base = redisOptions(options);
   const clients = new Map<number, Redis>();
   const open = async (db: number): Promise<Redis> => {
     const existing = clients.get(db);

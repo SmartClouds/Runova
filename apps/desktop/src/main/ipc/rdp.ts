@@ -145,10 +145,6 @@ const handshakeDeps: HandshakeDeps = { ...directHandshakeDeps, route: resolveTun
 
 const proxy = new RdpProxy(
   {
-    onCertificateFirstSeen: (target, cert) => {
-      const session = sessions.get(target.sessionId);
-      if (session) void updateServer(session.serverId, pinCertificate(cert));
-    },
     onCertificateMismatch: (target, cert) => {
       const session = sessions.get(target.sessionId);
       if (!session) return;
@@ -156,6 +152,7 @@ const proxy = new RdpProxy(
       const prompt: RdpCertificatePrompt = {
         sessionId: session.sessionId,
         host: target.host,
+        // Empty on a first connect: nothing saved yet, and the window words its question so.
         expectedFingerprint: target.expectedFingerprint ?? '',
         actualFingerprint: cert.fingerprint,
         subject: cert.subject,
@@ -377,8 +374,8 @@ export function registerRdpHandlers(): void {
     },
   );
 
-  // After this the next connection accepts whatever certificate the server presents and saves
-  // it, as if the server had never been connected to.
+  // After this the next connection asks about the certificate the server presents, as if the
+  // server had never been connected to.
   ipcMain.handle(IPC.rdp.forgetCertificate, async (_event, serverId: string): Promise<void> => {
     checkedCertificates.delete(serverId);
     await updateServer(serverId, (s) => ({

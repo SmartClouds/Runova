@@ -1,5 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing.Handlers;
+using Microsoft.Extensions.DependencyInjection;
+using Runova.Website.Data.Identity;
 using Runova.Website.IntegrationTests.Infrastructure;
 
 namespace Runova.Website.IntegrationTests.Accounts;
@@ -9,9 +13,11 @@ public sealed class GoogleSignInTests : IDisposable
     private readonly FakeGoogle _google = new();
     private readonly WebsiteApiFactory _factory;
     private readonly string _connection;
+    private readonly PostgresFixture _postgres;
 
     public GoogleSignInTests(PostgresFixture postgres)
     {
+        _postgres = postgres;
         _connection = postgres.ConnectionString;
         _google.Email = TestAccounts.NewEmail();
         _google.Subject = Guid.NewGuid().ToString("N");
@@ -133,6 +139,24 @@ public sealed class GoogleSignInTests : IDisposable
         var done = await FakeGoogle.SignInAsync(client, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
 
         Assert.Equal("/account/security?error=login-taken", done.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_signed_api_client_can_not_link_google_to_the_account_that_shares_its_id()
+    {
+        // A database of its own, so the client can be given the account's id.
+        using var factory = new WebsiteApiFactory(await _postgres.CreateDatabaseAsync(), settings: FakeGoogle.Settings, services: _google.Register);
+        var victim = await TestAccounts.CreateAsync(factory.Services);
+        var (keyId, secret) = await TestApiClients.AddAsync(factory.Services, id: victim.Id);
+        var signed = new ApiClient(factory.CreateDefaultClient(
+            new Uri("https://localhost"), new CookieContainerHandler(), new RunovaSigningHandler(keyId, secret)));
+
+        var done = await FakeGoogle.SignInAsync(signed, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+
+        Assert.DoesNotContain("linked=", done.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        Assert.Empty(await users.GetLoginsAsync(await TestAccounts.ReloadAsync(factory.Services, victim.Id)));
     }
 
     [Fact]

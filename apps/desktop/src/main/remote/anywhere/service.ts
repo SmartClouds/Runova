@@ -198,6 +198,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
   const now = deps.now ?? Date.now;
   const ringMs = deps.ringMs ?? 60_000;
   const lockout = new PasswordLockout(now);
+  /** One password try at a time, so the lockout sees each guess before the next one comes in. */
+  let passwordHandshake = false;
 
   let status: AnywhereStatus = 'signed-out';
   let error: string | null = null;
@@ -546,6 +548,27 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     announce();
   }
 
+  /**
+   * Where a host's key is pinned, and whether the key offered for it is one to trust. The app and
+   * the background agent each have a slot, and it is the hub that says which one answered. So an
+   * empty slot only counts as first contact when the other slot is empty too or holds this same
+   * key; otherwise the hub could slip in a key of its own just by saying the agent answered.
+   */
+  async function checkHostKey(
+    remoteId: string,
+    kind: string,
+    offered: string,
+  ): Promise<{ pinKey: string; trusted: boolean }> {
+    const agentSlot = `${remoteId}#agent`;
+    const appPin = await deps.store.pin(remoteId);
+    const agentPin = await deps.store.pin(agentSlot);
+    const [slotPin, otherPin] = kind === 'agent' ? [agentPin, appPin] : [appPin, agentPin];
+    return {
+      pinKey: kind === 'agent' ? agentSlot : remoteId,
+      trusted: slotPin ? slotPin === offered : otherPin === null || otherPin === offered,
+    };
+  }
+
   function fail(attempt: number, message: string): void {
     if (outgoing?.attempt !== attempt) return;
     if (outgoing.sessionId) void deps.hub.end(outgoing.sessionId).catch(() => undefined);
@@ -625,11 +648,11 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     outgoing.hostKey = result.host.identityKey;
     setOutgoing({ hostName: result.host.name, platform: result.host.platform });
 
-    outgoing.pinKey = result.host.kind === 'agent' ? `${remoteId}#agent` : remoteId;
-    const pinned = await deps.store.pin(outgoing.pinKey);
+    const pin = await checkHostKey(remoteId, result.host.kind, result.host.identityKey);
     // An answer can arrive during that wait, and it must not be painted over below.
     if (outgoing?.attempt !== attempt || outgoing.sessionId !== result.sessionId) return;
-    if (pinned && pinned !== result.host.identityKey) {
+    outgoing.pinKey = pin.pinKey;
+    if (!pin.trusted) {
       void deps.hub.end(result.sessionId).catch(() => undefined);
       outgoing.sessionId = null;
       setOutgoing({ phase: 'key-changed' });
@@ -827,9 +850,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     const host = result.host;
     const name = host.name || formatRemoteId(remoteId);
     try {
-      const pinKey = host.kind === 'agent' ? `${remoteId}#agent` : remoteId;
-      const pinned = await deps.store.pin(pinKey);
-      if (pinned && pinned !== host.identityKey) {
+      const { pinKey, trusted } = await checkHostKey(remoteId, host.kind, host.identityKey);
+      if (!trusted) {
         throw new DialError(
           'key-changed',
           `${name} has a new key since you last connected. Connect to it once from the Anywhere tab to check it, then send again.`,
@@ -942,6 +964,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       void serve(request, current.defaultPermissions);
       return;
     }
+    const keyApproved =
+      key && request.intent !== 'manage' && request.mode === 'ask'
+        ? await deps.store.controllerApproved(key, request.controller.userId)
+        : false;
     const decision = !key
       ? 'decline'
       : request.intent === 'manage'
@@ -958,7 +984,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
               controllerUserId: request.controller.userId,
               teams: request.teams,
               hasPasswordSecret: passwordSet,
-              lockedOut: lockout.locked(),
+              lockedOut: lockout.locked() || passwordHandshake,
+              keyApproved,
             },
             current,
           );
@@ -967,7 +994,14 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       return;
     }
     if (decision === 'accept') {
-      await deps.hub.respond(request.sessionId, true);
+      const password = request.mode === 'password';
+      if (password) passwordHandshake = true;
+      try {
+        await deps.hub.respond(request.sessionId, true);
+      } catch (e) {
+        if (password) passwordHandshake = false;
+        throw e;
+      }
       void serve(request, current.defaultPermissions);
       return;
     }
@@ -1024,10 +1058,23 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       });
       announce();
     }
-    const phoneKey = entry.request.controller.identityKey;
-    if (entry.request.intent === 'manage' && phoneKey) {
+    const controllerKey = entry.request.controller.identityKey;
+    if (
+      controllerKey &&
+      (entry.request.intent === 'control' || entry.request.intent === 'files') &&
+      (entry.request.relation === 'own' || entry.request.relation === 'teammate')
+    ) {
+      // Someone here said yes to this key, so it may come back without asking when the settings
+      // allow that. A new key, even under the same account, is asked about again.
+      await deps.store.approveController({
+        key: controllerKey,
+        userId: entry.request.controller.userId,
+        approvedAt: now(),
+      });
+    }
+    if (entry.request.intent === 'manage' && controllerKey) {
       await deps.store.trustPhone({
-        key: phoneKey,
+        key: controllerKey,
         name: entry.request.controller.deviceName ?? 'Phone',
         platform: entry.request.controller.platform,
         scopes: answer.scopes ?? [],
@@ -1046,9 +1093,11 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
     permissions: AnywherePermissions,
   ): Promise<void> {
     const sessionId = request.sessionId;
-    if (!identity || !request.controller.identityKey) return;
+    const password = request.mode === 'password';
+    let guessed = false;
     let link: SecureLink | null = null;
     try {
+      if (!identity || !request.controller.identityKey) return;
       const opened = await deps.links.open({
         sessionId,
         role: 'host',
@@ -1062,6 +1111,13 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
           : null;
       if (request.mode === 'password' && !secret)
         throw new HandshakeError('protocol', 'No password is set here.');
+      // The controller can tell whether its guess was right from this side's first reply alone,
+      // so the guess counts before that reply goes out, however the controller ends things after.
+      // Only a finished handshake takes it back.
+      if (password) {
+        lockout.failed();
+        guessed = true;
+      }
       const keys = await link.runAsHost({
         sessionId,
         mode: request.mode,
@@ -1071,7 +1127,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
         localFingerprint: opened.localFingerprint,
         remoteFingerprint: opened.remoteFingerprint,
       });
-      if (request.mode === 'password') lockout.succeeded();
+      if (password) {
+        lockout.succeeded();
+        guessed = false;
+      }
       // A send leaves no record on the website, so it is not reported as a session.
       if (request.intent !== 'send') {
         await deps.hub.connected(sessionId, opened.kind).catch(() => undefined);
@@ -1125,8 +1184,8 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
       link?.close();
       void deps.hub.end(sessionId).catch(() => undefined);
       deps.links.cancel(sessionId);
-      if (e instanceof HandshakeError && e.reason === 'wrong-password') {
-        lockout.failed();
+      if (guessed) {
+        // Counted already, before the reply went out.
         if (lockout.lockedUntil()) {
           forwardNotification({ category: 'remote', status: 'locked' });
           deps.notify(
@@ -1135,9 +1194,10 @@ export function createAnywhereService(deps: AnywhereServiceDeps) {
           );
         }
         announce();
-        return;
       }
       log(`serving a session failed: ${String(e)}`);
+    } finally {
+      if (password) passwordHandshake = false;
     }
   }
 

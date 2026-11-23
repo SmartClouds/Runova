@@ -31,7 +31,13 @@ internal sealed unsafe class X11Display : IDisposable
         _spareKeycode = FindSpareKeycode();
     }
 
-    public static X11Display? Open(string display, string? authFile)
+    /// <param name="display">The display to open, like ":0".</param>
+    /// <param name="authFile">The server's auth file, or null for none.</param>
+    /// <param name="serverPid">
+    /// The X server process that has to be at the other end. The connection is dropped when the
+    /// socket Xlib reached belongs to anything else.
+    /// </param>
+    public static X11Display? Open(string display, string? authFile, int? serverPid = null)
     {
         // libX11 reads XAUTHORITY from the C environment, which Environment.SetEnvironmentVariable does not change.
         if (authFile is null)
@@ -45,7 +51,18 @@ internal sealed unsafe class X11Display : IDisposable
 
         X11Native.XSetErrorHandler(&IgnoreError);
         var handle = X11Native.XOpenDisplay(display);
-        return handle == 0 ? null : new X11Display(handle);
+        if (handle == 0)
+        {
+            return null;
+        }
+
+        if (serverPid is { } pid && LinuxXServerProbe.PeerPid(X11Native.XConnectionNumber(handle)) != pid)
+        {
+            X11Native.XCloseDisplay(handle);
+            return null;
+        }
+
+        return new X11Display(handle);
     }
 
     [UnmanagedCallersOnly]

@@ -166,6 +166,36 @@ describe('EnvironmentsTab linked files', () => {
     ).toBeInTheDocument();
   });
 
+  it('asks to confirm a link that came from another computer, starting on its file', async () => {
+    const synced: ProjectEnvironment = {
+      ...environment,
+      files: [
+        envFile({
+          id: 'f9',
+          fileName: '.env.shared',
+          link: { path: 'config/.env.shared', state: 'needsConfirmation' },
+        }),
+      ],
+    };
+    const { user } = renderTab({
+      'environments.list': [synced],
+      'environments.scanFolder': [],
+      'environments.inspectLinkFile': {
+        path: 'config/.env.shared',
+        keyCount: 1,
+        sameAsSaved: true,
+      },
+    });
+    await screen.findByText('.env.shared', { selector: 'p' });
+    expect(row('.env.shared')).toHaveTextContent('Not followed here until you confirm it');
+
+    await user.click(within(row('.env.shared')).getByRole('button', { name: 'Review link' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Link .env.shared to a project file',
+    });
+    expect(within(dialog).getByRole('radio', { name: /config\/\.env\.shared/ })).toBeChecked();
+  });
+
   it('unlinks and shows the file in its folder from the link menu', async () => {
     const { user, bridge } = renderLinked();
     await screen.findByText('.env.production', { selector: 'p' });

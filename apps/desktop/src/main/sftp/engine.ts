@@ -305,6 +305,7 @@ function codedError(error: unknown, path: string): Error {
   const ssh = sshErrorCode(error);
   if (ssh === 'vault-locked') return filesError('vaultLocked', sshErrorMessage(error));
   if (ssh === 'host-key-changed') return filesError('hostKeyChanged', sshErrorMessage(error));
+  if (ssh === 'host-key-unknown') return filesError('hostKeyUnknown', sshErrorMessage(error));
   if (ssh) return filesError('auth', sshErrorMessage(error));
   if (isLocalFsError(error)) return localError(error, path);
   return mapSftpError(error, path);

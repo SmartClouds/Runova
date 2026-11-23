@@ -73,6 +73,15 @@ export interface DetectedDatabase {
   needsPassword: boolean;
 }
 
+/**
+ * How a TLS connection checks the server's certificate, named after the Postgres sslmode values.
+ * - verify-full: the chain and the host name (the default for any TLS connection).
+ * - verify-ca: the chain only.
+ * - require: encrypted, but any certificate is accepted. Only an explicit opt-in in the URL
+ *   (sslmode=require, tlsAllowInvalidCertificates, trustServerCertificate) asks for it.
+ */
+export type DbTlsMode = 'verify-full' | 'verify-ca' | 'require';
+
 /** A connection read from a URL. A network address or a SQLite file. */
 export type ParsedConnectionUrl =
   | {
@@ -86,6 +95,8 @@ export type ParsedConnectionUrl =
       authDatabase?: string;
       srv?: boolean;
       tls: boolean;
+      /** Set when `tls` is. */
+      tlsMode?: DbTlsMode;
     }
   | { engine: 'sqlite'; file: string };
 

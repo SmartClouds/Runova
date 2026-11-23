@@ -6,7 +6,7 @@ import type { ManagePhone } from '../manage/session';
 import type { AgentConfigFile } from './agentInstaller';
 import type { AnywhereApi, RegisteredDevice } from './api';
 import type { AnywhereHub, AnywhereHubHandlers, HubConnectResult } from './hub';
-import type { LinkTransport } from './link';
+import { type LinkTransport, SecureLink } from './link';
 import type { LinkOpener, OpenedLink } from './links';
 import {
   type AnywhereManagerPort,
@@ -494,6 +494,7 @@ function computer(
     registerGate?: Promise<void>;
     checkAccount?: () => void;
     send?: SendPort;
+    now?: () => number;
   } = {},
 ) {
   const manager = fakeManager();
@@ -539,6 +540,7 @@ function computer(
     agent: installer,
     ...(options.checkAccount ? { checkAccount: options.checkAccount } : {}),
     ...(options.send ? { send: options.send } : {}),
+    ...(options.now ? { now: options.now } : {}),
   });
   return {
     service,
@@ -804,6 +806,8 @@ describe('Runova Anywhere service: a password', () => {
       savePassword: true,
     });
     await until(() => lee.state().outgoing?.phase === 'connected');
+    // The host takes one password try at a time; this one ends once it lets Lee in.
+    await until(() => sam.manager.hostPeers.length === 1, 'the host let Lee in');
     lee.service.disconnect();
 
     await lee.service.connect({ remoteId: samId, intent: 'control' });
@@ -836,6 +840,7 @@ describe('Runova Anywhere service: a password', () => {
       savePassword: true,
     });
     await until(() => lee.state().outgoing?.phase === 'connected');
+    await until(() => sam.manager.hostPeers.length === 1, 'the host let Lee in');
     lee.service.disconnect();
     await sam.service.setPassword('a completely new phrase');
 
@@ -843,6 +848,106 @@ describe('Runova Anywhere service: a password', () => {
     await until(() => lee.state().outgoing?.phase === 'needs-password');
 
     expect(lee.passwords.entries.has(samId)).toBe(false);
+  });
+
+  /**
+   * A controller that learns from the host's reply whether its guess was right, then hangs up
+   * instead of saying so. Sam's clock is the test's, so the waits between tries can be skipped.
+   */
+  async function guessing() {
+    let clock = 1_000_000;
+    const server = new FakeServer();
+    server.user(1, 'Sam');
+    server.user(3, 'Lee');
+    const links = new FakeLinks();
+    const sam = computer(server, links, 1, "Sam's desk", { now: () => clock });
+    const lee = computer(server, links, 3, "Lee's PC");
+    await sam.service.start();
+    await lee.service.start();
+    await sam.service.setPassword('purple monkey dishwasher');
+    const samId = sam.state().device?.remoteId ?? '';
+    const leeDevice = lee.state().device?.id ?? -1;
+    const identity = await lee.store.identity();
+
+    const ring = async () => {
+      const result = await lee.hub.requestConnect({
+        remoteId: samId,
+        mode: 'password',
+        controllerDeviceId: leeDevice,
+        intent: 'control',
+      });
+      if (!result.sessionId || !result.host) throw new Error('the hub did not ring');
+      return { sessionId: result.sessionId, hostKey: result.host.identityKey };
+    };
+    const openController = (sessionId: string) =>
+      links
+        .opener()
+        .open({ sessionId, role: 'controller', relayOnly: false, signal: () => undefined });
+    const guessAndHangUp = async (guess: string) => {
+      const { sessionId, hostKey } = await ring();
+      const opened = await openController(sessionId);
+      const transport: LinkTransport = {
+        ...opened.transport,
+        // The first frame back is the host's reply: enough to check the guess, so hang up there.
+        onFrame: () => opened.transport.onFrame(() => opened.transport.close('hung up')),
+      };
+      await new SecureLink(transport)
+        .runAsController({
+          sessionId,
+          mode: 'password',
+          identity,
+          expectedHostKey: fromB64u(hostKey),
+          passwordSecret: await derivePasswordSecret(guess, hostKey),
+          localFingerprint: '',
+          remoteFingerprint: '',
+        })
+        .catch(() => undefined);
+      return sessionId;
+    };
+    return {
+      server,
+      links,
+      sam,
+      ring,
+      openController,
+      guessAndHangUp,
+      wait: (ms: number) => {
+        clock += ms;
+      },
+    };
+  }
+
+  it('counts a guess when the controller hangs up after the reply, and locks after 10', async () => {
+    const { server, links, sam, ring, guessAndHangUp, wait } = await guessing();
+
+    for (let i = 1; i <= 10; i++) {
+      const sessionId = await guessAndHangUp(`wrong guess number ${i}`);
+      await until(() => server.ends.includes(sessionId), `guess ${i} over at the host`);
+      expect(sam.service.passwordFailures()).toBe(i);
+      wait(61_000);
+    }
+
+    expect(sam.state().passwordLockedUntil).not.toBeNull();
+    expect(sam.notices.some((n) => n.startsWith('Password access is locked'))).toBe(true);
+    const { sessionId } = await ring();
+    await until(() => !server.sessions.has(sessionId), 'the 11th request answered');
+    expect(links.opened.some((o) => o.sessionId === sessionId && o.role === 'host')).toBe(false);
+    expect(sam.manager.hostPeers).toEqual([]);
+  });
+
+  it('takes one password try at a time', async () => {
+    const { server, links, sam, ring, openController } = await guessing();
+    const first = await ring();
+    const opened = await openController(first.sessionId);
+
+    const second = await ring();
+    await until(() => !server.sessions.has(second.sessionId), 'the second request answered');
+    expect(links.opened.some((o) => o.sessionId === second.sessionId && o.role === 'host')).toBe(
+      false,
+    );
+
+    opened.transport.close('gone');
+    await until(() => sam.service.passwordFailures() === 1, 'the first try counted');
   });
 });
 
@@ -1030,7 +1135,114 @@ describe('Runova Anywhere service: the background agent', () => {
 });
 
 describe('Runova Anywhere service: pinned keys', () => {
-  it('pins the agent key apart from the app key, so reaching the agent is not a changed key', async () => {
+  /** Kim has connected to Sam's desk once, so its app key is pinned; then its agent answers. */
+  async function agentAnswers() {
+    const w = await world({ send: true });
+    await w.sam.service.updateSettings({ teamIds: [10] });
+    await w.kim.service.refresh();
+    await w.kim.service.connect({ remoteId: w.samId, intent: 'control' });
+    await until(() => w.sam.incoming.length === 1);
+    await w.sam.service.respondIncoming(w.sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: true,
+    });
+    await until(() => w.kim.state().outgoing?.phase === 'connected');
+    w.kim.service.disconnect();
+    const device = w.server.devices.find((d) => d.remoteId === w.samId);
+    w.server.agents.set(device?.id ?? -1, 'B'.repeat(43));
+    w.server.agentAnswers.add(device?.id ?? -1);
+    return { ...w, appKey: device?.identityKey ?? '' };
+  }
+
+  it('stops at a changed key when the hub says the agent answers with a key not pinned for that ID', async () => {
+    const { kim, samId, appKey } = await agentAnswers();
+
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+
+    expect(kim.state().outgoing?.phase).toBe('key-changed');
+    expect(kim.manager.clients).toHaveLength(1);
+    expect(await kim.store.pin(`${samId}#agent`)).toBeNull();
+    expect(await kim.store.pin(samId)).toBe(appKey);
+  });
+
+  it('pins the agent key apart from the app key once the person trusts it', async () => {
+    const { server, kim, samId, appKey } = await agentAnswers();
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+
+    await kim.service.trustNewKey();
+
+    expect(await kim.store.pin(`${samId}#agent`)).toBe('B'.repeat(43));
+    expect(await kim.store.pin(samId)).toBe(appKey);
+    kim.service.disconnect();
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+    expect(kim.state().outgoing?.phase).not.toBe('key-changed');
+    kim.service.disconnect();
+    server.agentAnswers.clear();
+    await kim.service.connect({ remoteId: samId, intent: 'control' });
+    expect(kim.state().outgoing?.phase).not.toBe('key-changed');
+  });
+
+  it('will not send files to a key the hub says is the agent before it is trusted', async () => {
+    const { kim, samId, ports } = await agentAnswers();
+
+    await expect(kim.service.dial(samId, 'send')).rejects.toMatchObject({
+      reason: 'key-changed',
+    });
+    expect(ports.sam.incoming).toHaveLength(0);
+    expect(await kim.store.pin(`${samId}#agent`)).toBeNull();
+  });
+});
+
+describe('Runova Anywhere service: letting in without asking', () => {
+  /** Sam's laptop, in Sam's own account, next to Sam's desk, which lets his computers in. */
+  async function twoOfSams() {
+    const w = await world();
+    await w.sam.service.updateSettings({ allowOwnDevices: true });
+    const laptop = computer(w.server, w.links, 1, "Sam's laptop");
+    await laptop.service.start();
+    return { ...w, laptop };
+  }
+
+  it('asks once about my own computer, then lets that key straight in', async () => {
+    const { sam, laptop, samId } = await twoOfSams();
+
+    await laptop.service.connect({ remoteId: samId, intent: 'control' });
+    await until(() => sam.incoming.length === 1, 'asked the first time');
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: false,
+    });
+    await until(() => sam.manager.hostPeers.length === 1);
+    laptop.service.disconnect();
+
+    await laptop.service.connect({ remoteId: samId, intent: 'control' });
+    await until(() => sam.manager.hostPeers.length === 2, 'let in the second time');
+    expect(sam.incoming).toHaveLength(1);
+  });
+
+  it('asks about a key the hub names for my account that nobody here accepted', async () => {
+    const { server, sam, laptop, samId } = await twoOfSams();
+    await laptop.service.connect({ remoteId: samId, intent: 'control' });
+    await until(() => sam.incoming.length === 1);
+    await sam.service.respondIncoming(sam.incoming[0].sessionId, {
+      accept: true,
+      permissions: { control: true, clipboard: true, files: false },
+      alwaysAllow: false,
+    });
+    await until(() => sam.manager.hostPeers.length === 1);
+    laptop.service.disconnect();
+    const announced = server.devices.find((d) => d.name === "Sam's laptop");
+    if (announced) announced.identityKey = 'C'.repeat(43);
+
+    await laptop.service.connect({ remoteId: samId, intent: 'control' });
+
+    await until(() => sam.incoming.length === 2, 'asked about the new key');
+    expect(sam.manager.hostPeers).toHaveLength(1);
+  });
+
+  it('asks about an always-allowed teammate whose key nobody here accepted', async () => {
     const { server, sam, kim, samId } = await world();
     await sam.service.updateSettings({ teamIds: [10] });
     await kim.service.refresh();
@@ -1041,15 +1253,15 @@ describe('Runova Anywhere service: pinned keys', () => {
       permissions: { control: true, clipboard: true, files: false },
       alwaysAllow: true,
     });
-    await until(() => kim.state().outgoing?.phase === 'connected');
+    await until(() => sam.manager.hostPeers.length === 1);
     kim.service.disconnect();
-    const device = server.devices.find((d) => d.remoteId === samId);
-    server.agents.set(device?.id ?? -1, 'B'.repeat(43));
-    server.agentAnswers.add(device?.id ?? -1);
+    const announced = server.devices.find((d) => d.name === "Kim's laptop");
+    if (announced) announced.identityKey = 'C'.repeat(43);
 
     await kim.service.connect({ remoteId: samId, intent: 'control' });
 
-    expect(kim.state().outgoing?.phase).not.toBe('key-changed');
+    await until(() => sam.incoming.length === 2, 'asked about the new key');
+    expect(sam.manager.hostPeers).toHaveLength(1);
   });
 });
 
@@ -1413,6 +1625,18 @@ describe('Runova Anywhere service: sending files', () => {
     await w.sam.service.updateSettings({ receiveFrom: 'own' });
 
     await expect(w.kim.service.dial(w.samId, 'send')).rejects.toMatchObject({
+      reason: 'declined',
+    });
+    expect(w.ports.sam.incoming).toHaveLength(0);
+  });
+
+  it('turns away a send from my own computer while connections are switched off', async () => {
+    const w = await world({ send: true });
+    await w.sam.service.updateSettings({ acceptConnections: false, autoAcceptOwn: true });
+    const laptop = computer(w.server, w.links, 1, "Sam's laptop", { send: fakeSendPort() });
+    await laptop.service.start();
+
+    await expect(laptop.service.dial(w.samId, 'send')).rejects.toMatchObject({
       reason: 'declined',
     });
     expect(w.ports.sam.incoming).toHaveLength(0);

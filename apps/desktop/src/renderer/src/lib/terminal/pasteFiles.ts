@@ -1,4 +1,5 @@
-import { quoteForShell, shellKindFor } from '@runova/core';
+import { hasShellControlChars, quoteForTyping, shellKindFor } from '@runova/core';
+import { toast } from 'sonner';
 import type { ChipInput, ChipPasteController } from '@/lib/terminal/chipPasteMode';
 
 /**
@@ -31,13 +32,23 @@ function shortLabel(path: string): string {
 }
 
 /** One chip per path: its own quoted text for the shell, and a short name to remember it by
- * (the chip itself just shows an index; the label is there for whatever needs it later). */
+ * (the chip itself just shows an index; the label is there for whatever needs it later).
+ *
+ * A path holding a control character is left out with a note. The chip's text is typed into the
+ * shell as keys, and no quoting stops a key like Ctrl-U from acting on the line. */
 export function pathsToChips(paths: string[], shell: string | undefined): ChipInput[] {
   const kind = shellKindFor(shell, window.runova.platform);
-  return paths.map((path) => ({
-    realText: quoteForShell(path, kind),
-    displayLabel: shortLabel(path),
-  }));
+  const chips: ChipInput[] = [];
+  for (const path of paths) {
+    if (hasShellControlChars(path)) {
+      toast.error(
+        `${JSON.stringify(shortLabel(path))} was left out: its name has control characters a shell would act on.`,
+      );
+      continue;
+    }
+    chips.push({ realText: quoteForTyping(path, kind), displayLabel: shortLabel(path) });
+  }
+  return chips;
 }
 
 export async function pasteFilesToChips(

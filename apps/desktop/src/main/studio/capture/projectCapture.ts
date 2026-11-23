@@ -123,7 +123,12 @@ export function createProjectCapture(deps: ProjectCaptureDeps): StudioCaptureHos
   const running = new Map<string, ChildProcess>();
 
   async function captureRoute(input: CaptureRouteInput): Promise<Uint8Array> {
-    const origin = new URL(input.url).origin;
+    // The page must be on the app's own address, checked again here so a path that names another
+    // host can never reach loadURL.
+    const origin = new URL(input.appOrigin).origin;
+    if (new URL(input.url).origin !== origin) {
+      throw new Error("A screenshot can only open the app's own pages.");
+    }
     const width = Math.round(input.width * input.scale);
     const height = Math.round(input.height * input.scale);
     const win = new BrowserWindow({

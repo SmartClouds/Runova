@@ -56,7 +56,6 @@ afterEach(async () => {
 
 function makeHooks() {
   return {
-    onCertificateFirstSeen: vi.fn(),
     onCertificateMismatch: vi.fn(),
     onConnected: vi.fn(),
     onError: vi.fn<(target: RdpProxyTarget, failure: RdpFailureInfo) => void>(),
@@ -90,23 +89,25 @@ async function openSession(
 }
 
 describe('RdpProxy with a Windows server certificate that only allows key encipherment', () => {
-  it('connects a server seen for the first time and saves its certificate', async () => {
-    server = await startFakeRdpServer(windows);
+  it('refuses a server seen for the first time before relaying anything, and asks about its certificate', async () => {
+    server = await startFakeRdpServer(windows, {}, 0, true);
     const hooks = makeHooks();
 
     const reply = await openSession(hooks, boringSslLike({ allowRsa: true }), {
       port: server.port,
     });
 
-    // A success carries the server's X.224 confirm back to the window.
-    expect(reply.includes(X224_CONFIRM_TLS)).toBe(true);
-    expect(hooks.onError).not.toHaveBeenCalled();
-    expect(hooks.onConnected).toHaveBeenCalledOnce();
-    expect(hooks.onCertificateFirstSeen).toHaveBeenCalledOnce();
-    expect(hooks.onCertificateFirstSeen.mock.calls[0][1]).toMatchObject({
+    // Nothing vouches for an unpinned server, so the sign-in never goes through to it.
+    expect(reply.equals(buildRdCleanPathError(1, 403))).toBe(true);
+    expect(hooks.onConnected).not.toHaveBeenCalled();
+    expect(proxy?.linkStats('s1')).toBeNull();
+    expect(hooks.onCertificateMismatch).toHaveBeenCalledOnce();
+    expect(hooks.onCertificateMismatch.mock.calls[0][1]).toMatchObject({
       fingerprint,
       subject: 'CN=WIN-RDP-TEST',
     });
+    expect(hooks.onError).toHaveBeenCalledOnce();
+    expect(hooks.onError.mock.calls[0][1]).toMatchObject({ code: 'certificate-new' });
   });
 
   it('asks about the new certificate of a reinstalled server instead of failing on the old pin', async () => {
@@ -131,13 +132,15 @@ describe('RdpProxy with a Windows server certificate that only allows key enciph
     server = await startFakeRdpServer(windows);
     const hooks = makeHooks();
 
-    await openSession(hooks, boringSslLike({ allowRsa: true }), {
+    const reply = await openSession(hooks, boringSslLike({ allowRsa: true }), {
       port: server.port,
       expectedFingerprint: fingerprint,
     });
 
+    // A success carries the server's X.224 confirm back to the window.
+    expect(reply.includes(X224_CONFIRM_TLS)).toBe(true);
+    expect(hooks.onError).not.toHaveBeenCalled();
     expect(hooks.onConnected).toHaveBeenCalledOnce();
-    expect(hooks.onCertificateFirstSeen).not.toHaveBeenCalled();
     expect(hooks.onCertificateMismatch).not.toHaveBeenCalled();
   });
 
@@ -162,7 +165,10 @@ describe('RdpProxy with a Windows server certificate that only allows key enciph
 describe('RdpProxy link stats', () => {
   it('measures what crosses an open session and drops it when the session closes', async () => {
     server = await startFakeRdpServer(windows, {}, 0, true);
-    await openSession(makeHooks(), boringSslLike({ allowRsa: true }), { port: server.port });
+    await openSession(makeHooks(), boringSslLike({ allowRsa: true }), {
+      port: server.port,
+      expectedFingerprint: fingerprint,
+    });
 
     // Connected, but nothing has crossed yet.
     expect(proxy?.linkStats('s1')).toEqual({

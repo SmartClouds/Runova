@@ -37,6 +37,12 @@ internal readonly record struct IpKey(UInt128 Value, bool IsV4)
         }
     }
 
+    /// <summary>
+    /// Who an attack is counted and blocked under (E110): an IPv4 address on its own, and the /64 of
+    /// an IPv6 one, since one subscriber normally holds a whole /64 and could move around in it.
+    /// </summary>
+    public IpNetwork Visitor => IsV4 ? new IpNetwork(this, 32) : new IpNetwork(this with { Value = Value & ~((UInt128.One << 64) - 1) }, 64);
+
     public static IpKey FromAddress(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
@@ -199,6 +205,15 @@ internal readonly record struct IpNetwork(IpKey Base, int Prefix)
         var shift = bits - Prefix;
         return (key.Value >> shift) == (Base.Value >> shift);
     }
+
+    /// <summary>Whether every address of <paramref name="other"/> is in this network.</summary>
+    public bool Covers(IpNetwork other) => Prefix <= other.Prefix && Contains(other.Base);
+
+    /// <summary>Whether the two networks share any address.</summary>
+    public bool Overlaps(IpNetwork other) => Covers(other) || other.Covers(this);
+
+    /// <summary>As nginx is given it (<see cref="NginxAddresses.TryParseNetwork"/>): the address alone for a single address, else address/prefix.</summary>
+    public string Text => Prefix == (Base.IsV4 ? 32 : 128) ? Base.ToString() : $"{Base}/{Prefix}";
 
     /// <summary>What <see cref="NginxAddresses.TryParseNetwork"/> accepts: an address, or a network without bits past its prefix.</summary>
     public static bool TryParse(string text, out IpNetwork network)

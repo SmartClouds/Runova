@@ -908,3 +908,105 @@ describe('queries', () => {
     ).rejects.toThrow(/closed/);
   });
 });
+
+describe('TLS certificate checks', () => {
+  const base = {
+    name: 'Shop',
+    engine: 'postgres' as const,
+    user: 'app',
+    database: 'shop',
+    password: 'pw',
+  };
+
+  it('checks a new direct TLS connection fully, with no other name to check', async () => {
+    const { service, opened } = harness();
+    const saved = await service.saveConnection({
+      ...base,
+      target: { kind: 'direct', host: 'db.example.com', port: 5432 },
+      tls: true,
+    });
+    expect(saved.tlsMode).toBe('verify-full');
+    await service.connect(saved.id);
+    expect(opened[0]).toMatchObject({ host: 'db.example.com', tls: true, tlsMode: 'verify-full' });
+    expect(opened[0]).not.toHaveProperty('tlsServername');
+  });
+
+  it('keeps sslmode=require as an explicit choice to skip the check', async () => {
+    const { service, opened } = harness();
+    const saved = await service.saveConnection({
+      ...base,
+      target: { kind: 'direct', host: 'db.example.com', port: 5432 },
+      tls: true,
+      tlsMode: 'require',
+    });
+    await service.connect(saved.id);
+    expect(opened[0]).toMatchObject({ tls: true, tlsMode: 'require' });
+  });
+
+  it('checks a forwarded connection against the host the server reaches', async () => {
+    const { service, opened } = harness();
+    const saved = await service.saveConnection({
+      ...base,
+      target: { kind: 'server', serverId: 's1', host: 'db.internal', port: 5432 },
+      tls: true,
+      tlsMode: 'verify-full',
+    });
+    const result = await service.connect(saved.id);
+    expect(opened[0]).toMatchObject({
+      host: '127.0.0.1',
+      tlsMode: 'verify-full',
+      tlsServername: 'db.internal',
+    });
+    if ('sessionId' in result) await service.disconnect(result.sessionId);
+  });
+
+  it('reads a connection saved before modes existed: direct ones verify, tunnelled ones do not', async () => {
+    const { service, opened } = harness();
+    const store = new storeModule.DatabaseConnectionStore(userData.dataFile('databases.json'));
+    const legacy = {
+      ...base,
+      authDatabase: null,
+      tls: true,
+      srv: false,
+      readOnly: false,
+      passwordEnvelope: null,
+      sourceKey: null,
+      createdAt: 1,
+      lastUsedAt: null,
+    };
+    await store.put({
+      ...legacy,
+      id: 'old-direct',
+      target: { kind: 'direct', host: 'db.example.com', port: 5432 },
+    });
+    await store.put({
+      ...legacy,
+      id: 'old-server',
+      target: { kind: 'server', serverId: 's1', host: 'db.internal', port: 5432 },
+    });
+
+    await service.connect('old-direct');
+    expect(opened[0]).toMatchObject({ tls: true, tlsMode: 'verify-full' });
+    const tunnelled = await service.connect('old-server');
+    expect(opened[1]).toMatchObject({ tls: true, tlsMode: 'require' });
+    if ('sessionId' in tunnelled) await service.disconnect(tunnelled.sessionId);
+
+    // Typing a new password re-saves the connection; that must not change how it is checked.
+    await service.connect('old-server', 'new-pw');
+    expect((await store.get('old-server')).tlsMode).toBeUndefined();
+  });
+
+  it('says how to opt out when a certificate does not check out', async () => {
+    const { service } = harness({
+      open: async () => {
+        throw new DriverError('self-signed certificate');
+      },
+    });
+    const saved = await service.saveConnection({
+      ...base,
+      target: { kind: 'direct', host: 'db.example.com', port: 5432 },
+      tls: true,
+    });
+    await expect(service.connect(saved.id)).rejects.toThrow(/sslmode=require/);
+  });
+});

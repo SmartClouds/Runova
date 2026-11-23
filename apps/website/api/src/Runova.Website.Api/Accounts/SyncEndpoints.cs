@@ -142,6 +142,26 @@ internal static partial class SyncEndpoints
     public const int MaxLimit = 1000;
     public const string RateLimitPolicy = "sync-push";
 
+    /// <summary>
+    /// The collections a team scope may hold: those marked <c>shareable</c> in
+    /// packages/core/src/sync/policy.ts. The rest (settings, blueprints, health history) belong to
+    /// one person and sync only to their personal scope, so a teammate can never push them to
+    /// another member's app.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> TeamCollections = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "projects",
+        "environments",
+        "ssh-servers",
+        "rdp-servers",
+        "database-connections",
+        "vault-entries",
+        "health-targets",
+        "api-collections",
+        "error-tracking",
+        "prompt-templates",
+    };
+
     [GeneratedRegex("^[a-z][a-z0-9-]{1,39}$", RegexOptions.CultureInvariant)]
     private static partial Regex CollectionName();
 
@@ -324,6 +344,10 @@ internal static partial class SyncEndpoints
             if (r.Collection is null || !CollectionName().IsMatch(r.Collection))
             {
                 errors[$"records[{i}].collection"] = ["A collection is 2 to 40 lowercase letters, digits and dashes."];
+            }
+            else if (found.Scope.Kind != SyncScopeKinds.Personal && !TeamCollections.Contains(r.Collection))
+            {
+                errors[$"records[{i}].collection"] = ["This collection syncs only to a personal scope, never to a team."];
             }
 
             if (r.ItemId is null || !ItemId().IsMatch(r.ItemId))

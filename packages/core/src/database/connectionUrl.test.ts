@@ -15,6 +15,8 @@ describe('parseConnectionUrl', () => {
       password: 's@cret',
       database: 'shop',
       tls: true,
+      // Postgres's own meaning of require: encrypted, certificate not checked.
+      tlsMode: 'require',
     });
   });
 
@@ -64,6 +66,7 @@ describe('parseConnectionUrl', () => {
       database: 'app',
       srv: true,
       tls: true,
+      tlsMode: 'verify-full',
     });
   });
 
@@ -78,9 +81,31 @@ describe('parseConnectionUrl', () => {
     });
     expect(parseConnectionUrl('rediss://default:pw@cache')).toMatchObject({
       tls: true,
+      tlsMode: 'verify-full',
       user: 'default',
       port: 6379,
     });
+  });
+
+  it('checks the certificate of every TLS connection unless the URL opts out', () => {
+    const mode = (url: string) => {
+      const parsed = parseConnectionUrl(url);
+      return parsed.engine === 'sqlite' ? null : parsed.tlsMode;
+    };
+    expect(mode('postgres://u@h/db?sslmode=verify-full')).toBe('verify-full');
+    expect(mode('postgres://u@h/db?sslmode=VERIFY-CA')).toBe('verify-ca');
+    expect(mode('postgres://u@h/db?sslmode=require')).toBe('require');
+    expect(mode('mysql://u@h/db?ssl=true')).toBe('verify-full');
+    expect(mode('rediss://h')).toBe('verify-full');
+    expect(mode('mongodb+srv://u@c.example.net/app')).toBe('verify-full');
+    expect(mode('mongodb://u@h/app?tls=true&tlsAllowInvalidCertificates=true')).toBe('require');
+    expect(mode('mongodb://u@h/app?tls=true&tlsInsecure=true')).toBe('require');
+    expect(mode('mongodb://u@h/app?tls=true&tlsAllowInvalidHostnames=true')).toBe('verify-ca');
+    expect(mode('sqlserver://sa@h/db?encrypt=true&TrustServerCertificate=true')).toBe('require');
+    expect(mode('sqlserver://sa@h/db?encrypt=true')).toBe('verify-full');
+    // No TLS, no mode.
+    expect(parseConnectionUrl('postgres://u@h/db')).not.toHaveProperty('tlsMode');
+    expect(parseConnectionUrl('postgres://u@h/db?sslmode=disable')).not.toHaveProperty('tlsMode');
   });
 
   it('reads SQL Server and Cassandra URLs', () => {

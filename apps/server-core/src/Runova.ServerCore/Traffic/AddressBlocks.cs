@@ -5,8 +5,11 @@ using Runova.ServerCore.Nginx;
 
 namespace Runova.ServerCore.Traffic;
 
-/// <summary>An address an attack came from, which auto-block may block.</summary>
+/// <summary>A visitor an attack came from (<see cref="IpKey.Visitor"/>), which auto-block may block.</summary>
 internal sealed record AutoBlockCandidate(IpKey Address, AttackKind Kind, string SiteId, string SiteName);
+
+/// <summary>A candidate that a block now covers, and when that block ends (null: never).</summary>
+internal sealed record AutoBlocked(IpKey Address, long? ExpiresAt);
 
 /// <summary>
 /// Addresses nginx refuses on every site (E110), kept in the database and written to blocked.conf
@@ -26,7 +29,12 @@ internal sealed partial class AddressBlocks(IDbContextFactory<CoreDbContext> con
 
     public const int MinIpv6Prefix = 16;
 
+    /// <summary>How often a full auto-block list is logged while candidates keep coming.</summary>
+    private const long CapWarningEveryMs = 10 * 60_000;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    private long _nextCapWarning;
 
     private long Now => time.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -146,10 +154,12 @@ internal sealed partial class AddressBlocks(IDbContextFactory<CoreDbContext> con
     }
 
     /// <summary>
-    /// Blocks the attacking addresses auto-block allows: not already blocked, not an address an app
-    /// is connected from, and only while fewer than the cap are blocked. Returns the ones it blocked.
+    /// Blocks the attacking visitors auto-block allows (the address for IPv4, the /64 for IPv6): not
+    /// holding an address an app is connected from, and only while fewer than the cap are blocked.
+    /// Returns every candidate a block covers now, the ones it blocked and the ones blocked already,
+    /// with when that block ends. The rest are left for the caller to offer again.
     /// </summary>
-    public async Task<IReadOnlyList<IpKey>> AutoBlockAsync(IReadOnlyList<AutoBlockCandidate> candidates, AutoBlockSettings settings, IReadOnlyCollection<IpKey> appAddresses, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AutoBlocked>> AutoBlockAsync(IReadOnlyList<AutoBlockCandidate> candidates, AutoBlockSettings settings, IReadOnlyCollection<IpKey> appAddresses, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(settings);
@@ -164,28 +174,47 @@ internal sealed partial class AddressBlocks(IDbContextFactory<CoreDbContext> con
         {
             var now = Now;
             await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-            var active = await db.BlockedAddresses.Where(b => b.ExpiresAt == null || b.ExpiresAt > now).Select(b => b.Network).ToListAsync(cancellationToken);
-            var networks = active.Select(text => IpNetwork.TryParse(text, out var network) ? network : (IpNetwork?)null).OfType<IpNetwork>().ToList();
+            var rows = await db.BlockedAddresses.Where(b => b.ExpiresAt == null || b.ExpiresAt > now).Select(b => new { b.Network, b.ExpiresAt }).ToListAsync(cancellationToken);
+            var active = rows.Select(row => row.Network).ToList();
+            var networks = new List<(IpNetwork Network, long? ExpiresAt)>();
+            foreach (var row in rows)
+            {
+                if (IpNetwork.TryParse(row.Network, out var network))
+                {
+                    networks.Add((network, row.ExpiresAt));
+                }
+            }
+
             var added = new List<BlockedAddress>();
+            var already = new List<AutoBlocked>();
             var blocked = new List<IpKey>();
+            var overCap = 0;
             foreach (var candidate in candidates)
             {
-                if (active.Count + added.Count >= settings.MaxBlocked)
+                var address = candidate.Address;
+                var visitor = address.Visitor;
+                if (!settings.Kinds.Contains(candidate.Kind) || visitor.Base.IsLocal || appAddresses.Any(visitor.Contains)
+                    || blocked.Contains(address) || already.Any(a => a.Address == address))
                 {
-                    break;
+                    continue;
                 }
 
-                var address = candidate.Address;
-                if (!settings.Kinds.Contains(candidate.Kind) || address.IsLocal || appAddresses.Contains(address)
-                    || blocked.Contains(address) || networks.Any(network => network.Contains(address)))
+                if (networks.Where(n => n.Network.Covers(visitor)).Select(n => (long?)(n.ExpiresAt ?? long.MaxValue)).Max() is { } until)
                 {
+                    already.Add(new AutoBlocked(address, until == long.MaxValue ? null : until));
+                    continue;
+                }
+
+                if (active.Count + added.Count >= settings.MaxBlocked)
+                {
+                    overCap++;
                     continue;
                 }
 
                 var reason = $"{KindName(candidate.Kind)} on {candidate.SiteName}";
                 var row = new BlockedAddress
                 {
-                    Network = address.ToString(),
+                    Network = visitor.Text,
                     Reason = reason.Length > MaxReasonLength ? reason[..MaxReasonLength] : reason,
                     Automatic = true,
                     CreatedAt = now,
@@ -196,25 +225,34 @@ internal sealed partial class AddressBlocks(IDbContextFactory<CoreDbContext> con
                 blocked.Add(address);
             }
 
+            if (overCap > 0 && now >= _nextCapWarning)
+            {
+                // The caller offers them again on later reads, so this would repeat every few seconds.
+                _nextCapWarning = now + CapWarningEveryMs;
+                LogAutoBlockCapReached(logger, settings.MaxBlocked, overCap);
+            }
+
             if (added.Count == 0)
             {
-                return [];
+                return already;
             }
 
             var outcome = await nginx.ApplyAsync([.. active, .. added.Select(row => row.Network)], cancellationToken);
             if (!outcome.Applied)
             {
                 LogAutoBlockRefused(logger, outcome.Error);
-                return [];
+                return already;
             }
 
+            // A block of the same network that ran out may not be pruned yet; the new one takes its place.
+            var texts = added.Select(row => row.Network).ToList();
+            await db.BlockedAddresses.Where(b => texts.Contains(b.Network) && b.ExpiresAt != null && b.ExpiresAt <= now).ExecuteDeleteAsync(cancellationToken);
             db.BlockedAddresses.AddRange(added);
             await db.SaveChangesAsync(cancellationToken);
 
-            var texts = added.Select(row => row.Network).ToList();
             await db.AttackEvents.Where(e => texts.Contains(e.Address)).ExecuteUpdateAsync(update => update.SetProperty(e => e.Blocked, true), cancellationToken);
             LogAutoBlocked(logger, added.Count);
-            return blocked;
+            return [.. already, .. blocked.Select(address => new AutoBlocked(address, settings.Minutes > 0 ? now + (settings.Minutes * 60_000L) : null))];
         }
         finally
         {
@@ -319,6 +357,9 @@ internal sealed partial class AddressBlocks(IDbContextFactory<CoreDbContext> con
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Auto-blocked {Count} attacking addresses.")]
     private static partial void LogAutoBlocked(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Auto-block has reached its cap of {MaxBlocked} blocked addresses, so {Count} attacking addresses were not blocked. Raise the cap or unblock some.")]
+    private static partial void LogAutoBlockCapReached(ILogger logger, int maxBlocked, int count);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "nginx refused auto-blocked addresses, so they were not blocked: {Error}")]
     private static partial void LogAutoBlockRefused(ILogger logger, string? error);

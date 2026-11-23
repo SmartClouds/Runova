@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   countDotenvKeys,
   type DotenvEntry,
@@ -381,11 +381,12 @@ export async function saveEnvFile(input: SaveEnvFileInput): Promise<ProjectEnvir
 }
 
 export function removeEnvFile(environmentId: string, fileId: string): Promise<void> {
-  return mutate((environments) => {
+  return mutate(async (environments) => {
     const environment = findEnvironment(environments, environmentId);
     environment.files = environment.files.filter((f) => f.id !== fileId);
     environment.updatedAt = Date.now();
     envFileHistoryDb.removeForFile(fileId);
+    await setLinkConfirmation(fileId, undefined);
     setEnvFileLinkState(fileId, undefined);
   });
 }
@@ -522,7 +523,12 @@ export async function importEnvFromFolder(
     for (const pick of picks) {
       try {
         assertFileName(pick.fileName);
-        const path = join(project.folderPath, pick.fileName);
+        // Resolved through symlinks, so a committed one can't pull in a file from elsewhere.
+        const path = await realTargetInProject(
+          project.folderPath,
+          join(project.folderPath, pick.fileName),
+          pick.fileName,
+        );
         if ((await stat(path)).size > MAX_ENV_FILE_BYTES) {
           throw new Error('it is larger than 1 MB');
         }
@@ -550,7 +556,11 @@ export async function importEnvFromFolder(
         await upsertFileByName(target, pick.fileName, content);
         if (pick.link) {
           const record = target.files.find((f) => f.fileName === pick.fileName);
-          if (record) record.link = { path: pick.fileName, linkedAt: Date.now() };
+          if (record) {
+            record.link = { path: pick.fileName, linkedAt: Date.now() };
+            // Asked for in the import dialog on this computer, so it counts as chosen here.
+            await setLinkConfirmation(record.id, pick.fileName);
+          }
         }
         imported++;
       } catch (error) {
@@ -589,14 +599,97 @@ export async function writeEnvToFolder(
 
 /* Linked files: a saved env file that follows a file in the project folder (see fileLinks.ts). */
 
+/** A path relative to the project folder that leaves it. */
+function leavesFolder(inside: string): boolean {
+  return !inside || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside);
+}
+
+/** True for anything inside a .git folder, at any depth: git's config and hooks are not env files. */
+function inGitFolder(inside: string): boolean {
+  return inside.split(/[\\/]/).some((part) => part.toLowerCase() === '.git');
+}
+
+/** A link that, with symlinks followed, leads out of the project folder or into .git. */
+class OutsideProjectError extends Error {}
+
 /** The link's path and where it points, checked to stay inside the project folder. */
 function resolveInProject(folder: string, path: string): { absolute: string; relative: string } {
   const absolute = resolve(folder, String(path ?? ''));
   const inside = relative(folder, absolute);
-  if (!inside || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
-    throw new Error('Pick a file inside the project folder.');
-  }
+  if (leavesFolder(inside)) throw new Error('Pick a file inside the project folder.');
+  if (inGitFolder(inside)) throw new Error("Files inside .git can't be linked.");
   return { absolute, relative: inside.split(sep).join('/') };
+}
+
+/**
+ * Where a link really points, with symlinks resolved for both the folder and the file. The check
+ * in resolveInProject only looks at the path as written, so a symlink committed to the repo could
+ * still lead anywhere. A file that does not exist yet (about to be written) is placed by the real
+ * path of its folder. Throws the filesystem's error for a missing file.
+ */
+async function realTargetInProject(
+  folder: string,
+  absolute: string,
+  shown: string,
+  forWrite = false,
+): Promise<string> {
+  const realFolder = await realpath(folder);
+  let real: string;
+  try {
+    real = await realpath(absolute);
+  } catch (error) {
+    if (!forWrite || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    real = join(await realpath(dirname(absolute)), basename(absolute));
+  }
+  const inside = relative(realFolder, real);
+  if (leavesFolder(inside) || inGitFolder(inside)) {
+    throw new OutsideProjectError(`${shown} leads outside the project folder.`);
+  }
+  return real;
+}
+
+/**
+ * The links someone on this computer chose, as file id to path (see store.getConfirmedEnvLinks).
+ * The first read after the update that added it counts every link this computer was already
+ * following as chosen, which is every one with a mark from having been read here, so links made
+ * here before keep working without a prompt.
+ */
+let consentMigration: Promise<Record<string, string>> | null = null;
+
+async function confirmedEnvLinks(): Promise<Record<string, string>> {
+  const saved = await store.getConfirmedEnvLinks();
+  if (saved) return saved;
+  consentMigration ??= (async () => {
+    const [marks, environments] = await Promise.all([
+      store.getEnvFileLinkMarks(),
+      store.getProjectEnvironments(),
+    ]);
+    const seeded: Record<string, string> = {};
+    for (const environment of environments) {
+      for (const file of environment.files) {
+        if (file.link && marks[file.id]) seeded[file.id] = file.link.path;
+      }
+    }
+    await store.setConfirmedEnvLinks(seeded);
+    return seeded;
+  })().finally(() => {
+    consentMigration = null;
+  });
+  return consentMigration;
+}
+
+/** True when someone on this computer chose this file's link, as it points now. */
+async function isLinkConfirmed(file: StoredEnvFile): Promise<boolean> {
+  return file.link !== undefined && (await confirmedEnvLinks())[file.id] === file.link.path;
+}
+
+/** Records (or with no path, forgets) that a person here chose this link. Never synced. */
+async function setLinkConfirmation(fileId: string, path: string | undefined): Promise<void> {
+  const links = { ...(await confirmedEnvLinks()) };
+  if (path !== undefined) links[fileId] = path;
+  else if (fileId in links) delete links[fileId];
+  else return;
+  await store.setConfirmedEnvLinks(links);
 }
 
 async function projectFolderOf(projectId: string): Promise<string> {
@@ -606,12 +699,21 @@ async function projectFolderOf(projectId: string): Promise<string> {
 }
 
 /** The contents of a file about to be linked, with a message fit to show when it won't do. */
-async function readLinkTarget(absolute: string, shown: string): Promise<string> {
-  const info = await stat(absolute).catch(() => null);
+async function readLinkTarget(
+  folder: string,
+  path: string,
+): Promise<{ relative: string; content: string }> {
+  const target = resolveInProject(folder, path);
+  const shown = target.relative;
+  const real = await realTargetInProject(folder, target.absolute, shown).catch((error) => {
+    if (error instanceof OutsideProjectError) throw error;
+    throw new Error(`${shown} is not in the project folder.`);
+  });
+  const info = await stat(real).catch(() => null);
   if (!info) throw new Error(`${shown} is not in the project folder.`);
   if (info.isDirectory()) throw new Error(`${shown} is a folder.`);
   if (info.size > MAX_ENV_FILE_BYTES) throw new Error('That file is larger than 1 MB.');
-  return readFile(absolute, 'utf-8');
+  return { relative: shown, content: await readFile(real, 'utf-8') };
 }
 
 /** A path picked anywhere, as the link would keep it, or an error when it is outside the project. */
@@ -626,8 +728,8 @@ export async function inspectEnvLinkFile(
 ): Promise<EnvLinkPreview> {
   const environment = await readEnvironment(environmentId);
   const file = findFile(environment, fileId);
-  const target = resolveInProject(await projectFolderOf(environment.projectId), path);
-  const content = await readLinkTarget(target.absolute, target.relative);
+  const target = await readLinkTarget(await projectFolderOf(environment.projectId), path);
+  const { content } = target;
   return {
     path: target.relative,
     keyCount: countDotenvKeys(content),
@@ -637,19 +739,21 @@ export async function inspectEnvLinkFile(
 
 /**
  * Links a saved env file to a file in the project. The saved copy takes the file's contents right
- * away (what it held goes into the history) and follows the file from then on.
+ * away (what it held goes into the history) and follows the file from then on. Only the
+ * Environments tab on this computer calls it, so it is also how a link that came by sync gets
+ * confirmed here.
  */
 export function linkEnvFile(input: LinkEnvFileInput): Promise<ProjectEnvironment> {
   return mutate(async (environments) => {
     const environment = findEnvironment(environments, input.environmentId);
     const index = environment.files.findIndex((f) => f.id === input.fileId);
     if (index < 0) throw new Error('That env file no longer exists.');
-    const target = resolveInProject(await projectFolderOf(environment.projectId), input.path);
-    const content = await readLinkTarget(target.absolute, target.relative);
+    const target = await readLinkTarget(await projectFolderOf(environment.projectId), input.path);
     const { fileName } = environment.files[index];
-    await writeFileRecord(environment, index, fileName, content, 'linked');
+    await writeFileRecord(environment, index, fileName, target.content, 'linked');
     environment.files[index].link = { path: target.relative, linkedAt: Date.now() };
     environment.updatedAt = Date.now();
+    await setLinkConfirmation(input.fileId, target.relative);
     setEnvFileLinkState(input.fileId, 'watching');
     return toPublicEnvironment(environment);
   });
@@ -657,21 +761,27 @@ export function linkEnvFile(input: LinkEnvFileInput): Promise<ProjectEnvironment
 
 /** Stops following the file. The saved contents and their history stay as they are. */
 export function unlinkEnvFile(environmentId: string, fileId: string): Promise<ProjectEnvironment> {
-  return mutate((environments) => {
+  return mutate(async (environments) => {
     const environment = findEnvironment(environments, environmentId);
     const file = findFile(environment, fileId);
     delete file.link;
     environment.updatedAt = Date.now();
+    await setLinkConfirmation(fileId, undefined);
     setEnvFileLinkState(fileId, undefined);
     return toPublicEnvironment(environment);
   });
 }
 
-/** Every linked file of every project, where it sits on this computer. */
+/**
+ * Every linked file of every project, where it sits on this computer. Links nobody here has
+ * confirmed (they came from another computer or a teammate by sync) are listed without a path
+ * and marked as needing confirmation, so they are neither watched nor read.
+ */
 export async function linkedEnvFiles(): Promise<LinkedEnvFile[]> {
-  const [projects, environments] = await Promise.all([
+  const [projects, environments, confirmed] = await Promise.all([
     store.getProjects(),
     store.getProjectEnvironments(),
+    confirmedEnvLinks(),
   ]);
   const folders = new Map(projects.map((project) => [project.id, project.folderPath]));
   const linked: LinkedEnvFile[] = [];
@@ -680,6 +790,11 @@ export async function linkedEnvFiles(): Promise<LinkedEnvFile[]> {
     const folder = folders.get(environment.projectId);
     for (const file of environment.files) {
       if (!file.link) continue;
+      const entry = { projectId: environment.projectId, environmentId: environment.id };
+      if (folder && confirmed[file.id] !== file.link.path) {
+        linked.push({ ...entry, fileId: file.id, path: null, needsConfirmation: true });
+        continue;
+      }
       let path: string | null = null;
       if (folder) {
         try {
@@ -689,12 +804,7 @@ export async function linkedEnvFiles(): Promise<LinkedEnvFile[]> {
           continue;
         }
       }
-      linked.push({
-        projectId: environment.projectId,
-        environmentId: environment.id,
-        fileId: file.id,
-        path,
-      });
+      linked.push({ ...entry, fileId: file.id, path });
     }
   }
   return linked;
@@ -711,9 +821,18 @@ export function updateEnvFileFromDisk(linked: LinkedEnvFile): Promise<LinkUpdate
       const index = environment?.files.findIndex((f) => f.id === linked.fileId) ?? -1;
       const record = environment?.files[index];
       if (!environment || !record?.link) return 'gone';
+      // The link may have changed by sync since it was listed; one nobody here chose is not read.
+      if (!(await isLinkConfirmed(record))) return 'gone';
       const project = (await store.getProjects()).find((p) => p.id === environment.projectId);
       if (!project?.folderPath) return 'gone';
-      const { absolute } = resolveInProject(project.folderPath, record.link.path);
+      let absolute: string;
+      try {
+        const target = resolveInProject(project.folderPath, record.link.path);
+        absolute = await realTargetInProject(project.folderPath, target.absolute, target.relative);
+      } catch {
+        // Gone, or a symlink that leads out of the folder: either way nothing is read.
+        return 'missing';
+      }
 
       const info = await stat(absolute).catch(() => null);
       if (!info || info.isDirectory()) return 'missing';
@@ -728,6 +847,8 @@ export function updateEnvFileFromDisk(linked: LinkedEnvFile): Promise<LinkUpdate
 
 interface LinkedWrite {
   fileId: string;
+  /** The project folder, absolute. */
+  folder: string;
   /** Absolute. */
   path: string;
   /** As the link keeps it, for messages. */
@@ -735,18 +856,23 @@ interface LinkedWrite {
   content: string;
 }
 
-/** Where a save of a linked file has to go, or null for a file that isn't linked. */
+/**
+ * Where a save of a linked file has to go, or null for a file that isn't linked. A link nobody
+ * on this computer confirmed is not written through either: the save stays in Runova.
+ */
 async function linkedWriteFor(
   environment: StoredProjectEnvironment,
   file: StoredEnvFile,
   content: string,
 ): Promise<LinkedWrite | null> {
-  if (!file.link) return null;
-  const target = resolveInProject(await projectFolderOf(environment.projectId), file.link.path);
-  return { fileId: file.id, path: target.absolute, shown: file.link.path, content };
+  if (!file.link || !(await isLinkConfirmed(file))) return null;
+  const folder = await projectFolderOf(environment.projectId);
+  const target = resolveInProject(folder, file.link.path);
+  return { fileId: file.id, folder, path: target.absolute, shown: file.link.path, content };
 }
 
 function writeFailure(error: unknown): string {
+  if (error instanceof OutsideProjectError) return 'it leads outside the project folder';
   switch ((error as NodeJS.ErrnoException)?.code) {
     case 'EISDIR':
       return 'a folder has that name';
@@ -779,7 +905,9 @@ async function afterLinkedWrite(
   write: LinkedWrite,
 ): Promise<ProjectEnvironment> {
   try {
-    await writeFile(write.path, write.content, 'utf-8');
+    // A symlink in the repo must not turn a save into a write somewhere else on the computer.
+    const real = await realTargetInProject(write.folder, write.path, write.shown, true);
+    await writeFile(real, write.content, 'utf-8');
   } catch (error) {
     setEnvFileLinkState(write.fileId, 'error');
     throw new Error(`Saved in Runova, but couldn't write ${write.shown}: ${writeFailure(error)}.`);

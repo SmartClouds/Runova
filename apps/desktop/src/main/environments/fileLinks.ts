@@ -17,8 +17,13 @@ export interface LinkedEnvFile {
   projectId: string;
   environmentId: string;
   fileId: string;
-  /** Absolute. Null when the project has no folder on this computer. */
+  /** Absolute. Null when the project has no folder on this computer, or the link needs confirming. */
   path: string | null;
+  /**
+   * The link came by sync and nobody on this computer has confirmed it, so it is not watched or
+   * read until someone does (by linking it again in the Environments tab).
+   */
+  needsConfirmation?: boolean;
 }
 
 /**
@@ -162,7 +167,11 @@ export function createEnvFileLinkManager(deps: EnvFileLinkDeps): EnvFileLinkMana
     const fresh: LinkedEnvFile[] = [];
     for (const file of files) {
       const current = watched.get(file.fileId);
-      if (current && current.file.path === file.path) {
+      if (
+        current &&
+        current.file.path === file.path &&
+        Boolean(current.file.needsConfirmation) === Boolean(file.needsConfirmation)
+      ) {
         // Same file in the same place; keep the watcher, but take the latest ids.
         current.file = file;
         continue;
@@ -172,7 +181,8 @@ export function createEnvFileLinkManager(deps: EnvFileLinkDeps): EnvFileLinkMana
       const entry: Watched = { file, close: () => undefined };
       watched.set(file.fileId, entry);
       if (!file.path) {
-        if (setState(file.fileId, 'noFolder')) deps.notify(file.projectId);
+        const state = file.needsConfirmation ? 'needsConfirmation' : 'noFolder';
+        if (setState(file.fileId, state)) deps.notify(file.projectId);
         continue;
       }
       const handle = deps.watch(file.path, () => {

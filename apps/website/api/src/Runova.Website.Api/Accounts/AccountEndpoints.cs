@@ -40,9 +40,12 @@ internal static class AccountEndpoints
     }
 
     /// <summary>
-    /// A new account, or a fresh link for one that was never confirmed (its password is replaced,
-    /// so whoever started it first can not sign in with theirs). A confirmed address gets an email
-    /// saying so instead, and its password is left alone.
+    /// A new account, or a fresh link for one that was never confirmed. Registering an address
+    /// again before it is confirmed leaves the account with no password at all: neither the first
+    /// password nor the new one proves who owns the address, and confirming would otherwise make
+    /// whichever came last work for whoever chose it. The person who confirms is signed in and adds
+    /// a password from a reset link. A confirmed address gets an email saying so instead, and its
+    /// password is left alone.
     /// </summary>
     private static async Task<Results<Accepted, ValidationProblem>> RegisterAsync(
         RegisterRequest request,
@@ -105,12 +108,16 @@ internal static class AccountEndpoints
             }
             else
             {
+                // As long as a new account takes, so the answer's timing tells nothing either.
+                users.PasswordHasher.HashPassword(user, request.Password!);
                 if (await users.HasPasswordAsync(user))
                 {
                     Succeeded(await users.RemovePasswordAsync(user));
                 }
-
-                Succeeded(await users.AddPasswordAsync(user, request.Password!));
+                else
+                {
+                    Succeeded(await users.UpdateAsync(user));
+                }
             }
 
             var link = await links.IssueAsync(user, SetupLinkPurposes.EmailVerification);

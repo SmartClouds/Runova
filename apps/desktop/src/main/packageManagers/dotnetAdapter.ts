@@ -11,7 +11,7 @@ import type {
   RuntimeUpdateResult,
 } from '../../shared/apiTypes';
 import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
-import { CliNotFoundError, mapWithConcurrency, runCli, tryParseJson } from './execUtils';
+import { mapWithConcurrency, runCli, tryParseJson } from './execUtils';
 import { type DotnetChannel, runtimeFeeds } from './runtimeFeeds';
 import {
   type DeclaredTargetFramework,
@@ -32,11 +32,8 @@ import type { PackageManagerAdapter, UpdateProgressTick } from './types';
 const MAX_SCAN_DEPTH = 4;
 const PRUNED_DIRS = new Set(['bin', 'obj', 'node_modules', '.git', 'packages', 'TestResults']);
 const PROJECT_EXTENSIONS = ['.csproj', '.vbproj', '.fsproj'];
-/** `dotnet list package` restores on demand; on a cold NuGet cache a single call can take a minute. */
-const LIST_TIMEOUT_MS = 3 * 60 * 1000;
-/** Each project runs two `dotnet` processes, so this is really 2x this many MSBuild instances. */
+/** Projects read at once; each one reads a few files and then asks nuget.org per package. */
 const LIST_CONCURRENCY = 4;
-/** Generous, because these run while several MSBuild processes are saturating the machine. */
 const REGISTRY_TIMEOUT_MS = 15000;
 const REGISTRY_CONCURRENCY = 8;
 
@@ -65,9 +62,8 @@ async function findProjectFiles(root: string, dir = root, depth = 0): Promise<st
 
 // --- Manifest parsing -------------------------------------------------------
 // The .csproj is the source of truth for *which* packages a project declares.
-// `dotnet list package` only enriches that with resolved/latest versions, since
-// it needs a successful restore and silently reports nothing for legacy or
-// unrestorable projects.
+// The restore output only enriches that with resolved versions, since it is
+// missing for projects that were never restored and for legacy projects.
 
 interface DeclaredPackage {
   name: string;
@@ -176,41 +172,67 @@ async function readDeclaredPackages(
   return [...declared.values()];
 }
 
-// --- CLI enrichment ---------------------------------------------------------
+// --- Restore output ---------------------------------------------------------
+// Listing never runs `dotnet`. Even with --no-restore, `dotnet list package` evaluates the
+// project and runs targets such as CollectPackageReferences, so a .csproj or a
+// Directory.Build.targets in a cloned repo could run its own commands just because the
+// Packages tab opened. What the last restore resolved is already on disk in
+// obj/project.assets.json, and reading that file runs nothing.
 
-interface DotnetListPackage {
-  id: string;
-  resolvedVersion?: string;
-  requestedVersion?: string;
-  latestVersion?: string;
-}
-
-interface DotnetListJson {
-  projects?: {
-    path?: string;
-    frameworks?: { topLevelPackages?: DotnetListPackage[] }[];
-  }[];
-  /** Present instead of usable framework data when restore fails. */
-  problems?: { text?: string; level?: string }[];
-}
-
-function collectTopLevelPackages(json: DotnetListJson | null): Map<string, DotnetListPackage> {
-  const map = new Map<string, DotnetListPackage>();
-  for (const project of json?.projects ?? []) {
-    for (const framework of project.frameworks ?? []) {
-      for (const pkg of framework.topLevelPackages ?? []) {
-        if (!map.has(pkg.id)) map.set(pkg.id, pkg);
-      }
-    }
-  }
-  return map;
+interface AssetsFile {
+  targets?: Record<string, Record<string, { type?: string }>>;
+  project?: {
+    restore?: { projectPath?: string };
+    frameworks?: Record<
+      string,
+      { dependencies?: Record<string, { target?: string; autoReferenced?: boolean }> }
+    >;
+  };
 }
 
 /**
- * Latest stable version from the NuGet flat container, used when the CLI can't
- * restore. The index is sorted ascending by SemVer, so the last non-prerelease
- * entry is the latest stable. Retried once, since a transient timeout here would
- * otherwise be indistinguishable from "already up to date".
+ * The project's direct package references and the versions the last restore resolved them to,
+ * keyed by package id. Empty when the project was never restored here, or when the assets file
+ * in its obj folder belongs to a different project sharing the same folder.
+ */
+async function readRestoredPackages(projectPath: string): Promise<Map<string, string | null>> {
+  const restored = new Map<string, string | null>();
+  const raw = await readFileSafe(join(dirname(projectPath), 'obj', 'project.assets.json'));
+  const assets = raw ? tryParseJson<AssetsFile>(raw) : null;
+  const restoredFor = assets?.project?.restore?.projectPath;
+  // Compared by file name so a folder moved after its restore still counts.
+  if (
+    !restoredFor ||
+    basename(restoredFor.replace(/\\/g, '/')).toLowerCase() !== basename(projectPath).toLowerCase()
+  ) {
+    return restored;
+  }
+
+  const resolved = new Map<string, string>();
+  for (const libraries of Object.values(assets?.targets ?? {})) {
+    for (const [key, library] of Object.entries(libraries ?? {})) {
+      const slash = key.lastIndexOf('/');
+      if (library?.type !== 'package' || slash <= 0) continue;
+      const id = key.slice(0, slash).toLowerCase();
+      if (!resolved.has(id)) resolved.set(id, key.slice(slash + 1));
+    }
+  }
+
+  for (const framework of Object.values(assets?.project?.frameworks ?? {})) {
+    for (const [name, dep] of Object.entries(framework?.dependencies ?? {})) {
+      // Implicit SDK references (NETStandard.Library and friends) are not the user's to update.
+      if (dep?.target !== 'Package' || dep.autoReferenced || restored.has(name)) continue;
+      restored.set(name, resolved.get(name.toLowerCase()) ?? null);
+    }
+  }
+  return restored;
+}
+
+/**
+ * Latest stable version from the NuGet flat container. The index is sorted
+ * ascending by SemVer, so the last non-prerelease entry is the latest stable.
+ * Retried once, since a transient timeout here would otherwise be
+ * indistinguishable from "already up to date".
  */
 async function fetchLatestFromNuget(name: string, attempt = 0): Promise<string | null> {
   try {
@@ -230,7 +252,7 @@ async function fetchLatestFromNuget(name: string, attempt = 0): Promise<string |
 
 interface ProjectScanOutcome {
   projectLabel: string;
-  /** True when the CLI failed, so versions came from the manifest alone. */
+  /** True when the project has no restore output, so versions came from the manifest alone. */
   degraded: boolean;
   packages: PackageInfo[];
 }
@@ -239,51 +261,39 @@ async function listPackagesForProject(
   rootFolder: string,
   projectPath: string,
 ): Promise<ProjectScanOutcome> {
-  const cwd = dirname(projectPath);
   const projectLabel = basename(projectPath).replace(/\.(cs|vb|fs)proj$/i, '');
-  const declared = await readDeclaredPackages(rootFolder, projectPath);
-
-  const [installedRes, outdatedRes] = await Promise.all([
-    runCli('dotnet', ['list', projectPath, 'package', '--format', 'json'], cwd, LIST_TIMEOUT_MS),
-    runCli(
-      'dotnet',
-      ['list', projectPath, 'package', '--outdated', '--format', 'json'],
-      cwd,
-      LIST_TIMEOUT_MS,
-    ),
+  const [declared, restored] = await Promise.all([
+    readDeclaredPackages(rootFolder, projectPath),
+    readRestoredPackages(projectPath),
   ]);
 
-  const installed = collectTopLevelPackages(tryParseJson<DotnetListJson>(installedRes.stdout));
-  const outdated = collectTopLevelPackages(tryParseJson<DotnetListJson>(outdatedRes.stdout));
-
-  // Union so neither source can hide a package: the manifest catches projects the
-  // CLI can't restore, the CLI catches packages pulled in by an imported .props.
-  const names = new Set([...declared.map((p) => p.name), ...installed.keys()]);
+  // Union so neither source can hide a package: the manifest catches projects that were never
+  // restored, the assets file catches packages pulled in by an imported .props.
+  // NuGet ids are case-insensitive, and the project file and assets file may disagree on case.
   const declaredByName = new Map(declared.map((p) => [p.name, p]));
-  const degraded = names.size > 0 && installed.size === 0;
+  const restoredById = new Map([...restored].map(([id, version]) => [id.toLowerCase(), version]));
+  const names = [...declaredByName.keys()];
+  const known = new Set(names.map((n) => n.toLowerCase()));
+  for (const name of restored.keys()) if (!known.has(name.toLowerCase())) names.push(name);
+  const degraded = names.length > 0 && restored.size === 0;
 
-  const packages = await mapWithConcurrency([...names], REGISTRY_CONCURRENCY, async (name) => {
-    const resolved = installed.get(name);
-    const currentVersion =
-      resolved?.resolvedVersion ??
-      resolved?.requestedVersion ??
-      declaredByName.get(name)?.version ??
-      'unknown';
-    let latestVersion = outdated.get(name)?.latestVersion ?? null;
-    // The CLI only lists packages it considers outdated, so a miss here is
-    // ambiguous: up to date, or never resolved at all. Only ask NuGet directly
-    // in the latter case.
-    if (latestVersion === null && !resolved) latestVersion = await fetchLatestFromNuget(name);
+  const packages = await mapWithConcurrency(names, REGISTRY_CONCURRENCY, async (name) => {
+    const resolved = restoredById.get(name.toLowerCase()) ?? null;
+    const currentVersion = resolved ?? declaredByName.get(name)?.version ?? 'unknown';
+    const latestVersion = await fetchLatestFromNuget(name);
 
     const isOutdated =
-      latestVersion !== null && currentVersion !== 'unknown' && latestVersion !== currentVersion;
+      latestVersion !== null &&
+      currentVersion !== 'unknown' &&
+      latestVersion !== currentVersion &&
+      compareVersions(latestVersion, currentVersion) >= 0;
     return {
       name,
       currentVersion,
       latestVersion: isOutdated ? latestVersion : currentVersion,
       isOutdated,
       isDev: false,
-      isInstalled: resolved !== undefined,
+      isInstalled: resolved !== null,
       manifestPath: projectPath,
       projectLabel,
     } satisfies PackageInfo;
@@ -432,14 +442,6 @@ async function listSection(folderPath: string): Promise<PackageManagerSection> {
       listPackagesForProject(folderPath, path),
     );
   } catch (err) {
-    if (err instanceof CliNotFoundError) {
-      return {
-        ...base,
-        status: 'cli-missing',
-        message: 'Install the .NET SDK to manage NuGet packages for this project.',
-        packages: [],
-      };
-    }
     return {
       ...base,
       status: 'error',
@@ -451,7 +453,7 @@ async function listSection(folderPath: string): Promise<PackageManagerSection> {
   const degraded = outcomes.filter((o) => o.degraded && o.packages.length > 0);
   const message =
     degraded.length > 0
-      ? `Could not restore ${degraded.map((o) => o.projectLabel).join(', ')}, so versions for ${degraded.length === 1 ? 'it are' : 'those are'} read from the project file and may not reflect what is resolved at build time.`
+      ? `${degraded.map((o) => o.projectLabel).join(', ')} ${degraded.length === 1 ? 'has' : 'have'} not been restored yet, so versions are read from the project file and may not reflect what is resolved at build time.`
       : null;
 
   return { ...base, status: 'ok', message, packages: outcomes.flatMap((o) => o.packages) };

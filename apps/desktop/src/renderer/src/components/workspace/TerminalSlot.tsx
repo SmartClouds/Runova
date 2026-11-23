@@ -76,8 +76,10 @@ export function TerminalSlot({ projectId, tab, focused }: TerminalSlotProps): Re
         const paths = Array.from(event.dataTransfer.files)
           .map((file) => window.runova.shell.pathForFile(file))
           .filter((path): path is string => Boolean(path));
-        if (paths.length === 0) return;
-        terminalRuntime.pasteChips(tab.id, pathsToChips(paths, tab.shell));
+        // A path the shell could not take safely is left out, with a note, by pathsToChips.
+        const chips = pathsToChips(paths, tab.shell);
+        if (chips.length === 0) return;
+        terminalRuntime.pasteChips(tab.id, chips);
         terminalRuntime.focus(tab.id);
       }}
     >

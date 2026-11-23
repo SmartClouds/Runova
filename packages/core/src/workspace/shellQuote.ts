@@ -33,8 +33,9 @@ export function quoteForShell(value: string, kind: ShellKind): string {
   }
   switch (kind) {
     case 'powershell':
-      // Single quotes are literal in PowerShell; a quote inside is written twice.
-      return `'${value.replace(/'/g, "''")}'`;
+      // Single quotes are literal in PowerShell; a quote inside is written twice. PowerShell also
+      // ends a single-quoted string at U+2018 to U+201B, so those are written twice as well.
+      return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, (quote) => quote + quote)}'`;
     case 'cmd':
       return `"${value.replace(/"/g, '""')}"`;
     case 'fish':
@@ -42,6 +43,31 @@ export function quoteForShell(value: string, kind: ShellKind): string {
     case 'posix':
       return `'${value.replace(/'/g, `'\\''`)}'`;
   }
+}
+
+/**
+ * True when the text holds a C0 control character, DEL or a C1 control character. Quotes do not
+ * help with these once the text is typed into a terminal: the line editor acts on them as keys
+ * (Ctrl-U wipes the line, for one), so whatever follows would run as a command.
+ */
+export function hasShellControlChars(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
+
+/**
+ * quoteForShell for text that will be typed into an interactive shell as keystrokes, such as a
+ * dropped file path. It throws when the text holds control characters, since no quoting keeps
+ * those from acting on the line.
+ */
+export function quoteForTyping(value: string, kind: ShellKind): string {
+  if (hasShellControlChars(value)) {
+    throw new Error('That text holds control characters, so it cannot be typed into a shell.');
+  }
+  return quoteForShell(value, kind);
 }
 
 /** Joins several values as separate words, e.g. multiple dropped files. */

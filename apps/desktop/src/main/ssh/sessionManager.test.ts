@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sshErrorCode } from '../../shared/sshErrors';
 import { tempDir } from '../../test/main/fixtures';
 import { type SshSessionListener, SshSessionManager } from './sessionManager';
 import { type FakeSshServer, generateClientKey, startFakeSshServer } from './testing/fakeSshServer';
@@ -24,18 +25,14 @@ afterEach(async () => {
 function listener(): SshSessionListener & {
   data: string[];
   exits: Array<string | undefined>;
-  trusted: string[];
 } {
   const data: string[] = [];
   const exits: Array<string | undefined> = [];
-  const trusted: string[] = [];
   return {
     data,
     exits,
-    trusted,
     onData: (_id, chunk) => data.push(chunk),
     onExit: (_id, error) => exits.push(error),
-    onHostKeyTrusted: (_id, fingerprint) => trusted.push(fingerprint),
   };
 }
 
@@ -55,6 +52,7 @@ describe('SshSessionManager', () => {
       {
         host: server.host,
         port: server.port,
+        storedFingerprint: server.fingerprint(),
         username: 'deploy',
         authMethod: 'password',
         password: PASSWORD,
@@ -79,6 +77,7 @@ describe('SshSessionManager', () => {
       {
         host: server.host,
         port: server.port,
+        storedFingerprint: server.fingerprint(),
         username: 'deploy',
         authMethod: 'privateKey',
         privateKeyPath: keyPath,
@@ -89,23 +88,27 @@ describe('SshSessionManager', () => {
     await waitFor(() => events.data.join('').includes('fake shell ready'));
   });
 
-  it('trusts the host key on first use and reports its fingerprint', async () => {
+  it('refuses a server with no trusted key before sending the login', async () => {
     server = await startFakeSshServer({ password: PASSWORD });
-    const events = listener();
 
-    await manager.create(
-      's1',
-      {
-        host: server.host,
-        port: server.port,
-        username: 'deploy',
-        authMethod: 'password',
-        password: PASSWORD,
-      },
-      events,
-    );
+    const failure = await manager
+      .create(
+        's1',
+        {
+          host: server.host,
+          port: server.port,
+          username: 'deploy',
+          authMethod: 'password',
+          password: PASSWORD,
+        },
+        listener(),
+      )
+      .catch((error: unknown) => error);
 
-    expect(events.trusted).toEqual([server.fingerprint()]);
+    expect(sshErrorCode(failure)).toBe('host-key-unknown');
+    expect(failure).toMatchObject({ presented: server.fingerprint() });
+    expect(server.authAttempts).toEqual([]);
+    expect(server.shells).toHaveLength(0);
   });
 
   it('connects silently when the stored fingerprint matches', async () => {
@@ -125,7 +128,7 @@ describe('SshSessionManager', () => {
       events,
     );
 
-    expect(events.trusted).toEqual([]);
+    await waitFor(() => events.data.join('').includes('fake shell ready'));
   });
 
   it('refuses a server whose host key changed', async () => {
@@ -158,6 +161,7 @@ describe('SshSessionManager', () => {
         {
           host: server.host,
           port: server.port,
+          storedFingerprint: server.fingerprint(),
           username: 'deploy',
           authMethod: 'password',
           password: 'wrong',
@@ -190,6 +194,7 @@ describe('SshSessionManager', () => {
       {
         host: server.host,
         port: server.port,
+        storedFingerprint: server.fingerprint(),
         username: 'deploy',
         authMethod: 'password',
         password: PASSWORD,
@@ -210,6 +215,7 @@ describe('SshSessionManager', () => {
     const options = {
       host: server.host,
       port: server.port,
+      storedFingerprint: server.fingerprint(),
       username: 'deploy',
       authMethod: 'password' as const,
       password: PASSWORD,
@@ -227,6 +233,7 @@ describe('SshSessionManager', () => {
     const options = {
       host: server.host,
       port: server.port,
+      storedFingerprint: server.fingerprint(),
       username: 'deploy',
       authMethod: 'password' as const,
       password: PASSWORD,

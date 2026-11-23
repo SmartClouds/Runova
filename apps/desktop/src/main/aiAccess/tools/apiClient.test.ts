@@ -106,25 +106,28 @@ describe('api_save_request', () => {
     });
   });
 
-  it('updates the request with the same name instead of adding a second one', async () => {
+  it('never overwrites a request that has the same name, even inside a folder', async () => {
     await run('api_save_request', {
       collection: 'Shop',
       createCollection: true,
+      folder: 'Users',
       name: 'Ping',
       method: 'GET',
       url: 'https://a.test',
     });
-    const second = await run('api_save_request', {
-      collection: 'shop',
-      name: 'ping',
-      method: 'GET',
-      url: 'https://b.test',
-    });
 
-    expect(second.text).toContain('Updated Ping in Shop');
+    await expect(
+      run('api_save_request', {
+        collection: 'shop',
+        name: 'ping',
+        method: 'GET',
+        url: 'https://b.test',
+      }),
+    ).rejects.toThrow(/already has a request named Ping.*api_update_request/);
+
     const collection = await store.get((await store.list())[0].id);
     expect(requestsOf(collection.item).map((one) => one.request.url)).toEqual([
-      { raw: 'https://b.test' },
+      { raw: 'https://a.test' },
     ]);
   });
 
@@ -170,6 +173,103 @@ describe('api_save_request', () => {
         url: 'https://a.test',
       }),
     ).rejects.toThrow(/No collection named Shop.*Billing/);
+  });
+});
+
+describe('api_update_request', () => {
+  async function seed() {
+    const summary = await store.create('Shop');
+    await store.saveRequest({
+      collectionId: summary.id,
+      parentId: null,
+      item: {
+        id: 'r1',
+        name: 'Get profile',
+        request: {
+          method: 'GET',
+          url: { raw: 'https://api.shop.test/me' },
+          header: [{ key: 'X-Api-Key', value: 'k-123' }],
+          auth: { type: 'noauth' },
+        },
+        event: [{ listen: 'prerequest', script: { exec: ['pm.variables.set("a", 1)'] } }],
+      },
+    });
+    return summary;
+  }
+
+  it('is sensitive, so changing a saved request always asks first', () => {
+    expect(tools.get('api_update_request')?.risk).toBe('sensitive');
+    expect(tools.get('api_save_request')?.risk).toBe('write');
+  });
+
+  it('shows the request before and after, its auth and the scripts that stay', async () => {
+    await seed();
+
+    const shown = await preview('api_update_request', {
+      collection: 'Shop',
+      request: 'get profile',
+      url: 'https://other.test/p',
+    });
+
+    expect(shown).toMatchObject({
+      title: 'Change Get profile in Shop',
+      request: { method: 'GET', url: 'https://other.test/p' },
+      fields: [
+        { label: 'Auth', value: 'noauth' },
+        { label: 'Scripts', value: expect.stringContaining('pre-request') },
+      ],
+      diff: {
+        fileName: 'Get profile',
+        before: expect.stringContaining('GET https://api.shop.test/me'),
+        after: expect.stringContaining('GET https://other.test/p'),
+      },
+    });
+  });
+
+  it('changes only what is given and keeps its own auth and headers', async () => {
+    const summary = await seed();
+
+    await run('api_update_request', {
+      collection: 'Shop',
+      request: 'r1',
+      url: 'https://other.test/p',
+    });
+
+    const [item] = requestsOf((await store.get(summary.id)).item);
+    expect(item).toMatchObject({
+      id: 'r1',
+      name: 'Get profile',
+      request: {
+        method: 'GET',
+        url: { raw: 'https://other.test/p' },
+        header: [{ key: 'X-Api-Key', value: 'k-123' }],
+        auth: { type: 'noauth' },
+      },
+    });
+  });
+
+  it('replaces the auth only when a bearer token is given', async () => {
+    const summary = await seed();
+
+    await run('api_update_request', {
+      collection: 'Shop',
+      request: 'Get profile',
+      bearerToken: '{{token}}',
+    });
+
+    const [item] = requestsOf((await store.get(summary.id)).item);
+    expect(item.request.auth).toEqual({
+      type: 'bearer',
+      bearer: [{ key: 'token', value: '{{token}}', type: 'string' }],
+    });
+  });
+
+  it('refuses a folder', async () => {
+    const summary = await seed();
+    await store.createFolder(summary.id, null, 'Users');
+    await expect(
+      run('api_update_request', { collection: 'Shop', request: 'Users', url: 'https://x.test' }),
+    ).rejects.toThrow(/is a folder/);
   });
 });
 

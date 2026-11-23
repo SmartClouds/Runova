@@ -74,13 +74,21 @@ export function LinkEnvFileDialog({
       .then((files) => {
         if (cancelled) return;
         const usable = files.filter((found) => !found.tooLarge);
+        const found = usable.map((one) => ({
+          path: one.fileName,
+          note: `${formatSize(one.size)}${one.isTemplate ? ' · looks like a template' : ''}`,
+        }));
+        // A file already linked (maybe on another computer, waiting to be confirmed here) starts
+        // on the file it points at, so confirming is one look and one click.
+        const current = file.link?.path;
         setChoices(
-          usable.map((found) => ({
-            path: found.fileName,
-            note: `${formatSize(found.size)}${found.isTemplate ? ' · looks like a template' : ''}`,
-          })),
+          current && !found.some((choice) => choice.path === current)
+            ? [...found, { path: current, note: 'Linked now' }]
+            : found,
         );
-        setSelected(usable.find((found) => found.fileName === file.fileName)?.fileName ?? null);
+        setSelected(
+          current ?? usable.find((one) => one.fileName === file.fileName)?.fileName ?? null,
+        );
       })
       .catch((error: unknown) => {
         if (!cancelled) setScanError(ipcErrorMessage(error, 'Could not read the project folder.'));

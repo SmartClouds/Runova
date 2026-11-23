@@ -95,6 +95,63 @@ describe('withHostKeyTrust', () => {
     await expect(second).rejects.toThrow(/not trusted/);
   });
 
+  describe('a server never connected to before', () => {
+    const firstSeen: SshHostKeyStatus = { ...status, stored: null };
+    const hostKeyUnknown = () =>
+      new Error(
+        `Error invoking remote method 'ssh:create': Error: ${encodeSshError('host-key-unknown', 'Not trusted yet.')}`,
+      );
+
+    it('asks about the key, trusts it and only then connects when the user agrees', async () => {
+      const trust = vi.fn(async () => undefined);
+      installRunovaBridge({ 'ssh.hostKeyStatus': firstSeen, 'ssh.trustHostKey': trust });
+      const attempt = vi
+        .fn()
+        .mockRejectedValueOnce(hostKeyUnknown())
+        .mockResolvedValueOnce('connected');
+
+      const result = withHostKeyTrust('srv-1', attempt);
+      await vi.waitFor(() => expect(useHostKeyPromptStore.getState().request).not.toBeNull());
+      expect(useHostKeyPromptStore.getState().request).toMatchObject({ stored: null });
+      expect(attempt).toHaveBeenCalledTimes(1);
+      answerHostKeyPrompt(true);
+
+      await expect(result).resolves.toBe('connected');
+      expect(trust).toHaveBeenCalledWith('srv-1', firstSeen.presented);
+      expect(trust.mock.invocationCallOrder[0]).toBeLessThan(attempt.mock.invocationCallOrder[1]);
+    });
+
+    it('trusts nothing and does not connect when the user declines', async () => {
+      const trust = vi.fn(async () => undefined);
+      installRunovaBridge({ 'ssh.hostKeyStatus': firstSeen, 'ssh.trustHostKey': trust });
+      const attempt = vi.fn().mockRejectedValue(hostKeyUnknown());
+
+      const result = withHostKeyTrust('srv-1', attempt);
+      await vi.waitFor(() => expect(useHostKeyPromptStore.getState().request).not.toBeNull());
+      answerHostKeyPrompt(false);
+
+      await expect(result).rejects.toThrow('Not connected to prod: its host key was not trusted.');
+      expect(trust).not.toHaveBeenCalled();
+      expect(attempt).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks for a saved server reached through an FTP or SFTP site too', async () => {
+      const trust = vi.fn(async () => undefined);
+      installRunovaBridge({ 'ssh.hostKeyStatus': firstSeen, 'ssh.trustHostKey': trust });
+      const attempt = vi
+        .fn()
+        .mockRejectedValueOnce(new Error(encodeFilesError('hostKeyUnknown', 'Not trusted yet.')))
+        .mockResolvedValueOnce('planned');
+
+      const result = withHostKeyTrust('srv-1', attempt);
+      await vi.waitFor(() => expect(useHostKeyPromptStore.getState().request).not.toBeNull());
+      answerHostKeyPrompt(true);
+
+      await expect(result).resolves.toBe('planned');
+      expect(trust).toHaveBeenCalledWith('srv-1', firstSeen.presented);
+    });
+  });
+
   it('ignores an answer when nothing was asked', () => {
     answerHostKeyPrompt(true);
 
@@ -181,9 +238,13 @@ describe('withHostKeyTrust with a source of its own', () => {
     expect(keys.trust).not.toHaveBeenCalled();
   });
 
-  it('rethrows other files failures untouched', async () => {
+  it.each([
+    ['auth', 'Wrong password.'],
+    // A site login of its own trusts its first key in the site's form, not here.
+    ['hostKeyUnknown', 'Not trusted yet.'],
+  ] as const)('rethrows a files %s failure untouched', async (code, message) => {
     const keys = source();
-    const failure = new Error(encodeFilesError('auth', 'Wrong password.'));
+    const failure = new Error(encodeFilesError(code, message));
 
     await expect(withHostKeyTrust(keys, vi.fn().mockRejectedValue(failure))).rejects.toBe(failure);
     expect(keys.status).not.toHaveBeenCalled();

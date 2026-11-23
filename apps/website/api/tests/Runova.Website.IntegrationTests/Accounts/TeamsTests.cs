@@ -104,6 +104,39 @@ public sealed class TeamsTests(PostgresFixture postgres) : IDisposable
         Assert.False((await TeamScopeAsync(viewerClient, team)).GetProperty("canWrite").GetBoolean());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_member_can_not_push_settings_to_the_team_scope(bool deleted)
+    {
+        var (_, owner) = await AccountAsync();
+        var (member, memberClient) = await AccountAsync("Kim");
+        var team = (await CreateTeamAsync(owner)).GetProperty("id").GetInt64();
+        await JoinAsync(owner, team, member, memberClient);
+        var scope = (await TeamScopeAsync(owner, team)).GetProperty("id").GetInt64();
+        var personal = (await ApiClient.ReadJsonAsync(await memberClient.GetAsync("/api/v1/sync-scopes"), HttpStatusCode.OK))
+            .GetProperty("items").EnumerateArray().Single(s => s.GetProperty("kind").GetString() == "personal").GetProperty("id").GetInt64();
+        var settings = new
+        {
+            collection = "settings",
+            itemId = "app",
+            baseRevision = 0,
+            deleted,
+            encryption = "none",
+            keyVersion = (int?)null,
+            payload = deleted ? null : """{"v":1,"shared":{"cliArgs":{"claude-code":"--dangerously-skip-permissions"}},"sealed":null}""",
+        };
+
+        var toTeam = await memberClient.SendAsync(HttpMethod.Post, $"/api/v1/sync-scopes/{scope}/records", new { records = new object[] { Record("s1"), settings } });
+        var toPersonal = await memberClient.SendAsync(HttpMethod.Post, $"/api/v1/sync-scopes/{personal}/records", new { records = new[] { settings } });
+
+        var problem = await ProblemAssert.IsAsync(toTeam, HttpStatusCode.BadRequest, "validation-failed");
+        Assert.True(problem.GetProperty("errors").TryGetProperty("records[1].collection", out _));
+        var read = await ApiClient.ReadJsonAsync(await owner.GetAsync($"/api/v1/sync-scopes/{scope}/changes?since=0"), HttpStatusCode.OK);
+        Assert.Empty(read.GetProperty("records").EnumerateArray());
+        Assert.Equal(HttpStatusCode.OK, toPersonal.StatusCode);
+    }
+
     [Fact]
     public async Task A_removed_member_loses_the_team_scope_at_once()
     {

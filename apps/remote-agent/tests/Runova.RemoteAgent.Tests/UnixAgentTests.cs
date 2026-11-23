@@ -76,6 +76,163 @@ public class UnixAgentTests
         Assert.Null(XServerDiscovery.Pick([], "tty1"));
     }
 
+    private static readonly FileOwner _rootFile = new(0, (UnixFileMode)0b111_101_101);
+
+    private sealed record FakeProcess(string CommandLine, string Executable, FileOwner Binary, int Uid);
+
+    /// <summary>A Linux computer as discovery sees it, with GDM's greeter user (120) on seat0.</summary>
+    private sealed class FakeProbe : IXServerProbe
+    {
+        public Dictionary<int, FakeProcess> Processes { get; } = [];
+
+        public Dictionary<string, FileOwner> Folders { get; } = new()
+        {
+            ["/"] = _rootFile,
+            ["/usr"] = _rootFile,
+            ["/usr/lib"] = _rootFile,
+            ["/usr/lib/xorg"] = _rootFile,
+            ["/usr/bin"] = _rootFile,
+        };
+
+        public int? Seat { get; set; } = 120;
+
+        public string Active { get; set; } = "tty1";
+
+        public List<string> SocketNames { get; } = [];
+
+        public Dictionary<string, int[]> Peers { get; } = [];
+
+        public IEnumerable<int> ProcessIds() => Processes.Keys.Order();
+
+        public string? CommandLine(int pid) => Processes.GetValueOrDefault(pid)?.CommandLine;
+
+        public string? Executable(int pid) => Processes.GetValueOrDefault(pid)?.Executable;
+
+        public FileOwner? ExecutableFile(int pid) => Processes.GetValueOrDefault(pid)?.Binary;
+
+        public FileOwner? Folder(string path) => Folders.GetValueOrDefault(path);
+
+        public int? EffectiveUid(int pid) => Processes.GetValueOrDefault(pid)?.Uid;
+
+        public int? SeatUser() => Seat;
+
+        public string ActiveTerminal() => Active;
+
+        public IEnumerable<string> Sockets() => SocketNames;
+
+        public IReadOnlyList<int> SocketPeers(string display) => Peers.GetValueOrDefault(display) ?? [];
+    }
+
+    private static FakeProcess RealGdmServer => new(GdmServer, "/usr/lib/xorg/Xorg", _rootFile, 120);
+
+    [Fact]
+    public void The_display_managers_own_xorg_is_found_with_its_process()
+    {
+        var probe = new FakeProbe { Processes = { [29] = RealGdmServer } };
+
+        Assert.Equal(new XServer("/run/user/120/gdm/Xauthority", 1, null, 29), XServerDiscovery.Current(probe));
+
+        probe.Processes[29] = RealGdmServer with { Uid = 0, Executable = "/usr/lib/xorg/Xorg (deleted)" };
+        Assert.Equal(29, XServerDiscovery.Current(probe)?.Pid);
+    }
+
+    [Fact]
+    public void A_forged_command_line_on_the_active_terminal_loses_to_the_real_server()
+    {
+        // Another local user names Xorg, a display and an auth file of their own, with a lower pid.
+        var forged = new FakeProcess("Xorg\0-auth\0/tmp/evil\0vt1\0:7\0", "/usr/bin/Xvfb", new FileOwner(0, (UnixFileMode)0b111_101_101), 1000);
+        var probe = new FakeProbe { Processes = { [26] = forged, [29] = RealGdmServer } };
+
+        Assert.Equal(29, XServerDiscovery.Current(probe)?.Pid);
+
+        probe.Processes.Remove(29);
+        Assert.Null(XServerDiscovery.Current(probe));
+    }
+
+    private static FakeProcess Forged(string how) => how switch
+    {
+        "real Xorg run by a user not on seat0" => RealGdmServer with { Uid = 1001 },
+        "not Xorg" => RealGdmServer with { Executable = "/usr/bin/Xvfb", Uid = 0 },
+        "the user's own Xorg" => RealGdmServer with { Executable = "/home/eve/Xorg", Binary = new FileOwner(1001, (UnixFileMode)0b111_101_101) },
+        "root binary anyone can write" => RealGdmServer with { Binary = new FileOwner(0, (UnixFileMode)0b111_111_111) },
+        "binary owned by someone else" => RealGdmServer with { Binary = new FileOwner(1001, (UnixFileMode)0b111_101_101) },
+        "exe cannot be read" => RealGdmServer with { Executable = null! },
+        _ => throw new ArgumentOutOfRangeException(nameof(how)),
+    };
+
+    [Theory]
+    [InlineData("real Xorg run by a user not on seat0")]
+    [InlineData("not Xorg")]
+    [InlineData("the user's own Xorg")]
+    [InlineData("root binary anyone can write")]
+    [InlineData("binary owned by someone else")]
+    [InlineData("exe cannot be read")]
+    public void An_x_server_that_is_not_the_systems_own_is_never_used(string how)
+    {
+        var probe = new FakeProbe { Processes = { [26] = Forged(how) } };
+
+        Assert.False(XServerDiscovery.Trusted(26, probe, probe.Seat));
+        Assert.Null(XServerDiscovery.Current(probe));
+    }
+
+    [Fact]
+    public void Xorg_in_a_folder_others_can_write_is_not_trusted()
+    {
+        var probe = new FakeProbe { Processes = { [29] = RealGdmServer } };
+        probe.Folders["/usr/lib/xorg"] = new FileOwner(0, (UnixFileMode)0b111_111_101);
+
+        Assert.Null(XServerDiscovery.Current(probe));
+
+        probe.Folders["/usr/lib/xorg"] = new FileOwner(1001, (UnixFileMode)0b111_101_101);
+        Assert.Null(XServerDiscovery.Current(probe));
+
+        probe.Folders.Remove("/usr/lib/xorg");
+        Assert.Null(XServerDiscovery.Current(probe));
+    }
+
+    [Fact]
+    public void A_rootless_xorg_counts_only_for_the_user_on_seat0()
+    {
+        var probe = new FakeProbe { Seat = 1000, Processes = { [29] = RealGdmServer } };
+        Assert.Null(XServerDiscovery.Current(probe));
+
+        probe.Seat = null;
+        Assert.Null(XServerDiscovery.Current(probe));
+
+        probe.Processes[29] = RealGdmServer with { Uid = 0 };
+        Assert.Equal(29, XServerDiscovery.Current(probe)?.Pid);
+    }
+
+    [Fact]
+    public void Only_displays_whose_sockets_lead_to_the_server_are_tried()
+    {
+        var server = new XServer("/run/user/120/gdm/Xauthority", 1, null, 29);
+        var probe = new FakeProbe
+        {
+            SocketNames = { "X2", "X1", "X0", "X3" },
+            Peers =
+            {
+                [":0"] = [26, 26],
+                [":1"] = [29, 29],
+                [":2"] = [26, 29],
+                [":3"] = [],
+            },
+        };
+
+        Assert.Equal([":1"], XServerDiscovery.Candidates(server, probe));
+        Assert.Empty(XServerDiscovery.Candidates(server with { Display = ":0" }, probe));
+        Assert.Equal([":1"], XServerDiscovery.Candidates(server with { Display = ":1" }, probe));
+    }
+
+    [Fact]
+    public void The_seat_user_and_a_processs_effective_user_are_read_from_their_files()
+    {
+        Assert.Equal(1000, XServerDiscovery.SeatUser("# This is private data. Do not parse.\nIS_SEAT0=1\nACTIVE=2\nACTIVE_UID=1000\nSESSIONS=2 c1\n"));
+        Assert.Null(XServerDiscovery.SeatUser("IS_SEAT0=1\nCAN_GRAPHICAL=1\n"));
+        Assert.Equal(0, XServerDiscovery.EffectiveUid("Name:\tXorg\nUmask:\t0022\nUid:\t1000\t0\t0\t0\nGid:\t1000\t1000\t1000\t1000\n"));
+        Assert.Null(XServerDiscovery.EffectiveUid("Name:\tgone\n"));
+    }
+
     [Fact]
     public void The_systemd_unit_restarts_the_agent_and_gives_it_somewhere_to_unpack()
     {

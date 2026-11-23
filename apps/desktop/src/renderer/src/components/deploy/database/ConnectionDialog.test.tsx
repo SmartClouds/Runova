@@ -1,5 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { DatabaseSaveInput } from '../../../../../shared/databaseTypes';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
 import { ConnectionDialog } from './ConnectionDialog';
 
@@ -34,11 +35,33 @@ describe('ConnectionDialog', () => {
     });
     expect(screen.getByText('PostgreSQL')).toBeInTheDocument();
     expect(screen.getByText('db.example.com:6543')).toBeInTheDocument();
-    expect(screen.getByText('Encrypted')).toBeInTheDocument();
+    // sslmode=require encrypts without checking the certificate, and says so.
+    expect(screen.getByText('Encrypted, not verified')).toBeInTheDocument();
     expect(screen.getByText('shop')).toBeInTheDocument();
     expect(screen.getByText('Included')).toBeInTheDocument();
     expect(screen.queryByText(/usually needs a password/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save and connect' })).toBeEnabled();
+  });
+
+  it('calls a connection that checks the certificate plainly encrypted', () => {
+    renderDialog();
+    fireEvent.change(urlField(), {
+      target: { value: 'postgres://app:secret@db.example.com/shop?sslmode=verify-full' },
+    });
+    expect(screen.getByText('Encrypted')).toBeInTheDocument();
+    expect(screen.queryByText('Encrypted, not verified')).not.toBeInTheDocument();
+  });
+
+  it('saves the certificate mode the URL asked for', async () => {
+    const saveConnection = vi.fn(async (input: DatabaseSaveInput) => ({ id: 'c1', ...input }));
+    const view = renderDialog({ 'database.saveConnection': saveConnection });
+    fireEvent.change(urlField(), {
+      target: { value: 'rediss://:pw@cache.example.com:6380' },
+    });
+    await view.user.click(screen.getByRole('button', { name: 'Save and connect' }));
+    expect(saveConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ tls: true, tlsMode: 'verify-full' }),
+    );
   });
 
   it('warns when an engine that needs a password has none in the URL', () => {

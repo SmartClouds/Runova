@@ -82,6 +82,59 @@ describe('scheduled task tools', () => {
     await run('task_remove', { taskId: task.id });
     expect((await run('tasks_list')).data).toEqual([]);
   });
+
+  it('never lets task_update start a prompt the user did not approve', async () => {
+    const { dueTasks } = await import('../../scheduledTasks/scheduler');
+    const { store } = await import('../../store');
+    await run('task_schedule_run', { prompt: 'Run the tests', runAt: '2026-12-01T09:00:00Z' });
+    const [task] = (await run('tasks_list')).data as { id: string }[];
+
+    const tool = tools.get('task_update') as AiTool;
+    const args = tool.input.parse({
+      taskId: task.id,
+      prompt: 'Something else',
+      runAt: '2026-12-01T10:00:00Z',
+    });
+    expect(await tool.preview(args, context)).toMatchObject({
+      summary: expect.stringContaining('Run now'),
+      fields: [
+        expect.objectContaining({ label: 'When' }),
+        { label: 'Prompt', value: 'Something else' },
+      ],
+    });
+    const result = await tool.run(args, context);
+
+    expect(result.text).toContain('no longer starts by itself');
+    expect((await run('tasks_list')).data).toEqual([
+      expect.objectContaining({ prompt: 'Something else', startsByItself: false }),
+    ]);
+    expect(dueTasks(await store.getScheduledTasks(), new Date('2026-12-01T10:00:30Z'))).toEqual([]);
+  });
+
+  it('puts a missed automatic task back in the queue only as one that waits for Run now', async () => {
+    const { dueTasks } = await import('../../scheduledTasks/scheduler');
+    const { store } = await import('../../store');
+    await run('task_schedule_run', { prompt: 'Run the audit', runAt: '2026-01-01T09:00:00Z' });
+    const [task] = await store.getScheduledTasks();
+    await store.setScheduledTasks([{ ...task, status: 'missed' }]);
+
+    await run('task_update', { taskId: task.id, runAt: '2026-12-01T10:00:00Z' });
+
+    const [moved] = await store.getScheduledTasks();
+    expect(moved).toMatchObject({ status: 'pending', runMode: 'manual' });
+    expect(dueTasks([moved], new Date('2026-12-01T10:00:30Z'))).toEqual([]);
+  });
+
+  it('leaves an automatic task alone when it is only cancelled', async () => {
+    await run('task_schedule_run', { prompt: 'Run the audit', runAt: '2026-12-01T09:00:00Z' });
+    const [task] = (await run('tasks_list')).data as { id: string }[];
+
+    await run('task_update', { taskId: task.id, cancel: true });
+
+    expect((await run('tasks_list')).data).toEqual([
+      expect.objectContaining({ status: 'cancelled', startsByItself: true }),
+    ]);
+  });
 });
 
 describe('healthcheck tools', () => {

@@ -14,6 +14,7 @@ import {
 import { filesErrorCode } from '../../shared/deployFilesErrors';
 import { IPC } from '../../shared/ipcChannels';
 import type { SftpBatchFinished, SftpQueueSnapshot } from '../../shared/sftpTypes';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnection } from '../ssh/connection';
 import type { SftpPool } from './client';
 import { LocalBrowseRegistry } from './localBrowse';
@@ -86,12 +87,12 @@ function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function open(): Promise<SshConnection> {
+async function open(): Promise<SshConnection> {
   const { host, port } = live();
-  // No stored fingerprint: the key is trusted on first use, as for a newly saved server.
   return SshConnection.open({
     host,
     port,
+    storedFingerprint: await probeHostKey(host, port),
     username: SSH_USER,
     authMethod: 'password',
     password: SSH_PASSWORD,

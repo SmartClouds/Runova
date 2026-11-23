@@ -1,4 +1,4 @@
-import type { DbEngine } from '@runova/core';
+import type { DbEngine, DbTlsMode } from '@runova/core';
 import type {
   DbHealthReport,
   DbObjectKind,
@@ -25,6 +25,13 @@ export interface DriverConnectOptions {
   database?: string;
   authDatabase?: string;
   tls: boolean;
+  /** How the certificate is checked when `tls` is on. Missing means verify-full. */
+  tlsMode?: DbTlsMode;
+  /**
+   * The host name the certificate has to carry when `host` is not it, as through an SSH
+   * forward, where `host` is 127.0.0.1 and this is the host the server itself reaches.
+   */
+  tlsServername?: string;
   srv: boolean;
   /** How long to wait for the server to answer the sign-in. */
   connectTimeoutMs?: number;

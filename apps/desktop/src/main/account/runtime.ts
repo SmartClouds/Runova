@@ -161,6 +161,8 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
       db: opened,
       adapters,
       key: (scopeId) => keys.key(scopeId),
+      pinnedPolicy: (scopeId) => state.pinnedPolicy(scopeId),
+      pinPolicy: (scopeId, policy) => state.pinPolicy(scopeId, policy),
       enabled: (collection) => !disabled.has(collection),
       onApplied: (area) => options.dataChanged?.(area),
       onStatus: () => {
@@ -424,6 +426,17 @@ export function createAccountRuntime(options: AccountRuntimeOptions) {
 
     async setPolicy(scopeId: number, policy: EncryptionPolicy): Promise<void> {
       await remote.setPolicy(scopeId, policy);
+      // Only the person lowers sealing, so what they turned off here comes off the pin kept on
+      // this computer. What they turned on is pinned by the next sync, which seals what is
+      // already stored that way too.
+      const pinned = await state.pinnedPolicy(scopeId);
+      if (pinned) {
+        await state.pinPolicy(scopeId, {
+          servers: pinned.servers && policy.servers,
+          environments: pinned.environments && policy.environments,
+          everything: pinned.everything && policy.everything,
+        });
+      }
       trigger(0);
     },
 

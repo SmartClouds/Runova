@@ -46,6 +46,35 @@
         }
       ]
     },
+    "builder": {
+      "build": {
+        "context": "/srv/build",
+        "dockerfile": "Dockerfile",
+        "additional_contexts": {
+          "base": "docker-image://alpine:3.22",
+          "extra": "/srv/extra"
+        }
+      },
+      "command": null,
+      "configs": [
+        {
+          "source": "conf"
+        }
+      ],
+      "entrypoint": null,
+      "image": "example/builder:1.0",
+      "networks": {
+        "default": null
+      },
+      "secrets": [
+        {
+          "source": "key"
+        },
+        {
+          "source": "local"
+        }
+      ]
+    },
     "web": {
       "cap_add": ["SYS_ADMIN", "NET_ADMIN", "CHOWN", "SYS_NICE"],
       "command": null,
@@ -138,6 +167,22 @@
         "o": "bind",
         "type": "none"
       }
+    }
+  },
+  "secrets": {
+    "key": {
+      "name": "parity_key",
+      "file": "/root/.ssh/id_ed25519"
+    },
+    "local": {
+      "name": "parity_local",
+      "file": "/srv/app/files/secrets/local.txt"
+    }
+  },
+  "configs": {
+    "conf": {
+      "name": "parity_conf",
+      "file": "/srv/conf/app.conf"
     }
   }
 }

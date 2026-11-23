@@ -1,5 +1,5 @@
 import { buildReadRows, classifyStatement, splitStatements } from '@runova/core';
-import { auth, Client, types } from 'cassandra-driver';
+import { auth, Client, type ClientOptions, types } from 'cassandra-driver';
 import type {
   DbColumn,
   DbIndex,
@@ -13,7 +13,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
-import { describeError } from './shared';
+import { describeError, nodeTlsOptions } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -64,7 +64,13 @@ export function cqlResult(
   };
 }
 
+/** The driver's TLS options. cassandra-driver defaults to no check, so it is always spelled out. */
+export function cassandraSslOptions(options: DriverConnectOptions): ClientOptions['sslOptions'] {
+  return nodeTlsOptions(options);
+}
+
 export async function openCassandra(options: DriverConnectOptions): Promise<DbDriver> {
+  const sslOptions = cassandraSslOptions(options);
   const client = new Client({
     contactPoints: [`${options.host}:${options.port ?? 9042}`],
     localDataCenter: DATA_CENTER,
@@ -72,7 +78,7 @@ export async function openCassandra(options: DriverConnectOptions): Promise<DbDr
     ...(options.user
       ? { authProvider: new auth.PlainTextAuthProvider(options.user, options.password ?? '') }
       : {}),
-    ...(options.tls ? { sslOptions: { rejectUnauthorized: false } } : {}),
+    ...(sslOptions ? { sslOptions } : {}),
     socketOptions: { connectTimeout: options.connectTimeoutMs ?? 15_000, readTimeout: 0 },
     // Through a forward, the driver must keep to the one address it was given.
     policies: {},

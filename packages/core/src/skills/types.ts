@@ -1,13 +1,35 @@
 import { z } from 'zod';
 
+const SKILL_ID_PATTERN = /^[\w.-]+$/;
+
+/**
+ * A skill id becomes a folder name under an agent skills dir, so it has to be one plain path
+ * segment. '.' and '..' match the character set but would name the skills dir or its parent.
+ */
+export function isSafeSkillId(id: string): boolean {
+  return SKILL_ID_PATTERN.test(id) && id !== '.' && id !== '..';
+}
+
+/**
+ * A path inside a skill folder or a repository: relative, with no '..' segment, and no leading
+ * slash, backslash or drive letter that would anchor it somewhere else.
+ */
+export function isSafeRelativeSkillPath(path: string): boolean {
+  if (path.length === 0 || path.includes('\0')) return false;
+  if (/^[\\/]/.test(path) || /^[a-zA-Z]:/.test(path)) return false;
+  return !path.split(/[\\/]/).includes('..');
+}
+
 export const SkillFileSchema = z.object({
-  path: z.string(),
+  // Where the file lands inside the installed skill folder.
+  path: z.string().refine(isSafeRelativeSkillPath, 'Skill file path must stay inside the skill'),
+  // A url index may point at absolute URLs here, so a folder or git source checks this on read.
   url: z.string(),
 });
 export type SkillFile = z.infer<typeof SkillFileSchema>;
 
 export const SkillSchema = z.object({
-  id: z.string(),
+  id: z.string().refine(isSafeSkillId, 'Skill id must be a single folder name'),
   name: z.string(),
   description: z.string(),
   category: z.string(),

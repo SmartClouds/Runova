@@ -141,13 +141,8 @@ export function updateTunnelSsh(
 
 /** Where the Deploy connection pool gets its endpoints and records what it learned. */
 export const savedServerPoolSource: PoolSource = {
+  // A key is only ever stored by `ssh:trustHostKey`, after the user saw it.
   endpoint: savedServerEndpoint,
-  // First use only: never replace a key that was already trusted.
-  trustHostKey: (serverId, fingerprint) =>
-    updateSshServer(serverId, (s) => ({
-      ...s,
-      hostKeyFingerprint: s.hostKeyFingerprint ?? fingerprint,
-    })),
   connected: (serverId) => {
     void updateSshServer(serverId, (s) => ({ ...s, lastConnectedAt: Date.now() }));
   },

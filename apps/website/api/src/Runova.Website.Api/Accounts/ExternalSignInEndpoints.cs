@@ -121,7 +121,7 @@ internal static class ExternalSignInEndpoints
         }
 
         var back = SafeReturn(returnUrl);
-        var userId = link == true && await users.GetUserAsync(http.User) is { } user
+        var userId = link == true && await SessionUserAsync(http, users) is { } user
             ? user.Id.ToString(CultureInfo.InvariantCulture)
             : null;
         // The provider comes back from another site, so the browser would leave the SameSite=Strict
@@ -148,7 +148,9 @@ internal static class ExternalSignInEndpoints
         var linking = external.Properties?.Items.ContainsKey(LinkItem) == true;
 
         // A link started by one account finishes only for that account, still signed in here.
-        var linkFor = linking ? users.GetUserId(http.User) : null;
+        var linkFor = linking && await SessionUserAsync(http, users) is { } linker
+            ? linker.Id.ToString(CultureInfo.InvariantCulture)
+            : null;
         var info = linking && linkFor is null ? null : await signIn.GetExternalLoginInfoAsync(linkFor);
         await http.SignOutAsync(IdentityConstants.ExternalScheme);
         var provider = ExternalProviders.ForScheme(info?.LoginProvider ?? external.Properties?.GetString(LoginProviderItem));
@@ -287,6 +289,17 @@ internal static class ExternalSignInEndpoints
         await db.SaveChangesAsync();
         await signIn.RefreshSignInAsync(user);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The account signed in by its own browser session cookie. A link is only ever for that
+    /// account, never for whoever a signed request, device token or agent token stands for, since
+    /// those routes are open to anyone and the request's user may not be an account at all.
+    /// </summary>
+    private static async Task<AppUser?> SessionUserAsync(HttpContext http, UserManager<AppUser> users)
+    {
+        var session = await http.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        return session is { Succeeded: true, Principal: { } principal } ? await users.GetUserAsync(principal) : null;
     }
 
     private static RedirectHttpResult Fail(string error, string back) => TypedResults.Redirect(ExternalProviders.FailurePath(error, back));

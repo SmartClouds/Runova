@@ -222,4 +222,69 @@ public class HostSessionTests
 
         Assert.Equal(HandshakeFailure.Protocol, (await Assert.ThrowsAsync<HandshakeException>(() => accepting)).Reason);
     }
+
+    private static readonly AgentSettings _settings = new(AllowOwnDevices: false, AlwaysAllow: [], DefaultPermissions: _all);
+
+    private static IncomingRequest PasswordRequest(Identity controller) =>
+        new("s1", "password", "other", "control", new IncomingController(9, "Mallory", "m@example.com", null, null, null, Bytes.ToB64u(controller.PublicKey)), []);
+
+    private static byte[] Frame(HandshakeMessage message) => LinkFraming.Encode(LinkFraming.Text, JsonSerializer.SerializeToUtf8Bytes(message), 1)[0];
+
+    [Theory]
+    [InlineData("hang-up")]
+    [InlineData("signature")]
+    [InlineData("protocol")]
+    public async Task A_wrong_password_counts_even_when_the_controller_never_owns_up_to_it(string ending)
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var lockout = new PasswordLockout(() => now);
+        var host = Identity.Create();
+        var controllerId = Identity.Create();
+        Assert.True(AgentService.Admits(PasswordRequest(controllerId), hasPasswordSecret: true, _settings, lockout, () => true));
+
+        var (hostPipe, controllerPipe) = Pipe.Create();
+        var hostHandshake = new HostHandshake("s1", "password", host, controllerId.PublicKey, RandomNumberGenerator.GetBytes(32), "", "", RandomNumberGenerator.GetBytes);
+        var accepting = AgentService.HandshakeAsync(hostPipe, hostHandshake, lockout, TimeSpan.FromSeconds(10), Ct);
+
+        // The controller learns from the host's reply alone that its guess is wrong, then leaves
+        // without the hs-abort "wrong-password" an honest controller would send.
+        var guess = new ControllerHandshake("s1", "password", controllerId, host.PublicKey, RandomNumberGenerator.GetBytes(32), "", "", RandomNumberGenerator.GetBytes);
+        await controllerPipe.SendAsync(Frame(guess.Hello), Ct);
+        var reply = JsonSerializer.Deserialize<HandshakeMessage>((await controllerPipe.ReceiveAsync(Ct))!.AsSpan(1))!;
+        Assert.Equal("hs-reply", reply.T);
+        Assert.Equal(HandshakeFailure.WrongPassword, Assert.Throws<HandshakeException>(() => guess.Complete(reply)).Reason);
+        if (ending == "hang-up")
+        {
+            await controllerPipe.DisposeAsync();
+        }
+        else
+        {
+            await controllerPipe.SendAsync(Frame(new HandshakeMessage { T = "hs-abort", Reason = ending }), Ct);
+        }
+
+        await Assert.ThrowsAsync<HandshakeException>(() => accepting);
+        Assert.True(lockout.Wait() > TimeSpan.Zero);
+        Assert.False(AgentService.Admits(PasswordRequest(controllerId), hasPasswordSecret: true, _settings, lockout, () => true));
+    }
+
+    [Fact]
+    public async Task The_right_password_takes_back_the_guess_it_was_charged()
+    {
+        var now = DateTimeOffset.UnixEpoch;
+        var lockout = new PasswordLockout(() => now);
+        var host = Identity.Create();
+        var controllerId = Identity.Create();
+        var secret = RandomNumberGenerator.GetBytes(32);
+        Assert.True(AgentService.Admits(PasswordRequest(controllerId), hasPasswordSecret: true, _settings, lockout, () => true));
+        Assert.True(lockout.Locked());
+
+        var (hostPipe, controllerPipe) = Pipe.Create();
+        var hostHandshake = new HostHandshake("s1", "password", host, controllerId.PublicKey, secret, "", "", RandomNumberGenerator.GetBytes);
+        var controllerHandshake = new ControllerHandshake("s1", "password", controllerId, host.PublicKey, secret, "", "", RandomNumberGenerator.GetBytes);
+        var accepting = AgentService.HandshakeAsync(hostPipe, hostHandshake, lockout, TimeSpan.FromSeconds(10), Ct);
+        await using var controllerLink = await AgentLink.ConnectAsync(controllerPipe, controllerHandshake, sealFrames: true, TimeSpan.FromSeconds(10), Ct);
+        await using var hostLink = await accepting;
+
+        Assert.Equal(TimeSpan.Zero, lockout.Wait());
+    }
 }

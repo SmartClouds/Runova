@@ -42,6 +42,30 @@ function quoteForCmd(value: string): string {
 }
 
 /**
+ * Extra environment for read-only listing commands (`yarn outdated`, `pnpm outdated`) that run
+ * inside a project folder the user may have just cloned. Each one stops the repository from
+ * picking which package manager binary actually runs, or from loading its own code into it:
+ * - YARN_IGNORE_PATH ignores a `yarnPath` in .yarnrc / .yarnrc.yml, which points at a JS file
+ *   committed to the repo.
+ * - YARN_RC_FILENAME points Yarn 2+ at an rc file that does not exist, so the repo's
+ *   .yarnrc.yml cannot load `plugins` (also committed JS). Yarn 2+ has no `outdated` command,
+ *   so listing loses nothing; Yarn 1 does not read this variable.
+ * - PNPM_CONFIG_PM_ON_FAIL=ignore (pnpm 11+) and npm_config_manage_package_manager_versions=false
+ *   (pnpm 9.7 to 10) keep pnpm from downloading and running the version pinned in package.json.
+ * - COREPACK_ENABLE_PROJECT_SPEC=0 makes a Corepack shim run the system-wide manager instead of
+ *   the one named by the project's `packageManager` field, and COREPACK_ENABLE_STRICT=0 keeps it
+ *   from refusing to run when the two differ.
+ */
+export const LISTING_ENV: Readonly<Record<string, string>> = Object.freeze({
+  YARN_IGNORE_PATH: '1',
+  YARN_RC_FILENAME: '.runova-ignores-project-yarnrc.yml',
+  PNPM_CONFIG_PM_ON_FAIL: 'ignore',
+  npm_config_manage_package_manager_versions: 'false',
+  COREPACK_ENABLE_PROJECT_SPEC: '0',
+  COREPACK_ENABLE_STRICT: '0',
+});
+
+/**
  * Runs a CLI command, routing through cmd.exe on Windows so npm/yarn/pnpm/dotnet
  * .cmd shims spawn correctly (Node refuses to spawn .cmd files directly as of
  * Node >=18.20/20.11/21.6). Arguments carry parsed manifest data and, for
@@ -53,12 +77,15 @@ function quoteForCmd(value: string): string {
  * commonly exit 1 when they find results, which is expected, not a failure.
  * A genuinely missing CLI (ENOENT, or cmd.exe's "not recognized") throws
  * CliNotFoundError so callers can render a cli-missing state.
+ *
+ * `extraEnv` is laid over the inherited environment, for example LISTING_ENV.
  */
 export async function runCli(
   command: string,
   args: string[],
   cwd: string,
   timeoutMs = 30000,
+  extraEnv: Record<string, string> = {},
 ): Promise<CliResult> {
   const options = {
     cwd,
@@ -68,7 +95,15 @@ export async function runCli(
     // Cline's CLI self-updates on every invocation, including a bare version check,
     // by spawning a detached background installer; on Windows that can flash open a
     // visible console. This is a no-op env var for every other CLI we shell out to.
-    env: { ...process.env, CLINE_NO_AUTO_UPDATE: '1' },
+    // cmd.exe looks for a command in the current directory before PATH, and cwd is the
+    // project folder, so a repo shipping its own npm.cmd or dotnet.bat would run that instead.
+    // This variable turns the current-directory lookup off (for the shims' own nested cmd too).
+    env: {
+      ...process.env,
+      CLINE_NO_AUTO_UPDATE: '1',
+      NoDefaultCurrentDirectoryInExePath: '1',
+      ...extraEnv,
+    },
   };
   try {
     // The command name stays unquoted: npm/yarn/pnpm are .cmd shims that work out

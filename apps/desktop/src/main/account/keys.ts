@@ -106,10 +106,21 @@ export function createKeyService(deps: { api: KeyApi; state: AccountState; cost?
       await deps.state.forgetKey(scopeId);
     },
 
-    /** Drops a key the server moved past (rotated elsewhere, or reset). */
+    /**
+     * Drops a key the server moved past: rotated elsewhere to a newer version, or reset and set
+     * again. A scope listed with no key, or an older one, does not drop it: the server alone can
+     * not make this computer let go of its key (and so seal less). After a reset the next key
+     * starts at version 1 again, so a key held through a listing with no key is dropped once the
+     * server lists any key.
+     */
     async forgetIfStale(scopeId: number, serverVersion: number | null): Promise<void> {
       const held = await deps.state.key(scopeId);
-      if (held && held.version !== serverVersion) await deps.state.forgetKey(scopeId);
+      if (!held) return;
+      if (serverVersion === null) {
+        if (!held.suspended) await deps.state.suspendKey(scopeId);
+      } else if (serverVersion > held.version || held.suspended) {
+        await deps.state.forgetKey(scopeId);
+      }
     },
   };
 }

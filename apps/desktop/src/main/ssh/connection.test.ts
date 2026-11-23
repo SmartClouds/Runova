@@ -49,6 +49,7 @@ async function connect(
       username: 'deploy',
       authMethod: 'password',
       password: PASSWORD,
+      storedFingerprint: server.fingerprint(),
       ...endpoint,
     },
     hooks,
@@ -303,11 +304,20 @@ describe('SshConnection.createStagingDirectory', () => {
 });
 
 describe('SshConnection lifecycle', () => {
-  it('reports a first-use host key so it can be stored', async () => {
-    const onHostKeyTrusted = vi.fn();
-    const { server } = await connect({}, {}, { onHostKeyTrusted });
+  it('refuses a server with no trusted key before sending the login', async () => {
+    server = await startFakeSshServer({ password: PASSWORD });
 
-    expect(onHostKeyTrusted).toHaveBeenCalledWith(server.fingerprint());
+    const failure = await SshConnection.open({
+      host: server.host,
+      port: server.port,
+      username: 'deploy',
+      authMethod: 'password',
+      password: PASSWORD,
+    }).catch((error: unknown) => error);
+
+    expect(sshErrorCode(failure)).toBe('host-key-unknown');
+    expect(failure).toMatchObject({ presented: server.fingerprint() });
+    expect(server.authAttempts).toEqual([]);
   });
 
   it('refuses a changed host key with the coded error', async () => {

@@ -90,7 +90,8 @@ export function settingsAdapter(store: SettingsPort): SyncAdapter {
     },
 
     async apply(incoming: LocalItem): Promise<void> {
-      if (incoming.id !== ID) return;
+      // Settings are never shared with a team, so a team's record of them is not taken.
+      if (incoming.id !== ID || (incoming.teamId ?? null) !== null) return;
       await store.updateSettings((current) => {
         const next = { ...current } as unknown as Record<string, unknown>;
         const take = (key: string, field: unknown) => {

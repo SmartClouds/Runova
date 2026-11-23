@@ -73,7 +73,7 @@ rv_oldversions() {
     [ -d "$rv_v" ] && [ ! -L "$rv_v" ] || continue
     rv_rv=$(rv_real "$rv_v")
     if [ "$rv_rv" = "$rv_lb" ] || [ "$rv_rv" = "$rv_le" ]; then continue; fi
-    printf '%s\\n' "$rv_v"
+    "$2" "$rv_v"
   done
 }
 rv_docker() {
@@ -86,12 +86,25 @@ rv_docker() {
 `;
 }
 
-/** The parts that delete. They note the first error and carry on, so one locked file never stops the rest. */
+/**
+ * The parts that delete. They note the first error and carry on, so one locked file never stops the
+ * rest. rv_safe guards each of them: a path must be absolute with no . or .. parts, and while the
+ * scheduled job works on a runner (RV_INSIDE set) it must also lie inside that runner's folder.
+ */
 const DELETE_LIB = `RV_ERR=""
+RV_INSIDE=""
 rv_err() { [ -n "$RV_ERR" ] || RV_ERR=$(printf '%s' "$1" | tr '\\t\\r' '  ' | awk 'NF {print; exit}'); [ -n "$RV_ERR" ] || RV_ERR="failed"; }
-rv_rm() { if [ -e "$1" ] || [ -L "$1" ]; then RV_E=$(rm -rf -- "$1" 2>&1) || rv_err "$RV_E"; fi; }
-rv_empty() { if [ -d "$1" ] && [ ! -L "$1" ]; then RV_E=$(find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>&1) || rv_err "$RV_E"; fi; }
-rv_oldlogs() { if [ -d "$1" ]; then RV_E=$(find "$1" -type f -mtime +"$2" -exec rm -f -- {} + 2>&1) || rv_err "$RV_E"; fi; }
+rv_safe() {
+  case "$1" in /*) ;; *) rv_err "Refused a path that is not absolute"; return 1 ;; esac
+  case "$1/" in */./*|*/../*) rv_err "Refused a path with . or .. in it"; return 1 ;; esac
+  if [ -n "$RV_INSIDE" ]; then
+    case "$1" in "$RV_INSIDE"/?*) ;; *) rv_err "Refused a path outside the runner folder"; return 1 ;; esac
+  fi
+  return 0
+}
+rv_rm() { rv_safe "$1" || return 0; if [ -e "$1" ] || [ -L "$1" ]; then RV_E=$(rm -rf -- "$1" 2>&1) || rv_err "$RV_E"; fi; }
+rv_empty() { rv_safe "$1" || return 0; if [ -d "$1" ] && [ ! -L "$1" ]; then RV_E=$(find "$1" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>&1) || rv_err "$RV_E"; fi; }
+rv_oldlogs() { rv_safe "$1" || return 0; if [ -d "$1" ]; then RV_E=$(find "$1" -type f -mtime +"$2" -exec rm -f -- {} + 2>&1) || rv_err "$RV_E"; fi; }
 rv_sum() { rv_t=0; for rv_p in "$@"; do rv_n=$(rv_kb "$rv_p"); rv_t=$((rv_t + rv_n)); done; echo "$rv_t"; }
 rv_docker_prune() {
   RV_FREED=""
@@ -124,7 +137,8 @@ function cacheWords(os: 'linux' | 'macos'): string {
     .join(' ');
 }
 
-const SCAN_RUNNER = `rv_scan_runner() {
+const SCAN_RUNNER = `rv_scan_old() { rv_out size "$rv_d" oldver "$(rv_kb "$1")" "$1"; }
+rv_scan_runner() {
   rv_d="$1"
   rv_out runner "$rv_d"
   if [ -f "$rv_d/.runner" ]; then
@@ -155,9 +169,7 @@ const SCAN_RUNNER = `rv_scan_runner() {
     rv_old=$(find "$rv_d/_diag" -type f -mtime +7 -exec du -k {} + 2>/dev/null | awk '{s += $1} END {print s + 0}')
     rv_out size "$rv_d" diag "$rv_old" "$rv_d/_diag"
   fi
-  rv_oldversions "$rv_d" | while IFS= read -r rv_v; do
-    [ -n "$rv_v" ] && rv_out size "$rv_d" oldver "$(rv_kb "$rv_v")" "$rv_v"
-  done
+  rv_oldversions "$rv_d" rv_scan_old
   rv_out size "$rv_d" total "$(rv_kb "$rv_d")" "$rv_d"
 }
 `;
@@ -335,15 +347,16 @@ export function posixJobScript(
     );
   }
   if (rules.oldVersions) {
-    perRunner.push(
-      'rv_oldversions "$rv_d" | while IFS= read -r rv_v; do [ -n "$rv_v" ] && rv_rm "$rv_v"; done',
-    );
+    // The folders go straight from the glob to rv_rm. A list read back line by line would split a
+    // name holding a newline into a second, relative path.
+    perRunner.push('rv_oldversions "$rv_d" rv_rm');
   }
   if (rules.toolKeepNewest) {
+    // Sorting needs one name per line, so a version folder whose name holds a newline is left alone.
     perRunner.push(
       'for rv_t in "$rv_d"/_work/_tool/*; do',
       '  [ -d "$rv_t" ] || continue',
-      '  for rv_v in "$rv_t"/*; do [ -d "$rv_v" ] && printf \'%s\\n\' "${rv_v##*/}"; done | sort -t. -k1,1n -k2,2n -k3,3n | sed \'$d\' | while IFS= read -r rv_v; do rv_rm "$rv_t/$rv_v"; done',
+      '  for rv_v in "$rv_t"/*; do case "$rv_v" in *"$RV_NL"*) continue ;; esac; [ -d "$rv_v" ] && printf \'%s\\n\' "${rv_v##*/}"; done | sort -t. -k1,1n -k2,2n -k3,3n | sed \'$d\' | while IFS= read -r rv_v; do rv_rm "$rv_t/$rv_v"; done',
       'done',
     );
   }
@@ -368,16 +381,20 @@ mkdir -p "$RV_JOBDIR"
 mkdir "$RV_JOBDIR/runner-cleanup.lock" 2>/dev/null || exit 0
 trap 'rmdir "$RV_JOBDIR/runner-cleanup.lock" 2>/dev/null' EXIT INT TERM
 rv_avail() { df -Pk "$RV_HOME" 2>/dev/null | awk 'NR == 2 {print $4}'; }
+RV_NL='
+'
 RV_F0=$(rv_avail)
 RV_LIST=$(rv_runners)
 while IFS= read -r rv_d; do
   [ -n "$rv_d" ] && [ -d "$rv_d" ] || continue
   rv_busy "$rv_d" && continue
+  RV_INSIDE="$rv_d"
 ${perRunner.map((line) => `  ${line}`).join('\n')}
   :
 done <<RV_LIST_END
 $RV_LIST
 RV_LIST_END
+RV_INSIDE=""
 ${machine.join('\n')}
 RV_F1=$(rv_avail)
 RV_FREED=$(( \${RV_F1:-0} - \${RV_F0:-0} ))

@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import {
+  type EncryptionPolicy,
   joinFields,
   planPull,
   planPush,
   type RemoteChange,
   type Sealing,
   type SplitItem,
+  type SyncCollection,
   sealingFor,
   splitFields,
 } from '@runova/core';
@@ -24,6 +26,7 @@ import {
   decodeRecord,
   encodeRecord,
   type ScopeKey,
+  sealedWhole,
   travellingSecret,
 } from './wire';
 
@@ -57,10 +60,44 @@ export interface SyncEngineDeps {
   now?: () => number;
   /** For tests: the most payload one push carries. */
   maxPushBytes?: number;
+  /**
+   * The sealing policy kept on this computer for a scope (account.json), so the server can not
+   * turn sealing down on its own. Without these the server's policy is used as it is.
+   */
+  pinnedPolicy?: (scopeId: number) => Promise<EncryptionPolicy | null>;
+  pinPolicy?: (scopeId: number, policy: EncryptionPolicy) => Promise<void>;
 }
 
 interface Split extends SplitItem {
   hash: string;
+}
+
+const NO_POLICY: EncryptionPolicy = { servers: false, environments: false, everything: false };
+
+/** Each part sealed when either policy seals it. */
+function strongerPolicy(a: EncryptionPolicy, b: EncryptionPolicy): EncryptionPolicy {
+  return {
+    servers: a.servers || b.servers,
+    environments: a.environments || b.environments,
+    everything: a.everything || b.everything,
+  };
+}
+
+/** True when `a` seals some part that `b` does not. */
+function sealsMore(a: EncryptionPolicy, b: EncryptionPolicy): boolean {
+  return (
+    (a.servers && !b.servers) ||
+    (a.environments && !b.environments) ||
+    (a.everything && !b.everything)
+  );
+}
+
+function sealsWhole(collection: SyncCollection, policy: EncryptionPolicy): boolean {
+  return sealingFor(collection, policy, true).mode === 'seal-all';
+}
+
+function inScope(item: LocalItem, scope: SyncScopeInfo): boolean {
+  return (item.teamId ?? null) === scope.teamId;
 }
 
 export function createSyncEngine(deps: SyncEngineDeps) {
@@ -119,8 +156,27 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   async function localItems(adapter: SyncAdapter, scope: SyncScopeInfo): Promise<LocalItem[]> {
-    return (await adapter.list()).filter((item) => (item.teamId ?? null) === scope.teamId);
+    return (await adapter.list()).filter((item) => inScope(item, scope));
   }
+
+  /**
+   * The policy this computer seals the scope's records by: the server's, never weaker than the
+   * one pinned here. The pin is what the person set on this computer, raised to the strongest
+   * policy seen while this computer held the scope's key. `raised` says the pin just went up.
+   */
+  async function policyFor(
+    scope: SyncScopeInfo,
+    key: ScopeKey | null,
+  ): Promise<{ policy: EncryptionPolicy; pinned: EncryptionPolicy | null; raised: boolean }> {
+    const pinned = (await deps.pinnedPolicy?.(scope.id)) ?? null;
+    const policy = pinned ? strongerPolicy(pinned, scope.policy) : scope.policy;
+    if (key && deps.pinPolicy && (!pinned || sealsMore(policy, pinned))) {
+      await deps.pinPolicy(scope.id, policy);
+      return { policy, pinned: policy, raised: sealsMore(policy, pinned ?? NO_POLICY) };
+    }
+    return { policy, pinned, raised: false };
+  }
+
   /** The items sync works with, and the ids of those it leaves alone here. */
   function syncing(items: LocalItem[]): { items: LocalItem[]; localOnly: Set<string> } {
     return {
@@ -132,8 +188,20 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   async function syncScope(scope: SyncScopeInfo): Promise<{ needsKey: boolean }> {
     // The cloud copy was reset: start over, so everything here is sent again.
     if (deps.db.epoch(scope.id) !== scope.epoch) deps.db.startEpoch(scope.id, scope.epoch);
-    const key = scope.keyVersion === null ? null : await deps.key(scope.id);
+    // Only the key at the version the server lists seals here; the server takes no other.
+    const held = scope.keyVersion === null ? null : await deps.key(scope.id);
+    const key = held && held.version === scope.keyVersion ? held : null;
     const keyFor = (version: number) => (key && key.version === version ? key : null);
+    const { policy, pinned, raised } = await policyFor(scope, key);
+    // The scope seals this collection whole (by its listed key and policy, or by the pin kept
+    // here) but this computer has no key for it: it waits, as the Vault does, rather than going
+    // out readable.
+    const heldBack = (collection: SyncCollection) =>
+      !key &&
+      ((scope.keyVersion !== null && sealsWhole(collection, policy)) ||
+        (pinned !== null && sealsWhole(collection, pinned)));
+    const sealingOf = (collection: SyncCollection): Sealing =>
+      heldBack(collection) ? { mode: 'needs-key' } : sealingFor(collection, policy, key !== null);
     let needsKey = false;
     // Records whose secrets waited for a key: once it is here they are applied again, even at the
     // revision this computer already has, to fill the secrets in.
@@ -156,20 +224,36 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     }
     const incoming = [...newest.values()].sort((a, b) => a.revision - b.revision);
 
-    const adapters = deps.adapters.filter((a) => enabled(a.collection.id) && (a.ready?.() ?? true));
+    // Settings and the other collections that can not be shared belong to the person's own scope
+    // only. A team scope's records of theirs are dropped, never applied or kept for later, and
+    // nothing of theirs is pushed there.
+    const forScope = (a: SyncAdapter) => scope.teamId === null || a.collection.shareable;
+    const refused = new Set(deps.adapters.filter((a) => !forScope(a)).map((a) => a.collection.id));
+    const adapters = deps.adapters.filter(
+      (a) => forScope(a) && enabled(a.collection.id) && (a.ready?.() ?? true),
+    );
     // A store that is locked or turned off gets its records later, so the cursor can move on.
     const active = new Set(adapters.map((a) => a.collection.id));
     for (const record of incoming) {
-      if (!active.has(record.collection)) deps.db.addPending(scope.id, record);
+      if (refused.has(record.collection)) {
+        deps.db.dropPending(scope.id, record.collection, record.itemId);
+      } else if (!active.has(record.collection)) {
+        deps.db.addPending(scope.id, record);
+      }
     }
     let touched = false;
     for (const adapter of adapters) {
-      const sealing = sealingFor(adapter.collection, scope.policy, key !== null);
+      const sealing = sealingOf(adapter.collection);
       if (sealing.mode === 'needs-key') {
-        if (incoming.some((r) => r.collection === adapter.collection.id)) needsKey = true;
-        for (const record of incoming.filter((r) => r.collection === adapter.collection.id)) {
-          deps.db.addPending(scope.id, record);
+        const waiting = incoming.filter((r) => r.collection === adapter.collection.id);
+        // Items here that can not go out until the key is here count too.
+        if (
+          waiting.length ||
+          (heldBack(adapter.collection) && (await localItems(adapter, scope)).length)
+        ) {
+          needsKey = true;
         }
+        for (const record of waiting) deps.db.addPending(scope.id, record);
         continue;
       }
       const place = (itemId: string) => ({
@@ -177,10 +261,23 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         collection: adapter.collection.id,
         itemId,
       });
-      const { items, localOnly } = syncing(await localItems(adapter, scope));
+      const listed = await adapter.list();
+      const { items, localOnly } = syncing(listed.filter((item) => inScope(item, scope)));
+      // Items kept here in another scope: the person's own, or another team's.
+      const elsewhere = new Set(listed.filter((item) => !inScope(item, scope)).map((i) => i.id));
       const locals = new Map(
         items.map((item) => [item.id, splitLocal(adapter, sealing, item.value)]),
       );
+      const conflict = (record: WireRecord, localDeleted: boolean) =>
+        deps.db.addConflict({
+          scopeId: scope.id,
+          collection: adapter.collection.id,
+          itemId: record.itemId,
+          remote: record,
+          localDeleted,
+          detectedAt: now(),
+        });
+      const synced = deps.db.synced(scope.id, adapter.collection.id);
       const decoded = new Map<string, Decoded>();
       const remote: RemoteChange[] = [];
       for (const record of incoming.filter(
@@ -193,6 +290,19 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             deleted: true,
             hash: null,
           });
+          continue;
+        }
+        const seen = (synced.get(record.itemId)?.revision ?? 0) >= record.revision;
+        if (
+          sealing.mode === 'seal-all' &&
+          !seen &&
+          !sealedWhole({ ...record, payload: record.payload })
+        ) {
+          // Here every record is sealed whole, so a new one with readable fields did not come
+          // from a computer with the key. It is never applied; the person sees it as a conflict.
+          // (One this computer already took in, from before the policy went up, is let through.)
+          deps.db.dropPending(scope.id, record.collection, record.itemId);
+          conflict(record, !locals.has(record.itemId));
           continue;
         }
         const content = decodeRecord({
@@ -221,7 +331,6 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         remote.push({ itemId: record.itemId, revision: record.revision, deleted: false, hash });
       }
 
-      const synced = deps.db.synced(scope.id, adapter.collection.id);
       // A record that waited for its secrets and opens now plans as if just arrived.
       const planned = new Map(synced);
       for (const change of remote) {
@@ -249,6 +358,16 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             hash: null,
           });
         } else {
+          if (scope.teamId !== null && elsewhere.has(change.itemId)) {
+            // A team record under the id of an item kept here outside that team (moved out of
+            // it, or never in it). Writing it would pull that item, with this computer's own
+            // fields, into the team. The person decides.
+            const record = incoming.find(
+              (r) => r.collection === adapter.collection.id && r.itemId === change.itemId,
+            );
+            if (record) conflict(record, true);
+            continue;
+          }
           const content = decoded.get(change.itemId) as Decoded;
           const value = joined(adapter, content, locals.get(change.itemId));
           await adapter.apply({ id: change.itemId, teamId: scope.teamId, value });
@@ -265,27 +384,23 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           hash: settled.hash === null ? null : (locals.get(settled.itemId)?.hash ?? settled.hash),
         });
       }
-      for (const conflict of plan.conflicts) {
+      for (const clash of plan.conflicts) {
         const record = incoming.find(
-          (r) => r.collection === adapter.collection.id && r.itemId === conflict.itemId,
+          (r) => r.collection === adapter.collection.id && r.itemId === clash.itemId,
         );
-        if (record) {
-          deps.db.addConflict({
-            scopeId: scope.id,
-            collection: adapter.collection.id,
-            itemId: conflict.itemId,
-            remote: record,
-            localDeleted: conflict.localDeleted,
-            detectedAt: now(),
-          });
-        }
+        if (record) conflict(record, clash.localDeleted);
       }
       if (touched) deps.onApplied?.(adapter.area);
       touched = false;
     }
     deps.db.setCursor(scope.id, cursor);
 
-    if (scope.canWrite) await pushScope(scope, key, adapters);
+    if (scope.canWrite) {
+      // Sealing went up: send everything again, so records stored under the weaker policy are
+      // sealed the new way too.
+      if (raised) deps.db.markScopeChanged(scope.id);
+      await pushScope(scope, key, adapters, sealingOf);
+    }
     return { needsKey };
   }
 
@@ -293,6 +408,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     scope: SyncScopeInfo,
     key: ScopeKey | null,
     adapters: SyncAdapter[],
+    sealingOf: (collection: SyncCollection) => Sealing,
   ): Promise<void> {
     const held = new Set(
       deps.db
@@ -302,7 +418,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     );
     const records: (PushRecord & { hash: string | null })[] = [];
     for (const adapter of adapters) {
-      const sealing = sealingFor(adapter.collection, scope.policy, key !== null);
+      const sealing = sealingOf(adapter.collection);
       if (sealing.mode === 'needs-key') continue;
       const { items, localOnly } = syncing(await localItems(adapter, scope));
       const locals = new Map(

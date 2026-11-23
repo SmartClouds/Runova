@@ -249,6 +249,7 @@ describe('the Pictures step', () => {
     expect(s.capture.started).toEqual([{ folder: s.projectFolder, command: 'npm run dev' }]);
     expect(s.capture.routes[0]).toMatchObject({
       url: 'http://localhost:5173/settings',
+      appOrigin: 'http://localhost:5173',
       width: 1440,
       height: 900,
       scale: 2,

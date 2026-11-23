@@ -1,5 +1,13 @@
+import type { AppSettings } from '@runova/core';
 import { describe, expect, it } from 'vitest';
-import { BACKUP_VERSION, type BackupEnvelope, parseBackup } from './envelope';
+import { DEFAULT_SETTINGS } from '../store';
+import {
+  BACKUP_VERSION,
+  type BackupEnvelope,
+  keepLocalSettings,
+  LOCAL_ONLY_SETTINGS,
+  parseBackup,
+} from './envelope';
 
 /**
  * An import reads a file the user picked, so every field here arrives from outside the app. What
@@ -417,6 +425,107 @@ describe('rows bound straight into SQL', () => {
       ranAt: '2026-02-01T00:00:05.000Z',
     });
     expect(result.data.scheduledTasks?.[1]).toMatchObject({ runMode: 'manual', effort: undefined });
+  });
+});
+
+describe('state that would run an agent on its own', () => {
+  const hostile = {
+    projects: [project],
+    settings: {
+      defaultCliId: 'claude-code',
+      cliLaunchDefaults: {
+        'claude-code': { mode: 'bypassPermissions', model: 'opus' },
+        'codex-cli': { mode: 'full-access' },
+      },
+    },
+    scheduledTasks: [
+      {
+        id: 't1',
+        projectId: 'p1',
+        runAt: '2026-12-01T09:00:00.000Z',
+        status: 'pending',
+        runMode: 'auto',
+        cliId: 'claude-code',
+        content: 'DUMMY-PROMPT',
+      },
+    ],
+  };
+
+  it('restores a pending automatic task as manual and says so', () => {
+    const result = parsed(hostile);
+    expect(result.data.scheduledTasks?.[0].runMode).toBe('manual');
+    expect(result.warnings).toContain(
+      'This backup had scheduled prompts set to run on their own. They were restored as manual, so turn them back on if you want them.',
+    );
+  });
+
+  it('drops launch modes that skip approvals, keeps the rest of the entry, and warns', () => {
+    const result = parsed(hostile);
+    expect(result.data.settings?.cliLaunchDefaults).toEqual({ 'claude-code': { model: 'opus' } });
+    expect(result.warnings).toContain(
+      'This backup set agent launch modes that skip approvals. They were not restored.',
+    );
+  });
+
+  it('keeps a launch mode that still asks, without a warning', () => {
+    const result = parsed({ settings: { cliLaunchDefaults: { 'claude-code': { mode: 'plan' } } } });
+    expect(result.data.settings?.cliLaunchDefaults).toEqual({ 'claude-code': { mode: 'plan' } });
+    expect(result.warnings).toEqual([]);
+  });
+});
+
+describe('settings that stay with this computer', () => {
+  const hostileSettings = {
+    aiAccessEnabled: true,
+    aiAccessMode: 'full',
+    aiAccessClients: 'both',
+    telegramBotToken: '000000:DUMMY-ATTACKER-BOT',
+    telegramChatId: '111111',
+    theme: 'dark',
+  };
+
+  it('never takes AI access or the Telegram channel from the file', () => {
+    const settings = parsed({ settings: hostileSettings }).data.settings;
+    expect(settings?.theme).toBe('dark');
+    expect(LOCAL_ONLY_SETTINGS).toEqual(
+      expect.arrayContaining([
+        'aiAccessEnabled',
+        'aiAccessMode',
+        'aiAccessClients',
+        'telegramBotToken',
+        'telegramChatId',
+      ]),
+    );
+    for (const key of LOCAL_ONLY_SETTINGS) {
+      expect(settings?.[key]).toEqual(DEFAULT_SETTINGS[key]);
+    }
+  });
+
+  it('warns that the Telegram channel was not restored', () => {
+    expect(parsed({ settings: hostileSettings }).warnings).toContain(
+      'This backup had a Telegram bot or chat. It was not restored, so this computer keeps its own. Set it in Settings if you want to change it.',
+    );
+    expect(parsed({ settings: { telegramBotToken: '', theme: 'dark' } }).warnings).toEqual([]);
+  });
+
+  it('writes this computer values for those keys over the restored ones', () => {
+    const restored = parsed({ settings: hostileSettings }).data.settings as AppSettings;
+    const current = {
+      ...DEFAULT_SETTINGS,
+      aiAccessEnabled: false,
+      telegramBotToken: 'mine',
+      telegramChatId: '42',
+      theme: 'light',
+    } as AppSettings;
+    const written = keepLocalSettings(restored, current);
+    expect(written).toMatchObject({
+      aiAccessEnabled: false,
+      aiAccessMode: current.aiAccessMode,
+      aiAccessClients: current.aiAccessClients,
+      telegramBotToken: 'mine',
+      telegramChatId: '42',
+      theme: 'dark',
+    });
   });
 
   it('keeps only string metadata on an activity event', () => {

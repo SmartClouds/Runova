@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { filesError, filesErrorCode } from '../../../../shared/deployFilesErrors';
-import { HostKeyChangedError } from '../../../ssh/connectConfig';
+import { HostKeyChangedError, HostKeyUnknownError } from '../../../ssh/connectConfig';
 import { VaultLockedError } from '../../../ssh/vaultErrors';
 import { FilesTransportError, mapSftpError, mapSshConnectError } from './errors';
 
@@ -50,6 +50,13 @@ describe('mapSshConnectError', () => {
 
     expect(mapped.code).toBe('hostKeyChanged');
     expect(mapped.hostKey).toEqual({ presented: 'bb', stored: 'aa' });
+  });
+
+  it('reads a saved server with no trusted key yet, with the key it presented', () => {
+    const mapped = mapSshConnectError(new HostKeyUnknownError('example.com', 22, 'bb'));
+
+    expect(mapped.code).toBe('hostKeyUnknown');
+    expect(mapped.hostKey).toEqual({ presented: 'bb', stored: null });
   });
 
   it.each([

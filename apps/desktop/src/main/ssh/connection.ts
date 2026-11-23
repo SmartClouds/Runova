@@ -24,8 +24,6 @@ export type { DownloadFileOptions, DownloadFileResult, SftpDetailedEntry };
  */
 
 export interface SshConnectionHooks {
-  /** Fires on a first connect, so the caller can store the fingerprint it just trusted. */
-  onHostKeyTrusted?: (fingerprint: string) => void;
   /** Fires once when the connection ends, whoever ended it. */
   onClose?: () => void;
 }
@@ -307,7 +305,6 @@ export class SshConnection {
       connection.markClosed();
       hooks.onClose?.();
     });
-    if (verdict.trustedFingerprint) hooks.onHostKeyTrusted?.(verdict.trustedFingerprint);
     return connection;
   }
 

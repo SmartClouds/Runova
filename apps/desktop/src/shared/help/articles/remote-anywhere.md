@@ -47,7 +47,7 @@ When connected, the window shows a six-digit **Safety code**. The person at the 
 
 Nothing can connect to a new computer until you allow it. Click **Access settings** on the **This computer** card. The chips on the card sum up what is on.
 
-- **My other computers connect without asking**: computers signed in to your own account get in with no one accepting.
+- **My other computers connect without asking**: computers signed in to your own account get in with no one accepting. The first time each computer connects, someone here accepts it once; after that it gets straight in. A teammate you always let in works the same way for each of their computers.
 - **Teammates who can ask**: tick the teams that can see this computer. Their members can ask to connect, and someone at this computer accepts each time.
 - **Unattended access**: set a password for when no one is at the computer. Anyone signed in to Runova with the ID and the password can connect without anyone accepting. Use at least 10 characters; a short phrase works well. **Remove password** turns it off.
 - **A new session may**: what someone who connects may do unless you change it when you accept. Turn off **Use the mouse and keyboard** for view only. **Share the clipboard** and **Send and receive files** are separate.

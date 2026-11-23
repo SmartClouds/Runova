@@ -337,8 +337,9 @@ itself. Every anonymous route here answers the same whether or not an address ha
 100), "captchaToken": string | null }`. `POST /verification-emails` and `POST /password-resets` also
 take `captchaToken` next to `email`; it is needed only while the captcha is on. A new address gets an account with no role and a link to
 `https://runovahq.com/account/verify-email#token=<token>` (24 hours, one use). An address whose
-account was never confirmed gets a new link, and the password it was registered with before stops
-working. A confirmed address gets an email saying it already has an account, and nothing changes.
+account was never confirmed gets a new link, and the account is left with no password: neither the
+earlier password nor the new one works, since neither proves who owns the address. Confirming signs
+that person in, and they add a password from a `POST /password-resets` link. A confirmed address gets an email saying it already has an account, and nothing changes.
 Confirming signs in, unless the account has two-factor on. Accounts never confirmed are deleted
 after 7 days.
 
@@ -712,7 +713,10 @@ personal scope the account is its manager; for a team, its Owners and Admins are
 "itemId": string (1 to 64 of letters, digits, . : - _), "baseRevision": number, "deleted": bool,
 "encryption": "none" | "e2ee", "keyVersion": int | null, "payload": string | null }`. A delete has
 no payload and anything else has one, up to 1 MB. An `e2ee` record must use the scope's current
-`keyVersion`. `SyncRecordDto` is the stored record: `{ "collection", "itemId", "revision",
+`keyVersion`. A team scope takes only the collections the desktop app can share (`projects`,
+`environments`, `ssh-servers`, `rdp-servers`, `database-connections`, `vault-entries`,
+`health-targets`, `api-collections`, `error-tracking`, `prompt-templates`); a record of any other
+collection, such as `settings`, makes the push a 400. `SyncRecordDto` is the stored record: `{ "collection", "itemId", "revision",
 "deleted", "encryption", "keyVersion", "payload", "updatedAt" }`. Deletes stay in the feed for 90
 days. A scope holds up to `Sync__QuotaBytes` of payload (200 MB unless set), and an account may push
 `Sync__PushesPerMinute` times a minute (120 unless set).

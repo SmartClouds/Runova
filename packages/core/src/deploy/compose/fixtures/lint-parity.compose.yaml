@@ -34,9 +34,27 @@ services:
   proxied:
     image: grafana/grafana:12.1.1
     ports: ["3000:3000"]
+  builder:
+    image: example/builder:1.0
+    build:
+      context: /srv/build
+      dockerfile: Dockerfile
+      additional_contexts:
+        extra: /srv/extra
+        base: docker-image://alpine:3.22
+    secrets: [key, local]
+    configs: [conf]
 volumes:
   shared:
     driver_opts:
       type: none
       o: bind
       device: /opt/runova-core/shared
+secrets:
+  key:
+    file: /root/.ssh/id_ed25519
+  local:
+    file: ./secrets/local.txt
+configs:
+  conf:
+    file: /srv/conf/app.conf

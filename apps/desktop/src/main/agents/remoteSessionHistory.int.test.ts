@@ -6,6 +6,7 @@ import {
   type SshTestServer,
   startSshServer,
 } from '../../../e2e/sshServer';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnection } from '../ssh/connection';
 import { SshConnectionPool } from '../ssh/pool';
 import { listRemoteAgentHistory, PROBE_COMMAND, parseRemoteProbe } from './remoteSessionHistory';
@@ -48,11 +49,12 @@ function codexRollout(id: string, cwd: string, prompt: string): string {
   );
 }
 
-function open(): Promise<SshConnection> {
+async function open(): Promise<SshConnection> {
   if (!server) throw new Error('no server');
   return SshConnection.open({
     host: server.host,
     port: server.port,
+    storedFingerprint: await probeHostKey(server.host, server.port),
     username: SSH_USER,
     authMethod: 'password',
     password: SSH_PASSWORD,
@@ -126,12 +128,12 @@ function newPool(): SshConnectionPool {
       return {
         host: server.host,
         port: server.port,
+        storedFingerprint: await probeHostKey(server.host, server.port),
         username: SSH_USER,
         authMethod: 'password',
         password: SSH_PASSWORD,
       };
     },
-    trustHostKey: async () => undefined,
   });
 }
 

@@ -9,6 +9,7 @@ const teammate: IncomingFacts = {
   teams: ['Ops'],
   hasPasswordSecret: false,
   lockedOut: false,
+  keyApproved: true,
 };
 
 describe('decideIncoming', () => {
@@ -32,6 +33,18 @@ describe('decideIncoming', () => {
     expect(decideIncoming(own, { ...DEFAULT_ANYWHERE_SETTINGS, allowOwnDevices: true })).toBe(
       'accept',
     );
+  });
+
+  it('asks about a key nobody here accepted yet, whoever the hub says is asking', () => {
+    const fresh: IncomingFacts = { ...teammate, keyApproved: false };
+    const settings = {
+      ...DEFAULT_ANYWHERE_SETTINGS,
+      allowOwnDevices: true,
+      alwaysAllow: [{ userId: 4, displayName: 'Kim' }],
+    };
+
+    expect(decideIncoming(fresh, settings)).toBe('ask');
+    expect(decideIncoming({ ...fresh, relation: 'own', teams: [] }, settings)).toBe('ask');
   });
 
   it('declines a stranger asking, whatever the settings', () => {
@@ -182,5 +195,16 @@ describe('decideSend', () => {
     expect(decideSend({ ...mate, teams: [] }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
     expect(decideSend({ ...own, mode: 'password' }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
     expect(decideSend({ ...own, hasKey: false }, DEFAULT_ANYWHERE_SETTINGS)).toBe('decline');
+  });
+
+  it('declines every send while connections are switched off', () => {
+    const settings = {
+      ...DEFAULT_ANYWHERE_SETTINGS,
+      acceptConnections: false,
+      autoAcceptOwn: true,
+    };
+
+    expect(decideSend(own, settings)).toBe('decline');
+    expect(decideSend(mate, settings)).toBe('decline');
   });
 });

@@ -51,9 +51,9 @@ import type {
   ContainerList,
 } from '../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { DeployRevealEnvInput } from '../../shared/deployDockerTypes';
-import type { DatabaseConnectionStore } from './connectionStore';
+import { type DatabaseConnectionStore, effectiveTlsMode } from './connectionStore';
 import type { OpenDriver } from './drivers';
-import { describeError } from './drivers/shared';
+import { describeError, withCertificateHint } from './drivers/shared';
 import type { DbDriver, DriverConnectOptions, DriverError } from './drivers/types';
 import { openLocalForward } from './forward';
 import { type LocalContainer, type LocalDocker, localEngine } from './localDocker';
@@ -561,6 +561,7 @@ export class DatabaseService {
     let driver: DbDriver;
     try {
       const where = await this.reach(stored.target, cleanup);
+      const tlsMode = effectiveTlsMode(stored);
       const options: DriverConnectOptions = {
         engine: stored.engine,
         ...where,
@@ -569,6 +570,12 @@ export class DatabaseService {
         ...(stored.database ? { database: stored.database } : {}),
         ...(stored.authDatabase ? { authDatabase: stored.authDatabase } : {}),
         tls: stored.tls,
+        ...(tlsMode ? { tlsMode } : {}),
+        // Through the SSH forward the driver dials 127.0.0.1, so the certificate is checked
+        // against the host the server itself reaches.
+        ...(tlsMode && stored.target.kind === 'server'
+          ? { tlsServername: stored.target.host }
+          : {}),
         srv: stored.srv,
       };
       driver = await this.deps.openDriver(options);
@@ -577,7 +584,7 @@ export class DatabaseService {
       if ((error as Partial<DriverError>).authFailed === true) {
         return { needsPassword: true, reason: 'refused', engine: stored.engine, user: stored.user };
       }
-      throw new Error(describeError(error));
+      throw new Error(withCertificateHint(describeError(error)));
     }
     const session: Session = {
       id: randomUUID(),

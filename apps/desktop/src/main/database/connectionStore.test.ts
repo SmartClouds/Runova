@@ -72,6 +72,36 @@ describe('DatabaseConnectionStore', () => {
     expect(await one.password(saved.id)).toBeUndefined();
   });
 
+  it('checks the certificate of a new TLS connection unless it opted out', async () => {
+    const one = store();
+    expect((await one.save(input({ tls: true }))).tlsMode).toBe('verify-full');
+    expect((await one.save(input({ tls: true, tlsMode: 'require' }))).tlsMode).toBe('require');
+    expect(await one.save(input({ tls: false, tlsMode: 'require' }))).not.toHaveProperty('tlsMode');
+  });
+
+  it('reads a TLS connection saved before modes existed by where it points', () => {
+    const legacy = { tls: true } as const;
+    expect(
+      mod.effectiveTlsMode({ ...legacy, target: { kind: 'direct', host: 'h', port: 5432 } }),
+    ).toBe('verify-full');
+    expect(
+      mod.effectiveTlsMode({
+        ...legacy,
+        target: { kind: 'server', serverId: 's1', host: 'h', port: 5432 },
+      }),
+    ).toBe('require');
+    expect(
+      mod.effectiveTlsMode({
+        tls: true,
+        tlsMode: 'verify-ca',
+        target: { kind: 'server', serverId: 's1', host: 'h', port: 5432 },
+      }),
+    ).toBe('verify-ca');
+    expect(
+      mod.effectiveTlsMode({ tls: false, target: { kind: 'direct', host: 'h', port: 1 } }),
+    ).toBeNull();
+  });
+
   it('finds the connection made from a container, so the card can say it is saved', async () => {
     const one = store();
     const saved = await one.save(input(), { sourceKey: 'server:s1:app-db' });

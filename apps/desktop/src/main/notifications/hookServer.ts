@@ -12,12 +12,16 @@ import { broadcastToWindows } from '../ipc/send';
 import { findSessionIdForProject, SESSION_ID_PATTERN, writeToSession } from '../ipc/terminal';
 import { handleRunCommandsRequest } from '../runProposals/service';
 import { store } from '../store';
+import { refreshNotificationHookScripts } from './hookInstaller';
 import { speakOnPet } from './petNotifier';
 import { pollTelegramUpdates, sendTelegramMessage } from './telegramApi';
 
 let server: Server | null = null;
 let pollOffset = 0;
-let pollingActive = false;
+/** Bumped by stopHookServer, so a poll loop still waiting on a request stops when it wakes. */
+let pollGeneration = 0;
+/** The generation whose poll loop is running, or null when none is. */
+let activePoll: number | null = null;
 
 const pendingConfirmations = new Map<string, { since: number }>();
 const PENDING_TTL_MS = 20 * 60 * 1000;
@@ -63,15 +67,33 @@ async function handleHookRequest(projectId: string, kind: NotificationHookKind):
   }
 }
 
+/**
+ * The oldest pending project that has an agent session waiting for input, and that session.
+ * A project that asked but has nothing waiting any more is skipped, so it cannot take a reply
+ * meant for another project.
+ */
+function replyTarget(): { projectId: string; sessionId: string } | null {
+  for (const projectId of pendingConfirmations.keys()) {
+    const waiting = agentStatus.sessionAwaitingInput(projectId);
+    // findSessionIdForProject answers with the waiting session only while it is still open.
+    if (waiting && findSessionIdForProject(projectId) === waiting) {
+      return { projectId, sessionId: waiting };
+    }
+  }
+  return null;
+}
+
 function notifyRenderer(payload: ConfirmationForwardedPayload): void {
   broadcastToWindows(IPC.notifications.onConfirmationForwarded, payload);
 }
 
 async function runPollLoop(): Promise<void> {
-  if (pollingActive) return;
-  pollingActive = true;
+  const generation = pollGeneration;
+  if (activePoll === generation) return;
+  activePoll = generation;
+  const stopped = () => generation !== pollGeneration;
   try {
-    while (pendingConfirmations.size > 0) {
+    while (pendingConfirmations.size > 0 && !stopped()) {
       const now = Date.now();
       for (const [projectId, entry] of pendingConfirmations) {
         if (now - entry.since > PENDING_TTL_MS) pendingConfirmations.delete(projectId);
@@ -79,12 +101,13 @@ async function runPollLoop(): Promise<void> {
       if (pendingConfirmations.size === 0) break;
 
       const settings = await store.getSettings();
-      if (!settings.telegramBotToken || !settings.telegramChatId) break;
+      if (stopped() || !settings.telegramBotToken || !settings.telegramChatId) break;
 
       let messages: { chatId: string; text: string }[];
       try {
         const result = await pollTelegramUpdates(settings.telegramBotToken, pollOffset);
         messages = result.messages;
+        if (stopped()) break;
         pollOffset = result.nextOffset;
       } catch {
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -93,21 +116,18 @@ async function runPollLoop(): Promise<void> {
 
       for (const message of messages) {
         if (message.chatId !== settings.telegramChatId) continue;
-        const [oldestProjectId] = pendingConfirmations.keys();
-        if (!oldestProjectId) continue;
-        pendingConfirmations.delete(oldestProjectId);
+        const target = replyTarget();
+        // With no agent waiting on a question, the reply is dropped rather than typed into
+        // whatever terminal the project opened last, which may be a plain shell.
+        if (!target) continue;
+        pendingConfirmations.delete(target.projectId);
 
-        const sessionId = findSessionIdForProject(oldestProjectId);
-        if (sessionId) writeToSession(sessionId, `${message.text}\r`);
-        notifyRenderer({
-          projectId: oldestProjectId,
-          sessionId: sessionId ?? '',
-          text: message.text,
-        });
+        writeToSession(target.sessionId, `${message.text}\r`);
+        notifyRenderer({ ...target, text: message.text });
       }
     }
   } finally {
-    pollingActive = false;
+    if (activePoll === generation) activePoll = null;
   }
 }
 
@@ -430,9 +450,12 @@ export async function startHookServer(): Promise<void> {
         return;
       }
       try {
-        const parsed = JSON.parse(body) as { projectId?: string; kind?: string };
+        const parsed = JSON.parse(body) as { projectId?: unknown; kind?: unknown; token?: unknown };
+        // Like /agent-event, only a script that could read the port file may fire a hook. A
+        // confirmation opens the Telegram reply path, so an unknown caller must not reach it.
+        if (!tokenMatches(parsed.token)) return;
         const kind = NOTIFICATION_HOOK_KINDS.find((candidate) => candidate === parsed.kind);
-        if (parsed.projectId && kind) {
+        if (typeof parsed.projectId === 'string' && parsed.projectId && kind) {
           void handleHookRequest(parsed.projectId, kind).catch(() => {
             // Nothing to report back: the hook script has already exited.
           });
@@ -452,6 +475,12 @@ export async function startHookServer(): Promise<void> {
   await mkdir(dataDir(), { recursive: true });
   // Older generated scripts only read `port`, so adding the token keeps them working.
   await writeFile(portFilePath(), JSON.stringify({ port, token: agentEventToken }), 'utf-8');
+  // Notification scripts written before /hook asked for the token send none, so bring them
+  // up to date now rather than waiting for the user to save each project's hooks again.
+  void store
+    .getProjects()
+    .then(refreshNotificationHookScripts)
+    .catch(() => undefined);
 
   // Establish a baseline offset (short timeout) so the poll loop only reacts
   // to messages sent after startup, not the bot's entire history.
@@ -469,5 +498,6 @@ export async function startHookServer(): Promise<void> {
 export function stopHookServer(): void {
   server?.close();
   server = null;
+  pollGeneration += 1;
   pendingConfirmations.clear();
 }

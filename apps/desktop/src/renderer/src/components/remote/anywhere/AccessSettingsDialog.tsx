@@ -63,7 +63,7 @@ export function AccessSettingsDialog({
             />
             <ToggleRow
               label="My other computers connect without asking"
-              description="Computers signed in to your own Runova account."
+              description="Computers signed in to your own Runova account, once you accept each one here."
               checked={settings.allowOwnDevices}
               onChange={(allowOwnDevices) => update({ allowOwnDevices })}
             />

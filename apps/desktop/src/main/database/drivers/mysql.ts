@@ -20,7 +20,7 @@ import type {
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { mysqlHealth, mysqlSchemaGraph } from './mysqlInsights';
-import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
+import { countIsCheap, describeError, EXACT_COUNT_LIMIT, tlsModeOf } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -60,6 +60,22 @@ const ACCESS_DENIED = new Set(['ER_ACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERR
 
 type Connection = mysql.Connection;
 
+/**
+ * mysql2's TLS options. It only takes `rejectUnauthorized` and `verifyIdentity`, and checks the
+ * name against the host it dialled. Through a forward that host is 127.0.0.1, which no real
+ * certificate names, so a forwarded verify-full connection checks the chain only. The SSH tunnel
+ * covers the path to the server in that case.
+ */
+export function mysqlSslOptions(
+  options: DriverConnectOptions,
+): { rejectUnauthorized: boolean; verifyIdentity?: boolean } | undefined {
+  if (!options.tls) return undefined;
+  const mode = tlsModeOf(options);
+  if (mode === 'require') return { rejectUnauthorized: false };
+  const forwarded = Boolean(options.tlsServername) && options.tlsServername !== options.host;
+  return { rejectUnauthorized: true, verifyIdentity: mode === 'verify-full' && !forwarded };
+}
+
 async function connect(options: DriverConnectOptions): Promise<Connection> {
   try {
     const connection = await mysql.createConnection({
@@ -68,7 +84,7 @@ async function connect(options: DriverConnectOptions): Promise<Connection> {
       user: options.user,
       password: options.password,
       database: options.database || undefined,
-      ssl: options.tls ? { rejectUnauthorized: false } : undefined,
+      ssl: mysqlSslOptions(options),
       connectTimeout: options.connectTimeoutMs ?? 15_000,
       // Dates stay as the server wrote them, and big numbers as text, so nothing is rounded.
       dateStrings: true,

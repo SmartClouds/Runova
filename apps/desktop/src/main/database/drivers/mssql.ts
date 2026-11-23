@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { mssqlHealth, mssqlSchemaGraph } from './mssqlInsights';
-import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
+import { countIsCheap, describeError, EXACT_COUNT_LIMIT, tlsModeOf } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -68,8 +68,28 @@ function recordsetResult(
   };
 }
 
-export async function openMssql(options: DriverConnectOptions): Promise<DbDriver> {
-  const pool = new sql.ConnectionPool({
+/**
+ * tedious's encryption options. It has no chain-only check, so verify-ca checks the name too.
+ * `serverName` is the name the certificate is checked against, which through a forward is the
+ * original host rather than 127.0.0.1. With TLS off only the sign-in is encrypted, as before,
+ * and that never checked the certificate.
+ */
+export function mssqlTlsOptions(options: DriverConnectOptions): {
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+  serverName?: string;
+} {
+  if (!options.tls) return { encrypt: false, trustServerCertificate: true };
+  if (tlsModeOf(options) === 'require') return { encrypt: true, trustServerCertificate: true };
+  return {
+    encrypt: true,
+    trustServerCertificate: false,
+    ...(options.tlsServername ? { serverName: options.tlsServername } : {}),
+  };
+}
+
+export function mssqlConfig(options: DriverConnectOptions): sql.config {
+  return {
     server: options.host,
     port: options.port ?? 1433,
     user: options.user,
@@ -78,8 +98,12 @@ export async function openMssql(options: DriverConnectOptions): Promise<DbDriver
     connectionTimeout: options.connectTimeoutMs ?? 15_000,
     requestTimeout: 0,
     pool: { max: 4, min: 0, idleTimeoutMillis: 60_000 },
-    options: { encrypt: options.tls, trustServerCertificate: true, appName: 'Runova' },
-  });
+    options: { ...mssqlTlsOptions(options), appName: 'Runova' },
+  };
+}
+
+export async function openMssql(options: DriverConnectOptions): Promise<DbDriver> {
+  const pool = new sql.ConnectionPool(mssqlConfig(options));
   pool.on('error', () => undefined);
   try {
     await pool.connect();

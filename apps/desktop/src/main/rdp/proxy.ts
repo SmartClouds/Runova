@@ -34,9 +34,10 @@ export interface RdpProxyTarget {
 }
 
 export interface RdpProxyHooks {
-  /** First connect to this server: remember its certificate. */
-  onCertificateFirstSeen: (target: RdpProxyTarget, cert: RdpCertificateInfo) => void;
-  /** The certificate changed. The connection is refused; the window asks whether to trust it. */
+  /**
+   * The certificate is not the saved one, or none is saved yet (a first connect). The connection
+   * is refused before anything is relayed; the window asks whether to trust it.
+   */
   onCertificateMismatch: (target: RdpProxyTarget, cert: RdpCertificateInfo) => void;
   onConnected: (target: RdpProxyTarget) => void;
   onError: (target: RdpProxyTarget, failure: RdpFailureInfo) => void;
@@ -194,15 +195,24 @@ export class RdpProxy {
       }
 
       const { cert } = result;
-      if (!target.expectedFingerprint) {
-        this.hooks.onCertificateFirstSeen(target, cert);
-      } else if (target.expectedFingerprint !== cert.fingerprint) {
+      // TLS verification is off (handshake.ts), so the saved fingerprint is the only trust there
+      // is. With none saved yet, nothing vouches for the server: refuse as for a changed one and
+      // let the window ask. Only respondCertificate saves it, after the person says yes.
+      if (target.expectedFingerprint !== cert.fingerprint) {
         result.tlsSocket.destroy();
         this.hooks.onCertificateMismatch(target, cert);
-        this.hooks.onError(target, {
-          code: 'certificate-changed',
-          message: `${host} is presenting a different certificate than the one Runova saved.`,
-        });
+        this.hooks.onError(
+          target,
+          target.expectedFingerprint
+            ? {
+                code: 'certificate-changed',
+                message: `${host} is presenting a different certificate than the one Runova saved.`,
+              }
+            : {
+                code: 'certificate-new',
+                message: `Runova has not connected to ${host} before. Check its certificate before signing in.`,
+              },
+        );
         try {
           ws.send(buildRdCleanPathError(1, 403));
         } catch {

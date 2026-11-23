@@ -114,6 +114,26 @@ const shotStep = z.discriminatedUnion('do', [
 export type ShotStep = z.infer<typeof shotStep>;
 
 /**
+ * A route shot's path, trimmed and with its leading slash, the way the capture opens it. A second
+ * slash or a backslash after the first one, or a tab or line break the URL parser would drop,
+ * would make the path name another host, so those are refused.
+ */
+const routePath = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value;
+    const clean = value.trim();
+    return clean.startsWith('/') ? clean : `/${clean}`;
+  },
+  z
+    .string()
+    .max(1000)
+    .regex(
+      /^\/(?![/\\])[^\t\n\r]*$/,
+      "A route path is the part after the app's address, like /settings, and cannot name another host.",
+    ),
+);
+
+/**
  * How a screenshot is taken: a page of the project's web app, opened at a route, or a window of a
  * desktop app, which the user brings to the right screen before Studio captures it.
  */
@@ -121,7 +141,7 @@ export const shotSchema = z.discriminatedUnion('target', [
   z.object({
     target: z.literal('route'),
     /** The path and query after the app's address, like /settings?tab=ai. */
-    path: z.string().max(1000),
+    path: routePath,
     /** A CSS selector that must be on the page before the picture is taken. */
     waitFor: z.string().max(300).optional(),
     steps: z.array(shotStep).max(MAX_SHOT_STEPS).optional(),

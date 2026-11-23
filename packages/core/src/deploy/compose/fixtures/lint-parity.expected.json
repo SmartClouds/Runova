@@ -1,4 +1,6 @@
 [
+  "host-file:-:secrets.key:/root/.ssh/id_ed25519",
+  "host-file:-:configs.conf:/srv/conf/app.conf",
   "privileged:web",
   "host-pid:web",
   "docker-socket:web:/var/run/docker.sock",
@@ -16,5 +18,7 @@
   "host-uts:api",
   "host-root:api:/",
   "core-data:api:/opt/runova-core/shared",
-  "device-cgroup-rule:api:c 10:200 rwm"
+  "device-cgroup-rule:api:c 10:200 rwm",
+  "build-outside:builder:/srv/build",
+  "build-outside:builder:/srv/extra"
 ]

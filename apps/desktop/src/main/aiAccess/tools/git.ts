@@ -10,7 +10,9 @@ import {
   git,
   gitOrNull,
   listBranches,
-  pushCurrentBranch,
+  PUSH_TIMEOUT_MS,
+  primaryRemote,
+  safeBranchName,
 } from '../../git/plumbing';
 import {
   assertRepoPaths,
@@ -54,6 +56,26 @@ function changes(state: WorkspaceGitState) {
     untracked: shape(state.untracked),
     conflicts: shape(state.conflicts),
   };
+}
+
+/**
+ * The branch exactly as given. safeBranchName refuses anything git could read as an option or a
+ * revision, but it also tidies spaces into dashes, which would push some other branch.
+ */
+function exactBranch(name: string): string {
+  if (safeBranchName(name) !== name) throw new Error(`${name} is not a valid branch name.`);
+  return name;
+}
+
+/** The remote a branch pushes to: its own when it tracks one, else the main remote. */
+async function pushRemoteOf(
+  root: string,
+  branch: string,
+): Promise<{ remote: string; tracked: boolean }> {
+  const own = (await gitOrNull(root, ['config', `branch.${branch}.remote`]))?.trim();
+  const remote = own || (await primaryRemote(root)) || 'origin';
+  if (remote.startsWith('-')) throw new Error(`The remote name ${remote} is not usable.`);
+  return { remote, tracked: Boolean(own) };
 }
 
 const pathsArg = z
@@ -266,26 +288,56 @@ export const gitTools = [
     name: 'git_push',
     area: 'git',
     title: 'Push',
-    description: 'Pushes the current branch to its remote, setting the upstream when it has none.',
+    description:
+      'Pushes the checked out branch, named in branch, to its remote, setting the upstream when it has none. Nothing is pushed when another branch is checked out by then.',
     risk: 'sensitive',
     needsProject: true,
-    input: z.object({ projectId: projectIdArg }),
-    async preview(_args, context) {
+    input: z.object({
+      projectId: projectIdArg,
+      branch: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe('The branch to push. It must be the checked out one, as git_status names it.'),
+    }),
+    async preview(args, context) {
       const { root } = await repoOf(context);
-      const branch = await currentBranch(root);
-      const ahead = (await gitOrNull(root, ['rev-list', '--count', '@{upstream}..HEAD']))?.trim();
+      const branch = exactBranch(args.branch);
+      const current = await currentBranch(root);
+      const { remote } = await pushRemoteOf(root, branch);
+      const ahead = (
+        await gitOrNull(root, ['rev-list', '--count', `${branch}@{upstream}..refs/heads/${branch}`])
+      )?.trim();
       return {
         title: `Push ${branch}`,
+        summary:
+          current === branch
+            ? undefined
+            : `${branch} is not checked out (${current || 'no branch'} is), so the push will be refused.`,
         fields: [
           { label: 'Branch', value: branch, mono: true },
+          { label: 'Remote', value: remote, mono: true },
           { label: 'Commits to push', value: ahead ?? 'All of them (no upstream yet)' },
         ],
       };
     },
-    async run(_args, context) {
+    async run(args, context) {
       const { root } = await repoOf(context);
-      const branch = await currentBranch(root);
-      const output = await pushCurrentBranch(root, branch);
+      const branch = exactBranch(args.branch);
+      // The approval named this branch. If the checkout moved while it waited, push nothing.
+      const current = await currentBranch(root);
+      if (current !== branch) {
+        throw new Error(
+          `The push was approved for ${branch}, but ${current || 'no branch'} is checked out now. Nothing was pushed.`,
+        );
+      }
+      const { remote, tracked } = await pushRemoteOf(root, branch);
+      // An explicit refspec, so the pushed ref is the approved branch whatever HEAD does next.
+      const output = await git(
+        root,
+        ['push', ...(tracked ? [] : ['-u']), remote, `refs/heads/${branch}:refs/heads/${branch}`],
+        PUSH_TIMEOUT_MS,
+      );
       return { text: output.trim() || `Pushed ${branch}.` };
     },
   }),

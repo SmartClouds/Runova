@@ -133,7 +133,7 @@ export function RdpCertificateDialog({
     const confirmed = await confirmDialog({
       title: `Forget the saved certificate for "${server.nickname}"?`,
       description:
-        'The next time you connect, Runova accepts the certificate the server shows and saves it, without asking. Only do this if you know the server was reinstalled or its certificate was replaced.',
+        'The next time you connect, Runova shows the certificate the server presents and asks you to trust it again. Only do this if you know the server was reinstalled or its certificate was replaced.',
       confirmLabel: 'Forget certificate',
       variant: 'destructive',
     });
@@ -160,8 +160,8 @@ export function RdpCertificateDialog({
         <DialogHeader>
           <DialogTitle>Certificate for {server?.nickname}</DialogTitle>
           <DialogDescription>
-            Runova remembers the certificate a server shows the first time you connect, and asks
-            before connecting if it ever changes.
+            Runova asks you to check a server's certificate the first time you connect, saves it
+            once you trust it, and asks again if it ever changes.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,8 +171,8 @@ export function RdpCertificateDialog({
               <CertificateFacts details={server?.certDetails} fingerprint={savedFingerprint} />
             ) : (
               <Notice tone="neutral" size="sm">
-                Nothing is saved yet. Runova saves the certificate on the first connection, or you
-                can get it from the server now.
+                Nothing is saved yet. Runova asks you to check the certificate on the first
+                connection, or you can get it from the server now.
               </Notice>
             )}
           </Section>

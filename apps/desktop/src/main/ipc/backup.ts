@@ -17,6 +17,7 @@ import {
   BACKUP_VERSION,
   type BackupData,
   type BackupEnvelope,
+  keepLocalSettings,
   parseBackup,
 } from '../backup/envelope';
 import {
@@ -274,8 +275,12 @@ export function registerBackupHandlers(): void {
       const snapshot = await readCurrentData();
       const environmentsSnapshot = await store.getProjectEnvironments();
       const historySnapshot = environments ? envFileHistoryDb.exportAll() : null;
+      // AI access, the Telegram channel and local paths stay as this computer has them.
+      const restoring: BackupData = pending.data.settings
+        ? { ...pending.data, settings: keepLocalSettings(pending.data.settings, snapshot.settings) }
+        : pending.data;
       try {
-        await writeData(pending.data);
+        await writeData(restoring);
         if (environments) {
           await store.setProjectEnvironments(environments);
           envFileHistoryDb.replaceAll(envFileHistory);

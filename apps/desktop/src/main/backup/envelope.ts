@@ -14,10 +14,13 @@ import type {
   SkillRepository,
 } from '@runova/core';
 import {
+  type CliLaunchDefaultsMap,
+  cliLaunchOptions,
   defaultProjectNotifications,
   isBlueprintStepId,
   normalizeBlueprintPreset,
   normalizeCliArgs,
+  normalizeCliLaunchDefaults,
   normalizeProjectColor,
   normalizeProjectGithubActions,
   normalizeProjectNotifications,
@@ -32,6 +35,7 @@ import type {
   SkillAuditRecord,
 } from '../../shared/apiTypes';
 import { DEFAULT_SETTINGS } from '../store';
+import { DEVICE_SETTINGS } from '../sync/adapters/settings';
 import type { VaultFileV1 } from '../vault/format';
 import type { EncryptedEnvironmentsSection } from './environmentsCipher';
 
@@ -182,18 +186,66 @@ function buildProject(entry: Record_): Project | null {
 }
 
 /**
+ * The Telegram bot and chat decide where "needs you" messages go and whose replies get typed
+ * into an agent terminal, so a backup never repoints them.
+ */
+const TELEGRAM_CHANNEL_SETTINGS = ['telegramBotToken', 'telegramChatId'] as const;
+
+/**
+ * Settings a restore never takes from the file: every `aiAccess*` choice about what agents may
+ * do on this computer (sync keeps those per computer too), plus the Telegram channel. The
+ * restore keeps this computer's current values for them. The other per-computer settings sync
+ * leaves out (paths, news read marks) still come back from a backup, as they always have.
+ */
+export const LOCAL_ONLY_SETTINGS: readonly (keyof AppSettings)[] = [
+  ...DEVICE_SETTINGS.filter((key) => key.startsWith('aiAccess')),
+  ...TELEGRAM_CHANNEL_SETTINGS,
+];
+
+/** The settings to write for a restore: the backup's, with this computer's own values kept. */
+export function keepLocalSettings(restored: AppSettings, current: AppSettings): AppSettings {
+  const merged = { ...restored } as Record_;
+  for (const key of LOCAL_ONLY_SETTINGS) merged[key] = current[key];
+  return merged as unknown as AppSettings;
+}
+
+/**
  * Keeps only keys the current build knows about, so an unrecognized field in the
  * file can never reach the settings store. The store merges over DEFAULT_SETTINGS
  * and runs its own migrations on read, which fills in whatever the backup omitted.
+ * The keys in LOCAL_ONLY_SETTINGS stay at their defaults here.
  */
 function buildSettings(entry: Record_): AppSettings {
-  const known = Object.keys(DEFAULT_SETTINGS) as (keyof AppSettings)[];
+  const localOnly = new Set<string>(LOCAL_ONLY_SETTINGS);
+  const known = (Object.keys(DEFAULT_SETTINGS) as (keyof AppSettings)[]).filter(
+    (key) => !localOnly.has(key),
+  );
   const settings = { ...DEFAULT_SETTINGS } as Record_;
   for (const key of known) {
     if (entry[key] !== undefined) settings[key] = entry[key];
   }
   settings.cliArgs = normalizeCliArgs(settings.cliArgs);
   return settings as unknown as AppSettings;
+}
+
+/**
+ * Drops every launch mode that lets an agent act without asking (and any this build does not
+ * know, which could turn out to be one), so a restored file cannot start agents with approvals
+ * off. Returns whether a risky mode was dropped.
+ */
+function dropRiskyLaunchModes(settings: Record_): boolean {
+  const defaults: CliLaunchDefaultsMap = normalizeCliLaunchDefaults(settings.cliLaunchDefaults);
+  let droppedRisky = false;
+  for (const [cliId, entry] of Object.entries(defaults)) {
+    if (!entry.mode) continue;
+    const mode = cliLaunchOptions(cliId)?.modes.find((one) => one.id === entry.mode);
+    if (mode && !mode.risky) continue;
+    if (mode?.risky) droppedRisky = true;
+    delete entry.mode;
+    if (!entry.model && !entry.effort) delete defaults[cliId];
+  }
+  settings.cliLaunchDefaults = defaults;
+  return droppedRisky;
 }
 
 function buildActivity(entry: Record_): ActivityEvent | null {
@@ -255,6 +307,20 @@ function buildProjectDraft(entry: Record_): ProjectDraft | null {
 const TASK_STATUSES = new Set(['pending', 'completed', 'cancelled', 'missed']);
 const TASK_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
+/** A task the scheduler would still fire: pending, which is also what an unknown status reads as. */
+function isPendingTask(entry: Record_): boolean {
+  const status = strOr(entry.status, 'pending');
+  return !TASK_STATUSES.has(status) || status === 'pending';
+}
+
+/**
+ * A pending automatic task would run its prompt with nobody there, so a restored one waits for
+ * Run now until the user switches it back on. Tasks that already ran or were missed keep theirs.
+ */
+function restoredRunMode(entry: Record_): ScheduledTask['runMode'] {
+  return entry.runMode === 'auto' && !isPendingTask(entry) ? 'auto' : 'manual';
+}
+
 function buildScheduledTask(entry: Record_): ScheduledTask | null {
   const id = str(entry.id);
   const projectId = str(entry.projectId);
@@ -273,7 +339,7 @@ function buildScheduledTask(entry: Record_): ScheduledTask | null {
     createdAt: strOr(entry.createdAt, new Date().toISOString()),
     telegramChatId: nullableStr(entry.telegramChatId),
     telegramMessageId: typeof entry.telegramMessageId === 'number' ? entry.telegramMessageId : null,
-    runMode: entry.runMode === 'auto' ? 'auto' : 'manual',
+    runMode: restoredRunMode(entry),
     cliId: str(entry.cliId) || undefined,
     model: str(entry.model) || undefined,
     effort:
@@ -446,6 +512,11 @@ function buildAttachmentBlob(entry: Record_): BackupAttachmentBlob | null {
  * decide which directories the filesystem handlers accept and what the Run button
  * starts. They are normalized rather than trusted verbatim, and `warnings` tells the
  * user when a backup carried them so they can look before running anything.
+ *
+ * Some state is not taken from the file at all, since it would let a file someone else wrote
+ * run agents or reach them later: launch modes that skip approvals are dropped, scheduled tasks
+ * come back as manual, and LOCAL_ONLY_SETTINGS (AI access and the Telegram channel) keep this
+ * computer's values.
  */
 export function parseBackup(value: unknown): ParsedBackup {
   if (!isRecord(value)) return { ok: false, error: 'That file is not a valid Runova backup.' };
@@ -517,6 +588,27 @@ export function parseBackup(value: unknown): ParsedBackup {
         'This backup set custom CLI arguments. Review them in Settings before running an agent.',
       );
     }
+    if (dropRiskyLaunchModes(data.settings as unknown as Record_)) {
+      warnings.push(
+        'This backup set agent launch modes that skip approvals. They were not restored.',
+      );
+    }
+    const settingsRecord = raw.settings;
+    if (TELEGRAM_CHANNEL_SETTINGS.some((key) => str(settingsRecord[key]))) {
+      warnings.push(
+        'This backup had a Telegram bot or chat. It was not restored, so this computer keeps its own. Set it in Settings if you want to change it.',
+      );
+    }
+  }
+  if (
+    Array.isArray(raw.scheduledTasks) &&
+    raw.scheduledTasks.some(
+      (task) => isRecord(task) && task.runMode === 'auto' && isPendingTask(task),
+    )
+  ) {
+    warnings.push(
+      'This backup had scheduled prompts set to run on their own. They were restored as manual, so turn them back on if you want them.',
+    );
   }
   if (data.projects?.some((project) => project.runCommands.length > 0)) {
     warnings.push(

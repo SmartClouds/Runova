@@ -5,6 +5,7 @@ import { Client, utils } from 'ssh2';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SshAuthMethod } from '../../shared/apiTypes';
 import { tempDir } from '../../test/main/fixtures';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnectionPool } from '../ssh/pool';
 import { localArtifactSource } from './bootstrap/releaseSource';
 import { DeployHardening, PASSWORD_LOGIN_REFUSAL } from './hardening';
@@ -74,6 +75,7 @@ async function install(owner: string, image: TestServerImage): Promise<Installed
         ? {
             host: server.host,
             port: server.port,
+            storedFingerprint: await probeHostKey(server.host, server.port),
             username: 'root',
             authMethod: 'password',
             password: TEST_LOGINS.root.password,
@@ -81,11 +83,11 @@ async function install(owner: string, image: TestServerImage): Promise<Installed
         : {
             host: server.host,
             port: server.port,
+            storedFingerprint: await probeHostKey(server.host, server.port),
             username: 'root',
             authMethod: 'privateKey',
             privateKeyPath: login.keyPath,
           },
-    trustHostKey: async () => undefined,
   });
   let file: unknown = null;
   const service = new DeployService({

@@ -42,6 +42,8 @@ export interface CaptureRouteInput {
   /** The browser session the shots are taken in, kept per project so a sign-in lasts. */
   partition: string;
   url: string;
+  /** The app's own origin. The capture opens nothing on any other. */
+  appOrigin: string;
   /** The viewport, in CSS pixels. */
   width: number;
   height: number;
@@ -146,11 +148,18 @@ export function capturePartition(projectId: string): string {
   return `persist:studio-capture-${projectId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
 }
 
-/** The address a route shot opens: the app's origin and the shot's path. */
+/**
+ * The address a route shot opens: the app's origin and the shot's path. A path like `//host` or
+ * `/\host` would swap the host out, so anything that ends up somewhere else is refused.
+ */
 export function routeUrl(base: string, path: string): string {
-  const url = new URL(base);
+  const origin = new URL(base).origin;
   const clean = path.trim() || '/';
-  return new URL(clean.startsWith('/') ? clean : `/${clean}`, url.origin).toString();
+  const url = new URL(clean.startsWith('/') ? clean : `/${clean}`, origin);
+  if (url.origin !== origin) {
+    throw new Error(`A screenshot can only open the app's own pages, not ${url.origin}.`);
+  }
+  return url.toString();
 }
 
 export function createPictureJobs(deps: PictureJobsDeps) {
@@ -391,6 +400,7 @@ export function createPictureJobs(deps: PictureJobsDeps) {
         const bytes = await capture.captureRoute({
           partition: capturePartition(project.id),
           url: routeUrl(base, shot.path),
+          appOrigin: new URL(base).origin,
           width: size.width,
           height: size.height,
           scale,

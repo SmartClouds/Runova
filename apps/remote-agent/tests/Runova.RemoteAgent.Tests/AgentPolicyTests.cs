@@ -48,4 +48,24 @@ public class AgentPolicyTests
         now += TimeSpan.FromMinutes(15);
         Assert.False(lockout.Locked());
     }
+
+    [Fact]
+    public void Requests_that_arrive_together_get_one_guess_between_them()
+    {
+        var lockout = new PasswordLockout(() => DateTimeOffset.UnixEpoch);
+        var begun = 0;
+
+        Parallel.For(0, 64, _ =>
+        {
+            if (lockout.TryBegin())
+            {
+                Interlocked.Increment(ref begun);
+            }
+        });
+
+        Assert.Equal(1, begun);
+        Assert.Equal(TimeSpan.FromSeconds(1), lockout.Wait());
+        lockout.Succeeded();
+        Assert.True(lockout.TryBegin());
+    }
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Runova.ServerCore.Alerts;
@@ -24,6 +25,8 @@ public sealed class AttackMonitorTests : IAsyncLifetime
 
     private readonly FixedAppAddresses _app = new();
 
+    private readonly ListLogger<AttackMonitor> _log = new();
+
     private TestDatabase _database = null!;
 
     private AlertCenter _alerts = null!;
@@ -40,9 +43,9 @@ public sealed class AttackMonitorTests : IAsyncLifetime
 
     private static IpKey Key(string address) => IpKey.FromAddress(IPAddress.Parse(address));
 
-    private static TrafficConfig Config(bool detection = true, AutoBlockSettings? autoBlock = null) => new(
+    private static TrafficConfig Config(bool detection = true, AutoBlockSettings? autoBlock = null, string[]? allowlist = null) => new(
         new TrafficSettings(false, true, [], 90, 730, "UTC"),
-        new AttackSettings(detection, _thresholds, [], 30),
+        new AttackSettings(detection, _thresholds, allowlist ?? [], 30),
         autoBlock ?? new AutoBlockSettings(false, Enum.GetValues<AttackKind>(), 60, 1000),
         TimeZoneInfo.Utc,
         null,
@@ -54,7 +57,7 @@ public sealed class AttackMonitorTests : IAsyncLifetime
         await _kit.SetUpAsync();
         _alerts = new AlertCenter(_database.Contexts, _clock, new Redactor(), NullLogger<AlertCenter>.Instance);
         _blocks = new AddressBlocks(_database.Contexts, new BlockList(_kit.Control, _kit.Applier, NginxKit.Ubuntu, NullLogger<BlockList>.Instance), _clock, NullLogger<AddressBlocks>.Instance);
-        _monitor = new AttackMonitor(_database.Contexts, _alerts, _blocks, _app, _clock, NullLogger<AttackMonitor>.Instance);
+        _monitor = new AttackMonitor(_database.Contexts, _alerts, _blocks, _app, _clock, _log);
     }
 
     public async ValueTask DisposeAsync()
@@ -193,6 +196,99 @@ public sealed class AttackMonitorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_address_is_blocked_again_when_its_block_runs_out_while_the_attack_goes_on()
+    {
+        var autoBlock = new AutoBlockSettings(true, [AttackKind.Scan], 60, 1000);
+        Record(Hit(count: 20));
+        await _monitor.UpdateAsync(Config(autoBlock: autoBlock), Cancel);
+        var first = Assert.Single(await _blocks.ListAsync(Cancel));
+
+        // Its 444 lines still count, so the attack never goes quiet.
+        for (var minute = 1; minute <= 61; minute++)
+        {
+            _clock.Advance(TimeSpan.FromMinutes(1));
+            Record(Hit());
+            await _monitor.UpdateAsync(Config(autoBlock: autoBlock), Cancel);
+        }
+
+        var again = Assert.Single(await _blocks.ListAsync(Cancel));
+        Assert.Equal("198.51.100.7", again.Network);
+        Assert.True(again.ExpiresAtUnixMs > first.ExpiresAtUnixMs);
+        Assert.True(again.ExpiresAtUnixMs > Now);
+    }
+
+    [Fact]
+    public async Task An_address_the_cap_kept_out_is_blocked_within_a_minute_of_room_coming_free()
+    {
+        var autoBlock = new AutoBlockSettings(true, [AttackKind.Scan], 60, 1);
+        var manual = (await _blocks.BlockAsync(new BlockAddressRequest("192.0.2.200"), "maria", null, Cancel)).Blocked!;
+        Record(Hit(count: 20));
+        await _monitor.UpdateAsync(Config(autoBlock: autoBlock), Cancel);
+        Assert.Equal(["192.0.2.200"], (await _blocks.ListAsync(Cancel)).Select(b => b.Network));
+
+        await _blocks.UnblockAsync(manual.Id, Cancel);
+        _clock.Advance(TimeSpan.FromSeconds(30));
+        await _monitor.UpdateAsync(Config(autoBlock: autoBlock), Cancel);
+        Assert.Empty(await _blocks.ListAsync(Cancel));
+        _clock.Advance(TimeSpan.FromSeconds(30));
+        await _monitor.UpdateAsync(Config(autoBlock: autoBlock), Cancel);
+
+        Assert.Equal(["198.51.100.7"], (await _blocks.ListAsync(Cancel)).Select(b => b.Network));
+    }
+
+    [Fact]
+    public async Task An_attack_event_stops_showing_blocked_once_the_block_ran_out()
+    {
+        Record(Hit(count: 20));
+        await _monitor.UpdateAsync(Config(autoBlock: new AutoBlockSettings(true, [AttackKind.Scan], 60, 1000)), Cancel);
+        await _monitor.FlushAsync(Cancel);
+        await using (var db = await _database.Contexts.CreateDbContextAsync(Cancel))
+        {
+            Assert.True((await db.AttackEvents.SingleAsync(Cancel)).Blocked);
+        }
+
+        for (var minute = 5; minute <= 65; minute += 5)
+        {
+            _clock.Advance(TimeSpan.FromMinutes(5));
+            Record(Hit());
+            await _monitor.UpdateAsync(Config(), Cancel);
+        }
+
+        await _blocks.PruneExpiredAsync(Cancel);
+        await _monitor.FlushAsync(Cancel);
+
+        await using var check = await _database.Contexts.CreateDbContextAsync(Cancel);
+        var row = await check.AttackEvents.SingleAsync(Cancel);
+        Assert.False(row.Blocked);
+    }
+
+    [Fact]
+    public async Task An_ipv6_attacker_is_named_and_blocked_by_its_64_unless_the_allowlist_holds_an_address_in_it()
+    {
+        var autoBlock = new AutoBlockSettings(true, [AttackKind.Scan], 60, 1000);
+        var visitor = Key("2001:db8:2::1").Visitor.Base;
+        Record(new AttackHit("app", AttackKind.Scan, visitor, Now, "/.env", null, 20, false), new AttackHit("app", AttackKind.Scan, Key("2001:db8:3::"), Now, "/.env", null, 20, false));
+
+        await _monitor.UpdateAsync(Config(autoBlock: autoBlock, allowlist: ["2001:db8:3::7"]), Cancel);
+        await _monitor.FlushAsync(Cancel);
+
+        Assert.Contains("2001:db8:2::/64", Assert.Single(await OpenAsync()).Message, StringComparison.Ordinal);
+        Assert.Equal(["2001:db8:2::/64"], (await _blocks.ListAsync(Cancel)).Select(b => b.Network));
+        await using var db = await _database.Contexts.CreateDbContextAsync(Cancel);
+        Assert.True((await db.AttackEvents.SingleAsync(e => e.Address == "2001:db8:2::/64", Cancel)).Blocked);
+        Assert.False((await db.AttackEvents.SingleAsync(e => e.Address == "2001:db8:3::/64", Cancel)).Blocked);
+    }
+
+    [Fact]
+    public void Addresses_past_the_incident_cap_are_logged_once()
+    {
+        Record([.. Enumerable.Range(0, AttackMonitor.MaxAddressesPerIncident + 2).Select(i => Hit(address: $"198.18.{i / 256}.{i % 256}", count: 20))]);
+        Record(Hit(address: "198.19.0.1", count: 20));
+
+        Assert.Single(_log.Lines, line => line.Contains("More than 1000 addresses", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Attacks_are_listed_newest_first_with_a_series_and_counts()
     {
         Record(Hit(count: 20), Hit(address: "192.0.2.1", kind: AttackKind.BruteForce, count: 20));
@@ -223,6 +319,20 @@ public sealed class AttackMonitorTests : IAsyncLifetime
 
         Assert.Equal(1, await _monitor.PruneAsync(30, Cancel));
     }
+}
+
+/// <summary>A logger that keeps what was written, to check a warning went out.</summary>
+internal sealed class ListLogger<T> : ILogger<T>
+{
+    public List<string> Lines { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+        Lines.Add(formatter(state, exception));
 }
 
 /// <summary>The addresses apps are connected from, as a test sets them.</summary>

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { withPlatform } from '../../test/main/fixtures';
-import { CliNotFoundError, mapWithConcurrency, runCli, tryParseJson } from './execUtils';
+import {
+  CliNotFoundError,
+  LISTING_ENV,
+  mapWithConcurrency,
+  runCli,
+  tryParseJson,
+} from './execUtils';
 
 /**
  * runCli is the only place the app shells out to a package manager, so the shape of the command
@@ -88,6 +94,23 @@ describe('runCli on POSIX', () => {
     await withPlatform('linux', () => runCli('npm', [], '/repo'));
     expect(execState.calls[0].options.timeout).toBe(30000);
   });
+
+  it('lays extra environment over the inherited one', async () => {
+    execState.outcomes.push({ stdout: '' });
+    await withPlatform('linux', () =>
+      runCli('yarn', ['outdated'], '/repo', undefined, LISTING_ENV),
+    );
+    const env = execState.calls[0].options.env as Record<string, string>;
+    expect(env).toMatchObject({
+      CLINE_NO_AUTO_UPDATE: '1',
+      YARN_IGNORE_PATH: '1',
+      YARN_RC_FILENAME: '.runova-ignores-project-yarnrc.yml',
+      PNPM_CONFIG_PM_ON_FAIL: 'ignore',
+      npm_config_manage_package_manager_versions: 'false',
+      COREPACK_ENABLE_PROJECT_SPEC: '0',
+    });
+    expect(env.PATH ?? env.Path).toBeDefined();
+  });
 });
 
 describe('runCli on Windows', () => {
@@ -135,6 +158,16 @@ describe('runCli on Windows', () => {
     await withPlatform('win32', () => runCli('yarn', ['outdated'], 'C:\\repo'));
 
     expect(execState.calls[0].args[3].startsWith('"yarn "')).toBe(true);
+  });
+
+  it('stops cmd.exe from running a same-named script out of the project folder', async () => {
+    execState.outcomes.push({ stdout: '' });
+
+    await withPlatform('win32', () => runCli('npm', ['outdated'], 'C:\\cloned-repo'));
+
+    // Without it, a repo's own npm.cmd next to its package.json would run instead of npm.
+    const env = execState.calls[0].options.env as Record<string, string>;
+    expect(env.NoDefaultCurrentDirectoryInExePath).toBe('1');
   });
 });
 

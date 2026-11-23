@@ -173,7 +173,10 @@ describe('posixJobScript', () => {
     expect(all).toContain('rv_oldlogs "$rv_d/_diag" 14');
     expect(all).toContain('-mtime -5');
     expect(all).toContain('until=48h');
-    expect(all).toContain('rv_oldversions "$rv_d"');
+    // Old versions go straight from the glob to rv_rm, never through a list read line by line.
+    expect(all).toContain('rv_oldversions "$rv_d" rv_rm');
+    expect(all).not.toMatch(/rv_oldversions[^\n]*\| *while/);
+    expect(all).toContain('RV_INSIDE="$rv_d"');
     expect(all).toContain('sort -t. -k1,1n -k2,2n -k3,3n');
     expect(all).toContain("'npm' 'cache' 'clean' '--force'");
 

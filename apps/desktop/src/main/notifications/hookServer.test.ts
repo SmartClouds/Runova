@@ -26,9 +26,12 @@ vi.mock('../ipc/terminal', () => ({
 
 const hookCalls: { id: string; event: string; message?: string }[] = [];
 const runInfoCalls: { id: string; info: Record<string, unknown> }[] = [];
+/** The agent session the status tracker says is waiting on a question, per project. */
+const awaitingByProject = new Map<string, string>();
 
 vi.mock('../agents/statusTracker', () => ({
   agentStatus: {
+    sessionAwaitingInput: (projectId: string) => awaitingByProject.get(projectId) ?? null,
     hook: (id: string, event: string, message?: string) => {
       hookCalls.push({ id, event, message });
       return true;
@@ -111,6 +114,7 @@ beforeEach(() => {
   runInfoCalls.length = 0;
   petMessages.length = 0;
   sessionsByProject.clear();
+  awaitingByProject.clear();
 });
 
 afterEach(async () => {
@@ -327,7 +331,7 @@ describe('/hook', () => {
     seedProject();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'pet' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'pet' });
 
     await vi.waitFor(() => expect(petMessages).toHaveLength(1));
     expect(petMessages[0]).toEqual({ projectName: 'Checkout', text: 'Checkout says hi' });
@@ -343,7 +347,7 @@ describe('/hook', () => {
     seedProject();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'completion' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'completion' });
 
     await vi.waitFor(() => expect(sendMessages(telegram as LocalServer)).toHaveLength(1));
     expect(JSON.parse(sendMessages(telegram)[0].body)).toEqual({
@@ -367,7 +371,7 @@ describe('/hook', () => {
     });
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'completion' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'completion' });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(sendMessages(telegram)).toEqual([]);
@@ -383,7 +387,7 @@ describe('/hook', () => {
     seedProject();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'gone', kind: 'completion' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'gone', kind: 'completion' });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(sendMessages(telegram)).toEqual([]);
@@ -398,7 +402,7 @@ describe('/hook', () => {
     seedProject();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'rm -rf' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'rm -rf' });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(sendMessages(telegram)).toEqual([]);
@@ -413,7 +417,7 @@ describe('/hook', () => {
     seedProject();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'completion' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'completion' });
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(sendMessages(telegram)).toEqual([]);
@@ -453,12 +457,13 @@ describe('confirmation round trip', () => {
     userData.writeData('settings.json', { telegramBotToken: 'tok', telegramChatId: '-100' });
     seedProject();
     sessionsByProject.set('p1', 'tab-9');
+    awaitingByProject.set('p1', 'tab-9');
 
     const { FakeBrowserWindow, electronState } = await import('../../test/main/electronMock');
     const window = new FakeBrowserWindow();
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'confirmation' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'confirmation' });
 
     await vi.waitFor(() => expect(writes).toHaveLength(1), { timeout: 10_000 });
     // The reply has to reach the agent as if the user had typed it, carriage return included.
@@ -491,12 +496,75 @@ describe('confirmation round trip', () => {
     userData.writeData('settings.json', { telegramBotToken: 'tok', telegramChatId: '-100' });
     seedProject();
     sessionsByProject.set('p1', 'tab-9');
+    awaitingByProject.set('p1', 'tab-9');
     const file = await startAndRead();
 
-    await post(file.port, '/hook', { projectId: 'p1', kind: 'confirmation' });
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'confirmation' });
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     // A stranger messaging the bot must never be able to answer a confirmation.
+    expect(writes).toEqual([]);
+  });
+
+  /** A bot that answers every getUpdates after the startup baseline with one reply from the chat. */
+  async function botWithReply(): Promise<{ replies: () => number }> {
+    let updateCalls = 0;
+    telegram = await startHttpServer((request, response) => {
+      const url = request.url ?? '';
+      response.writeHead(200, { 'content-type': 'application/json' });
+      if (url.includes('sendMessage')) {
+        response.end(JSON.stringify({ ok: true, result: { message_id: 1 } }));
+        return;
+      }
+      updateCalls += 1;
+      if (updateCalls <= 1) {
+        response.end(JSON.stringify({ ok: true, result: [] }));
+        return;
+      }
+      response.end(
+        JSON.stringify({
+          ok: true,
+          result: [{ update_id: updateCalls, message: { chat: { id: -100 }, text: 'ls' } }],
+        }),
+      );
+    });
+    redirectTelegramToLocal(telegram.url);
+    userData.writeData('settings.json', { telegramBotToken: 'tok', telegramChatId: '-100' });
+    return { replies: () => updateCalls - 1 };
+  }
+
+  it('drops a reply when no agent in the project is waiting on a question', async () => {
+    const bot = await botWithReply();
+    seedProject();
+    // A plain shell is the project's newest session, and nothing is awaiting input.
+    sessionsByProject.set('p1', 'shell-tab-1');
+    const file = await startAndRead();
+
+    await post(file.port, '/hook', { token: file.token, projectId: 'p1', kind: 'confirmation' });
+    // A second poll only starts once the loop has handled the reply the first one brought.
+    await vi.waitFor(() => expect(bot.replies()).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
+
+    expect(writes).toEqual([]);
+  });
+
+  it('ignores a hook ping without the secret, so it cannot arm the reply path', async () => {
+    const bot = await botWithReply();
+    seedProject();
+    sessionsByProject.set('p1', 'tab-9');
+    awaitingByProject.set('p1', 'tab-9');
+    const file = await startAndRead();
+
+    for (const kind of ['confirmation', 'completion', 'pet']) {
+      expect(await post(file.port, '/hook', { projectId: 'p1', kind })).toBe(204);
+      expect(await post(file.port, '/hook', { token: 'f'.repeat(48), projectId: 'p1', kind })).toBe(
+        204,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(sendMessages(telegram as LocalServer)).toEqual([]);
+    expect(petMessages).toEqual([]);
+    expect(bot.replies()).toBe(0);
     expect(writes).toEqual([]);
   });
 });

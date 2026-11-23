@@ -92,6 +92,10 @@ async function openServerTab(replies: string[]): Promise<Page> {
   const savedServer = page.getByRole('listitem').filter({ hasText: 'E2E server' });
   await expect(savedServer).toBeVisible({ timeout: 30_000 });
   await savedServer.getByRole('button', { name: 'Connect' }).click();
+  // A first connection: the host key is checked and trusted before the login is sent.
+  const firstContact = page.getByRole('dialog', { name: 'Check E2E server’s host key' });
+  await expect(firstContact).toBeVisible({ timeout: 30_000 });
+  await firstContact.getByRole('button', { name: 'Trust and connect' }).click();
   await expect(terminalRows(page)).toContainText(SHELL_PROMPT, { timeout: 30_000 });
   // The docked drawer only shows a few rows, so earlier commands would scroll out of view.
   await page.getByRole('button', { name: 'Maximize terminal' }).click();

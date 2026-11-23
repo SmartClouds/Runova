@@ -9,8 +9,6 @@ import { SshConnection, type SshConnectionHooks } from './connection';
 export interface PoolSource {
   /** The endpoint for a saved server, secrets decrypted. Throws when it is gone or locked. */
   endpoint: (serverId: string) => Promise<SshEndpoint>;
-  /** Stores a host key trusted on first use. */
-  trustHostKey: (serverId: string, fingerprint: string) => Promise<void>;
   /** Called after every successful login, for "last connected" bookkeeping. */
   connected?: (serverId: string) => void;
 }
@@ -90,11 +88,7 @@ export class SshConnectionPool {
    */
   async openSeparate(serverId: string): Promise<SshLease> {
     const endpoint = await this.source.endpoint(serverId);
-    const connection = await this.open(endpoint, {
-      onHostKeyTrusted: (fingerprint) => {
-        void this.source.trustHostKey(serverId, fingerprint);
-      },
-    });
+    const connection = await this.open(endpoint, {});
     this.source.connected?.(serverId);
     let released = false;
     return {
@@ -125,9 +119,6 @@ export class SshConnectionPool {
     const endpoint = await this.source.endpoint(serverId);
     let connection: SshConnection | null = null;
     connection = await this.open(endpoint, {
-      onHostKeyTrusted: (fingerprint) => {
-        void this.source.trustHostKey(serverId, fingerprint);
-      },
       onClose: () => {
         const entry = this.entries.get(serverId);
         if (entry) {

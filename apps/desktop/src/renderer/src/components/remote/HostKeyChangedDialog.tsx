@@ -26,9 +26,10 @@ function FingerprintRow({ label, value }: { label: string; value: string }): Rea
 }
 
 /**
- * Asks whether to trust a server whose host key changed. Mount once near the app root; it opens
- * whenever `withHostKeyTrust` needs an answer. "Don't connect" is the default: a changed key is
- * how a machine in the middle looks too.
+ * Asks whether to trust a server whose host key changed, or one never connected to before (no
+ * key on record). Mount once near the app root; it opens whenever `withHostKeyTrust` needs an
+ * answer. "Don't connect" is the default: a changed key is how a machine in the middle looks too,
+ * and on a first connection nothing yet tells the real server from one in the middle.
  */
 export function HostKeyChangedDialogHost(): React.JSX.Element {
   const request = useHostKeyPromptStore((state) => state.request);
@@ -46,26 +47,45 @@ export function HostKeyChangedDialogHost(): React.JSX.Element {
         {request && (
           <>
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <div
+                className={
+                  request.stored
+                    ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/15 text-destructive'
+                    : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning'
+                }
+              >
                 <TriangleAlert className="h-4 w-4" />
               </div>
               <DialogHeader className="min-w-0 pr-6 pt-1">
                 <DialogTitle className="break-words leading-snug">
-                  {request.nickname}’s identity changed
+                  {request.stored
+                    ? `${request.nickname}’s identity changed`
+                    : `Check ${request.nickname}’s host key`}
                 </DialogTitle>
-                <DialogDescription>
-                  {request.host}:{request.port} presented a different host key than the one Runova
-                  trusted before. That is expected after you reinstall or replace the server. If you
-                  did neither, someone may be intercepting the connection: check the new fingerprint
-                  with your hosting provider before you trust it.
-                </DialogDescription>
+                {request.stored ? (
+                  <DialogDescription>
+                    {request.host}:{request.port} presented a different host key than the one Runova
+                    trusted before. That is expected after you reinstall or replace the server. If
+                    you did neither, someone may be intercepting the connection: check the new
+                    fingerprint with your hosting provider before you trust it.
+                  </DialogDescription>
+                ) : (
+                  <DialogDescription>
+                    Runova has not connected to {request.host}:{request.port} before, so it can't
+                    tell yet whether this key belongs to your server. Compare the fingerprint with
+                    the one your hosting provider or the server shows. Runova sends your login only
+                    after you trust it.
+                  </DialogDescription>
+                )}
               </DialogHeader>
             </div>
             <div className="flex min-w-0 flex-col gap-3">
-              <FingerprintRow
-                label="Trusted before"
-                value={request.stored ? formatHostKeyFingerprint(request.stored) : 'Not recorded'}
-              />
+              {request.stored && (
+                <FingerprintRow
+                  label="Trusted before"
+                  value={formatHostKeyFingerprint(request.stored)}
+                />
+              )}
               <FingerprintRow
                 label="Presented now"
                 value={formatHostKeyFingerprint(request.presented)}
@@ -80,9 +100,13 @@ export function HostKeyChangedDialogHost(): React.JSX.Element {
               <Button ref={safeChoice} variant="soft" onClick={() => answerHostKeyPrompt(false)}>
                 Don't connect
               </Button>
-              <Button variant="destructive" onClick={() => answerHostKeyPrompt(true)}>
-                Trust the new key
-              </Button>
+              {request.stored ? (
+                <Button variant="destructive" onClick={() => answerHostKeyPrompt(true)}>
+                  Trust the new key
+                </Button>
+              ) : (
+                <Button onClick={() => answerHostKeyPrompt(true)}>Trust and connect</Button>
+              )}
             </DialogFooter>
           </>
         )}

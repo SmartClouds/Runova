@@ -116,7 +116,13 @@ function PasswordCard({ account }: { account: Account }) {
         <CardHeader
           icon={<KeyRound />}
           title="Password"
-          description={`You sign in with ${signsInWith(account)}. Add a password too, so you can sign in if you ever lose that account.`}
+          description={
+            account.logins.length === 0 && account.passkeyCount === 0
+              ? // An address registered twice before it was confirmed ends up here: neither
+                // password proved who owns it, so the owner sets one from an emailed link.
+                'Your account has no password yet. Add one so you can sign in again later.'
+              : `You sign in with ${signsInWith(account)}. Add a password too, so you can sign in if you ever lose that account.`
+          }
           actions={
             <Button
               size="sm"

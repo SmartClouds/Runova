@@ -124,6 +124,10 @@ async function openSession(replies: FakeReply[]): Promise<{ page: Page; sessionI
   );
   const session = await sessionWindow;
   await session.waitForFunction(() => Boolean((window as { runova?: unknown }).runova));
+  // A first connection: nothing is relayed to the server until its certificate is trusted.
+  const prompt = session.getByRole('dialog', { name: "Check the server's certificate" });
+  await expect(prompt).toBeVisible({ timeout: 60_000 });
+  await prompt.getByRole('button', { name: 'Trust and connect' }).click();
   // The button only turns on once the session is connected.
   await expect(session.getByRole('button', { name: /Ask AI/ })).toBeEnabled({ timeout: 60_000 });
   // Connected comes before the first picture; the AI should not start on a blank screen.

@@ -131,7 +131,7 @@ public sealed class AddressBlocksTests : IAsyncLifetime
             [Key("203.0.113.50")],
             Cancel);
 
-        Assert.Equal([Key("198.51.100.7")], blocked);
+        Assert.Equal([new AutoBlocked(Key("198.51.100.7"), _clock.GetUtcNow().AddMinutes(30).ToUnixTimeMilliseconds())], blocked);
         var row = Assert.Single(await _blocks.ListAsync(Cancel));
         Assert.Equal((true, "Scan on app.example.com", (string?)null), (row.Automatic, row.Reason, row.CreatedBy));
         Assert.Equal(_clock.GetUtcNow().AddMinutes(30).ToUnixTimeMilliseconds(), row.ExpiresAtUnixMs);
@@ -149,8 +149,45 @@ public sealed class AddressBlocksTests : IAsyncLifetime
             [],
             Cancel);
 
-        Assert.Equal([Key("192.0.2.1")], blocked);
+        // 198.51.100.9 is covered already, for good; 192.0.2.2 is past the cap and left to offer again.
+        Assert.Equal(
+            [new AutoBlocked(Key("198.51.100.9"), null), new AutoBlocked(Key("192.0.2.1"), _clock.GetUtcNow().AddMinutes(30).ToUnixTimeMilliseconds())],
+            blocked);
         Assert.Equal(2, (await _blocks.ListAsync(Cancel)).Length);
+    }
+
+    [Fact]
+    public async Task Auto_block_blocks_the_whole_64_of_an_ipv6_attacker_but_not_one_an_app_is_connected_from()
+    {
+        var settings = new AutoBlockSettings(true, [AttackKind.Scan], 30, 1000);
+        var attacker = Key("2001:db8:2::1").Visitor.Base;
+
+        var blocked = await _blocks.AutoBlockAsync(
+            [new AutoBlockCandidate(attacker, AttackKind.Scan, "app", "app.example.com"), new AutoBlockCandidate(Key("2001:db8:3::"), AttackKind.Scan, "app", "app.example.com")],
+            settings,
+            [Key("2001:db8:3::abcd")],
+            Cancel);
+
+        Assert.Equal([attacker], blocked.Select(b => b.Address));
+        Assert.Equal(["2001:db8:2::/64"], (await _blocks.ListAsync(Cancel)).Select(b => b.Network));
+        Assert.Contains("2001:db8:2::/64 1;", BlockedFile, StringComparison.Ordinal);
+        var again = await _blocks.AutoBlockAsync([new AutoBlockCandidate(Key("2001:db8:2::"), AttackKind.Scan, "app", "app.example.com")], settings, [], Cancel);
+        Assert.Equal(_clock.GetUtcNow().AddMinutes(30).ToUnixTimeMilliseconds(), Assert.Single(again).ExpiresAt);
+        Assert.Single(await _blocks.ListAsync(Cancel));
+    }
+
+    [Fact]
+    public async Task Auto_block_blocks_again_once_a_block_ran_out_even_before_the_prune()
+    {
+        var settings = new AutoBlockSettings(true, [AttackKind.Scan], 30, 1000);
+        AutoBlockCandidate[] candidate = [new(Key("198.51.100.7"), AttackKind.Scan, "app", "app.example.com")];
+        Assert.Single(await _blocks.AutoBlockAsync(candidate, settings, [], Cancel));
+        _clock.Advance(TimeSpan.FromMinutes(31));
+
+        var blocked = await _blocks.AutoBlockAsync(candidate, settings, [], Cancel);
+
+        Assert.Equal(_clock.GetUtcNow().AddMinutes(30).ToUnixTimeMilliseconds(), Assert.Single(blocked).ExpiresAt);
+        Assert.Equal(["198.51.100.7"], (await _blocks.ListAsync(Cancel)).Select(b => b.Network));
     }
 
     [Fact]

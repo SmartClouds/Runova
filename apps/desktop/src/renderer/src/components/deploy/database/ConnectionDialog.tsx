@@ -131,6 +131,7 @@ export function ConnectionDialog({
               database: value.database ?? null,
               authDatabase: value.authDatabase ?? null,
               tls: value.tls,
+              ...(value.tlsMode ? { tlsMode: value.tlsMode } : {}),
               srv: value.srv ?? false,
               readOnly,
               ...(value.password !== undefined ? { password: value.password } : {}),
@@ -324,7 +325,14 @@ function ParsedSummary({ value }: { value: ParsedConnectionUrl }): React.JSX.Ele
             <p className="text-sm font-medium">{info.label}</p>
             <p className="truncate font-mono text-xs text-muted-foreground">{address}</p>
           </div>
-          {value.tls ? (
+          {value.tls && value.tlsMode === 'require' ? (
+            <span
+              className="flex shrink-0 items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning"
+              title="The connection is encrypted, but the server's certificate is not checked."
+            >
+              <Lock className="h-2.5 w-2.5" /> Encrypted, not verified
+            </span>
+          ) : value.tls ? (
             <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
               <Lock className="h-2.5 w-2.5" /> Encrypted
             </span>

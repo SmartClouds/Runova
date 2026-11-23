@@ -6,8 +6,10 @@ import { type AccessRoute, openAccessStream } from './cloudflareAccess';
 
 /**
  * How every SSH connection in the app is opened: terminal sessions, and the Deploy section's
- * exec, upload and tunnel connections. Host keys are trusted on first use and pinned after that;
- * a changed key is refused with a coded error so the renderer can ask the user what to do.
+ * exec, upload and tunnel connections. Only a host key the user trusted is accepted. A server
+ * with no trusted key yet, or one that presents a different key, is refused before the login is
+ * sent, with a coded error so the renderer can show the key and ask (`ssh:trustHostKey` stores
+ * it).
  */
 
 export interface SshEndpoint {
@@ -29,8 +31,8 @@ export interface SshEndpoint {
 
 /** What the handshake learned about the host key. */
 export interface HostKeyVerdict {
-  /** Set on a first connect: the fingerprint the caller should now store. */
-  trustedFingerprint: string | null;
+  /** Set when no key was trusted yet: the fingerprint the server presented, refused. */
+  unknown: string | null;
   /** Set when the server presented a different key from the stored one. */
   mismatch: { stored: string; presented: string } | null;
 }
@@ -53,6 +55,23 @@ export class HostKeyChangedError extends Error {
   }
 }
 
+export class HostKeyUnknownError extends Error {
+  readonly presented: string;
+
+  constructor(host: string, port: number, presented: string) {
+    super(
+      encodeSshError(
+        'host-key-unknown',
+        `Runova has not connected to ${host}:${port} before, so its host key is not trusted ` +
+          'yet. Check and trust the key first (opening the server in Remote asks about it). ' +
+          'The login is not sent until then.',
+      ),
+    );
+    this.name = 'HostKeyUnknownError';
+    this.presented = presented;
+  }
+}
+
 const READY_TIMEOUT_MS = 15_000;
 const UNREACHABLE: ReadonlySet<string> = new Set([
   'ENOTFOUND',
@@ -70,7 +89,7 @@ export async function buildConnectConfig(
     endpoint.authMethod === 'privateKey' && endpoint.privateKeyPath
       ? await readFile(endpoint.privateKeyPath)
       : undefined;
-  const verdict: HostKeyVerdict = { trustedFingerprint: null, mismatch: null };
+  const verdict: HostKeyVerdict = { unknown: null, mismatch: null };
   const sock =
     endpoint.via?.kind === 'cloudflare' ? await openAccessStream(endpoint.via) : undefined;
 
@@ -85,9 +104,11 @@ export async function buildConnectConfig(
     readyTimeout: READY_TIMEOUT_MS,
     hostHash: 'sha256',
     hostVerifier: (fingerprint: string): boolean => {
+      // No trusted key is not trust: refuse before authenticating, so the login only goes to a
+      // key the user looked at and trusted.
       if (!endpoint.storedFingerprint) {
-        verdict.trustedFingerprint = fingerprint;
-        return true;
+        verdict.unknown = fingerprint;
+        return false;
       }
       if (fingerprint === endpoint.storedFingerprint) return true;
       verdict.mismatch = { stored: endpoint.storedFingerprint, presented: fingerprint };
@@ -106,6 +127,7 @@ export function friendlyConnectError(
 ): Error {
   const { host, port } = endpoint;
   if (verdict.mismatch) return new HostKeyChangedError(host, port, verdict.mismatch);
+  if (verdict.unknown) return new HostKeyUnknownError(host, port, verdict.unknown);
   if (error.level === 'client-authentication') {
     return new Error('Authentication failed. Check the username, password, or private key.');
   }
@@ -153,10 +175,7 @@ export function probeHostKey(
           friendlyConnectError(
             error ?? new Error('The server never sent a host key.'),
             { host, port },
-            {
-              trustedFingerprint: null,
-              mismatch: null,
-            },
+            { unknown: null, mismatch: null },
           ),
         );
     };

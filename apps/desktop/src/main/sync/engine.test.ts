@@ -1,14 +1,17 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { syncCollection } from '@runova/core';
+import { type AppSettings, type EncryptionPolicy, syncCollection } from '@runova/core';
 import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_SETTINGS } from '../../shared/defaultSettings';
 import { closeSqliteHandlesAfterEach } from '../../test/main/sqliteHandles';
+import { settingsAdapter } from './adapters/settings';
 import { createSyncEngine } from './engine';
-import { openSyncDb } from './syncDb';
+import { openSyncDb, type WireRecord } from './syncDb';
+import { withTeamMap } from './teamMap';
 import { createMemorySyncServer, type MemorySyncServer } from './testing/memoryServer';
 import type { LocalItem, SyncAdapter } from './types';
-import type { ScopeKey } from './wire';
+import type { Payload, ScopeKey } from './wire';
 
 const dirs: string[] = [];
 const closeDatabases = closeSqliteHandlesAfterEach();
@@ -40,7 +43,7 @@ function memoryAdapter(collection: string, area = collection) {
 /** One computer: its own state file, its own stores, the same server. */
 function computer(
   server: MemorySyncServer,
-  options: { key?: ScopeKey | null; visible?: () => number[] } = {},
+  options: { key?: ScopeKey | null; visible?: () => number[]; pins?: boolean } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'runova-sync-'));
   dirs.push(dir);
@@ -49,6 +52,8 @@ function computer(
   const vault = memoryAdapter('vault-entries', 'vault');
   const keys = new Map<number, ScopeKey>();
   if (options.key) keys.set(1, options.key);
+  // The sealing policy pinned on this computer, as account.json keeps it.
+  const pins = new Map<number, EncryptionPolicy>();
   const applied: string[] = [];
   const db = openSyncDb(join(dir, 'sync-state.db'));
   const engine = createSyncEngine({
@@ -57,11 +62,25 @@ function computer(
     adapters: [projects, servers, vault],
     key: async (scopeId) => keys.get(scopeId) ?? null,
     onApplied: (area) => applied.push(area),
+    ...(options.pins
+      ? {
+          pinnedPolicy: async (scopeId: number) => pins.get(scopeId) ?? null,
+          pinPolicy: async (scopeId: number, policy: EncryptionPolicy) => {
+            pins.set(scopeId, policy);
+          },
+        }
+      : {}),
   });
-  return { engine, db, projects, servers, vault, keys, applied };
+  return { engine, db, projects, servers, vault, keys, pins, applied };
 }
 
 const KEY: ScopeKey = { version: 1, key: Buffer.alloc(32, 9) };
+const EVERYTHING: EncryptionPolicy = { servers: false, environments: false, everything: true };
+const NOTHING: EncryptionPolicy = { servers: false, environments: false, everything: false };
+
+function payloadOf(record: WireRecord | undefined): Payload {
+  return JSON.parse(record?.payload ?? 'null') as Payload;
+}
 
 function project(
   id: string,
@@ -479,5 +498,210 @@ describe('sync engine', () => {
     await Promise.all([a.engine.sync(), a.engine.sync(), a.engine.sync()]);
 
     expect(server.stored(1, 'projects', 'p1')?.revision).toBe(1);
+  });
+
+  it('never takes a team’s settings record and never sends the settings to a team', async () => {
+    const server = createMemorySyncServer([{ id: 1 }]);
+    server.addScope({ id: 7, teamId: 7 });
+    const dir = mkdtempSync(join(tmpdir(), 'runova-sync-'));
+    dirs.push(dir);
+    const db = openSyncDb(join(dir, 'sync-state.db'));
+    const before: AppSettings = {
+      ...structuredClone(DEFAULT_SETTINGS),
+      openaiApiKey: 'sk-victim',
+    };
+    let current = structuredClone(before);
+    const settings = withTeamMap(
+      settingsAdapter({
+        getSettings: async () => structuredClone(current),
+        updateSettings: async (change) => {
+          current = structuredClone(await change(structuredClone(current)));
+          return current;
+        },
+      }),
+      db,
+    );
+    // A raw store too, so the engine's own check is what keeps the record out.
+    const raw = memoryAdapter('blueprints');
+    raw.items.set('b1', { id: 'b1', teamId: null, value: { id: 'b1', name: 'Mine' } });
+    const engine = createSyncEngine({
+      api: server.client(),
+      db,
+      adapters: [settings, raw],
+      key: async () => null,
+    });
+    await engine.sync();
+
+    const planted = (collection: string, itemId: string, shared: Record<string, unknown>) => ({
+      collection,
+      itemId,
+      baseRevision: 0,
+      deleted: false,
+      encryption: 'none' as const,
+      keyVersion: null,
+      payload: JSON.stringify({ v: 1, shared, sealed: null }),
+    });
+    await server.client().push(7, [
+      planted('settings', 'app', {
+        cliArgs: { 'claude-code': '--dangerously-skip-permissions' },
+        telegramChatId: '424242',
+        secrets: {},
+      }),
+      planted('blueprints', 'b1', { id: 'b1', name: 'Planted' }),
+    ]);
+    await engine.sync();
+    await engine.sync();
+
+    expect(current).toEqual(before);
+    expect(raw.items.get('b1')).toEqual({
+      id: 'b1',
+      teamId: null,
+      value: { id: 'b1', name: 'Mine' },
+    });
+    expect(server.all(7).map((r) => r.revision)).toEqual([1, 2]);
+    expect(server.stored(1, 'settings', 'app')?.deleted).toBe(false);
+    expect(db.teamOf('settings', 'app')).not.toBe(7);
+    expect(db.pending(7)).toEqual([]);
+  });
+
+  it('keeps sealing whole when the server turns the policy down, even with a new epoch', async () => {
+    const server = createMemorySyncServer([{ id: 1, keyVersion: 1, policy: EVERYTHING }]);
+    const a = computer(server, { key: KEY, pins: true });
+    a.servers.items.set('s1', {
+      id: 's1',
+      teamId: null,
+      value: { id: 's1', host: 'db.internal.example', username: 'deploy', secretEnvelope: 'pw' },
+    });
+    await a.engine.sync();
+    expect(payloadOf(server.stored(1, 'ssh-servers', 's1')).shared).toBeNull();
+
+    server.wipe(1);
+    server.setScope(1, { policy: NOTHING });
+    await a.engine.sync();
+    (a.servers.items.get('s1') as LocalItem).value.host = 'db2.internal.example';
+    await a.engine.sync();
+
+    const stored = server.stored(1, 'ssh-servers', 's1');
+    expect(stored?.encryption).toBe('e2ee');
+    expect(payloadOf(stored).shared).toBeNull();
+    expect(stored?.payload).not.toContain('internal.example');
+    expect(a.pins.get(1)).toEqual(EVERYTHING);
+  });
+
+  it('sends nothing readable when the server lists no key while this computer holds one', async () => {
+    const server = createMemorySyncServer([{ id: 1, keyVersion: 1, policy: EVERYTHING }]);
+    const a = computer(server, { key: KEY, pins: true });
+    a.projects.items.set('p1', project('p1', 'Secret shop', 'C:\\a'));
+    await a.engine.sync();
+
+    server.wipe(1);
+    server.setScope(1, { keyVersion: null });
+    (a.projects.items.get('p1') as LocalItem).value.name = 'Secret shop 2';
+    a.projects.items.set('p2', project('p2', 'Another', 'C:\\b'));
+    await a.engine.sync();
+
+    expect(server.all(1).filter((r) => r.encryption === 'none' && !r.deleted)).toEqual([]);
+    expect(JSON.stringify(server.all(1))).not.toContain('Secret shop');
+    expect(a.engine.status().needsKey).toEqual([1]);
+  });
+
+  it('seals records stored under a weaker policy again once the policy goes up', async () => {
+    const server = createMemorySyncServer([{ id: 1, keyVersion: 1 }]);
+    const a = computer(server, { key: KEY, pins: true });
+    a.projects.items.set('p1', project('p1', 'Shop', 'C:\\a'));
+    await a.engine.sync();
+    expect(payloadOf(server.stored(1, 'projects', 'p1')).shared).not.toBeNull();
+
+    server.setScope(1, { policy: EVERYTHING });
+    await a.engine.sync();
+
+    expect(payloadOf(server.stored(1, 'projects', 'p1')).shared).toBeNull();
+    expect(a.engine.conflicts()).toEqual([]);
+  });
+
+  it('never applies a record with readable fields in a scope sealed whole', async () => {
+    const server = createMemorySyncServer([
+      { id: 1, keyVersion: 1, policy: { servers: true, environments: false, everything: false } },
+    ]);
+    const a = computer(server, { key: KEY });
+    const original: LocalItem = {
+      id: 's1',
+      teamId: null,
+      value: {
+        id: 's1',
+        host: 'good.invalid',
+        hostKeyFingerprint: 'SHA256:pin',
+        secretEnvelope: 'pw',
+      },
+    };
+    a.servers.items.set('s1', structuredClone(original));
+    await a.engine.sync();
+
+    // The server forges a newer record with nothing sealed.
+    await server.client().push(1, [
+      {
+        collection: 'ssh-servers',
+        itemId: 's1',
+        baseRevision: 1,
+        deleted: false,
+        encryption: 'none',
+        keyVersion: null,
+        payload: JSON.stringify({
+          v: 1,
+          shared: { id: 's1', host: 'attacker.invalid' },
+          sealed: null,
+        }),
+      },
+    ]);
+    await a.engine.sync();
+    await a.engine.sync();
+
+    expect(a.servers.items.get('s1')).toEqual(original);
+    expect(a.engine.conflicts()).toMatchObject([
+      { scopeId: 1, collection: 'ssh-servers', itemId: 's1' },
+    ]);
+    expect(server.stored(1, 'ssh-servers', 's1')?.revision).toBe(2);
+  });
+
+  it('never lets a team record take over an item kept here outside that team', async () => {
+    const server = createMemorySyncServer([{ id: 1 }]);
+    server.addScope({ id: 7, teamId: 7 });
+    const victim = computer(server);
+    const teammate = computer(server, { visible: () => [7] });
+    const mine = project('p1', 'Private repo', 'C:\\work\\private');
+    victim.projects.items.set('p1', structuredClone(mine));
+    await victim.engine.sync();
+
+    teammate.projects.items.set('p1', {
+      ...project('p1', 'Planted', '', 7),
+      value: { id: 'p1', name: 'Planted', runCommands: [{ command: 'echo planted' }] },
+    });
+    await teammate.engine.sync();
+    await victim.engine.sync();
+    await victim.engine.sync();
+
+    expect(victim.projects.items.get('p1')).toEqual(mine);
+    expect(victim.engine.conflicts()).toMatchObject([
+      { scopeId: 7, collection: 'projects', itemId: 'p1' },
+    ]);
+    expect(server.stored(1, 'projects', 'p1')?.deleted).toBe(false);
+  });
+
+  it('still moves an item out of a team when another of the person’s computers does', async () => {
+    const server = createMemorySyncServer([{ id: 1 }]);
+    server.addScope({ id: 5, teamId: 5 });
+    const a = computer(server);
+    const b = computer(server);
+    a.projects.items.set('t1', project('t1', 'Team project', 'C:\\t', 5));
+    await a.engine.sync();
+    await b.engine.sync();
+    expect(b.projects.items.get('t1')?.teamId).toBe(5);
+
+    a.projects.items.set('t1', project('t1', 'Team project', 'C:\\t', null));
+    await a.engine.sync();
+    await b.engine.sync();
+
+    expect(b.projects.items.get('t1')?.teamId).toBeNull();
+    expect(b.engine.conflicts()).toEqual([]);
   });
 });

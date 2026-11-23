@@ -72,6 +72,7 @@ describe('openAccessStream', () => {
       username: 'deploy',
       authMethod: 'password',
       password: 'pw',
+      storedFingerprint: ssh.fingerprint(),
       via: {
         kind: 'cloudflare',
         hostname: 'ssh.example.com',

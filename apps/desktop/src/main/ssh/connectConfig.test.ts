@@ -7,6 +7,7 @@ import {
   buildConnectConfig,
   friendlyConnectError,
   HostKeyChangedError,
+  HostKeyUnknownError,
   probeHostKey,
   type SshEndpoint,
 } from './connectConfig';
@@ -71,12 +72,12 @@ describe('buildConnectConfig', () => {
     expect(config.keepaliveInterval).toBe(15_000);
   });
 
-  it('trusts an unknown host on first use and remembers what it saw', async () => {
+  it('refuses a host with no trusted key yet, before the login, and remembers what it saw', async () => {
     const { config, verdict } = await buildConnectConfig(endpoint);
     const verify = config.hostVerifier as (fingerprint: string) => boolean;
 
-    expect(verify('ab'.repeat(32))).toBe(true);
-    expect(verdict).toEqual({ trustedFingerprint: 'ab'.repeat(32), mismatch: null });
+    expect(verify('ab'.repeat(32))).toBe(false);
+    expect(verdict).toEqual({ unknown: 'ab'.repeat(32), mismatch: null });
   });
 
   it('accepts the stored key without asking to trust it again', async () => {
@@ -87,7 +88,7 @@ describe('buildConnectConfig', () => {
     const verify = config.hostVerifier as (fingerprint: string) => boolean;
 
     expect(verify('ab'.repeat(32))).toBe(true);
-    expect(verdict).toEqual({ trustedFingerprint: null, mismatch: null });
+    expect(verdict).toEqual({ unknown: null, mismatch: null });
   });
 
   it('refuses a different key and records both fingerprints', async () => {
@@ -103,11 +104,11 @@ describe('buildConnectConfig', () => {
 });
 
 describe('friendlyConnectError', () => {
-  const noVerdict = { trustedFingerprint: null, mismatch: null };
+  const noVerdict = { unknown: null, mismatch: null };
 
   it('turns a host key mismatch into a coded error the renderer can act on', () => {
     const error = friendlyConnectError(new Error('handshake failed'), endpoint, {
-      trustedFingerprint: null,
+      unknown: null,
       mismatch: { stored: 'ab'.repeat(32), presented: 'cd'.repeat(32) },
     });
 
@@ -116,6 +117,18 @@ describe('friendlyConnectError', () => {
     expect(error.message).toContain('example.test:2222');
     expect(error.message).toContain('has changed since you last connected');
     expect((error as HostKeyChangedError).presented).toBe('cd'.repeat(32));
+  });
+
+  it('turns a key nobody trusted yet into a coded error that carries the presented key', () => {
+    const error = friendlyConnectError(new Error('Host denied'), endpoint, {
+      unknown: 'cd'.repeat(32),
+      mismatch: null,
+    });
+
+    expect(error).toBeInstanceOf(HostKeyUnknownError);
+    expect(sshErrorCode(error)).toBe('host-key-unknown');
+    expect(error.message).toContain('example.test:2222');
+    expect((error as HostKeyUnknownError).presented).toBe('cd'.repeat(32));
   });
 
   it('explains a rejected login', () => {

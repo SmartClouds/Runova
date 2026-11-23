@@ -21,7 +21,10 @@ internal static class TestApiClients
     /// <summary>The request header the test host reads the caller's address from.</summary>
     public const string RemoteIpHeader = "X-Test-Remote-Ip";
 
-    /// <summary>A client with one key, sealed as the API seals it. A new key id and secret unless given.</summary>
+    /// <summary>
+    /// A client with one key, sealed as the API seals it. A new key id and secret unless given, and
+    /// the next id unless <paramref name="id"/> picks one (only in a database of the test's own).
+    /// </summary>
     public static async Task<(string KeyId, string Secret)> AddAsync(
         IServiceProvider services,
         string? keyId = null,
@@ -30,7 +33,8 @@ internal static class TestApiClients
         string[]? ipAllowlist = null,
         DateTimeOffset? expiresAt = null,
         DateTimeOffset? revokedAt = null,
-        string? name = null)
+        string? name = null,
+        long? id = null)
     {
         keyId ??= RequestSignature.NewKeyId();
         secret ??= RequestSignature.NewSecret();
@@ -39,6 +43,7 @@ internal static class TestApiClients
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.ApiClients.Add(new Core.ApiClients.ApiClient
         {
+            Id = id ?? 0,
             Name = name ?? "Test client " + keyId,
             Scopes = [.. scopes ?? [ApiScopes.NewsWrite]],
             IpAllowlist = [.. ipAllowlist ?? []],

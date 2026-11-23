@@ -10,15 +10,20 @@ import type { SyncAdapter } from './types';
  */
 export function withTeamMap(adapter: SyncAdapter, db: SyncDb): SyncAdapter {
   const collection = adapter.collection.id;
+  // Settings and the other collections that can not be shared are the person's own, whatever a
+  // team record says, and are never filed under a team.
+  const shareable = adapter.collection.shareable;
   return {
     ...adapter,
     async list() {
+      if (!shareable) return adapter.list();
       return (await adapter.list()).map((item) => {
         const team = db.teamOf(collection, item.id);
         return team === undefined ? item : { ...item, teamId: team };
       });
     },
     async apply(item) {
+      if (!shareable && item.teamId !== null) return;
       db.setTeam(collection, item.id, item.teamId);
       await adapter.apply(item);
     },

@@ -68,9 +68,11 @@ describe('AI CLI launches use the user CLI settings', () => {
       'main/store.ts',
     ]);
     // A Relay leg's terminal, a CI auto-fix tab and an agent started from a saved prompt are
-    // started by main, so their launch lines are built there.
+    // started by main, so their launch lines are built there. A backup import only reads them
+    // to drop launch modes that skip approvals before they are restored.
     expect(filesMatching('main', /\bcliLaunchDefaults\b/)).toEqual([
       'main/agents/promptLaunch.ts',
+      'main/backup/envelope.ts',
       'main/pipelines/autoFix/launch.ts',
       'main/relay/launch.ts',
       'main/store.ts',

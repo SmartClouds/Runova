@@ -126,7 +126,7 @@ export const taskTools = [
     area: 'scheduledTasks',
     title: 'Change a scheduled task',
     description:
-      'Moves a task to another time, changes its prompt, or cancels it with cancel: true.',
+      'Moves a task to another time, changes its prompt, or cancels it with cancel: true. A task that starts by itself goes back to waiting for Run now when its prompt or time changes.',
     risk: 'write',
     needsProject: true,
     input: z.object({
@@ -136,18 +136,33 @@ export const taskTools = [
       prompt: z.string().min(1).max(50_000).optional(),
       cancel: z.boolean().optional(),
     }),
-    preview: (args) => ({
-      title: args.cancel ? 'Cancel a scheduled task' : 'Change a scheduled task',
-    }),
+    async preview(args, context) {
+      const task = await findTask(context, args.taskId).catch(() => null);
+      const stopsAuto = task?.runMode === 'auto' && Boolean(args.prompt || args.runAt);
+      return {
+        title: args.cancel ? 'Cancel a scheduled task' : 'Change a scheduled task',
+        summary: stopsAuto
+          ? 'This task started an agent by itself. After this change it waits for you to press Run now.'
+          : undefined,
+        fields: [
+          ...(args.runAt ? [{ label: 'When', value: new Date(args.runAt).toLocaleString() }] : []),
+          ...(args.prompt ? [{ label: 'Prompt', value: args.prompt }] : []),
+        ],
+      };
+    },
     async run(args, context) {
-      await findTask(context, args.taskId);
+      const task = await findTask(context, args.taskId);
+      // Only the user may choose what an automatic task runs and when, through task_schedule_run
+      // or the Prompts tab. An agent's change turns it back into one that waits for Run now.
+      const stopsAuto = task.runMode === 'auto' && Boolean(args.prompt || args.runAt);
       const updated = await updateScheduledTask(args.taskId, {
         ...(args.runAt ? { runAt: new Date(args.runAt).toISOString() } : {}),
         ...(args.prompt ? { content: args.prompt, rawInput: args.prompt } : {}),
         ...(args.cancel ? { status: 'cancelled' as const } : {}),
+        ...(stopsAuto ? { runMode: 'manual' as const } : {}),
       });
       return {
-        text: `Updated the task; it is ${updated?.status ?? 'gone'}, at ${updated?.runAt ?? ''}.`,
+        text: `Updated the task; it is ${updated?.status ?? 'gone'}, at ${updated?.runAt ?? ''}.${stopsAuto ? ' It no longer starts by itself and waits for Run now.' : ''}`,
       };
     },
   }),

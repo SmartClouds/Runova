@@ -6,9 +6,9 @@ import { tempDir, writeTree } from '../../test/main/fixtures';
 import type { UpdateProgressTick } from './types';
 
 /**
- * `dotnet list package` needs a successful restore and quietly reports nothing without one, so
- * the .csproj is the source of truth for which packages exist and the CLI only enriches it. The
- * cases worth pinning are the ones where those two disagree.
+ * Listing never runs `dotnet`: the .csproj is the source of truth for which packages exist, and
+ * obj/project.assets.json (what the last restore resolved) only enriches it. The cases worth
+ * pinning are the ones where those two disagree, and that no listing ever starts the CLI.
  */
 
 interface CliCall {
@@ -79,58 +79,37 @@ const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 `;
 
-/** Real `dotnet list package --format json` output. */
-function listJson(packages: { id: string; resolvedVersion: string }[]): string {
+/** A trimmed obj/project.assets.json, as `dotnet restore` writes it for one net8.0 project. */
+function assetsJson(
+  projectPath: string,
+  packages: { id: string; version: string; autoReferenced?: boolean }[],
+): string {
   return JSON.stringify({
-    version: 1,
-    parameters: '--format json',
-    projects: [
-      {
-        path: 'App.csproj',
-        frameworks: [
-          {
-            framework: 'net8.0',
-            topLevelPackages: packages.map((p) => ({
-              id: p.id,
-              requestedVersion: p.resolvedVersion,
-              resolvedVersion: p.resolvedVersion,
-            })),
-          },
-        ],
+    version: 4,
+    targets: {
+      'net8.0': Object.fromEntries(
+        packages.map((p) => [`${p.id}/${p.version}`, { type: 'package' }]),
+      ),
+    },
+    project: {
+      restore: { projectPath },
+      frameworks: {
+        'net8.0': {
+          dependencies: Object.fromEntries(
+            packages.map((p) => [
+              p.id,
+              {
+                target: 'Package',
+                version: `[${p.version}, )`,
+                ...(p.autoReferenced ? { autoReferenced: true } : {}),
+              },
+            ]),
+          ),
+        },
       },
-    ],
+    },
   });
 }
-
-/** Real `dotnet list package --outdated --format json` output. */
-function outdatedJson(packages: { id: string; resolved: string; latest: string }[]): string {
-  return JSON.stringify({
-    version: 1,
-    parameters: '--outdated --format json',
-    projects: [
-      {
-        path: 'App.csproj',
-        frameworks: [
-          {
-            framework: 'net8.0',
-            topLevelPackages: packages.map((p) => ({
-              id: p.id,
-              requestedVersion: p.resolved,
-              resolvedVersion: p.resolved,
-              latestVersion: p.latest,
-            })),
-          },
-        ],
-      },
-    ],
-  });
-}
-
-/** What the CLI prints when the project cannot be restored. */
-const RESTORE_PROBLEM = JSON.stringify({
-  version: 1,
-  problems: [{ project: 'App.csproj', level: 'error', text: 'No assets file was found.' }],
-});
 
 let root = '';
 
@@ -159,12 +138,6 @@ function stubNuget(versions: Record<string, string[]>): string[] {
     });
   });
   return requested;
-}
-
-/** Answers both `dotnet list package` calls of a single project. */
-function answerCli(installed: string | null, outdated: string | null): void {
-  cliState.handler = (_command, args) =>
-    args.includes('--outdated') ? { stdout: outdated ?? '' } : { stdout: installed ?? '' };
 }
 
 describe('detect', () => {
@@ -201,48 +174,46 @@ describe('detect', () => {
   });
 });
 
-describe('listPackages CLI usage', () => {
+describe('listPackages without the CLI', () => {
   beforeEach(() => {
     writeTree(root, { 'src/App/App.csproj': CSPROJ });
     stubNuget({});
   });
 
-  it('runs the plain and outdated listings against the project file', async () => {
-    answerCli(listJson([{ id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' }]), outdatedJson([]));
-    const project = join(root, 'src', 'App', 'App.csproj');
+  it('runs no dotnet command, even in a repo whose targets would run code', async () => {
+    // `dotnet list package` evaluates the project and runs targets like CollectPackageReferences
+    // even with --no-restore, so a cloned repo could run anything just by being listed. The
+    // assets file here is committed from another machine, which only ever counts as data.
+    writeTree(root, {
+      'src/App/Directory.Build.targets': `<Project>
+  <Target Name="Payload" BeforeTargets="CollectPackageReferences;Restore">
+    <Exec Command="calc.exe" />
+  </Target>
+</Project>`,
+      'src/App/obj/project.assets.json': assetsJson('D:\\elsewhere\\src\\App\\App.csproj', [
+        { id: 'Newtonsoft.Json', version: '13.0.1' },
+      ]),
+    });
 
-    await dotnetAdapter.listPackages(root);
+    const [section] = await dotnetAdapter.listPackages(root);
 
-    expect(cliState.calls).toEqual([
-      {
-        command: 'dotnet',
-        args: ['list', project, 'package', '--format', 'json'],
-        cwd: join(root, 'src', 'App'),
-        timeoutMs: 3 * 60 * 1000,
-      },
-      {
-        command: 'dotnet',
-        args: ['list', project, 'package', '--outdated', '--format', 'json'],
-        cwd: join(root, 'src', 'App'),
-        timeoutMs: 3 * 60 * 1000,
-      },
-    ]);
+    expect(cliState.calls).toEqual([]);
+    expect(section.packages.find((p) => p.name === 'Newtonsoft.Json')).toMatchObject({
+      currentVersion: '13.0.1',
+      isInstalled: true,
+    });
   });
 
-  it('reports cli-missing when the .NET SDK is not installed', async () => {
+  it('lists packages without the .NET SDK installed', async () => {
     cliState.handler = () => ({ notFound: true });
 
     const [section] = await dotnetAdapter.listPackages(root);
 
-    expect(section).toEqual({
-      ecosystem: 'dotnet',
-      manager: 'nuget',
-      status: 'cli-missing',
-      message: 'Install the .NET SDK to manage NuGet packages for this project.',
-      packages: [],
-      runtimes: [expect.objectContaining({ source: 'target-framework', declared: 'net8.0' })],
-      toolchain: 'dotnet-sdk',
-    });
+    expect(section).toMatchObject({ status: 'ok', toolchain: 'dotnet-sdk' });
+    expect(section.runtimes).toEqual([
+      expect.objectContaining({ source: 'target-framework', declared: 'net8.0' }),
+    ]);
+    expect(section.packages.map((p) => p.name)).toEqual(['Newtonsoft.Json', 'Serilog']);
   });
 
   it('returns an empty ok section when there is no project to scan', async () => {
@@ -268,13 +239,6 @@ describe('manifest parsing', () => {
 
   it('reads both the Version attribute and the nested Version element', async () => {
     writeTree(root, { 'App.csproj': CSPROJ });
-    answerCli(
-      listJson([
-        { id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' },
-        { id: 'Serilog', resolvedVersion: '3.1.1' },
-      ]),
-      outdatedJson([]),
-    );
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -291,7 +255,6 @@ describe('manifest parsing', () => {
   </ItemGroup>
 </Project>`,
     });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -305,7 +268,6 @@ describe('manifest parsing', () => {
         <PackageReference Update="Microsoft.SourceLink.GitHub" Version="8.0.0" />
       </ItemGroup></Project>`,
     });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -324,7 +286,6 @@ describe('manifest parsing', () => {
   <package id="NUnit" version="3.13.3" targetFramework="net48" />
 </packages>`,
     });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -344,7 +305,6 @@ describe('manifest parsing', () => {
         <PackageReference Include="Newtonsoft.Json" />
       </ItemGroup></Project>`,
     });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -364,7 +324,6 @@ describe('manifest parsing', () => {
       'src/App.csproj':
         '<Project><ItemGroup><PackageReference Include="Serilog" /></ItemGroup></Project>',
     });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -376,7 +335,6 @@ describe('manifest parsing', () => {
       'App.csproj':
         '<Project><ItemGroup><PackageReference Include="Mystery" /></ItemGroup></Project>',
     });
-    answerCli('', '');
     stubNuget({ mystery: ['1.0.0'] });
 
     const [section] = await dotnetAdapter.listPackages(root);
@@ -387,20 +345,23 @@ describe('manifest parsing', () => {
   });
 });
 
-describe('merging CLI output with the manifest', () => {
+describe('merging the restore output with the manifest', () => {
+  const project = (): string => join(root, 'App.csproj');
+
+  function restore(packages: { id: string; version: string; autoReferenced?: boolean }[]): void {
+    writeTree(root, { 'obj/project.assets.json': assetsJson(project(), packages) });
+  }
+
   beforeEach(() => {
     writeTree(root, { 'App.csproj': CSPROJ });
   });
 
-  it('marks a package outdated from the outdated listing', async () => {
-    stubNuget({});
-    answerCli(
-      listJson([
-        { id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' },
-        { id: 'Serilog', resolvedVersion: '3.1.1' },
-      ]),
-      outdatedJson([{ id: 'Newtonsoft.Json', resolved: '13.0.1', latest: '13.0.3' }]),
-    );
+  it('marks a package outdated when nuget.org has a newer stable version', async () => {
+    stubNuget({ 'newtonsoft.json': ['13.0.1', '13.0.3'], serilog: ['3.1.1'] });
+    restore([
+      { id: 'Newtonsoft.Json', version: '13.0.1' },
+      { id: 'Serilog', version: '3.1.1' },
+    ]);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -410,48 +371,94 @@ describe('merging CLI output with the manifest', () => {
       isOutdated: true,
       isInstalled: true,
       projectLabel: 'App',
-      manifestPath: join(root, 'App.csproj'),
+      manifestPath: project(),
+    });
+    expect(section.packages.find((p) => p.name === 'Serilog')).toMatchObject({
+      latestVersion: '3.1.1',
+      isOutdated: false,
     });
   });
 
-  it('treats a package missing from the outdated listing as up to date', async () => {
+  it('shows the version the restore resolved over the one the project file asks for', async () => {
     stubNuget({});
-    answerCli(listJson([{ id: 'Serilog', resolvedVersion: '3.1.1' }]), outdatedJson([]));
+    restore([
+      { id: 'Newtonsoft.Json', version: '13.0.3' },
+      { id: 'Serilog', version: '3.1.1' },
+    ]);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
-    const serilog = section.packages.find((p) => p.name === 'Serilog');
-    expect(serilog?.isOutdated).toBe(false);
-    expect(serilog?.latestVersion).toBe('3.1.1');
+    expect(section.packages.find((p) => p.name === 'Newtonsoft.Json')?.currentVersion).toBe(
+      '13.0.3',
+    );
   });
 
-  it('includes a package the CLI found but the manifest does not declare', async () => {
+  it('includes a package the restore found but the manifest does not declare', async () => {
     stubNuget({});
-    answerCli(
-      listJson([
-        { id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' },
-        { id: 'Serilog', resolvedVersion: '3.1.1' },
-        { id: 'Microsoft.Extensions.Logging', resolvedVersion: '8.0.0' },
-      ]),
-      outdatedJson([]),
-    );
+    restore([
+      { id: 'Newtonsoft.Json', version: '13.0.1' },
+      { id: 'Serilog', version: '3.1.1' },
+      { id: 'Microsoft.Extensions.Logging', version: '8.0.0' },
+    ]);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
     // A package can come in through an imported .props file the parser never sees.
-    expect(section.packages.map((p) => p.name)).toContain('Microsoft.Extensions.Logging');
+    expect(section.packages.find((p) => p.name === 'Microsoft.Extensions.Logging')).toMatchObject({
+      currentVersion: '8.0.0',
+      isInstalled: true,
+    });
+  });
+
+  it('leaves out packages the SDK references by itself', async () => {
+    stubNuget({});
+    restore([
+      { id: 'Newtonsoft.Json', version: '13.0.1' },
+      { id: 'Serilog', version: '3.1.1' },
+      { id: 'NETStandard.Library', version: '2.0.3', autoReferenced: true },
+    ]);
+
+    const [section] = await dotnetAdapter.listPackages(root);
+
+    expect(section.packages.map((p) => p.name)).toEqual(['Newtonsoft.Json', 'Serilog']);
+  });
+
+  it('matches a package across the two files whatever its case', async () => {
+    stubNuget({});
+    restore([
+      { id: 'newtonsoft.json', version: '13.0.2' },
+      { id: 'Serilog', version: '3.1.1' },
+    ]);
+
+    const [section] = await dotnetAdapter.listPackages(root);
+
+    expect(section.packages.map((p) => p.name)).toEqual(['Newtonsoft.Json', 'Serilog']);
+    expect(section.packages[0].currentVersion).toBe('13.0.2');
+  });
+
+  it('ignores an assets file restored for another project in the same folder', async () => {
+    stubNuget({});
+    writeTree(root, {
+      'obj/project.assets.json': assetsJson(join(root, 'Other.csproj'), [
+        { id: 'Newtonsoft.Json', version: '9.0.1' },
+      ]),
+    });
+
+    const [section] = await dotnetAdapter.listPackages(root);
+
+    expect(section.packages.find((p) => p.name === 'Newtonsoft.Json')).toMatchObject({
+      currentVersion: '13.0.1',
+      isInstalled: false,
+    });
   });
 
   it('sorts packages by name so the list does not reshuffle between scans', async () => {
     stubNuget({});
-    answerCli(
-      listJson([
-        { id: 'Serilog', resolvedVersion: '3.1.1' },
-        { id: 'AWSSDK.Core', resolvedVersion: '3.7.0' },
-        { id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' },
-      ]),
-      outdatedJson([]),
-    );
+    restore([
+      { id: 'Serilog', version: '3.1.1' },
+      { id: 'AWSSDK.Core', version: '3.7.0' },
+      { id: 'Newtonsoft.Json', version: '13.0.1' },
+    ]);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -462,25 +469,23 @@ describe('merging CLI output with the manifest', () => {
     ]);
   });
 
-  it('asks nuget.org only for packages the CLI never resolved', async () => {
-    const requested = stubNuget({ serilog: ['3.1.1', '4.0.0', '4.1.0-dev.1'] });
-    answerCli(listJson([{ id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' }]), outdatedJson([]));
+  it('does not call a prerelease newer than the latest stable outdated', async () => {
+    stubNuget({ serilog: ['3.1.1', '4.0.0', '4.1.0-dev.1'] });
+    restore([
+      { id: 'Newtonsoft.Json', version: '13.0.1' },
+      { id: 'Serilog', version: '4.1.0-dev.1' },
+    ]);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
-    // Newtonsoft.Json resolved, so its absence from the outdated list really means up to date.
-    expect(requested).toEqual(['serilog']);
     expect(section.packages.find((p) => p.name === 'Serilog')).toMatchObject({
-      currentVersion: '3.1.1',
-      latestVersion: '4.0.0',
-      isOutdated: true,
-      isInstalled: false,
+      currentVersion: '4.1.0-dev.1',
+      isOutdated: false,
     });
   });
 
   it('picks the newest stable version from the nuget index, not a prerelease', async () => {
     stubNuget({ 'newtonsoft.json': ['12.0.3', '13.0.3', '14.0.0-beta1'] });
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -492,7 +497,6 @@ describe('merging CLI output with the manifest', () => {
 
   it('leaves a package alone when nuget.org has never heard of it', async () => {
     stubNuget({});
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -502,42 +506,38 @@ describe('merging CLI output with the manifest', () => {
 });
 
 describe('degraded projects', () => {
-  it('warns that versions came from the project file when restore failed', async () => {
+  it('warns that versions came from the project file when it was never restored', async () => {
     writeTree(root, { 'src/App/App.csproj': CSPROJ });
     stubNuget({});
-    answerCli(RESTORE_PROBLEM, RESTORE_PROBLEM);
 
     const [section] = await dotnetAdapter.listPackages(root);
 
     expect(section.status).toBe('ok');
-    expect(section.message).toContain('Could not restore App');
+    expect(section.message).toContain('App has not been restored yet');
     expect(section.message).toContain('may not reflect what is resolved at build time');
     // The packages still come through, just from the manifest alone.
     expect(section.packages.map((p) => p.name)).toEqual(['Newtonsoft.Json', 'Serilog']);
     expect(section.packages.every((p) => p.isInstalled === false)).toBe(true);
   });
 
-  it('names every project that could not be restored', async () => {
+  it('names every project that was not restored', async () => {
     writeTree(root, { 'a/A.csproj': CSPROJ, 'b/B.csproj': CSPROJ });
     stubNuget({});
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 
-    expect(section.message).toContain('A, B');
-    expect(section.message).toContain('those are');
+    expect(section.message).toContain('A, B have not been restored yet');
   });
 
   it('says nothing when every project restored', async () => {
-    writeTree(root, { 'App.csproj': CSPROJ });
-    stubNuget({});
-    answerCli(
-      listJson([
-        { id: 'Newtonsoft.Json', resolvedVersion: '13.0.1' },
-        { id: 'Serilog', resolvedVersion: '3.1.1' },
+    writeTree(root, {
+      'App.csproj': CSPROJ,
+      'obj/project.assets.json': assetsJson(join(root, 'App.csproj'), [
+        { id: 'Newtonsoft.Json', version: '13.0.1' },
+        { id: 'Serilog', version: '3.1.1' },
       ]),
-      outdatedJson([]),
-    );
+    });
+    stubNuget({});
 
     const [section] = await dotnetAdapter.listPackages(root);
 
@@ -547,7 +547,6 @@ describe('degraded projects', () => {
   it('does not call a project with no packages at all degraded', async () => {
     writeTree(root, { 'Empty.csproj': '<Project><ItemGroup /></Project>' });
     stubNuget({});
-    answerCli('', '');
 
     const [section] = await dotnetAdapter.listPackages(root);
 

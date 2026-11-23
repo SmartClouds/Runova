@@ -13,7 +13,7 @@ Run these here, or `pnpm website:dev | website:build | website:test | website:e2
 | `bun install --frozen-lockfile` | Installs the pinned dependencies                                                          |
 | `bun run dev`                   | Dev server; `/api` and `/media` go to `WEBSITE_API_URL` (default `http://localhost:5180`) |
 | `bun run lint`                  | Biome                                                                                     |
-| `bun run check`                 | `astro check` (types in `.astro`, `.ts` and `.tsx`)                                       |
+| `bun run check`                 | `scripts/astroCheck.ts`: `astro check` on TypeScript 6 (`.astro`, `.ts` and `.tsx`)       |
 | `bun run test`                  | Vitest, with the Astro container API for components                                       |
 | `bun run build`                 | Static pages and the server in `dist/`, then `scripts/seoCheck.ts`                        |
 | `bun run start`                 | Serves `dist/` with the security headers, `bun scripts/server.ts` (`HOST`, `PORT`)        |

@@ -12,8 +12,6 @@ export interface SshConnectOptions extends SshEndpoint {
 export interface SshSessionListener {
   onData: (sessionId: string, data: string) => void;
   onExit: (sessionId: string, error?: string) => void;
-  /** Fires once, the first time this server is ever connected to, so the caller can persist it. */
-  onHostKeyTrusted: (sessionId: string, fingerprint: string) => void;
 }
 
 interface Session {
@@ -39,9 +37,6 @@ export class SshSessionManager {
       await new Promise<void>((resolve, reject) => {
         client
           .on('ready', () => {
-            if (verdict.trustedFingerprint) {
-              listener.onHostKeyTrusted(sessionId, verdict.trustedFingerprint);
-            }
             client.shell(
               { cols: options.cols, rows: options.rows, term: 'xterm-256color' },
               (err, stream) => {

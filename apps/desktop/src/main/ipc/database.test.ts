@@ -76,6 +76,23 @@ describe('registerDatabaseHandlers', () => {
     });
   });
 
+  it('passes the certificate mode through and refuses one it does not know', async () => {
+    const { call, service } = harness();
+    const base = {
+      name: 'Shop',
+      engine: 'postgres',
+      target: { kind: 'direct', host: 'db.example.com', port: 5432 },
+      tls: true,
+    };
+    await call(C.saveConnection, { ...base, tlsMode: 'require' });
+    expect(service.saveConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ tls: true, tlsMode: 'require' }),
+    );
+    await expect(call(C.saveConnection, { ...base, tlsMode: 'off' })).rejects.toThrow(
+      /certificate/,
+    );
+  });
+
   it.each([
     [{ name: 'x', engine: 'oracle', target: { kind: 'direct', host: 'h', port: 1 } }],
     [{ name: 'x', engine: 'redis', target: { kind: 'direct', host: 'h', port: 0 } }],

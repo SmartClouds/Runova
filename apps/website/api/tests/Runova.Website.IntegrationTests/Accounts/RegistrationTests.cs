@@ -87,20 +87,44 @@ public sealed class RegistrationTests(PostgresFixture postgres) : IDisposable
     }
 
     [Fact]
-    public async Task Registering_again_before_verifying_replaces_the_first_password()
+    public async Task Registering_again_before_verifying_leaves_no_password_until_the_owner_sets_one()
     {
         var email = TestAccounts.NewEmail();
         var client = _factory.CreateApiClient();
         await TestAccounts.RegisterAsync(client, email, "the first long password");
         await TestAccounts.RegisterAsync(client, email, "the second long password");
         var token = await TestAccounts.TokenFromLatestEmailAsync(_factory.Services, email, "/account/verify-email");
-        await client.SendAsync(HttpMethod.Post, Verifications, new { token });
 
-        var first = await _factory.CreateApiClient().SignInAsync(email, "the first long password");
-        var second = await _factory.CreateApiClient().SignInAsync(email, "the second long password");
+        var verified = await ApiClient.ReadJsonAsync(await client.SendAsync(HttpMethod.Post, Verifications, new { token }), HttpStatusCode.OK);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, first.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.True(verified.GetProperty("signedIn").GetBoolean());
+        var me = await ApiClient.ReadJsonAsync(await client.GetAsync("/api/v1/accounts/me"), HttpStatusCode.OK);
+        Assert.False(me.GetProperty("hasPassword").GetBoolean());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the first long password")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the second long password")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Someone_registering_the_owners_address_again_never_gets_a_password_the_owner_confirms()
+    {
+        var email = TestAccounts.NewEmail();
+        var owner = _factory.CreateApiClient();
+        await TestAccounts.RegisterAsync(owner, email, "the owner's long password");
+        await TestAccounts.RegisterAsync(_factory.CreateApiClient(), email, "the stranger's long password");
+        var token = await TestAccounts.TokenFromLatestEmailAsync(_factory.Services, email, "/account/verify-email");
+        await owner.SendAsync(HttpMethod.Post, Verifications, new { token });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the stranger's long password")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the owner's long password")).StatusCode);
+
+        // The owner, who holds the inbox, adds a password from a reset link.
+        await owner.RefreshAntiforgeryTokenAsync();
+        await owner.SendAsync(HttpMethod.Post, "/api/v1/password-resets", new { email });
+        var reset = await TestAccounts.TokenFromLatestEmailAsync(_factory.Services, email, "/account/reset-password");
+        var setup = await owner.SendAsync(HttpMethod.Post, "/api/v1/password-setups", new { token = reset, password = "the owner's new long password" });
+        Assert.Equal(HttpStatusCode.NoContent, setup.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _factory.CreateApiClient().SignInAsync(email, "the owner's new long password")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateApiClient().SignInAsync(email, "the stranger's long password")).StatusCode);
     }
 
     [Theory]

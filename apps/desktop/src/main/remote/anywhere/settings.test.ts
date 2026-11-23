@@ -186,3 +186,22 @@ describe('anywhere pins and recent connections', () => {
     expect(await store.recent()).toEqual([]);
   });
 });
+
+describe('anywhere approved controllers', () => {
+  it('remembers a key someone accepted, only for the account it came with', async () => {
+    const io = memoryIo();
+    const store = createAnywhereStore(io);
+
+    expect(await store.controllerApproved('key-1', 4)).toBe(false);
+    await store.approveController({ key: 'key-1', userId: 4, approvedAt: 1 });
+    await store.approveController({ key: 'key-1', userId: 4, approvedAt: 2 });
+
+    const reopened = createAnywhereStore(io);
+    expect(await reopened.controllerApproved('key-1', 4)).toBe(true);
+    expect(await reopened.controllerApproved('key-1', 5)).toBe(false);
+    expect(await reopened.controllerApproved('key-2', 4)).toBe(false);
+    expect((io.file() as { controllers: unknown[] }).controllers).toEqual([
+      { key: 'key-1', userId: 4, approvedAt: 2 },
+    ]);
+  });
+});

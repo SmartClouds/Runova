@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PackageUpdateRequest } from '../../shared/apiTypes';
 import { tempDir, writeTree } from '../../test/main/fixtures';
+import { LISTING_ENV } from './execUtils';
 import type { UpdateProgressTick } from './types';
 
 /**
@@ -16,6 +17,7 @@ interface CliCall {
   args: string[];
   cwd: string;
   timeoutMs?: number;
+  env?: Record<string, string>;
 }
 
 interface CliAnswer {
@@ -37,8 +39,14 @@ vi.mock('./execUtils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./execUtils')>();
   return {
     ...actual,
-    runCli: async (command: string, args: string[], cwd: string, timeoutMs?: number) => {
-      cliState.calls.push({ command, args, cwd, timeoutMs });
+    runCli: async (
+      command: string,
+      args: string[],
+      cwd: string,
+      timeoutMs?: number,
+      env?: Record<string, string>,
+    ) => {
+      cliState.calls.push({ command, args, cwd, timeoutMs, env });
       const answer = cliState.answers.get(command) ?? {};
       if (answer.notFound) throw new actual.CliNotFoundError(`${command} is not available on PATH`);
       return { stdout: answer.stdout ?? '', stderr: answer.stderr ?? '', code: answer.code ?? 0 };
@@ -194,7 +202,13 @@ describe('listPackages with npm', () => {
     await nodeAdapter.listPackages(root);
 
     expect(cliState.calls).toEqual([
-      { command: 'npm', args: ['outdated', '--json', '--long'], cwd: root, timeoutMs: undefined },
+      {
+        command: 'npm',
+        args: ['outdated', '--json', '--long'],
+        cwd: root,
+        timeoutMs: undefined,
+        env: LISTING_ENV,
+      },
     ]);
   });
 
@@ -307,7 +321,13 @@ describe('listPackages with pnpm and yarn', () => {
 
     expect(cliState.calls[0]).toMatchObject({
       command: 'pnpm',
-      args: ['outdated', '--format', 'json'],
+      args: ['outdated', '--ignore-pnpmfile', '--format', 'json'],
+    });
+    // Neither a package.json pin nor a .pnpmfile.cjs may make listing run code from the repo.
+    expect(cliState.calls[0].env).toMatchObject({
+      PNPM_CONFIG_PM_ON_FAIL: 'ignore',
+      npm_config_manage_package_manager_versions: 'false',
+      COREPACK_ENABLE_PROJECT_SPEC: '0',
     });
     expect(section.manager).toBe('pnpm');
     expect(section.packages.find((p) => p.name === 'left-pad')).toMatchObject({
@@ -325,6 +345,11 @@ describe('listPackages with pnpm and yarn', () => {
     const [section] = await nodeAdapter.listPackages(root);
 
     expect(cliState.calls[0]).toMatchObject({ command: 'yarn', args: ['outdated', '--json'] });
+    // A yarnPath in the repo's .yarnrc points at committed JS, which listing must not run.
+    expect(cliState.calls[0].env).toMatchObject({
+      YARN_IGNORE_PATH: '1',
+      COREPACK_ENABLE_PROJECT_SPEC: '0',
+    });
     expect(section.manager).toBe('yarn');
     // Column positions come from the head row, not a fixed index.
     expect(section.packages.find((p) => p.name === 'vitest')).toMatchObject({

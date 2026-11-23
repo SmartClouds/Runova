@@ -8,6 +8,7 @@ import {
   parseDocument,
   STUDIO_SCHEMA_VERSION,
   type StudioDocument,
+  shotSchema,
 } from './schema.js';
 
 function doc(overrides: Partial<StudioDocument> = {}): StudioDocument {
@@ -167,6 +168,40 @@ describe('outputSize', () => {
         expect(width % 2, `${aspect} ${resolution}`).toBe(0);
         expect(height % 2, `${aspect} ${resolution}`).toBe(0);
       }
+    }
+  });
+});
+
+describe('shotSchema route paths', () => {
+  const route = (path: string) =>
+    shotSchema.safeParse({ target: 'route', path, viewport: 'desktop' });
+
+  it('keeps a path after the app address, adding the leading slash a bare one lacks', () => {
+    for (const [path, read] of [
+      ['/settings?tab=ai', '/settings?tab=ai'],
+      ['settings', '/settings'],
+      ['  /a b  ', '/a b'],
+      ['', '/'],
+    ]) {
+      const result = route(path as string);
+      expect(result.success, path).toBe(true);
+      if (result.success && result.data.target === 'route') expect(result.data.path).toBe(read);
+    }
+  });
+
+  it('refuses a path that would name another host', () => {
+    const slash = String.fromCharCode(92);
+    for (const path of [
+      '//host',
+      `${slash}host`,
+      `${slash}${slash}host`,
+      `/${slash}host`,
+      ' //host',
+      '\t//host',
+      '/\t/host',
+      '/\n/host',
+    ]) {
+      expect(route(path).success, JSON.stringify(path)).toBe(false);
     }
   });
 });

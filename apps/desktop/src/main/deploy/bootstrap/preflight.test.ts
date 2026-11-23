@@ -113,6 +113,7 @@ async function preflight(overrides: Partial<Machine> = {}, options: PreflightOpt
     username: 'deployer',
     authMethod: 'password',
     password: 'pw',
+    storedFingerprint: server.fingerprint(),
   });
   return runPreflight(connection, options);
 }

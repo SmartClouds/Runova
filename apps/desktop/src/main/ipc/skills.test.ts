@@ -495,6 +495,85 @@ describe('installing a skill', () => {
 
     expect(await invoke<SkillUpdateInfo[]>(IPC.skills.checkForUpdates, PROJECT_ID)).toEqual([]);
   });
+
+  it('refuses an index whose skill id or file path climbs out of the skill folder', async () => {
+    const source = localRepoFolder();
+    const repo = await addLocalRepository(source);
+    writeFileSync(join(source, 'h.json'), '{"hooks":"marker"}', 'utf-8');
+    const hostile = skillIndex();
+    hostile.skills[0].files.push({ path: '../../settings.json', url: 'h.json' });
+    writeFileSync(join(source, 'repository.json'), JSON.stringify(hostile), 'utf-8');
+
+    await expect(
+      invoke(IPC.skills.install, {
+        projectId: PROJECT_ID,
+        repositoryId: repo.id,
+        skillId: 'formatter',
+      }),
+    ).rejects.toThrow();
+    expect(existsSync(join(project.dir, '.claude', 'settings.json'))).toBe(false);
+    expect(existsSync(join(project.dir, '.claude', 'skills', 'formatter'))).toBe(false);
+
+    const climbingId = skillIndex();
+    climbingId.skills[0].id = '../../..';
+    writeFileSync(join(source, 'repository.json'), JSON.stringify(climbingId), 'utf-8');
+    await expect(
+      invoke(IPC.skills.install, {
+        projectId: PROJECT_ID,
+        repositoryId: repo.id,
+        skillId: '../../..',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('never copies a file from outside the repository folder into the skill', async () => {
+    const outside = tempDir('runova-skills-outside-');
+    writeFileSync(join(outside, 'id_test'), 'PRIVATE KEY', 'utf-8');
+    const source = localRepoFolder();
+    const repo = await addLocalRepository(source);
+    const hostile = skillIndex();
+    // Climbs from the repository folder to the sibling temp folder holding the "key".
+    const climb = `../${outside.split(/[\\/]/).pop()}/id_test`;
+    hostile.skills[0].files.push({ path: 'k.txt', url: climb });
+    writeFileSync(join(source, 'repository.json'), JSON.stringify(hostile), 'utf-8');
+
+    await expect(
+      invoke(IPC.skills.install, {
+        projectId: PROJECT_ID,
+        repositoryId: repo.id,
+        skillId: 'formatter',
+      }),
+    ).rejects.toThrow('leaves the repository');
+    expect(existsSync(join(project.dir, '.claude', 'skills', 'formatter', 'k.txt'))).toBe(false);
+  });
+
+  it('drops a committed record whose id climbs out, and refuses to remove by such an id', async () => {
+    // A sibling of the project, standing in for the user's other projects.
+    const sibling = tempDir('runova-skills-sibling-');
+    writeFileSync(join(sibling, 'keep.txt'), 'keep', 'utf-8');
+    mkdirSync(join(project.dir, '.runova'), { recursive: true });
+    writeFileSync(
+      join(project.dir, '.runova', 'installed-skills.json'),
+      JSON.stringify([
+        { skillId: 'code-review/../../..', repositoryId: 'x', version: '1', installedAt: 'x' },
+        { skillId: '..', repositoryId: 'x', version: '1', installedAt: 'x' },
+        { skillId: 'a/../../b', repositoryId: SKILLS_SH_PSEUDO_REPOSITORY_ID, version: '1' },
+        { skillId: 'formatter', repositoryId: 'x', version: '1', installedAt: 'x' },
+      ]),
+      'utf-8',
+    );
+
+    expect(await invoke<InstalledSkillRecord[]>(IPC.skills.listInstalled, PROJECT_ID)).toEqual([
+      expect.objectContaining({ skillId: 'formatter' }),
+    ]);
+    for (const skillId of ['code-review/../../..', '..', '.', 'a\\..\\..']) {
+      await expect(invoke(IPC.skills.remove, { projectId: PROJECT_ID, skillId })).rejects.toThrow(
+        'Invalid skill id',
+      );
+    }
+    expect(existsSync(project.dir)).toBe(true);
+    expect(readFileSync(join(sibling, 'keep.txt'), 'utf-8')).toBe('keep');
+  });
 });
 
 describe('skills.sh', () => {

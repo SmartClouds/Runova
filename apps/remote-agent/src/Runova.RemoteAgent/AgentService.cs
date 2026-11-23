@@ -99,10 +99,7 @@ public sealed partial class AgentService(AgentConfig config, IAgentPlatform plat
     {
         var hub = _hub!;
         var passwordSecret = config.PasswordSecret is { } s ? Bytes.FromB64u(s) : null;
-        var facts = new IncomingFacts(request.Mode, request.Relation, request.Controller.UserId, request.Teams, passwordSecret is not null, _lockout.Locked());
-
-        // With no screen to show (a Wayland greeter, say) a session would only be blank.
-        var accept = request.Controller.IdentityKey is not null && AgentPolicy.Accepts(facts, config.Settings) && platform.Screen.Capture() is not null;
+        var accept = Admits(request, passwordSecret is not null, config.Settings, _lockout, () => platform.Screen.Capture() is not null);
         await hub.InvokeAsync("Respond", request.SessionId, accept, ct);
         if (!accept)
         {
@@ -124,12 +121,7 @@ public sealed partial class AgentService(AgentConfig config, IAgentPlatform plat
                 "",
                 "",
                 RandomNumberGenerator.GetBytes);
-            await using var link = await AgentLink.AcceptAsync(transport, handshake, sealFrames: true, TimeSpan.FromSeconds(20), ct);
-            if (request.Mode == "password")
-            {
-                _lockout.Succeeded();
-            }
-
+            await using var link = await HandshakeAsync(transport, handshake, request.Mode == "password" ? _lockout : null, TimeSpan.FromSeconds(20), ct);
             await hub.InvokeAsync("Connected", request.SessionId, "relay", ct);
             LogConnected(logger, request.Controller.DisplayName, request.Mode);
             var session = new HostSession(link, config.DeviceName, platform.Screen, platform.Encoder, platform.Input, new SessionOptions(config.DefaultPermissions, request.Intent, _frameInterval));
@@ -137,11 +129,6 @@ public sealed partial class AgentService(AgentConfig config, IAgentPlatform plat
         }
         catch (HandshakeException e)
         {
-            if (e.Reason == HandshakeFailure.WrongPassword)
-            {
-                _lockout.Failed();
-            }
-
             LogRefused(logger, e.Reason);
         }
         catch (Exception e) when (e is IOException or HttpRequestException or System.Net.WebSockets.WebSocketException or OperationCanceledException or HubException)
@@ -158,6 +145,30 @@ public sealed partial class AgentService(AgentConfig config, IAgentPlatform plat
             {
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the agent takes a request. A password guess is counted against the lockout right
+    /// here, before any handshake (see <see cref="PasswordLockout.TryBegin"/>), so a controller that
+    /// hangs up or aborts once it has the host's reply has still used up its guess.
+    /// </summary>
+    internal static bool Admits(IncomingRequest request, bool hasPasswordSecret, AgentSettings settings, PasswordLockout lockout, Func<bool> hasScreen)
+    {
+        var facts = new IncomingFacts(request.Mode, request.Relation, request.Controller.UserId, request.Teams, hasPasswordSecret, lockout.Locked());
+
+        // With no screen to show (a Wayland greeter, say) a session would only be blank.
+        return request.Controller.IdentityKey is not null
+            && AgentPolicy.Accepts(facts, settings)
+            && hasScreen()
+            && (request.Mode != "password" || lockout.TryBegin());
+    }
+
+    /// <summary>The host side of the handshake. A password guess counted by <see cref="Admits"/> is taken back only once the controller's finish checks out.</summary>
+    internal static async Task<AgentLink> HandshakeAsync(ILinkTransport transport, HostHandshake handshake, PasswordLockout? lockout, TimeSpan timeout, CancellationToken ct)
+    {
+        var link = await AgentLink.AcceptAsync(transport, handshake, sealFrames: true, timeout, ct);
+        lockout?.Succeeded();
+        return link;
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The website is not reachable yet: {Reason}")]

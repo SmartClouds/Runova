@@ -212,6 +212,19 @@ describe('the env file link manager', () => {
     expect(t.states.get('f1')).toBe('noFolder');
   });
 
+  it('neither watches nor reads a link that still needs confirming, and follows it once it is', async () => {
+    const t = setup([linked({ path: null, needsConfirmation: true })]);
+    await t.manager.reconcile();
+    expect(t.deps.watch).not.toHaveBeenCalled();
+    expect(t.deps.updateFromDisk).not.toHaveBeenCalled();
+    expect(t.states.get('f1')).toBe('needsConfirmation');
+
+    t.setFiles([linked()]);
+    await t.manager.reconcile();
+    expect(t.deps.watch).toHaveBeenCalledWith('/project/.env.prod', expect.any(Function));
+    expect(t.states.get('f1')).toBe('watching');
+  });
+
   it('drops a link whose item vanished between the list and the update', async () => {
     const t = setup();
     t.outcomes.push('gone');

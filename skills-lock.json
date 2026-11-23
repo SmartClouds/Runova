@@ -1,17 +1,24 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
-      "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+      "computedHash": ""
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5"
     },
     "webgl-components": {
       "source": "flornkm/skills",
       "sourceType": "github",
       "skillPath": "skills/webgl-components/SKILL.md",
-      "computedHash": "20e8085ec8ec205f2552924586a56dda3658ef3c36ec6ecddbe8b29540f528b9"
+      "computedHash": "b5af737364c1a5aa61d9d847b7223eb3be2b835331e0ae7865e48bb02dddbf0c"
     }
   }
 }

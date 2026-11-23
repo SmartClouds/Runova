@@ -1,4 +1,11 @@
-import type { AccessLevel, DbEngine, DbObjectRef, SchemaTable, StatementClass } from '@runova/core';
+import type {
+  AccessLevel,
+  DbEngine,
+  DbObjectRef,
+  DbTlsMode,
+  SchemaTable,
+  StatementClass,
+} from '@runova/core';
 
 /**
  * Plain data the Database section passes between main and the renderer. Passwords go in once
@@ -42,6 +49,11 @@ export interface DatabaseConnection {
   /** Mongo: the database the user is defined in. */
   authDatabase: string | null;
   tls: boolean;
+  /**
+   * How the certificate is checked when `tls` is on. Missing on a connection saved before this
+   * existed; see `effectiveTlsMode` in main for what that means.
+   */
+  tlsMode?: DbTlsMode;
   /** Mongo: the host is a DNS seed list (mongodb+srv). */
   srv: boolean;
   /** Writes need a second confirmation, and the AI may never write. */
@@ -143,6 +155,8 @@ export interface DatabaseSaveInput {
   database?: string | null;
   authDatabase?: string | null;
   tls?: boolean;
+  /** Left out with `tls` on: a new connection checks the certificate fully. */
+  tlsMode?: DbTlsMode;
   srv?: boolean;
   readOnly?: boolean;
   /** A new password. Left out keeps the saved one; an empty string removes it. */

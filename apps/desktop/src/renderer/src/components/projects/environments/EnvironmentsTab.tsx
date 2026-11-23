@@ -544,6 +544,9 @@ export function EnvironmentsTab({ project }: { project: Project }): React.JSX.El
                                 setUnlockMode('unlock');
                                 setUnlockOpen(true);
                               }}
+                              onConfirm={() =>
+                                void withVault(() => setLinkDialog({ open: true, fileId: file.id }))
+                              }
                             />
                           )}
                         </div>

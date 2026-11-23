@@ -58,8 +58,12 @@ export const SYNC_COLLECTIONS: readonly SyncCollection[] = [
     id: 'ssh-servers',
     label: 'SSH servers',
     category: 'servers',
-    // The host key pin syncs: it is just as useful on every computer.
-    fields: { device: ['privateKeyPath', 'lastConnectedAt'], secret: ['secretEnvelope'] },
+    // The host key pin syncs: it is just as useful on every computer. The Cloudflare Access
+    // service token's secret is sealed like the password.
+    fields: {
+      device: ['privateKeyPath', 'lastConnectedAt'],
+      secret: ['secretEnvelope', 'cloudflareTunnel.clientSecret'],
+    },
     shareable: true,
   },
   {

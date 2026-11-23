@@ -224,6 +224,30 @@ describe('ssh:saveServer and the trusted key', () => {
 });
 
 describe('ssh:create', () => {
+  it('refuses a server with no trusted key before the login, and connects once it is trusted', async () => {
+    const vault = await import('../ssh/vault');
+    userData.writeData('ssh-servers.json', [
+      saved({ secretEnvelope: await vault.encryptSecret('correct horse battery staple') }),
+    ]);
+    const sender = fakeWebContents();
+
+    const failure = await invokeFrom(sender, IPC.ssh.create, {
+      sessionId: 'tab-1',
+      savedServerId: 'srv-1',
+    }).catch((error: unknown) => error);
+
+    expect(sshErrorCode(failure)).toBe('host-key-unknown');
+    expect(server.authAttempts).toEqual([]);
+    expect(storedServers()[0].hostKeyFingerprint).toBeUndefined();
+
+    // What the renderer does after the user said yes to the key it was shown.
+    await invoke(IPC.ssh.trustHostKey, 'srv-1', server.fingerprint());
+    await invokeFrom(sender, IPC.ssh.create, { sessionId: 'tab-1', savedServerId: 'srv-1' });
+
+    await vi.waitFor(() => expect(server.shells).toHaveLength(1));
+    expect(storedServers()[0].hostKeyFingerprint).toBe(server.fingerprint());
+  });
+
   it('types the initial input into the new shell', async () => {
     // A resumed conversation opens as an SSH tab that types its own resume command.
     const key = generateClientKey();
@@ -232,7 +256,11 @@ describe('ssh:create', () => {
     const keyPath = join(tempDir(), 'id_ed25519');
     writeFileSync(keyPath, key.privateKey);
     userData.writeData('ssh-servers.json', [
-      saved({ authMethod: 'privateKey', privateKeyPath: keyPath }),
+      saved({
+        authMethod: 'privateKey',
+        privateKeyPath: keyPath,
+        hostKeyFingerprint: server.fingerprint(),
+      }),
     ]);
     const sender = fakeWebContents();
 
@@ -292,7 +320,10 @@ describe('ssh:typePassword', () => {
   async function openPasswordSession(): Promise<ReturnType<typeof fakeWebContents>> {
     const vault = await import('../ssh/vault');
     userData.writeData('ssh-servers.json', [
-      saved({ secretEnvelope: await vault.encryptSecret(PASSWORD) }),
+      saved({
+        secretEnvelope: await vault.encryptSecret(PASSWORD),
+        hostKeyFingerprint: server.fingerprint(),
+      }),
     ]);
     const sender = fakeWebContents();
     await invokeFrom(sender, IPC.ssh.create, { sessionId: 'tab-1', savedServerId: 'srv-1' });
@@ -337,7 +368,11 @@ describe('ssh:typePassword', () => {
     const keyPath = join(tempDir(), 'id_ed25519');
     writeFileSync(keyPath, key.privateKey);
     userData.writeData('ssh-servers.json', [
-      saved({ authMethod: 'privateKey', privateKeyPath: keyPath }),
+      saved({
+        authMethod: 'privateKey',
+        privateKeyPath: keyPath,
+        hostKeyFingerprint: server.fingerprint(),
+      }),
     ]);
     const sender = fakeWebContents();
     await invokeFrom(sender, IPC.ssh.create, { sessionId: 'tab-1', savedServerId: 'srv-1' });

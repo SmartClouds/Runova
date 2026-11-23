@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
@@ -943,6 +943,111 @@ describe('env files linked to a file in the project', () => {
     await invoke(IPC.environments.unlinkFile, environment.id, fileId);
     expect(await environments.updateEnvFileFromDisk(linkedFile)).toBe('gone');
     expect(await environments.linkedEnvFiles()).toEqual([]);
+  });
+
+  /** Puts a link on the saved file the way a sync pull would: in the store, with nothing local. */
+  function linkBySync(path: string): void {
+    const environments = storedEnvironments();
+    environments[0].files[0].link = { path, linkedAt: 2 };
+    userData.writeData('project-environments.json', environments);
+  }
+
+  it('does not follow a link that arrived by sync until it is confirmed here', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    // The kind of file a teammate could aim a synced link at.
+    writeFileSync(join(project.dir, '.env.local'), 'LOCAL_SECRET=only-here\n', 'utf-8');
+    linkBySync('.env.local');
+    const environments = await service();
+
+    const [listed] = await environments.linkedEnvFiles();
+    expect(listed).toEqual({
+      projectId: PROJECT_ID,
+      environmentId: environment.id,
+      fileId,
+      path: null,
+      needsConfirmation: true,
+    });
+    expect(await environments.updateEnvFileFromDisk({ ...listed, path: '' })).toBe('gone');
+    expect(await invoke<string>(IPC.environments.readFile, environment.id, fileId)).toBe('A=1\n');
+
+    // Saving the copy does not write through the unconfirmed link either.
+    await invoke(IPC.environments.saveFile, {
+      environmentId: environment.id,
+      id: fileId,
+      fileName: '.env.prod',
+      content: 'A=2\n',
+    });
+    expect(readFileSync(join(project.dir, '.env.local'), 'utf-8')).toBe('LOCAL_SECRET=only-here\n');
+
+    // Linking it again from the Environments tab is the confirmation.
+    await link(environment.id, fileId, '.env.local');
+    expect(await environments.linkedEnvFiles()).toEqual([
+      expect.objectContaining({ fileId, path: join(project.dir, '.env.local') }),
+    ]);
+    // The confirmation never goes into the synced store.
+    expect(readFileSync(userData.dataFile('project-environments.json'), 'utf-8')).not.toContain(
+      'confirm',
+    );
+
+    // A sync that points the confirmed link somewhere else needs confirming again.
+    linkBySync('.env.prod');
+    expect((await environments.linkedEnvFiles())[0]).toMatchObject({ needsConfirmation: true });
+  });
+
+  it('keeps links this computer already followed before the update', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    writeFileSync(join(project.dir, '.env.prod'), 'A=1\n', 'utf-8');
+    linkBySync('.env.prod');
+    // A mark means this computer has read the file before, so the link was made or kept here.
+    await store.setEnvFileLinkMarks({ [fileId]: { mtimeMs: 1, size: 4 } });
+    const environments = await service();
+
+    expect(await environments.linkedEnvFiles()).toEqual([
+      { projectId: PROJECT_ID, environmentId: environment.id, fileId, path: expect.any(String) },
+    ]);
+  });
+
+  it('refuses a link into .git', async () => {
+    const { environment, fileId } = await savedFile();
+    mkdirSync(join(project.dir, '.git'));
+    writeFileSync(join(project.dir, '.git', 'config'), '[remote]\n', 'utf-8');
+    await expect(link(environment.id, fileId, '.git/config')).rejects.toThrow(
+      "Files inside .git can't be linked.",
+    );
+  });
+
+  it('does not follow a symlink out of the project folder, to read or to write', async () => {
+    const { environment, fileId } = await savedFile('A=1\n');
+    const outside = tempDir('runova-env-outside-');
+    writeFileSync(join(outside, 'id_dummy'), 'PRIVATE KEY\n', 'utf-8');
+    // A junction needs no special rights on Windows, and is a plain symlink elsewhere.
+    symlinkSync(outside, join(project.dir, 'committed-link'), 'junction');
+
+    await expect(link(environment.id, fileId, 'committed-link/id_dummy')).rejects.toThrow(
+      'committed-link/id_dummy leads outside the project folder.',
+    );
+
+    // A link made to a real file that a symlink later replaces is not read or written either.
+    mkdirSync(join(project.dir, 'config'));
+    writeFileSync(join(project.dir, 'config', '.env'), 'A=1\n', 'utf-8');
+    await link(environment.id, fileId, 'config/.env');
+    const environments = await service();
+    const [listed] = await environments.linkedEnvFiles();
+    rmSync(join(project.dir, 'config'), { recursive: true });
+    symlinkSync(outside, join(project.dir, 'config'), 'junction');
+    writeFileSync(join(outside, '.env'), 'STOLEN=1\n', 'utf-8');
+
+    expect(await environments.updateEnvFileFromDisk(listed)).toBe('missing');
+    expect(await invoke<string>(IPC.environments.readFile, environment.id, fileId)).toBe('A=1\n');
+    await expect(
+      invoke(IPC.environments.saveFile, {
+        environmentId: environment.id,
+        id: fileId,
+        fileName: '.env.prod',
+        content: 'OVERWRITE=1\n',
+      }),
+    ).rejects.toThrow('it leads outside the project folder');
+    expect(readFileSync(join(outside, '.env'), 'utf-8')).toBe('STOLEN=1\n');
   });
 
   it('imports files linked to where they came from when asked', async () => {

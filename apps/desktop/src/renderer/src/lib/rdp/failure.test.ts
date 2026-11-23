@@ -12,6 +12,7 @@ const CODES: RdpProxyErrorCode[] = [
   'tls-failed',
   'tls-key-usage',
   'certificate-changed',
+  'certificate-new',
   'proxy-failed',
   'other',
 ];

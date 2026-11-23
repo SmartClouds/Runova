@@ -15,7 +15,7 @@ import type {
 } from '../../../shared/databaseTypes';
 import { toCell } from '../cells';
 import { type PgQueryable, pgHealth, pgSchemaGraph } from './postgresInsights';
-import { countIsCheap, describeError, EXACT_COUNT_LIMIT } from './shared';
+import { countIsCheap, describeError, EXACT_COUNT_LIMIT, nodeTlsOptions } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -56,14 +56,14 @@ const KIND_BY_RELKIND: Readonly<Record<string, DbObjectKind>> = {
 
 type Client = pg.Client;
 
-function clientConfig(options: DriverConnectOptions, database: string): pg.ClientConfig {
+export function clientConfig(options: DriverConnectOptions, database: string): pg.ClientConfig {
   return {
     host: options.host,
     port: options.port ?? 5432,
     user: options.user,
     password: options.password,
     database,
-    ssl: options.tls ? { rejectUnauthorized: false } : undefined,
+    ssl: nodeTlsOptions(options),
     connectionTimeoutMillis: options.connectTimeoutMs ?? 15_000,
     application_name: 'Runova',
     // Numbers that do not fit a JS number arrive as text instead of rounded.

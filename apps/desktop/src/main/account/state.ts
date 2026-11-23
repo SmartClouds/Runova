@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { EncryptionPolicy } from '@runova/core';
 import { z } from 'zod';
 
 /**
@@ -32,7 +33,10 @@ export interface AccountStateFile {
   account: AccountIdentity | null;
   sessionId: number | null;
   refreshToken: string | null;
-  keys: Record<string, { version: number; sealed: string }>;
+  /** `suspended`: the server listed the scope with no key while this one was held. */
+  keys: Record<string, { version: number; sealed: string; suspended?: boolean }>;
+  /** The sealing policy pinned on this computer for each scope (see sync/engine.ts). */
+  policies?: Record<string, EncryptionPolicy>;
 }
 
 export interface AccountSnapshot {
@@ -57,8 +61,18 @@ const fileSchema = z.object({
   refreshToken: z.string().max(4096).nullable(),
   keys: z.record(
     z.string().regex(/^\d{1,18}$/),
-    z.object({ version: z.number().int().positive(), sealed: z.string().max(4096) }),
+    z.object({
+      version: z.number().int().positive(),
+      sealed: z.string().max(4096),
+      suspended: z.boolean().optional(),
+    }),
   ),
+  policies: z
+    .record(
+      z.string().regex(/^\d{1,18}$/),
+      z.object({ servers: z.boolean(), environments: z.boolean(), everything: z.boolean() }),
+    )
+    .optional(),
 });
 
 export function createAccountState(port: AccountStatePort) {
@@ -66,7 +80,7 @@ export function createAccountState(port: AccountStatePort) {
   let queue: Promise<unknown> = Promise.resolve();
   // Held here when the keychain can not keep them.
   let memoryToken: string | null = null;
-  const memoryKeys = new Map<string, { version: number; key: Buffer }>();
+  const memoryKeys = new Map<string, { version: number; key: Buffer; suspended?: boolean }>();
 
   async function load(): Promise<AccountStateFile> {
     if (loaded) return loaded;
@@ -163,7 +177,9 @@ export function createAccountState(port: AccountStatePort) {
       });
     },
 
-    async key(scopeId: number): Promise<{ version: number; key: Buffer } | null> {
+    async key(
+      scopeId: number,
+    ): Promise<{ version: number; key: Buffer; suspended?: boolean } | null> {
       const id = String(scopeId);
       const inMemory = memoryKeys.get(id);
       if (inMemory) return inMemory;
@@ -171,13 +187,40 @@ export function createAccountState(port: AccountStatePort) {
       const opened = tryOpen(stored?.sealed ?? null);
       if (!stored || !opened) return null;
       const key = Buffer.from(opened, 'base64');
-      return key.length === 32 ? { version: stored.version, key } : null;
+      if (key.length !== 32) return null;
+      return stored.suspended
+        ? { version: stored.version, key, suspended: true }
+        : { version: stored.version, key };
+    },
+
+    /** The server listed the scope with no key: the key stays, marked until the next one. */
+    suspendKey(scopeId: number) {
+      const id = String(scopeId);
+      const inMemory = memoryKeys.get(id);
+      if (inMemory) {
+        inMemory.suspended = true;
+        return Promise.resolve();
+      }
+      return mutate((file) => {
+        const stored = file.keys[id];
+        if (stored) stored.suspended = true;
+      });
     },
 
     forgetKey(scopeId: number) {
       memoryKeys.delete(String(scopeId));
       return mutate((file) => {
         delete file.keys[String(scopeId)];
+      });
+    },
+
+    async pinnedPolicy(scopeId: number): Promise<EncryptionPolicy | null> {
+      return (await load()).policies?.[String(scopeId)] ?? null;
+    },
+
+    pinPolicy(scopeId: number, policy: EncryptionPolicy) {
+      return mutate((file) => {
+        file.policies = { ...file.policies, [String(scopeId)]: { ...policy } };
       });
     },
 
@@ -189,6 +232,7 @@ export function createAccountState(port: AccountStatePort) {
         file.sessionId = null;
         file.refreshToken = null;
         file.keys = {};
+        delete file.policies;
       });
     },
   };

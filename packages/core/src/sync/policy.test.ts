@@ -82,7 +82,7 @@ describe('field names', () => {
   it('names the sealed field each server store really keeps', () => {
     expect(syncCollection('ssh-servers').fields).toEqual({
       device: ['privateKeyPath', 'lastConnectedAt'],
-      secret: ['secretEnvelope'],
+      secret: ['secretEnvelope', 'cloudflareTunnel.clientSecret'],
     });
     expect(syncCollection('rdp-servers').fields.secret).toEqual(['secretEnvelope']);
     expect(syncCollection('database-connections').fields.secret).toEqual(['passwordEnvelope']);

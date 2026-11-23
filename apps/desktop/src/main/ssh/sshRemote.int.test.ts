@@ -8,6 +8,7 @@ import {
   startSshServer,
 } from '../../../e2e/sshServer';
 import { sshErrorCode } from '../../shared/sshErrors';
+import { probeHostKey } from './connectConfig';
 import { SshConnection } from './connection';
 import { detectSudoMode, openRootShell } from './sudo';
 
@@ -25,7 +26,7 @@ beforeAll(async () => {
 
 afterAll(() => server?.stop());
 
-function open(): Promise<SshConnection> {
+async function open(): Promise<SshConnection> {
   if (!server) throw new Error('no server');
   return SshConnection.open({
     host: server.host,
@@ -33,6 +34,7 @@ function open(): Promise<SshConnection> {
     username: SSH_USER,
     authMethod: 'password',
     password: SSH_PASSWORD,
+    storedFingerprint: await probeHostKey(server.host, server.port),
   });
 }
 

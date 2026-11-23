@@ -158,12 +158,26 @@ async function openServersList(): Promise<Page> {
   const { page } = launched;
   await page.setViewportSize({ width: 1400, height: 900 });
 
-  // Saved through the app itself, so the password is encrypted the way a real save does it.
+  // Saved through the app itself, so the password is encrypted the way a real save does it. Its
+  // host key is then trusted the way the first-connection prompt does it (read, then trusted), so
+  // the history sheet connects without that prompt in the way.
   await page.evaluate(
-    (input) =>
-      (
-        window as unknown as { runova: { ssh: { saveServer(i: unknown): Promise<unknown> } } }
-      ).runova.ssh.saveServer(input),
+    async (input) => {
+      const { ssh } = (
+        window as unknown as {
+          runova: {
+            ssh: {
+              saveServer(i: unknown): Promise<{ id: string }>;
+              hostKeyStatus(id: string): Promise<{ presented: string }>;
+              trustHostKey(id: string, fingerprint: string): Promise<void>;
+            };
+          };
+        }
+      ).runova;
+      const saved = await ssh.saveServer(input);
+      const { presented } = await ssh.hostKeyStatus(saved.id);
+      await ssh.trustHostKey(saved.id, presented);
+    },
     {
       nickname: NICKNAME,
       host: server.host,

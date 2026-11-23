@@ -9,6 +9,11 @@ export interface IncomingFacts {
   teams: string[];
   hasPasswordSecret: boolean;
   lockedOut: boolean;
+  /**
+   * The key the hub named for the controller was accepted by someone at this computer before, for
+   * this account. The hub's word on who is asking is not enough to let anyone in without asking.
+   */
+  keyApproved: boolean;
 }
 
 export type IncomingDecision = 'accept' | 'ask' | 'decline';
@@ -19,9 +24,10 @@ export type IncomingDecision = 'accept' | 'ask' | 'decline';
  *
  * - A password request goes straight to the handshake when a password is set: the handshake itself
  *   checks the password, and a wrong one counts towards the lockout.
- * - The owner's own computers get in without asking only when the owner turned that on.
- * - A teammate gets in without asking only when the owner chose "always allow" for them, and only
- *   while the computer is still shown to a team they share.
+ * - The owner's own computers get in without asking only when the owner turned that on, and only
+ *   with a key someone here accepted once already.
+ * - A teammate gets in without asking only when the owner chose "always allow" for them, only
+ *   while the computer is still shown to a team they share, and only with a key accepted here.
  * - Everyone else is declined.
  */
 export function decideIncoming(facts: IncomingFacts, settings: AnywhereSettings): IncomingDecision {
@@ -29,9 +35,12 @@ export function decideIncoming(facts: IncomingFacts, settings: AnywhereSettings)
   if (facts.mode === 'password') {
     return facts.hasPasswordSecret && !facts.lockedOut ? 'accept' : 'decline';
   }
-  if (facts.relation === 'own') return settings.allowOwnDevices ? 'accept' : 'ask';
+  if (facts.relation === 'own') {
+    return settings.allowOwnDevices && facts.keyApproved ? 'accept' : 'ask';
+  }
   if (facts.relation === 'teammate' && facts.teams.length > 0) {
-    return settings.alwaysAllow.some((p) => p.userId === facts.controllerUserId) ? 'accept' : 'ask';
+    const always = settings.alwaysAllow.some((p) => p.userId === facts.controllerUserId);
+    return always && facts.keyApproved ? 'accept' : 'ask';
   }
   return 'decline';
 }
@@ -41,7 +50,7 @@ export function decideIncoming(facts: IncomingFacts, settings: AnywhereSettings)
  * opens the encrypted link; the person is asked once the list of files comes over it, unless they
  * chose to take files from their own devices without asking. A stranger, a teammate no longer in a
  * team the computer is shown to, a password request, or no key to check, is declined whatever the
- * server let through.
+ * server let through. With connections switched off, every send is declined too.
  */
 export function decideSend(
   facts: {
@@ -50,8 +59,9 @@ export function decideSend(
     teams: string[];
     hasKey: boolean;
   },
-  settings: Pick<AnywhereSettings, 'receiveFrom'>,
+  settings: Pick<AnywhereSettings, 'receiveFrom' | 'acceptConnections'>,
 ): 'accept' | 'decline' {
+  if (!settings.acceptConnections) return 'decline';
   if (!facts.hasKey || facts.mode !== 'ask' || settings.receiveFrom === 'nobody') return 'decline';
   if (facts.relation === 'own') return 'accept';
   if (

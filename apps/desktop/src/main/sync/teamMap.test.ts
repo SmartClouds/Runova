@@ -58,6 +58,30 @@ describe('withTeamMap', () => {
     expect((await adapter.list())[0]?.teamId).toBeNull();
   });
 
+  it('never files a collection that can not be shared under a team', async () => {
+    const state = db();
+    const applied: LocalItem[] = [];
+    const settings: SyncAdapter = {
+      collection: syncCollection('settings'),
+      area: 'settings',
+      list: async () => [{ id: 'app', teamId: null, value: {} }],
+      apply: async (item) => {
+        applied.push(item);
+      },
+      remove: async () => {
+        // The settings are never removed.
+      },
+    };
+    const adapter = withTeamMap(settings, state);
+    // A team entry left in the map from before still does not count.
+    state.setTeam('settings', 'app', 7);
+
+    await adapter.apply({ id: 'app', teamId: 7, value: { theme: 'light' } });
+
+    expect(applied).toEqual([]);
+    expect((await adapter.list())[0]?.teamId).toBeNull();
+  });
+
   it('forgets the team when the item goes, and keeps teams apart by collection', async () => {
     const state = db();
     const store = forgetfulStore();

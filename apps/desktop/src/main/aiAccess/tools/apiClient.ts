@@ -108,7 +108,7 @@ const requestInput = z.object({
     .string()
     .min(1)
     .max(200)
-    .describe('The request name. A request with this name is updated.'),
+    .describe('The request name. It must not be taken; api_update_request changes one that is.'),
   method: z.string().min(1).max(16).describe('GET, POST, PUT, PATCH, DELETE and so on.'),
   url: z.string().min(1).describe('The address. Collection variables like {{baseUrl}} work.'),
   headers: z.array(z.object({ key: z.string().min(1), value: z.string() })).optional(),
@@ -125,34 +125,88 @@ const requestInput = z.object({
 
 type RequestInput = z.infer<typeof requestInput>;
 
+function headersFrom(headers: { key: string; value: string }[]): PostmanRequest['header'] {
+  return headers.map((header) => ({ key: header.key, value: header.value }));
+}
+
+function rawBody(body: string, bodyType?: 'json' | 'text' | 'xml'): PostmanRequest['body'] {
+  let language = bodyType;
+  if (!language) {
+    try {
+      JSON.parse(body);
+      language = 'json';
+    } catch {
+      language = 'text';
+    }
+  }
+  return { mode: 'raw', raw: body, options: { raw: { language } } };
+}
+
+function bearerAuth(token: string): PostmanRequest['auth'] {
+  return { type: 'bearer', bearer: [{ key: 'token', value: token, type: 'string' }] };
+}
+
 function buildRequest(args: RequestInput): PostmanRequest {
   const request: PostmanRequest = {
     method: args.method.toUpperCase(),
     url: { raw: args.url },
-    header: (args.headers ?? []).map((header) => ({ key: header.key, value: header.value })),
+    header: headersFrom(args.headers ?? []),
   };
-  if (args.body !== undefined) {
-    let language = args.bodyType;
-    if (!language) {
-      try {
-        JSON.parse(args.body);
-        language = 'json';
-      } catch {
-        language = 'text';
-      }
-    }
-    request.body = { mode: 'raw', raw: args.body, options: { raw: { language } } };
-  }
-  if (args.bearerToken) {
-    request.auth = {
-      type: 'bearer',
-      bearer: [{ key: 'token', value: args.bearerToken, type: 'string' }],
-    };
-  }
+  if (args.body !== undefined) request.body = rawBody(args.body, args.bodyType);
+  if (args.bearerToken) request.auth = bearerAuth(args.bearerToken);
   return request;
 }
 
-/** The request that already has this name, wherever it sits, so saving again updates it. */
+const updateInput = z.object({
+  collection: collectionArg,
+  request: z.string().min(1).describe('The request to change, by name or id.'),
+  method: z.string().min(1).max(16).optional(),
+  url: z.string().min(1).optional(),
+  headers: z
+    .array(z.object({ key: z.string().min(1), value: z.string() }))
+    .optional()
+    .describe('Replaces all of its headers. Left out, they stay.'),
+  body: z.string().optional().describe('Replaces the raw body. Left out, it stays.'),
+  bodyType: z.enum(['json', 'text', 'xml']).optional(),
+  bearerToken: z
+    .string()
+    .optional()
+    .describe('Sets bearer auth with this token or a {{variable}}. Left out, its auth stays.'),
+});
+
+type UpdateInput = z.infer<typeof updateInput>;
+
+/** The saved request with only what the agent gave changed. Its own auth stays unless replaced. */
+function updatedRequest(old: PostmanRequest, args: UpdateInput): PostmanRequest {
+  const next: PostmanRequest = { ...old };
+  if (args.method) next.method = args.method.toUpperCase();
+  if (args.url) next.url = { raw: args.url };
+  if (args.headers) next.header = headersFrom(args.headers);
+  if (args.body !== undefined) next.body = rawBody(args.body, args.bodyType);
+  if (args.bearerToken) next.auth = bearerAuth(args.bearerToken);
+  return next;
+}
+
+/** A request as text, so the approval can show it before and after. Tokens are left out. */
+function requestText(request: PostmanRequest): string {
+  const lines = [`${request.method ?? 'GET'} ${urlText(request)}`];
+  for (const header of headersOf(request)) lines.push(`${header.key}: ${header.value}`);
+  lines.push(`Auth: ${request.auth?.type ?? 'inherited from its folder or collection'}`);
+  if (request.body?.raw !== undefined) lines.push('', request.body.raw);
+  return `${lines.join('\n')}\n`;
+}
+
+async function findRequest(
+  collectionRef: string,
+  requestRef: string,
+): Promise<{ summary: ApiCollectionSummary; item: PostmanRequestItem }> {
+  const summary = await findCollection(collectionRef);
+  const { item } = findItem(await collectionStore.get(summary.id), requestRef);
+  if (isFolder(item)) throw new Error(`${item.name} is a folder, not a request.`);
+  return { summary, item };
+}
+
+/** The request that already has this name, wherever it sits. */
 function existingRequest(collection: PostmanCollection, name: string): PostmanRequestItem | null {
   const found = walk(collection.item).find(
     (one) => !isFolder(one.item) && same(one.item.name, name),
@@ -269,19 +323,15 @@ export const apiClientTools = [
   defineTool({
     name: 'api_save_request',
     area: 'apiClient',
-    title: 'Add or update an API request',
+    title: 'Add an API request',
     description:
-      'Saves a request in a collection, for example a sample login request to test with. A request with the same name is updated; otherwise it is added, in the given folder when there is one.',
+      'Adds a request to a collection, for example a sample login request to test with, in the given folder when there is one. A name that is already taken is refused; api_update_request changes that request.',
     risk: 'write',
     input: requestInput,
     async preview(args) {
       const summary = await findCollection(args.collection).catch(() => null);
-      const existing = summary
-        ? existingRequest(await collectionStore.get(summary.id), args.name)
-        : null;
-      const where = summary?.name ?? args.collection;
       return previewOf(
-        `${existing ? 'Update' : 'Add'} ${args.name} ${existing ? 'in' : 'to'} ${where}`,
+        `Add ${args.name} to ${summary?.name ?? args.collection}`,
         buildRequest(args),
       );
     },
@@ -292,9 +342,15 @@ export const apiClientTools = [
       });
       summary ??= await collectionStore.create(args.collection);
       const collection = await collectionStore.get(summary.id);
+      // Changing a saved request needs the user's approval, so this tool only ever adds one.
       const existing = existingRequest(collection, args.name);
+      if (existing) {
+        throw new Error(
+          `${summary.name} already has a request named ${existing.name} (id ${existing.id}). Nothing was saved. Use api_update_request to change it, or pick another name.`,
+        );
+      }
       let parentId: string | null = null;
-      if (!existing && args.folder) {
+      if (args.folder) {
         const folder = walk(collection.item).find(
           (one) => isFolder(one.item) && same(one.item.name, args.folder ?? ''),
         );
@@ -303,15 +359,58 @@ export const apiClientTools = [
           (await collectionStore.createFolder(summary.id, null, args.folder)).folderId;
       }
       const item: PostmanRequestItem = {
-        ...(existing ?? {}),
-        id: existing?.id ?? randomUUID(),
-        name: existing?.name ?? args.name,
+        id: randomUUID(),
+        name: args.name,
         request: buildRequest(args),
       };
       await collectionStore.saveRequest({ collectionId: summary.id, parentId, item });
       return {
-        text: `${existing ? 'Updated' : 'Added'} ${item.name} ${existing ? 'in' : 'to'} ${summary.name}${args.folder && !existing ? ` / ${args.folder}` : ''} (id ${item.id}).`,
+        text: `Added ${item.name} to ${summary.name}${args.folder ? ` / ${args.folder}` : ''} (id ${item.id}).`,
       };
+    },
+  }),
+
+  defineTool({
+    name: 'api_update_request',
+    area: 'apiClient',
+    title: 'Change an API request',
+    description:
+      'Changes a saved request in a collection. Only what is given changes: method, url, headers, body or bearer auth. Everything else, its own auth and its scripts included, stays.',
+    risk: 'sensitive',
+    input: updateInput,
+    async preview(args) {
+      const { summary, item } = await findRequest(args.collection, args.request);
+      const next = updatedRequest(item.request, args);
+      const scripts = (item.event ?? [])
+        .filter((event) => event.script && !event.disabled)
+        .map((event) => (event.listen === 'prerequest' ? 'pre-request' : event.listen));
+      return {
+        ...previewOf(`Change ${item.name} in ${summary.name}`, next),
+        fields: [
+          {
+            label: 'Auth',
+            value: next.auth?.type ?? 'Inherited from its folder or collection',
+          },
+          ...(scripts.length > 0
+            ? [
+                {
+                  label: 'Scripts',
+                  value: `Its ${scripts.join(' and ')} scripts stay and run when it is sent.`,
+                },
+              ]
+            : []),
+        ],
+        diff: { fileName: item.name, before: requestText(item.request), after: requestText(next) },
+      };
+    },
+    async run(args) {
+      const { summary, item } = await findRequest(args.collection, args.request);
+      await collectionStore.saveRequest({
+        collectionId: summary.id,
+        parentId: null,
+        item: { ...item, request: updatedRequest(item.request, args) },
+      });
+      return { text: `Changed ${item.name} in ${summary.name} (id ${item.id}).` };
     },
   }),
 

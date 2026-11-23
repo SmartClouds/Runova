@@ -5,7 +5,7 @@ import {
   filesErrorMessage,
 } from '../../../../shared/deployFilesErrors';
 import type { FilesCertificateInfo } from '../../../../shared/deployFilesTypes';
-import { HostKeyChangedError } from '../../../ssh/connectConfig';
+import { HostKeyChangedError, HostKeyUnknownError } from '../../../ssh/connectConfig';
 import { VaultLockedError } from '../../../ssh/vaultErrors';
 
 /**
@@ -81,6 +81,11 @@ export function mapSshConnectError(error: unknown): FilesTransportError {
   if (error instanceof HostKeyChangedError) {
     return new FilesTransportError('hostKeyChanged', filesErrorMessage(error), {
       hostKey: { presented: error.presented, stored: error.stored },
+    });
+  }
+  if (error instanceof HostKeyUnknownError) {
+    return new FilesTransportError('hostKeyUnknown', filesErrorMessage(error), {
+      hostKey: { presented: error.presented, stored: null },
     });
   }
   if (error instanceof VaultLockedError) {

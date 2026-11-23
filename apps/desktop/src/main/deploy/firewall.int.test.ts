@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FirewallChange } from '../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnectionPool } from '../ssh/pool';
 import { CoreSessions } from './auth/coreSessions';
 import { localArtifactSource } from './bootstrap/releaseSource';
@@ -57,11 +58,11 @@ function newPool(server: TestServer): SshConnectionPool {
     endpoint: async () => ({
       host: server.host,
       port: server.port,
+      storedFingerprint: await probeHostKey(server.host, server.port),
       username,
       authMethod: 'password',
       password,
     }),
-    trustHostKey: async () => undefined,
   });
   pools.push(pool);
   return pool;

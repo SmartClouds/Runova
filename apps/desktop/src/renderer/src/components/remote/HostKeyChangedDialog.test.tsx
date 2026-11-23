@@ -81,10 +81,28 @@ describe('HostKeyChangedDialog', () => {
     expect(screen.getByRole('button', { name: "Don't connect" })).toHaveFocus();
   });
 
-  it('says when there was no trusted key before', () => {
-    renderWithProviders(<HostKeyChangedDialogHost />);
-    void ask({ stored: null });
+  describe('a server never connected to before', () => {
+    it('asks to check the key instead of calling it changed, and shows only the presented one', () => {
+      renderWithProviders(<HostKeyChangedDialogHost />);
+      void ask({ stored: null });
 
-    expect(screen.getByRole('dialog')).toHaveTextContent('Not recorded');
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveTextContent('Check prod’s host key');
+      expect(dialog).toHaveTextContent('has not connected to prod.example:2222 before');
+      expect(dialog).not.toHaveTextContent('identity changed');
+      expect(dialog).not.toHaveTextContent('Trusted before');
+      expect(dialog).toHaveTextContent(formatHostKeyFingerprint(status.presented));
+      expect(screen.queryByRole('button', { name: 'Trust the new key' })).not.toBeInTheDocument();
+    });
+
+    it('trusts the key only on the explicit button, with the safe choice focused', async () => {
+      const { user } = renderWithProviders(<HostKeyChangedDialogHost />);
+      const answer = ask({ stored: null });
+
+      expect(screen.getByRole('button', { name: "Don't connect" })).toHaveFocus();
+      await user.click(screen.getByRole('button', { name: 'Trust and connect' }));
+
+      await expect(answer).resolves.toBe(true);
+    });
   });
 });

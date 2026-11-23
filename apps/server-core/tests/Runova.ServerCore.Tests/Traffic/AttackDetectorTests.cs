@@ -207,6 +207,22 @@ public sealed class AttackDetectorTests
     }
 
     [Fact]
+    public void An_ipv6_attacker_moving_around_its_64_is_one_visitor_and_ipv4_stays_per_address()
+    {
+        var detector = Detector();
+
+        var hits = Feed(detector, Enumerable.Range(1, 100).Select(i => Request("/wp-login.php", address: $"2001:db8:2::{i:x}", method: TrafficMethod.Post, at: Start + (i * 1000))));
+        var v4 = Feed(detector, Enumerable.Range(1, 19).Select(i => Request("/wp-login.php", address: $"198.51.100.{i}", method: TrafficMethod.Post, at: Start + (i * 1000))));
+
+        Assert.All(hits, hit => Assert.Equal((AttackKind.BruteForce, IpKey.FromAddress(IPAddress.Parse("2001:db8:2::"))), (hit.Kind, hit.Address)));
+        Assert.Equal(81, hits.Count);
+        Assert.Equal(20, hits[0].Count);
+        Assert.Empty(v4);
+        Assert.Equal("2001:db8:2::/64", hits[0].Address.Visitor.Text);
+        Assert.Equal("198.51.100.7", IpKey.FromAddress(IPAddress.Parse("198.51.100.7")).Visitor.Text);
+    }
+
+    [Fact]
     public void Each_site_counts_on_its_own()
     {
         var detector = Detector();

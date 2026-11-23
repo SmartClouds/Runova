@@ -150,6 +150,8 @@ export default function RdpSessionRoute(): React.JSX.Element {
   const sessionId = new URLSearchParams(useLocation().search).get('session') ?? '';
   const hostRef = useRef<HTMLDivElement>(null);
   const session = useRdpSession(sessionId, hostRef);
+  // No saved certificate to compare with: the first connection to this server.
+  const firstCertificate = session.certificate != null && !session.certificate.expectedFingerprint;
   const [windowState, setWindowState] = useState<RdpWindowState>({
     isMaximized: false,
     isFullScreen: false,
@@ -510,13 +512,24 @@ export default function RdpSessionRoute(): React.JSX.Element {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 text-warning" /> The server's certificate changed
+              <TriangleAlert className="h-4 w-4 text-warning" />{' '}
+              {firstCertificate
+                ? "Check the server's certificate"
+                : "The server's certificate changed"}
             </DialogTitle>
-            <DialogDescription>
-              {session.certificate?.host} is presenting a different certificate than the last time
-              you connected. That's expected after the server is reinstalled or its certificate is
-              renewed. If neither happened, someone could be intercepting the connection.
-            </DialogDescription>
+            {firstCertificate ? (
+              <DialogDescription>
+                Runova has not connected to {session.certificate?.host} before, so it can't tell yet
+                whether this certificate is really the server's. Compare it with the certificate on
+                the server. Runova signs in only after you trust it.
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                {session.certificate?.host} is presenting a different certificate than the last time
+                you connected. That's expected after the server is reinstalled or its certificate is
+                renewed. If neither happened, someone could be intercepting the connection.
+              </DialogDescription>
+            )}
           </DialogHeader>
           {session.certificate && (
             <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5 text-xs">
@@ -526,8 +539,12 @@ export default function RdpSessionRoute(): React.JSX.Element {
               <dd className="break-all">{session.certificate.issuer || 'Unknown'}</dd>
               <dt className="text-muted-foreground">Valid until</dt>
               <dd>{session.certificate.validTo}</dd>
-              <dt className="text-muted-foreground">Saved</dt>
-              <dd className="break-all font-mono">{session.certificate.expectedFingerprint}</dd>
+              {!firstCertificate && (
+                <>
+                  <dt className="text-muted-foreground">Saved</dt>
+                  <dd className="break-all font-mono">{session.certificate.expectedFingerprint}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Now</dt>
               <dd className="break-all font-mono">{session.certificate.actualFingerprint}</dd>
             </dl>

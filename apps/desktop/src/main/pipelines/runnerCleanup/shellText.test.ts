@@ -23,6 +23,14 @@ describe('psQuote', () => {
   it('leaves $ and backticks alone', () => {
     expect(psQuote('C:\\$x`y')).toBe("'C:\\$x`y'");
   });
+
+  it('doubles the curly single quotes too, since PowerShell ends a literal string at them', () => {
+    for (const quote of ['\u2018', '\u2019', '\u201A', '\u201B']) {
+      expect(psQuote(`C:\\_work\\v${quote};Write-Host hi;${quote}`)).toBe(
+        `'C:\\_work\\v${quote}${quote};Write-Host hi;${quote}${quote}'`,
+      );
+    }
+  });
 });
 
 describe('toBase64', () => {

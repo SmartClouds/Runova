@@ -14,7 +14,13 @@ import type {
 } from '../../shared/apiTypes';
 import { baseVersion, type InventoryPackage, tidyInventory } from '../../shared/dependencyAlerts';
 import { stripAnsi } from '../process/spawnStreaming';
-import { CliNotFoundError, mapWithConcurrency, runCli, tryParseJson } from './execUtils';
+import {
+  CliNotFoundError,
+  LISTING_ENV,
+  mapWithConcurrency,
+  runCli,
+  tryParseJson,
+} from './execUtils';
 import { fetchLatestFromRegistry, runtimeFeeds } from './runtimeFeeds';
 import {
   lowerBound,
@@ -189,20 +195,45 @@ async function runOutdated(
 ): Promise<Record<string, OutdatedEntry> | null> {
   try {
     if (manager === 'npm') {
-      const { stdout } = await runCli('npm', ['outdated', '--json', '--long'], folderPath);
+      const { stdout } = await runCli(
+        'npm',
+        ['outdated', '--json', '--long'],
+        folderPath,
+        undefined,
+        LISTING_ENV,
+      );
       return tryParseJson<Record<string, OutdatedEntry>>(stdout.trim() || '{}');
     }
     if (manager === 'pnpm') {
-      const { stdout } = await runCli('pnpm', ['outdated', '--format', 'json'], folderPath);
+      // pnpm loads the repo's .pnpmfile.cjs (code) even for `outdated` unless told not to.
+      const { stdout } = await runCli(
+        'pnpm',
+        ['outdated', '--ignore-pnpmfile', '--format', 'json'],
+        folderPath,
+        undefined,
+        LISTING_ENV,
+      );
       return tryParseJson<Record<string, OutdatedEntry>>(stdout.trim() || '{}');
     }
     if (manager === 'bun') {
       // npm can't follow bun's isolated node_modules layout and reports nothing as outdated.
-      const { stdout, code } = await runCli('bun', ['outdated', '--no-progress'], folderPath);
+      const { stdout, code } = await runCli(
+        'bun',
+        ['outdated', '--no-progress'],
+        folderPath,
+        undefined,
+        LISTING_ENV,
+      );
       return parseBunOutdated(stdout, code);
     }
     // yarn classic: NDJSON, one line per event; the "table" line holds the data we want.
-    const { stdout } = await runCli('yarn', ['outdated', '--json'], folderPath);
+    const { stdout } = await runCli(
+      'yarn',
+      ['outdated', '--json'],
+      folderPath,
+      undefined,
+      LISTING_ENV,
+    );
     const map: Record<string, OutdatedEntry> = {};
     for (const line of stdout.split('\n')) {
       if (!line.trim()) continue;

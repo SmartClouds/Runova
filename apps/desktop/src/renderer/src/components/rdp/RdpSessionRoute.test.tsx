@@ -1,3 +1,4 @@
+import type { RdpCertificatePrompt } from '@shared/apiTypes';
 import { screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeProxyFailure } from '@/lib/rdp/failure';
@@ -13,6 +14,7 @@ const hook = vi.hoisted(() => ({
   options: null as null | { clipboard: boolean; fileTransfer: boolean; resolution: string },
   remoteFiles: [] as { name: string; size: number; lastModified: number }[],
   remoteClipboard: 'idle' as 'idle' | 'copying' | 'ready',
+  certificate: null as RdpCertificatePrompt | null,
 }));
 
 vi.mock('./useRdpSession', () => ({
@@ -20,7 +22,7 @@ vi.mock('./useRdpSession', () => ({
     phase: hook.phase,
     nickname: 'Office PC',
     options: hook.options,
-    certificate: null,
+    certificate: hook.certificate,
     remoteFiles: hook.remoteFiles,
     remoteClipboard: hook.remoteClipboard,
     transfers: [],
@@ -61,6 +63,7 @@ beforeEach(() => {
   hook.options = null;
   hook.remoteFiles = [];
   hook.remoteClipboard = 'idle';
+  hook.certificate = null;
 });
 
 describe('RdpSessionRoute Ask AI', () => {
@@ -182,6 +185,55 @@ describe('RdpSessionRoute when the connection fails', () => {
     };
     const { user } = renderRoute();
 
+    await user.click(screen.getByRole('button', { name: 'Review certificate' }));
+
+    expect(hook.reviewCertificate).toHaveBeenCalledOnce();
+  });
+
+  describe('the certificate prompt', () => {
+    const prompt: RdpCertificatePrompt = {
+      sessionId: 's1',
+      host: '176.9.22.106',
+      expectedFingerprint: 'BB:99:88',
+      actualFingerprint: 'AA:11:22',
+      subject: 'CN=WIN-NEW',
+      issuer: 'CN=WIN-NEW',
+      validTo: 'Apr 1 00:00:00 2027 GMT',
+    };
+
+    it('says the certificate changed and shows the saved one next to the new one', () => {
+      hook.certificate = prompt;
+      renderRoute();
+
+      const dialog = screen.getByRole('dialog', { name: "The server's certificate changed" });
+      expect(dialog).toHaveTextContent('BB:99:88');
+      expect(dialog).toHaveTextContent('AA:11:22');
+    });
+
+    it('asks to check a first-seen certificate instead of calling it changed', () => {
+      hook.certificate = { ...prompt, expectedFingerprint: '' };
+      renderRoute();
+
+      const dialog = screen.getByRole('dialog', { name: "Check the server's certificate" });
+      expect(dialog).toHaveTextContent('has not connected to 176.9.22.106 before');
+      expect(dialog).not.toHaveTextContent('Saved');
+      expect(dialog).toHaveTextContent('AA:11:22');
+      expect(screen.getByRole('button', { name: 'Trust and connect' })).toBeInTheDocument();
+    });
+  });
+
+  it('offers the certificate review on the failed screen of a first connect too', async () => {
+    hook.phase = {
+      kind: 'failed',
+      ...describeProxyFailure({
+        code: 'certificate-new',
+        message:
+          'Runova has not connected to 176.9.22.106 before. Check its certificate before signing in.',
+      }),
+    };
+    const { user } = renderRoute();
+
+    expect(screen.getByRole('alert')).toHaveTextContent("Check the server's certificate first");
     await user.click(screen.getByRole('button', { name: 'Review certificate' }));
 
     expect(hook.reviewCertificate).toHaveBeenCalledOnce();

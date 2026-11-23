@@ -220,20 +220,8 @@ describe('savedServerEndpoint', () => {
 });
 
 describe('savedServerPoolSource', () => {
-  it('stores a key trusted on first use', async () => {
-    userData.writeData('ssh-servers.json', [server()]);
-
-    await saved.savedServerPoolSource.trustHostKey('srv-1', 'cd'.repeat(32));
-
-    expect(stored()[0].hostKeyFingerprint).toBe('cd'.repeat(32));
-  });
-
-  it('never replaces a key that was already trusted', async () => {
-    userData.writeData('ssh-servers.json', [server({ hostKeyFingerprint: 'ab'.repeat(32) })]);
-
-    await saved.savedServerPoolSource.trustHostKey('srv-1', 'cd'.repeat(32));
-
-    expect(stored()[0].hostKeyFingerprint).toBe('ab'.repeat(32));
+  it('has no way to store a host key, so only ssh:trustHostKey can', () => {
+    expect(saved.savedServerPoolSource).not.toHaveProperty('trustHostKey');
   });
 
   it('records when the server was last connected to', async () => {

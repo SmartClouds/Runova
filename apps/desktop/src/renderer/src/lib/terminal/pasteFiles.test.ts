@@ -10,6 +10,9 @@ import {
   type TerminalPasteTarget,
 } from './pasteFiles';
 
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+
 function chipMode(answers: { insertChips?: boolean; insertText?: boolean } = {}) {
   return {
     handleData: vi.fn(),
@@ -70,6 +73,22 @@ describe('pathsToChips', () => {
 
   it('has no chips for no paths', () => {
     expect(pathsToChips([], 'bash')).toEqual([]);
+  });
+
+  it('doubles the curly single quotes PowerShell also ends a string at', () => {
+    const quote = String.fromCharCode(0x2019);
+    const [chip] = pathsToChips([`C:/dl/r${quote}; calc; ${quote}.png`], 'powershell.exe');
+    expect(chip.realText).toBe(`'C:/dl/r${quote}${quote}; calc; ${quote}${quote}.png'`);
+  });
+
+  it('leaves out a path with a control character, says so and keeps the rest', () => {
+    installRunovaBridge({ platform: 'linux', 'shell.pathForFile': () => undefined });
+    toastError.mockClear();
+    const bad = `/tmp/x${String.fromCharCode(0x15)}echo hi #.png`;
+    const chips = pathsToChips([bad, '/tmp/ok.png'], 'bash');
+    expect(chips).toEqual([{ realText: '/tmp/ok.png', displayLabel: 'ok.png' }]);
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError.mock.calls[0]?.[0]).toMatch(/left out.*control characters/);
   });
 });
 

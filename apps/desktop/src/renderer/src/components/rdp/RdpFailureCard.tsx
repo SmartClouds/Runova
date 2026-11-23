@@ -94,8 +94,9 @@ export function RdpFailureBody({
 }
 
 /**
- * The screen a session window shows when it could not connect. A changed certificate leads with
- * "Review certificate", since reconnecting alone would only fail the same way.
+ * The screen a session window shows when it could not connect. A changed certificate, or one not
+ * trusted yet on a first connect, leads with "Review certificate", since reconnecting alone would
+ * only fail the same way.
  */
 export function RdpFailureCard({
   failure,
@@ -108,7 +109,8 @@ export function RdpFailureCard({
   onReconnect: () => void;
   onReviewCertificate: () => void;
 }): React.JSX.Element {
-  const certificateChanged = failure.code === 'certificate-changed';
+  const certificateChanged =
+    failure.code === 'certificate-changed' || failure.code === 'certificate-new';
   return (
     <div role="alert" className="m-auto flex max-w-md flex-col items-center gap-5 px-6 py-8">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">

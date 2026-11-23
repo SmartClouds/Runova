@@ -68,6 +68,7 @@ async function connectAs(account: Account) {
     username: 'deploy',
     authMethod: 'password',
     password: LOGIN_PASSWORD,
+    storedFingerprint: server.fingerprint(),
   });
   return { ...fake, server, connection };
 }
@@ -106,6 +107,7 @@ describe('detectSudoMode', () => {
       username: 'deploy',
       authMethod: 'password',
       password: LOGIN_PASSWORD,
+      storedFingerprint: server.fingerprint(),
     });
     return connection;
   }

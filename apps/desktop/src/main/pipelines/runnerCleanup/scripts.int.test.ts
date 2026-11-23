@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RunnerCleanupSchedule } from '../../../shared/apiTypes';
-import type { CleanStep } from './cleanSteps';
+import type { CleanAction, CleanStep } from './cleanSteps';
 import { runLocalScript, type ShellKind } from './machineShell';
 import {
   posixCleanScript,
@@ -298,6 +298,104 @@ describe('the scheduled job on this machine', () => {
     expect(log[0]).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\t\d+\tok$/);
     expect(existsSync(join(jobDir, 'runner-cleanup.lock'))).toBe(false);
   }, 120_000);
+
+  // Windows folder names cannot hold a newline, so this one runs on Linux and macOS.
+  it.runIf(!isWindows)(
+    'deletes an old bin.* folder whose name holds a newline as one folder, never the part after it',
+    async () => {
+      const tree = buildTree();
+      const cwd = join(tree.root, 'cwd');
+      file(join(cwd, 'victim', 'keep.txt'));
+      file(join(tree.home, 'victim', 'keep.txt'));
+      file(join(tree.runner, 'bin.x\nvictim', 'payload'));
+
+      const output = spawnSync('sh', [], {
+        cwd,
+        env: envFor(tree),
+        input: posixJobScript(schedule, { onlyRoots: [tree.root] }),
+        encoding: 'utf8',
+      });
+      expect(output.status).toBe(0);
+
+      expect(existsSync(join(cwd, 'victim', 'keep.txt'))).toBe(true);
+      expect(existsSync(join(tree.home, 'victim', 'keep.txt'))).toBe(true);
+      expect(existsSync(join(tree.runner, 'bin.x\nvictim'))).toBe(false);
+      expect(existsSync(join(tree.runner, 'bin', LISTENER))).toBe(true);
+    },
+    120_000,
+  );
+});
+
+describe('the POSIX delete helpers', () => {
+  const sh = spawnSync('sh', ['-c', 'exit 0']);
+  it.runIf(!sh.error)('refuse a relative path or one with . or .. in it', () => {
+    const root = mkdtempSync(join(tmpdir(), 'runova-runner-cleanup-'));
+    roots.push(root);
+    file(join(root, 'victim', 'keep.txt'));
+    file(join(root, 'logs', 'old.log'));
+    age(join(root, 'logs', 'old.log'), 30);
+    const actions: CleanAction[] = [
+      { kind: 'remove', path: 'victim' },
+      { kind: 'empty', path: 'victim' },
+      { kind: 'oldLogs', path: 'logs', days: 1 },
+      { kind: 'remove', path: '/no/such/runner/_work/../../..' },
+      { kind: 'remove', path: '/no/such/runner/./x' },
+    ];
+    const steps: CleanStep[] = actions.map((action, index) => ({
+      id: `s${index}`,
+      busyGuard: null,
+      measure: [],
+      actions: [action],
+    }));
+
+    const output = spawnSync('sh', [], {
+      cwd: root,
+      input: posixCleanScript(steps),
+      encoding: 'utf8',
+    });
+    const outcomes = output.stdout
+      .split(/\r?\n/)
+      .map(parseCleanLine)
+      .filter((item) => item !== null);
+
+    expect(outcomes.map((item) => item.status)).toEqual(steps.map(() => 'failed'));
+    expect(outcomes[0]?.error).toMatch(/not absolute/);
+    expect(outcomes[3]?.error).toMatch(/\. or \.\./);
+    expect(existsSync(join(root, 'victim', 'keep.txt'))).toBe(true);
+    expect(existsSync(join(root, 'logs', 'old.log'))).toBe(true);
+  });
+});
+
+describe('a cleanup of a checkout named with curly quotes', () => {
+  it.runIf(isWindows)(
+    'removes the folder and never runs the text after a quote as PowerShell',
+    async () => {
+      const tree = buildTree();
+      const work = join(tree.runner, '_work');
+      const checkouts = ['\u2018', '\u2019', '\u201A', '\u201B'].map((quote) =>
+        join(work, `v${quote};RvOut '@@pwned' ${quote.codePointAt(0)};${quote}`),
+      );
+      for (const path of checkouts) file(join(path, 'src.txt'));
+      const steps: CleanStep[] = [
+        {
+          id: 'checkouts',
+          busyGuard: tree.runner,
+          measure: checkouts,
+          actions: checkouts.map((path) => ({ kind: 'remove' as const, path })),
+        },
+      ];
+
+      const stdout = await run(windowsCleanScript(steps), tree);
+
+      expect(stdout).not.toContain('@@pwned');
+      expect(
+        parseCleanLine(stdout.split(/\r?\n/).find((line) => line.startsWith('@@')) ?? ''),
+      ).toMatchObject({ id: 'checkouts', status: 'done' });
+      for (const path of checkouts) expect(existsSync(path)).toBe(false);
+      expect(existsSync(join(work, 'web'))).toBe(true);
+    },
+    120_000,
+  );
 });
 
 describe('the install and remove scripts', () => {

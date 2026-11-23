@@ -7,12 +7,15 @@ namespace Runova.ServerCore.Traffic;
 /// One request that is part of an attack. Count is how many requests it stands for: the whole
 /// window on the request that crossed the threshold, then one each. A site-wide flood names every
 /// address in it, but none of them alone was over the rate, so auto-block leaves them alone.
+/// Address is who the attack is counted under: an IPv4 address, or the first address of an IPv6
+/// /64 (<see cref="IpKey.Visitor"/>).
 /// </summary>
 internal readonly record struct AttackHit(string Site, AttackKind Kind, IpKey Address, long AtUnixMs, string Path, string? Country, int Count, bool SiteWide);
 
 /// <summary>
 /// Spots attacks in a site's requests (E110), like <see cref="Alerts.CrashLoopDetector"/> does for
-/// containers: pure, fed by one loop, counting in sliding windows per site and address. Scans are
+/// containers: pure, fed by one loop, counting in sliding windows per site and visitor (an IPv4
+/// address, or an IPv6 /64, so moving around inside one counts as the same visitor). Scans are
 /// probe paths or many 404s; brute force is POSTs to login pages; floods are one address over a rate,
 /// or a site at ten times its usual rate; injection is SQL, script, traversal, command or Log4Shell
 /// patterns in the decoded path, query or user agent. An address is flagged once a window reaches
@@ -130,7 +133,8 @@ internal sealed class AttackDetector
         }
 
         var at = request.AtUnixMs;
-        var tracked = TrackedOf(request.Site, request.Address);
+        var visitor = request.Address.Visitor.Base;
+        var tracked = TrackedOf(request.Site, visitor);
         var path = Shown(request);
 
         var probe = IsProbe(request.Path);
@@ -142,29 +146,29 @@ internal sealed class AttackDetector
             tracked.NotFound ??= new SlidingCount(window);
             var probes = probe ? tracked.Probes.Add(at) : tracked.Probes.Count(at);
             var misses = notFound ? tracked.NotFound.Add(at) : tracked.NotFound.Count(at);
-            Check(ref tracked.Scan, AttackKind.Scan, probes >= _thresholds.ScanProbes || misses >= _thresholds.ScanNotFound, Math.Max(probes, misses), request, path, hits);
+            Check(ref tracked.Scan, AttackKind.Scan, probes >= _thresholds.ScanProbes || misses >= _thresholds.ScanNotFound, Math.Max(probes, misses), request, visitor, path, hits);
         }
 
         if (request.Method == TrafficMethod.Post && IsLogin(request.Path))
         {
             tracked.Logins ??= new SlidingCount(Minutes(_thresholds.BruteForceWindowMinutes));
             var attempts = tracked.Logins.Add(at);
-            Check(ref tracked.BruteForce, AttackKind.BruteForce, attempts >= _thresholds.BruteForceAttempts, attempts, request, path, hits);
+            Check(ref tracked.BruteForce, AttackKind.BruteForce, attempts >= _thresholds.BruteForceAttempts, attempts, request, visitor, path, hits);
         }
 
         if (request.SuspiciousAgent || LooksLikeInjection(request.Path, request.Query))
         {
             tracked.Injections ??= new SlidingCount(Minutes(_thresholds.InjectionWindowMinutes));
             var injections = tracked.Injections.Add(at);
-            Check(ref tracked.Injection, AttackKind.Injection, injections >= _thresholds.InjectionHits, injections, request, path, hits);
+            Check(ref tracked.Injection, AttackKind.Injection, injections >= _thresholds.InjectionHits, injections, request, visitor, path, hits);
         }
 
         tracked.Requests ??= new SlidingCount(MinuteMs);
         var rate = tracked.Requests.Add(at);
-        var flooding = Check(ref tracked.Flood, AttackKind.Flood, rate >= _thresholds.FloodRequestsPerMinute, rate, request, path, hits);
+        var flooding = Check(ref tracked.Flood, AttackKind.Flood, rate >= _thresholds.FloodRequestsPerMinute, rate, request, visitor, path, hits);
         if (!flooding && SiteFlooding(request.Site, at))
         {
-            hits.Add(new AttackHit(request.Site, AttackKind.Flood, request.Address, at, path, request.Geo.Country, 1, SiteWide: true));
+            hits.Add(new AttackHit(request.Site, AttackKind.Flood, visitor, at, path, request.Geo.Country, 1, SiteWide: true));
         }
     }
 
@@ -227,14 +231,14 @@ internal sealed class AttackDetector
     }
 
     /// <summary>Raises the hit when the address crosses the threshold, or is still flagged. True while flagged.</summary>
-    private static bool Check(ref bool flagged, AttackKind kind, bool over, int count, in TrafficRequest request, string path, List<AttackHit> hits)
+    private static bool Check(ref bool flagged, AttackKind kind, bool over, int count, in TrafficRequest request, IpKey visitor, string path, List<AttackHit> hits)
     {
         if (!flagged && !over)
         {
             return false;
         }
 
-        hits.Add(new AttackHit(request.Site, kind, request.Address, request.AtUnixMs, path, request.Geo.Country, flagged ? 1 : count, SiteWide: false));
+        hits.Add(new AttackHit(request.Site, kind, visitor, request.AtUnixMs, path, request.Geo.Country, flagged ? 1 : count, SiteWide: false));
         flagged = true;
         return true;
     }
@@ -301,7 +305,7 @@ internal sealed class AttackDetector
 
     private static string Decode(string text) => text.Contains('%', StringComparison.Ordinal) ? WebUtility.UrlDecode(text.Replace("+", "%2B", StringComparison.Ordinal)) : text;
 
-    /// <summary>What is followed for one address on one site.</summary>
+    /// <summary>What is followed for one visitor on one site.</summary>
     private sealed class Follow(string site, IpKey address)
     {
         public string Site { get; } = site;

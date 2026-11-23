@@ -69,6 +69,27 @@ describe('account state', () => {
     expect(key?.key.equals(Buffer.alloc(32, 5))).toBe(true);
   });
 
+  it('keeps the pinned sealing policy and a key marked as listed without one, across restarts', async () => {
+    const port = memoryPort();
+    const state = createAccountState(port);
+    await state.signedIn({ account: ACCOUNT, sessionId: 9, refreshToken: 'rt' });
+    await state.putKey(7, 1, Buffer.alloc(32, 5));
+
+    await state.pinPolicy(7, { servers: true, environments: false, everything: false });
+    await state.suspendKey(7);
+
+    const after = createAccountState(port);
+    expect(await after.pinnedPolicy(7)).toEqual({
+      servers: true,
+      environments: false,
+      everything: false,
+    });
+    expect(await after.pinnedPolicy(8)).toBeNull();
+    expect(await after.key(7)).toMatchObject({ version: 1, suspended: true });
+    await after.signedOut();
+    expect(await createAccountState(port).pinnedPolicy(7)).toBeNull();
+  });
+
   it('forgets the token, the keys and the account on sign-out, but not the device id', async () => {
     const port = memoryPort();
     const state = createAccountState(port);

@@ -54,6 +54,96 @@ describe('parseDotenv', () => {
   it('counts a repeated key once', () => {
     expect(countDotenvKeys('A=1\nB=2\nA=3')).toBe(2);
   });
+
+  it('treats a backslash at the end of a line as escaping only the newline', () => {
+    // An escaped quote at the end of a line does not close the value.
+    expect(parseDotenv('A="a\\"\nb"\nB=1')).toEqual([
+      { key: 'A', value: 'a"\nb', line: 1 },
+      { key: 'B', value: '1', line: 3 },
+    ]);
+    // A lone backslash at the end escapes the newline, so a quote opening the next line closes it.
+    expect(parseDotenv('A="a\\\n"\nB=1')).toEqual([
+      { key: 'A', value: 'a\\\n', line: 1 },
+      { key: 'B', value: '1', line: 3 },
+    ]);
+    // Two backslashes are one escaped backslash, and the quote after them closes the value.
+    expect(parseDotenv('A="a\\\\"\nB=1')[0]).toEqual({ key: 'A', value: 'a\\\\', line: 1 });
+    // Single quotes have no escapes at all.
+    expect(parseDotenv("A='a\\'\nB=1")[0]).toEqual({ key: 'A', value: 'a\\', line: 1 });
+  });
+
+  it('reads multi-line quoted values the same as scanning the joined text', () => {
+    // The parser before it scanned each line once, kept here to check the two agree.
+    function joinedScan(text: string): Array<[string, string, number]> {
+      const lines = text.replace(/\r\n?/g, '\n').split('\n');
+      const out: Array<[string, string, number]> = [];
+      const close = (value: string, quote: string) => {
+        for (let i = 0; i < value.length; i++) {
+          if (value[i] === '\\' && quote === '"') {
+            i++;
+            continue;
+          }
+          if (value[i] === quote) return i;
+        }
+        return -1;
+      };
+      for (let index = 0; index < lines.length; index++) {
+        const start = index + 1;
+        let line = lines[index].trim();
+        if (!line || line.startsWith('#')) continue;
+        if (line.startsWith('export ')) line = line.slice(7).trimStart();
+        const eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        const key = line.slice(0, eq).trim();
+        if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) continue;
+        let rest = line.slice(eq + 1).trimStart();
+        const quote = rest[0];
+        if (quote === '"' || quote === "'" || quote === '`') {
+          rest = rest.slice(1);
+          let closing = close(rest, quote);
+          while (closing < 0 && index + 1 < lines.length) {
+            index++;
+            rest += `\n${lines[index]}`;
+            closing = close(rest, quote);
+          }
+          let value = closing < 0 ? rest : rest.slice(0, closing);
+          if (quote === '"') value = value.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          out.push([key, value, start]);
+          continue;
+        }
+        const comment = rest.search(/\s#/);
+        out.push([key, (comment >= 0 ? rest.slice(0, comment) : rest).trim(), start]);
+      }
+      return out;
+    }
+
+    const pieces = ['A="', "B='", 'C=`', '"', "'", '`', '\\', 'x', ' ', '\n', '#', '=', 'n'];
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    for (let round = 0; round < 3000; round++) {
+      let text = '';
+      const length = 1 + (next() % 24);
+      for (let i = 0; i < length; i++) text += pieces[next() % pieces.length];
+      const got = parseDotenv(text).map((entry): [string, string, number] => [
+        entry.key,
+        entry.value,
+        entry.line,
+      ]);
+      expect(got, JSON.stringify(text)).toEqual(joinedScan(text));
+    }
+  });
+
+  it('parses a 1 MB multi-line quoted value quickly', () => {
+    const closed = `A="${'x\n'.repeat(512 * 1024)}"\nB=1`;
+    const unclosed = `A="${'\n'.repeat(1024 * 1024)}`;
+    const started = performance.now();
+    expect(countDotenvKeys(closed)).toBe(2);
+    expect(parseDotenv(unclosed)).toHaveLength(1);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('env file names', () => {

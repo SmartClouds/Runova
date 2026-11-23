@@ -8,6 +8,7 @@ import type {
   JournalBatch,
 } from '../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnectionPool } from '../ssh/pool';
 import { approvalSigner } from './assistant/approvals';
 import { APPROVAL_INVALID, NEEDS_APPROVAL } from './assistant/coreExecutor';
@@ -119,11 +120,11 @@ describe.skipIf(!enabled)('StreamExec and the journal on a real server', () => {
           endpoint: async () => ({
             host: target.host,
             port: target.port,
+            storedFingerprint: await probeHostKey(target.host, target.port),
             username,
             authMethod: 'password',
             password,
           }),
-          trustHostKey: async () => undefined,
         });
         let file: unknown = null;
         const state = new DeployState({

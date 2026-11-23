@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { type FSWatcher, watch } from 'node:fs';
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   AgentType,
@@ -14,6 +14,8 @@ import type {
 } from '@runova/core';
 import {
   allProjectSkillRemoveDirs,
+  isSafeRelativeSkillPath,
+  isSafeSkillId,
   isUiProAiTarget,
   KNOWN_AGENT_DIRS,
   parseRepositoryIndex,
@@ -204,10 +206,55 @@ async function probePython(): Promise<{ probe: UiProToolProbe; command: string |
   return { probe: { found: false, version: null }, command: null };
 }
 
+/**
+ * The path of `relative` under `root`, refusing one that resolves to the root itself or anywhere
+ * outside it. Every skill file read or write and every skill folder delete goes through this.
+ */
+function pathInside(root: string, relative: string): string {
+  const base = resolve(root);
+  const target = resolve(base, relative);
+  if (!target.startsWith(base + sep)) {
+    throw new Error(`Path leaves its folder: ${relative}`);
+  }
+  return target;
+}
+
+/**
+ * skills.sh and ui-ux-pro-max records are named owner/repo/skill (their own CLI removes them, so
+ * the id never becomes a path here), and each part still has to be a safe segment. Every other
+ * record names the folder it was installed into, so it has to be a single safe segment.
+ */
+function isValidRecordSkillId(skillId: string, repositoryId: string): boolean {
+  if (
+    repositoryId === SKILLS_SH_PSEUDO_REPOSITORY_ID ||
+    repositoryId === UI_UX_PRO_MAX_PSEUDO_REPOSITORY_ID
+  ) {
+    const parts = skillId.split('/');
+    return parts.length <= 3 && parts.every(isSafeSkillId);
+  }
+  return isSafeSkillId(skillId);
+}
+
+function isValidInstalledRecord(value: unknown): value is InstalledSkillRecord {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Partial<InstalledSkillRecord>;
+  return (
+    typeof record.skillId === 'string' &&
+    typeof record.repositoryId === 'string' &&
+    isValidRecordSkillId(record.skillId, record.repositoryId)
+  );
+}
+
+/**
+ * The records file lives in the project folder and is often committed, so it is whatever the
+ * repository's author wrote. A record whose id could name a folder outside the skills dir is
+ * dropped here rather than offered for removal.
+ */
 async function readInstalledSkills(projectFolderPath: string): Promise<InstalledSkillRecord[]> {
   try {
     const raw = await readFile(installedSkillsFilePath(projectFolderPath), 'utf-8');
-    return JSON.parse(raw) as InstalledSkillRecord[];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isValidInstalledRecord) : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw error;
@@ -287,7 +334,12 @@ async function readSkillFileContent(
   ctx: { baseDir: string | null; baseUrl: string | null },
 ): Promise<string> {
   if (ctx.baseDir) {
-    return readFile(join(ctx.baseDir, file.url), 'utf-8');
+    // The index names the file to copy, so it must not reach out of the repository folder
+    // (a ~/.ssh key copied into the project, say).
+    if (!isSafeRelativeSkillPath(file.url)) {
+      throw new Error(`Skill file path leaves the repository: ${file.url}`);
+    }
+    return readFile(pathInside(ctx.baseDir, file.url), 'utf-8');
   }
   const absoluteUrl = ctx.baseUrl ? new URL(file.url, ctx.baseUrl).toString() : file.url;
   const response = await fetch(absoluteUrl);
@@ -819,15 +871,23 @@ export async function installRepositorySkill(params: {
   const skill = index.skills.find((s) => s.id === params.skillId);
   if (!skill) throw new Error(`Skill ${params.skillId} not found in repository ${repo.name}`);
 
+  // The schema already holds the id and paths to safe values. This checks again where the
+  // paths are used, and before anything is written, so a bad entry leaves no partial install.
+  if (!isSafeSkillId(skill.id)) throw new Error(`Invalid skill id: ${skill.id}`);
   const installDirs = await resolveSkillInstallDirs(scope);
-  for (const skillsParent of installDirs) {
-    const skillDir = join(skillsParent, skill.id);
-    for (const file of skill.files) {
-      const content = await readSkillFileContent(file, { baseDir, baseUrl });
-      const targetPath = join(skillDir, file.path);
-      await mkdir(dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, content, 'utf-8');
-    }
+  const writes = installDirs.flatMap((skillsParent) => {
+    const skillDir = pathInside(skillsParent, skill.id);
+    return skill.files.map((file) => {
+      if (!isSafeRelativeSkillPath(file.path)) {
+        throw new Error(`Skill file path leaves the skill folder: ${file.path}`);
+      }
+      return { file, targetPath: pathInside(skillDir, file.path) };
+    });
+  });
+  for (const { file, targetPath } of writes) {
+    const content = await readSkillFileContent(file, { baseDir, baseUrl });
+    await mkdir(dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, content, 'utf-8');
   }
 
   const installed = await readInstalledSkills(scope.scopeRoot);
@@ -856,7 +916,7 @@ export async function removeInstalledSkill(params: {
     // This handler only drops Runova's own bookkeeping entry.
   } else if (record?.repositoryId === SKILLS_SH_PSEUDO_REPOSITORY_ID) {
     const skillName = params.skillId.split('/').pop() ?? params.skillId;
-    if (SKILL_NAME_PATTERN.test(skillName)) {
+    if (isSafeSkillId(skillName)) {
       const agents = (record.agents ?? []).filter((a) => SKILL_NAME_PATTERN.test(a));
       const args = [
         'skills',
@@ -870,12 +930,19 @@ export async function removeInstalledSkill(params: {
       await runSkillsCli(args, scope.scopeRoot);
     }
   } else {
+    // The id comes back from the renderer and, before that, from a records file the project
+    // may have committed. It is deleted recursively, so it must name one folder directly
+    // inside each skills dir and nothing above it.
+    if (!isSafeSkillId(params.skillId)) throw new Error(`Invalid skill id: ${params.skillId}`);
+    const targets = resolveSkillRemoveDirs(scope).map((skillsParent) => {
+      const target = pathInside(skillsParent, params.skillId);
+      if (dirname(target) !== resolve(skillsParent)) {
+        throw new Error(`Invalid skill id: ${params.skillId}`);
+      }
+      return target;
+    });
     // Cover agent dirs (.claude/skills, .agents/skills, …) plus the old root skills/ path.
-    await Promise.all(
-      resolveSkillRemoveDirs(scope).map((skillsParent) =>
-        rm(join(skillsParent, params.skillId), { recursive: true, force: true }),
-      ),
-    );
+    await Promise.all(targets.map((target) => rm(target, { recursive: true, force: true })));
   }
 
   await writeInstalledSkills(

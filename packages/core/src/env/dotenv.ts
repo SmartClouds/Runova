@@ -59,18 +59,23 @@ export function parseDotenv(text: string): DotenvEntry[] {
     const key = line.slice(0, eq).trim();
     if (!KEY_PATTERN.test(key)) continue;
 
-    let rest = line.slice(eq + 1).trimStart();
+    const rest = line.slice(eq + 1).trimStart();
     const quote = rest[0];
     if (quote === '"' || quote === "'" || quote === '`') {
-      rest = rest.slice(1);
-      let closing = findClosingQuote(rest, quote);
-      // A quoted value can carry on over the next lines until its quote closes.
+      const parts = [rest.slice(1)];
+      let closing = findClosingQuote(parts[0], quote);
+      // A quoted value can carry on over the next lines until its quote closes. Each line is
+      // scanned once and the lines are joined at the end, so a long value stays linear. A
+      // backslash at the end of a line escapes only the newline that joins it to the next one,
+      // so every line can start its scan unescaped, the same as scanning the joined text.
       while (closing < 0 && index + 1 < lines.length) {
         index++;
-        rest += `\n${lines[index]}`;
-        closing = findClosingQuote(rest, quote);
+        parts.push(lines[index]);
+        closing = findClosingQuote(lines[index], quote);
       }
-      let value = closing < 0 ? rest : rest.slice(0, closing);
+      const last = parts.length - 1;
+      if (closing >= 0) parts[last] = parts[last].slice(0, closing);
+      let value = parts.join('\n');
       if (quote === '"') value = value.replace(/\\n/g, '\n').replace(/\\"/g, '"');
       entries.push({ key, value, line: startLine });
       continue;

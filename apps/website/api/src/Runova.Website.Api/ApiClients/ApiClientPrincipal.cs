@@ -7,18 +7,20 @@ namespace Runova.Website.Api.ApiClients;
 
 /// <summary>
 /// The user a signed request runs as: the client's id and name, one <c>scope</c> claim per scope,
-/// and an actor kind that tells it apart from a staff session.
+/// and an actor kind that tells it apart from a staff session. The id has a claim of its own, not
+/// Identity's user id claim, so a client is never read as the account that happens to share its id.
 /// </summary>
 internal static class ApiClientPrincipal
 {
     public const string ActorKindClaim = "runova:actor-kind";
     public const string ScopeClaim = "scope";
+    public const string ClientIdClaim = "runova:client-id";
 
     public static ClaimsPrincipal Create(ApiClient client, string scheme)
     {
         List<Claim> claims =
         [
-            new(ClaimTypes.NameIdentifier, client.Id.ToString(CultureInfo.InvariantCulture)),
+            new(ClientIdClaim, client.Id.ToString(CultureInfo.InvariantCulture)),
             new(ClaimTypes.Name, client.Name),
             new(ActorKindClaim, AuditActorKinds.ApiClient),
             .. client.Scopes.Select(scope => new Claim(ScopeClaim, scope)),
@@ -31,7 +33,7 @@ internal static class ApiClientPrincipal
 
     /// <summary>The signed-in API client's id, or null for anyone else.</summary>
     public static long? ClientId(ClaimsPrincipal? user) =>
-        IsApiClient(user) && long.TryParse(user!.FindFirstValue(ClaimTypes.NameIdentifier), CultureInfo.InvariantCulture, out var id)
+        IsApiClient(user) && long.TryParse(user!.FindFirstValue(ClientIdClaim), CultureInfo.InvariantCulture, out var id)
             ? id
             : null;
 

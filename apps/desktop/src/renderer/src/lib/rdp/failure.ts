@@ -86,6 +86,13 @@ const ADVICE: Record<RdpFailureCode, { title: string; hints: string[] }> = {
       "If neither happened, don't trust it.",
     ],
   },
+  'certificate-new': {
+    title: "Check the server's certificate first",
+    hints: [
+      'Runova has not connected to this server before, so nothing yet shows the certificate is really its own.',
+      'Compare it with the certificate on the server, then trust it to sign in.',
+    ],
+  },
   'proxy-failed': {
     title: "Couldn't connect through the proxy",
     hints: [

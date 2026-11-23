@@ -4,7 +4,7 @@ using System.Runtime.Versioning;
 
 namespace Runova.RemoteAgent.Linux;
 
-/// <summary>The parts of libX11, MIT-SHM and XTest the agent needs, plus setenv and System V shared memory.</summary>
+/// <summary>The parts of libX11, MIT-SHM and XTest the agent needs, plus setenv, System V shared memory, statx and getsockopt.</summary>
 [SupportedOSPlatform("linux")]
 internal static unsafe partial class X11Native
 {
@@ -52,6 +52,9 @@ internal static unsafe partial class X11Native
 
     [LibraryImport(X11)]
     public static partial int XCloseDisplay(nint display);
+
+    [LibraryImport(X11)]
+    public static partial int XConnectionNumber(nint display);
 
     [LibraryImport(X11)]
     public static partial nint XSetErrorHandler(delegate* unmanaged<nint, nint, int> handler);
@@ -142,4 +145,17 @@ internal static unsafe partial class X11Native
 
     [LibraryImport(LibC)]
     public static partial int shmctl(int id, int command, void* buffer);
+
+    public const int AtFdCwd = -100;
+    public const uint StatxBasicStats = 0x7ff;
+
+    /// <summary>Fills a 256-byte struct statx, the same on every architecture: uid at offset 20, mode at 28.</summary>
+    [LibraryImport(LibC, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int statx(int dirFd, string path, int flags, uint mask, byte* buffer);
+
+    public const int SolSocket = 1;
+    public const int SoPeerCred = 17;
+
+    [LibraryImport(LibC)]
+    public static partial int getsockopt(int socket, int level, int name, void* value, uint* length);
 }

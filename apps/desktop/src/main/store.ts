@@ -491,6 +491,16 @@ export const store = {
   setEnvFileLinkMarks: (marks: Record<string, { mtimeMs: number; size: number }>): Promise<void> =>
     writeJsonFile('env-file-link-marks.json', marks),
 
+  /**
+   * The env file links a person on this computer chose, by file id, with the path they chose.
+   * Only on this computer and never synced: a link that arrives from another computer or a
+   * teammate is not followed here until someone confirms it. Null until first written.
+   */
+  getConfirmedEnvLinks: (): Promise<Record<string, string> | null> =>
+    readJsonFile('env-file-link-consent.json', null),
+  setConfirmedEnvLinks: (links: Record<string, string>): Promise<void> =>
+    writeJsonFile('env-file-link-consent.json', links),
+
   getSshVault: (): Promise<SshVaultRecord | null> => readJsonFile('ssh-vault.json', null),
   setSshVault: (vault: SshVaultRecord | null): Promise<void> =>
     writeJsonFile('ssh-vault.json', vault),

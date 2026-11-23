@@ -195,6 +195,14 @@ async function saveServer(page: Page, { changedKey = true } = {}): Promise<strin
   return servers[0].id;
 }
 
+/** The host key the app trusted for the saved server, read from its store file. */
+function storedHostKey(): string | undefined {
+  if (!launched) throw new Error('The app did not start');
+  const file = join(launched.userDataDir, 'data', 'ssh-servers.json');
+  const servers = JSON.parse(readFileSync(file, 'utf-8')) as { hostKeyFingerprint?: string }[];
+  return servers[0]?.hostKeyFingerprint;
+}
+
 async function expectFilesPage(page: Page, serverId: string): Promise<void> {
   await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/ssh-files/${serverId}`);
   await expect(page.getByText(`Files: ${NICKNAME}`).first()).toBeVisible();
@@ -361,7 +369,8 @@ test('keeps transfers going and in reach from anywhere', async () => {
   const conflictTitle = 'This file already exists';
   const waitingToast = page.getByText(`${NICKNAME} needs your answer`);
 
-  // 1. Remote > SSH > Files. A server never trusted before is trusted on first use, so no prompt.
+  // 1. Remote > SSH > Files. A server never connected to before asks to check its host key first,
+  // as a first connection, not as a changed key, and nothing is stored until it is trusted.
   await page.evaluate(() => {
     location.hash = '#/remote';
   });
@@ -369,8 +378,13 @@ test('keeps transfers going and in reach from anywhere', async () => {
   const serverRow = page.getByRole('listitem').filter({ hasText: NICKNAME });
   await expect(serverRow).toBeVisible({ timeout: 30_000 });
   await serverRow.getByRole('button', { name: 'Files', exact: true }).click();
+  const firstContact = page.getByRole('dialog', { name: `Check ${NICKNAME}’s host key` });
+  await expect(firstContact).toBeVisible({ timeout: 60_000 });
+  await expect(firstContact.getByRole('button', { name: 'Trust the new key' })).toHaveCount(0);
+  expect(storedHostKey()).toBeUndefined();
+  await firstContact.getByRole('button', { name: 'Trust and connect' }).click();
   await expectFilesPage(page, serverId);
-  await expect(page.getByRole('button', { name: 'Trust the new key' })).toHaveCount(0);
+  expect(storedHostKey()).toMatch(/^[0-9a-f]{64}$/);
 
   await goTo(page, 'local', bigRoot, basename(bigRoot));
   await goTo(page, 'remote', BIG_DIR, 'transfers');

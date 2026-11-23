@@ -1,4 +1,4 @@
-import { isDbEngine } from '@runova/core';
+import { type DbTlsMode, isDbEngine } from '@runova/core';
 import type { IpcMainInvokeEvent } from 'electron';
 import type {
   DatabaseConnectCandidateInput,
@@ -108,6 +108,8 @@ function port(value: unknown): number {
   return value as number;
 }
 
+const TLS_MODES: readonly DbTlsMode[] = ['verify-full', 'verify-ca', 'require'];
+
 function flag(value: unknown): boolean | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'boolean') throw new Error('Expected yes or no.');
@@ -174,6 +176,12 @@ function saveInput(value: unknown): DatabaseSaveInput {
   for (const key of ['tls', 'srv', 'readOnly'] as const) {
     const value = flag(input[key]);
     if (value !== undefined) out[key] = value;
+  }
+  if (input.tlsMode !== undefined && input.tlsMode !== null) {
+    if (!TLS_MODES.includes(input.tlsMode as DbTlsMode)) {
+      throw new Error('That is not a way of checking a certificate Runova knows.');
+    }
+    out.tlsMode = input.tlsMode as DbTlsMode;
   }
   const secret = password(input.password);
   if (secret !== undefined) out.password = secret;

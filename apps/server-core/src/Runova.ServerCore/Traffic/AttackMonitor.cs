@@ -11,10 +11,13 @@ namespace Runova.ServerCore.Traffic;
 /// kind has at most one open alert (resource <c>site:&lt;id&gt;</c>), whose message names the busiest
 /// addresses with their country and counts; it is raised again at most once a minute while the
 /// attack goes on, at once when it gets worse, and resolved after <see cref="QuietToResolve"/> without
-/// a hit. Every address's part is kept as an attack event, written once a minute. With auto-block on,
-/// each newly flagged address of a chosen kind is blocked, except addresses an app is connected from
-/// and the addresses of a site-wide flood (none of which was over the rate alone). Memory is bounded:
-/// at most <see cref="MaxAddressesPerIncident"/> addresses per site and kind.
+/// a hit. Every address's part is kept as an attack event, written once a minute. An address here is
+/// a visitor (<see cref="IpKey.Visitor"/>): an IPv4 address, or an IPv6 /64. With auto-block on, every
+/// flagged address of a chosen kind that is not blocked now is offered for a block on its next hit,
+/// so one whose block ran out, or that the cap or nginx kept out, is offered again while it goes on.
+/// Never an address an app is connected from or on the allowlist, nor the addresses of a site-wide
+/// flood (none of which was over the rate alone). Memory is bounded: at most
+/// <see cref="MaxAddressesPerIncident"/> addresses per site and kind; past that the rest are logged.
 /// </summary>
 internal sealed partial class AttackMonitor(
     IDbContextFactory<CoreDbContext> contexts,
@@ -50,6 +53,11 @@ internal sealed partial class AttackMonitor(
     private readonly Dictionary<(string Site, AttackKind Kind), Incident> _incidents = [];
     private readonly HashSet<Activity> _dirty = [];
 
+    /// <summary>When auto-block last ran, and whether an address has waited for it since.</summary>
+    private DateTimeOffset _lastAutoBlock = DateTimeOffset.MinValue;
+
+    private bool _newlyPending;
+
     public static AlertKind AlertKindOf(AttackKind kind) => kind switch
     {
         AttackKind.BruteForce => AlertKind.WebBruteForce,
@@ -69,6 +77,7 @@ internal sealed partial class AttackMonitor(
         }
 
         var now = time.GetUtcNow();
+        var nowMs = now.ToUnixTimeMilliseconds();
         lock (_gate)
         {
             foreach (var hit in hits)
@@ -86,15 +95,24 @@ internal sealed partial class AttackMonitor(
                 {
                     if (incident.Addresses.Count >= MaxAddressesPerIncident)
                     {
+                        if (!incident.Overflowed)
+                        {
+                            incident.Overflowed = true;
+                            LogIncidentFull(logger, MaxAddressesPerIncident, hit.Kind, incident.SiteName);
+                        }
+
                         continue;
                     }
 
                     activity = new Activity(incident, hit.Address, hit.AtUnixMs, hit.SiteWide);
                     incident.Addresses[hit.Address] = activity;
-                    if (!hit.SiteWide)
-                    {
-                        incident.NewlyFlagged.Add(activity);
-                    }
+                }
+
+                // Offered for a block on every hit of its own while no block covers it, so one
+                // that ran out, or that the cap or nginx kept out, is offered again.
+                if (!hit.SiteWide && !(activity.BlockedUntil > nowMs) && incident.Pending.Add(activity))
+                {
+                    _newlyPending = true;
                 }
 
                 activity.Count += hit.Count;
@@ -122,8 +140,17 @@ internal sealed partial class AttackMonitor(
         var raise = new List<(AlertKind Kind, string Resource, AlertSeverity Severity, string Message)>();
         var resolve = new List<(AlertKind Kind, string Resource)>();
         var candidates = new List<(AutoBlockCandidate Candidate, Activity Activity)>();
+        var allowlist = config.Attacks.Allowlist.Select(text => IpNetwork.TryParse(text, out var network) ? network : (IpNetwork?)null).OfType<IpNetwork>().ToList();
         lock (_gate)
         {
+            // A new address goes at once; the ones left waiting (over the cap, refused by nginx) once a minute.
+            var offer = _newlyPending || now - _lastAutoBlock >= UpdateEvery;
+            if (offer)
+            {
+                _newlyPending = false;
+                _lastAutoBlock = now;
+            }
+
             foreach (var (key, incident) in _incidents.ToList())
             {
                 if (!config.Attacks.Enabled || now - incident.LastActivity >= QuietToResolve)
@@ -146,12 +173,13 @@ internal sealed partial class AttackMonitor(
                     }
                 }
 
-                if (config.AutoBlock.Enabled && config.AutoBlock.Kinds.Contains(key.Kind))
+                if (offer && config.AutoBlock.Enabled && config.AutoBlock.Kinds.Contains(key.Kind))
                 {
-                    candidates.AddRange(incident.NewlyFlagged.Select(activity => (new AutoBlockCandidate(activity.Address, key.Kind, key.Site, incident.SiteName), activity)));
+                    // An IPv6 /64 can hold an allowed address beside the attacking one; it is not blocked whole.
+                    candidates.AddRange(incident.Pending
+                        .Where(activity => !allowlist.Any(allowed => allowed.Overlaps(activity.Address.Visitor)))
+                        .Select(activity => (new AutoBlockCandidate(activity.Address, key.Kind, key.Site, incident.SiteName), activity)));
                 }
-
-                incident.NewlyFlagged.Clear();
             }
         }
 
@@ -169,13 +197,19 @@ internal sealed partial class AttackMonitor(
         {
             await SafelyAsync(async () =>
             {
-                var blocked = await blocks.AutoBlockAsync([.. candidates.Select(c => c.Candidate)], config.AutoBlock, await app.CurrentAsync(cancellationToken), cancellationToken);
+                var blocked = (await blocks.AutoBlockAsync([.. candidates.Select(c => c.Candidate)], config.AutoBlock, await app.CurrentAsync(cancellationToken), cancellationToken))
+                    .ToDictionary(b => b.Address, b => b.ExpiresAt ?? long.MaxValue);
                 lock (_gate)
                 {
-                    foreach (var (_, activity) in candidates.Where(c => blocked.Contains(c.Candidate.Address)))
+                    // Only a block takes an address off the list: the rest are offered again.
+                    foreach (var (candidate, activity) in candidates)
                     {
-                        activity.Blocked = true;
-                        _dirty.Add(activity);
+                        if (blocked.TryGetValue(candidate.Address, out var until))
+                        {
+                            activity.BlockedUntil = until;
+                            activity.Incident.Pending.Remove(activity);
+                            _dirty.Add(activity);
+                        }
                     }
                 }
             });
@@ -210,10 +244,10 @@ internal sealed partial class AttackMonitor(
     /// <summary>Writes what changed since the last flush as attack events, carrying on each address's event while its attack lasts.</summary>
     public async Task FlushAsync(CancellationToken cancellationToken)
     {
-        List<(Activity Activity, long? EventId, int Count, long First, long Last, string[] Samples, string? Country, bool Blocked)> changes;
+        List<(Activity Activity, long? EventId, int Count, long First, long Last, string[] Samples, string? Country)> changes;
         lock (_gate)
         {
-            changes = [.. _dirty.Select(a => (a, a.EventId, a.Count, a.First, a.Last, a.Samples.ToArray(), a.Country, a.Blocked))];
+            changes = [.. _dirty.Select(a => (a, a.EventId, a.Count, a.First, a.Last, a.Samples.ToArray(), a.Country))];
             _dirty.Clear();
         }
 
@@ -226,12 +260,23 @@ internal sealed partial class AttackMonitor(
         await using var transaction = await Data.CoreDatabase.BeginWriteAsync(db, cancellationToken);
         var ids = changes.Where(c => c.EventId is not null).Select(c => c.EventId!.Value).ToList();
         var rows = await db.AttackEvents.Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id, cancellationToken);
+
+        // Whether an event is blocked comes from the blocks in force now, so one that ran out shows as such.
+        var nowMs = time.GetUtcNow().ToUnixTimeMilliseconds();
+        var blockedNetworks = new List<IpNetwork>();
+        foreach (var text in await db.BlockedAddresses.Where(b => b.ExpiresAt == null || b.ExpiresAt > nowMs).Select(b => b.Network).ToListAsync(cancellationToken))
+        {
+            if (IpNetwork.TryParse(text, out var network))
+            {
+                blockedNetworks.Add(network);
+            }
+        }
         var added = new List<(Activity Activity, AttackEvent Row)>();
         foreach (var change in changes)
         {
             if (change.EventId is not { } id || !rows.TryGetValue(id, out var row))
             {
-                row = new AttackEvent { SiteId = change.Activity.Incident.Site, Kind = change.Activity.Incident.Kind, Address = change.Activity.Address.ToString() };
+                row = new AttackEvent { SiteId = change.Activity.Incident.Site, Kind = change.Activity.Incident.Kind, Address = change.Activity.Address.Visitor.Text };
                 db.AttackEvents.Add(row);
                 added.Add((change.Activity, row));
             }
@@ -241,7 +286,7 @@ internal sealed partial class AttackMonitor(
             row.LastSeenAt = change.Last;
             row.Count = change.Count;
             row.SamplePaths = TrafficMapper.WriteStrings(change.Samples);
-            row.Blocked |= change.Blocked;
+            row.Blocked = blockedNetworks.Any(network => network.Covers(change.Activity.Address.Visitor));
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -365,7 +410,7 @@ internal sealed partial class AttackMonitor(
         var more = addresses.Count > TopNamed ? $" and {addresses.Count - TopNamed} more" : string.Empty;
         return $"{Count(addresses.Count, "address", "addresses")} {what}: {string.Join(", ", addresses.Take(TopNamed).Select(Named))}{more}.";
 
-        static string Who(Activity activity) => activity.Country is { } country ? $"{activity.Address} ({country})" : activity.Address.ToString();
+        static string Who(Activity activity) => activity.Country is { } country ? $"{activity.Address.Visitor.Text} ({country})" : activity.Address.Visitor.Text;
 
         static string Named(Activity activity) => $"{Who(activity)} {Times(activity.Count)}";
     }
@@ -389,6 +434,9 @@ internal sealed partial class AttackMonitor(
     [LoggerMessage(Level = LogLevel.Warning, Message = "An attack alert or block could not be recorded; it is tried again on the next read.")]
     private static partial void LogFailed(ILogger logger, Exception error);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "More than {Max} addresses take part in one {Kind} attack on {Site}; the rest are not followed or auto-blocked until it ends.")]
+    private static partial void LogIncidentFull(ILogger logger, int max, AttackKind kind, string site);
+
     /// <summary>One site under one kind of attack, while it lasts.</summary>
     private sealed class Incident(string site, AttackKind kind, string siteName)
     {
@@ -400,7 +448,11 @@ internal sealed partial class AttackMonitor(
 
         public Dictionary<IpKey, Activity> Addresses { get; } = [];
 
-        public List<Activity> NewlyFlagged { get; } = [];
+        /// <summary>Flagged addresses no block covers, waiting to be offered to auto-block.</summary>
+        public HashSet<Activity> Pending { get; } = [];
+
+        /// <summary>Whether an address was turned away for <see cref="MaxAddressesPerIncident"/>, which is logged once.</summary>
+        public bool Overflowed { get; set; }
 
         public long Total { get; set; }
 
@@ -434,7 +486,8 @@ internal sealed partial class AttackMonitor(
 
         public List<string> Samples { get; } = [];
 
-        public bool Blocked { get; set; }
+        /// <summary>When the block auto-block saw covering it ends (long.MaxValue: never), so it is offered again after.</summary>
+        public long? BlockedUntil { get; set; }
 
         public long? EventId { get; set; }
     }

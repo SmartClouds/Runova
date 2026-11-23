@@ -5,6 +5,7 @@ import { connect as tlsConnect } from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { closePortChanges, openPortChanges } from '../../shared/deploy/directTlsValidation';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnectionPool } from '../ssh/pool';
 import { localArtifactSource } from './bootstrap/releaseSource';
 import { CoreHttpClient } from './connection/coreHttp';
@@ -104,11 +105,11 @@ describe.skipIf(!enabled)('direct TLS on a real server', () => {
         endpoint: async () => ({
           host: server.host,
           port: server.port,
+          storedFingerprint: await probeHostKey(server.host, server.port),
           username,
           authMethod: 'password',
           password,
         }),
-        trustHostKey: async () => undefined,
       });
       pools.push(pool);
       let file: unknown = null;

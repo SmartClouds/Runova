@@ -226,6 +226,34 @@ test('says a server refused the connection in words', async () => {
   expect(await session.locator('body').innerText()).not.toMatch(/ECONNREFUSED/);
 });
 
+test('asks about the certificate of a server never connected to, and saves it only on a yes', async () => {
+  const windows = rdpStyleCertificate('windows');
+  const server = await serve(windows);
+  const app = await launch();
+  const saved = await saveServer(app.page, server.port);
+  const fingerprint = new X509Certificate(windows.cert).fingerprint256;
+
+  const session = await openSession(app, saved.id);
+
+  // A first connection asks before anything goes to the server, worded as a first meeting.
+  const prompt = session.getByRole('dialog', { name: "Check the server's certificate" });
+  await expect(prompt).toBeVisible({ timeout: 60_000 });
+  await expect(prompt).toContainText(fingerprint);
+  await expect(prompt).not.toContainText('Saved');
+  expect(await savedFingerprint(app.page, saved.id)).toBeUndefined();
+  await prompt.getByRole('button', { name: "Don't connect" }).click();
+
+  const card = session.getByRole('alert');
+  await expect(card).toContainText("Check the server's certificate first");
+  expect(await savedFingerprint(app.page, saved.id)).toBeUndefined();
+  await card.getByRole('button', { name: 'Review certificate' }).click();
+  await expect(prompt).toBeVisible();
+
+  await prompt.getByRole('button', { name: 'Trust and connect' }).click();
+  await expect.poll(() => savedFingerprint(app.page, saved.id)).toBe(fingerprint);
+  await expect(prompt).toBeHidden();
+});
+
 test('lets a person review and trust the changed certificate after saying no', async () => {
   const testInfo = test.info();
   const before = rdpStyleCertificate('windows', 'WIN-BEFORE');

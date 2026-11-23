@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+import { checkServerIdentity } from 'node:tls';
 import { parseMongoShell, parseMongoValue } from '@runova/core';
 import { BSON, MongoClient, type MongoClientOptions } from 'mongodb';
 import type {
@@ -12,7 +14,7 @@ import type {
   DbUser,
 } from '../../../shared/databaseTypes';
 import { documentsToResult, type MongoClientLike, runMongoCommand } from './mongoRun';
-import { describeError, EXACT_COUNT_LIMIT } from './shared';
+import { describeError, EXACT_COUNT_LIMIT, tlsIdentityHost, tlsModeOf } from './shared';
 import {
   type DbDriver,
   type DriverConnectOptions,
@@ -45,16 +47,33 @@ function bsonTypeName(value: unknown): string {
   return typeof value;
 }
 
-export async function openMongo(options: DriverConnectOptions): Promise<DbDriver> {
-  const host = options.srv ? options.host : `${options.host}:${options.port ?? 27017}`;
-  const url = `${options.srv ? 'mongodb+srv' : 'mongodb'}://${host}/`;
-  const clientOptions: MongoClientOptions = {
+/**
+ * The driver's TLS options. A mongodb+srv URL turns TLS on, and like every TLS connection it
+ * checks the certificate and host name unless the URL opted out. Through a forward the name is
+ * checked against the original host.
+ */
+function mongoTlsOptions(options: DriverConnectOptions): MongoClientOptions {
+  if (!options.tls) return {};
+  const mode = tlsModeOf(options);
+  if (mode === 'require') return { tls: true, tlsAllowInvalidCertificates: true };
+  if (mode === 'verify-ca') return { tls: true, tlsAllowInvalidHostnames: true };
+  if (!options.tlsServername || options.tlsServername === options.host) return { tls: true };
+  const name = tlsIdentityHost(options);
+  return {
+    tls: true,
+    ...(isIP(name) ? {} : { servername: name }),
+    checkServerIdentity: (_host, certificate) => checkServerIdentity(name, certificate),
+  };
+}
+
+export function mongoClientOptions(options: DriverConnectOptions): MongoClientOptions {
+  return {
     serverSelectionTimeoutMS: options.connectTimeoutMs ?? 15_000,
     connectTimeoutMS: options.connectTimeoutMs ?? 15_000,
     appName: 'Runova',
     // Through a forward the driver must not go looking for the replica set's own addresses.
     ...(options.srv ? {} : { directConnection: true }),
-    ...(options.tls ? { tls: true, tlsAllowInvalidCertificates: true } : {}),
+    ...mongoTlsOptions(options),
     ...(options.user
       ? {
           auth: { username: options.user, password: options.password ?? '' },
@@ -62,7 +81,12 @@ export async function openMongo(options: DriverConnectOptions): Promise<DbDriver
         }
       : {}),
   };
-  const client = new MongoClient(url, clientOptions);
+}
+
+export async function openMongo(options: DriverConnectOptions): Promise<DbDriver> {
+  const host = options.srv ? options.host : `${options.host}:${options.port ?? 27017}`;
+  const url = `${options.srv ? 'mongodb+srv' : 'mongodb'}://${host}/`;
+  const client = new MongoClient(url, mongoClientOptions(options));
   try {
     await client.connect();
     await client.db('admin').command({ ping: 1 });

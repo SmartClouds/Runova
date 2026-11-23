@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sshErrorCode } from '../../shared/sshErrors';
 import type { SshEndpoint } from './connectConfig';
 import { SshConnection } from './connection';
 import { type PoolSource, SshConnectionPool } from './pool';
@@ -21,8 +22,8 @@ afterEach(async () => {
   server = null;
 });
 
-function sourceFor(fake: FakeSshServer, stored?: string) {
-  const trusted: Array<[string, string]> = [];
+/** `stored` is the trusted key, the server's own unless a test says otherwise; null for none. */
+function sourceFor(fake: FakeSshServer, stored: string | null = fake.fingerprint()) {
   const connected: string[] = [];
   const source: PoolSource = {
     endpoint: async (serverId): Promise<SshEndpoint> => {
@@ -33,23 +34,20 @@ function sourceFor(fake: FakeSshServer, stored?: string) {
         username: 'deploy',
         authMethod: 'password',
         password: PASSWORD,
-        storedFingerprint: stored,
+        ...(stored ? { storedFingerprint: stored } : {}),
       };
-    },
-    trustHostKey: async (serverId, fingerprint) => {
-      trusted.push([serverId, fingerprint]);
     },
     connected: (serverId) => connected.push(serverId),
   };
-  return { source, trusted, connected };
+  return { source, connected };
 }
 
-async function setup(options: { idleMs?: number; stored?: string } = {}) {
+async function setup(options: { idleMs?: number; stored?: string | null } = {}) {
   server = await startFakeSshServer({ password: PASSWORD });
-  const { source, trusted, connected } = sourceFor(server, options.stored);
+  const { source, connected } = sourceFor(server, options.stored);
   const open = vi.fn(SshConnection.open);
   pool = new SshConnectionPool(source, { open, idleMs: options.idleMs });
-  return { server, pool, open, trusted, connected };
+  return { server, pool, open, connected };
 }
 
 describe('SshConnectionPool', () => {
@@ -65,18 +63,30 @@ describe('SshConnectionPool', () => {
     for (const lease of [a, b, c]) lease.release();
   });
 
-  it('stores a host key trusted on first use, and records the connect', async () => {
-    const { pool, server, trusted, connected } = await setup();
+  it('records the connect', async () => {
+    const { pool, connected } = await setup();
 
     const lease = await pool.acquire('srv-1');
 
-    expect(trusted).toEqual([['srv-1', server.fingerprint()]]);
     expect(connected).toEqual(['srv-1']);
     lease.release();
   });
 
+  it('refuses a server with no trusted key, before the login, and does not keep the failure', async () => {
+    const { pool, server, connected } = await setup({ stored: null });
+
+    for (const attempt of [() => pool.acquire('srv-1'), () => pool.openSeparate('srv-1')]) {
+      const failure = await attempt().catch((error: unknown) => error);
+      expect(sshErrorCode(failure)).toBe('host-key-unknown');
+    }
+
+    expect(server.authAttempts).toEqual([]);
+    expect(connected).toEqual([]);
+    expect(pool.isConnected('srv-1')).toBe(false);
+  });
+
   it('opens a fresh connection after the old one dropped', async () => {
-    const { pool, open, server } = await setup({ stored: undefined });
+    const { pool, open, server } = await setup();
     const first = await pool.acquire('srv-1');
     first.release();
 

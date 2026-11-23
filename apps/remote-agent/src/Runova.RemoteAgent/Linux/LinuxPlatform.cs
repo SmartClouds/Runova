@@ -40,7 +40,7 @@ internal sealed class LinuxAgentPlatform : IAgentPlatform, IScreenSource, IInput
             }
 
             _sinceLook.Restart();
-            var server = XServerDiscovery.Current();
+            var server = XServerDiscovery.Current(LinuxXServerProbe.Instance);
             if (server == _server && _display is not null)
             {
                 return _display;
@@ -51,9 +51,9 @@ internal sealed class LinuxAgentPlatform : IAgentPlatform, IScreenSource, IInput
             _server = server;
             if (server is not null)
             {
-                foreach (var candidate in XServerDiscovery.Candidates(server))
+                foreach (var candidate in XServerDiscovery.Candidates(server, LinuxXServerProbe.Instance))
                 {
-                    _display = X11Display.Open(candidate, server.AuthFile);
+                    _display = X11Display.Open(candidate, server.AuthFile, server.Pid);
                     if (_display is not null)
                     {
                         break;

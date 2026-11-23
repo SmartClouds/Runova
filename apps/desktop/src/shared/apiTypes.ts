@@ -2733,6 +2733,8 @@ export type EnvFileLinkState =
   | 'waitingForUnlock'
   | 'tooLarge'
   | 'noFolder'
+  /** The link came from another computer or a teammate and nobody here has confirmed it. */
+  | 'needsConfirmation'
   | 'error';
 
 export interface EnvFileLinkSummary {
@@ -2910,10 +2912,14 @@ export interface RdpConnectTicket {
   options: RdpServerOptions;
 }
 
-/** Sent to a session window when the server's certificate is not the one saved last time. */
+/**
+ * Sent to a session window when the server's certificate is not the one saved last time, or when
+ * none is saved yet (a first connect).
+ */
 export interface RdpCertificatePrompt {
   sessionId: string;
   host: string;
+  /** Empty when no certificate was saved for this server yet. */
   expectedFingerprint: string;
   actualFingerprint: string;
   subject: string;
@@ -2936,6 +2942,8 @@ export type RdpProxyErrorCode =
   | 'tls-failed'
   | 'tls-key-usage'
   | 'certificate-changed'
+  /** A first connect: no certificate is saved yet, so the person has to check this one. */
+  | 'certificate-new'
   /** The proxy from the Network settings could not be reached or would not connect. */
   | 'proxy-failed'
   | 'other';

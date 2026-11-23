@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { quoteAllForShell, quoteForShell, shellKindFor } from './shellQuote.js';
+import {
+  hasShellControlChars,
+  quoteAllForShell,
+  quoteForShell,
+  quoteForTyping,
+  shellKindFor,
+} from './shellQuote.js';
 
 describe('shellQuote', () => {
   it('maps shells to quoting families', () => {
@@ -30,5 +36,45 @@ describe('shellQuote', () => {
 
   it('joins multiple values', () => {
     expect(quoteAllForShell(['a', 'b c'], 'posix')).toBe("a 'b c'");
+  });
+
+  it('doubles the curly single quotes PowerShell also ends a string at', () => {
+    for (const code of [0x2018, 0x2019, 0x201a, 0x201b]) {
+      const quote = String.fromCharCode(code);
+      const name = `C:\\Downloads\\report${quote}; Write-Output hi; ${quote}.png`;
+      expect(quoteForShell(name, 'powershell')).toBe(
+        `'C:\\Downloads\\report${quote}${quote}; Write-Output hi; ${quote}${quote}.png'`,
+      );
+    }
+    expect(quoteForShell("a'b", 'powershell')).toBe("'a''b'");
+  });
+});
+
+describe('quoteForTyping', () => {
+  const controls = [
+    ...Array.from({ length: 0x20 }, (_, code) => code),
+    0x7f,
+    ...Array.from({ length: 0x20 }, (_, i) => 0x80 + i),
+  ];
+
+  it('refuses text holding a C0 control, DEL or a C1 control, for every shell', () => {
+    for (const code of controls) {
+      const path = `/tmp/x${String.fromCharCode(code)}echo hi #.png`;
+      expect(hasShellControlChars(path)).toBe(true);
+      for (const kind of ['posix', 'fish', 'powershell', 'cmd'] as const) {
+        expect(() => quoteForTyping(path, kind)).toThrow(/control characters/);
+      }
+    }
+  });
+
+  it('quotes everything else the same as quoteForShell', () => {
+    for (const value of ['/home/me/a file.png', "it's", 'caf\u00e9 \u00a0x', 'plain']) {
+      expect(hasShellControlChars(value)).toBe(false);
+      expect(quoteForTyping(value, 'posix')).toBe(quoteForShell(value, 'posix'));
+    }
+  });
+
+  it('leaves quoteForShell itself working for scripts that hold newlines', () => {
+    expect(quoteForShell('echo a\necho b', 'posix')).toBe("'echo a\necho b'");
   });
 });

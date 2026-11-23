@@ -4,6 +4,8 @@
  */
 export type SshErrorCode =
   | 'host-key-changed'
+  /** A server never connected to before: its key has to be trusted before the login is sent. */
+  | 'host-key-unknown'
   | 'sudo-password-required'
   | 'sudo-password-rejected'
   /** The Servers vault holds the server's secret and has to be unlocked with its passkey. */
@@ -13,6 +15,7 @@ export type SshErrorCode =
 
 const CODES: ReadonlySet<string> = new Set<SshErrorCode>([
   'host-key-changed',
+  'host-key-unknown',
   'sudo-password-required',
   'sudo-password-rejected',
   'vault-locked',

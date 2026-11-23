@@ -189,17 +189,40 @@ describe('what the proxy tells a session window', () => {
     ]);
   });
 
-  it('saves the certificate, with who it was issued to, the first time a server is seen', async () => {
+  it('asks about the certificate of a server seen for the first time, and saves it only on a yes', async () => {
     const sessionId = await invoke<string>(IPC.rdp.openSession, 'server-1');
+    const window = FakeBrowserWindow.instances[0];
+    expect(fakes.hooks).not.toHaveProperty('onCertificateFirstSeen');
 
-    fakes.hooks?.onCertificateFirstSeen(target(sessionId), NEW_CERTIFICATE);
+    // The proxy refuses an unpinned server and reports its certificate this way.
+    fakes.hooks?.onCertificateMismatch(target(sessionId), NEW_CERTIFICATE);
 
-    await vi.waitFor(() => expect(savedServer().certFingerprint).toBe('AA:11:22'));
+    expect(window.webContents.sentOn(IPC.rdp.onCertificatePrompt)).toEqual([
+      [expect.objectContaining({ expectedFingerprint: '', actualFingerprint: 'AA:11:22' })],
+    ]);
+    expect(savedServer().certFingerprint).toBeUndefined();
+
+    await invokeFrom(window.webContents, IPC.rdp.respondCertificate, sessionId, true);
+    expect(savedServer().certFingerprint).toBe('AA:11:22');
     expect(savedServer().certDetails).toEqual({
       subject: 'CN=WIN-NEW',
       issuer: 'CN=WIN-NEW',
       validTo: 'Apr 1 00:00:00 2027 GMT',
     });
+  });
+
+  it('saves nothing for a first-seen certificate the person turns down', async () => {
+    const sessionId = await invoke<string>(IPC.rdp.openSession, 'server-1');
+
+    fakes.hooks?.onCertificateMismatch(target(sessionId), NEW_CERTIFICATE);
+    await invokeFrom(
+      FakeBrowserWindow.instances[0].webContents,
+      IPC.rdp.respondCertificate,
+      sessionId,
+      false,
+    );
+
+    expect(savedServer().certFingerprint).toBeUndefined();
   });
 
   it('keeps the old certificate until the person trusts the new one', async () => {

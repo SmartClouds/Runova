@@ -69,6 +69,16 @@ export interface TrustedPhone {
   sealKey?: string;
 }
 
+/**
+ * A computer's key someone here accepted a control or files request from, with the account the hub
+ * named for it then. Only these keys get in without asking, never just a relation the hub claims.
+ */
+export interface ApprovedController {
+  key: string;
+  userId: number;
+  approvedAt: number;
+}
+
 function grantable(scopes: readonly ManageScope[]): ManageScope[] {
   return MANAGE_GRANTABLE_SCOPES.filter((scope) => scopes.includes(scope));
 }
@@ -84,6 +94,7 @@ interface AnywhereFile {
   pins?: Record<string, string>;
   recent?: AnywhereRecent[];
   phones?: TrustedPhone[];
+  controllers?: ApprovedController[];
 }
 
 export interface AnywhereStoreIo {
@@ -246,6 +257,22 @@ export function createAnywhereStore(io: AnywhereStoreIo) {
     forgetPhone(key: string): Promise<void> {
       return change((file) => {
         file.phones = (file.phones ?? []).filter((p) => p.key !== key);
+      });
+    },
+
+    /** Whether someone here accepted this key before, for this account. */
+    async controllerApproved(key: string, userId: number): Promise<boolean> {
+      return ((await load()).controllers ?? []).some((c) => c.key === key && c.userId === userId);
+    },
+
+    approveController(controller: ApprovedController): Promise<void> {
+      return change((file) => {
+        file.controllers = [
+          ...(file.controllers ?? []).filter(
+            (c) => !(c.key === controller.key && c.userId === controller.userId),
+          ),
+          controller,
+        ];
       });
     },
 

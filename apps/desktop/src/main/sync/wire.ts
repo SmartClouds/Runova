@@ -50,6 +50,15 @@ export function travellingSecret(
   return sealing.mode === 'shared-only' || !Object.keys(secret).length ? null : secret;
 }
 
+/** An opened secret (`{ $secret: plaintext }`, envelopes.ts) anywhere in a value. */
+function holdsOpenedSecret(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(holdsOpenedSecret);
+  if (!value || typeof value !== 'object') return false;
+  const fields = value as Record<string, unknown>;
+  if (typeof fields.$secret === 'string' && Object.keys(fields).length === 1) return true;
+  return Object.values(fields).some(holdsOpenedSecret);
+}
+
 export function encodeRecord(input: {
   place: Omit<RecordPlace, 'keyVersion'>;
   sealing: Sealing;
@@ -59,6 +68,11 @@ export function encodeRecord(input: {
 }): Encoded {
   const { sealing, key, shared, secret } = input;
   if (sealing.mode === 'needs-key') throw new Error('This collection waits for a key.');
+  // A secret the collection does not name as one would stay in the shared fields and go out
+  // readable. Refuse to send it at all rather than leak it.
+  if (sealing.mode !== 'seal-all' && holdsOpenedSecret(shared)) {
+    throw new Error(`A secret in ${input.place.collection} is not sealed, so it was not sent.`);
+  }
   if (
     sealing.mode === 'shared-only' ||
     (sealing.mode === 'seal-secrets' && !Object.keys(secret).length)
@@ -73,6 +87,20 @@ export function encodeRecord(input: {
       ? { v: 1, shared: null, sealed: sealRecord(key.key, place, { shared, secret }) }
       : { v: 1, shared, sealed: sealRecord(key.key, place, { secret }) };
   return { encryption: 'e2ee', keyVersion: key.version, payload: JSON.stringify(payload) };
+}
+
+/**
+ * True when nothing in the record is readable without the key: end-to-end encrypted, with no
+ * shared fields beside the sealed part.
+ */
+export function sealedWhole(record: { encryption: 'none' | 'e2ee'; payload: string }): boolean {
+  if (record.encryption !== 'e2ee') return false;
+  try {
+    const payload = JSON.parse(record.payload) as Partial<Payload>;
+    return payload.shared === null && typeof payload.sealed === 'string' && !!payload.sealed;
+  } catch {
+    return false;
+  }
 }
 
 /**

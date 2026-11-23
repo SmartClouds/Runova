@@ -11,9 +11,10 @@ import type { FilesConnectTarget } from './types';
 /**
  * Opens the files of an FTP or SFTP site (E23), whatever its login:
  * - a server saved in Remote goes through the shared pool: a connection of its own for a deploy
- *   run, so a long upload never blocks Deploy's other work, and the pooled one for browsing. The
- *   pool trusts a saved server's first host key, as Remote does when a person connects; with
- *   nobody there to look (`unattended`, Deploy on save), a server with no trusted key is refused;
+ *   run, so a long upload never blocks Deploy's other work, and the pooled one for browsing. A
+ *   saved server with no trusted host key is refused before the login (`hostKeyUnknown`, with
+ *   the key it presented) until the user trusts it in Remote's prompt; with nobody there to look
+ *   (`unattended`, Deploy on save), it is refused without connecting at all;
  * - an SFTP login of the site's own opens its own connection, checked against the host key the
  *   user trusted for this site. A key nobody trusted yet is refused before the login is sent;
  *   trusting it is a separate, explicit step;
@@ -100,7 +101,7 @@ export function createOpenRemoteFiles(deps: ConnectDeps = {}): OpenRemoteFiles {
     };
     let connection: SshConnection;
     try {
-      // No onHostKeyTrusted: with a stored fingerprint a different key is refused, never stored.
+      // With a stored fingerprint a different key is refused, never stored.
       connection = await (deps.openSsh ?? SshConnection.open)(endpoint, {});
     } catch (error) {
       throw mapSshConnectError(error);

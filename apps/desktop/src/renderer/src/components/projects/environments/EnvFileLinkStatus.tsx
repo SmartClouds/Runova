@@ -10,6 +10,7 @@ const STATE_TEXT: Record<EnvFileLinkState, string> = {
   waitingForUnlock: 'Locked, unlock to pick up changes',
   tooLarge: 'File is over 1 MB, changes are not picked up',
   noFolder: 'This project has no folder on this computer',
+  needsConfirmation: 'Linked on another computer. Not followed here until you confirm it.',
   error: "Couldn't write the file. Save again to retry.",
 };
 
@@ -40,15 +41,18 @@ export function EnvFileLinkStatus({
   link,
   absolutePath,
   onUnlock,
+  onConfirm,
 }: {
   link: EnvFileLinkSummary;
   absolutePath: string;
   onUnlock: () => void;
+  /** Opens the link dialog on this file, which is how a synced link gets confirmed here. */
+  onConfirm?: () => void;
 }): React.JSX.Element {
   const tone =
     link.state === 'error'
       ? 'text-destructive'
-      : link.state === 'missing' || link.state === 'tooLarge'
+      : link.state === 'missing' || link.state === 'tooLarge' || link.state === 'needsConfirmation'
         ? 'text-amber-600 dark:text-amber-400'
         : 'text-muted-foreground';
   return (
@@ -67,6 +71,11 @@ export function EnvFileLinkStatus({
       {link.state === 'waitingForUnlock' && (
         <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={onUnlock}>
           Unlock
+        </Button>
+      )}
+      {link.state === 'needsConfirmation' && onConfirm && (
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={onConfirm}>
+          Review link
         </Button>
       )}
     </div>

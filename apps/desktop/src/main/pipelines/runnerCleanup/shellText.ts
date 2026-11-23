@@ -8,9 +8,12 @@ export function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-/** A PowerShell literal string: only a single quote means anything inside one, and it is doubled. */
+/**
+ * A PowerShell literal string: only a single quote means anything inside one, and it is doubled.
+ * PowerShell takes U+2018 to U+201B as single quotes too, so those are doubled the same way.
+ */
 export function psQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+  return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, (quote) => quote + quote)}'`;
 }
 
 export function toBase64(text: string): string {

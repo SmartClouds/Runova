@@ -88,6 +88,18 @@ describe('settingsAdapter', () => {
     expect(next).not.toHaveProperty('someFutureSetting');
   });
 
+  it('takes nothing from a team’s record of the settings', async () => {
+    const store = memorySettings(settings());
+
+    await settingsAdapter(store).apply({
+      id: 'app',
+      teamId: 7,
+      value: { theme: 'light', cliArgs: { 'claude-code': '--x' }, secrets: { openaiApiKey: 'k' } },
+    });
+
+    expect(store.get()).toEqual(settings());
+  });
+
   it('never removes the settings', async () => {
     const store = memorySettings(settings());
 

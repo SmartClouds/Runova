@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DeploySetupProgressEvent } from '../../shared/deployTypes';
 import { tempDir } from '../../test/main/fixtures';
+import { probeHostKey } from '../ssh/connectConfig';
 import { SshConnectionPool } from '../ssh/pool';
 import { localArtifactSource, type ReleaseSource } from './bootstrap/releaseSource';
 import { CoreHttpClient } from './connection/coreHttp';
@@ -86,11 +87,11 @@ function deploy(
     endpoint: async () => ({
       host: server.host,
       port: server.port,
+      storedFingerprint: await probeHostKey(server.host, server.port),
       username,
       authMethod: 'password',
       password,
     }),
-    trustHostKey: async () => undefined,
   });
   let file: unknown = null;
   const events: DeploySetupProgressEvent[] = [];
