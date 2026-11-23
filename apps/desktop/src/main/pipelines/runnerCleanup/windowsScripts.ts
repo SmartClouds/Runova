@@ -246,14 +246,18 @@ function RvIsAdmin {
   return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 function RvUnservice([string]$Dir) {
-  $file = Join-Path $Dir '.service'
-  if (-not (Test-Path -LiteralPath $file)) { return $true }
-  $name = ([string]@(Get-Content -LiteralPath $file -TotalCount 1)[0]).Trim()
-  if (-not $name) { return $true }
-  if (-not (RvIsAdmin)) { RvErr ('Removing its service needs an administrator shell. Run: sc.exe stop ' + $name + '; sc.exe delete ' + $name); return $false }
-  & sc.exe stop $name *> $null
+  # The runner account can rewrite .service, so the service is the one Windows runs from this
+  # runner's bin folder, never a name read from the folder.
+  $bin = (Join-Path $Dir 'bin').TrimEnd('\\') + '\\'
+  $names = @(Get-CimInstance Win32_Service | Where-Object {
+    $p = ([string]$_.PathName).TrimStart('"')
+    $p.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase)
+  } | ForEach-Object { $_.Name })
+  if ($names.Count -eq 0) { return $true }
+  if (-not (RvIsAdmin)) { RvErr ('Removing its service needs an administrator shell. Run: ' + (@($names | ForEach-Object { 'sc.exe stop ' + $_ + '; sc.exe delete ' + $_ }) -join '; ')); return $false }
+  foreach ($name in $names) { & sc.exe stop $name *> $null }
   Start-Sleep -Seconds 3
-  & sc.exe delete $name *> $null
+  foreach ($name in $names) { & sc.exe delete $name *> $null }
   return $true
 }
 `;

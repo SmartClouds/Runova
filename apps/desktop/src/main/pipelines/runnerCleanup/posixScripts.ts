@@ -114,18 +114,38 @@ rv_docker_prune() {
   RV_FREED=$(printf '%s\\n' "$RV_O" | sed -n -e 's/^Total reclaimed space:[[:space:]]*//p' -e 's/^Total:[[:space:]]*//p' | tail -n 1)
 }
 rv_unservice() {
+  # The runner account owns the runner folder, so its jobs can rewrite svc.sh and .service. The
+  # service is found from what root wrote when it was installed (the unit or plist whose
+  # WorkingDirectory is this folder) and removed with the system's own tools.
   rv_u="$1"
-  [ -f "$rv_u/.service" ] || return 0
-  if [ ! -f "$rv_u/svc.sh" ]; then rv_err "The runner has a service but no svc.sh to remove it with"; return 1; fi
+  rv_ur=$(rv_real "$rv_u")
   if [ "$(uname -s)" = Darwin ]; then
-    (cd "$rv_u" || exit 1; ./svc.sh stop; ./svc.sh uninstall) >/dev/null 2>&1
+    for rv_s in "$RV_HOME"/Library/LaunchAgents/actions.runner.*.plist; do
+      [ -f "$rv_s" ] || continue
+      rv_w=$(tr -d '\\n\\t' < "$rv_s" | sed -n 's:.*<key>WorkingDirectory</key> *<string>\\([^<]*\\)</string>.*:\\1:p' | sed 's:/*$::')
+      [ -n "$rv_w" ] && { [ "$rv_w" = "$rv_u" ] || [ "$rv_w" = "$rv_ur" ]; } || continue
+      launchctl unload "$rv_s" >/dev/null 2>&1
+      rm -f -- "$rv_s"
+    done
     return 0
   fi
-  if [ "$(id -u)" = 0 ]; then rv_sudo=""
-  elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then rv_sudo="sudo -n"
-  else rv_err "Removing its service needs sudo. On the machine, run: cd $rv_u && sudo ./svc.sh stop && sudo ./svc.sh uninstall"; return 1
-  fi
-  (cd "$rv_u" || exit 1; $rv_sudo ./svc.sh stop; $rv_sudo ./svc.sh uninstall) >/dev/null 2>&1
+  rv_sudo=-
+  for rv_s in "\${RV_UNIT_DIR:-/etc/systemd/system}"/actions.runner.*.service; do
+    [ -f "$rv_s" ] || continue
+    rv_w=$(sed -n 's/^WorkingDirectory=//p' "$rv_s" | head -n 1 | sed 's:/*$::')
+    [ -n "$rv_w" ] && { [ "$rv_w" = "$rv_u" ] || [ "$rv_w" = "$rv_ur" ]; } || continue
+    rv_n="\${rv_s##*/}"
+    if [ "$rv_sudo" = - ]; then
+      if [ "$(id -u)" = 0 ]; then rv_sudo=""
+      elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then rv_sudo="sudo -n"
+      else rv_err "Removing its service needs sudo. On the machine, run: sudo systemctl disable --now $rv_n && sudo rm $rv_s && sudo systemctl daemon-reload"; return 1
+      fi
+    fi
+    $rv_sudo systemctl stop "$rv_n" >/dev/null 2>&1
+    $rv_sudo systemctl disable "$rv_n" >/dev/null 2>&1
+    RV_E=$($rv_sudo rm -f -- "$rv_s" 2>&1) || { rv_err "$RV_E"; return 1; }
+  done
+  [ "$rv_sudo" = - ] || $rv_sudo systemctl daemon-reload >/dev/null 2>&1
   return 0
 }
 `;

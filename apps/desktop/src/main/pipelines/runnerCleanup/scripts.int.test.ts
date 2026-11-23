@@ -463,7 +463,7 @@ describe('a cleanup racing a folder swapped for a junction', () => {
         '$script:RvSwapped = $false',
         '$RvRealIsLink = ${function:RvIsLink}',
         'function RvIsLink($Item) {',
-        `  if (-not $script:RvSwapped -and $Item.FullName -like ${psLiteral(`${join(checkout, 'Z')}\*`)}) {`,
+        `  if (-not $script:RvSwapped -and $Item.FullName -like ${psLiteral(`${join(checkout, 'Z')}\\*`)}) {`,
         '    $script:RvSwapped = $true',
         `    Rename-Item -LiteralPath ${psLiteral(early)} -NewName 'A2'`,
         `    cmd /c mklink /J ${psLiteral(`"${early}"`)} ${psLiteral(`"${victim}"`)} | Out-Null`,
@@ -486,3 +486,105 @@ describe('a cleanup racing a folder swapped for a junction', () => {
 function psLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
+
+describe('removing a gone runner', () => {
+  const sh = spawnSync('sh', ['-c', 'exit 0']);
+  /** The path sh sees: Git's sh on Windows reads C:\x as /c/x. */
+  const shPath = (path: string) =>
+    isWindows
+      ? path
+          .replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`)
+          .replace(/\\/g, '/')
+      : path;
+
+  it.runIf(!sh.error)(
+    'never runs the svc.sh in the runner folder, and stops only the unit that runs from it',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'runova-runner-unservice-'));
+      roots.push(root);
+      const runner = join(root, 'actions-runner', 'build-01');
+      const marker = join(root, 'svc-ran');
+      const calls = join(root, 'calls.log');
+      // A job running as the runner account can rewrite these, so the cleanup must not trust them.
+      file(join(runner, 'config.sh'));
+      writeFileSync(join(runner, '.service'), 'ssh.service\n');
+      writeFileSync(join(runner, 'svc.sh'), `#!/bin/sh\necho ran > '${shPath(marker)}'\n`);
+      chmodSync(join(runner, 'svc.sh'), 0o755);
+      // The unit files root wrote when the runners were installed as services.
+      const units = join(root, 'units');
+      mkdirSync(units);
+      writeFileSync(
+        join(units, 'actions.runner.acme-web.build-01.service'),
+        `[Service]\nExecStart=${shPath(runner)}/runsvc.sh\nWorkingDirectory=${shPath(runner)}\n`,
+      );
+      writeFileSync(
+        join(units, 'actions.runner.acme-api.build-02.service'),
+        `[Service]\nWorkingDirectory=${shPath(join(root, 'actions-runner', 'build-02'))}\n`,
+      );
+      // A Linux login that is not root but has passwordless sudo.
+      const bin = join(root, 'bin');
+      mkdirSync(bin);
+      const stub = (name: string, body: string) => {
+        writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+        chmodSync(join(bin, name), 0o755);
+      };
+      stub('uname', 'echo Linux');
+      stub('id', 'echo 1000');
+      stub('sudo', `[ "$1" = -n ] && shift\necho "sudo $*" >> '${shPath(calls)}'\n"$@"`);
+      stub('systemctl', `echo "systemctl $*" >> '${shPath(calls)}'`);
+      const steps: CleanStep[] = [
+        {
+          id: 'gone',
+          busyGuard: null,
+          measure: [],
+          actions: [{ kind: 'removeRunner', path: shPath(runner) }],
+        },
+      ];
+
+      spawnSync('sh', [], {
+        input: posixCleanScript(steps),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${shPath(bin)}:${process.env.PATH ?? ''}`,
+          RV_UNIT_DIR: shPath(units),
+        },
+      });
+
+      expect(existsSync(marker)).toBe(false);
+      const log = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+      expect(log).toContain('systemctl stop actions.runner.acme-web.build-01.service');
+      expect(log).not.toContain('build-02');
+      expect(log).not.toContain('ssh.service');
+      expect(existsSync(join(units, 'actions.runner.acme-web.build-01.service'))).toBe(false);
+      expect(existsSync(join(units, 'actions.runner.acme-api.build-02.service'))).toBe(true);
+      expect(existsSync(runner)).toBe(false);
+    },
+  );
+
+  it.runIf(isWindows)(
+    'never stops or deletes a service named by the .service file in the runner folder',
+    async () => {
+      const tree = buildTree();
+      // No service runs from this folder; the name is one a job wrote there.
+      writeFileSync(join(tree.oldRunner, '.service'), 'RunovaNoSuchService\r\n');
+      const steps: CleanStep[] = [
+        {
+          id: 'gone',
+          busyGuard: null,
+          measure: [tree.oldRunner],
+          actions: [{ kind: 'removeRunner', path: tree.oldRunner }],
+        },
+      ];
+
+      const stdout = await run(windowsCleanScript(steps), tree);
+
+      expect(stdout).not.toContain('RunovaNoSuchService');
+      expect(
+        parseCleanLine(stdout.split(/\r?\n/).find((line) => line.startsWith('@@')) ?? ''),
+      ).toMatchObject({ id: 'gone', status: 'done' });
+      expect(existsSync(tree.oldRunner)).toBe(false);
+    },
+    120_000,
+  );
+});
