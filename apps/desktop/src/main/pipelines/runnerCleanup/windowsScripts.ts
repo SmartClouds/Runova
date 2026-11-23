@@ -206,6 +206,8 @@ function RvRemove([string]$Path) {
   $stack.Push($root)
   while ($stack.Count -gt 0) {
     $i = $stack.Pop()
+    # Listed a while ago: a job still running may have swapped this folder for a junction since.
+    $i.Refresh()
     if ((RvIsLink $i) -or -not ($i -is [IO.DirectoryInfo])) {
       if ($i -is [IO.DirectoryInfo]) { [IO.Directory]::Delete($i.FullName, $false) }
       else { $i.Attributes = [IO.FileAttributes]::Normal; $i.Delete() }

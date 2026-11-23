@@ -435,3 +435,54 @@ describe('the install and remove scripts', () => {
     }
   });
 });
+
+describe('a cleanup racing a folder swapped for a junction', () => {
+  it.runIf(isWindows)(
+    'never deletes what a junction put in place of a folder it listed earlier points at',
+    async () => {
+      const tree = buildTree();
+      const checkout = join(tree.runner, '_work', 'race', 'race');
+      const early = join(checkout, 'A');
+      file(join(early, 'one.txt'));
+      for (let n = 0; n < 5; n += 1) file(join(checkout, 'Z', `f${n}.txt`));
+      const victim = join(tree.root, 'victim');
+      file(join(victim, 'keep.txt'));
+      const steps: CleanStep[] = [
+        {
+          id: 'checkouts',
+          busyGuard: null,
+          measure: [checkout],
+          actions: [{ kind: 'remove', path: checkout }],
+        },
+      ];
+
+      // A job process still running as the runner account swaps A, which the cleanup listed but
+      // has not reached yet, for a junction while the cleanup works through Z. The hook stands in
+      // for that process: it fires on the first item under Z.
+      const swap = [
+        '$script:RvSwapped = $false',
+        '$RvRealIsLink = ${function:RvIsLink}',
+        'function RvIsLink($Item) {',
+        `  if (-not $script:RvSwapped -and $Item.FullName -like ${psLiteral(`${join(checkout, 'Z')}\*`)}) {`,
+        '    $script:RvSwapped = $true',
+        `    Rename-Item -LiteralPath ${psLiteral(early)} -NewName 'A2'`,
+        `    cmd /c mklink /J ${psLiteral(`"${early}"`)} ${psLiteral(`"${victim}"`)} | Out-Null`,
+        '  }',
+        '  return & $RvRealIsLink $Item',
+        '}',
+      ].join('\n');
+      const script = windowsCleanScript(steps).replace(/^\$RvId = /m, `${swap}\n$&`);
+
+      const stdout = await run(script, tree);
+
+      expect(stdout).toContain('@@');
+      expect(existsSync(join(victim, 'keep.txt'))).toBe(true);
+      expect(existsSync(join(checkout, 'Z'))).toBe(false);
+    },
+    120_000,
+  );
+});
+
+function psLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
