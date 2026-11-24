@@ -85,6 +85,8 @@ Three quick switches sit on the right of the zone's header, so they are one clic
 - **I'm Under Attack** turns Cloudflare's strongest check on for every visitor. Turning it off puts the security level back where it was before (Medium if Runova does not know).
 - **Block AI bots** shows **Off**, **On, ad pages** or **On, everywhere**. Turning it back on blocks AI bots where they were blocked before (everywhere if Runova does not know). It needs Bot Management on the token; without it, only this switch is left out.
 
+Next to them, **Purge cache** opens a short menu to purge Cloudflare's copies from any tab. See [Caching tab](#caching-tab).
+
 A zone has six tabs: **DNS**, **SSL/TLS**, **Caching**, **Security**, **Servers** and **Turnstile**. An older link to the Settings tab opens SSL/TLS.
 
 ### Add a domain
@@ -149,10 +151,16 @@ The **Caching** card:
 - **Caching level** decides which addresses count as the same cached file: **Standard** (a separate copy for every query string), **Ignore query string** (one copy whatever the query string) or **No query string** (only addresses without one are cached).
 - **Browser cache TTL** is how long a visitor's browser keeps files before asking again, from 30 seconds to 1 year. **Respect existing headers** follows your server's own cache headers. Some short values need a paid plan, and Cloudflare says so if yours cannot use them.
 
-The **Purge cache** card below it purges Cloudflare's cached copies.
+The **Purge cache** card below it purges Cloudflare's cached copies. Pick what to list with **URLs**, **Folders** or **Hostnames** next to the box, type one per line (up to 30 at a time), and click the button under it. Each choice keeps its own list, so you can switch without losing what you typed.
 
-- **Purge these URLs**: paste one full URL per line (up to 30) and click the button.
+- **URLs**: full addresses such as `https://example.com/styles.css`. Only those files go.
+- **Folders**: a name and a path such as `example.com/blog/`. Everything under that path goes. You can paste it with `https://` and the app takes that off. A query string or `#` is not allowed.
+- **Hostnames**: names such as `www.example.com` or `shop.example.com`. Everything cached for that name goes, which suits one subdomain.
 - **Purge everything**: removes every cached file at once, so the next visits all reach your server. You must type the domain's name to confirm.
+
+Every entry has to belong to the domain you have open. One on another domain is refused before anything is sent, since Cloudflare would quietly purge nothing.
+
+The domain header also has a **Purge cache** button next to the quick switches, so you can purge from any tab. **Choose URLs, folders or hostnames…** opens the Caching tab with the cursor in the purge box, and **Purge everything…** asks for the domain's name as above.
 
 ## Security tab
 

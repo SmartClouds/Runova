@@ -212,7 +212,11 @@ export type CloudflareBotChange =
   | { setting: 'aiBots'; value: CloudflareAiBotsProtection }
   | { setting: 'aiLabyrinth' | 'preferenceSync' | 'fightMode'; value: boolean };
 
-export type CloudflarePurgeRequest = { everything: true } | { urls: string[] };
+export type CloudflarePurgeRequest =
+  | { everything: true }
+  | { urls: string[] }
+  | { prefixes: string[] }
+  | { hosts: string[] };
 
 /** The custom rule builder's choices; the main process turns each into an expression. */
 export type CloudflareRuleSpec =

@@ -64,10 +64,15 @@ export function sslAdvice(mode: CloudflareSslMode): SslAdvice {
 }
 
 export type PurgeUrlsCheck = { ok: true; urls: string[] } | { ok: false; problem: string };
+export type PurgeListCheck = { ok: true; items: string[] } | { ok: false; problem: string };
 
-/** The URLs to purge, one per line, as full http or https addresses. */
-export function checkPurgeUrls(text: string): PurgeUrlsCheck {
-  const lines = [
+/** One label of a hostname: letters, digits and inner dashes. */
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const SCHEME = /^https?:\/\//i;
+
+/** The non-blank lines of a list, trimmed, each once, in the order typed. */
+function listLines(text: string): string[] {
+  return [
     ...new Set(
       text
         .split(/\r?\n/)
@@ -75,10 +80,38 @@ export function checkPurgeUrls(text: string): PurgeUrlsCheck {
         .filter(Boolean),
     ),
   ];
-  if (lines.length === 0) return { ok: false, problem: 'Enter at least one URL to purge.' };
+}
+
+/** Why a list of `noun`s cannot go out as it stands, or null when its size is fine. */
+function listSizeProblem(lines: string[], noun: string): string | null {
+  if (lines.length === 0) return `Enter at least one ${noun} to purge.`;
   if (lines.length > PURGE_URL_LIMIT) {
-    return { ok: false, problem: `Cloudflare purges up to ${PURGE_URL_LIMIT} URLs at a time.` };
+    return `Cloudflare purges up to ${PURGE_URL_LIMIT} ${noun}s at a time.`;
   }
+  return null;
+}
+
+/** A hostname with at least two labels, such as www.example.com. No wildcards. */
+function isHostname(host: string): boolean {
+  if (host.length > 253) return false;
+  const labels = host.split('.');
+  return labels.length >= 2 && labels.every((label) => HOST_LABEL.test(label));
+}
+
+/** The domain itself or any name under it, so a purge never aims at someone else's site. */
+function underZone(host: string, zoneName: string): boolean {
+  const zone = zoneName.toLowerCase();
+  return host === zone || host.endsWith(`.${zone}`);
+}
+
+/**
+ * The URLs to purge, one per line, as full http or https addresses. Given the domain's name, a
+ * URL on another domain is refused, since Cloudflare would quietly purge nothing.
+ */
+export function checkPurgeUrls(text: string, zoneName?: string): PurgeUrlsCheck {
+  const lines = listLines(text);
+  const sizeProblem = listSizeProblem(lines, 'URL');
+  if (sizeProblem) return { ok: false, problem: sizeProblem };
   for (const line of lines) {
     let url: URL | null = null;
     try {
@@ -95,6 +128,86 @@ export function checkPurgeUrls(text: string): PurgeUrlsCheck {
     if (line.length > MAX_URL) {
       return { ok: false, problem: `Keep each URL under ${MAX_URL} characters.` };
     }
+    if (zoneName && !underZone(url.hostname, zoneName)) {
+      return { ok: false, problem: `${line} is not under ${zoneName}.` };
+    }
   }
   return { ok: true, urls: lines };
+}
+
+/**
+ * The folders to purge, one per line, as a name and a path (example.com/blog/). Cloudflare takes
+ * them without a scheme, so one pasted with https:// loses it, and the name goes to lower case.
+ * The path keeps its case, since paths are case sensitive.
+ */
+export function checkPurgePrefixes(text: string, zoneName?: string): PurgeListCheck {
+  const lines = listLines(text).map((line) => {
+    const bare = line.replace(SCHEME, '');
+    const slash = bare.indexOf('/');
+    return slash === -1
+      ? bare.toLowerCase()
+      : bare.slice(0, slash).toLowerCase() + bare.slice(slash);
+  });
+  const items = [...new Set(lines)];
+  const sizeProblem = listSizeProblem(items, 'folder');
+  if (sizeProblem) return { ok: false, problem: sizeProblem };
+  for (const item of items) {
+    if (item.length > MAX_URL) {
+      return { ok: false, problem: `Keep each folder under ${MAX_URL} characters.` };
+    }
+    if (/[?#]/.test(item)) {
+      return {
+        ok: false,
+        problem: `${item} has a query or a #. Keep just the name and the folder.`,
+      };
+    }
+    const slash = item.indexOf('/');
+    const host = slash === -1 ? item : item.slice(0, slash);
+    const path = slash === -1 ? '' : item.slice(slash);
+    if (!isHostname(host) || /\s/.test(path)) {
+      return {
+        ok: false,
+        problem: `${item} is not a folder address. Write it like example.com/blog/.`,
+      };
+    }
+    if (path === '' || path === '/') {
+      return {
+        ok: false,
+        problem: `${item} is a whole hostname. Add a folder after it, like ${host}/blog/, or pick Hostnames.`,
+      };
+    }
+    if (zoneName && !underZone(host, zoneName)) {
+      return { ok: false, problem: `${item} is not under ${zoneName}.` };
+    }
+  }
+  return { ok: true, items };
+}
+
+/**
+ * The hostnames to purge, one per line (www.example.com). One pasted as an address loses its
+ * scheme and closing slash; one with a path is a folder, so the problem says to pick Folders.
+ */
+export function checkPurgeHosts(text: string, zoneName?: string): PurgeListCheck {
+  const items = [
+    ...new Set(
+      listLines(text).map((line) => line.replace(SCHEME, '').replace(/\/$/, '').toLowerCase()),
+    ),
+  ];
+  const sizeProblem = listSizeProblem(items, 'hostname');
+  if (sizeProblem) return { ok: false, problem: sizeProblem };
+  for (const item of items) {
+    if (item.includes('/')) {
+      return { ok: false, problem: `${item} is a folder. Pick Folders to purge it.` };
+    }
+    if (!isHostname(item)) {
+      return {
+        ok: false,
+        problem: `${item} is not a hostname. Write it like www.example.com.`,
+      };
+    }
+    if (zoneName && !underZone(item, zoneName)) {
+      return { ok: false, problem: `${item} is not under ${zoneName}.` };
+    }
+  }
+  return { ok: true, items };
 }

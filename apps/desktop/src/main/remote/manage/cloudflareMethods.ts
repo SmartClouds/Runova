@@ -4,6 +4,7 @@ import { cloudflareErrorMessage } from '../../../shared/cloudflareErrors';
 import type {
   CloudflareAccountStatus,
   CloudflarePermissionId,
+  CloudflarePurgeRequest,
   CloudflareStatus,
 } from '../../../shared/cloudflareTypes';
 import type { CloudflareEmailGateOps } from '../../deploy/cloudflare/emailGate';
@@ -149,6 +150,27 @@ function phoneStatus(status: CloudflareStatus) {
   };
 }
 
+/** What a phone asked to purge, in the shape the desktop's check reads; the zone id stays out. */
+function purgeParams(params: unknown): unknown {
+  if (field(params, 'everything') === true) return { everything: true };
+  for (const kind of ['prefixes', 'hosts'] as const) {
+    const value = field(params, kind);
+    if (value !== undefined) return { [kind]: value };
+  }
+  return { urls: field(params, 'urls') };
+}
+
+function purgedMessage(request: CloudflarePurgeRequest): string {
+  if ('everything' in request) return 'Purged everything. Visitors get fresh copies now.';
+  const [count, noun] =
+    'prefixes' in request
+      ? [request.prefixes.length, 'folder']
+      : 'hosts' in request
+        ? [request.hosts.length, 'hostname']
+        : [request.urls.length, 'file'];
+  return `Purged ${count} ${count === 1 ? noun : `${noun}s`}.`;
+}
+
 const accountOf = (params: unknown) => checked(() => check.accountId(field(params, 'accountId')));
 const zoneOf = (params: unknown) => checked(() => check.zoneId(field(params, 'zoneId')));
 const recordOf = (params: unknown) =>
@@ -251,19 +273,9 @@ export function cloudflareMethods(deps: ManageCloudflareDeps): ManageMethods['ca
     },
     'cloudflare.purgeCache': async (params) => {
       const zone = zoneOf(params);
-      const request = checked(() =>
-        check.purgeRequest(
-          field(params, 'everything') === true
-            ? { everything: true }
-            : { urls: field(params, 'urls') },
-        ),
-      );
+      const request = checked(() => check.purgeRequest(purgeParams(params)));
       await run(() => service.purgeCache(zone, request));
-      const message =
-        'everything' in request
-          ? 'Purged everything. Visitors get fresh copies now.'
-          : `Purged ${request.urls.length} ${request.urls.length === 1 ? 'file' : 'files'}.`;
-      return { ok: true, message };
+      return { ok: true, message: purgedMessage(request) };
     },
     'cloudflare.customRules': async (params) => {
       const zone = zoneOf(params);

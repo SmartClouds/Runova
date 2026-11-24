@@ -81,6 +81,8 @@ describe('registerCloudflareHandlers', () => {
     });
     await call(IPC.cloudflare.purgeCache, ZONE, { everything: true });
     await call(IPC.cloudflare.purgeCache, ZONE, { urls: ['https://example.com/a.css'] });
+    await call(IPC.cloudflare.purgeCache, ZONE, { prefixes: ['https://Example.com/blog/'] });
+    await call(IPC.cloudflare.purgeCache, ZONE, { hosts: ['shop.example.com'] });
     await call(IPC.cloudflare.listCustomRules, ZONE);
     await call(IPC.cloudflare.createCustomRule, ZONE, {
       description: 'Block CN',
@@ -124,6 +126,10 @@ describe('registerCloudflareHandlers', () => {
     expect(service.purgeCache).toHaveBeenNthCalledWith(2, ZONE, {
       urls: ['https://example.com/a.css'],
     });
+    expect(service.purgeCache).toHaveBeenNthCalledWith(3, ZONE, {
+      prefixes: ['example.com/blog/'],
+    });
+    expect(service.purgeCache).toHaveBeenNthCalledWith(4, ZONE, { hosts: ['shop.example.com'] });
     expect(service.createCustomRule).toHaveBeenCalledWith(ZONE, {
       description: 'Block CN',
       spec: { kind: 'block-countries', countries: ['CN'] },
@@ -345,6 +351,23 @@ describe('registerCloudflareHandlers', () => {
     await expect(
       call(IPC.cloudflare.purgeCache, ZONE, { urls: ['ftp://example.com/a'] }),
     ).rejects.toThrow(/web address/);
+    await expect(
+      call(IPC.cloudflare.purgeCache, ZONE, { prefixes: 'example.com/a' }),
+    ).rejects.toThrow(/folders or hostnames/);
+    await expect(
+      call(IPC.cloudflare.purgeCache, ZONE, { prefixes: ['example.com/'] }),
+    ).rejects.toThrow(/whole hostname/);
+    await expect(
+      call(IPC.cloudflare.purgeCache, ZONE, { hosts: ['*.example.com'] }),
+    ).rejects.toThrow(/not a hostname/);
+    await expect(call(IPC.cloudflare.purgeCache, ZONE, { hosts: [42] })).rejects.toThrow(
+      /folders or hostnames/,
+    );
+    await expect(
+      call(IPC.cloudflare.purgeCache, ZONE, {
+        hosts: Array.from({ length: 31 }, (_, index) => `s${index}.example.com`),
+      }),
+    ).rejects.toThrow(/30 hostnames/);
     await expect(
       call(IPC.cloudflare.createCustomRule, ZONE, {
         description: '',

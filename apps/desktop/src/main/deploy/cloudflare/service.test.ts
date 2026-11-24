@@ -553,15 +553,19 @@ describe('zone settings and the cache (T3)', () => {
     expect(cloudflareErrorMessage(error)).toContain('Zone > Bot Management > Edit');
   });
 
-  it('purges everything, or just the listed URLs', async () => {
+  it('purges everything, or just the listed URLs, folders or hostnames', async () => {
     const { service, fake } = await connectedService();
 
     await service.purgeCache(ZONE_ID, { everything: true });
     await service.purgeCache(ZONE_ID, { urls: ['https://example.com/app.css'] });
+    await service.purgeCache(ZONE_ID, { prefixes: ['example.com/blog/'] });
+    await service.purgeCache(ZONE_ID, { hosts: ['shop.example.com'] });
 
     expect(fake.zones.get(ZONE_ID)?.purges).toEqual([
       { purge_everything: true },
       { files: ['https://example.com/app.css'] },
+      { prefixes: ['example.com/blog/'] },
+      { hosts: ['shop.example.com'] },
     ]);
   });
 

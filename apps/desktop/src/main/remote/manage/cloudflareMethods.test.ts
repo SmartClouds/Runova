@@ -392,6 +392,29 @@ describe('cloudflare methods', () => {
     expect(bad.code).toBe('bad-params');
   });
 
+  it('purges folders or hostnames too, and names what went', async () => {
+    const d = deps();
+    expect(
+      await call(d, 'cloudflare.purgeCache', {
+        zoneId: ZONE,
+        prefixes: ['example.com/blog/', 'example.com/shop/'],
+      }),
+    ).toEqual({ ok: true, message: 'Purged 2 folders.' });
+    expect(
+      await call(d, 'cloudflare.purgeCache', { zoneId: ZONE, hosts: ['shop.example.com'] }),
+    ).toEqual({ ok: true, message: 'Purged 1 hostname.' });
+    expect(d.service.purgeCache).toHaveBeenNthCalledWith(1, ZONE, {
+      prefixes: ['example.com/blog/', 'example.com/shop/'],
+    });
+    expect(d.service.purgeCache).toHaveBeenNthCalledWith(2, ZONE, {
+      hosts: ['shop.example.com'],
+    });
+    const bad = await failure(
+      call(d, 'cloudflare.purgeCache', { zoneId: ZONE, hosts: ['example.com/blog'] }),
+    );
+    expect(bad.code).toBe('bad-params');
+  });
+
   it('lists, adds, switches and deletes WAF custom rules (E99)', async () => {
     const d = deps();
     expect(await call(d, 'cloudflare.customRules', { zoneId: ZONE })).toEqual([RULE]);

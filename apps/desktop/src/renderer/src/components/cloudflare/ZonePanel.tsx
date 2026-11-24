@@ -1,5 +1,6 @@
 import type { CloudflareZone } from '@shared/cloudflareTypes';
 import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
+import { useState } from 'react';
 import { Globe } from '@/components/icons';
 import { Chip, FOOTER_HAIRLINE, GLASS_CARD } from '@/components/pageKit';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,6 +18,7 @@ import { SecurityLevelCard } from './SecurityLevelCard';
 import { SslTlsCard } from './SslTlsCard';
 import { DnsTokensCard } from './server/DnsTokensCard';
 import { TurnstileCard } from './turnstile/TurnstileCard';
+import { ZonePurgeMenu } from './ZonePurgeMenu';
 import { ZoneQuickToggles } from './ZoneQuickToggles';
 import { zoneStateText } from './ZoneRail';
 
@@ -45,11 +47,11 @@ export function zoneTab(value: string | null): ZoneTab {
 const CONTENT = 'mt-0 flex flex-col gap-2 focus-visible:ring-offset-0';
 
 /**
- * One zone: its state with the quick switches (development mode, I'm Under Attack and AI bots),
- * and by tab its DNS records, its SSL/TLS, its caching, its rules and AI bot access, the DNS
- * tokens its servers hold for DNS-01, the Turnstile widgets (captcha) that cover it, the email
- * code gate (Cloudflare Access) on each of its names, and the names and paths only listed IP
- * addresses can open.
+ * One zone: its state with the quick switches (development mode, I'm Under Attack and AI bots)
+ * and the purge menu, and by tab its DNS records, its SSL/TLS, its caching, its rules and AI bot
+ * access, the DNS tokens its servers hold for DNS-01, the Turnstile widgets (captcha) that cover
+ * it, the email code gate (Cloudflare Access) on each of its names, and the names and paths only
+ * listed IP addresses can open.
  */
 export function ZonePanel({
   zone,
@@ -62,6 +64,8 @@ export function ZonePanel({
 }): React.JSX.Element {
   const reduceMotion = useReducedMotion();
   const active = zone.status === 'active' && !zone.paused;
+  // Goes up each time the header's purge menu asks for the Purge cache card, which then takes focus.
+  const [purgeFocus, setPurgeFocus] = useState(0);
   return (
     <Tabs
       value={tab}
@@ -86,7 +90,16 @@ export function ZonePanel({
               {zone.plan || 'Cloudflare zone'}
             </p>
           </div>
-          <ZoneQuickToggles zone={zone} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ZoneQuickToggles zone={zone} />
+            <ZonePurgeMenu
+              zone={zone}
+              onChoose={() => {
+                onTabChange('caching');
+                setPurgeFocus((count) => count + 1);
+              }}
+            />
+          </div>
         </div>
         {zone.status === 'pending' && (
           <div className="px-4 pb-3">
@@ -141,7 +154,7 @@ export function ZonePanel({
       </TabsContent>
       <TabsContent value="caching" className={CONTENT}>
         <CachingCard zone={zone} />
-        <PurgeCard zone={zone} />
+        <PurgeCard zone={zone} focusRequest={purgeFocus} />
       </TabsContent>
       <TabsContent value="security" className={CONTENT}>
         <SecurityLevelCard zone={zone} />

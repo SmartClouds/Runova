@@ -135,6 +135,38 @@ describe('CloudflareView', () => {
     expect(address().get('tab')).toBe('security');
   });
 
+  it('takes the header purge menu to the Caching tab with focus in the list', async () => {
+    const { user } = renderPage();
+    expect(await screen.findByRole('tab', { name: 'DNS' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Purge cache' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Choose URLs, folders or hostnames…' }),
+    );
+
+    // The card opens once the menu has closed, so the tab changes a moment after the click.
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Caching' })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(address().get('tab')).toBe('caching');
+    await waitFor(() => expect(screen.getByLabelText('URLs to purge')).toHaveFocus());
+  });
+
+  it('keeps focus in the list when the header menu is used on the Caching tab itself', async () => {
+    const { user } = renderPage({}, `/deploy?cloudflare=1&zone=${ZONE.id}&tab=caching`);
+    const field = await screen.findByLabelText('URLs to purge');
+
+    await user.click(screen.getByRole('button', { name: 'Purge cache' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Choose URLs, folders or hostnames…' }),
+    );
+
+    await waitFor(() => expect(field).toHaveFocus());
+  });
+
   it('opens the Turnstile tab from the address and keeps it there', async () => {
     const { user } = renderPage(
       { 'cloudflare.listTurnstileWidgets': async () => [WIDGET] },

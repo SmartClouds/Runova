@@ -667,11 +667,15 @@ export class CloudflareService {
 
   purgeCache(zoneId: string, request: CloudflarePurgeRequest): Promise<void> {
     return this.withZone(zoneId, 'cachePurge', async (api) => {
-      await api.cache.purge(
-        'everything' in request
-          ? { zone_id: zoneId, purge_everything: true }
-          : { zone_id: zoneId, files: request.urls },
-      );
+      if ('everything' in request) {
+        await api.cache.purge({ zone_id: zoneId, purge_everything: true });
+      } else if ('prefixes' in request) {
+        await api.cache.purge({ zone_id: zoneId, prefixes: request.prefixes });
+      } else if ('hosts' in request) {
+        await api.cache.purge({ zone_id: zoneId, hosts: request.hosts });
+      } else {
+        await api.cache.purge({ zone_id: zoneId, files: request.urls });
+      }
     });
   }
 

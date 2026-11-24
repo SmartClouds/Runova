@@ -11,7 +11,13 @@ import {
   MAX_TURNSTILE_DOMAINS,
   validateTurnstileInput,
 } from '../../shared/cloudflare/turnstile';
-import { BROWSER_CACHE_TTLS, checkPurgeUrls, PURGE_URL_LIMIT } from '../../shared/cloudflare/zone';
+import {
+  BROWSER_CACHE_TTLS,
+  checkPurgeHosts,
+  checkPurgePrefixes,
+  checkPurgeUrls,
+  PURGE_URL_LIMIT,
+} from '../../shared/cloudflare/zone';
 import type {
   CloudflareAccessMode,
   CloudflareAccessRuleInput,
@@ -237,16 +243,34 @@ function botChange(value: unknown): CloudflareBotChange {
   throw new Error('That is not a bot setting the page changes.');
 }
 
+const PURGE_WHAT = 'Say what to purge: everything, or a list of URLs, folders or hostnames.';
+
+/** A purge list's entries, refused before any checks when it is not a list of strings. */
+function purgeLines(value: unknown, noun: string): string {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(PURGE_WHAT);
+  }
+  // Counted before the check joins them, so a list padded with blank lines is still refused.
+  if (value.length > PURGE_URL_LIMIT) {
+    throw new Error(`Cloudflare purges up to ${PURGE_URL_LIMIT} ${noun} at a time.`);
+  }
+  return value.join('\n');
+}
+
 function purgeRequest(value: unknown): CloudflarePurgeRequest {
   const input = object(value, 'what to purge');
   if (input.everything === true) return { everything: true };
-  if (!Array.isArray(input.urls) || input.urls.some((url) => typeof url !== 'string')) {
-    throw new Error('Say what to purge: everything, or a list of URLs.');
+  if ('prefixes' in input) {
+    const checked = checkPurgePrefixes(purgeLines(input.prefixes, 'folders'));
+    if (!checked.ok) throw new Error(checked.problem);
+    return { prefixes: checked.items };
   }
-  if (input.urls.length > PURGE_URL_LIMIT) {
-    throw new Error(`Cloudflare purges up to ${PURGE_URL_LIMIT} URLs at a time.`);
+  if ('hosts' in input) {
+    const checked = checkPurgeHosts(purgeLines(input.hosts, 'hostnames'));
+    if (!checked.ok) throw new Error(checked.problem);
+    return { hosts: checked.items };
   }
-  const checked = checkPurgeUrls(input.urls.join('\n'));
+  const checked = checkPurgeUrls(purgeLines(input.urls, 'URLs'));
   if (!checked.ok) throw new Error(checked.problem);
   return { urls: checked.urls };
 }
