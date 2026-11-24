@@ -92,11 +92,13 @@ describe('backupPlan', () => {
       port: 1433,
     });
     expect(plan.extension).toBe('bak');
+    expect(plan.script).toContain('RUNOVA_DIR=$(mktemp -d /tmp/runova.XXXXXXXXXX)');
     expect(plan.script).toContain(
-      `-Q 'BACKUP DATABASE [shop] TO DISK = N'\\''/tmp/runova-backup.bak'\\'' WITH INIT, COPY_ONLY'`,
+      `-Q 'BACKUP DATABASE [shop] TO DISK = N'\\'''"$RUNOVA_BAK"''\\'' WITH INIT, COPY_ONLY'`,
     );
     expect(plan.script).toContain('>&2');
-    expect(plan.script).toContain('cat /tmp/runova-backup.bak');
+    expect(plan.script).toContain('cat "$RUNOVA_BAK"');
+    expect(plan.script).toContain('rm -rf "$RUNOVA_DIR"');
     expect(plan.script).not.toMatch(/-P '/);
   });
 
@@ -140,9 +142,9 @@ describe('restorePlan', () => {
       host: '127.0.0.1',
       port: 1433,
     });
-    expect(mssql.script).toContain('cat > /tmp/runova-restore.bak');
+    expect(mssql.script).toContain('(umask 022; cat > "$RUNOVA_BAK")');
     expect(mssql.script).toContain(
-      `-Q 'RESTORE DATABASE [shop] FROM DISK = N'\\''/tmp/runova-restore.bak'\\'' WITH REPLACE'`,
+      `-Q 'RESTORE DATABASE [shop] FROM DISK = N'\\'''"$RUNOVA_BAK"''\\'' WITH REPLACE'`,
     );
     expect(restorePlan({ engine: 'cassandra', host: '127.0.0.1', port: 9042 }).script).toContain(
       '-f /dev/stdin',

@@ -62,10 +62,27 @@ function needDatabase(options: DumpOptions): string {
 const SQLCMD =
   '"$(command -v sqlcmd || ls /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd 2>/dev/null | head -n 1)"';
 
-function sqlcmd(options: DumpOptions, query: string): string {
+/** sqlcmd with its query already written as one shell word, so it can hold a variable. */
+function sqlcmdWord(options: DumpOptions, queryWord: string): string {
   const { host, port } = where(options);
   // -C trusts the server's own certificate, which the tools18 client insists on otherwise.
-  return `${SQLCMD} -C -b -S ${host},${port} -U ${shQuote(options.user ?? 'sa')} -P ${PASSWORD} -Q ${shQuote(query)}`;
+  return `${SQLCMD} -C -b -S ${host},${port} -U ${shQuote(options.user ?? 'sa')} -P ${PASSWORD} -Q ${queryWord}`;
+}
+
+/**
+ * SQL Server reads and writes backup files itself, as its own account, so they go through a
+ * folder both it and the login can reach. On a server target /tmp is shared with every account,
+ * where a fixed name is one anyone can create first, to read the backup or swap what is restored.
+ * Each run gets a fresh folder others can not list (1733: SQL Server may create in it and the
+ * sticky bit keeps others from renaming), and a random file name in it. The folder goes at the end.
+ */
+const MSSQL_STAGE =
+  'RUNOVA_DIR=$(mktemp -d /tmp/runova.XXXXXXXXXX) && chmod 1733 "$RUNOVA_DIR" && RUNOVA_BAK=$(mktemp -u "$RUNOVA_DIR/XXXXXXXXXXXXXXXX") || exit 1;';
+const MSSQL_UNSTAGE = 'rm -rf "$RUNOVA_DIR"';
+
+/** A T-SQL statement with the staged file's path spliced in as an N'' literal. */
+function mssqlWithFile(before: string, after: string): string {
+  return `${shQuote(`${before} N'`)}"$RUNOVA_BAK"${shQuote(`' ${after}`)}`;
 }
 
 function cqlsh(options: DumpOptions, rest: string): string {
@@ -139,9 +156,9 @@ export function backupPlan(options: DumpOptions): DumpPlan {
     }
     case 'mssql': {
       const database = quoteIdentifier('mssql', needDatabase(options));
-      const file = '/tmp/runova-backup.bak';
+      const query = mssqlWithFile(`BACKUP DATABASE ${database} TO DISK =`, 'WITH INIT, COPY_ONLY');
       return {
-        script: `${READ_PASSWORD} ${sqlcmd(options, `BACKUP DATABASE ${database} TO DISK = N'${file}' WITH INIT, COPY_ONLY`)} >&2 && cat ${file}; status=$?; rm -f ${file}; exit $status`,
+        script: `${READ_PASSWORD} ${MSSQL_STAGE} ${sqlcmdWord(options, query)} >&2 && cat "$RUNOVA_BAK"; status=$?; ${MSSQL_UNSTAGE}; exit $status`,
         passwordOnStdin: true,
         extension: 'bak',
         complete: true,
@@ -205,9 +222,10 @@ export function restorePlan(options: DumpOptions): DumpPlan {
     }
     case 'mssql': {
       const database = quoteIdentifier('mssql', needDatabase(options));
-      const file = '/tmp/runova-restore.bak';
+      const query = mssqlWithFile(`RESTORE DATABASE ${database} FROM DISK =`, 'WITH REPLACE');
+      // SQL Server's own account has to read the file the login writes.
       return {
-        script: `${READ_PASSWORD} cat > ${file} && ${sqlcmd(options, `RESTORE DATABASE ${database} FROM DISK = N'${file}' WITH REPLACE`)} >&2; status=$?; rm -f ${file}; exit $status`,
+        script: `${READ_PASSWORD} ${MSSQL_STAGE} (umask 022; cat > "$RUNOVA_BAK") && ${sqlcmdWord(options, query)} >&2; status=$?; ${MSSQL_UNSTAGE}; exit $status`,
         passwordOnStdin: true,
         extension: 'bak',
         complete: true,
