@@ -14,6 +14,7 @@ import { stopEmulatorsOnQuit } from './android/runtime';
 import { appCsp, keepsOwnCsp } from './appCsp';
 import { APP_NAME, DEV_APP_NAME } from './appData';
 import { appIcon, appUserModelId, removeDevShortcuts, showAppIconInDev } from './appIcon';
+import { keepOnAppPage } from './appPage';
 import { registerBlueprintFileProtocol } from './blueprintFileStore';
 import { configureBrowserSession, setupBrowserGuests } from './browser/guestSession';
 import { registerDeployIpc } from './deploy';
@@ -324,6 +325,9 @@ function createMainWindow(): BrowserWindow {
       console.log(`[renderer] ${sourceId}:${line} ${message}`);
     });
   }
+
+  // The preload bridge goes to whatever page the window shows, so it never leaves the app's own.
+  keepOnAppPage(win.webContents);
 
   // Any attempt to open a new window/tab (target="_blank", window.open) is
   // redirected to the user's default browser instead of a new Electron window.

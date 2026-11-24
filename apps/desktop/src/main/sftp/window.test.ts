@@ -183,7 +183,8 @@ describe('opening a pop-out', () => {
     const { pathToFileURL } = await import('node:url');
     const { join } = await import('node:path');
     const { window } = popOut('sess-nav');
-    const appPage = pathToFileURL(join(__dirname, '../renderer/index.html')).href;
+    // Worked out next to the main bundle, where appPage.ts lives (one folder up from here).
+    const appPage = pathToFileURL(join(__dirname, '..', '../renderer/index.html')).href;
     const navigate = (url: string) => {
       const event = { preventDefault: vi.fn() };
       page(window).fire('will-navigate', event, url);

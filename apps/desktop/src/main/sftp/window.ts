@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { BrowserWindow, shell, type WebContents } from 'electron';
 import { IPC } from '../../shared/ipcChannels';
 import type {
@@ -9,6 +8,7 @@ import type {
   SftpWindowState,
 } from '../../shared/sftpTypes';
 import { appIcon } from '../appIcon';
+import { keepOnAppPage } from '../appPage';
 import { sendToWindow } from '../ipc/send';
 import { focusMainWindow, getMainWindow } from '../mainWindow';
 import { themeBackground } from '../splashWindow';
@@ -76,20 +76,6 @@ function closeWithMainWindow(): void {
 function handToMainWindow(owners: SftpWindowOwners, ownerId: number): void {
   const main = getMainWindow();
   if (main && !main.isDestroyed()) owners.adoptSessions(ownerId, main.webContents.id);
-}
-
-/** Whether `url` is the app's own page, the only one the pop-out may show. */
-function isAppPage(url: string): boolean {
-  let target: URL;
-  try {
-    target = new URL(url);
-  } catch {
-    return false;
-  }
-  const devServer = process.env.ELECTRON_RENDERER_URL;
-  if (devServer) return target.origin === new URL(devServer).origin;
-  const page = new URL(pathToFileURL(join(__dirname, '../renderer/index.html')).href);
-  return target.protocol === 'file:' && target.pathname === page.pathname;
 }
 
 /**
@@ -160,9 +146,7 @@ export function openSftpWindow(
     handToMainWindow(owners, ownerId);
     if (!window.isDestroyed()) window.close();
   });
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!isAppPage(url)) event.preventDefault();
-  });
+  keepOnAppPage(window.webContents);
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:')) void shell.openExternal(url);
     return { action: 'deny' };
