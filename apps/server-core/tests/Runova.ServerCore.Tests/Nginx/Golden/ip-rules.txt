@@ -47,6 +47,10 @@ server {
         return 444;
     }
 
+    if ($request_uri ~* "^[^?]*(?:(?:%2e|\.){2}(?:%2f|%5c)|(?:%2f|%5c)(?:%2e|\.){2}(?:[/?]|$))") {
+        return 400;
+    }
+
     location ^~ /.well-known/acme-challenge/ {
         root /var/www/runova/acme;
         default_type text/plain;

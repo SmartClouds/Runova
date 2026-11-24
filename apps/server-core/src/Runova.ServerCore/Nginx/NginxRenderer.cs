@@ -304,6 +304,9 @@ internal static class NginxRenderer
             ]).Concat(Logs(site, layout)));
             WriteTls(writer, site, certificate, layout, directory, originLock);
             WriteBlocked(writer, layout);
+            // Cloudflare in Full mode brings a challenge request (and anything else an email gate
+            // lets through under the prefix) here, so it is kept to the webroot over HTTPS too.
+            WriteAcmeLocation(writer, layout);
             WriteServerBody(writer, site, layout, upstreams, directory, overTls: true);
             writer.Close();
         }
@@ -552,6 +555,13 @@ internal static class NginxRenderer
     /// </summary>
     private static void WriteAcmeLocation(ConfigWriter writer, NginxLayout layout)
     {
+        // nginx picks a location after decoding %2F and resolving dot segments, so
+        // /.well-known/acme-challenge/..%2Fsecret would leave this location for the app, while an
+        // email gate's Cloudflare bypass matches the raw path and lets it through as a challenge.
+        // A path with an encoded slash next to .. has no honest use, so it is refused outright.
+        writer.Open(@"if ($request_uri ~* ""^[^?]*(?:(?:%2e|\.){2}(?:%2f|%5c)|(?:%2f|%5c)(?:%2e|\.){2}(?:[/?]|$))"")");
+        writer.Section("return 400;");
+        writer.Close();
         writer.Open("location ^~ /.well-known/acme-challenge/");
         writer.Section(
             $"root {layout.AcmeWebroot};",

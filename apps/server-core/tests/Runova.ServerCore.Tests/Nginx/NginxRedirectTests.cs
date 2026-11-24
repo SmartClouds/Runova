@@ -69,7 +69,8 @@ public sealed class NginxRedirectTests
         var content = SiteFile(Redirect("https://runovahq.com/landing?from=old", permanent: false, keepPath: false));
 
         Assert.Contains("return 302 https://runovahq.com/landing?from=old;", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("$request_uri", content, StringComparison.Ordinal);
+        // The only $request_uri left is the ACME guard's check, never a return target.
+        Assert.DoesNotContain("$request_uri;", content, StringComparison.Ordinal);
     }
 
     [Fact]

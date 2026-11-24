@@ -77,6 +77,57 @@ public abstract class NginxHarnessTests(NginxHarnessFixture fixture)
         Assert.True(failures.Count == 0, $"nginx -t failed on {nginx.Distro} ({nginx.NginxVersion}):\n{string.Join("\n\n", failures)}");
     }
 
+    /// <summary>
+    /// An email gate opens /.well-known/acme-challenge to everyone at Cloudflare's edge, which
+    /// may reach the origin over HTTPS and matches the raw path. The origin has to keep that
+    /// prefix to the challenge files on every listener, including an encoded ..%2F that nginx
+    /// itself would resolve out of the prefix.
+    /// </summary>
+    [Fact]
+    public async Task The_acme_prefix_never_reaches_the_app_on_any_listener()
+    {
+        DockerCli.RequireAvailable();
+        var ct = TestContext.Current.CancellationToken;
+        var nginx = await fixture.GetAsync();
+        await nginx.InstallAsync(NginxVariants.All(), ct);
+        await nginx.ReloadAsync(async () => (await nginx.CurlAsync(ct, Http("tls.test"))).Status == 301, ct);
+
+        var leaks = new List<string>();
+        foreach (var host in new[] { "tls.test", "open.test" })
+        {
+            var challenge = await nginx.CurlAsync(ct, Https(host, _acmePath));
+            if (challenge.Body != NginxHarness.AcmeContent)
+            {
+                leaks.Add($"https://{host}{_acmePath} was not the challenge file:\n{challenge.Body}");
+            }
+        }
+
+        foreach (var path in new[]
+        {
+            "/.well-known/acme-challenge/not-a-token",
+            "/.well-known/acme-challenge/..%2F..%2Fsecret",
+            "/.well-known/acme-challenge/..%2fsecret",
+            "/.well-known/acme-challenge%2F..%2F..%2Fsecret",
+            "/.well-known/acme-challenge/%2E%2E%2Fsecret",
+        })
+        {
+            foreach (var request in new[] { Https("open.test", path), Http("open.test", path), Https("tls.test", path) })
+            {
+                var response = await nginx.CurlAsync(ct, ["--path-as-is", .. request]);
+                if (response.Body.Contains("upstream:", StringComparison.Ordinal))
+                {
+                    leaks.Add($"{request[^1]} reached the app:\n{response.Body}");
+                }
+            }
+        }
+
+        Assert.True(leaks.Count == 0, string.Join("\n\n", leaks));
+
+        // An encoded slash anywhere else still goes to the app as before.
+        var api = await nginx.CurlAsync(ct, ["--path-as-is", .. Https("open.test", "/api/a%2Fb")]);
+        Assert.Contains("upstream: http\nGET /api/a%2Fb HTTP/1.1\n", api.Body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task All_variants_load_together_and_serve_through_the_upstream()
     {
