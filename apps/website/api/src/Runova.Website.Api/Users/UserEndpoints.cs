@@ -179,7 +179,8 @@ internal static class UserEndpoints
         AppDbContext db,
         AuditLog audit,
         TimeProvider time,
-        Accounts.AccountSessions sessions)
+        Accounts.AccountSessions sessions,
+        Remote.RemotePresence presence)
     {
         if (await FindAsync(users, id) is not { } user)
         {
@@ -243,8 +244,14 @@ internal static class UserEndpoints
         await transaction.CommitAsync();
         if (user.DisabledAt is not null)
         {
-            // Every browser and computer of a disabled user stops at its next request.
+            // Every browser and computer of a disabled user stops at its next request, and the
+            // background agents they turned on, which hold no sign-in, go offline now.
             await sessions.RevokeAllAsync(user.Id, keep: null);
+            var agents = await db.RemoteDevices.Where(d => d.UserId == user.Id && d.AgentSecretHash != null).Select(d => d.Id).ToListAsync();
+            foreach (var device in agents)
+            {
+                presence.RemoveAgent(device);
+            }
         }
 
         Versions.SetETag(http.Response, user.Version);

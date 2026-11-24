@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Runova.Website.Api.Remote;
 using Runova.Website.IntegrationTests.Infrastructure;
 using static Runova.Website.IntegrationTests.Infrastructure.TestDependencies;
@@ -116,6 +118,31 @@ public sealed class RemoteAgentTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, otherId.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, afterOff.StatusCode);
+    }
+
+    /// <summary>
+    /// The agent's secret and tokens hang off the computer, not a sign-in, so an account an admin
+    /// turned off has to be checked for here as everywhere a device gets a token.
+    /// </summary>
+    [Fact]
+    public async Task A_disabled_account_gets_no_agent_token_and_an_earlier_one_stops_working()
+    {
+        var (_, device, _, secret) = await AgentOnAsync();
+        var remoteId = device.GetProperty("remoteId").GetString()!;
+        var earlier = await AgentTokenAsync(remoteId, secret);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Runova.Website.Data.AppDbContext>();
+            var deviceId = device.GetProperty("id").GetInt64();
+            var userId = await db.RemoteDevices.Where(d => d.Id == deviceId).Select(d => d.UserId).SingleAsync(Ct);
+            await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(u => u.SetProperty(x => x.DisabledAt, DateTimeOffset.UtcNow), Ct);
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await TokenAsync(remoteId, secret)).StatusCode);
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        {
+            await using var agent = await ConnectAsync(_factory, earlier);
+        });
     }
 
     [Fact]

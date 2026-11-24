@@ -110,7 +110,8 @@ internal sealed class RemoteAgentAuthenticationHandler(
         }
 
         var hash = await db.RemoteDevices.AsNoTracking()
-            .Where(d => d.Id == read.DeviceId && d.UserId == read.UserId && d.RevokedAt == null)
+            .Where(d => d.Id == read.DeviceId && d.UserId == read.UserId && d.RevokedAt == null
+                && db.Users.Any(u => u.Id == d.UserId && u.DisabledAt == null))
             .Select(d => d.AgentSecretHash)
             .SingleOrDefaultAsync();
         if (hash is null || Convert.ToHexString(hash, 0, 8) != read.Stamp)
@@ -193,8 +194,11 @@ internal static class RemoteAgentEndpoints
             return refused;
         }
 
+        // The secret belongs to the computer, but an account an admin turned off gets no token here
+        // either, as on every other way a device gets one.
         var device = await db.RemoteDevices.AsNoTracking()
-            .Where(d => d.RemoteId == remoteId && d.RevokedAt == null && d.AgentSecretHash != null)
+            .Where(d => d.RemoteId == remoteId && d.RevokedAt == null && d.AgentSecretHash != null
+                && db.Users.Any(u => u.Id == d.UserId && u.DisabledAt == null))
             .Select(d => new { d.Id, d.UserId, d.AgentSecretHash })
             .SingleOrDefaultAsync();
         var hash = RemoteAgentTokens.Hash(request.Secret);
