@@ -74,12 +74,21 @@ internal sealed class AptPackageManager(IProcessRunner runner, SystemdRunner uni
     /// is told not to: a check must never hold up unattended-upgrades or an install job. If it
     /// fails, nothing is marked.
     /// </summary>
+    /// <remarks>
+    /// The dry run goes through a transient unit, like the upgrade it predicts. The core's own
+    /// hardening (ProtectKernelModules and friends) gives it a mount namespace of its own, and in
+    /// there apt takes itself for a chroot and ignores phasing (seen on Ubuntu 24.04). Run from the
+    /// core itself, the dry run deferred nothing, the list offered a phased package, and the
+    /// upgrade, run in its unit where phasing applies, left it alone every time.
+    /// </remarks>
     private async Task<IReadOnlySet<string>> DeferredByPhasingAsync(CancellationToken cancellationToken)
     {
-        var result = await runner.RunAsync(
+        var result = await units.RunAsync(
+            SystemdRunner.UnitName("phasing", Guid.NewGuid()),
+            "Check which updates Ubuntu is still phasing in",
             new ProcessSpec
             {
-                Program = "apt-get",
+                Program = AptGet,
                 Arguments = ["-s", "-o", "Debug::NoLocking=true", "--with-new-pkgs", "upgrade"],
                 Timeout = TimeSpan.FromMinutes(2),
                 MaxOutputBytes = 4 * 1024 * 1024,

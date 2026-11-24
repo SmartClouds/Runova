@@ -21,6 +21,9 @@ public sealed class LinuxPlatformTests
         "-q", "-y", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold",
     ];
 
+    /// <summary>The phasing dry run: a simulated upgrade that takes no lock.</summary>
+    private static readonly string[] _dryRun = ["/usr/bin/apt-get", "-s", "-o", "Debug::NoLocking=true", "--with-new-pkgs", "upgrade"];
+
     private sealed class Stats(Dictionary<string, (long Total, long Free, long Available)> sizes) : IFileSystemStats
     {
         public (long Total, long Free, long Available)? Of(string mountPoint) =>
@@ -131,7 +134,8 @@ public sealed class LinuxPlatformTests
         Assert.Equal(4, packages.Count(p => p.Security));
         Assert.All(packages, p => Assert.Null(p.Phased));
         Assert.Equal(2, processes.Calls.Count);
-        Assert.DoesNotContain(processes.Calls, Units.IsUnitRun);
+        // The one unit is the dry run, which simulates and takes no lock.
+        Assert.Equal(_dryRun, Units.Command(Assert.Single(processes.Calls, Units.IsUnitRun)));
     }
 
     [Fact]
@@ -140,7 +144,7 @@ public sealed class LinuxPlatformTests
         using var root = new TestRoot("ubuntu-24.04");
         var processes = new FakeProcessRunner();
         processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/list-upgradable-phased-ubuntu-24.04.txt")));
-        processes.Respond("apt-get", ["-s"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/upgrade-simulate-phased-ubuntu-24.04.txt")));
+        processes.Respond(IsDryRunInUnit, _ => FakeProcessRunner.Ok(Fixtures.Read("apt/upgrade-simulate-phased-ubuntu-24.04.txt")));
 
         var packages = await Apt(root.Files, processes).ListUpgradableAsync(Cancel);
 
@@ -148,9 +152,36 @@ public sealed class LinuxPlatformTests
             ["snapd", "ubuntu-pro-client", "ubuntu-pro-client-l10n"],
             packages.Where(p => p.Phased == true).Select(p => p.Name).Order(StringComparer.Ordinal));
         Assert.Equal(3, packages.Count(p => p.Phased is null));
-        var dryRun = Assert.Single(processes.Calls, call => FakeProcessRunner.Is(call, "apt-get"));
-        Assert.Equal(["-s", "-o", "Debug::NoLocking=true", "--with-new-pkgs", "upgrade"], dryRun.Arguments);
-        Assert.DoesNotContain(processes.Calls, Units.IsUnitRun);
+        var dryRun = Assert.Single(processes.Calls, Units.IsUnitRun);
+        Assert.Equal(_dryRun, Units.Command(dryRun));
+        Assert.StartsWith("runova-phasing-", Units.UnitName(dryRun), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The core runs in a mount namespace of its own, where apt took itself for a chroot and
+    /// ignored phasing: the dry run deferred nothing, so a phased libsqlite3-0 was offered, and
+    /// "Install all" (whose upgrade runs in a unit, where phasing applies) never installed it.
+    /// The dry run has to ask the same apt the upgrade does.
+    /// </summary>
+    [Fact]
+    public async Task The_phasing_dry_run_runs_where_the_upgrade_runs_so_a_phased_update_is_not_offered()
+    {
+        using var root = new TestRoot("ubuntu-24.04");
+        var processes = new FakeProcessRunner();
+        processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok(
+            "Listing...\nlibsqlite3-0/noble-updates 3.45.1-1ubuntu2.11 amd64 [upgradable from: 3.45.1-1ubuntu2.9]\n"));
+        // What apt says inside the core's own namespace: phasing ignored, the update goes in.
+        processes.Respond("apt-get", ["-s"], _ => FakeProcessRunner.Ok(
+            "Calculating upgrade...\nThe following packages will be upgraded:\n  libsqlite3-0\n1 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n"));
+        // What apt says in a unit, where the upgrade runs: deferred.
+        processes.Respond(IsDryRunInUnit, _ => FakeProcessRunner.Ok(
+            "Calculating upgrade...\nThe following upgrades have been deferred due to phasing:\n  libsqlite3-0\n0 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.\n"));
+
+        var package = Assert.Single(await Apt(root.Files, processes).ListUpgradableAsync(Cancel));
+
+        Assert.Equal("libsqlite3-0", package.Name);
+        Assert.True(package.Phased);
+        Assert.DoesNotContain(processes.Calls, call => FakeProcessRunner.Is(call, "apt-get"));
     }
 
     [Fact]
@@ -159,7 +190,7 @@ public sealed class LinuxPlatformTests
         using var root = new TestRoot("ubuntu-24.04");
         var processes = new FakeProcessRunner();
         processes.Respond("apt", ["list", "--upgradable"], _ => FakeProcessRunner.Ok(Fixtures.Read("apt/list-upgradable-phased-ubuntu-24.04.txt")));
-        processes.Respond("apt-get", ["-s"], _ => FakeProcessRunner.Exit(100, error: "E: The package lists or status file could not be parsed or opened."));
+        processes.Respond(IsDryRunInUnit, _ => FakeProcessRunner.Exit(100, error: "E: The package lists or status file could not be parsed or opened."));
 
         var packages = await Apt(root.Files, processes).ListUpgradableAsync(Cancel);
 
@@ -542,6 +573,9 @@ public sealed class LinuxPlatformTests
     }
 
     private static OsInfo Os(string fixture) => OsRelease.Describe(OsRelease.Parse(Fixtures.Read($"os-release/{fixture}")));
+
+    private static bool IsDryRunInUnit(ProcessSpec spec) =>
+        Units.IsUnitRun(spec) && Units.Command(spec) is ["/usr/bin/apt-get", "-s", ..];
 
     private static AptPackageManager Apt(SystemFiles files, FakeProcessRunner processes) =>
         new(processes, Units.Runner(processes), files);
