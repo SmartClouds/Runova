@@ -5,6 +5,9 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
+      "!.agents/skills/**",
+      "!.claude/skills/**",
+      "!.runova/installed-skills.json",
       "!apps/remote-agent/**",
       "!apps/server-core/**",
       "!apps/website/**",
