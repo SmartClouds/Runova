@@ -135,6 +135,8 @@ function create(): AutoFixService {
         headSha: run.headSha ?? null,
         runNumber: run.runNumber,
         displayTitle: run.displayTitle,
+        workflowId: run.workflowId,
+        workflowName: run.name,
       };
     },
     findRun: async (repo, workflowId, branch, wait) => {

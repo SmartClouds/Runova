@@ -40,6 +40,9 @@ export interface AutoFixRunView {
   headSha: string | null;
   runNumber: number;
   displayTitle: string;
+  /** The workflow the run belongs to, as GitHub names it. */
+  workflowId: number;
+  workflowName: string;
 }
 
 export interface AutoFixProject {
@@ -211,6 +214,15 @@ export function createAutoFixService(deps: AutoFixDeps): AutoFixService {
     if (!run.headSha) {
       return blockLaunch(id, 'read-failed', 'GitHub did not say which commit the run tested.');
     }
+    if (run.workflowId !== session.workflowId) {
+      return blockLaunch(id, 'read-failed', 'That run belongs to another workflow.');
+    }
+    // The prompt and the commit name the workflow as GitHub does. The name a caller sent (a
+    // paired phone with only the ops scope, say) is display text and never reaches the agent.
+    if (run.workflowName && run.workflowName !== session.workflowName) {
+      sessions.set(id, { ...session, workflowName: run.workflowName });
+      changed();
+    }
 
     const ready = await deps.preflight(project.folderPath, session.branch, run.headSha).catch(
       (error: unknown): AutoFixPreflight => ({
@@ -227,7 +239,7 @@ export function createAutoFixService(deps: AutoFixDeps): AutoFixService {
     const runInput: GithubActionsRunErrorInput = {
       repo: session.repo,
       runId,
-      workflowName: session.workflowName,
+      workflowName: run.workflowName || 'CI',
       displayTitle: run.displayTitle,
       runNumber: run.runNumber,
       headBranch: session.branch,
