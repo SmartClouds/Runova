@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { lstat, mkdir, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -52,6 +52,17 @@ function processIsAlive(pid: number): boolean {
 }
 
 /**
+ * Whether `root` is a real folder of this account's. The root sits under the temp folder, which
+ * on Linux is the shared /tmp, so another account could have made the name first, as a link to
+ * a folder of this person's or as a folder of its own.
+ */
+async function ownRealFolder(root: string): Promise<boolean> {
+  const info = await lstat(root).catch(() => null);
+  if (!info?.isDirectory() || info.isSymbolicLink()) return false;
+  return typeof process.getuid !== 'function' || info.uid === process.getuid();
+}
+
+/**
  * Removes what earlier runs left behind. The staged files stay on disk after a window closes so
  * a paste still works then, which is why they are only cleaned up when the next run starts.
  */
@@ -59,6 +70,7 @@ export async function sweepStaleStaging(
   root: string = defaultRoot(),
   isAlive: (pid: number) => boolean = processIsAlive,
 ): Promise<void> {
+  if (!(await ownRealFolder(root))) return;
   const names = await readdir(root).catch(() => [] as string[]);
   await Promise.all(
     names.map(async (name) => {

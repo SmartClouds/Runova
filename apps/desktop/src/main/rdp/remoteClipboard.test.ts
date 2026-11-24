@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tempDir, withPlatform } from '../../test/main/fixtures';
@@ -114,6 +114,19 @@ describe('sweepStaleStaging', () => {
 
   it('has nothing to do before the first copy ever made a folder', async () => {
     await expect(sweepStaleStaging(join(tempDir(), 'missing'))).resolves.toBeUndefined();
+  });
+
+  it('never follows a root that is a link to somewhere else', async () => {
+    // Another account plants the shared /tmp name as a link to a folder of this person's.
+    const victim = tempDir();
+    mkdirSync(join(victim, '2024'));
+    writeFileSync(join(victim, '2024', 'photo.jpg'), 'x');
+    const root = join(tempDir(), 'runova-rdp-clipboard');
+    symlinkSync(victim, root, process.platform === 'win32' ? 'junction' : 'dir');
+
+    await sweepStaleStaging(root, () => false);
+
+    expect(existsSync(join(victim, '2024', 'photo.jpg'))).toBe(true);
   });
 });
 

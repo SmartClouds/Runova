@@ -183,7 +183,8 @@ function syncPowerSaveBlocker(): void {
 
 export function registerRdpHandlers(): void {
   // Files staged for the clipboard by an earlier run stay on disk until now.
-  void sweepStaleStaging();
+  // Only Windows stages files, in a temp folder of the person's own.
+  if (stagingSupported()) void sweepStaleStaging();
 
   ipcMain.handle(
     IPC.rdp.listServers,
