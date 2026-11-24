@@ -86,6 +86,14 @@ internal static class RemoteLimits
 
     public static readonly TimeSpan SignalWindow = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Relay tickets one side of a session may ask for. A link needs one, or a few more when it
+    /// drops and reconnects; every relay connection waits on the table they sit in.
+    /// </summary>
+    public const int RelayTicketsPerSide = 10;
+
+    public static readonly TimeSpan RelayTicketWindow = TimeSpan.FromMinutes(1);
+
     /// <summary>The largest signaling message, in characters. An SDP offer is a few kilobytes.</summary>
     public const int MaxSignalLength = 64 * 1024;
 

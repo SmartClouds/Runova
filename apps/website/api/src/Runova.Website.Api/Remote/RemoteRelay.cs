@@ -36,8 +36,12 @@ internal sealed class RemoteRelayTickets(TimeProvider time)
 {
     public static readonly TimeSpan ValidFor = TimeSpan.FromMinutes(1);
 
+    /// <summary>How often expired tickets are swept out, rather than on every ticket issued.</summary>
+    private static readonly TimeSpan _sweepEvery = TimeSpan.FromSeconds(10);
+
     private readonly Dictionary<string, (RelayTicket Ticket, DateTimeOffset ExpiresAt)> _tickets = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
+    private DateTimeOffset _nextSweep = DateTimeOffset.MinValue;
 
     public int Count
     {
@@ -56,11 +60,17 @@ internal sealed class RemoteRelayTickets(TimeProvider time)
         var now = time.GetUtcNow();
         lock (_gate)
         {
-            foreach (var (key, entry) in _tickets.ToList())
+            // A sweep walks every ticket while Redeem waits on the same lock, so it runs every few
+            // seconds instead of on every ticket; an expired ticket is refused on redeem either way.
+            if (now >= _nextSweep)
             {
-                if (entry.ExpiresAt <= now)
+                _nextSweep = now + _sweepEvery;
+                foreach (var (key, entry) in _tickets)
                 {
-                    _tickets.Remove(key);
+                    if (entry.ExpiresAt <= now)
+                    {
+                        _tickets.Remove(key);
+                    }
                 }
             }
 

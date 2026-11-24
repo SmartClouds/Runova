@@ -293,6 +293,11 @@ internal sealed partial class RemoteHub(
         }
 
         var side = session.Parties.HostConnectionId == Context.ConnectionId ? RelaySide.Host : RelaySide.Controller;
+        if (!limits.TryAcquire($"relay-ticket:{sessionId}:{side}", RemoteLimits.RelayTicketsPerSide, RemoteLimits.RelayTicketWindow))
+        {
+            throw new HubException("Too many relay tickets for this session. Wait a minute and try again.");
+        }
+
         return new RelayTicketDto($"{RemoteRelay.PathPrefix}/{sessionId}", relayTickets.Issue(sessionId, side));
     }
 

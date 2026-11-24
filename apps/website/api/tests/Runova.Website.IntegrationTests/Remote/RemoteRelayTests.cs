@@ -98,6 +98,32 @@ public sealed class RemoteRelayTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.Equal(new byte[] { 9, 8 }, atController.Data);
     }
 
+    /// <summary>
+    /// A link needs a ticket or two per side. Without a limit one account could fill the ticket
+    /// table, which every relay connection waits on.
+    /// </summary>
+    [Fact]
+    public async Task A_side_that_keeps_asking_for_relay_tickets_is_turned_down()
+    {
+        await using var accepted = await AcceptedAsync();
+        var (host, _, sessionId) = accepted;
+
+        var refused = 0;
+        for (var i = 0; i < 200 && refused == 0; i++)
+        {
+            try
+            {
+                await host.RelayTicketAsync(sessionId);
+            }
+            catch (Microsoft.AspNetCore.SignalR.HubException)
+            {
+                refused = i;
+            }
+        }
+
+        Assert.InRange(refused, 2, 50);
+    }
+
     [Fact]
     public async Task A_frame_close_to_the_limit_passes_whole()
     {
