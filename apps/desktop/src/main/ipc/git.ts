@@ -590,6 +590,9 @@ export async function createPullRequest(
   return { ok: true, url, usedFallback: true };
 }
 
+/** Longer than any version tag a project would use, short enough to keep a prompt a prompt. */
+const MAX_VERSION_TAG_LENGTH = 64;
+
 async function applyVersion(
   input: ApplyVersionInput,
   signal: AbortSignal,
@@ -600,6 +603,16 @@ async function applyVersion(
   const tag = input.tag.trim();
   if (!tag) {
     return { ok: false, output: '', changes: [], error: 'No version to apply.' };
+  }
+  // The tag goes into the prompt of an agent that may write and run things unasked, and it can
+  // come from a paired phone with only the git scope, so it has to be a tag name and no more.
+  if (tag.length > MAX_VERSION_TAG_LENGTH || !TAG_NAME_PATTERN.test(tag)) {
+    return {
+      ok: false,
+      output: '',
+      changes: [],
+      error: `"${tag.slice(0, 40)}" is not a tag name.`,
+    };
   }
 
   // Snapshot first: the CLI's own summary of what it edited can't be trusted, and
