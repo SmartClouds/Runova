@@ -26,6 +26,9 @@ public interface IXServerProbe
     /// <summary>The owner and mode of a folder.</summary>
     FileOwner? Folder(string path);
 
+    /// <summary>The owner and mode of a file, through any link to it, or null when there is none.</summary>
+    FileOwner? FileAt(string path);
+
     /// <summary>The effective user the process runs as.</summary>
     int? EffectiveUid(int pid);
 
@@ -150,7 +153,7 @@ public static class XServerDiscovery
         var servers = new List<XServer>();
         foreach (var pid in probe.ProcessIds())
         {
-            if (probe.CommandLine(pid) is { } commandLine && Parse(commandLine, pid) is { } server && Trusted(pid, probe, seatUser))
+            if (probe.CommandLine(pid) is { } commandLine && Parse(commandLine, pid) is { } server && Trusted(pid, probe, seatUser) && OwnAuthFile(server, probe))
             {
                 servers.Add(server);
             }
@@ -203,6 +206,24 @@ public static class XServerDiscovery
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether the server's auth file may be read for it. The agent reads it as root, so a server
+    /// the seat0 user started themselves could otherwise name another account's cookie file and be
+    /// handed that cookie when the agent connects (root's included): such a server only gets a file
+    /// of its own user's. A server root runs (only root could have written its command line) may
+    /// name any.
+    /// </summary>
+    private static bool OwnAuthFile(XServer server, IXServerProbe probe)
+    {
+        if (probe.FileAt(server.AuthFile) is not { } owner)
+        {
+            return false;
+        }
+
+        var uid = probe.EffectiveUid(server.Pid);
+        return uid == 0 || owner.Uid == uid;
     }
 
     private static bool RootOnly(FileOwner owner) =>

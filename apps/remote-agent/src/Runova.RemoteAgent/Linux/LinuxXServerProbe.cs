@@ -40,6 +40,8 @@ internal sealed unsafe class LinuxXServerProbe : IXServerProbe
 
     public FileOwner? Folder(string path) => Stat(path);
 
+    public FileOwner? FileAt(string path) => Stat(path);
+
     public int? EffectiveUid(int pid) => Read($"/proc/{pid}/status") is { } status ? XServerDiscovery.EffectiveUid(status) : null;
 
     public int? SeatUser() => Read("/run/systemd/seats/seat0") is { } seat ? XServerDiscovery.SeatUser(seat) : null;

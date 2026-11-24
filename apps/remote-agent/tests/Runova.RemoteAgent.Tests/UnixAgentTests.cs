@@ -94,6 +94,12 @@ public class UnixAgentTests
             ["/usr/bin"] = _rootFile,
         };
 
+        /// <summary>The auth files on disk and who owns them.</summary>
+        public Dictionary<string, FileOwner> Files { get; } = new()
+        {
+            ["/run/user/120/gdm/Xauthority"] = new FileOwner(120, (UnixFileMode)0b110_000_000),
+        };
+
         public int? Seat { get; set; } = 120;
 
         public string Active { get; set; } = "tty1";
@@ -111,6 +117,8 @@ public class UnixAgentTests
         public FileOwner? ExecutableFile(int pid) => Processes.GetValueOrDefault(pid)?.Binary;
 
         public FileOwner? Folder(string path) => Folders.GetValueOrDefault(path);
+
+        public FileOwner? FileAt(string path) => Files.GetValueOrDefault(path);
 
         public int? EffectiveUid(int pid) => Processes.GetValueOrDefault(pid)?.Uid;
 
@@ -188,6 +196,28 @@ public class UnixAgentTests
 
         probe.Folders.Remove("/usr/lib/xorg");
         Assert.Null(XServerDiscovery.Current(probe));
+    }
+
+    [Fact]
+    public void An_auth_file_of_another_account_is_never_read_for_a_server()
+    {
+        // The seat0 user starts the real Xorg binary themselves and names someone else's cookie
+        // file; the agent, as root, would read it and hand the cookie to that user's server.
+        var probe = new FakeProbe
+        {
+            Processes = { [29] = RealGdmServer with { CommandLine = "/usr/lib/xorg/Xorg\0vt1\0-displayfd\03\0-auth\0/home/bob/.Xauthority\0" } },
+        };
+        probe.Files["/home/bob/.Xauthority"] = new FileOwner(1001, (UnixFileMode)0b110_000_000);
+
+        Assert.Null(XServerDiscovery.Current(probe));
+
+        // Nor one that is missing, nor root's (another server's cookie); a server root runs may name any.
+        probe.Files.Remove("/home/bob/.Xauthority");
+        Assert.Null(XServerDiscovery.Current(probe));
+        probe.Files["/home/bob/.Xauthority"] = new FileOwner(0, (UnixFileMode)0b110_000_000);
+        Assert.Null(XServerDiscovery.Current(probe));
+        probe.Processes[29] = probe.Processes[29] with { Uid = 0 };
+        Assert.Equal(29, XServerDiscovery.Current(probe)?.Pid);
     }
 
     [Fact]
