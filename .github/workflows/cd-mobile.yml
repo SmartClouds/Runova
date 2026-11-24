@@ -176,17 +176,25 @@ jobs:
   ios:
     name: iOS
     needs: ci-passed
-    runs-on: [self-hosted, macOS, ARM64]
+    # A fresh GitHub-hosted Mac, never the self-hosted one. The self-hosted Mac keeps its disk
+    # between jobs and runs CI for pushes and pull requests, so anything an earlier job left in its
+    # brew prefix, ~/.cargo or tool cache would run here next to the App Store Connect key.
+    runs-on: macos-latest
     timeout-minutes: 90
+    # This job uploads nothing to the release, so it gets a read-only token.
+    permissions:
+      contents: read
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
-      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-      KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
     steps:
+      # The secrets are only handed to the two steps that use them, not to the job.
       - name: Is everything needed here?
         id: secrets
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
         run: |
           if [ -z "$KEY_BASE64" ] || [ -z "$TEAM_ID" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
             echo "::warning::The App Store Connect secrets are not all set, so nothing went to TestFlight. See docs/mobile-release-setup.md."
@@ -202,12 +210,7 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         uses: actions/checkout@v7
         with:
-          # The Mac keeps node_modules between jobs, and Runner cleanup clears the rest.
-          clean: false
-
-      - name: Runner cleanup
-        if: steps.secrets.outputs.ready == 'true'
-        uses: ./.github/actions/runner-cleanup
+          persist-credentials: false
 
       - name: Setup Rust
         if: steps.secrets.outputs.ready == 'true'
@@ -231,6 +234,11 @@ jobs:
       - name: Archive and upload to TestFlight
         if: steps.secrets.outputs.ready == 'true'
         working-directory: apps/mobile/ios
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
         run: |
           version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
           eval "$version"

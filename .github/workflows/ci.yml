@@ -37,7 +37,12 @@ name: CI
 # The repository is public, and a pull request from a fork would run its own
 # code on our machine, so pull requests only run here from branches of this
 # repository. Fork pull requests get no CI until a maintainer pushes the
-# branch here.
+# branch here. The if: on each job only keeps an ordinary fork pull request
+# from queueing. It is no defence, since a pull request runs the workflow
+# files from its own merge commit and can drop it. What keeps fork code off
+# these machines is the repository setting that makes every run from an
+# outside contributor wait for a maintainer's approval (all external
+# contributors), so read a fork's workflow changes before approving a run.
 
 on:
   push:
@@ -131,6 +136,11 @@ jobs:
       - name: No workflow waits for a sudo password
         if: ${{ !cancelled() }}
         run: node --test scripts/workflow-sudo.test.mjs
+
+      # The release jobs hold the signing secrets, so they never run on these self-hosted runners.
+      - name: No release job runs on a self-hosted runner
+        if: ${{ !cancelled() }}
+        run: node --test scripts/release-runners.test.mjs
 
       # The desktop type-checks against @runova/core and
       # @runova/protocol declaration output, so those have to be built first.
