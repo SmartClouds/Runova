@@ -44,6 +44,12 @@ services:
         base: docker-image://alpine:3.22
     secrets: [key, local]
     configs: [conf]
+  joiner:
+    image: example/joiner:1.0
+    pid: container:sidecar
+    network_mode: container:sidecar
+    ipc: container:sidecar
+    volumes_from: ["container:sidecar:ro", proxied]
 volumes:
   shared:
     driver_opts:

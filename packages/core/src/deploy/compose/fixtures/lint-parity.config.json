@@ -157,6 +157,21 @@
           "bind": {}
         }
       ]
+    },
+    "joiner": {
+      "command": null,
+      "entrypoint": null,
+      "image": "example/joiner:1.0",
+      "ipc": "container:sidecar",
+      "network_mode": "container:sidecar",
+      "pid": "container:sidecar",
+      "volumes_from": ["container:sidecar:ro", "proxied"],
+      "depends_on": {
+        "proxied": {
+          "condition": "service_started",
+          "required": true
+        }
+      }
     }
   },
   "volumes": {

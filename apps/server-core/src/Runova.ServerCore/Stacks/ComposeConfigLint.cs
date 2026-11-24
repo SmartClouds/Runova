@@ -29,6 +29,17 @@ internal static partial class ComposeConfigLint
         ("cgroup", "host-cgroup", StackRiskSeverity.Medium, "{0} uses the server's control groups (cgroup: host)."),
     ];
 
+    /// <summary>
+    /// Namespaces a service can borrow from another container by name. That container may sit
+    /// outside the app (a Docker socket proxy, a privileged agent), and its access comes along.
+    /// </summary>
+    private static readonly (string Key, string Rule, string What)[] _containerJoins =
+    [
+        ("pid", "container-pid", "process list"),
+        ("network_mode", "container-network", "network"),
+        ("ipc", "container-ipc", "shared memory"),
+    ];
+
     private static readonly string[] _socketPaths =
     [
         "/run", "/var/run", "/run/docker.sock", "/var/run/docker.sock", "/run/docker", "/var/run/docker",
@@ -176,6 +187,29 @@ internal static partial class ComposeConfigLint
                 if (on)
                 {
                     Add(rule, severity, service.Name, null, string.Format(System.Globalization.CultureInfo.InvariantCulture, message, service.Name));
+                }
+            }
+
+            foreach (var (key, rule, what) in _containerJoins)
+            {
+                if (definition.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
+                    && value.GetString() is { } joined && joined.StartsWith("container:", StringComparison.Ordinal))
+                {
+                    var container = joined["container:".Length..];
+                    Add(rule, StackRiskSeverity.High, service.Name, container, $"{service.Name} shares the {what} of the container {container} ({key}: container:{container}).");
+                }
+            }
+
+            // A service of this app is linted on its own; a container named here brings mounts nobody checked.
+            if (definition.TryGetProperty("volumes_from", out var volumesFrom) && volumesFrom.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in volumesFrom.EnumerateArray())
+                {
+                    if (entry.ValueKind == JsonValueKind.String && entry.GetString() is { } from && from.StartsWith("container:", StringComparison.Ordinal))
+                    {
+                        var container = from["container:".Length..].Split(':')[0];
+                        Add("volumes-from", StackRiskSeverity.High, service.Name, container, $"{service.Name} mounts every volume of the container {container} (volumes_from).");
+                    }
                 }
             }
 

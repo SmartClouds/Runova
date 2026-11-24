@@ -20,5 +20,9 @@
   "core-data:api:/opt/runova-core/shared",
   "device-cgroup-rule:api:c 10:200 rwm",
   "build-outside:builder:/srv/build",
-  "build-outside:builder:/srv/extra"
+  "build-outside:builder:/srv/extra",
+  "container-pid:joiner:sidecar",
+  "container-network:joiner:sidecar",
+  "container-ipc:joiner:sidecar",
+  "volumes-from:joiner:sidecar"
 ]

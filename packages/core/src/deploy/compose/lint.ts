@@ -24,6 +24,10 @@ export type ComposeRiskRule =
   | 'host-userns'
   | 'host-uts'
   | 'host-cgroup'
+  | 'container-pid'
+  | 'container-network'
+  | 'container-ipc'
+  | 'volumes-from'
   | 'docker-socket'
   | 'host-root'
   | 'core-data'
@@ -633,6 +637,16 @@ function imageRisks(service: string, definition: Record<string, unknown>, add: A
   }
 }
 
+/**
+ * Namespaces a service can borrow from another container by name. That container may sit outside
+ * the app (a Docker socket proxy, a privileged agent) and its access comes along.
+ */
+const CONTAINER_JOINS: { key: string; rule: ComposeRiskRule; what: string }[] = [
+  { key: 'pid', rule: 'container-pid', what: 'process list' },
+  { key: 'network_mode', rule: 'container-network', what: 'network' },
+  { key: 'ipc', rule: 'container-ipc', what: 'shared memory' },
+];
+
 function lintService(
   service: string,
   definition: Record<string, unknown>,
@@ -655,6 +669,38 @@ function lintService(
           setting.advice,
         ),
       );
+  }
+
+  for (const join of CONTAINER_JOINS) {
+    const value = definition[join.key];
+    if (typeof value !== 'string' || !value.startsWith('container:')) continue;
+    const container = value.slice('container:'.length);
+    add(
+      risk(
+        join.rule,
+        'high',
+        service,
+        container,
+        `${service} shares the ${join.what} of the container ${container} (${join.key}: container:${container}).`,
+        'It gets whatever that container was given, and the container is not part of this app. Use service: to join a service of this app instead.',
+      ),
+    );
+  }
+
+  // A service of this app is linted on its own; a container named here brings mounts nobody checked.
+  for (const entry of asList(definition.volumes_from)) {
+    if (typeof entry !== 'string' || !entry.startsWith('container:')) continue;
+    const container = entry.slice('container:'.length).split(':')[0] ?? '';
+    add(
+      risk(
+        'volumes-from',
+        'high',
+        service,
+        container,
+        `${service} mounts every volume of the container ${container} (volumes_from).`,
+        'That container may mount the Docker socket or the server itself, and none of it is checked here. Mount what the service needs directly.',
+      ),
+    );
   }
 
   for (const mount of serviceMounts(definition, data)) {
