@@ -8,9 +8,19 @@ import type { ErrorConnectionSummary, ErrorCreatedProject } from '@shared/errorT
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
-import { CircleCheck, Copy, ExternalLink, Key, Link, Plus, Spinner } from '@/components/icons';
+import {
+  CircleCheck,
+  Copy,
+  ExternalLink,
+  Key,
+  Link,
+  LinkOff,
+  Plus,
+  Spinner,
+} from '@/components/icons';
 import { Chip, Notice, SECTION_HEADING } from '@/components/pageKit';
 import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
+import { noProjectOption, projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -294,8 +304,8 @@ function NewProjectForm({
               value={linkTo}
               onChange={changeLink}
               options={[
-                { value: NO_LINK, label: 'Do not link' },
-                ...projects.map((one) => ({ value: one.id, label: one.name })),
+                noProjectOption(NO_LINK, 'Do not link', LinkOff),
+                ...projects.map(projectOption),
               ]}
               searchPlaceholder="Search projects…"
               emptyText="No project matches."

@@ -13,6 +13,13 @@ export interface ComboboxOption {
   icon?: React.ReactNode;
   /** Dim text at the end of the row (a subnet, a size), which the search box also matches. */
   hint?: string;
+  /**
+   * A second, smaller line under the label (a project's folder, say), which the search box also
+   * matches. It stays off the trigger and out of the option's accessible name.
+   */
+  description?: string;
+  /** Cuts a long description at the start instead of the end, for a path whose last folder matters. */
+  keepDescriptionEnd?: boolean;
 }
 
 export interface ComboboxProps {
@@ -75,6 +82,10 @@ export function Combobox({
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const listRef = React.useRef<HTMLDivElement>(null);
+  const descriptionId = React.useId();
+  // Rows with an icon or a second line put the check at the far end, so the icons line up on the
+  // left instead of sitting behind an empty check column.
+  const rich = options.some((o) => o.icon || o.description);
   const selected =
     options.find((o) => o.value === value) ??
     (allowCustom && value ? { value, label: value } : undefined);
@@ -155,6 +166,8 @@ export function Combobox({
             OVERLAY_SURFACE,
             OVERLAY_MOTION,
             'z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden origin-[var(--radix-popover-content-transform-origin)]',
+            // A narrow field still leaves room for the second line.
+            rich && 'min-w-64',
           )}
         >
           <CommandPrimitive
@@ -195,36 +208,67 @@ export function Combobox({
                   }}
                   className={LIST_OPTION}
                 >
-                  <Check className="h-3.5 w-3.5 shrink-0 opacity-0" />
+                  {!rich && <Check className="h-3.5 w-3.5 shrink-0 opacity-0" />}
                   <span className="truncate font-mono text-xs">{customLabel(typed)}</span>
                 </CommandPrimitive.Item>
               ) : null}
-              {options.map((option) => (
-                <CommandPrimitive.Item
-                  key={option.value}
-                  value={itemValue(option)}
-                  onSelect={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                  className={LIST_OPTION}
-                >
+              {options.map((option, index) => {
+                const check = (
                   <Check
                     className={cn(
                       'h-3.5 w-3.5 shrink-0 text-primary',
                       option.value === value ? 'opacity-100' : 'opacity-0',
                     )}
                   />
-                  {option.icon}
-                  <span className="truncate">{option.label}</span>
-                  {option.hint && (
-                    <span className="ml-auto shrink-0 pl-2 font-mono text-[11px] text-muted-foreground">
-                      {option.hint}
-                    </span>
-                  )}
-                </CommandPrimitive.Item>
-              ))}
+                );
+                const describedBy = option.description ? `${descriptionId}-${index}` : undefined;
+                return (
+                  <CommandPrimitive.Item
+                    key={option.value}
+                    value={itemValue(option)}
+                    onSelect={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    // The folder line would otherwise be read as part of the name.
+                    aria-label={option.description ? option.label : undefined}
+                    aria-describedby={describedBy}
+                    className={LIST_OPTION}
+                  >
+                    {!rich && check}
+                    {option.icon}
+                    {option.description ? (
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{option.label}</span>
+                        <span
+                          id={describedBy}
+                          // Laid out right to left, the ellipsis lands at the start; the inner span
+                          // keeps the path itself reading left to right.
+                          dir={option.keepDescriptionEnd ? 'rtl' : undefined}
+                          className="block truncate text-left font-mono text-[10px] text-muted-foreground"
+                        >
+                          {option.keepDescriptionEnd ? (
+                            <span dir="ltr">{option.description}</span>
+                          ) : (
+                            option.description
+                          )}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className={cn('truncate', rich && !option.hint && 'flex-1')}>
+                        {option.label}
+                      </span>
+                    )}
+                    {option.hint && (
+                      <span className="ml-auto shrink-0 pl-2 font-mono text-[11px] text-muted-foreground">
+                        {option.hint}
+                      </span>
+                    )}
+                    {rich && check}
+                  </CommandPrimitive.Item>
+                );
+              })}
             </CommandPrimitive.List>
           </CommandPrimitive>
         </PopoverPrimitive.Content>
@@ -234,7 +278,9 @@ export function Combobox({
 }
 
 function itemValue(option: ComboboxOption): string {
-  return [option.label, option.hint, ...(option.keywords ?? [])].filter(Boolean).join(' ');
+  return [option.label, option.hint, option.description, ...(option.keywords ?? [])]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function cmdkFilter(value: string, search: string): number {

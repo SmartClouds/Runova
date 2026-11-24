@@ -25,6 +25,7 @@ import {
   SECTION_WELL,
   segmentClass,
 } from '@/components/pageKit';
+import { projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -343,7 +344,7 @@ function AutoFixBody({
               ariaLabel="Project"
               value={projectId}
               onChange={(next) => next && setProjectId(next)}
-              options={projects.map((one) => ({ value: one.id, label: one.name }))}
+              options={projects.map(projectOption)}
               placeholder="Pick a project"
               searchPlaceholder="Search projects…"
               emptyText="No matching project."

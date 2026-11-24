@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Plus, Sparkles, TerminalSquare } from '@/components/icons';
 import { FOOTER_HAIRLINE, SECTION_WELL, SEGMENT_TRACK, segmentClass } from '@/components/pageKit';
-import { ProjectIcon } from '@/components/projects/ProjectIcon';
+import { ProjectRowIcon, projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -47,18 +47,6 @@ function cleanPath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return HEALTH_DEFAULT_PATH;
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-}
-
-function projectIcon(project: Project, size: 'sm' | 'md'): React.ReactNode {
-  return (
-    <ProjectIcon
-      iconDataUrl={project.iconDataUrl ?? null}
-      bgColor={project.iconBgColor}
-      iconColor={project.iconColor}
-      className={size === 'sm' ? 'h-5 w-5 rounded' : 'h-8 w-8 rounded-lg'}
-      glyphClassName={size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'}
-    />
-  );
 }
 
 /** Stands in for the prompt until a project is picked, so the choice is the first thing seen. */
@@ -103,7 +91,7 @@ function ProjectChoices({
               onClick={() => onPick(one.id)}
               className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {projectIcon(one, 'md')}
+              <ProjectRowIcon project={one} size="card" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{one.name}</span>
                 <span className="block truncate font-mono text-[10px] text-muted-foreground">
@@ -217,12 +205,7 @@ export function HealthBuildDialog({
                 searchPlaceholder="Search projects…"
                 emptyText="No project matches."
                 onChange={pickProject}
-                options={projects.map((one) => ({
-                  value: one.id,
-                  label: one.name,
-                  keywords: [one.folderPath],
-                  icon: projectIcon(one, 'sm'),
-                }))}
+                options={projects.map(projectOption)}
               />
             </Field>
             <Field id={id('environment')} label="Environment" optional>

@@ -46,6 +46,7 @@ import {
   SearchPill,
   SideNavRow,
 } from '@/components/pageKit';
+import { ProjectRowIcon } from '@/components/projects/projectOptions';
 import { AdHocSkillScanner } from '@/components/skills/AdHocSkillScanner';
 import { SkillAuditReport, SkillAuditVerdictBadge } from '@/components/skills/SkillAuditReport';
 import { SkillCatalogCard } from '@/components/skills/SkillCatalogCard';
@@ -1729,6 +1730,7 @@ export default function SkillsPage(): React.JSX.Element {
                     checked={checked}
                     onCheckedChange={() => toggleInstallPickerProject(p.id)}
                   />
+                  <ProjectRowIcon project={p} size="card" />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">{p.name}</span>
                     <span className="truncate text-xs text-muted-foreground">{p.folderPath}</span>

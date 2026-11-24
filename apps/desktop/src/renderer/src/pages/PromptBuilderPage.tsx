@@ -41,6 +41,7 @@ import {
   Trash2,
 } from '@/components/icons';
 import { SECTION_HEADING } from '@/components/pageKit';
+import { projectOption } from '@/components/projects/projectOptions';
 import {
   RunRecommendationPanel,
   useRunRecommendation,
@@ -616,8 +617,9 @@ export default function PromptBuilderPage(): React.JSX.Element {
                   }
                 }}
                 placeholder="No project"
-                emptyText="No projects yet."
-                options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                searchPlaceholder="Search projects…"
+                emptyText={projects.length === 0 ? 'No projects yet.' : 'No matching project.'}
+                options={projects.map(projectOption)}
                 clearable
               />
             </OptionRow>

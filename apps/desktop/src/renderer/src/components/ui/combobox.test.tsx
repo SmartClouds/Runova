@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Combobox } from './combobox';
@@ -61,6 +61,59 @@ describe('Combobox', () => {
     await user.type(screen.getByPlaceholderText('Search…'), '10.9');
     expect(screen.getByRole('option', { name: /tools_net/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /shop_default/ })).toBeNull();
+  });
+
+  it('shows a second line under the label, finds the row by it, and keeps it out of the name', async () => {
+    const user = userEvent.setup();
+    render(
+      <Combobox
+        ariaLabel="Project"
+        options={[
+          { value: 'a', label: 'Atlas', description: 'E:\\Work\\atlas' },
+          { value: 'b', label: 'Borealis', description: 'D:\\Sites\\borealis' },
+        ]}
+        value=""
+        onChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const atlas = await screen.findByRole('option', { name: 'Atlas' });
+    expect(atlas).toHaveAccessibleDescription('E:\\Work\\atlas');
+
+    await user.type(screen.getByPlaceholderText('Search…'), 'sites');
+    expect(screen.getByRole('option', { name: 'Borealis' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Atlas' })).toBeNull();
+  });
+
+  it('puts the check at the end of rows with an icon and shows the icon on the field', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Combobox
+        ariaLabel="Project"
+        options={[
+          { value: 'a', label: 'Atlas', icon: <span data-testid="icon-a" /> },
+          { value: 'b', label: 'Borealis', icon: <span data-testid="icon-b" /> },
+        ]}
+        value="a"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const field = screen.getByRole('combobox', { name: 'Project' });
+    expect(within(field).getByTestId('icon-a')).toBeInTheDocument();
+
+    await user.click(field);
+    const row = await screen.findByRole('option', { name: 'Atlas' });
+    expect(row.firstElementChild).toBe(within(row).getByTestId('icon-a'));
+    expect(row.lastElementChild?.tagName.toLowerCase()).toBe('svg');
+
+    // A plain list keeps the check in front.
+    await user.keyboard('{Escape}');
+    rerender(<Combobox ariaLabel="Project" options={POLICIES} value="deny" onChange={vi.fn()} />);
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    const plain = await screen.findByRole('option', { name: 'Deny' });
+    expect(plain.firstElementChild?.tagName.toLowerCase()).toBe('svg');
   });
 
   it('leaves focus where a choice moved it, even when it moved before the list closed', async () => {

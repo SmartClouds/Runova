@@ -1,6 +1,7 @@
 import type { VideoSummary } from '@runova/studio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { projectOption } from '@/components/projects/projectOptions';
 import { listProjects, studioClient } from '../client';
 import { errorMessage } from '../format';
 import {
@@ -96,7 +97,9 @@ export function StudioHome({
             ariaLabel="Project"
             className="w-56"
             placeholder="Choose a project"
-            options={(projects.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+            searchPlaceholder="Search projects…"
+            emptyText="No matching project."
+            options={(projects.data ?? []).map(projectOption)}
             value={projectId}
             onChange={setProjectId}
           />

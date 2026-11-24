@@ -9,6 +9,7 @@ import {
 } from '@runova/studio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useState } from 'react';
+import { noProjectOption, projectOption } from '@/components/projects/projectOptions';
 import { BriefFields, type BriefValue, customStyleOf, styleReady } from '../ai/BriefFields';
 import {
   fromRunInput,
@@ -220,10 +221,8 @@ export function NewVideoDialog({
   });
 
   const owners = [
-    { value: STANDALONE, label: 'Standalone video (no project)' },
-    ...(projects.data ?? [])
-      .filter((p) => !p.archived)
-      .map((p) => ({ value: p.id, label: p.name })),
+    noProjectOption(STANDALONE, 'Standalone video (no project)'),
+    ...(projects.data ?? []).filter((p) => !p.archived).map(projectOption),
   ];
   const languages = CONTENT_LANGUAGES.map((l) => ({
     value: l.code,

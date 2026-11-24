@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CircleCheck, FolderKanban, ListTodo, Sparkles, Spinner } from '@/components/icons';
 import { Notice } from '@/components/pageKit';
+import { projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -177,10 +178,7 @@ export function SplitIntoTasksDialog({
   }
 
   const addCount = proposal?.add.length ?? 0;
-  const projectOptions = (projectsQuery.data ?? []).map((entry) => ({
-    value: entry.id,
-    label: entry.name,
-  }));
+  const projectOptions = (projectsQuery.data ?? []).map(projectOption);
 
   return (
     <Dialog

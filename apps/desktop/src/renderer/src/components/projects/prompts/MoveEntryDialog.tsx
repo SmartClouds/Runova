@@ -1,6 +1,7 @@
 import type { Project } from '@runova/core';
 import type { PromptHistoryEntry } from '@shared/apiTypes';
 import { useState } from 'react';
+import { projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { ProjectIcon } from '../ProjectIcon';
 
 /**
  * Picks the project an entry should be re-filed under. The caller keys this on
@@ -56,20 +56,7 @@ export function MoveEntryDialog({
         <div className="space-y-1.5">
           <Label>Project</Label>
           <Combobox
-            options={projects.map((p) => ({
-              value: p.id,
-              label: p.name,
-              keywords: p.tags,
-              icon: (
-                <ProjectIcon
-                  iconDataUrl={p.iconDataUrl}
-                  bgColor={p.iconBgColor}
-                  iconColor={p.iconColor}
-                  className="h-5 w-5 rounded"
-                  glyphClassName="h-3 w-3"
-                />
-              ),
-            }))}
+            options={projects.map(projectOption)}
             value={selected}
             onChange={setSelected}
             placeholder="Pick a project…"

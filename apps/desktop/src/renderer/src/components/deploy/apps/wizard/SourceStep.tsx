@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId } from 'react';
 import { Field } from '@/components/cloudflare/fields';
+import { projectOption } from '@/components/projects/projectOptions';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,10 +47,7 @@ export function SourceStep({
         ) : (
           <Combobox
             id={`${ids}-project`}
-            options={(projects.data ?? []).map((project) => ({
-              value: project.id,
-              label: project.name,
-            }))}
+            options={(projects.data ?? []).map(projectOption)}
             value={source.projectId}
             placeholder="Pick a project"
             searchPlaceholder="Search projects…"

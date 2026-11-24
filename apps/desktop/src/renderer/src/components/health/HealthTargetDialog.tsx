@@ -18,6 +18,7 @@ import {
   segmentClass,
 } from '@/components/pageKit';
 import { ipcErrorMessage } from '@/components/projects/environments/ipcError';
+import { projectOption } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -364,7 +365,7 @@ export function HealthTargetDialog({
                           environmentId: current.projectId === value ? current.environmentId : '',
                         }))
                       }
-                      options={projects.map((one) => ({ value: one.id, label: one.name }))}
+                      options={projects.map(projectOption)}
                       invalid={Boolean(errors.projectId)}
                       ariaDescribedBy={errors.projectId ? `${id('project')}-error` : undefined}
                     />

@@ -6,7 +6,7 @@ import type {
 } from '@shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { FolderKanban } from '@/components/icons';
+import { ProjectRowIcon } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -212,12 +212,7 @@ function ProjectPicker({
                     className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]"
                   />
                 )}
-                <FolderKanban
-                  className={cn(
-                    'h-3.5 w-3.5 shrink-0',
-                    choice === project.id ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                />
+                <ProjectRowIcon project={project} />
                 <span className="min-w-0">
                   <span
                     className={cn(

@@ -53,6 +53,7 @@ import {
   TOOLBAR,
   UpdateSummary,
 } from '@/components/pageKit';
+import { projectOption } from '@/components/projects/projectOptions';
 import { AI_CLIS_TAB, AiClisPanel } from '@/components/tools/aiClis';
 import { CodeqlInstallCard } from '@/components/tools/CodeqlInstallCard';
 import { DEV_SETUP_TAB, DevSetupPanel } from '@/components/tools/devSetup';
@@ -796,7 +797,7 @@ export default function ToolsPage(): React.JSX.Element {
                 onChange={setSelectedProjectId}
                 placeholder="Choose a project"
                 searchPlaceholder="Search projects…"
-                options={projectsQuery.data?.map((p) => ({ value: p.id, label: p.name })) ?? []}
+                options={projectsQuery.data?.map(projectOption) ?? []}
                 clearable
               />
               <p className="px-2 text-[11px] leading-relaxed text-muted-foreground">

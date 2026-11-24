@@ -25,6 +25,7 @@ import {
   TerminalSquare,
   TriangleAlert,
 } from '@/components/icons';
+import { ProjectRowIcon } from '@/components/projects/projectOptions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -500,6 +501,7 @@ export function UiUxProMaxWizard({
                         checked={checked}
                         onCheckedChange={() => toggleProject(project.id)}
                       />
+                      <ProjectRowIcon project={project} size="card" />
                       <span className="flex min-w-0 flex-col">
                         <span className="truncate text-sm font-medium text-foreground">
                           {project.name}

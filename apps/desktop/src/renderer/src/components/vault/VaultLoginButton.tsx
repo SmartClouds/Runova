@@ -10,6 +10,7 @@ import {
   WindowMaximize,
   Workspace,
 } from '@/components/icons';
+import { ProjectRowIcon } from '@/components/projects/projectOptions';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -171,7 +172,8 @@ export function VaultLoginButton({
                         value={option.id}
                         onSelect={() => pick({ kind: 'workspace', projectId: option.id })}
                       >
-                        {option.name}
+                        <ProjectRowIcon project={option} className="h-5 w-5 rounded" />
+                        <span className="truncate">{option.name}</span>
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>

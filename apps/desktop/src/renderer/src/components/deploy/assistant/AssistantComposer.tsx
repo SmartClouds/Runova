@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { CliLogo } from '@/components/cliLogos';
 import { Paperclip, Play, Send, StopCircle, TriangleAlert } from '@/components/icons';
+import { projectOption } from '@/components/projects/projectOptions';
 import { AgentPromptField } from '@/components/terminal/AgentPromptField';
 import { AttachmentChip } from '@/components/ui/attachment-chip';
 import { Button } from '@/components/ui/button';
@@ -477,11 +478,7 @@ export function AssistantComposer({
                 }
                 searchPlaceholder="Search projects…"
                 emptyText="No matching project."
-                options={projects.map((p) => ({
-                  value: p.id,
-                  label: p.name,
-                  keywords: [p.folderPath],
-                }))}
+                options={projects.map(projectOption)}
               />
             </Field>
             {project && (

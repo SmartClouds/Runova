@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CircleInfo, FolderPlus, Search } from '@/components/icons';
+import { ProjectRowIcon } from '@/components/projects/projectOptions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -203,6 +204,7 @@ function AddUsedSkillContent({
                 aria-label={project.name}
                 onCheckedChange={() => toggle(project.id)}
               />
+              <ProjectRowIcon project={project} size="card" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-medium text-foreground">{project.name}</span>
                 <span className="truncate text-xs text-muted-foreground">{project.folderPath}</span>
