@@ -71,26 +71,28 @@ internal static class AccessLogParser
 
         var rest = text;
         if (!Field(ref rest, out var address) || address.IsEmpty
-            || !Field(ref rest, out var dash) || dash is not [(byte)'-']
-            || !Field(ref rest, out _)
-            || rest.IsEmpty || rest[0] != (byte)'[')
+            || !Field(ref rest, out var dash) || dash is not [(byte)'-'])
         {
             return false;
         }
 
-        var close = rest.IndexOf((byte)']');
-        if (close < 0 || !TryParseTime(rest[1..close], out var time))
+        // $remote_user is whatever a visitor's Basic auth header names, written unquoted, so it may
+        // hold spaces and brackets. nginx escapes a quote in it, though, so the line's first quote
+        // opens the request, the time sits in the brackets right before it, and the user is all
+        // that comes before the time.
+        var quote = rest.IndexOf((byte)'"');
+        if (quote < 2 || rest[quote - 1] != (byte)' ' || rest[quote - 2] != (byte)']')
         {
             return false;
         }
 
-        rest = rest[(close + 1)..];
-        if (rest.IsEmpty || rest[0] != (byte)' ')
+        var open = rest[..(quote - 2)].LastIndexOf((byte)'[');
+        if (open < 0 || (open > 0 && rest[open - 1] != (byte)' ') || !TryParseTime(rest[(open + 1)..(quote - 2)], out var time))
         {
             return false;
         }
 
-        rest = rest[1..];
+        rest = rest[quote..];
         if (!Quoted(ref rest, out var request)
             || !Field(ref rest, out var statusText) || !TryStatus(statusText, out var status)
             || !Field(ref rest, out var bytesText) || !TryNumber(bytesText, out var bytes)

@@ -46,6 +46,28 @@ public sealed class AccessLogParserTests
         Assert.Equal("Land Berlin", Text(line.CloudflareRegion));
     }
 
+    /// <summary>
+    /// $remote_user is whatever a visitor's Basic auth header names, and nginx writes it unquoted,
+    /// spaces and brackets included. A line with such a user must still be read, or the visitor's
+    /// requests never reach attack detection.
+    /// </summary>
+    [Theory]
+    [InlineData("john doe")]
+    [InlineData("a [b")]
+    [InlineData("x ] y")]
+    [InlineData("x [01/Jan/2026:00:00:00 +0000] y")]
+    public void A_user_name_with_spaces_or_brackets_still_parses(string user)
+    {
+        var text = $"198.51.100.4 - {user} [01/Jan/2026:00:00:05 +0000] \"POST /wp-login.php HTTP/1.1\" 401 0 \"-\" \"curl/8.5.0\"";
+
+        Assert.True(AccessLogParser.TryParse(Bytes(text), out var line));
+
+        Assert.Equal("198.51.100.4", Text(line.RemoteAddress));
+        Assert.Equal(1_767_225_605_000, line.TimeUnixMs);
+        Assert.Equal("/wp-login.php", Text(line.Target));
+        Assert.Equal(401, line.Status);
+    }
+
     [Fact]
     public void A_plain_combined_line_parses_without_the_extra_fields()
     {
