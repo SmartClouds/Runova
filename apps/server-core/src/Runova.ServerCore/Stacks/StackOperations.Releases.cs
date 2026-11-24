@@ -100,10 +100,13 @@ internal sealed partial class StackOperations
                 throw await RefuseAsync(invalid.Message);
             }
 
-            if (!tags.Any(tag => used.Any(image => ReleaseNames.SameImage(tag, image))))
+            // Docker applies every one of these names to the engine all apps share, so each has to be
+            // an image of this app: one more would move a tag another app runs onto this image.
+            var foreign = tags.Where(tag => !used.Any(image => ReleaseNames.SameImage(tag, image))).ToArray();
+            if (foreign.Length > 0)
             {
                 throw await RefuseAsync(
-                    $"{request!.AssetName} holds {string.Join(", ", tags)}, which no service of the compose file uses ({(used.Length == 0 ? "none names an image" : string.Join(", ", used))}). Set the service's image: to the name the pipeline saves.");
+                    $"{request!.AssetName} holds {string.Join(", ", foreign)}, which no service of the compose file uses ({(used.Length == 0 ? "none names an image" : string.Join(", ", used))}). Save only the images this app runs, under the names its image: lines give.");
             }
 
             IReadOnlyList<string> loaded;

@@ -264,6 +264,76 @@ public sealed class StackReleaseImageTests
         Assert.All(github.Requests, r => Assert.Null(r.Authorization));
     }
 
+    /// <summary>A gzipped tar with exactly these entries, for archives docker save never writes.</summary>
+    private static byte[] RawArchive(params (string Name, string Content)[] entries)
+    {
+        using var buffer = new MemoryStream();
+        using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, leaveOpen: true))
+        using (var writer = new TarWriter(gzip, TarEntryFormat.Pax, leaveOpen: true))
+        {
+            foreach (var (name, content) in entries)
+            {
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, name) { DataStream = new MemoryStream(Encoding.UTF8.GetBytes(content)) });
+            }
+        }
+
+        return buffer.ToArray();
+    }
+
+    private static string Manifest(params string[] tags) =>
+        $"[{{\"Config\":\"config.json\",\"RepoTags\":[{string.Join(',', tags.Select(t => $"\"{t}\""))}],\"Layers\":[]}}]";
+
+    /// <summary>
+    /// Docker applies every name an archive carries to the one engine all apps share, moving a tag
+    /// another app runs onto this image. So every name has to be one of this app's images, in each
+    /// place a loader reads names from, not just one of them.
+    /// </summary>
+    public static TheoryData<string, string, string> ArchivesNamingAnotherImage => new()
+    {
+        { "a second tag", "two-tags", "nginx:latest" },
+        { "a second manifest.json", "two-manifests", "more than one manifest.json" },
+        { "a name in index.json", "index-name", "docker.io/library/nginx:latest" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ArchivesNamingAnotherImage))]
+    public async Task An_archive_that_also_names_an_image_this_app_does_not_use_is_refused(string what, string shape, string said)
+    {
+        var (kit, github, stack, revision) = await AwaitingAsync();
+        await using var _ = kit;
+        github.Asset = shape switch
+        {
+            "two-tags" => ImageArchive("acme/shop:1.4.0", "nginx:latest"),
+            "two-manifests" => RawArchive(("manifest.json", Manifest("acme/shop:1.4.0")), ("config.json", "{}"), ("manifest.json", Manifest("nginx:latest"))),
+            _ => RawArchive(
+                ("manifest.json", Manifest("acme/shop:1.4.0")),
+                ("config.json", "{}"),
+                ("index.json", """{"schemaVersion":2,"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:00","size":1,"annotations":{"io.containerd.image.name":"docker.io/library/nginx:latest","org.opencontainers.image.ref.name":"latest"}}]}""")),
+        };
+        var loads = kit.Simulated.Calls.Count(call => call.Contains("load", StringComparison.Ordinal));
+
+        using var response = await kit.PostReleaseImageAsync(stack.Id, revision.Number, Request(github.Asset, _signedLink));
+
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, what);
+        Assert.Contains(said, await RefusalOf(response), StringComparison.Ordinal);
+        Assert.Equal(loads, kit.Simulated.Calls.Count(call => call.Contains("load", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task A_current_docker_save_archive_with_its_index_json_reads_as_the_one_image()
+    {
+        // The layout today's docker save writes: index.json first, naming the image in full.
+        var archive = RawArchive(
+            ("index.json", """{"schemaVersion":2,"manifests":[{"digest":"sha256:00","size":1,"annotations":{"io.containerd.image.name":"docker.io/acme/shop:1.4.0","org.opencontainers.image.ref.name":"1.4.0"}}]}"""),
+            ("manifest.json", Manifest("acme/shop:1.4.0")),
+            ("config.json", "{}"));
+
+        var names = await Runova.ServerCore.Releases.ReleaseArchive.ReadTagsAsync(new MemoryStream(archive), Cancel);
+
+        Assert.Equal(["docker.io/acme/shop:1.4.0", "acme/shop:1.4.0"], names);
+        Assert.All(names, name => Assert.True(Runova.ServerCore.Releases.ReleaseNames.SameImage(name, "acme/shop:1.4.0")));
+    }
+
     [Fact]
     public async Task An_archive_that_names_no_image_the_compose_file_uses_is_refused()
     {
