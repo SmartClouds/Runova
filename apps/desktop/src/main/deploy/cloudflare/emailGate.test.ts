@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SecretEnvelope } from '../../../shared/apiTypes';
 import { cloudflareErrorCode, cloudflareErrorPermission } from '../../../shared/cloudflareErrors';
 import type { EmailGateInput } from '../../../shared/cloudflareTypes';
@@ -71,9 +71,25 @@ async function setup(
     coreDown?: boolean;
     /** The server's link is not up, so its core is not asked at all. */
     offline?: boolean;
+    /** How the server can be reached from outside. Locked to Cloudflare with AOP unless said. */
+    origin?: 'locked' | 'locked-no-aop' | 'tunnel' | 'open';
   } = {},
 ) {
   const core = new FakeCore(() => Date.now());
+  const origin = options.origin ?? 'locked';
+  const lock = core.cloudflare.status();
+  vi.spyOn(core.cloudflare, 'status').mockReturnValue({
+    ...lock,
+    enabled: origin.startsWith('locked'),
+    authenticatedOriginPulls: origin === 'locked',
+    state: origin.startsWith('locked') ? 'on' : 'off',
+  });
+  const tunnel = core.tunnel.status();
+  vi.spyOn(core.tunnel, 'status').mockReturnValue({
+    ...tunnel,
+    enabled: origin === 'tunnel',
+    state: origin === 'tunnel' ? 'connected' : 'off',
+  });
   core.nginx.status = { ...core.nginx.status, managed: true };
   core.nginx.saveSite(site('blog', ['blog.example.com']));
   core.coreDomain = {
@@ -185,9 +201,13 @@ describe('CloudflareEmailGateOps.plan', () => {
   it('never asks the core of a server whose link is not up, yet still passes its core domain', async () => {
     const { ops, calls, passes } = await setup({ offline: true });
 
+    await ops.plan(ZONE_ID);
+    expect(calls).toEqual([]);
+
+    // Putting a gate on is the one time it asks, to check only Cloudflare can reach the server.
     await ops.save({ ...INPUT, hostname: 'core.example.com' });
 
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(['srv-1']);
     expect(await passes.pass('core.example.com')).not.toBeNull();
   });
 
@@ -383,6 +403,50 @@ describe('CloudflareEmailGateOps.save and remove', () => {
     );
     await expect(ops.save({ ...INPUT, hostname: 'shop.example.com' })).rejects.toThrow(/proxy/i);
     expect(fake.accessApps.size).toBe(0);
+  });
+
+  // Access runs at Cloudflare's edge, so a server that answers anyone on 80 and 443 hands the
+  // gated name to whoever asks it directly at its address.
+  it('refuses a name on a server that still answers anyone, and makes no gate', async () => {
+    const { ops, fake } = await setup({ origin: 'open' });
+
+    await expect(ops.save(INPUT)).rejects.toThrow(
+      'prod still answers anyone who finds its address',
+    );
+    await expect(ops.save({ ...INPUT, hostname: 'core.example.com' })).rejects.toThrow(
+      'prod still answers anyone who finds its address',
+    );
+    expect(fake.accessApps.size).toBe(0);
+  });
+
+  it('refuses a server locked to Cloudflare without Authenticated Origin Pulls', async () => {
+    const { ops, fake } = await setup({ origin: 'locked-no-aop' });
+
+    await expect(ops.save(INPUT)).rejects.toThrow('Authenticated Origin Pulls');
+    expect(fake.accessApps.size).toBe(0);
+  });
+
+  it('puts the gate on a server behind a tunnel with its web ports closed', async () => {
+    const { ops } = await setup({ origin: 'tunnel' });
+
+    await expect(ops.save(INPUT)).resolves.toMatchObject({ kind: 'on' });
+  });
+
+  it('refuses when the server cannot say how it is reached', async () => {
+    const { ops, fake } = await setup({ coreDown: true });
+
+    await expect(ops.save({ ...INPUT, hostname: 'core.example.com' })).rejects.toThrow(
+      'could not ask prod whether only Cloudflare can reach it',
+    );
+    expect(fake.accessApps.size).toBe(0);
+  });
+
+  it('still gates a name no saved server serves', async () => {
+    const { ops } = await setup({ origin: 'open' });
+
+    await expect(ops.save({ ...INPUT, hostname: 'wiki.example.com' })).resolves.toMatchObject({
+      kind: 'on',
+    });
   });
 
   it('asks for the one-time setup first when the login is not on', async () => {

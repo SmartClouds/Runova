@@ -78,3 +78,8 @@ What is left or unverified:
 - A computer's pass is a service token valid for a year (`8760h`). When it runs out the core domain
   check says the gate stopped this computer, and Let this computer through makes a new one.
 - No server core change: Access runs at Cloudflare's edge.
+- Access only runs at the edge, so a server that answers anyone on 80 and 443 hands a gated name
+  to whoever asks it directly at its address. `save` therefore asks the core of the server behind
+  a name (core domain or site) first, and refuses unless it is behind a connected tunnel with the
+  web ports closed, or locked to Cloudflare (`on`) with Authenticated Origin Pulls. For a name no
+  saved server serves the app cannot check, so the gate goes on and the dialog says so.

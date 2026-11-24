@@ -236,6 +236,13 @@ export function EmailGateDialog({
             {emailGatePreview({ ...people, session }, host.hostname)}
           </Notice>
 
+          {!host.serverId && (
+            <Notice tone="warning" size="sm">
+              The app can't see the server behind this name, so it can't check that only Cloudflare
+              reaches it. If that server answers anyone, people who find its address skip the gate.
+            </Notice>
+          )}
+
           {host.role === 'core' && (
             <Notice tone="neutral" icon={Monitor} size="sm">
               {host.thisComputerPass

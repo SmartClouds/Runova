@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import { renderWithProviders } from '../../../../../test/renderer/renderWithProviders';
-import { CORE_HOST, ipcError, SITE_HOST, ZONE } from '../testing/fixtures';
+import { CORE_HOST, ipcError, PLAIN_HOST, SITE_HOST, ZONE } from '../testing/fixtures';
 
 /**
  * The email code gate's dialog (E96): who may ask for a code, as chips that take addresses and
@@ -139,6 +139,19 @@ describe('EmailGateDialog', () => {
       expect(remove).toHaveBeenCalledWith({ zoneId: ZONE.id, hostname: 'core.example.com' }),
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('warns that it cannot check the server behind a name no saved server serves', async () => {
+    renderDialog({ ...PLAIN_HOST, proxied: true });
+
+    expect(await screen.findByText(/can't check that only Cloudflare reaches it/)).toBeTruthy();
+  });
+
+  it('does not warn for a name a saved server serves, since saving checks that server', async () => {
+    renderDialog(SITE_HOST);
+
+    await screen.findByRole('dialog');
+    expect(screen.queryByText(/can't check that only Cloudflare reaches it/)).toBeNull();
   });
 
   it('has no Turn off button for a new gate', async () => {

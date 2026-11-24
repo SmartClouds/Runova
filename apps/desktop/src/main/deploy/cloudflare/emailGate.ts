@@ -22,6 +22,10 @@ import type {
   EmailGateState,
   EmailGateTarget,
 } from '../../../shared/cloudflareTypes';
+import type {
+  CloudflareTunnelStatus,
+  OriginLockStatus,
+} from '../../../shared/deploy/protocol/generated/Runova.ServerCore.Contracts';
 import type { ICoreHub } from '../../../shared/deploy/protocol/generated/TypedSignalR.Client/Runova.ServerCore.Contracts';
 import type { CloudflareApi } from './client';
 import { hasCloudflareCode, isNotFound } from './errors';
@@ -63,6 +67,8 @@ export interface EmailGateDeps {
 }
 
 const CORE_TIMEOUT_MS = 4_000;
+/** How long a core gets to say whether only Cloudflare can reach it, before a gate goes on. */
+const CHECK_TIMEOUT_MS = 15_000;
 const ONE_TIME_PIN = 'onetimepin';
 const PEOPLE_POLICY = 'People with an email code';
 const PASS_DURATION = '8760h';
@@ -313,6 +319,8 @@ export class CloudflareEmailGateOps {
     }
     const readiness = await this.readiness(account);
     if (!readiness.organization || !readiness.oneTimePin) throw new Error(SETUP_FIRST);
+    const info = (await this.names(account.zone)).get(hostname);
+    if (info && info.role !== 'ssh') await this.requireOnlyCloudflare(info);
     const apps = await this.apps(account);
     const ours = apps.find((app) => app.domain === hostname && emailGateApp.isOurs(app));
     const other = apps.find(
@@ -326,7 +334,7 @@ export class CloudflareEmailGateOps {
         `${hostname} already has an Access application, ${other.name || 'made elsewhere'}. Change it on Cloudflare's Zero Trust dashboard, or remove it there first.`,
       );
     }
-    const isCore = (await this.names(account.zone)).get(hostname)?.role === 'core';
+    const isCore = info?.role === 'core';
     const otp = await this.oneTimePinId(account);
     const appId = ours
       ? await this.update(account, ours.id, hostname, input, otp)
@@ -410,6 +418,35 @@ export class CloudflareEmailGateOps {
         ...(record.comment ? { comment: record.comment } : {}),
       });
     }
+  }
+
+  /**
+   * Access only runs at Cloudflare's edge. A server that still answers anyone on 80 and 443 serves
+   * the gated name to whoever finds its address and asks it directly, so the gate only goes on a
+   * name of a server that is locked to Cloudflare with Authenticated Origin Pulls, or that is
+   * behind a tunnel with its web ports closed.
+   */
+  private async requireOnlyCloudflare(info: NameInfo): Promise<void> {
+    const timeout = Math.max(this.deps.coreTimeoutMs ?? CORE_TIMEOUT_MS, CHECK_TIMEOUT_MS);
+    let lock: OriginLockStatus;
+    let tunnel: CloudflareTunnelStatus;
+    try {
+      [lock, tunnel] = await withTimeout(
+        this.deps.links.call(info.serverId, (hub) =>
+          Promise.all([hub.getOriginLock(), hub.getCloudflareTunnel()]),
+        ),
+        timeout,
+      );
+    } catch {
+      throw new Error(
+        `The app could not ask ${info.serverName} whether only Cloudflare can reach it, and the gate needs that. Connect to the server and try again.`,
+      );
+    }
+    if (tunnel.state === 'connected') return;
+    if (lock.state === 'on' && lock.authenticatedOriginPulls) return;
+    throw new Error(
+      `${info.serverName} still answers anyone who finds its address, and they would get past the gate. Lock it to Cloudflare with Authenticated Origin Pulls on, or put it behind a tunnel with the web ports closed, then turn the gate on.`,
+    );
   }
 
   private async account(zoneId: string): Promise<Account> {
