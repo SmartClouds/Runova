@@ -5,7 +5,7 @@ import { cp, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { app } from 'electron';
-import { HostClient } from './hostClient';
+import { HostClient, LegacyHostError } from './hostClient';
 import { type HelloResult, PTY_HOST_PROTOCOL_VERSION, ptyHostPaths } from './protocol';
 
 const READY_TIMEOUT_MS = 15_000;
@@ -222,15 +222,25 @@ export async function connectToHost(): Promise<ConnectedHost | null> {
   await mkdir(paths.runtimeDir, { recursive: true });
   const identity = hostIdentity(hostEntryPath());
 
-  const tryConnect = async (): Promise<ConnectedHost | null> => {
+  const tryConnect = async (): Promise<ConnectedHost | 'legacy' | null> => {
     try {
       return await HostClient.connect(paths.endpoint, paths.tokenFile);
-    } catch {
-      return null;
+    } catch (error) {
+      return error instanceof LegacyHostError ? 'legacy' : null;
     }
   };
+  const usable = (outcome: ConnectedHost | 'legacy' | null): ConnectedHost | null =>
+    outcome === 'legacy' ? null : outcome;
 
   let existing = await tryConnect();
+  if (existing === 'legacy') {
+    // A host from before the proof step, or something squatting on the endpoint that acts like
+    // one. Neither can prove it holds the token, so it never gets a shell or a keystroke, only a
+    // shutdown. A real old host's shells go with it, once, at the update that brought the proof.
+    await HostClient.retireLegacy(paths.endpoint, paths.tokenFile).catch(() => undefined);
+    existing = null;
+    await endpointFree(paths.endpoint, 3000);
+  }
   if (existing) {
     const { client, hello } = existing;
     const incompatible = hello.protocolVersion !== PTY_HOST_PROTOCOL_VERSION;
@@ -256,14 +266,14 @@ export async function connectToHost(): Promise<ConnectedHost | null> {
 
   let outcome = await launch(location, identity, paths.runtimeDir);
   if (outcome === 'endpoint-taken') {
-    const raced = await tryConnect();
+    const raced = usable(await tryConnect());
     if (raced) return raced;
     await sleep(300);
     outcome = await launch(location, identity, paths.runtimeDir);
   }
   if (outcome !== 'ready') return null;
 
-  const connected = await tryConnect();
+  const connected = usable(await tryConnect());
   if (connected) void keepHostFiles(identity, connected.hello.appVersion);
   return connected;
 }

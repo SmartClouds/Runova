@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
 import {
@@ -6,7 +7,9 @@ import {
   type HelloResult,
   type HostMessage,
   type HostRequest,
+  type ProveResult,
   PTY_HOST_PROTOCOL_VERSION,
+  proofMatches,
 } from './protocol';
 
 export interface HostClientEvents {
@@ -17,6 +20,37 @@ export interface HostClientEvents {
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
+
+/** The host hung up on `prove`, as hosts from before the proof step do. */
+export class LegacyHostError extends Error {
+  constructor() {
+    super('terminal host does not know the proof step');
+    this.name = 'LegacyHostError';
+  }
+}
+
+async function readToken(tokenFile: string): Promise<string> {
+  return (await readFile(tokenFile, 'utf8')).trim();
+}
+
+function openSocket(endpoint: string): Promise<Socket> {
+  return new Promise<Socket>((resolve, reject) => {
+    const candidate = connect(endpoint);
+    const timer = setTimeout(() => {
+      candidate.destroy();
+      reject(new Error('timed out connecting to terminal host'));
+    }, 3000);
+    candidate.once('connect', () => {
+      clearTimeout(timer);
+      candidate.removeListener('error', reject);
+      resolve(candidate);
+    });
+    candidate.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -49,30 +83,30 @@ export class HostClient {
     });
   }
 
-  /** Connects and says hello. Rejects if nothing is listening or the token is wrong. */
+  /**
+   * Connects, checks the host holds the token, then says hello. Rejects if nothing is listening,
+   * the host cannot prove itself or the token is wrong. The token is only sent after the proof, so
+   * a process squatting on the predictable endpoint never gets it. A host from before the proof
+   * step hangs up on `prove`, which rejects with LegacyHostError.
+   */
   static async connect(
     endpoint: string,
     tokenFile: string,
   ): Promise<{ client: HostClient; hello: HelloResult }> {
-    const token = (await readFile(tokenFile, 'utf8')).trim();
-    const socket = await new Promise<Socket>((resolve, reject) => {
-      const candidate = connect(endpoint);
-      const timer = setTimeout(() => {
-        candidate.destroy();
-        reject(new Error('timed out connecting to terminal host'));
-      }, 3000);
-      candidate.once('connect', () => {
-        clearTimeout(timer);
-        candidate.removeListener('error', reject);
-        resolve(candidate);
-      });
-      candidate.once('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-    });
-    const client = new HostClient(socket);
+    const token = await readToken(tokenFile);
+    const client = new HostClient(await openSocket(endpoint));
     try {
+      const nonce = randomBytes(32).toString('hex');
+      let result: ProveResult | undefined;
+      try {
+        result = await client.request<ProveResult | undefined>({ type: 'prove', nonce }, 3000);
+      } catch (error) {
+        if (!client.connected) throw new LegacyHostError();
+        throw error;
+      }
+      if (!proofMatches(token, nonce, result?.proof)) {
+        throw new Error('terminal host could not prove it holds the token');
+      }
       const hello = await client.request<HelloResult>(
         { type: 'hello', token, protocolVersion: PTY_HOST_PROTOCOL_VERSION },
         3000,
@@ -81,6 +115,25 @@ export class HostClient {
     } catch (error) {
       client.close();
       throw error;
+    }
+  }
+
+  /**
+   * Shuts down a host from before the proof step, shells and all. It is never used for anything
+   * else, because it cannot prove it is the real host: it is only handed the token (stale anyway
+   * when a squatter holds the endpoint, since the next real host writes a new one) and a shutdown.
+   */
+  static async retireLegacy(endpoint: string, tokenFile: string): Promise<void> {
+    const token = await readToken(tokenFile);
+    const client = new HostClient(await openSocket(endpoint));
+    try {
+      await client.request<HelloResult>(
+        { type: 'hello', token, protocolVersion: PTY_HOST_PROTOCOL_VERSION },
+        3000,
+      );
+      await client.request({ type: 'shutdown', payload: { killSessions: true } }, 2000);
+    } finally {
+      client.close();
     }
   }
 

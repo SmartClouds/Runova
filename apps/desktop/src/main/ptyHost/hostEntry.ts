@@ -15,6 +15,8 @@ import {
   type HelloResult,
   type HostMessage,
   type HostRequestEnvelope,
+  hostProof,
+  type ProveResult,
   PTY_HOST_PROTOCOL_VERSION,
   ptyHostPaths,
 } from './protocol';
@@ -118,6 +120,18 @@ function handleConnection(socket: Socket): void {
   };
 
   const handle = async (request: HostRequestEnvelope): Promise<void> => {
+    if (request.type === 'prove') {
+      // Answered before hello on purpose: the app checks this host holds the token before it
+      // sends the token, so a process squatting on the endpoint never learns it.
+      if (typeof request.nonce !== 'string' || request.nonce.length < 32) {
+        fail(request.id, 'bad nonce');
+        socket.destroy();
+        return;
+      }
+      const result: ProveResult = { proof: hostProof(token, request.nonce) };
+      reply(request.id, result);
+      return;
+    }
     if (request.type === 'hello') {
       if (!tokensMatch(request.token)) {
         fail(request.id, 'unauthorized');

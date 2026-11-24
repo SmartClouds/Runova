@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -6,8 +6,8 @@ import type { TerminalSnapshot } from '../../shared/apiTypes';
 
 /**
  * Bump whenever a message changes shape. A host speaking another version is never
- * talked to beyond `hello` and `shutdown`, which have to stay the same forever so a
- * newer app can always retire an older host it can no longer drive.
+ * talked to beyond `prove`, `hello` and `shutdown`, which have to stay the same forever so a
+ * newer app can always check and retire an older host it can no longer drive.
  */
 export const PTY_HOST_PROTOCOL_VERSION = 1;
 
@@ -78,6 +78,7 @@ export interface HelloResult {
 }
 
 export type HostRequest =
+  | { type: 'prove'; nonce: string }
   | { type: 'hello'; token: string; protocolVersion: number }
   | { type: 'createOrAttach'; payload: CreateOrAttachPayload }
   | { type: 'write'; payload: { sessionId: string; data: string } }
@@ -94,6 +95,28 @@ export type HostMessage =
   | { kind: 'response'; id: number; ok: false; error: string }
   | { kind: 'event'; event: 'data'; sessionId: string; data: string }
   | { kind: 'event'; event: 'exit'; sessionId: string; exitCode: number };
+
+/** What a host answers to `prove`. */
+export interface ProveResult {
+  proof: string;
+}
+
+/**
+ * The host's answer to the app's random nonce. Only a process that can read the token file the
+ * real host wrote can work it out, so the app checks it before it sends the token itself. The
+ * endpoint name is predictable, and another local account could otherwise squat on it and be
+ * handed the token, the shell environment and every keystroke.
+ */
+export function hostProof(token: string, nonce: string): string {
+  return createHmac('sha256', token).update(`runova-pty-host-proof\n${nonce}`).digest('hex');
+}
+
+export function proofMatches(token: string, nonce: string, proof: unknown): boolean {
+  if (typeof proof !== 'string') return false;
+  const expected = Buffer.from(hostProof(token, nonce));
+  const actual = Buffer.from(proof);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 /** Splits a byte stream into newline-delimited JSON messages. */
 export function createLineReader(onMessage: (message: unknown) => void, onOverflow: () => void) {

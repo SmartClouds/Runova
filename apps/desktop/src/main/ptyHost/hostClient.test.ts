@@ -4,12 +4,13 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HostClient } from './hostClient';
+import { HostClient, LegacyHostError } from './hostClient';
 import {
   createLineReader,
   encodeLine,
   type HostMessage,
   type HostRequestEnvelope,
+  hostProof,
   PTY_HOST_PROTOCOL_VERSION,
 } from './protocol';
 
@@ -24,6 +25,8 @@ interface FakeHost {
   tokenFile: string;
   /** Every request line the host received, in order. */
   received: HostRequestEnvelope[];
+  /** Answers `prove` as the real host does. A test turns it off to play a squatter. */
+  answersProve: boolean;
   /** Replaceable per test. Return nothing to stay silent (fire-and-forget or a hang). */
   onRequest: (request: HostRequestEnvelope, socket: Socket) => void;
   /** Pushes an unsolicited event line at every connected client. */
@@ -59,6 +62,7 @@ async function startFakeHost(token = 'correct-token'): Promise<FakeHost> {
     endpoint: endpointFor(dir),
     tokenFile,
     received,
+    answersProve: true,
     onRequest: (request, socket) => {
       if (request.type === 'hello') {
         if (request.token !== token) {
@@ -105,6 +109,13 @@ async function startFakeHost(token = 'correct-token'): Promise<FakeHost> {
       (message) => {
         const request = message as HostRequestEnvelope;
         received.push(request);
+        if (request.type === 'prove' && host.answersProve) {
+          const proof = hostProof(token, request.nonce);
+          socket.write(
+            encodeLine({ kind: 'response', id: request.id, ok: true, result: { proof } }),
+          );
+          return;
+        }
         host.onRequest(request, socket);
       },
       () => socket.destroy(),
@@ -145,24 +156,37 @@ describe('HostClient.connect', () => {
       pid: 4242,
       sessionCount: 0,
     });
+    expect(host.received[0]).toMatchObject({ type: 'prove', id: 1 });
     // The trailing newline in the token file must not reach the wire.
-    expect(host.received[0]).toMatchObject({
+    expect(host.received[1]).toMatchObject({
       type: 'hello',
       token: 'correct-token',
       protocolVersion: PTY_HOST_PROTOCOL_VERSION,
-      id: 1,
+      id: 2,
     });
     expect(client.connected).toBe(true);
     client.close();
   });
 
-  it('rejects and closes the socket when the host refuses the token', async () => {
+  it('rejects and closes the socket when the token on disk is a stale one', async () => {
     const host = await startFakeHost('the-real-token');
     writeFileSync(host.tokenFile, 'a-stale-token', 'utf-8');
 
+    await expect(HostClient.connect(host.endpoint, host.tokenFile)).rejects.toThrow(
+      'could not prove',
+    );
+    // The proof does not match the stale token, so the token is never sent.
+    expect(host.received.map((one) => one.type)).toEqual(['prove']);
+  });
+
+  it('rejects and closes the socket when the host refuses the hello', async () => {
+    const host = await startFakeHost();
+    host.onRequest = (request, socket) => {
+      socket.write(encodeLine({ kind: 'response', id: request.id, ok: false, error: 'bad t' }));
+    };
+
     await expect(HostClient.connect(host.endpoint, host.tokenFile)).rejects.toThrow('bad t');
-    // A refused hello must not leave a half-open connection behind.
-    expect(host.received).toHaveLength(1);
+    expect(host.received.map((one) => one.type)).toEqual(['prove', 'hello']);
   });
 
   it('rejects when nothing is listening on the endpoint', async () => {
@@ -178,6 +202,64 @@ describe('HostClient.connect', () => {
     rmSync(host.tokenFile);
 
     await expect(HostClient.connect(host.endpoint, join(host.tokenFile))).rejects.toThrow();
+  });
+
+  // The endpoint name is a hash of the userData path, so another local account can work it out and
+  // listen there while no real host runs. It does not have the token, so it cannot answer prove.
+  it('never sends the token to a squatter that answers ok to everything', async () => {
+    const host = await startFakeHost();
+    host.answersProve = false;
+    host.onRequest = (request, socket) => {
+      socket.write(encodeLine({ kind: 'response', id: request.id, ok: true, result: {} }));
+    };
+
+    await expect(HostClient.connect(host.endpoint, host.tokenFile)).rejects.toThrow(
+      'could not prove',
+    );
+    expect(host.received.map((one) => one.type)).toEqual(['prove']);
+    expect(JSON.stringify(host.received)).not.toContain('correct-token');
+  });
+
+  it('never sends the token to a squatter that guesses a proof', async () => {
+    const host = await startFakeHost();
+    host.answersProve = false;
+    host.onRequest = (request, socket) => {
+      if (request.type !== 'prove') return;
+      const proof = hostProof('some-other-token', request.nonce);
+      socket.write(encodeLine({ kind: 'response', id: request.id, ok: true, result: { proof } }));
+    };
+
+    await expect(HostClient.connect(host.endpoint, host.tokenFile)).rejects.toThrow(
+      'could not prove',
+    );
+    expect(host.received.map((one) => one.type)).toEqual(['prove']);
+  });
+
+  it('reports a host that hangs up on prove as a legacy host, without sending the token', async () => {
+    const host = await startFakeHost();
+    host.answersProve = false;
+    host.onRequest = (_request, socket) => socket.destroy();
+
+    await expect(HostClient.connect(host.endpoint, host.tokenFile)).rejects.toBeInstanceOf(
+      LegacyHostError,
+    );
+    expect(host.received.map((one) => one.type)).toEqual(['prove']);
+  });
+});
+
+describe('HostClient.retireLegacy', () => {
+  it('only says hello and asks the host to shut down with its shells', async () => {
+    const host = await startFakeHost();
+    host.onRequest = (request, socket) => {
+      socket.write(encodeLine({ kind: 'response', id: request.id, ok: true, result: {} }));
+    };
+
+    await HostClient.retireLegacy(host.endpoint, host.tokenFile);
+
+    expect(host.received).toEqual([
+      { type: 'hello', token: 'correct-token', protocolVersion: PTY_HOST_PROTOCOL_VERSION, id: 1 },
+      { type: 'shutdown', payload: { killSessions: true }, id: 2 },
+    ]);
   });
 });
 
@@ -205,8 +287,8 @@ describe('HostClient.request', () => {
       );
     }
 
-    expect(await first).toBe('answer-2');
-    expect(await second).toBe('answer-3');
+    expect(await first).toBe('answer-3');
+    expect(await second).toBe('answer-4');
     client.close();
   });
 
@@ -285,9 +367,9 @@ describe('HostClient.notify', () => {
 
     client.notify({ type: 'write', payload: { sessionId: 's1', data: 'ls\r' } });
 
-    await vi.waitFor(() => expect(host.received).toHaveLength(2));
+    await vi.waitFor(() => expect(host.received).toHaveLength(3));
     // No id means the host knows not to answer, which is what keeps keystrokes cheap.
-    expect(host.received[1]).toEqual({
+    expect(host.received[2]).toEqual({
       type: 'write',
       payload: { sessionId: 's1', data: 'ls\r' },
     });
@@ -406,7 +488,7 @@ describe('HostClient disconnect', () => {
 
     const first = client.request({ type: 'list' });
     const second = client.request({ type: 'kill', payload: { sessionId: 's1' } });
-    await vi.waitFor(() => expect(host.received).toHaveLength(3));
+    await vi.waitFor(() => expect(host.received).toHaveLength(4));
 
     host.dropConnections();
 
