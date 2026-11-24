@@ -174,7 +174,9 @@ export const CLI_REGISTRY: CliDefinition[] = [
     promptCommand: { command: 'gemini', args: ['-p', 'Answer the prompt above.'] },
     promptInputMode: 'stdin',
     promptTrustEnv: { GEMINI_CLI_TRUST_WORKSPACE: 'true' },
-    promptWriteArgs: ['--yolo'],
+    // auto_edit approves its edit tools only; a headless run denies anything else (a shell
+    // command a repository's text asks for, say) instead of --yolo's approving it.
+    promptWriteArgs: ['--approval-mode', 'auto_edit'],
     promptImageInput: 'mention',
     // Headless gemini refuses to read from a folder it doesn't trust, and a per-run temp folder
     // never is.
@@ -376,7 +378,9 @@ export const CLI_REGISTRY: CliDefinition[] = [
     // suppresses the session banner and stats, leaving only the answer on stdout.
     promptCommand: { command: 'copilot', args: ['-s'] },
     promptInputMode: 'stdin',
-    promptWriteArgs: ['--allow-all-tools'],
+    // File edits only. Non-interactive mode denies any tool no rule approves, so a shell command
+    // a repository's text asks for is refused instead of --allow-all-tools' running it.
+    promptWriteArgs: ['--allow-tool', 'write'],
     argsExample: `--model ${CLI_MODEL_EXAMPLES['copilot-cli']}`,
     // GitHub's install script is macOS/Linux only; on Windows the documented path is winget.
     installCommand: {

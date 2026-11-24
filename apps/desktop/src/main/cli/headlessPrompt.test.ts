@@ -478,3 +478,18 @@ describe('runHeadlessCliPrompt for a step that must not use tools', () => {
     expect(started.command).toBe('claude');
   });
 });
+
+describe('runHeadlessCliPrompt for a run that may write', () => {
+  // A version bump or a conflict fix only edits files, while it reads text from the repository
+  // that anyone with push access wrote. The CLI gets to edit without asking, not to run commands.
+  it.each([
+    ['gemini-cli', 'gemini', ['--approval-mode', 'auto_edit'], '--yolo'],
+    ['copilot-cli', 'copilot', ['--allow-tool', 'write'], '--allow-all-tools'],
+  ])('lets %s edit files and nothing more', async (cliId, command, expected, never) => {
+    installed.add(command);
+    const started = await run({ preferredCliId: cliId, strictCli: true, allowWrites: true });
+
+    expect(started.args.join(' ')).toContain(expected.join(' '));
+    expect(started.args).not.toContain(never);
+  });
+});
