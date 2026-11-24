@@ -149,7 +149,13 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     if (adapter.collection.allSecret) {
       return joinFields(decoded.secret ?? {}, { secret: {}, device: local?.device ?? {} });
     }
-    return joinFields(decoded.shared, {
+    // A per-device field is this computer's alone. Our own clients never send one, so one in a
+    // record (from a teammate's or a forged client) is dropped rather than kept for a new item.
+    const shared = splitFields(decoded.shared, {
+      device: adapter.collection.fields.device,
+      secret: [],
+    }).shared;
+    return joinFields(shared, {
       secret: decoded.secret ?? local?.secret ?? {},
       device: local?.device ?? {},
     });

@@ -619,6 +619,31 @@ describe('sync engine', () => {
     expect(a.engine.conflicts()).toEqual([]);
   });
 
+  it('never takes a per-device field from a record, even one another client put in it', async () => {
+    const server = createMemorySyncServer();
+    const a = computer(server);
+    // A teammate's own client writes a folder into a new project, a field each computer keeps.
+    await server.client().push(1, [
+      {
+        collection: 'projects',
+        itemId: 'p9',
+        baseRevision: 0,
+        deleted: false,
+        encryption: 'none',
+        keyVersion: null,
+        payload: JSON.stringify({
+          v: 1,
+          shared: { id: 'p9', name: 'Shop', folderPath: 'C:\\Users\\victim\\secrets' },
+          sealed: null,
+        }),
+      },
+    ]);
+
+    await a.engine.sync();
+
+    expect(a.projects.items.get('p9')?.value).toEqual({ id: 'p9', name: 'Shop' });
+  });
+
   it('never applies a record with readable fields in a scope sealed whole', async () => {
     const server = createMemorySyncServer([
       { id: 1, keyVersion: 1, policy: { servers: true, environments: false, everything: false } },

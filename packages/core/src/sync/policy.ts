@@ -95,7 +95,10 @@ export const SYNC_COLLECTIONS: readonly SyncCollection[] = [
     id: 'health-targets',
     label: 'Monitors',
     category: 'monitoring',
-    fields: { device: [], secret: ['secretEnvelope'] },
+    // Whether an incident starts an AI analysis on its own is each computer's choice: the run is
+    // an agent CLI in a project folder here, which a teammate's (or another computer's) monitor
+    // must never be able to switch on.
+    fields: { device: ['autoDiagnose'], secret: ['secretEnvelope'] },
     shareable: true,
   },
   {

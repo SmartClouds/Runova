@@ -106,6 +106,20 @@ describe('healthTargetsAdapter', () => {
     });
   });
 
+  it('starts a monitor new to this computer with automatic analysis off', async () => {
+    const health = memoryHealth();
+    // autoDiagnose is kept per computer, so the engine hands over a new monitor without it.
+    const { secretEnvelope: _key, autoDiagnose: _auto, ...shared } = target();
+
+    await healthTargetsAdapter(health.port, memorySecrets()).apply({
+      id: 't1',
+      teamId: 7,
+      value: shared,
+    });
+
+    expect(health.state().targets[0]?.autoDiagnose).toBe(false);
+  });
+
   it('keeps a monitor a teammate turned online as online, so this computer does not check it (E56)', async () => {
     const health = memoryHealth();
     const { secretEnvelope: _key, ...shared } = target();

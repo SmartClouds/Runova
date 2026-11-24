@@ -45,6 +45,8 @@ export function healthTargetsAdapter(
       return {
         ...target,
         appLink: target.appLink ?? null,
+        // A per-device field, so a monitor new to this computer arrives without it: off.
+        autoDiagnose: target.autoDiagnose === true,
         showVersion: target.showVersion !== false,
         secretEnvelope: target.secretEnvelope ?? null,
         secretRotatedAt: target.secretRotatedAt ?? null,
