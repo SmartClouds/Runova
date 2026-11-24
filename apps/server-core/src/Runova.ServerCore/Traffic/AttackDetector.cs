@@ -193,9 +193,60 @@ internal sealed class AttackDetector
         return false;
     }
 
+    /// <summary>
+    /// The path the way nginx (or the app behind it) serves it: percent-decoded once, slashes
+    /// merged, dot segments resolved. /%77p-login.php, //wp-login.php and /blog/../wp-login.php
+    /// all reach the login page, so each counts as a try at it.
+    /// </summary>
+    public static string Served(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var decoded = path.Contains('%', StringComparison.Ordinal) ? Uri.UnescapeDataString(path) : path;
+        if (!decoded.Contains("//", StringComparison.Ordinal) && !decoded.Contains("/.", StringComparison.Ordinal))
+        {
+            return decoded;
+        }
+
+        var segments = new List<string>();
+        foreach (var segment in decoded.Split('/'))
+        {
+            if (segment is "" or ".")
+            {
+                continue;
+            }
+
+            if (segment == "..")
+            {
+                if (segments.Count > 0)
+                {
+                    segments.RemoveAt(segments.Count - 1);
+                }
+
+                continue;
+            }
+
+            segments.Add(segment);
+        }
+
+        var served = "/" + string.Join('/', segments);
+        return decoded.EndsWith('/') && served.Length > 1 ? served + "/" : served;
+    }
+
+    /// <summary>Whether the path, as written or as served, is one no ordinary visitor asks for.</summary>
     public static bool IsProbe(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
+        if (ProbeAsWritten(path))
+        {
+            return true;
+        }
+
+        var served = Served(path);
+        return !ReferenceEquals(served, path) && ProbeAsWritten(served);
+    }
+
+    private static bool ProbeAsWritten(string path)
+    {
         foreach (var probe in _probesAnywhere)
         {
             if (path.Contains(probe, StringComparison.OrdinalIgnoreCase))
@@ -215,9 +266,21 @@ internal sealed class AttackDetector
         return false;
     }
 
+    /// <summary>Whether the path, as written or as served, is a login page.</summary>
     public static bool IsLogin(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
+        if (LoginAsWritten(path))
+        {
+            return true;
+        }
+
+        var served = Served(path);
+        return !ReferenceEquals(served, path) && LoginAsWritten(served);
+    }
+
+    private static bool LoginAsWritten(string path)
+    {
         foreach (var login in _logins)
         {
             if (path.StartsWith(login, StringComparison.OrdinalIgnoreCase)

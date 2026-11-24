@@ -105,6 +105,41 @@ public sealed class AttackDetectorTests
         Assert.Equal((AttackKind.BruteForce, 20), (Assert.Single(hits).Kind, hits[0].Count));
     }
 
+    /// <summary>
+    /// nginx (or the app behind it) decodes the path, merges slashes and resolves dot segments before
+    /// it serves the page, so these all reach the login page and count as tries at it.
+    /// </summary>
+    [Theory]
+    [InlineData("/%77p-login.php")]
+    [InlineData("/wp%2Dlogin.php")]
+    [InlineData("//wp-login.php")]
+    [InlineData("/./wp-login.php")]
+    [InlineData("/blog/../wp-login.php")]
+    [InlineData("/%2E/xmlrpc.php")]
+    public void Posts_to_another_spelling_of_a_login_page_are_brute_force_too(string path)
+    {
+        var detector = Detector();
+
+        var hits = Feed(detector, Enumerable.Range(0, 20).Select(i => Request(path, method: TrafficMethod.Post, status: 401, at: Start + (i * 1000))));
+
+        // A dot segment also reads as path traversal, which is a hit of its own.
+        Assert.Contains(hits, hit => hit.Kind == AttackKind.BruteForce);
+    }
+
+    [Theory]
+    [InlineData("/%2Eenv")]
+    [InlineData("//.git/config")]
+    [InlineData("/assets/../.env")]
+    [InlineData("/%2Fserver-status")]
+    public void Another_spelling_of_a_probe_is_a_probe(string path)
+    {
+        var detector = Detector();
+
+        var hits = Feed(detector, Enumerable.Range(0, 20).Select(i => Request(path, status: 200, at: Start + (i * 1000))));
+
+        Assert.Contains(hits, hit => hit.Kind == AttackKind.Scan);
+    }
+
     [Theory]
     [InlineData("/login", "Get")]
     [InlineData("/loginhelp", "Post")]
