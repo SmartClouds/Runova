@@ -267,6 +267,8 @@ async function askCli(run: RunState, prompt: string, frame: RdpAgentFrame): Prom
       runArgs: run.runArgs,
       timeoutMs: CLI_STEP_TIMEOUT_MS,
       images: [FRAME_FILE],
+      // The step acts only through its answer; the screen it reads is the other computer's.
+      noTools: true,
     });
     if (!result.ok) throw new Error(result.error || `${result.cliName ?? 'The CLI'} failed.`);
     return result.text;

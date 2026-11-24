@@ -366,6 +366,8 @@ describe('approve every command (the default)', () => {
     expect(dirname(plain?.[1] ?? '')).toBe(tmpdir());
     expect(plain?.[2]).toMatchObject({ timeoutMs: 5 * 60 * 1000 });
     expect(plain?.[2]).not.toHaveProperty('allowWrites');
+    // Its answer is its only way to act, so a CLI that runs tools unasked is not started.
+    expect(plain?.[2]).toMatchObject({ noTools: true });
     expect(fake.prompts.at(-1)).toContain('Do not use any tools');
   });
 

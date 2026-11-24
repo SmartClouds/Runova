@@ -223,6 +223,7 @@ describe('AI task on a Remote Desktop session', () => {
         preferredCliId: 'codex-cli',
         strictCli: true,
         images: ['frame.png'],
+        noTools: true,
       });
       return { ok: true, text: 'FINISHED: done', cliName: 'Codex' };
     });

@@ -280,6 +280,12 @@ export interface HeadlessPromptOptions {
    * trust it instead of stopping to ask. Never set for a folder the user works in.
    */
   trustCwd?: boolean;
+  /**
+   * The run must not use the CLI's own tools: its prompt carries text from a server or a screen,
+   * and anything it should do goes through its answer. A CLI whose headless mode runs tools
+   * without asking (`promptAutoApprovesTools`) is not started for it.
+   */
+  noTools?: boolean;
 }
 
 /** Names the CLIs that can look at a screenshot, for an error that tells the user what to pick. */
@@ -381,6 +387,15 @@ export async function prepareHeadlessRun(
       error:
         'No installed CLI supports non-interactive prompts. Install one (Claude Code, Codex, Gemini, …) ' +
         'from the AI CLIs tab in Dev Tools and pick it as your default CLI in Settings.',
+    });
+  }
+
+  if (options.noTools && cli.promptAutoApprovesTools) {
+    return fail({
+      cliName: cli.name,
+      error:
+        `${cli.name} runs its tools without asking in a background run, so it can't take a step ` +
+        'that must not run anything on this computer. Pick another CLI for it.',
     });
   }
 

@@ -440,3 +440,31 @@ describe('runHeadlessCliPrompt in a folder the app made for the run', () => {
     expect(started.args).not.toContain('--skip-git-repo-check');
   });
 });
+
+describe('runHeadlessCliPrompt for a step that must not use tools', () => {
+  // Their headless modes run shell and file tools with no approval, so the "use no tools" line in
+  // a prompt carrying a server's output would be the only thing in the way.
+  it.each([
+    ['pi', 'pi'],
+    ['cline-cli', 'cline'],
+    ['goose', 'goose'],
+  ])('never starts %s, which runs its tools without asking', async (cliId, command) => {
+    installed.add(command);
+    const { runHeadlessCliPrompt } = await import('./headlessPrompt');
+
+    const result = await runHeadlessCliPrompt('next step?', '/run', {
+      preferredCliId: cliId,
+      strictCli: true,
+      noTools: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/without asking/);
+    expect(spawned).toEqual([]);
+  });
+
+  it('still starts a CLI that asks before it uses a tool', async () => {
+    const started = await run({ preferredCliId: 'claude-code', strictCli: true, noTools: true });
+    expect(started.command).toBe('claude');
+  });
+});

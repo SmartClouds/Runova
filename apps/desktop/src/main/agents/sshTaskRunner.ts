@@ -783,7 +783,8 @@ async function askCli(run: RunState, prompt: string): Promise<string> {
         preferredCliId: run.cliId,
         strictCli: true,
         runArgs: run.runArgs,
-        ...(workspace ? { allowWrites: workspace.allowWrites } : {}),
+        // Without a project the step's only way to act is its answer (see cliPreamble).
+        ...(workspace ? { allowWrites: workspace.allowWrites } : { noTools: true }),
         ...(run.attachments.images.length > 0
           ? { images: run.attachments.images, imagesWithTools: workspace !== null }
           : {}),

@@ -278,6 +278,7 @@ describe('choosing the AI', () => {
       preferredCliId: 'claude',
       strictCli: true,
       runArgs: ['--model', 'opus'],
+      noTools: true,
       timeoutMs: 5 * 60 * 1000,
     });
     expect(getSshTaskHistory(sessionId)[0]?.aiLabel).toBe('Claude Code');

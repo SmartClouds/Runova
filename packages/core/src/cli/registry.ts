@@ -52,6 +52,13 @@ export const CliDefinitionSchema = z.object({
    */
   promptWriteArgs: z.array(z.string()).optional(),
   /**
+   * True when `promptCommand` runs the CLI's shell and file tools without asking anyone. Such a
+   * CLI is never started for a run that must not use tools (an SSH, Remote Desktop or Deploy AI
+   * step whose prompt carries a server's output), since a line in the prompt would be all that
+   * kept it from running commands on this computer.
+   */
+  promptAutoApprovesTools: z.boolean().optional(),
+  /**
    * What a headless run needs in a folder the app made for it (a Studio work folder), which the
    * CLI has never been told to trust and which is no git repository. Without these, Codex refuses
    * to start and Cursor and Gemini stop to ask, which nothing can answer with no terminal. Only
@@ -469,6 +476,8 @@ export const CLI_REGISTRY: CliDefinition[] = [
     detectCommand: { command: 'goose', args: ['--version'] },
     versionCommand: { command: 'goose', args: ['--version'] },
     promptCommand: { command: 'goose', args: ['run', '-t'] },
+    // goose runs in its autonomous mode unless configured otherwise, using tools as it sees fit.
+    promptAutoApprovesTools: true,
     fileMention: 'plain',
     // The Windows script calls `exit 1` when something fails, which piped straight into this
     // tab's `iex` would close the tab along with the error. A child PowerShell keeps the message.
@@ -502,6 +511,8 @@ export const CLI_REGISTRY: CliDefinition[] = [
     detectCommand: { command: 'cline', args: ['--version'] },
     versionCommand: { command: 'cline', args: ['--version'] },
     promptCommand: { command: 'cline', args: ['-y'] },
+    // -y approves every tool call, which a headless run needs to finish at all.
+    promptAutoApprovesTools: true,
     argsExample: `--model ${CLI_MODEL_EXAMPLES['cline-cli']}`,
     installCommand: {
       win32: 'npm install -g cline',
@@ -556,6 +567,7 @@ export const CLI_REGISTRY: CliDefinition[] = [
     promptInputMode: 'stdin',
     // No promptWriteArgs: pi has no permission popups, so its write/edit/bash tools run
     // as-is, and the project trust prompt never appears in non-interactive mode.
+    promptAutoApprovesTools: true,
     argsExample: `--model ${CLI_MODEL_EXAMPLES['pi']}`,
     // pi.dev's installers are the recommended path: they pin every dependency and can bring Node
     // along. The Windows line is the one pi itself prints.
