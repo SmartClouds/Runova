@@ -678,6 +678,11 @@ export interface AppSettings {
    * of scan logs and reports before either crosses IPC.
    */
   securityScannerConfigs: Record<string, SecurityScannerSettings>;
+  /**
+   * Where each project's AI security audit runs go, keyed by project id, when the user picked a
+   * folder other than ~/security-audit-skill/<project folder>. Absolute paths on this computer.
+   */
+  aiAuditRunsRoots: Record<string, string>;
   /** Floating desktop usage widgets the user has pinned; recreated on app launch. */
   usageWidgets: DesktopWidgetInstance[];
   /** Floating desktop Build Prompt widgets the user has pinned; recreated on app launch. */

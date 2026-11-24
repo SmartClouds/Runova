@@ -1110,6 +1110,12 @@ const securityAudit = {
     ipcRenderer.invoke(IPC.securityAudit.setTriage, projectId, runName, fingerprint, change),
   openPath: (projectId: string, runName: string, target: 'folder' | 'report'): Promise<void> =>
     ipcRenderer.invoke(IPC.securityAudit.openPath, projectId, runName, target),
+  /** Asks where this project's runs go in a folder picker. `null` when the picker is cancelled. */
+  pickRunsRoot: (projectId: string): Promise<AiAuditStatus | null> =>
+    ipcRenderer.invoke(IPC.securityAudit.pickRunsRoot, projectId),
+  /** Sends this project's runs back to the default folder. */
+  resetRunsRoot: (projectId: string): Promise<AiAuditStatus> =>
+    ipcRenderer.invoke(IPC.securityAudit.resetRunsRoot, projectId),
 };
 
 const security = {

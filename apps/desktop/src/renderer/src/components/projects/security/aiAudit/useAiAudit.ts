@@ -2,6 +2,7 @@ import type {
   AiAuditPhase,
   AiAuditProfile,
   AiAuditRunDetail,
+  AiAuditStatus,
   AiAuditTriageStatus,
   Project,
 } from '@runova/core';
@@ -307,6 +308,39 @@ export function useAiAudit(project: Project) {
     [setFixTab],
   );
 
+  /**
+   * Puts the new folder's status in place and re-reads the runs, which now come from there. Runs
+   * left in the old folder stay on disk.
+   */
+  const changeRunsRoot = useCallback(
+    async (change: () => Promise<AiAuditStatus | null>): Promise<void> => {
+      try {
+        const next = await change();
+        if (!next) return;
+        // A read still under way would land after this and put the old folder back.
+        await queryClient.cancelQueries({ queryKey: queryKeys.aiAuditStatus(projectId) });
+        queryClient.setQueryData(queryKeys.aiAuditStatus(projectId), next);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.aiAuditRuns(projectId) });
+      } catch (error) {
+        toast.error('Could not change the results folder', {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [projectId, queryClient],
+  );
+
+  /** Asks for another folder for this project's runs. Cancelling the picker changes nothing. */
+  const pickRunsRoot = useCallback(
+    () => changeRunsRoot(() => window.runova.securityAudit.pickRunsRoot(projectId)),
+    [changeRunsRoot, projectId],
+  );
+
+  const resetRunsRoot = useCallback(
+    () => changeRunsRoot(() => window.runova.securityAudit.resetRunsRoot(projectId)),
+    [changeRunsRoot, projectId],
+  );
+
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.aiAuditStatus(projectId) }),
@@ -348,6 +382,8 @@ export function useAiAudit(project: Project) {
     startAudit,
     setTriage,
     trackFixTab,
+    pickRunsRoot,
+    resetRunsRoot,
     refresh,
   };
 }

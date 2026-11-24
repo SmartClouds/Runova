@@ -213,8 +213,11 @@ export function bridgeDefaults(): Record<string, unknown> {
       locations: [],
       node: { found: true, version: 'v22.20.0', meetsMinimum: true },
       runsRoot: '/home/test/security-audit-skill/project',
+      runsRootIsDefault: true,
+      runsRootInsideProject: false,
     },
     'securityAudit.listRuns': [],
+    'securityAudit.pickRunsRoot': async () => null,
     'pipelines.runAnnotations': {
       ok: true,
       annotations: [],

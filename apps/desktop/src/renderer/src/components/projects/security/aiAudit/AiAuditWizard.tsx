@@ -26,6 +26,8 @@ import {
   CircleCheck,
   Copy,
   ExternalLink,
+  Folder,
+  FolderOpen,
   Play,
   RefreshCw,
   Shield,
@@ -201,6 +203,8 @@ export function AiAuditWizard({
   const [pathDraft, setPathDraft] = useState('');
   const [pathError, setPathError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  // The folder picker is open, or the new folder is being saved.
+  const [movingRoot, setMovingRoot] = useState(false);
 
   const cliQuery = useQuery({
     queryKey: queryKeys.cliStatus,
@@ -267,7 +271,8 @@ export function AiAuditWizard({
     chosenInstallAgents.length > 0 ? buildSecurityAuditInstallCommand(chosenInstallAgents) : '';
   const runsRoot = status?.runsRoot ?? '';
   const separator = runsRoot.includes('\\') ? '\\' : '/';
-  const previewOutputDir = `${runsRoot}${separator}${nextAuditRunName(audit.runs.map((r) => r.runName))}`;
+  const nextRunName = nextAuditRunName(audit.runs.map((r) => r.runName));
+  const previewOutputDir = `${runsRoot}${separator}${nextRunName}`;
   const effectiveScope = scopeMode === 'some' ? scopePaths : [];
   const prompt = buildSecurityAuditPrompt({
     outputDir: previewOutputDir,
@@ -314,6 +319,15 @@ export function AiAuditWizard({
     setStep(steps[stepIndex + 1]);
   }
 
+  async function moveRunsRoot(change: () => Promise<void>): Promise<void> {
+    setMovingRoot(true);
+    try {
+      await change();
+    } finally {
+      setMovingRoot(false);
+    }
+  }
+
   async function start(): Promise<void> {
     if (!chosenCliId) return;
     setStarting(true);
@@ -353,7 +367,8 @@ export function AiAuditWizard({
             {step === 'overview' &&
               "Cloudflare's security-audit skill, run by your own agent against this project."}
             {step === 'install' && `Install the skill into ${project.name}.`}
-            {step === 'configure' && 'Choose who runs it, how deep it goes and what it covers.'}
+            {step === 'configure' &&
+              'Choose who runs it, how deep it goes, what it covers and where the results go.'}
             {step === 'review' && 'Read what the agent will be asked, then start.'}
           </DialogDescription>
         </DialogHeader>
@@ -721,10 +736,78 @@ export function AiAuditWizard({
                 )}
               </fieldset>
 
-              <p className="text-xs text-muted-foreground">
-                Results go to a new folder in <span className="font-mono">{runsRoot}</span>, outside
-                the project, so nothing is added to your repository.
-              </p>
+              <fieldset className="space-y-2">
+                <legend className="mb-2 text-sm font-medium text-foreground">
+                  Where the results go
+                </legend>
+                {status === null ? (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Spinner className="h-3.5 w-3.5 animate-spin" /> Checking...
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-3 rounded-lg border border-border bg-card/60 px-3 py-2.5">
+                      <Folder className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <p
+                          title={runsRoot}
+                          className="font-mono text-xs text-foreground [overflow-wrap:anywhere]"
+                        >
+                          {runsRoot}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Each run gets its own folder here, like {nextRunName}.
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {!status.runsRootIsDefault && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={movingRoot || audit.live || starting}
+                            onClick={() => void moveRunsRoot(audit.resetRunsRoot)}
+                          >
+                            Use the default
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-label="Change folder"
+                          disabled={movingRoot || audit.live || starting}
+                          onClick={() => void moveRunsRoot(audit.pickRunsRoot)}
+                        >
+                          {movingRoot ? (
+                            <Spinner className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <FolderOpen className="h-3.5 w-3.5" />
+                          )}
+                          Change
+                        </Button>
+                      </div>
+                    </div>
+                    {status.runsRootInsideProject ? (
+                      <p className="flex items-start gap-2 text-xs text-warning">
+                        <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        This folder is inside the project. Add it to .gitignore so the results are
+                        not committed.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Outside the project, so nothing is added to your repository.
+                        {!status.runsRootIsDefault &&
+                          ' The Security tab lists the runs in this folder.'}
+                      </p>
+                    )}
+                    {audit.live && (
+                      <p className="text-xs text-muted-foreground">
+                        An audit is running. Change the folder once it ends, so the Security tab
+                        keeps following it.
+                      </p>
+                    )}
+                  </>
+                )}
+              </fieldset>
             </>
           )}
 

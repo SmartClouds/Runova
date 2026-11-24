@@ -287,3 +287,80 @@ describe('auditRunPath', () => {
     await expect(auditRunPath('p1', 'run-x', 'folder')).rejects.toThrow(/run name/i);
   });
 });
+
+describe('setAuditRunsRoot', () => {
+  it('starts on the default folder outside the project', async () => {
+    const { getAuditStatus } = await load();
+    const status = await getAuditStatus('p1');
+
+    expect(status.runsRoot).toBe(runsRoot);
+    expect(status.runsRootIsDefault).toBe(true);
+    expect(status.runsRootInsideProject).toBe(false);
+  });
+
+  it('keeps every run in the folder the user chose', async () => {
+    const chosen = join(userData.dir, 'audits', 'shop');
+    write(join(chosen, 'run-2', 'REPORT.md'), '#');
+    const { setAuditRunsRoot, listAuditRuns, prepareAuditRun, auditRunPath } = await load();
+
+    const status = await setAuditRunsRoot('p1', chosen);
+
+    expect(status.runsRoot).toBe(chosen);
+    expect(status.runsRootIsDefault).toBe(false);
+    expect(status.runsRootInsideProject).toBe(false);
+    expect((await listAuditRuns('p1')).map((run) => run.runName)).toEqual(['run-2']);
+    expect(await auditRunPath('p1', 'run-2', 'report')).toBe(join(chosen, 'run-2', 'REPORT.md'));
+    expect(await prepareAuditRun('p1')).toEqual({
+      runName: 'run-3',
+      outputDir: join(chosen, 'run-3'),
+    });
+  });
+
+  it('remembers the choice for that project only', async () => {
+    const { setAuditRunsRoot, getAuditStatus } = await load();
+    await setAuditRunsRoot('p1', join(userData.dir, 'audits'));
+
+    expect((await getAuditStatus('p1')).runsRoot).toBe(join(userData.dir, 'audits'));
+    expect(JSON.parse(readFileSync(userData.dataFile('settings.json'), 'utf-8'))).toMatchObject({
+      aiAuditRunsRoots: { p1: join(userData.dir, 'audits') },
+    });
+  });
+
+  it('goes back to the default when cleared', async () => {
+    const { setAuditRunsRoot } = await load();
+    await setAuditRunsRoot('p1', join(userData.dir, 'audits'));
+
+    const status = await setAuditRunsRoot('p1', null);
+
+    expect(status.runsRoot).toBe(runsRoot);
+    expect(status.runsRootIsDefault).toBe(true);
+  });
+
+  it('treats picking the default folder as going back to it', async () => {
+    const { setAuditRunsRoot } = await load();
+    await setAuditRunsRoot('p1', join(userData.dir, 'audits'));
+
+    expect((await setAuditRunsRoot('p1', runsRoot)).runsRootIsDefault).toBe(true);
+  });
+
+  it('says when the folder is the project or inside it', async () => {
+    const { setAuditRunsRoot } = await load();
+
+    expect((await setAuditRunsRoot('p1', projectDir)).runsRootInsideProject).toBe(true);
+    expect(
+      (await setAuditRunsRoot('p1', join(projectDir, 'audit-results'))).runsRootInsideProject,
+    ).toBe(true);
+    // A sibling whose name only starts with the project's is not inside it.
+    expect((await setAuditRunsRoot('p1', `${projectDir}-audits`)).runsRootInsideProject).toBe(
+      false,
+    );
+  });
+
+  it('refuses a relative folder or an unknown project', async () => {
+    const { setAuditRunsRoot } = await load();
+
+    await expect(setAuditRunsRoot('p1', 'audits')).rejects.toThrow(/full path/i);
+    await expect(setAuditRunsRoot('p1', 42)).rejects.toThrow(/full path/i);
+    await expect(setAuditRunsRoot('nope', join(userData.dir, 'x'))).rejects.toThrow(/not found/);
+  });
+});

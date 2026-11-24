@@ -194,6 +194,13 @@ export interface AiAuditStatus {
   /** Every copy found: project paths are relative to the project, global ones start with ~/. */
   locations: { path: string; scope: 'project' | 'global' }[];
   node: { found: boolean; version: string | null; meetsMinimum: boolean };
-  /** ~/security-audit-skill/<project folder>, where every run of this project lands. */
+  /**
+   * Where every run of this project lands: the folder the user picked, or by default
+   * ~/security-audit-skill/<project folder>.
+   */
   runsRoot: string;
+  /** No folder has been picked, so runs go to the default one. */
+  runsRootIsDefault: boolean;
+  /** The folder is the project or inside it, so the results can end up in the repository. */
+  runsRootInsideProject: boolean;
 }

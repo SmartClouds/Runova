@@ -50,6 +50,8 @@ const installed: AiAuditStatus = {
   locations: [{ path: '.claude/skills/security-audit', scope: 'project' }],
   node: { found: true, version: 'v22.20.0', meetsMinimum: true },
   runsRoot: '/home/me/security-audit-skill/shop',
+  runsRootIsDefault: true,
+  runsRootInsideProject: false,
 };
 
 function summary(over: Partial<AiAuditRunSummary> = {}): AiAuditRunSummary {

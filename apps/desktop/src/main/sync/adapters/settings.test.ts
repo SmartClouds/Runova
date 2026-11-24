@@ -58,6 +58,19 @@ describe('settingsAdapter', () => {
     });
   });
 
+  it('keeps the AI audit results folders on this computer', async () => {
+    const store = memorySettings(settings({ aiAuditRunsRoots: { p1: 'D:/audits' } }));
+    const [item] = await settingsAdapter(store).list();
+    expect(item?.value).not.toHaveProperty('aiAuditRunsRoots');
+
+    await settingsAdapter(store).apply({
+      id: 'app',
+      teamId: null,
+      value: { ...(item?.value as Record<string, unknown>), aiAuditRunsRoots: { p1: '/other' } },
+    });
+    expect(store.get().aiAuditRunsRoots).toEqual({ p1: 'D:/audits' });
+  });
+
   it('merges what arrived into the settings here and keeps this computer’s own', async () => {
     const store = memorySettings(settings());
     const [item] = await settingsAdapter(memorySettings(settings())).list();

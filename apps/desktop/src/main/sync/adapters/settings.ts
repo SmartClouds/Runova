@@ -11,8 +11,9 @@ export interface SettingsPort {
 
 /**
  * Settings that belong to this computer and never sync:
- * - local paths: `projectsRootPath`, `androidSdkPath`, `androidCapturePath`, and the worktree
- *   folder (`worktrees.baseDir`, left out of the worktree settings that do sync)
+ * - local paths: `projectsRootPath`, `androidSdkPath`, `androidCapturePath`, the AI audit
+ *   results folders (`aiAuditRunsRoots`), and the worktree folder (`worktrees.baseDir`, left out
+ *   of the worktree settings that do sync)
  * - windows on this desktop: `usageWidgets`, `promptBuildWidgets`
  * - what is set up on this computer: `deployServerIds`, `runnerMachineLinks` (a runner can be
  *   "this computer"), `skillRepositoryIds` (the repositories list stays here), and the pet's
@@ -27,6 +28,7 @@ export const DEVICE_SETTINGS = [
   'projectsRootPath',
   'androidSdkPath',
   'androidCapturePath',
+  'aiAuditRunsRoots',
   'usageWidgets',
   'promptBuildWidgets',
   'deployServerIds',

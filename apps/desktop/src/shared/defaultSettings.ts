@@ -99,6 +99,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   proxy: defaultProxySettings(),
   usageProviderConfigs: {},
   securityScannerConfigs: {},
+  aiAuditRunsRoots: {},
   usageWidgets: [],
   promptBuildWidgets: [],
   usageCardOrder: [],

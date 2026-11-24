@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   AiAuditFinding,
   AiAuditLedgerSummary,
@@ -34,7 +34,8 @@ import { probe } from './exec';
 /**
  * The file side of the AI security audit (Cloudflare's security-audit skill). The agent does the
  * work in a terminal; this module only looks at what it leaves on disk: the skill's folder in the
- * project, and the run folders under ~/security-audit-skill/<project folder>/run-<N>.
+ * project, and the run folders under ~/security-audit-skill/<project folder>/run-<N> (or under the
+ * folder the user picked for the project instead).
  *
  * Every entry point takes a project id and resolves paths here. A run name from the renderer is
  * held to `run-<N>` before it is joined onto anything, so a compromised page cannot read or open
@@ -46,10 +47,16 @@ const MAX_FINDINGS_BYTES = 25 * 1024 * 1024;
 const MAX_REPORT_BYTES = 2 * 1024 * 1024;
 const MAX_TRIAGE_BYTES = 2 * 1024 * 1024;
 
-async function getProject(projectId: string): Promise<{ folderPath: string; name: string }> {
+interface AuditProject {
+  id: string;
+  folderPath: string;
+  name: string;
+}
+
+async function getProject(projectId: string): Promise<AuditProject> {
   const project = (await store.getProjects()).find((p) => p.id === projectId);
   if (!project) throw new Error(`Project ${projectId} not found`);
-  return { folderPath: project.folderPath, name: project.name };
+  return { id: project.id, folderPath: project.folderPath, name: project.name };
 }
 
 async function isFile(path: string): Promise<boolean> {
@@ -58,11 +65,28 @@ async function isFile(path: string): Promise<boolean> {
     .catch(() => false);
 }
 
-function runsRootFor(project: { folderPath: string; name: string }): string {
+function defaultRunsRoot(project: AuditProject): string {
   // The folder's own name, like the skill's default `<repo>`; the display name covers a path that
   // has none (a drive root).
   const folder = basename(project.folderPath) || project.name.replace(/[\\/:*?"<>|]/g, '-');
   return join(app.getPath('home'), SECURITY_AUDIT_RUNS_FOLDER, folder);
+}
+
+/** The same folder, or one inside it. `relative` already ignores case where the OS does. */
+function isInside(folder: string, parent: string): boolean {
+  const path = relative(parent, folder);
+  return path === '' || (path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
+async function runsRootFor(project: AuditProject): Promise<{ root: string; isDefault: boolean }> {
+  const saved = (await store.getSettings()).aiAuditRunsRoots?.[project.id];
+  return typeof saved === 'string' && isAbsolute(saved)
+    ? { root: saved, isDefault: false }
+    : { root: defaultRunsRoot(project), isDefault: true };
+}
+
+async function runsRootOf(projectId: string): Promise<string> {
+  return (await runsRootFor(await getProject(projectId))).root;
 }
 
 function checkRunName(runName: string): void {
@@ -113,12 +137,38 @@ export async function getAuditStatus(projectId: string): Promise<AiAuditStatus> 
   const nodeProbe = await probe('node', ['--version']);
   const version = nodeProbe.ok ? nodeProbe.stdout.trim() || null : null;
 
+  const runs = await runsRootFor(project);
   return {
     installed: locations.some((location) => location.scope === 'project'),
     locations,
     node: { found: nodeProbe.ok, version, meetsMinimum: nodeMeetsAuditMinimum(version) },
-    runsRoot: runsRootFor(project),
+    runsRoot: runs.root,
+    runsRootIsDefault: runs.isDefault,
+    runsRootInsideProject: isInside(runs.root, project.folderPath),
   };
+}
+
+/**
+ * Saves the folder this project's runs go to, or with `null` goes back to the default. Picking
+ * the default folder itself counts as going back to it. Runs already in the old folder stay
+ * there; the tracker lists the new folder's runs from now on.
+ */
+export async function setAuditRunsRoot(projectId: string, folder: unknown): Promise<AiAuditStatus> {
+  if (folder !== null && (typeof folder !== 'string' || !isAbsolute(folder))) {
+    throw new Error('The results folder needs a full path.');
+  }
+  const project = await getProject(projectId);
+  const chosen = folder === null ? null : resolve(folder);
+  await store.updateSettings((settings) => {
+    const roots = { ...(settings.aiAuditRunsRoots ?? {}) };
+    if (chosen === null || relative(defaultRunsRoot(project), chosen) === '') {
+      delete roots[projectId];
+    } else {
+      roots[projectId] = chosen;
+    }
+    return { ...settings, aiAuditRunsRoots: roots };
+  });
+  return getAuditStatus(projectId);
 }
 
 interface RunFiles {
@@ -180,7 +230,7 @@ function summarize(runName: string, outputDir: string, run: RunFiles): AiAuditRu
 
 /** Every run-<N> folder of the project, newest first. */
 export async function listAuditRuns(projectId: string): Promise<AiAuditRunSummary[]> {
-  const root = runsRootFor(await getProject(projectId));
+  const root = await runsRootOf(projectId);
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   const names = entries
     .filter((entry) => entry.isDirectory() && isAuditRunName(entry.name))
@@ -198,7 +248,7 @@ export async function listAuditRuns(projectId: string): Promise<AiAuditRunSummar
 
 export async function getAuditRun(projectId: string, runName: string): Promise<AiAuditRunDetail> {
   checkRunName(runName);
-  const dir = join(runsRootFor(await getProject(projectId)), runName);
+  const dir = join(await runsRootOf(projectId), runName);
   const files = await readRunFiles(dir).catch(() => {
     throw new Error(`${runName} is no longer there. It may have been moved or deleted.`);
   });
@@ -230,7 +280,7 @@ export async function setAuditTriage(
   if (change !== null && (typeof change !== 'object' || Array.isArray(change))) {
     throw new Error('Not a triage change.');
   }
-  const dir = join(runsRootFor(await getProject(projectId)), runName);
+  const dir = join(await runsRootOf(projectId), runName);
   const dirStats = await stat(dir).catch(() => null);
   if (!dirStats?.isDirectory()) {
     throw new Error(`${runName} is no longer there. It may have been moved or deleted.`);
@@ -256,7 +306,7 @@ export async function setAuditTriage(
 export async function prepareAuditRun(
   projectId: string,
 ): Promise<{ runName: string; outputDir: string }> {
-  const root = runsRootFor(await getProject(projectId));
+  const root = await runsRootOf(projectId);
   const existing = await readdir(root).catch(() => [] as string[]);
   const runName = nextAuditRunName(existing);
   const outputDir = join(root, runName);
@@ -270,6 +320,6 @@ export async function auditRunPath(
   target: 'folder' | 'report',
 ): Promise<string> {
   checkRunName(runName);
-  const dir = join(runsRootFor(await getProject(projectId)), runName);
+  const dir = join(await runsRootOf(projectId), runName);
   return target === 'report' ? join(dir, 'REPORT.md') : dir;
 }

@@ -48,6 +48,13 @@ const installed: AiAuditStatus = {
   locations: [{ path: '.claude/skills/security-audit', scope: 'project' }],
   node: { found: true, version: 'v22.20.0', meetsMinimum: true },
   runsRoot: '/home/me/security-audit-skill/shop',
+  runsRootIsDefault: true,
+  runsRootInsideProject: false,
+};
+const elsewhere: AiAuditStatus = {
+  ...installed,
+  runsRoot: '/data/audits',
+  runsRootIsDefault: false,
 };
 const notInstalled: AiAuditStatus = { ...installed, installed: false, locations: [] };
 
@@ -75,6 +82,7 @@ function setup(
     status?: AiAuditStatus;
     initialStep?: 'overview' | 'configure';
     codexInstalled?: boolean;
+    bridge?: Record<string, unknown>;
   } = {},
 ) {
   const onOpenChange = vi.fn();
@@ -95,6 +103,7 @@ function setup(
             version: options.codexInstalled ? '1.0.0' : null,
           },
         ],
+        ...options.bridge,
       },
     },
   );
@@ -102,6 +111,7 @@ function setup(
 }
 
 beforeEach(() => {
+  toast.error.mockClear();
   launch.launchPromptTab.mockClear();
   launch.launchSetupTab.mockClear();
 });
@@ -283,5 +293,113 @@ describe('AiAuditWizard', () => {
     await user.click(await screen.findByRole('radio', { name: /Only some folders/ }));
 
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+  });
+
+  describe('where the results go', () => {
+    it('shows the folder and promises nothing lands in the repository', async () => {
+      setup({ initialStep: 'configure' });
+
+      await screen.findByText('/home/me/security-audit-skill/shop');
+      const section = screen.getByRole('group', { name: 'Where the results go' });
+      expect(section).toHaveTextContent('/home/me/security-audit-skill/shop');
+      expect(section).toHaveTextContent(/each run gets its own folder here, like run-1/i);
+      expect(section).toHaveTextContent(/outside the project, so nothing is added/i);
+      expect(screen.queryByRole('button', { name: /Use the default/ })).not.toBeInTheDocument();
+    });
+
+    it('moves the results to a folder picked, and the prompt follows', async () => {
+      const { user, bridge } = setup({
+        initialStep: 'configure',
+        bridge: { 'securityAudit.pickRunsRoot': elsewhere },
+      });
+
+      await user.click(await screen.findByRole('button', { name: /Change folder/ }));
+
+      expect(bridge.$fn('securityAudit.pickRunsRoot')).toHaveBeenCalledWith('p1');
+      const section = screen.getByRole('group', { name: 'Where the results go' });
+      await waitFor(() => expect(section).toHaveTextContent('/data/audits'));
+      expect(section).toHaveTextContent(/The Security tab lists the runs in this folder/);
+      expect(screen.getByRole('button', { name: /Use the default/ })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+      expect(await screen.findByText(/\/data\/audits\/run-1/)).toBeInTheDocument();
+    });
+
+    it('keeps the folder when the picker is cancelled', async () => {
+      const { user } = setup({
+        initialStep: 'configure',
+        bridge: { 'securityAudit.pickRunsRoot': async () => null },
+      });
+
+      await user.click(await screen.findByRole('button', { name: /Change folder/ }));
+
+      const section = screen.getByRole('group', { name: 'Where the results go' });
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Change folder/ })).toBeEnabled(),
+      );
+      expect(section).toHaveTextContent('/home/me/security-audit-skill/shop');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('goes back to the default folder', async () => {
+      const { user, bridge } = setup({
+        initialStep: 'configure',
+        status: elsewhere,
+        bridge: { 'securityAudit.resetRunsRoot': installed },
+      });
+
+      await user.click(await screen.findByRole('button', { name: /Use the default/ }));
+
+      expect(bridge.$fn('securityAudit.resetRunsRoot')).toHaveBeenCalledWith('p1');
+      const section = screen.getByRole('group', { name: 'Where the results go' });
+      await waitFor(() => expect(section).toHaveTextContent('/home/me/security-audit-skill/shop'));
+      expect(screen.queryByRole('button', { name: /Use the default/ })).not.toBeInTheDocument();
+    });
+
+    it('warns when the folder is inside the project', async () => {
+      setup({
+        initialStep: 'configure',
+        status: {
+          ...installed,
+          runsRoot: '/work/shop/audits',
+          runsRootIsDefault: false,
+          runsRootInsideProject: true,
+        },
+      });
+
+      await screen.findByText('/work/shop/audits');
+      const section = screen.getByRole('group', { name: 'Where the results go' });
+      expect(section).toHaveTextContent(/inside the project/i);
+      expect(section).toHaveTextContent(/\.gitignore/);
+      expect(section).not.toHaveTextContent(/nothing is added/i);
+    });
+
+    it('will not move the folder while an audit is running', async () => {
+      setup({
+        initialStep: 'configure',
+        bridge: {
+          'securityAudit.listRuns': [
+            {
+              runName: 'run-1',
+              outputDir: '/home/me/security-audit-skill/shop/run-1',
+              phase: 'hunting',
+              metadata: null,
+              counts: null,
+              ledger: null,
+              startedAt: '2026-11-01T10:00:00Z',
+              lastActivityAt: '2026-11-01T10:05:00Z',
+              hasReport: false,
+            },
+          ],
+        },
+      });
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Change folder/ })).toBeDisabled(),
+      );
+      expect(screen.getByRole('group', { name: 'Where the results go' })).toHaveTextContent(
+        /an audit is running/i,
+      );
+    });
   });
 });

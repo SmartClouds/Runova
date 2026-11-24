@@ -740,6 +740,8 @@ export const IPC = {
     prepareRun: 'securityAudit:prepareRun',
     setTriage: 'securityAudit:setTriage',
     openPath: 'securityAudit:openPath',
+    pickRunsRoot: 'securityAudit:pickRunsRoot',
+    resetRunsRoot: 'securityAudit:resetRunsRoot',
   },
   tools: {
     detectAll: 'tools:detectAll',

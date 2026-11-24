@@ -82,6 +82,8 @@ function setup(bridge: Record<string, unknown> = {}) {
         locations: [{ path: '.claude/skills/security-audit', scope: 'project' }],
         node: { found: true, version: 'v22.20.0', meetsMinimum: true },
         runsRoot: '/home/me/security-audit-skill/shop',
+        runsRootIsDefault: true,
+        runsRootInsideProject: false,
       },
       ...bridge,
     },
@@ -279,6 +281,92 @@ describe('useAiAudit', () => {
     expect(result.current.selectedRunName).toBe('run-3');
   });
 
+  it('moves the results to the folder picked, and lists the runs found there', async () => {
+    const moved = {
+      installed: true,
+      locations: [],
+      node: { found: true, version: 'v22.20.0', meetsMinimum: true },
+      runsRoot: '/data/audits',
+      runsRootIsDefault: false,
+      runsRootInsideProject: false,
+    };
+    const { result, bridge } = setup({
+      'securityAudit.pickRunsRoot': moved,
+      'securityAudit.listRuns': [summary()],
+    });
+    await waitFor(() => expect(result.current.runs).toHaveLength(1));
+    bridge.$set('securityAudit.listRuns', [summary({ runName: 'run-7' })]);
+
+    await act(async () => {
+      await result.current.pickRunsRoot();
+    });
+
+    expect(bridge.$fn('securityAudit.pickRunsRoot')).toHaveBeenCalledWith('p1');
+    await waitFor(() => expect(result.current.status?.runsRoot).toBe('/data/audits'));
+    await waitFor(() => expect(result.current.runs.map((run) => run.runName)).toEqual(['run-7']));
+  });
+
+  it('leaves the folder alone when the picker is cancelled', async () => {
+    const { result } = setup({ 'securityAudit.pickRunsRoot': async () => null });
+    await waitFor(() => expect(result.current.statusLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.pickRunsRoot();
+    });
+
+    expect(result.current.status?.runsRoot).toBe('/home/me/security-audit-skill/shop');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('says why the folder could not be changed', async () => {
+    const { result } = setup({
+      'securityAudit.pickRunsRoot': async () => {
+        throw new Error('Access is denied.');
+      },
+    });
+    await waitFor(() => expect(result.current.statusLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.pickRunsRoot();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('Could not change the results folder', {
+      description: 'Access is denied.',
+    });
+  });
+
+  it('sends the results back to the default folder', async () => {
+    const { result, bridge } = setup({
+      'securityAudit.status': {
+        installed: true,
+        locations: [],
+        node: { found: true, version: 'v22.20.0', meetsMinimum: true },
+        runsRoot: '/data/audits',
+        runsRootIsDefault: false,
+        runsRootInsideProject: false,
+      },
+      'securityAudit.resetRunsRoot': {
+        installed: true,
+        locations: [],
+        node: { found: true, version: 'v22.20.0', meetsMinimum: true },
+        runsRoot: '/home/me/security-audit-skill/shop',
+        runsRootIsDefault: true,
+        runsRootInsideProject: false,
+      },
+    });
+    await waitFor(() => expect(result.current.statusLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.resetRunsRoot();
+    });
+
+    expect(bridge.$fn('securityAudit.resetRunsRoot')).toHaveBeenCalledWith('p1');
+    await waitFor(() =>
+      expect(result.current.status?.runsRoot).toBe('/home/me/security-audit-skill/shop'),
+    );
+    expect(result.current.status?.runsRootIsDefault).toBe(true);
+  });
+
   it('reports a launch that never opened a tab', async () => {
     launch.launchPromptTab.mockReturnValueOnce(null);
     const { result } = setup({
@@ -305,6 +393,8 @@ describe('useAiAudit', () => {
       locations: [],
       node: { found: true, version: 'v22.20.0', meetsMinimum: true },
       runsRoot: '/x',
+      runsRootIsDefault: true,
+      runsRootInsideProject: false,
     };
     const { result, bridge } = setup({ 'securityAudit.status': notInstalled });
     await waitFor(() => expect(result.current.status?.installed).toBe(false));
@@ -347,6 +437,8 @@ describe('useAiAudit', () => {
       locations: [],
       node: { found: true, version: 'v22.20.0', meetsMinimum: true },
       runsRoot: '/x',
+      runsRootIsDefault: true,
+      runsRootInsideProject: false,
     };
 
     async function installing() {
