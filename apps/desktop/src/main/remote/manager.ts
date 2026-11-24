@@ -474,6 +474,8 @@ export class RemoteManager {
 
   private onHostMessage(peer: HostPeer, data: Buffer, isBinary: boolean): void {
     if (isBinary) {
+      // Binary frames carry screen tiles and file chunks, which nobody may send before signing in.
+      if (!peer.authed) return;
       this.onBinary(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), this.files);
       return;
     }

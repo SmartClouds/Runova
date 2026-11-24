@@ -454,6 +454,41 @@ describe('paired LAN devices on the host', () => {
     expect(real.last('auth-ok')).toBeDefined();
   });
 
+  it('shrugs off malformed frames from a peer that never signed in', async () => {
+    const { code, open } = host();
+    const { token, hostKey } = await code();
+    // Anyone on the network can finish the handshake: the host has no key for them to prove.
+    async function stranger(): Promise<End> {
+      const { mine } = open('198.51.100.7');
+      const link = linkOn(mine);
+      await link.runAsController({
+        sessionId: LAN_SESSION_ID,
+        mode: 'ask',
+        identity: newIdentity(),
+        expectedHostKey: fromB64u(hostKey),
+      });
+      return new End(mine, link);
+    }
+
+    // A file chunk too short to hold its header, before any sign-in. The link stays up, so the
+    // same connection can still pair.
+    const first = await stranger();
+    first.sendBinary(new Uint8Array([2]));
+    first.sendBinary(new Uint8Array([2, 0, 0, 0]));
+    await settle();
+    first.send({ t: 'hello', role: 'controller', deviceName: 'Phone', protocolVersion: 4 });
+    first.send({ t: 'auth', token });
+    await vi.waitFor(() => expect(first.last('auth-ok')).toBeDefined());
+
+    // A token that is not text gets an answer, not an exception, while a code waits to be used.
+    await code();
+    for (const bad of [12345, { length: 3 }, null]) {
+      const end = await stranger();
+      end.send({ t: 'auth', token: bad });
+      await vi.waitFor(() => expect(end.last('auth-fail')).toBeDefined());
+    }
+  });
+
   it('lists a device that paired, under the name it paired with', async () => {
     const { manager, connect, pair } = host();
     const { deviceToken, hostKey } = await pair('Phone');

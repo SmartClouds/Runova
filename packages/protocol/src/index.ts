@@ -344,7 +344,9 @@ export function encodeFileChunk(chunk: FileChunk): Uint8Array {
   return out;
 }
 
-export function decodeFileChunk(buf: Uint8Array): FileChunk {
+/** A file chunk, or null for a frame too short to hold its header (it came from the network). */
+export function decodeFileChunk(buf: Uint8Array): FileChunk | null {
+  if (buf.byteLength < FILE_HEADER_BYTES) return null;
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   return {
     transferKey: view.getUint32(1),

@@ -65,6 +65,13 @@ function seededBytes(length: number, seed: number): Uint8Array {
   return out;
 }
 
+/** A chunk the test built itself, so there is always one to read back. */
+function fileChunk(buf: Uint8Array) {
+  const chunk = decodeFileChunk(buf);
+  if (!chunk) throw new Error('not a file chunk');
+  return chunk;
+}
+
 describe('REMOTE_PROTOCOL_VERSION', () => {
   it('is pinned, because every peer has to move in step', () => {
     // A controller sends this number in its `hello` frame and the host refuses
@@ -270,13 +277,19 @@ describe('file chunk frames', () => {
       bytes: payload,
     });
     expect(encoded.byteLength).toBe(13 + payload.byteLength);
-    const chunk = decodeFileChunk(encoded);
+    const chunk = fileChunk(encoded);
     expect(chunk).toMatchObject({ transferKey: 0xdeadbeef, partIndex: 3, seq: 17 });
     expect(Array.from(chunk.bytes)).toEqual(Array.from(payload));
   });
 
+  it('reads a frame too short for its header as nothing, since it came off the network', () => {
+    expect(decodeFileChunk(new Uint8Array([2]))).toBeNull();
+    expect(decodeFileChunk(new Uint8Array(12))).toBeNull();
+    expect(decodeFileChunk(new Uint8Array(0))).toBeNull();
+  });
+
   it('handles a zero-length chunk', () => {
-    const chunk = decodeFileChunk(
+    const chunk = fileChunk(
       encodeFileChunk({ transferKey: 1, partIndex: 0, seq: 0, bytes: new Uint8Array(0) }),
     );
     expect(chunk.bytes.byteLength).toBe(0);
@@ -284,7 +297,7 @@ describe('file chunk frames', () => {
 
   it('handles a full-size chunk, the common case on the wire', () => {
     const payload = bytes(FILE_CHUNK_BYTES, 23);
-    const chunk = decodeFileChunk(
+    const chunk = fileChunk(
       encodeFileChunk({ transferKey: 9, partIndex: 1, seq: 2, bytes: payload }),
     );
     expect(chunk.bytes.byteLength).toBe(FILE_CHUNK_BYTES);
@@ -295,7 +308,7 @@ describe('file chunk frames', () => {
 
   it('keeps the header fields unsigned', () => {
     // transferKey comes from an FNV hash, so its top bit is set half the time.
-    const chunk = decodeFileChunk(
+    const chunk = fileChunk(
       encodeFileChunk({
         transferKey: 0xffffffff,
         partIndex: 0xfffffffe,
@@ -312,21 +325,21 @@ describe('file chunk frames', () => {
 
   it('decodes a view that starts partway into a larger buffer', () => {
     const payload = bytes(32, 5);
-    const chunk = decodeFileChunk(
+    const chunk = fileChunk(
       asViewWithOffset(encodeFileChunk({ transferKey: 77, partIndex: 4, seq: 5, bytes: payload })),
     );
     expect(chunk).toMatchObject({ transferKey: 77, partIndex: 4, seq: 5 });
     expect(Array.from(chunk.bytes)).toEqual(Array.from(payload));
   });
 
-  it('throws a bounds error on a truncated header', () => {
+  it('reads a truncated header as nothing rather than throwing', () => {
     const short = encodeFileChunk({
       transferKey: 1,
       partIndex: 1,
       seq: 1,
       bytes: bytes(4),
     }).subarray(0, 9);
-    expect(() => decodeFileChunk(short)).toThrow(RangeError);
+    expect(decodeFileChunk(short)).toBeNull();
   });
 
   it('splits a part into whole chunks', () => {

@@ -740,6 +740,7 @@ export class FileTransferManager {
   handleBinary(buf: Uint8Array): boolean {
     if (buf[0] !== BIN_FILE_CHUNK) return false;
     const chunk = decodeFileChunk(buf);
+    if (!chunk) return true;
     const transferId = this.byKey.get(chunk.transferKey);
     const state = transferId ? this.transfers.get(transferId) : undefined;
     if (state?.direction === 'download') this.handlePartData(state, chunk);

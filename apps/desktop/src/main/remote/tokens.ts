@@ -95,6 +95,8 @@ export class TokenStore {
 
   /** Validate and consume a pairing token. Returns true only for a live, unused token. */
   consume(candidate: string): boolean {
+    // It comes straight off the network, whatever its declared type.
+    if (typeof candidate !== 'string') return false;
     this.prune();
     for (const [token, meta] of this.pairing) {
       if (meta.expiresAt < Date.now()) continue;
