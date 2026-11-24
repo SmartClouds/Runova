@@ -1,7 +1,7 @@
 import { createPublicKey, verify } from 'node:crypto';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SshAgentHistoryRun, SshAgentProgress } from '../../../shared/apiTypes';
 import { coreErrorCode } from '../../../shared/coreErrors';
@@ -361,7 +361,9 @@ describe('approve every command (the default)', () => {
     await assistant.start({ serverId, prompt: 'Uptime?', cliId: 'claude-code' });
     await until(progress, 'finished', 3);
     const plain = vi.mocked(runHeadlessCliPrompt).mock.lastCall;
-    expect(plain?.[1]).toBe(tmpdir());
+    // A temp folder made for the run, never the shared temp folder itself (/tmp on Linux).
+    expect(plain?.[1]).not.toBe(tmpdir());
+    expect(dirname(plain?.[1] ?? '')).toBe(tmpdir());
     expect(plain?.[2]).toMatchObject({ timeoutMs: 5 * 60 * 1000 });
     expect(plain?.[2]).not.toHaveProperty('allowWrites');
     expect(fake.prompts.at(-1)).toContain('Do not use any tools');

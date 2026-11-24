@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { dirname } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SshAgentMode, SshAgentProgress } from '../../shared/apiTypes';
 import { runHeadlessCliPrompt } from '../cli/headlessPrompt';
@@ -258,7 +260,7 @@ describe('choosing the AI', () => {
     expect(getSshTaskHistory(sessionId)[0]?.aiLabel).toBe('Gemini');
   });
 
-  it('runs the chosen CLI headless in the temp folder with its model flags', async () => {
+  it('runs the chosen CLI headless in a temp folder of its own with its model flags', async () => {
     const { sessionId, progress } = start({
       cliId: 'claude',
       modelId: 'opus',
@@ -266,7 +268,12 @@ describe('choosing the AI', () => {
     });
     await until(progress, 'finished');
     expect(runAiPrompt).not.toHaveBeenCalled();
-    expect(runHeadlessCliPrompt).toHaveBeenCalledWith(expect.any(String), tmpdir(), {
+    // Never the shared temp folder itself, which is /tmp on Linux.
+    const cwd = vi.mocked(runHeadlessCliPrompt).mock.calls[0]?.[1] ?? '';
+    expect(cwd).not.toBe(tmpdir());
+    expect(dirname(cwd)).toBe(tmpdir());
+    expect(existsSync(cwd)).toBe(false);
+    expect(runHeadlessCliPrompt).toHaveBeenCalledWith(expect.any(String), cwd, {
       requestId: `ssh-agent:${sessionId}:1`,
       preferredCliId: 'claude',
       strictCli: true,

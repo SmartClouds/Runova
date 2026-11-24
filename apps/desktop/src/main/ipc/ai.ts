@@ -1,4 +1,3 @@
-import { tmpdir } from 'node:os';
 import { buildRunAssessmentPrompt, parseRunAssessment, runArgsFor } from '@runova/core';
 import { ipcMain } from 'electron';
 import type {
@@ -14,6 +13,7 @@ import type {
 } from '../../shared/apiTypes';
 import { IPC } from '../../shared/ipcChannels';
 import { cancelHeadlessPrompt, runHeadlessCliPrompt } from '../cli/headlessPrompt';
+import { inPrivateRunFolder } from '../cli/runFolder';
 import { store } from '../store';
 
 /** True for the DOMException fetch throws when its AbortSignal fires. */
@@ -306,15 +306,17 @@ const ASSESS_RUN_TIMEOUT_MS = 120000;
 
 /**
  * Asks the default AI CLI (Settings, then any installed headless-capable CLI) to size a
- * generated prompt. It runs from the temp dir rather than a project folder: the CLI only
+ * generated prompt. It runs from a fresh temp folder of its own rather than a project folder: the CLI only
  * needs the prompt text, and an agent started inside a repo tends to read files first,
  * which costs time and tokens for no better answer.
  */
 export async function assessRun(input: AssessRunInput): Promise<AssessRunResult> {
-  const result = await runHeadlessCliPrompt(buildRunAssessmentPrompt(input), tmpdir(), {
-    requestId: input.requestId,
-    timeoutMs: ASSESS_RUN_TIMEOUT_MS,
-  });
+  const result = await inPrivateRunFolder((cwd) =>
+    runHeadlessCliPrompt(buildRunAssessmentPrompt(input), cwd, {
+      requestId: input.requestId,
+      timeoutMs: ASSESS_RUN_TIMEOUT_MS,
+    }),
+  );
   if (!result.ok) {
     return {
       ok: false,
@@ -348,17 +350,19 @@ const ASK_CLI_TIMEOUT_MS = 5 * 60_000;
  */
 export async function askCli(input: AskCliInput): Promise<AskCliResult> {
   const { cliId } = input;
-  const result = await runHeadlessCliPrompt(input.prompt, tmpdir(), {
-    requestId: input.requestId,
-    timeoutMs: ASK_CLI_TIMEOUT_MS,
-    ...(cliId
-      ? {
-          preferredCliId: cliId,
-          strictCli: true,
-          runArgs: runArgsFor(cliId, input.modelId, input.effort),
-        }
-      : {}),
-  });
+  const result = await inPrivateRunFolder((cwd) =>
+    runHeadlessCliPrompt(input.prompt, cwd, {
+      requestId: input.requestId,
+      timeoutMs: ASK_CLI_TIMEOUT_MS,
+      ...(cliId
+        ? {
+            preferredCliId: cliId,
+            strictCli: true,
+            runArgs: runArgsFor(cliId, input.modelId, input.effort),
+          }
+        : {}),
+    }),
+  );
   return {
     ok: result.ok,
     text: result.ok ? result.text : '',

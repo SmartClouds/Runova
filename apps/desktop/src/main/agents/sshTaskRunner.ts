@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { getCliDefinition, runArgsFor } from '@runova/core';
 import type {
   AiProvider,
@@ -13,6 +12,7 @@ import type {
 } from '../../shared/apiTypes';
 import { MAX_SSH_AGENT_MESSAGE_CHARS } from '../../shared/sshAgentMessage';
 import { cancelHeadlessPrompt, runHeadlessCliPrompt } from '../cli/headlessPrompt';
+import { inPrivateRunFolder } from '../cli/runFolder';
 import { runAiPrompt } from '../ipc/ai';
 import {
   getSshSessionPassword,
@@ -774,20 +774,22 @@ async function askCli(run: RunState, prompt: string): Promise<string> {
   const requestId = `ssh-agent:${run.sessionId}:${run.step}`;
   run.cliRequestId = requestId;
   try {
-    // The temp dir unless the user gave the run a project: the CLI only needs the prompt, and
-    // one started inside a repo tends to go reading files first.
+    // A fresh temp folder unless the user gave the run a project: the CLI only needs the prompt,
+    // and one started inside a repo tends to go reading files first.
     const workspace = run.cliWorkspace;
-    const result = await runHeadlessCliPrompt(prompt, workspace?.cwd ?? tmpdir(), {
-      requestId,
-      preferredCliId: run.cliId,
-      strictCli: true,
-      runArgs: run.runArgs,
-      ...(workspace ? { allowWrites: workspace.allowWrites } : {}),
-      ...(run.attachments.images.length > 0
-        ? { images: run.attachments.images, imagesWithTools: workspace !== null }
-        : {}),
-      timeoutMs: workspace ? CLI_WORKSPACE_STEP_TIMEOUT_MS : CLI_STEP_TIMEOUT_MS,
-    });
+    const ask = (cwd: string) =>
+      runHeadlessCliPrompt(prompt, cwd, {
+        requestId,
+        preferredCliId: run.cliId,
+        strictCli: true,
+        runArgs: run.runArgs,
+        ...(workspace ? { allowWrites: workspace.allowWrites } : {}),
+        ...(run.attachments.images.length > 0
+          ? { images: run.attachments.images, imagesWithTools: workspace !== null }
+          : {}),
+        timeoutMs: workspace ? CLI_WORKSPACE_STEP_TIMEOUT_MS : CLI_STEP_TIMEOUT_MS,
+      });
+    const result = workspace ? await ask(workspace.cwd) : await inPrivateRunFolder(ask);
     if (!result.ok) throw new Error(result.error || `${result.cliName ?? 'The CLI'} failed.`);
     return result.text;
   } finally {

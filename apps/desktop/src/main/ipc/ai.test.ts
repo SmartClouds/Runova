@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AskAiHistoryMessage } from '../../shared/apiTypes';
 
@@ -195,6 +198,22 @@ describe('runAiPrompt with a system instruction', () => {
   });
 });
 
+/** Whether each run's folder existed while it ran, by path. */
+const folderSeen = new Map<string, boolean>();
+
+/**
+ * A run with no project gets a folder of its own, made for it and gone afterwards. The shared temp
+ * folder itself is /tmp on Linux, where another account can leave agent config for the CLI to load.
+ */
+function expectPrivateRunFolder(cwd: unknown): void {
+  expect(typeof cwd).toBe('string');
+  const folder = cwd as string;
+  expect(folder).not.toBe(tmpdir());
+  expect(dirname(folder)).toBe(tmpdir());
+  expect(folderSeen.get(folder)).toBe(true);
+  expect(existsSync(folder)).toBe(false);
+}
+
 describe('askCli', () => {
   async function headless() {
     const mod = await import('../cli/headlessPrompt');
@@ -203,11 +222,15 @@ describe('askCli', () => {
 
   beforeEach(async () => {
     (await headless()).mockReset();
+    folderSeen.clear();
+    (await headless()).mockImplementation(async (_prompt, cwd) => {
+      folderSeen.set(cwd, existsSync(cwd));
+      return { ok: true, text: 'the prompt', cliName: 'Claude Code CLI' };
+    });
   });
 
   it('runs only the picked CLI, with its model and effort flags, outside any repo', async () => {
     const run = await headless();
-    run.mockResolvedValue({ ok: true, text: 'the prompt', cliName: 'Claude Code CLI' });
     const { askCli } = await import('./ai');
 
     const result = await askCli({
@@ -221,7 +244,7 @@ describe('askCli', () => {
     expect(result).toMatchObject({ ok: true, text: 'the prompt', cliName: 'Claude Code CLI' });
     const [prompt, cwd, options] = run.mock.calls[0] ?? [];
     expect(prompt).toBe('write it');
-    expect(cwd).toBe((await import('node:os')).tmpdir());
+    expectPrivateRunFolder(cwd);
     expect(options).toMatchObject({
       requestId: 'r1',
       preferredCliId: 'claude-code',
