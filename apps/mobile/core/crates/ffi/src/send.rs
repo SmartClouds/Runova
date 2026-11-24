@@ -253,6 +253,8 @@ struct Job {
     system_id: i64,
     remote_id: String,
     device_name: String,
+    /// One of the account's own computers, as the list said when the send began.
+    own: bool,
     rows: Vec<Row>,
     note: Option<String>,
     source: Arc<PickedSource>,
@@ -737,6 +739,7 @@ impl Runner {
             system_id,
             remote_id: entry.remote_id.clone(),
             device_name: entry.name.clone(),
+            own: entry.own,
             rows,
             note,
             source: Arc::new(PickedSource { picked, handles }),
@@ -809,6 +812,8 @@ impl Runner {
         job.events = Some(events);
         let target = ConnectTarget {
             remote_id: job.remote_id.clone(),
+            name: job.device_name.clone(),
+            own: job.own,
             device_id,
             identity_seed: seed,
         };

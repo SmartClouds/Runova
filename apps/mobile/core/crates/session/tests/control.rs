@@ -194,6 +194,8 @@ fn direct_to(mode: Mode, password: Option<&str>) -> FakeTransports {
 fn target() -> ConnectTarget {
     ConnectTarget {
         remote_id: "111222333".into(),
+        name: "Sam's desk".into(),
+        own: true,
         device_id: 7,
         identity_seed: PHONE_SEED,
     }

@@ -250,6 +250,8 @@ fn direct_transports(ready: Option<u32>) -> FakeTransports {
 fn target() -> ConnectTarget {
     ConnectTarget {
         remote_id: "111222333".into(),
+        name: "Sam's desk".into(),
+        own: true,
         device_id: 7,
         identity_seed: PHONE_SEED,
     }
@@ -357,6 +359,116 @@ async fn a_computer_whose_key_changed_is_refused_and_the_request_ended() {
 
     assert_eq!(result.err(), Some(ConnectError::KeyChanged));
     assert_eq!(hub.ended.lock().unwrap().as_slice(), ["s1"]);
+}
+
+/// The hub assigns the ids, so it could list the person's computer under a fresh id and answer
+/// with a key of its own. The name the person picks it by still carries the key seen before.
+#[tokio::test]
+async fn a_known_computer_listed_under_a_new_id_with_another_key_is_refused() {
+    let hub = FakeHub::ringing(host_key());
+    let transports = direct_transports(Some(1));
+    let pins = MemoryPins::default();
+    pins.pin("111222333", "the-real-computers-key");
+    pins.pin("name:app:own:sam's desk", "the-real-computers-key");
+    let (_events, mut queue) = mpsc::channel(32);
+    let (_seen, on_phase) = phases();
+    let impostor = ConnectTarget {
+        remote_id: "999888777".into(),
+        name: "  Sam's   DESK ".into(),
+        ..target()
+    };
+
+    let result = connect_to(
+        impostor,
+        hub.as_ref(),
+        &transports,
+        &pins,
+        &mut queue,
+        &on_phase,
+    )
+    .await;
+
+    assert_eq!(result.err(), Some(ConnectError::KeyChanged));
+    assert_eq!(hub.ended.lock().unwrap().as_slice(), ["s1"]);
+    assert_eq!(pins.pinned("999888777"), None);
+}
+
+#[tokio::test]
+async fn the_key_is_pinned_under_the_computers_name_as_well() {
+    let hub = FakeHub::ringing(host_key());
+    let transports = direct_transports(Some(1));
+    let pins = MemoryPins::default();
+    let (events, mut queue) = mpsc::channel(32);
+    events.send(accepted()).await.unwrap();
+    let (_seen, on_phase) = phases();
+
+    connect_to(
+        target(),
+        hub.as_ref(),
+        &transports,
+        &pins,
+        &mut queue,
+        &on_phase,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(pins.pinned("name:app:own:sam's desk"), Some(host_key()));
+}
+
+#[tokio::test]
+async fn an_id_seen_before_decides_on_its_own_over_the_name() {
+    let hub = FakeHub::ringing(host_key());
+    let transports = direct_transports(Some(1));
+    let pins = MemoryPins::default();
+    // Another computer of the same name was renamed away; this one is pinned under its own id.
+    pins.pin("111222333", &host_key());
+    pins.pin("name:app:own:sam's desk", "another-computers-key");
+    let (events, mut queue) = mpsc::channel(32);
+    events.send(accepted()).await.unwrap();
+    let (_seen, on_phase) = phases();
+
+    let result = connect_to(
+        target(),
+        hub.as_ref(),
+        &transports,
+        &pins,
+        &mut queue,
+        &on_phase,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    assert_eq!(pins.pinned("name:app:own:sam's desk"), Some(host_key()));
+}
+
+#[tokio::test]
+async fn a_teammates_computer_of_the_same_name_is_not_held_to_the_own_one() {
+    let hub = FakeHub::ringing(host_key());
+    let transports = direct_transports(Some(1));
+    let pins = MemoryPins::default();
+    pins.pin("name:app:own:sam's desk", "the-own-computers-key");
+    let (events, mut queue) = mpsc::channel(32);
+    events.send(accepted()).await.unwrap();
+    let (_seen, on_phase) = phases();
+    let teammates = ConnectTarget {
+        remote_id: "444555666".into(),
+        own: false,
+        ..target()
+    };
+
+    let result = connect_to(
+        teammates,
+        hub.as_ref(),
+        &transports,
+        &pins,
+        &mut queue,
+        &on_phase,
+    )
+    .await;
+
+    assert!(result.is_ok());
+    assert_eq!(pins.pinned("name:app:team:sam's desk"), Some(host_key()));
 }
 
 #[tokio::test]

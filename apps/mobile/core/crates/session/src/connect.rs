@@ -57,6 +57,11 @@ pub enum ConnectError {
 #[derive(Clone)]
 pub struct ConnectTarget {
     pub remote_id: String,
+    /// The name the phone knows the computer by, and whether it is one of the account's own.
+    /// Pins are kept under these too, so a computer the hub lists under a new id is still checked
+    /// against the key last seen under the same name.
+    pub name: String,
+    pub own: bool,
     pub device_id: i64,
     pub identity_seed: [u8; 32],
 }
@@ -203,6 +208,26 @@ fn pin_key(remote_id: &str, kind: HostKind) -> String {
     }
 }
 
+/// The hub hands out the ids, so pins by id alone let it present a computer the phone already
+/// trusts under a fresh id with a key of its own. The name the person picks the computer by is
+/// kept as well, and a new id with a known name has to show the key last seen under that name.
+fn name_pin_key(name: &str, own: bool, kind: HostKind) -> Option<String> {
+    let name = name
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    if name.is_empty() {
+        return None;
+    }
+    let kind = match kind {
+        HostKind::App => "app",
+        HostKind::Agent => "agent",
+    };
+    let whose = if own { "own" } else { "team" };
+    Some(format!("name:{kind}:{whose}:{name}"))
+}
+
 /// The key CPace runs on. Slow on purpose, so it does not run on the app's few workers.
 async fn password_secret(
     password: Zeroizing<String>,
@@ -299,12 +324,14 @@ where
         return Err(ConnectError::Unavailable);
     };
     let pin = pin_key(&target.remote_id, host.kind);
+    let name_pin = name_pin_key(&target.name, target.own, host.kind);
 
-    // A key that differs from the one seen before could be someone in the middle.
-    if pins
+    // A key that differs from the one seen before could be someone in the middle. An id seen
+    // before decides on its own; a new one is held to the key last seen under its name.
+    let expected = pins
         .pinned(&pin)
-        .is_some_and(|pinned| pinned != host.identity_key)
-    {
+        .or_else(|| name_pin.as_deref().and_then(|key| pins.pinned(key)));
+    if expected.is_some_and(|pinned| pinned != host.identity_key) {
         hub.end(&session_id).await;
         return Err(ConnectError::KeyChanged);
     }
@@ -391,6 +418,9 @@ where
     match finish(link, details).await {
         Ok(session) => {
             pins.pin(&pin, &host.identity_key);
+            if let Some(name_pin) = &name_pin {
+                pins.pin(name_pin, &host.identity_key);
+            }
             on_phase(Phase::Connected {
                 safety_code,
                 direct: is_direct,

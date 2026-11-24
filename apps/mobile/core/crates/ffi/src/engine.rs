@@ -861,6 +861,8 @@ impl Runner {
         let attempt = self.attempt;
         let target = ConnectTarget {
             remote_id: entry.remote_id,
+            name: entry.name,
+            own: entry.own,
             device_id,
             identity_seed: identity_seed(self.deps.secure.as_ref()),
         };
