@@ -78,12 +78,80 @@ public static class AgentConfigStore
         var plain = System.Text.Encoding.UTF8.GetBytes(config.ToJson());
         if (OperatingSystem.IsWindows())
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.WriteAllBytes(file, Seal(plain));
+            WriteLockedDown(file, Seal(plain), lockParent: path is null);
         }
         else
         {
             WriteForOwnerOnly(file, plain);
+        }
+    }
+
+    /// <summary>
+    /// Any local account can open the sealed config (DPAPI machine scope), so on Windows the
+    /// folder's access list is what keeps it to SYSTEM and administrators, and it has to be in place
+    /// before the first byte. ProgramData lets a standard user make a folder first and own it, so an
+    /// existing folder gets a new owner and its whole access list replaced, not just added to.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static void WriteLockedDown(string file, byte[] content, bool lockParent)
+    {
+        var folder = Path.GetDirectoryName(file)!;
+        if (lockParent && Path.GetDirectoryName(folder) is { } parent)
+        {
+            // ProgramData\Runova: whoever owns it could swap the Agent folder inside it.
+            LockDown(parent);
+        }
+
+        LockDown(folder);
+        var temporary = $"{file}.{Environment.ProcessId}.tmp";
+        File.WriteAllBytes(temporary, content);
+        // A new file under the locked folder, put in place of whatever was there.
+        File.Move(temporary, file, overwrite: true);
+    }
+
+    /// <summary>
+    /// Makes <paramref name="folder"/> belong to the account saving (the elevated installer, or
+    /// SYSTEM for the service) with only SYSTEM, administrators and that account let in, nothing
+    /// inherited. Refuses when the folder belongs to someone who will not let go of it.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static void LockDown(string folder)
+    {
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var security = new System.Security.AccessControl.DirectorySecurity();
+        security.SetOwner(me);
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        var allowed = new[]
+        {
+            new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null),
+            new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null),
+            me,
+        };
+        foreach (var sid in allowed.Distinct())
+        {
+            security.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+                sid,
+                System.Security.AccessControl.FileSystemRights.FullControl,
+                System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+                System.Security.AccessControl.PropagationFlags.None,
+                System.Security.AccessControl.AccessControlType.Allow));
+        }
+
+        var info = new DirectoryInfo(folder);
+        if (!info.Exists)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(folder)!);
+            FileSystemAclExtensions.Create(info, security);
+            return;
+        }
+
+        try
+        {
+            info.SetAccessControl(security);
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            throw new IOException($"{folder} belongs to another account that keeps it to itself. Delete it as an administrator and install again.", error);
         }
     }
 

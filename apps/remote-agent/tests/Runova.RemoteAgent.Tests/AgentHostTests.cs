@@ -75,6 +75,64 @@ public class AgentHostTests
         }
     }
 
+    /// <summary>
+    /// The sealed config can be opened by any local account (DPAPI machine scope), so the folder's
+    /// access list is all that guards it, from the first byte written. A standard user can make the
+    /// ProgramData folder first and give themselves access to it.
+    /// </summary>
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void The_config_folder_is_locked_down_before_the_config_is_written()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var folder = Path.Combine(Path.GetTempPath(), $"runova-agent-{Guid.NewGuid():N}");
+        var everyone = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null);
+        var planted = new System.Security.AccessControl.DirectorySecurity();
+        planted.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+            everyone,
+            System.Security.AccessControl.FileSystemRights.FullControl,
+            System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
+            System.Security.AccessControl.PropagationFlags.None,
+            System.Security.AccessControl.AccessControlType.Allow));
+        System.IO.FileSystemAclExtensions.Create(new DirectoryInfo(folder), planted);
+        var file = Path.Combine(folder, "agent.bin");
+        try
+        {
+            AgentConfigStore.Save(
+                new AgentConfig
+                {
+                    SiteUrl = "https://runovahq.com",
+                    RemoteId = "1",
+                    DeviceId = 1,
+                    DeviceName = "PC",
+                    IdentitySeed = Bytes.ToB64u(new byte[32]),
+                    AgentSecret = "ras1.x",
+                    AllowOwnDevices = false,
+                    AlwaysAllow = [],
+                    DefaultPermissions = new SessionPermissions(true, true, false),
+                },
+                file);
+
+            static bool GrantsEveryone(System.Security.AccessControl.FileSystemSecurity security, System.Security.Principal.SecurityIdentifier everyone) =>
+                security.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier))
+                    .OfType<System.Security.AccessControl.FileSystemAccessRule>()
+                    .Any(rule => rule.IdentityReference.Equals(everyone));
+            var folderSecurity = new DirectoryInfo(folder).GetAccessControl();
+            Assert.True(folderSecurity.AreAccessRulesProtected);
+            Assert.False(GrantsEveryone(folderSecurity, everyone));
+            Assert.False(GrantsEveryone(new FileInfo(file).GetAccessControl(), everyone));
+            Assert.Equal("ras1.x", AgentConfigStore.Load(file).AgentSecret);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [Fact]
     public void This_desktop_can_be_captured_and_encoded_as_jpeg_tiles()
     {
