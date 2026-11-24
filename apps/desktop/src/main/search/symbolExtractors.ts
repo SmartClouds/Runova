@@ -326,10 +326,16 @@ function endsWithoutBody(_groups: Groups, text: string): boolean {
 const CS_MODS =
   '(?:(?:public|private|protected|internal|static|abstract|sealed|partial|readonly|unsafe|new|virtual|override|async|extern|file|required|const|volatile|ref)\\s+)*';
 
+/** Attributes written on the declaration's own line: `[Fact] public void Works()`. */
+const CS_ATTRS = '(?:\\[[^\\]]*\\]\\s*)*';
+const CS_START = `^\\s*${CS_ATTRS}${CS_MODS}`;
+/** A return type, a tuple included: `(int Count, string Name) Totals()`. */
+const CS_RETURN = `${CTYPE}|\\([^()]*\\)`;
+
 const CSHARP: Rule[] = [
   {
     re: rx(
-      `^\\s*${CS_MODS}(?<k>class|interface|struct|enum|record(?:\\s+(?:struct|class))?)\\s+(?<n>\\w+)`,
+      `${CS_START}(?<k>class|interface|struct|enum|record(?:\\s+(?:struct|class))?)\\s+(?<n>\\w+)`,
     ),
     kind: (groups) =>
       groups.k?.startsWith('record')
@@ -339,27 +345,38 @@ const CSHARP: Rule[] = [
   },
   { re: rx('^\\s*namespace\\s+(?<n>[\\w.]+)'), kind: 'namespace' },
   {
-    re: rx('^\\s*(?:(?:public|private|protected|internal|static)\\s+)+(?<n>\\w+)\\s*\\('),
+    re: rx(`${CS_START}delegate\\s+(?<t>${CS_RETURN})\\s+(?<n>\\w+)\\s*(?:<[^()]*>)?\\s*\\(`),
+    kind: 'type',
+  },
+  {
+    re: rx(`${CS_START}event\\s+(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:[;={]|$)`),
+    kind: 'field',
+    member: true,
+  },
+  {
+    re: rx(
+      `^\\s*${CS_ATTRS}(?:(?:public|private|protected|internal|static)\\s+)+(?<n>\\w+)\\s*\\(`,
+    ),
     kind: 'constructor',
     member: true,
     constructorOf: 'parent',
   },
   {
-    re: rx(`^\\s*${CS_MODS}(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:<[^()]*>)?\\s*\\(`),
+    re: rx(`${CS_START}(?<t>${CS_RETURN})\\s+(?<n>\\w+)\\s*(?:<[^()]*>)?\\s*\\(`),
     kind: 'method',
     member: true,
     signature: endsWithoutBody,
   },
   {
     re: rx(
-      `^\\s*${CS_MODS}(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:\\{\\s*(?:get|set|init|private|protected|internal)|=>)`,
+      `${CS_START}(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:\\{\\s*(?:get|set|init|private|protected|internal)|=>)`,
     ),
     kind: 'property',
     member: true,
   },
   {
     re: rx(
-      `^\\s*(?<m>(?:(?:public|private|protected|internal|static|readonly|const|volatile|required|new)\\s+)+)(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:=|;)`,
+      `^\\s*${CS_ATTRS}(?<m>(?:(?:public|private|protected|internal|static|readonly|const|volatile|required|new)\\s+)+)(?<t>${CTYPE})\\s+(?<n>\\w+)\\s*(?:=|;)`,
     ),
     kind: (groups) => (/\bconst\b/.test(groups.m ?? '') ? 'const' : 'field'),
     member: true,

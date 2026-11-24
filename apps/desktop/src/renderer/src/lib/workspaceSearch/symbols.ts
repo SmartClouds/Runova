@@ -2,7 +2,8 @@ import type { SymbolIndex } from '@shared/apiTypes';
 import { SYMBOL_KINDS, type SymbolKind, symbolCategory } from '@shared/symbolKinds';
 import {
   DEFAULT_SEARCH_LIMIT,
-  loweredPaths,
+  type PreparedSearch,
+  prepareSearch,
   searchFiles,
 } from '@/components/workspace/git/explorer/fileSearch';
 
@@ -14,10 +15,10 @@ export interface SymbolView {
   /** Positions in the full index. */
   ids: Uint32Array;
   names: string[];
-  lowered: string[];
+  prepared: PreparedSearch;
   /** `Container.name`, for a query that names the type too. */
   qualified: string[];
-  qualifiedLowered: string[];
+  qualifiedPrepared: PreparedSearch;
 }
 
 export interface SymbolHit {
@@ -47,9 +48,9 @@ function view(index: SymbolIndex, ids: number[]): SymbolView {
   return {
     ids: Uint32Array.from(ids),
     names,
-    lowered: loweredPaths(names),
+    prepared: prepareSearch(names),
     qualified,
-    qualifiedLowered: loweredPaths(qualified),
+    qualifiedPrepared: prepareSearch(qualified),
   };
 }
 
@@ -77,7 +78,7 @@ export function searchSymbols(
   const labels = byContainer ? symbols.qualified : symbols.names;
   const result = searchFiles(labels, query, {
     limit,
-    lowered: byContainer ? symbols.qualifiedLowered : symbols.lowered,
+    prepared: byContainer ? symbols.qualifiedPrepared : symbols.prepared,
   });
   return {
     total: result.total,

@@ -249,6 +249,41 @@ public enum Status { Active }`;
       'enum Status',
     ]);
   });
+
+  it('finds the shapes a test project and a modern solution are full of', () => {
+    const source = `namespace Runova.ServerCore.Tests;
+[Collection("Docker")] public sealed class SecretsTests : IAsyncLifetime
+{
+    [Fact] public async Task PreRenameSecrets()
+    {
+        await Task.Delay(1);
+    }
+    [Theory, InlineData(1)] public void KeepsOld(int value) { }
+    public (int Count, string Name) Totals() => (0, "");
+    public T Find<T>(int id) where T : class
+    {
+        return default!;
+    }
+    public event EventHandler? Changed;
+    public delegate void Renamed(string from, string to);
+    [JsonPropertyName("id")] public string Id { get; init; } = "";
+}
+public readonly record struct Point(int X, int Y);
+file sealed class Hidden { }`;
+    expect(symbols('SecretsTests.cs', source)).toEqual([
+      'namespace Runova.ServerCore.Tests',
+      'class SecretsTests',
+      'method SecretsTests.PreRenameSecrets',
+      'method SecretsTests.KeepsOld',
+      'method SecretsTests.Totals',
+      'method SecretsTests.Find',
+      'field SecretsTests.Changed',
+      'type SecretsTests.Renamed',
+      'property SecretsTests.Id',
+      'record Point',
+      'class Hidden',
+    ]);
+  });
 });
 
 describe('Java', () => {

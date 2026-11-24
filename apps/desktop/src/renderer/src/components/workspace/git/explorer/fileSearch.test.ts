@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchFiles, toAbsolutePath } from './fileSearch';
+import { prepareSearch, searchFiles, toAbsolutePath } from './fileSearch';
 
 /**
  * What the explorer's search box puts at the top. The order is the whole feature: a name that
@@ -77,6 +77,111 @@ describe('searchFiles', () => {
       'apps/desktop/src/renderer/src/stores/workspaceStore.ts',
       'apps/desktop/src/renderer/src/stores/workspaceStore.test.ts',
     ]);
+  });
+});
+
+/**
+ * What the Go to All dialog got wrong: a long query found unrelated files because its letters
+ * happened to sit in order somewhere along a long path, while words typed in another order, or
+ * a path typed with backslashes, found nothing.
+ */
+describe('searchFiles relevance', () => {
+  const SERVER = 'apps/server-core/tests/Runova.ServerCore.SystemTests';
+  const TREE = [
+    `${SERVER}/Firewall/ContainerCgroupSystemTests.cs`,
+    `${SERVER}/Files/ContainerFilesSystemTests.cs`,
+    `${SERVER}/Runova.ServerCore.SystemTests.csproj`,
+    `${SERVER}/Acme/AcmeThroughNginxTests.cs`,
+    `${SERVER}/Secrets/PreRenameSecretsTests.cs`,
+    `${SERVER}/Secrets/RenameSecretsTests.cs`,
+    'apps/desktop/src/main/ipc/explorer.ts',
+    'apps/desktop/src/main/explorer/fileIndex.ts',
+    'apps/desktop/src/renderer/src/stores/workspaceSearchStore.ts',
+    'apps/desktop/src/renderer/src/components/workspace/git/GitPanel.tsx',
+    'apps/desktop/src/renderer/src/components/workspace/search/SearchPreview.tsx',
+  ];
+
+  function found(query: string, files: readonly string[] = TREE): string[] {
+    return searchFiles(files, query).hits.map((hit) => hit.path.slice(hit.nameStart));
+  }
+
+  function marked(path: string, query: string): string[] {
+    const [hit] = searchFiles([path], query).hits;
+    return hit ? hit.ranges.map(([from, to]) => path.slice(from, to)) : [];
+  }
+
+  it('finds nothing when the name is nowhere, however many letters a path holds', () => {
+    const without = TREE.filter((path) => !path.includes('Secrets'));
+    expect(found('PreRenameSecrets', without)).toEqual([]);
+    expect(found('PreRenameSecrets')).toEqual(['PreRenameSecretsTests.cs']);
+  });
+
+  it('does not match letters spread across folders', () => {
+    // a(pps) s(erver) e(rver) ... every letter is somewhere in the path, in order.
+    expect(found('aserunsysfire')).toEqual([]);
+  });
+
+  it('finds a name by the first letters of its words', () => {
+    expect(found('PreRenSec')[0]).toBe('PreRenameSecretsTests.cs');
+    expect(found('prst')[0]).toBe('PreRenameSecretsTests.cs');
+    expect(found('wss')[0]).toBe('workspaceSearchStore.ts');
+  });
+
+  it('marks the starts of the words it matched', () => {
+    expect(marked(`${SERVER}/Secrets/PreRenameSecretsTests.cs`, 'prst')).toEqual([
+      'P',
+      'R',
+      'S',
+      'T',
+    ]);
+    // Pieces that touch are marked as one.
+    expect(marked(`${SERVER}/Secrets/PreRenameSecretsTests.cs`, 'PreRenSec')).toEqual([
+      'PreRen',
+      'Sec',
+    ]);
+  });
+
+  it('takes words in any order', () => {
+    expect(found('secrets rename')).toEqual(['RenameSecretsTests.cs', 'PreRenameSecretsTests.cs']);
+    expect(found('explorer ipc')).toEqual(['explorer.ts']);
+  });
+
+  it('still reads words typed apart as one name when they are', () => {
+    expect(found('git panel')).toEqual(['GitPanel.tsx']);
+  });
+
+  it('reads backslashes as folder separators', () => {
+    expect(found('ipc\\explorer')).toEqual(['explorer.ts']);
+    expect(found('Secrets\\PreRename')).toEqual(['PreRenameSecretsTests.cs']);
+  });
+
+  it('finds a folder and a name by the starts of their words', () => {
+    expect(found('ipcexplorer')).toEqual(['explorer.ts']);
+  });
+
+  it('puts any match in the name above a match only in the folders', () => {
+    const files = ['src/search/index.ts', 'src/stores/searchStore.ts'];
+    expect(found('search', files)).toEqual(['searchStore.ts', 'index.ts']);
+  });
+
+  it('keeps scattered letters inside one name', () => {
+    expect(found('gtpnl')).toEqual(['GitPanel.tsx']);
+    expect(found('srchprv')).toEqual(['SearchPreview.tsx']);
+  });
+
+  it('finds the same thing whether typed at once or a letter at a time', () => {
+    const many = Array.from(
+      { length: 3000 },
+      (_, at) =>
+        `src/area${at % 37}/${['user', 'order', 'secret', 'store'][at % 4]}${at % 11 === 0 ? 'Rename' : ''}Service${at}.ts`,
+    );
+    const prepared = prepareSearch(many);
+    for (const query of ['secretrenameservice', 'usse', 'area3/store', 'order serv 1']) {
+      for (let length = 1; length <= query.length; length += 1) {
+        const typed = query.slice(0, length);
+        expect(searchFiles(many, typed, { prepared })).toEqual(searchFiles(many, typed));
+      }
+    }
   });
 });
 

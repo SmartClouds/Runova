@@ -93,6 +93,59 @@ describe('WorkspaceSearchDialog', () => {
     );
   });
 
+  describe('with a long name that only a member has', () => {
+    const SERVER = 'apps/server-core/tests/Runova.ServerCore.SystemTests';
+    const SERVER_FILES = [
+      `${SERVER}/Firewall/ContainerCgroupSystemTests.cs`,
+      `${SERVER}/Files/ContainerFilesSystemTests.cs`,
+      `${SERVER}/Runova.ServerCore.SystemTests.csproj`,
+      `${SERVER}/Acme/AcmeThroughNginxTests.cs`,
+      `${SERVER}/Secrets/SecretsTests.cs`,
+    ];
+
+    function renderServer(members: SymbolEntry[]) {
+      return renderWithProviders(<WorkspaceSearchDialog project={project} />, {
+        bridge: {
+          'explorer.listFiles': { root: 'E:\\work\\app', files: SERVER_FILES, truncated: false },
+          'workspaceSearch.symbols': packSymbolIndex(members, {
+            version: 1,
+            root: 'E:\\work\\app',
+            truncated: false,
+            unavailable: false,
+          }),
+          'workspaceSearch.text': () => new Promise(() => undefined),
+          'fs.readFile': () => 'line one\nline two\n',
+        },
+      });
+    }
+
+    it('lists no files whose paths merely hold its letters', async () => {
+      renderServer([]);
+      type('f:PreRenameSecrets');
+      expect(await screen.findByText(/No files match/)).toBeInTheDocument();
+      expect(options()).toEqual([]);
+    });
+
+    it('shows the member first and selects it', async () => {
+      renderServer([
+        entry({
+          name: 'PreRenameSecrets',
+          kind: 'method',
+          container: 'SecretsTests',
+          path: `${SERVER}/Secrets/SecretsTests.cs`,
+          line: 40,
+          column: 23,
+        }),
+      ]);
+      type('PreRenameSecrets');
+      await waitFor(() => expect(options()[0]).toContain('PreRenameSecrets'));
+      // Only the member: none of the test files above made it in on scattered letters.
+      expect(options()).toHaveLength(1);
+      const active = input().getAttribute('aria-activedescendant');
+      expect(active && document.getElementById(active)?.textContent).toContain('PreRenameSecrets');
+    });
+  });
+
   it('filters to types with t:, and marks that tab', async () => {
     renderDialog();
     type('t:user');

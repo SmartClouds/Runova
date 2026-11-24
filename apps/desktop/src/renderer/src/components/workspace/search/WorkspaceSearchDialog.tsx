@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import {
   type FileSearchResult,
-  loweredPaths,
+  prepareSearch,
   searchFiles,
   toAbsolutePath,
 } from '@/components/workspace/git/explorer/fileSearch';
@@ -214,10 +214,10 @@ function SearchPanel({
   });
   const files = index.data?.files ?? NO_FILES;
   const root = index.data?.root ?? project.folderPath;
-  const lowered = useMemo(() => loweredPaths(files), [files]);
+  const prepared = useMemo(() => prepareSearch(files), [files]);
   const fileHits = useMemo(
-    () => (wantFiles && query ? searchFiles(files, query, { lowered }) : NO_FILE_HITS),
-    [wantFiles, files, lowered, query],
+    () => (wantFiles && query ? searchFiles(files, query, { prepared }) : NO_FILE_HITS),
+    [wantFiles, files, prepared, query],
   );
 
   // Types and members: fetched as the dialog opens, so they are ready by the time `t:` is typed.

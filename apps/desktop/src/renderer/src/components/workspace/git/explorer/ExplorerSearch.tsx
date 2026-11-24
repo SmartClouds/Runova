@@ -14,7 +14,7 @@ import { useWorkspaceSearchStore } from '@/stores/workspaceSearchStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { StatusLetter, statusTextClass } from '../StatusLetter';
 import { revealInTree } from './actions';
-import { type FileHit, loweredPaths, searchFiles, toAbsolutePath } from './fileSearch';
+import { type FileHit, prepareSearch, searchFiles, toAbsolutePath } from './fileSearch';
 
 const NO_FILES: string[] = [];
 /** Roughly what the folder line fits in the panel at its usual width. */
@@ -170,14 +170,14 @@ export function ExplorerSearch({
     staleTime: 30_000,
   });
   const files = index.data?.files ?? NO_FILES;
-  const lowered = useMemo(() => loweredPaths(files), [files]);
+  const prepared = useMemo(() => prepareSearch(files), [files]);
 
   // Typing stays responsive on a big project: React keeps the old list on screen while the
   // new one is matched, and the box below dims until it catches up.
   const settled = useDeferredValue(query);
   const results = useMemo(
-    () => searchFiles(files, settled, { lowered, patterns: true }),
-    [files, lowered, settled],
+    () => searchFiles(files, settled, { prepared, patterns: true }),
+    [files, prepared, settled],
   );
   const hits = results.hits;
 

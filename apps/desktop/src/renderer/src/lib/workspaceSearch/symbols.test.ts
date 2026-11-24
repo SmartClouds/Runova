@@ -57,6 +57,23 @@ describe('searchSymbols', () => {
     ]);
   });
 
+  it('finds a member by the first letters of its words, and not by letters spread out', () => {
+    const index = packSymbolIndex(
+      [
+        entry({ name: 'PreRenameSecrets', kind: 'method', container: 'SecretsTests' }),
+        entry({ name: 'ParseRequestHeaders', kind: 'method', container: 'Http' }),
+        entry({ name: 'prepareRenderingContextForSecondaryScreens', kind: 'function' }),
+      ],
+      { version: 1, root: '/p', truncated: false, unavailable: false },
+    );
+    const { members } = splitSymbolIndex(index);
+    const names = (query: string) => searchSymbols(index, members, query).hits.map((h) => h.name);
+    expect(names('prs')[0]).toBe('PreRenameSecrets');
+    expect(names('PreRenameSecrets')).toEqual(['PreRenameSecrets']);
+    expect(names('secrets pre')).toEqual(['PreRenameSecrets']);
+    expect(names('SecretsTests.prs')).toEqual(['PreRenameSecrets']);
+  });
+
   it('finds nothing for an empty query', () => {
     const { members } = splitSymbolIndex(INDEX);
     expect(searchSymbols(INDEX, members, ' ')).toEqual({ hits: [], total: 0 });
