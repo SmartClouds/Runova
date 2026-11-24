@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 export interface SpecFeatureRow {
   slug: string;
   title: string;
-  /** README feature names, empty for an entry with no README bullet (Studio). */
+  /** README feature names, empty for an entry with no README bullet. */
   covers: string[];
   screenshots: string[];
 }

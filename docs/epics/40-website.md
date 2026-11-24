@@ -172,7 +172,7 @@ On the Remote page only the SSH and Remote Desktop tabs are captured.
 
 `src/content/features/` holds one MDX entry per group below (T015). The test in T015 checks that
 every README feature name in this table maps to exactly one entry, and that every entry exists.
-Studio has no README bullet; its copy comes from `studio.md` in the help articles.
+The README's Account bullets have no group of their own and sit under `more`.
 
 | Entry slug | Title | README features it covers | Screenshots |
 |---|---|---|---|
@@ -181,13 +181,13 @@ Studio has no README bullet; its copy comes from `studio.md` in the help article
 | `tests` | Tests | Tests | `workspace` |
 | `relay` | Relay | Relay | `relay` |
 | `token-usage` | Token usage and auto-continue | Token usage and auto-continue | `usage` |
-| `projects` | Projects | Project workspace; Run commands; WordPress projects; Security; Packages; Environments; Setup | `projects`, `project-detail` |
+| `projects` | Projects | Project workspace; Run commands; WordPress projects; Security; Packages; Dependency alerts; Cleanup; Environments; Setup | `projects`, `project-detail` |
 | `build` | Build | Blueprint; Prompt Builder; Prompt History; Scheduled prompts; Writing check; Ask AI; API Client | `blueprint`, `prompt-builder`, `api-client` |
-| `agents` | Agents | AI CLIs; CLI arguments and launch defaults; Skill Marketplace; Skill Security; MCP Marketplace; Dev Tools | `cli-manager`, `skills`, `skill-security`, `mcp`, `agent-tools` |
+| `agents` | Agents | AI CLIs; CLI arguments and launch defaults; Skill Marketplace; Skill Security; MCP Marketplace; AI access; Dev Tools | `cli-manager`, `skills`, `skill-security`, `mcp`, `agent-tools` |
 | `ship` | Ship | Pipelines; Deploy; Monitoring; Docker; Android | `pipelines`, `deploy-overview`, `deploy-containers`, `deploy-app-store`, `deploy-websites`, `deploy-firewall`, `deploy-backups`, `monitoring-uptime`, `monitoring-errors`, `docker` |
-| `connect` | Connect | Remote; Send files; SSH; RDP; Vault | `ssh`, `remote-desktop`, `vault` |
-| `studio` | Studio | (none, from the Studio help article) | `studio` |
-| `more` | Everything else | Dashboard; Status bar; Notifications; Help center; AI Pet; Settings; Proxy; Also in the app | `dashboard`, `help`, `ai-pet`, `settings` |
+| `connect` | Connect | Remote; Runova Anywhere; The phone app; Send files; SSH; RDP; Vault | `ssh`, `remote-desktop`, `vault` |
+| `studio` | Studio | Studio | `studio` |
+| `more` | Everything else | Sync; End-to-end encryption; Teams; Recovery phrases; Dashboard; Status bar; Notifications; Help center; AI Pet; Settings; Proxy; Also in the app | `dashboard`, `help`, `ai-pet`, `settings` |
 
 The Remote copy describes controlling another Runova computer over the local network and the
 remote file manager, and nothing else from that README bullet. The Send files copy covers sending

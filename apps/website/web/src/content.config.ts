@@ -17,7 +17,7 @@ const features = defineCollection({
     order: z.number().int(),
     /** The screenshot on the index card, a name in src/assets/screenshots/manifest.json. */
     cover: z.string(),
-    /** The README feature names this entry explains, exactly as the README spells them (none for Studio). */
+    /** The README feature names this entry explains, exactly as the README spells them. */
     covers: z.array(z.string()),
     /** Help article file names without `.md`, linked as `/help/<name>`. */
     help: z.array(z.string()).min(1),
