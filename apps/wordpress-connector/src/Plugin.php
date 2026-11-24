@@ -100,10 +100,19 @@ final class Plugin
     public static function siteKeys(): SiteKeys
     {
         if (self::$keys === null) {
-            $home = is_multisite() ? get_blog_option(get_main_site_id(), 'home') : get_option('home');
-            self::$keys = SiteKeys::load((string) $home, array(self::class, 'siteMoved'));
+            self::$keys = SiteKeys::load(self::keyHome(), array(self::class, 'siteMoved'));
         }
         return self::$keys;
+    }
+
+    /**
+     * The address the site key belongs to: on a multisite network the main site's, whichever
+     * site's address the request came in on. A subsite's address would read as the site having
+     * moved, which renews the key and revokes every connection.
+     */
+    public static function keyHome(): string
+    {
+        return (string) (is_multisite() ? get_blog_option(get_main_site_id(), 'home') : get_option('home'));
     }
 
     /** The site key was renewed because the address changed: nothing paired with the old one works. */

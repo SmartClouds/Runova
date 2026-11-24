@@ -66,7 +66,29 @@ if (!function_exists('wp_date')) {
 if (!function_exists('get_option')) {
     function get_option($name, $default = false)
     {
+        if (isset($GLOBALS['runova_test_options'][$name])) {
+            return $GLOBALS['runova_test_options'][$name];
+        }
         return $name === 'date_format' ? 'Y-m-d' : ($name === 'time_format' ? 'H:i' : $default);
+    }
+}
+// A multisite network, for tests that set $GLOBALS['runova_test_blogs'] (blog id => options).
+if (!function_exists('is_multisite')) {
+    function is_multisite()
+    {
+        return !empty($GLOBALS['runova_test_blogs']);
+    }
+}
+if (!function_exists('get_main_site_id')) {
+    function get_main_site_id()
+    {
+        return 1;
+    }
+}
+if (!function_exists('get_blog_option')) {
+    function get_blog_option($id, $name, $default = false)
+    {
+        return $GLOBALS['runova_test_blogs'][$id][$name] ?? $default;
     }
 }
 if (!function_exists('disabled')) {

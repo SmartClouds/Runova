@@ -30,6 +30,22 @@ final class SecurityFixesTest extends TestCase
         $this->assertNull(PathPolicy::validate('auth.json.dist'));
     }
 
+    public function testTheSiteKeyIsAlwaysLoadedForTheNetworksMainAddress(): void
+    {
+        // rescue.php reached through a subsite of a multisite network: the current blog's home is
+        // the subsite's. Taking that as the site's address would read as a move, renew the key
+        // and revoke every connection, for anyone who sends a request there.
+        $GLOBALS['runova_test_options'] = array('home' => 'https://shop.example.com');
+        $GLOBALS['runova_test_blogs'] = array(1 => array('home' => 'https://example.com'));
+        try {
+            $this->assertSame('https://example.com', \Runova\Connector\Plugin::keyHome());
+            unset($GLOBALS['runova_test_blogs']);
+            $this->assertSame('https://shop.example.com', \Runova\Connector\Plugin::keyHome());
+        } finally {
+            unset($GLOBALS['runova_test_options'], $GLOBALS['runova_test_blogs']);
+        }
+    }
+
     public function testWindowsShortNamesAreHardDenied(): void
     {
         // On an NTFS volume with 8.3 names, GIT~1 opens the item's own .git folder on the desktop.

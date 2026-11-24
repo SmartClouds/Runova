@@ -41,7 +41,7 @@ final class Rescue
         $storage = new WpdbStorage($wpdb);
         $env = new WordPressEnvironment(true);
         // A copy of the site must not answer with the original's key here either.
-        $keys = SiteKeys::load((string) get_option('home'), function (string $from, string $to) use ($storage) {
+        $keys = SiteKeys::load(Plugin::keyHome(), function (string $from, string $to) use ($storage) {
             SiteMove::apply($storage, time(), $from, $to);
         });
         $dispatcher = new Dispatcher($storage, $env, $keys, Handlers::rescue($storage, $env), array(Plugin::class, 'logError'));
