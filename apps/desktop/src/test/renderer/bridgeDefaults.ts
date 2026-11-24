@@ -141,6 +141,7 @@ export function bridgeDefaults(): Record<string, unknown> {
       broken: [],
     },
     'android.availableSystemImages': { images: [], error: null },
+    'grammar.check': { issues: [], language: '', source: 'online', truncatedAt: null },
     'grammar.localStatus': {
       toolsDir: '',
       installPath: null,

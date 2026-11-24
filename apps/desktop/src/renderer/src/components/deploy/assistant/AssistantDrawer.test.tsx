@@ -781,6 +781,81 @@ describe('AssistantComposer', () => {
     expect(within(drawer).getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
   });
 
+  it('checks the writing in the task box and fixes a mistake from the counter', async () => {
+    // jsdom has no execCommand, so the fix takes the path that sets the value and fires input.
+    Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+    try {
+      const { user } = renderWithProviders(<Page />, {
+        bridge: bridge({
+          'grammar.check': async () => ({
+            issues: [
+              {
+                offset: 6,
+                length: 3,
+                text: 'teh',
+                message: 'Possible spelling mistake found.',
+                shortMessage: 'Spelling mistake',
+                kind: 'spelling',
+                ruleId: 'MORFOLOGIK_RULE_EN_US',
+                categoryName: 'Possible Typo',
+                replacements: ['the'],
+              },
+            ],
+            language: 'English (US)',
+            source: 'online',
+            truncatedAt: null,
+          }),
+        }),
+      });
+      act(() => useDeployAssistantStore.getState().open(SERVER.id));
+      const drawer = await screen.findByRole('complementary', { name: 'Deploy AI' });
+      const box = within(drawer).getByLabelText('What should the AI look into?');
+      await waitFor(() => expect(box).toBeEnabled());
+      await user.type(box, 'I saw teh');
+      // The check waits for a pause in the typing before it asks LanguageTool.
+      await user.click(
+        await within(drawer).findByRole('button', { name: '1 issue' }, { timeout: 4000 }),
+      );
+      await user.click(await screen.findByRole('button', { name: 'the' }));
+      expect(box).toHaveValue('I saw the');
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('closes a popover on Escape without closing the drawer under it', async () => {
+    const { user } = renderWithProviders(<Page />, {
+      bridge: bridge({
+        'grammar.check': async () => ({
+          issues: [],
+          language: 'English (US)',
+          source: 'online',
+          truncatedAt: null,
+        }),
+      }),
+    });
+    act(() =>
+      useDeployAssistantStore.getState().open(SERVER.id, {
+        prompt: 'Look at the sender.',
+        context: { title: 'Crash loop: sender' },
+      }),
+    );
+    const drawer = await screen.findByRole('complementary', { name: 'Deploy AI' });
+    await user.click(
+      await within(drawer).findByRole('button', { name: 'No issues' }, { timeout: 4000 }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Writing check' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Writing check' })).toBeNull());
+    expect(screen.getByRole('complementary', { name: 'Deploy AI' })).toBeInTheDocument();
+
+    // Escape in the drawer itself still closes it.
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Deploy AI' })).toBeNull(),
+    );
+  });
+
   it('keeps the task when the start is refused and picks up a run already going', async () => {
     renderWithProviders(<Page />, {
       bridge: bridge({

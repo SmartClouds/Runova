@@ -245,6 +245,9 @@ export function AssistantDrawer({ server }: { server: DeployServer }): React.JSX
       aria-label="Deploy AI"
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
+        // React bubbles keys out of portals too, so Escape in a popover opened from the drawer
+        // (a picker, the writing check) reaches here. That one only closes the popover.
+        if (!event.currentTarget.contains(event.target as Node)) return;
         // The history is a view in the drawer: Escape leaves it, the next one closes the drawer.
         if (view === 'history') setView('chat');
         else close();

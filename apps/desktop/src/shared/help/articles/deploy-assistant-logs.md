@@ -115,7 +115,7 @@ Turning on **Auto-run diagnostics** asks for your password (or a code from your 
 
 The drawer remembers the AI, model and effort you picked, for the next run and the next time you open it. If the CLI you used last is no longer installed, it goes back to **AI provider (Settings)**.
 
-### Dictate, translate and tidy up the task
+### Dictate, translate, check and tidy up the task
 
 The bar under the text box has the same tools as Ask AI in an SSH terminal:
 
@@ -123,6 +123,7 @@ The bar under the text box has the same tools as Ask AI in an SSH terminal:
 - **English**: shows up when the text has Persian in it, and translates it to English.
 - **Write it for me**: the AI turns a rough note into a clear task, or, while a run goes, into a short message to it.
 - **Undo**: puts back what you wrote, until you edit the new text.
+- **Writing check**: once there is text, the box underlines spelling and grammar mistakes, and a counter in the bar (**3 issues**, **No issues**) opens the list of them with their fixes. Persian text is not checked (the checker has no Persian rules); use **English** for it instead. It follows the **Writing check** settings, see [Writing check, voice input and translation](writing-voice-translation.md).
 
 Press `Escape` to cancel a translation or a rewrite that is still going. These tools work on the task, a follow-up and a message to a running AI.
 

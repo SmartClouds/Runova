@@ -1,3 +1,5 @@
+import { defaultGrammarSettings } from '@runova/core';
+import type { GrammarIssue } from '@shared/grammar';
 import { screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -193,6 +195,88 @@ describe('keys', () => {
     field().focus();
     await user.keyboard('{Control>}t{/Control}');
     await waitFor(() => expect(field()).toHaveValue('Hello'));
+  });
+});
+
+describe('Writing check', () => {
+  /** The check waits for a pause in the typing (1.4 s) before it asks LanguageTool. */
+  const AFTER_PAUSE = { timeout: 4000 };
+
+  const typo: GrammarIssue = {
+    offset: 6,
+    length: 3,
+    text: 'teh',
+    message: 'Possible spelling mistake found.',
+    shortMessage: 'Spelling mistake',
+    kind: 'spelling',
+    ruleId: 'MORFOLOGIK_RULE_EN_US',
+    categoryName: 'Possible Typo',
+    replacements: ['the'],
+  };
+
+  const found = (issues: GrammarIssue[]) =>
+    vi.fn(async () => ({ issues, language: 'English (US)', source: 'online', truncatedAt: null }));
+
+  /** The counter's name is what it says: Checking…, No issues, 1 issue and so on. */
+  const counter = () => screen.queryByRole('button', { name: /issue|Checking|Check failed/ });
+
+  it('checks what is written and says how many issues it found', async () => {
+    const check = found([typo]);
+    const { bridge } = renderField('I saw teh', {}, { 'grammar.check': check });
+    expect(await screen.findByRole('button', { name: '1 issue' }, AFTER_PAUSE)).toBeInTheDocument();
+    expect(bridge.$fn('grammar.check')).toHaveBeenCalledWith({ text: 'I saw teh' });
+  });
+
+  it('fixes a mistake from the review panel', async () => {
+    // jsdom has no execCommand, so the fix takes the path that sets the value and fires input.
+    Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+    try {
+      const { user, field } = renderField('I saw teh', {}, { 'grammar.check': found([typo]) });
+      await user.click(await screen.findByRole('button', { name: '1 issue' }, AFTER_PAUSE));
+      await user.click(await screen.findByRole('button', { name: 'the' }));
+      expect(field()).toHaveValue('I saw the');
+    } finally {
+      Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('stays out of the way while the box is empty', async () => {
+    renderField('', {}, { 'grammar.check': found([]) });
+    await screen.findByRole('button', { name: /Dictation language/ });
+    expect(counter()).not.toBeInTheDocument();
+  });
+
+  it('is gone when the writing check is off in Settings', async () => {
+    renderField(
+      'I saw teh',
+      {},
+      {
+        'settings.get': { ...SETTINGS, grammar: { ...defaultGrammarSettings(), enabled: false } },
+        'grammar.check': found([typo]),
+      },
+    );
+    await screen.findByRole('button', { name: /Dictation language/ });
+    await waitFor(() => expect(counter()).not.toBeInTheDocument());
+  });
+
+  it('leaves Persian alone, which it has no rules for, and offers English instead', async () => {
+    const check = found([typo]);
+    const { user, field } = renderField('I saw teh', {}, { 'grammar.check': check });
+    await screen.findByRole('button', { name: '1 issue' }, AFTER_PAUSE);
+    await user.clear(field());
+    await user.type(field(), 'لاگ‌ها را ببین');
+    expect(screen.getByRole('button', { name: /Translate to English/ })).toBeInTheDocument();
+    expect(counter()).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes room for the recording while dictating', async () => {
+    const { user } = renderField('I saw teh', {}, { 'grammar.check': found([typo]) });
+    await screen.findByRole('button', { name: '1 issue' }, AFTER_PAUSE);
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    await screen.findByRole('group', { name: 'Recording' });
+    expect(counter()).not.toBeInTheDocument();
   });
 });
 

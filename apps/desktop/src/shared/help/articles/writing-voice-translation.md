@@ -66,6 +66,8 @@ When you choose **Never flag this rule** from the writing menu, the rule shows u
 
 Larger writing fields (for example the request box in [Prompt Builder](prompt-builder.md), the project Build Prompt dialog and Markdown editors) draw a small counter in the bottom right corner. It reads **Checking…**, **No issues**, **Check failed** or a number such as **3 issues**. Click it to open the **Writing check** panel.
 
+The boxes where you give an AI a task (Ask AI in an SSH terminal, the Deploy AI and the rest that share that box) show the same counter in the bar under the text, once there is something written. Text with Persian in it gets the **English** button there instead, since the check has no Persian rules.
+
 The panel header shows the detected language and a **Local** or **Online** badge. Each issue lists:
 
 - its type (spelling, grammar, punctuation, typography, style) with a colored dot,
@@ -107,6 +109,8 @@ The [Prompt Builder](prompt-builder.md) page and the **Build Prompt** dialog of 
 
 - **Dictate**, next to **Your request**, adds what you say to your request.
 - **Speak prompt**, above **Generated prompt**, is for when you already know exactly what you want to say: speak in English and your words become the prompt as they are, with nothing generated and nothing translated. It always listens for English, whatever language Dictate is set to.
+
+The boxes where you give an AI a task, such as Ask AI in an SSH terminal and the Deploy AI, have a **Dictate** microphone of their own in the bar under the text, with the same language chip.
 
 Only one microphone records at a time; the other one waits until you are done.
 

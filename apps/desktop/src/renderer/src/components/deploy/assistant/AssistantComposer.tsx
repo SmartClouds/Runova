@@ -35,9 +35,9 @@ import {
  * goes. The pick is kept for the next run. A CLI can also work in one of the user's projects (the
  * code that runs on the server), reading it or, when they say so, editing it; that choice is kept
  * per server. The box is the shared AI task box, so it takes dictation, Persian with a translation
- * to English, and "Write it for me". While a run goes, the box sends it a message (read at
- * its next step) and Stop ends it; once it is over, the same box asks a follow-up on the same
- * server and context, and a stopped run can be carried on from where it was.
+ * to English, and "Write it for me", and checks the writing. While a run goes, the box sends it a
+ * message (read at its next step) and Stop ends it; once it is over, the same box asks a
+ * follow-up on the same server and context, and a stopped run can be carried on from where it was.
  */
 
 /** Picker value for the OpenAI, Gemini or Ollama provider set in Settings. */

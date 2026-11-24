@@ -1,6 +1,17 @@
+import type { GrammarIssue } from '@shared/grammar';
 import { useQuery } from '@tanstack/react-query';
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
+import { GrammarPanel } from '@/components/grammar/GrammarPanel';
+import { GrammarUnderlines } from '@/components/grammar/GrammarUnderlines';
 import { Languages, Sparkles, Spinner, Undo } from '@/components/icons';
 import {
   cancelBusyMics,
@@ -13,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { FIELD_SURFACE } from '@/components/ui/input';
 import { MULTILINE_FIELD_RADIUS, Textarea } from '@/components/ui/textarea';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { useGrammarCheck } from '@/hooks/useGrammarCheck';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { queryKeys } from '@/lib/queryKeys';
 import { containsPersian } from '@/lib/rtl';
@@ -59,9 +71,11 @@ const JOB_LABELS = { translate: 'Translating…', rewrite: 'Writing…' } as con
 
 /**
  * The box for anything the user tells an AI task: the task itself, a message mid-run, or an answer
- * to its question (and Studio's video brief, which builds its own rewrite). Like Build Prompt it takes Persian, dictation, a translation to English, and an
- * AI rewrite of a rough note, and each of those can be undone or cancelled. The text box grows
- * with the text, and the toolbar under it keeps the tools and the caller's Send together.
+ * to its question (and Studio's video brief, which builds its own rewrite). Like Build Prompt it
+ * takes Persian, dictation, a translation to English, and an AI rewrite of a rough note, and each
+ * of those can be undone or cancelled. It checks the writing too: mistakes are underlined, and the
+ * counter in the toolbar opens the list with their fixes. The text box grows with the text, and
+ * the toolbar under it keeps the tools and the caller's Send together.
  */
 export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptFieldProps>(
   function AgentPromptField(props, forwardedRef) {
@@ -85,8 +99,18 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
       className,
       textClassName,
     } = props;
-    const fieldRef = useRef<HTMLTextAreaElement>(null);
+    const fieldRef = useRef<HTMLTextAreaElement | null>(null);
     useImperativeHandle(forwardedRef, () => fieldRef.current as HTMLTextAreaElement);
+    // Also in state, since the writing check and its underlines need the element once it exists,
+    // and setting a ref does not render again.
+    const [field, setField] = useState<HTMLTextAreaElement | null>(null);
+    const attachField = useCallback((element: HTMLTextAreaElement | null) => {
+      fieldRef.current = element;
+      setField(element);
+    }, []);
+    // LanguageTool has no Persian rules and would only answer "No issues"; Persian gets English.
+    const grammar = useGrammarCheck({ value, field, enabled: !containsPersian(value) });
+    const [activeIssue, setActiveIssue] = useState<GrammarIssue | null>(null);
 
     const settingsQuery = useQuery({
       queryKey: queryKeys.settings,
@@ -194,9 +218,9 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
           className,
         )}
       >
-        <div className={cn('rounded-t-[inherit]', busy && 'shimmer-sweep')}>
+        <div className={cn('relative rounded-t-[inherit]', busy && 'shimmer-sweep')}>
           <Textarea
-            ref={fieldRef}
+            ref={attachField}
             id={id}
             variant="bare"
             autoFocus={autoFocus}
@@ -212,6 +236,12 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
             onKeyDown={handleKeyDown}
             className={cn('resize-none px-3.5 pb-1 pt-2 text-xs leading-5', textClassName)}
             style={{ minHeight, maxHeight }}
+          />
+          <GrammarUnderlines
+            field={field}
+            value={value}
+            issues={grammar.issues}
+            activeIssue={activeIssue}
           />
         </div>
 
@@ -337,6 +367,15 @@ export const AgentPromptField = forwardRef<HTMLTextAreaElement, AgentPromptField
             </>
           )}
           <span className="flex-1" />
+          {/* Only once there is something to check, and not while the row shows a job or a recording. */}
+          {hasText && !busy && !recording && !disabled && (
+            <GrammarPanel
+              field={field}
+              value={value}
+              state={grammar}
+              onActiveIssueChange={setActiveIssue}
+            />
+          )}
           {showCount && (
             <span className="px-1 text-[10px] tabular-nums text-muted-foreground">
               {value.length}/{maxLength}
