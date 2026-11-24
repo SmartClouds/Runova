@@ -95,6 +95,32 @@ public sealed class StackHubTests
         Assert.Contains(audit, e => e.Action == "stack.risk-acknowledge" && e.Parameters!.Contains("privileged:agent", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A running container can write into the revision's files (a link under files/, say) after the
+    /// deploy checked them, and start or restart mounts every bind source again. What Compose reads
+    /// then is checked once more, and a new finding stops the action.
+    /// </summary>
+    [Fact]
+    public async Task Start_and_restart_check_the_files_again_and_stop_at_a_new_finding()
+    {
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Operator);
+        var stack = await kit.CreateStackAsync();
+        await kit.UploadAsync(stack.Id, StackKit.Upload());
+        await kit.RunAsync(await kit.DeployAsync(stack.Id, 1));
+        var compose = Path.Combine(kit.DataDirectory, "stacks", stack.Id.ToString("N"), "revisions", "1", "compose.yaml");
+        File.WriteAllText(compose, StackKit.Compose.Replace("restart: unless-stopped", "restart: unless-stopped\n    privileged: true", StringComparison.Ordinal));
+
+        foreach (var action in new[] { StackAction.Restart, StackAction.Start })
+        {
+            var calls = kit.Simulated.Calls.Count;
+            var (job, _) = await kit.RunAsync(await kit.Hub.InvokeAsync<JobInfo>(nameof(ICoreHub.RunStackAction), new StackActionRequest(stack.Id, action), Cancel));
+
+            Assert.Equal(JobState.Failed, job.State);
+            Assert.Contains("privileged:web", job.Error ?? string.Empty, StringComparison.Ordinal);
+            Assert.DoesNotContain(kit.Simulated.Calls.Skip(calls), call => call.StartsWith("site restart", StringComparison.Ordinal) || call.StartsWith("site start", StringComparison.Ordinal));
+        }
+    }
+
     [Fact]
     public async Task Acknowledgments_sent_with_the_upload_count_at_once()
     {

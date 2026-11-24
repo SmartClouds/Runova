@@ -219,11 +219,41 @@ internal sealed partial class StackOperations
             _ => $"Take {stack.Name} down",
         };
         var folder = RevisionFolder(stackId, live);
+        var row = await RevisionAsync(stackId, live, cancellationToken);
         return await StartAsync($"stack.{name}", caller, stack, new JobRequest(JobKind.StackAction, title, [LockOf(stack.Name)], stack.Name, caller.UserId, caller.UserName), async (job, token) =>
         {
             job.Seed(await EnvValuesAsync(folder, token));
+            if (action is StackAction.Start or StackAction.Restart)
+            {
+                // Starting mounts every bind source again, and a running container may have written
+                // into the files (a link under files/) since the deploy checked them.
+                await RecheckAsync(stack, folder, ShapeOf(row), Read<string[]>(row.AcknowledgedRisks), job, token);
+            }
+
             await ComposeStepAsync(job, Project(stack.Name, folder), arguments, ActionTimeout, "stackaction", token);
         }, cancellationToken);
+    }
+
+    /// <summary>Has Compose read the files once more and stops the job at a finding nobody acknowledged.</summary>
+    private async Task RecheckAsync(StackRecord stack, string folder, RevisionShape shape, string[] acknowledged, JobContext job, CancellationToken token)
+    {
+        CheckedConfig checkedConfig;
+        try
+        {
+            checkedConfig = await CheckAsync(stack, folder, shape, null, token);
+        }
+        catch (ComposeConfigException invalid)
+        {
+            throw new JobFailedException(invalid.Message);
+        }
+
+        var waiting = Unacknowledged(checkedConfig.Findings, acknowledged);
+        if (waiting.Length > 0)
+        {
+            throw new JobFailedException($"Compose now reads findings nobody acknowledged: {string.Join(", ", waiting)}.");
+        }
+
+        job.Log("Checked the files again.");
     }
 
     public async Task<JobInfo> DeleteAsync(Guid stackId, bool removeVolumes, StackCaller caller, CancellationToken cancellationToken)
@@ -423,6 +453,9 @@ internal sealed partial class StackOperations
                 await ComposeStepAsync(job, project, ["build"], BuildTimeout, "stackbuild", token, signIns.Environment);
                 return null;
             case StackStepKind.Up:
+                // Pulling and building take a while, and the containers still running may write
+                // into the files meanwhile, so what Up mounts is checked once more.
+                await RecheckAsync(stack, folder, shape, acknowledged, job, token);
                 await ComposeStepAsync(
                     job,
                     project,
