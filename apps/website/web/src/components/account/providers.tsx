@@ -66,6 +66,11 @@ export const providerLabel = (name: unknown): string =>
 export const providerStart = (name: ProviderName, returnUrl: string, link = false) =>
   `/api/v1/external-sign-ins/${name}?${link ? 'link=true&' : ''}returnUrl=${encodeURIComponent(returnUrl)}`;
 
+/** Sends the browser off to the provider, as a link to {@link providerStart} would. */
+export const goToProvider = (name: ProviderName, returnUrl: string, link = false) => {
+  window.location.assign(providerStart(name, returnUrl, link));
+};
+
 /** What the sign-in page says for the API's `?error=` after a provider. */
 export function providerError(code: string | null): string | null {
   if (!code) return null;

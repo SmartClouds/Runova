@@ -33,7 +33,7 @@ public sealed class TwoFactorTests : IDisposable
         Assert.StartsWith("otpauth://totp/", setup.GetProperty("authenticatorUri").GetString(), StringComparison.Ordinal);
         Assert.False((await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
 
-        var confirmed = await client.SendAsync(HttpMethod.Put, TwoFactor, new { code = CodeNow(key) });
+        var confirmed = await client.SendAsync(HttpMethod.Put, TwoFactor, new { code = CodeNow(key), password = TestUsers.Password });
 
         Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
         var recoveryCodes = (await ReadJsonAsync(confirmed)).GetProperty("recoveryCodes").EnumerateArray().Select(c => c.GetString()).ToList();
@@ -49,10 +49,47 @@ public sealed class TwoFactorTests : IDisposable
         var client = await SignedInClientAsync(await TestUsers.CreateAsync(_factory.Services));
         var key = Base32.Decode((await ReadJsonAsync(await client.SendAsync(HttpMethod.Post, TwoFactor))).GetProperty("sharedKey").GetString()!);
 
-        var response = await client.SendAsync(HttpMethod.Put, TwoFactor, new { code = Totp.Code(key, Totp.TimeStep(_time.GetUtcNow()) + 5) });
+        var response = await client.SendAsync(HttpMethod.Put, TwoFactor, new { code = Totp.Code(key, Totp.TimeStep(_time.GetUtcNow()) + 5), password = TestUsers.Password });
 
         await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), TwoFactor);
         Assert.False((await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not the password at all")]
+    public async Task Turning_two_factor_on_without_the_password_leaves_it_off_and_spends_no_code(string? password)
+    {
+        var client = await SignedInClientAsync(await TestUsers.CreateAsync(_factory.Services));
+        var key = Base32.Decode((await ReadJsonAsync(await client.SendAsync(HttpMethod.Post, TwoFactor))).GetProperty("sharedKey").GetString()!);
+        var code = CodeNow(key);
+
+        var response = await client.SendAsync(HttpMethod.Put, TwoFactor, new { code, password });
+
+        var problem = await ProblemAssert.IsProblemAsync(response, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), TwoFactor);
+        Assert.Equal(["password"], problem.GetProperty("errors").EnumerateObject().Select(p => p.Name));
+        Assert.False((await ReadJsonAsync(await client.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
+
+        // The proof is checked before the code, so the same code still works with it.
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(HttpMethod.Put, TwoFactor, new { code, password = TestUsers.Password })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_phone_or_desktop_token_can_not_set_up_or_turn_on_two_factor()
+    {
+        var browser = await SignedInClientAsync(await TestUsers.CreateAsync(_factory.Services));
+        var key = Base32.Decode((await ReadJsonAsync(await browser.SendAsync(HttpMethod.Post, TwoFactor))).GetProperty("sharedKey").GetString()!);
+        var phone = await TestPhones.SignInAsync(_factory, browser);
+
+        var started = await phone.Client.PostAsync(TwoFactor, null, TestContext.Current.CancellationToken);
+        var confirmed = await phone.Client.PutAsJsonAsync(TwoFactor, new { code = CodeNow(key), password = TestUsers.Password }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, started.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, confirmed.StatusCode);
+        Assert.False((await ReadJsonAsync(await browser.GetAsync(TwoFactor))).GetProperty("enabled").GetBoolean());
+
+        // The browser's own setup was not replaced: its key still turns two-factor on.
+        Assert.Equal(HttpStatusCode.OK, (await browser.SendAsync(HttpMethod.Put, TwoFactor, new { code = CodeNow(key), password = TestUsers.Password })).StatusCode);
     }
 
     [Fact]
@@ -93,7 +130,7 @@ public sealed class TwoFactorTests : IDisposable
         var user = await ReadJsonAsync(await client.GetAsync("/api/v1/users/me"));
         var key = Base32.Decode((await ReadJsonAsync(await client.SendAsync(HttpMethod.Post, TwoFactor))).GetProperty("sharedKey").GetString()!);
         var code = CodeNow(key);
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(HttpMethod.Put, TwoFactor, new { code })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(HttpMethod.Put, TwoFactor, new { code, password = TestUsers.Password })).StatusCode);
 
         var response = await _factory.CreateApiClient().SignInAsync(user.GetProperty("email").GetString()!, TestUsers.Password, code);
 

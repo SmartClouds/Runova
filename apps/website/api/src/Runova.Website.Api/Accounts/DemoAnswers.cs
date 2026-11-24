@@ -191,6 +191,7 @@ internal static class DemoAnswers
         ("POST", "/api/v1/accounts/me/billing-portal-sessions"),
         ("POST", "/api/v1/accounts/me/checkout-sessions"),
         ("POST", "/api/v1/accounts/me/crypto-invoices"),
+        ("POST", "/api/v1/accounts/me/login-link-grants"),
         ("POST", "/api/v1/accounts/me/telegram-link-codes"),
         ("POST", "/api/v1/cloud-monitors/"),
         ("POST", "/api/v1/device-authorizations"),

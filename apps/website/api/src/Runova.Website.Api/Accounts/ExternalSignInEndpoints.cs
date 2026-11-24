@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Identity;
 using Runova.Website.Api.Problems;
 using Runova.Website.Core.Accounts;
@@ -86,6 +88,7 @@ internal static class ExternalSignInEndpoints
         api.MapGet("/external-sign-ins/current", FinishAsync).AllowAnonymous().Produces(StatusCodes.Status302Found);
         api.MapPost("/two-factor-sign-ins", TwoFactorAsync).AllowAnonymous().WithMetadata(RequiresAntiforgery.Instance).RequireRateLimiting(AuthRateLimits.Policy);
         api.MapDelete("/accounts/me/logins/{provider}", UnlinkAsync).RequireAuthorization(Policies.Account);
+        api.MapPost("/accounts/me/login-link-grants", GrantLinkAsync).RequireAuthorization(Policies.Account);
         return api;
     }
 
@@ -112,8 +115,20 @@ internal static class ExternalSignInEndpoints
             ? path
             : DefaultReturn;
 
-    private static async Task<Results<ChallengeHttpResult, ProblemHttpResult>> StartAsync(
-        string provider, string? returnUrl, bool? link, HttpContext http, SignInSettingsStore store, SignInManager<AppUser> signIn, UserManager<AppUser> users)
+    /// <summary>
+    /// Starts a sign-in, or with <paramref name="link"/> a link for the account signed in by this
+    /// browser. A link needs a grant from <see cref="GrantLinkAsync"/>, and uses it up; without one
+    /// the browser goes back with <c>error=step-up-needed</c>.
+    /// </summary>
+    private static async Task<Results<ChallengeHttpResult, RedirectHttpResult, ProblemHttpResult>> StartAsync(
+        string provider,
+        string? returnUrl,
+        bool? link,
+        HttpContext http,
+        SignInSettingsStore store,
+        SignInManager<AppUser> signIn,
+        UserManager<AppUser> users,
+        LinkGrants grants)
     {
         if (!ExternalProviders.TryFind(provider, out var found) || !found.IsActive(await store.GetAsync(http.RequestAborted)))
         {
@@ -121,9 +136,17 @@ internal static class ExternalSignInEndpoints
         }
 
         var back = SafeReturn(returnUrl);
-        var userId = link == true && await SessionUserAsync(http, users) is { } user
-            ? user.Id.ToString(CultureInfo.InvariantCulture)
-            : null;
+        string? userId = null;
+        if (link == true)
+        {
+            if (await SessionAsync(http, users) is not ({ } user, var sessionId) || !await grants.TakeAsync(user.Id, sessionId))
+            {
+                return TypedResults.Redirect(WithQuery(back, "error=step-up-needed"));
+            }
+
+            userId = user.Id.ToString(CultureInfo.InvariantCulture);
+        }
+
         // The provider comes back from another site, so the browser would leave the SameSite=Strict
         // session cookie off the rest of the chain. The site's hop page moves on to
         // /external-sign-ins/current by script, a navigation of this site's own (E116).
@@ -292,14 +315,51 @@ internal static class ExternalSignInEndpoints
     }
 
     /// <summary>
+    /// Leave for this browser session to link one provider login in the next few minutes, for
+    /// step-up proof. Only a browser session cookie may ask, never a desktop or phone token.
+    /// </summary>
+    private static async Task<Results<NoContent, ValidationProblem, UnauthorizedHttpResult>> GrantLinkAsync(
+        [FromBody] StepUpRequest request,
+        HttpContext http,
+        UserManager<AppUser> users,
+        AccountSessions sessions,
+        LinkGrants grants,
+        TimeProvider time)
+    {
+        if (DeviceTokenAuthenticationHandler.IsDevice(http.User)
+            || ApiClientPrincipal.IsApiClient(http.User)
+            || await SessionAsync(http, users) is not ({ } user, var sessionId)
+            || AccountSessions.SessionId(http.User) != sessionId)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (await StepUp.ProblemsAsync(users, user, request, sessions, http, time) is { } problems)
+        {
+            return ApiProblems.Invalid(problems);
+        }
+
+        await grants.IssueAsync(user.Id, sessionId);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
     /// The account signed in by its own browser session cookie. A link is only ever for that
     /// account, never for whoever a signed request, device token or agent token stands for, since
     /// those routes are open to anyone and the request's user may not be an account at all.
     /// </summary>
-    private static async Task<AppUser?> SessionUserAsync(HttpContext http, UserManager<AppUser> users)
+    private static async Task<AppUser?> SessionUserAsync(HttpContext http, UserManager<AppUser> users) =>
+        await SessionAsync(http, users) is ({ } user, _) ? user : null;
+
+    /// <summary>The account and session of the browser session cookie, as for <see cref="SessionUserAsync"/>.</summary>
+    private static async Task<(AppUser User, long SessionId)?> SessionAsync(HttpContext http, UserManager<AppUser> users)
     {
         var session = await http.AuthenticateAsync(IdentityConstants.ApplicationScheme);
-        return session is { Succeeded: true, Principal: { } principal } ? await users.GetUserAsync(principal) : null;
+        return session is { Succeeded: true, Principal: { } principal }
+            && AccountSessions.SessionId(principal) is { } sessionId
+            && await users.GetUserAsync(principal) is { } user
+                ? (user, sessionId)
+                : null;
     }
 
     private static RedirectHttpResult Fail(string error, string back) => TypedResults.Redirect(ExternalProviders.FailurePath(error, back));

@@ -141,6 +141,7 @@ public sealed class AppleSignInTests : ProviderSignInTests
     {
         var owner = await TestAccounts.CreateAsync(Factory.Services);
         var client = await TestAccounts.SignedInClientAsync(Factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
         await Fake.SignInAsync(client, Fake.StartPath("/account/security", link: true));
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Delete, "/api/v1/accounts/me/logins/apple")).StatusCode);

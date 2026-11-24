@@ -85,7 +85,10 @@ export async function createEditor(owner: APIRequestContext, workerIndex: number
     await signIn(context, editor.email, editor.password);
     const setup = await apiCall(context, 'POST', '/users/me/two-factor');
     editor.secret = (await setup.json()).sharedKey;
-    await apiCall(context, 'PUT', '/users/me/two-factor', { code: await nextCode(editor) });
+    await apiCall(context, 'PUT', '/users/me/two-factor', {
+      code: await nextCode(editor),
+      password: editor.password,
+    });
   } finally {
     await context.dispose();
   }

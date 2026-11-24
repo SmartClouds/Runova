@@ -127,7 +127,12 @@ async function ownAccountChanges(
     secrets['authenticator key'] = setup.sharedKey;
     const authenticator = { secret: setup.sharedKey, lastStep: 0 };
     const first = await (
-      await call(session, '/users/me/two-factor', { code: await nextCode(authenticator) }, 'PUT')
+      await call(
+        session,
+        '/users/me/two-factor',
+        { code: await nextCode(authenticator), password: secrets['changed password'] },
+        'PUT',
+      )
     ).json();
     const renewed = await (
       await call(session, '/users/me/two-factor/recovery-codes', {

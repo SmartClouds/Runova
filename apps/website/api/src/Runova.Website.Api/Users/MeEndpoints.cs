@@ -1,8 +1,11 @@
 using System.Globalization;
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Runova.Website.Api.Accounts;
+using Runova.Website.Api.ApiClients;
 using Runova.Website.Api.Audit;
 using Runova.Website.Api.Http;
 using Runova.Website.Api.Identity;
@@ -22,6 +25,12 @@ public sealed record TwoFactorSetupDto(string SharedKey, string AuthenticatorUri
 
 public sealed record TwoFactorConfirmRequest(string? Code);
 
+/// <summary>
+/// Turning two-factor on: the first code from the new authenticator, and step-up proof (the
+/// password, or the answer to a <c>step-up</c> passkey challenge) as in <see cref="StepUpRequest"/>.
+/// </summary>
+public sealed record TwoFactorEnableRequest(string? Code, string? Password = null, string? PasskeyChallengeId = null, JsonElement? PasskeyCredential = null);
+
 public sealed record RecoveryCodesDto(IReadOnlyList<string> RecoveryCodes);
 
 public sealed record PasswordChangeRequest(string? CurrentPassword, string? NewPassword);
@@ -30,8 +39,8 @@ public sealed record TwoFactorOffRequest(string? Password);
 
 /// <summary>
 /// The signed-in user: their password and their two-factor setup. A change that could lock the
-/// owner out (a new password, two-factor off) needs the current password, and new recovery codes
-/// need a code from the authenticator. Passwords and codes never reach an audit entry or a log.
+/// owner out (a new password, two-factor off) needs the current password, turning two-factor on
+/// needs step-up proof, and new recovery codes need a code from the authenticator. Passwords and codes never reach an audit entry or a log.
 /// </summary>
 internal static class MeEndpoints
 {
@@ -76,11 +85,12 @@ internal static class MeEndpoints
     /// <summary>
     /// Makes a new authenticator key. Two-factor stays off until a code from it is confirmed, and
     /// a user who has it on already must turn it off first, so a running setup is never replaced.
+    /// Only a browser session sets it up, never a desktop or phone token.
     /// </summary>
     private static async Task<Results<Ok<TwoFactorSetupDto>, ProblemHttpResult, UnauthorizedHttpResult>> StartTwoFactorAsync(
         HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn)
     {
-        if (await users.GetUserAsync(http.User) is not { } user)
+        if (IsTokenPrincipal(http.User) || await users.GetUserAsync(http.User) is not { } user)
         {
             return TypedResults.Unauthorized();
         }
@@ -103,12 +113,28 @@ internal static class MeEndpoints
         return TypedResults.Ok(new TwoFactorSetupDto(key, uri));
     }
 
+    /// <summary>
+    /// Turns two-factor on for step-up proof and a right code from the new authenticator. The proof
+    /// is checked first, so a code is never spent on a request that fails it.
+    /// </summary>
     private static async Task<Results<Ok<RecoveryCodesDto>, ValidationProblem, UnauthorizedHttpResult>> ConfirmTwoFactorAsync(
-        TwoFactorConfirmRequest request, HttpContext http, UserManager<AppUser> users, SignInManager<AppUser> signIn, ActivityLog activity, AppDbContext db)
+        TwoFactorEnableRequest request,
+        HttpContext http,
+        UserManager<AppUser> users,
+        SignInManager<AppUser> signIn,
+        AccountSessions sessions,
+        ActivityLog activity,
+        AppDbContext db,
+        TimeProvider time)
     {
-        if (await users.GetUserAsync(http.User) is not { } user)
+        if (IsTokenPrincipal(http.User) || await users.GetUserAsync(http.User) is not { } user)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (await StepUp.ProblemsAsync(users, user, TwoFactorMapper.ToStepUp(request), sessions, http, time) is { } problems)
+        {
+            return ApiProblems.Invalid(problems);
         }
 
         if (string.IsNullOrWhiteSpace(request.Code)
@@ -255,6 +281,10 @@ internal static class MeEndpoints
         user.LastTotpTimeStep = null;
         Succeeded(await users.ResetAuthenticatorKeyAsync(user));
     }
+
+    /// <summary>A desktop or phone token, or an API client: never enough to add a way to sign in.</summary>
+    private static bool IsTokenPrincipal(ClaimsPrincipal user) =>
+        DeviceTokenAuthenticationHandler.IsDevice(user) || ApiClientPrincipal.IsApiClient(user);
 
     private static void Succeeded(IdentityResult result)
     {

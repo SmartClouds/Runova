@@ -17,6 +17,7 @@ internal static class AccountsSetup
         services.AddOidcSignIns();
         services.AddScoped<ExternalAccounts>();
         services.AddScoped<AppleTokens>();
+        services.AddScoped<LinkGrants>();
         services.AddHttpClient(AppleTokens.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddSingleton<IdTokenValidator>();
         services.AddHttpClient(IdTokenValidator.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));

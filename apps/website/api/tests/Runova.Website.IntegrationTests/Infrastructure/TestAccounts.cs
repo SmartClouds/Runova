@@ -45,6 +45,13 @@ internal static partial class TestAccounts
         return client;
     }
 
+    /// <summary>Step-up proof for linking a provider login; the client's next link start uses it up.</summary>
+    public static async Task GrantLinkAsync(ApiClient client, string password = Password)
+    {
+        var response = await client.SendAsync(HttpMethod.Post, "/api/v1/accounts/me/login-link-grants", new { password, code = (string?)null });
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
     public static async Task<AppUser?> FindAsync(IServiceProvider services, string email)
     {
         using var scope = services.CreateScope();

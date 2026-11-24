@@ -659,6 +659,48 @@
         }
       }
     },
+    "/api/v1/accounts/me/login-link-grants": {
+      "post": {
+        "tags": [
+          "ExternalSignInEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/site-analytics": {
       "get": {
         "tags": [
@@ -1989,7 +2031,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TwoFactorConfirmRequest"
+                "$ref": "#/components/schemas/TwoFactorEnableRequest"
               }
             }
           },
@@ -14481,6 +14523,34 @@
               "string"
             ]
           }
+        },
+        "additionalProperties": false
+      },
+      "TwoFactorEnableRequest": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "password": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkeyChallengeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "passkeyCredential": {}
         },
         "additionalProperties": false
       },

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing.Handlers;
@@ -119,6 +120,7 @@ public sealed class GoogleSignInTests : IDisposable
     {
         var owner = await TestAccounts.CreateAsync(_factory.Services);
         var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
 
         var done = await FakeGoogle.SignInAsync(client, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
 
@@ -135,6 +137,7 @@ public sealed class GoogleSignInTests : IDisposable
         await FakeGoogle.SignInAsync(_factory.CreateApiClient());
         var owner = await TestAccounts.CreateAsync(_factory.Services);
         var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
 
         var done = await FakeGoogle.SignInAsync(client, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
 
@@ -151,12 +154,98 @@ public sealed class GoogleSignInTests : IDisposable
         var signed = new ApiClient(factory.CreateDefaultClient(
             new Uri("https://localhost"), new CookieContainerHandler(), new RunovaSigningHandler(keyId, secret)));
 
-        var done = await FakeGoogle.SignInAsync(signed, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+        var done = await signed.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
 
-        Assert.DoesNotContain("linked=", done.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        Assert.Equal("/account/security?error=step-up-needed", done.Headers.Location!.OriginalString);
         using var scope = factory.Services.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         Assert.Empty(await users.GetLoginsAsync(await TestAccounts.ReloadAsync(factory.Services, victim.Id)));
+    }
+
+    [Fact]
+    public async Task A_link_without_step_up_proof_goes_back_without_reaching_google()
+    {
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+
+        var start = await client.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+
+        Assert.Equal(HttpStatusCode.Redirect, start.StatusCode);
+        Assert.Equal("/account/security?error=step-up-needed", start.Headers.Location!.OriginalString);
+        Assert.Empty(await LoginsAsync(_factory, owner.Id));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not the password at all")]
+    public async Task A_link_grant_needs_the_password(string? password)
+    {
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+
+        var grant = await client.SendAsync(HttpMethod.Post, LinkGrants, new { password, code = (string?)null });
+
+        var problem = await ProblemAssert.IsProblemAsync(grant, HttpStatusCode.BadRequest, ProblemAssert.Type("validation-failed"), LinkGrants);
+        Assert.Equal(["password"], problem.GetProperty("errors").EnumerateObject().Select(p => p.Name));
+        var start = await client.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+        Assert.Equal("/account/security?error=step-up-needed", start.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_link_grant_is_good_for_one_link_only()
+    {
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
+
+        var first = await client.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+        var second = await client.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+
+        Assert.Equal("accounts.google.com", first.Headers.Location!.Host);
+        Assert.Equal("/account/security?error=step-up-needed", second.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_link_grant_is_only_for_the_browser_session_that_asked_for_it()
+    {
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var asked = await TestAccounts.SignedInClientAsync(_factory, owner);
+        var other = await TestAccounts.SignedInClientAsync(_factory, owner);
+        await TestAccounts.GrantLinkAsync(asked);
+
+        var fromOther = await other.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+
+        Assert.Equal("/account/security?error=step-up-needed", fromOther.Headers.Location!.OriginalString);
+        Assert.Equal("/account/security?linked=google", (await FakeGoogle.SignInAsync(asked, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true")).Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_phone_or_desktop_token_gets_no_link_grant()
+    {
+        var owner = await TestAccounts.CreateAsync(_factory.Services);
+        var browser = await TestAccounts.SignedInClientAsync(_factory, owner);
+        var phone = await TestPhones.SignInAsync(_factory, browser);
+
+        var grant = await phone.Client.PostAsJsonAsync(LinkGrants, new { password = TestAccounts.Password, code = (string?)null }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, grant.StatusCode);
+        var start = await browser.GetAsync("/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
+        Assert.Equal("/account/security?error=step-up-needed", start.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_google_only_account_turns_on_two_factor_within_minutes_of_signing_in()
+    {
+        var client = _factory.CreateApiClient();
+        await FakeGoogle.SignInAsync(client);
+        await client.RefreshAntiforgeryTokenAsync();
+        var setup = await ApiClient.ReadJsonAsync(await client.SendAsync(HttpMethod.Post, "/api/v1/users/me/two-factor"), HttpStatusCode.OK);
+        var key = Core.Identity.Base32.Decode(setup.GetProperty("sharedKey").GetString()!);
+
+        var code = Core.Identity.Totp.Code(key, Core.Identity.Totp.TimeStep(DateTimeOffset.UtcNow));
+        var confirmed = await client.SendAsync(HttpMethod.Put, "/api/v1/users/me/two-factor", new { code });
+
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
     }
 
     [Fact]
@@ -164,6 +253,7 @@ public sealed class GoogleSignInTests : IDisposable
     {
         var owner = await TestAccounts.CreateAsync(_factory.Services);
         var client = await TestAccounts.SignedInClientAsync(_factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
         await FakeGoogle.SignInAsync(client, "/api/v1/external-sign-ins/google?returnUrl=%2Faccount%2Fsecurity&link=true");
 
         var response = await client.SendAsync(HttpMethod.Delete, "/api/v1/accounts/me/logins/google");
@@ -264,5 +354,14 @@ public sealed class GoogleSignInTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, finished.StatusCode);
         var me = await ApiClient.ReadJsonAsync(await next.GetAsync("/api/v1/accounts/me"), HttpStatusCode.OK);
         Assert.Equal(JsonValueKind.Number, me.GetProperty("id").ValueKind);
+    }
+
+    private const string LinkGrants = "/api/v1/accounts/me/login-link-grants";
+
+    private static async Task<IList<UserLoginInfo>> LoginsAsync(WebsiteApiFactory factory, long userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        return await users.GetLoginsAsync(await TestAccounts.ReloadAsync(factory.Services, userId));
     }
 }

@@ -3,7 +3,7 @@
 // whether the browser sends Runova's SameSite=Strict session cookie. The API's own tests can not
 // see this: their cookie jar ignores SameSite.
 import type { Page } from '@playwright/test';
-import { expect, SIGNED_OUT, test } from './fixtures';
+import { apiCall, expect, SIGNED_OUT, test } from './fixtures';
 
 test.use({ storageState: SIGNED_OUT });
 
@@ -45,6 +45,12 @@ test('a signed-in account links another Microsoft login from Security', async ({
   await approveAtMicrosoft(page, newEmail(info.workerIndex));
   await expect(page).toHaveURL(/\/account$/);
 
+  // Linking needs step-up proof first; a Microsoft-only account just signed in, which is the proof.
+  // The Security page can not offer a second Microsoft login, so the test asks for the grant itself.
+  await apiCall(page.request, 'POST', '/accounts/me/login-link-grants', {
+    password: null,
+    code: null,
+  });
   await page.goto('/api/v1/external-sign-ins/microsoft?link=true&returnUrl=%2Faccount%2Fsecurity');
   await approveAtMicrosoft(page, newEmail(info.workerIndex), crypto.randomUUID());
 

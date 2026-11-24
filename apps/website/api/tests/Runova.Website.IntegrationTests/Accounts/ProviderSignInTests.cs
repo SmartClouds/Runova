@@ -99,6 +99,7 @@ public abstract class ProviderSignInTests : IDisposable
     {
         var owner = await TestAccounts.CreateAsync(Factory.Services);
         var client = await TestAccounts.SignedInClientAsync(Factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
 
         var done = await Fake.SignInAsync(client, Fake.StartPath("/account/security", link: true));
 
@@ -115,6 +116,7 @@ public abstract class ProviderSignInTests : IDisposable
         await Fake.SignInAsync(Factory.CreateApiClient());
         var owner = await TestAccounts.CreateAsync(Factory.Services);
         var client = await TestAccounts.SignedInClientAsync(Factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
 
         var done = await Fake.SignInAsync(client, Fake.StartPath("/account/security", link: true));
 
@@ -126,6 +128,7 @@ public abstract class ProviderSignInTests : IDisposable
     {
         var owner = await TestAccounts.CreateAsync(Factory.Services);
         var client = await TestAccounts.SignedInClientAsync(Factory, owner);
+        await TestAccounts.GrantLinkAsync(client);
         await Fake.SignInAsync(client, Fake.StartPath("/account/security", link: true));
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(HttpMethod.Delete, $"/api/v1/accounts/me/logins/{Name}")).StatusCode);

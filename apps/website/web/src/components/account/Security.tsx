@@ -8,12 +8,12 @@ import { useSignInOptions } from '@/lib/account/signInOptions';
 import { StrengthMeter } from './AuthForms';
 import { AppInput, PasswordInput } from './fields';
 import {
+  goToProvider,
   isProvider,
   knownProviders,
   PROVIDERS,
   type ProviderName,
   providerLabel,
-  providerStart,
 } from './providers';
 import { Card, CardHeader, Notice, PageHeader, Pill, Shimmer, StepUpDialog, useLoad } from './ui';
 
@@ -36,6 +36,9 @@ function readLinkMessage(query: string): { tone: 'success' | 'warning'; text: st
   const error = params.get('error');
   if (error === 'login-taken') {
     return { tone: 'warning', text: 'That account already signs in to another Runova account.' };
+  }
+  if (error === 'step-up-needed') {
+    return { tone: 'warning', text: 'Confirm it is you first, then try linking again.' };
   }
   const failed = error && /^(.+)-failed$/.exec(error)?.[1];
   if (failed && isProvider(failed)) {
@@ -77,6 +80,7 @@ export default function Security() {
             enabled={twoFactor.value?.enabled ?? me.twoFactorEnabled}
             left={twoFactor.value?.recoveryCodesLeft ?? 0}
             hasPassword={me.hasPassword}
+            passkeys={me.passkeyCount > 0}
             reload={() => {
               void twoFactor.reload();
               void account.reload();
@@ -203,17 +207,20 @@ function TwoFactorCard({
   enabled,
   left,
   hasPassword,
+  passkeys,
   reload,
 }: {
   enabled: boolean;
   left: number;
   hasPassword: boolean;
+  passkeys: boolean;
   reload: () => void;
 }) {
   const [setup, setSetup] = useState<{ sharedKey: string; authenticatorUri: string } | null>(null);
   const [code, setCode] = useState('');
   const [codes, setCodes] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [turningOff, setTurningOff] = useState(false);
   const start = async () => {
     const response = await apiRequest<{ sharedKey: string; authenticatorUri: string }>(
@@ -222,17 +229,11 @@ function TwoFactorCard({
     );
     if (response.ok) setSetup(response.value);
   };
-  const confirm = async (event: { preventDefault(): void }) => {
+  // The code is typed first; turning two-factor on then asks for the usual proof.
+  const confirm = (event: { preventDefault(): void }) => {
     event.preventDefault();
-    const response = await apiRequest<{ recoveryCodes: string[] }>('/users/me/two-factor', {
-      method: 'PUT',
-      body: { code: code.replace(/\s/g, '') },
-    });
-    if (response.ok) {
-      setCodes(response.value.recoveryCodes);
-      setSetup(null);
-      reload();
-    } else setError(response.problem.errors.code?.[0] ?? response.problem.detail);
+    setError(null);
+    setConfirming(true);
   };
   return (
     <Card>
@@ -331,6 +332,37 @@ function TwoFactorCard({
         </div>
       )}
       <StepUpDialog
+        open={confirming}
+        title="Turn on two-factor?"
+        description="Confirm it is you. After this, signing in asks for a code from your authenticator app."
+        confirm="Turn on"
+        hasPassword={hasPassword}
+        twoFactor={false}
+        passkeys={passkeys}
+        onClose={() => setConfirming(false)}
+        onConfirm={async (stepUp) => {
+          const response = await apiRequest<{ recoveryCodes: string[] }>('/users/me/two-factor', {
+            method: 'PUT',
+            body: { ...stepUp, code: code.replace(/\s/g, '') },
+          });
+          if (response.ok) {
+            setConfirming(false);
+            setCodes(response.value.recoveryCodes);
+            setSetup(null);
+            reload();
+            return null;
+          }
+          const codeError = response.problem.errors.code?.[0];
+          if (codeError) {
+            // A wrong authenticator code belongs under the code field, not in the dialog.
+            setConfirming(false);
+            setError(codeError);
+            return null;
+          }
+          return response.problem.errors;
+        }}
+      />
+      <StepUpDialog
         open={turningOff}
         title="Turn off two-factor?"
         description="Your password alone will be enough to sign in again."
@@ -356,11 +388,13 @@ function TwoFactorCard({
 
 /**
  * Google, Apple and Microsoft (E116): link each one the site has on, and unlink one that is linked
- * even while the site has it off. The API refuses to unlink the last way in.
+ * even while the site has it off. The API refuses to unlink the last way in. Linking asks for the
+ * usual proof first, which leaves this browser a few minutes to start the link.
  */
 function ConnectedAccountsCard({ account, reload }: { account: Account; reload: () => void }) {
   const options = useSignInOptions();
   const [problem, setProblem] = useState<string | null>(null);
+  const [linking, setLinking] = useState<ProviderName | null>(null);
   const offered = knownProviders(options?.providers);
   const shown = (Object.keys(PROVIDERS) as ProviderName[]).filter(
     (name) => account.logins.includes(name) || offered.includes(name),
@@ -404,8 +438,13 @@ function ConnectedAccountsCard({ account, reload }: { account: Account; reload: 
                   Unlink
                 </Button>
               ) : (
-                <Button asChild size="sm" variant="outline" className="app-field border-0">
-                  <a href={providerStart(name, '/account/security', true)}>{`Link ${label}`}</a>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="app-field border-0"
+                  onClick={() => setLinking(name)}
+                >
+                  {`Link ${label}`}
                 </Button>
               )}
             </li>
@@ -417,6 +456,26 @@ function ConnectedAccountsCard({ account, reload }: { account: Account; reload: 
           <Notice tone="warning">{problem}</Notice>
         </div>
       )}
+      <StepUpDialog
+        open={linking !== null}
+        title={`Link ${linking ? PROVIDERS[linking].label : 'an account'}?`}
+        description="Confirm it is you. Then you sign in there, and it can sign you in here from now on."
+        confirm="Continue"
+        hasPassword={account.hasPassword}
+        twoFactor={account.twoFactorEnabled}
+        passkeys={account.passkeyCount > 0}
+        onClose={() => setLinking(null)}
+        onConfirm={async (stepUp) => {
+          if (!linking) return null;
+          const response = await apiRequest('/accounts/me/login-link-grants', {
+            method: 'POST',
+            body: stepUp,
+          });
+          if (!response.ok) return response.problem.errors;
+          goToProvider(linking, '/account/security', true);
+          return null;
+        }}
+      />
     </Card>
   );
 }

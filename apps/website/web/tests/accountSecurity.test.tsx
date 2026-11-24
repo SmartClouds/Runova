@@ -7,6 +7,13 @@ import Security from '../src/components/account/Security';
 import type { Account } from '../src/lib/account/api';
 import { fakeFetch, json, problem } from './helpers/fakeAdminFetch';
 
+// jsdom can not navigate, so the hop to the provider is only recorded.
+const goToProvider = vi.hoisted(() => vi.fn());
+vi.mock('../src/components/account/providers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/components/account/providers')>()),
+  goToProvider,
+}));
+
 const ME: Account = {
   id: 42,
   email: 'sam@example.com',
@@ -31,9 +38,20 @@ function routes(account: Account, providers: string[]) {
   };
 }
 
+const openDialog = () => document.querySelector<HTMLElement>('dialog[open]') as HTMLElement;
+
 beforeEach(() => {
   document.cookie = 'XSRF-TOKEN=xsrf; path=/';
   window.history.replaceState(null, '', '/account/security');
+  goToProvider.mockReset();
+  // jsdom has no modal dialogs; these open and close one the way the browser does.
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.removeAttribute('open');
+    this.dispatchEvent(new Event('close'));
+  };
 });
 
 describe('Security, Connected accounts', () => {
@@ -42,16 +60,62 @@ describe('Security, Connected accounts', () => {
     render(<Security />);
 
     expect(await screen.findByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
-    for (const [name, provider] of [
-      ['Google', 'google'],
-      ['Apple', 'apple'],
-      ['Microsoft', 'microsoft'],
-    ]) {
-      expect(screen.getByRole('link', { name: `Link ${name}` })).toHaveAttribute(
-        'href',
-        `/api/v1/external-sign-ins/${provider}?link=true&returnUrl=%2Faccount%2Fsecurity`,
-      );
+    for (const name of ['Google', 'Apple', 'Microsoft']) {
+      expect(screen.getByRole('button', { name: `Link ${name}` })).toBeInTheDocument();
     }
+  });
+
+  it('links a provider only after the password, then sends the browser there', async () => {
+    const api = fakeFetch({
+      ...routes(ME, ['google']),
+      'POST /api/v1/accounts/me/login-link-grants': new Response(null, { status: 204 }),
+    });
+    const user = userEvent.setup();
+    render(<Security />);
+
+    await user.click(await screen.findByRole('button', { name: 'Link Google' }));
+    const dialog = openDialog();
+    expect(within(dialog).getByText('Link Google?')).toBeInTheDocument();
+    expect(goToProvider).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByLabelText('Your password'), 'correct horse battery');
+    await user.click(within(dialog).getByRole('button', { name: 'Continue', hidden: true }));
+
+    await waitFor(() =>
+      expect(goToProvider).toHaveBeenCalledWith('google', '/account/security', true),
+    );
+    expect(api.calls('POST /api/v1/accounts/me/login-link-grants')[0]?.json()).toEqual({
+      password: 'correct horse battery',
+      code: null,
+    });
+  });
+
+  it('stays put and says why when the proof is wrong', async () => {
+    fakeFetch({
+      ...routes(ME, ['google']),
+      'POST /api/v1/accounts/me/login-link-grants': problem(400, 'validation-failed', {
+        errors: { password: ['Enter your password to confirm.'] },
+      }),
+    });
+    const user = userEvent.setup();
+    render(<Security />);
+
+    await user.click(await screen.findByRole('button', { name: 'Link Google' }));
+    const dialog = openDialog();
+    await user.type(within(dialog).getByLabelText('Your password'), 'wrong');
+    await user.click(within(dialog).getByRole('button', { name: 'Continue', hidden: true }));
+
+    expect(await within(dialog).findByText('Enter your password to confirm.')).toBeInTheDocument();
+    expect(goToProvider).not.toHaveBeenCalled();
+  });
+
+  it('says to confirm first when a link came back without the proof', async () => {
+    window.history.replaceState(null, '', '/account/security?error=step-up-needed');
+    fakeFetch(routes(ME, ['google']));
+    render(<Security />);
+
+    expect(
+      await screen.findByText('Confirm it is you first, then try linking again.'),
+    ).toBeInTheDocument();
   });
 
   it('shows nothing while an Admin has every provider off', async () => {
@@ -60,7 +124,7 @@ describe('Security, Connected accounts', () => {
 
     await screen.findByRole('heading', { name: /Password/ });
     expect(screen.queryByRole('heading', { name: 'Connected accounts' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Link / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Link / })).not.toBeInTheDocument();
   });
 
   it('still lets a linked account unlink a provider while it is off', async () => {
@@ -78,7 +142,7 @@ describe('Security, Connected accounts', () => {
     await waitFor(() =>
       expect(api.calls('DELETE /api/v1/accounts/me/logins/apple')).toHaveLength(1),
     );
-    expect(screen.getByRole('link', { name: 'Link Google' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link Google' })).toBeInTheDocument();
   });
 
   it('says why the last way in can not be unlinked', async () => {
@@ -111,6 +175,56 @@ describe('Security, Connected accounts', () => {
     render(<Security />);
 
     expect(await screen.findByText(/You sign in with Apple\./)).toBeInTheDocument();
+  });
+});
+
+describe('Security, turning two-factor on', () => {
+  const setup = () =>
+    json({ sharedKey: 'JBSWY3DPEHPK3PXP', authenticatorUri: 'otpauth://totp/Runova:sam' });
+
+  it('asks for the password after the code, and sends both', async () => {
+    const api = fakeFetch({
+      ...routes(ME, []),
+      'POST /api/v1/users/me/two-factor': setup(),
+      'PUT /api/v1/users/me/two-factor': json({ recoveryCodes: ['aaaa-1111', 'bbbb-2222'] }),
+    });
+    const user = userEvent.setup();
+    render(<Security />);
+
+    await user.click(await screen.findByRole('button', { name: 'Turn on' }));
+    await user.type(await screen.findByLabelText('Code'), '123 456');
+    await user.click(screen.getByRole('button', { name: 'Turn on two-factor' }));
+    const dialog = openDialog();
+    expect(api.calls('PUT /api/v1/users/me/two-factor')).toHaveLength(0);
+    await user.type(within(dialog).getByLabelText('Your password'), 'correct horse battery');
+    await user.click(within(dialog).getByRole('button', { name: 'Turn on', hidden: true }));
+
+    expect(await screen.findByText('aaaa-1111')).toBeInTheDocument();
+    expect(api.calls('PUT /api/v1/users/me/two-factor')[0]?.json()).toEqual({
+      password: 'correct horse battery',
+      code: '123456',
+    });
+  });
+
+  it('puts a wrong authenticator code under the code field', async () => {
+    fakeFetch({
+      ...routes(ME, []),
+      'POST /api/v1/users/me/two-factor': setup(),
+      'PUT /api/v1/users/me/two-factor': problem(400, 'validation-failed', {
+        errors: { code: ['The code is not right. Enter the current code from your app.'] },
+      }),
+    });
+    const user = userEvent.setup();
+    render(<Security />);
+
+    await user.click(await screen.findByRole('button', { name: 'Turn on' }));
+    await user.type(await screen.findByLabelText('Code'), '000000');
+    await user.click(screen.getByRole('button', { name: 'Turn on two-factor' }));
+    await user.type(within(openDialog()).getByLabelText('Your password'), 'correct horse battery');
+    await user.click(within(openDialog()).getByRole('button', { name: 'Turn on', hidden: true }));
+
+    expect(await screen.findByText(/The code is not right/)).toBeInTheDocument();
+    expect(document.querySelector('dialog[open]')).toBeNull();
   });
 });
 
@@ -164,19 +278,6 @@ describe('Security, the Passkeys card', () => {
     vi.stubGlobal('PublicKeyCredential', class {});
     Object.defineProperty(navigator, 'credentials', { value: credentials, configurable: true });
   }
-
-  const openDialog = () => document.querySelector<HTMLElement>('dialog[open]') as HTMLElement;
-
-  // jsdom has no modal dialogs; these open and close one the way the browser does.
-  beforeEach(() => {
-    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
-      this.setAttribute('open', '');
-    };
-    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
-      this.removeAttribute('open');
-      this.dispatchEvent(new Event('close'));
-    };
-  });
 
   afterEach(() => {
     vi.unstubAllGlobals();

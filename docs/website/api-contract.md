@@ -268,12 +268,15 @@ password is right.
 | GET | `/api/v1/users/me` | Account | none | 200 `UserDto`; 401 |
 | PUT | `/api/v1/users/me/password` | Account | `{ "currentPassword": string, "newPassword": string }` | 204; 400; 401 |
 | GET | `/api/v1/users/me/two-factor` | Account | none | 200 `{ "enabled": bool, "recoveryCodesLeft": int }`; 401 |
-| POST | `/api/v1/users/me/two-factor` | Account | none | 200 `{ "sharedKey": string, "authenticatorUri": string }` (starts setup, not yet on); 401 |
-| PUT | `/api/v1/users/me/two-factor` | Account | `{ "code": string }` | 200 `{ "recoveryCodes": string[10] }` (turns it on); 400 wrong code; 401 |
+| POST | `/api/v1/users/me/two-factor` | Account (browser session only) | none | 200 `{ "sharedKey": string, "authenticatorUri": string }` (starts setup, not yet on); 401 (also for a desktop or phone token) |
+| PUT | `/api/v1/users/me/two-factor` | Account (browser session only) | `{ "code": string }` and the proof of a `StepUpRequest` (`password`, or `passkeyChallengeId` and `passkeyCredential`) | 200 `{ "recoveryCodes": string[10] }` (turns it on); 400 step-up failed or wrong code; 401 (also for a desktop or phone token) |
 | DELETE | `/api/v1/users/me/two-factor` | Account | `{ "password": string }` | 204; 400; 401 |
 | POST | `/api/v1/users/me/two-factor/recovery-codes` | Account | `{ "code": string }` | 201 `{ "recoveryCodes": string[10] }` (the old ones stop working); 400; 401 |
 
 TOTP follows RFC 6238 (SHA-1, 6 digits, 30 seconds, one step of drift), and each code works once.
+Turning two-factor on checks the step-up proof (see `StepUpRequest`) before the code, so a code is
+not spent on a request whose proof fails. An account with no password proves itself with a passkey
+or a sign-in in the last 10 minutes.
 
 ### Users (Admin)
 
@@ -385,10 +388,11 @@ is trusted.
 | Method | Path | Auth | Request | Responses |
 |---|---|---|---|---|
 | GET | `/api/v1/sign-in-providers` | Anonymous | none | 200 `{ "items": string[], "captcha": { "provider": "turnstile", "siteKey": string } \| null }` (the providers that are set up, always in the order `google`, `apple`, `microsoft`; `captcha` while the captcha is on) |
-| GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add the provider to the signed-in account) | 302 to the provider; 404 not set up |
+| GET | `/api/v1/external-sign-ins/{provider}` | Anonymous | query `returnUrl` (a path on this site), `link` (`true` to add the provider to the account of this browser's session, which needs a link grant) | 302 to the provider, or to `returnUrl` with `error=step-up-needed` (a link with no grant); 404 not set up |
 | GET | `/api/v1/external-sign-ins/current` | Anonymous (the provider's external cookie) | query `returnUrl` | 302 to `returnUrl`, or to `/account/sign-in?error=...` or `?step=two-factor` |
 | POST | `/api/v1/two-factor-sign-ins` | Anonymous (with antiforgery, after a provider) | `{ "code": string or null, "recoveryCode": string or null }` | 204 and the session cookie; 401 `unauthorized` (start again); 401 `two-factor-required`; 423; 429 |
 | DELETE | `/api/v1/accounts/me/logins/{provider}` | Account | none | 204; 401; 404 not linked; 409 it is the only way in |
+| POST | `/api/v1/accounts/me/login-link-grants` | Account (browser session only) | `StepUpRequest` | 204 (this session may start one link in the next 2 minutes); 400 step-up failed; 401 (also for a desktop or phone token) |
 
 Rules: a login already linked signs in to its account (two-factor still applies). A new address
 gets a new confirmed account with no password. An address whose account someone confirmed is never
@@ -398,7 +402,9 @@ that started it. An address nobody confirmed goes to the provider's owner, and t
 registered with stops working. Errors in the redirect: `{provider}-failed` (such as
 `google-failed`; Cancel at the provider, or a token that did not check out), `email-unverified`,
 `link-needed`, `disabled`, `locked`, and `login-taken` (on a link, when another account has that
-login). A failed sign-in that was going anywhere but `/account` also carries `next` with that
+login). Linking a provider is a chain of redirects that can not carry step-up proof, so the
+Security page sends the proof to `login-link-grants` first. The grant is for the browser session
+that asked, works for one link start within 2 minutes, and is used up when the link starts. A failed sign-in that was going anywhere but `/account` also carries `next` with that
 path, so an app's authorize page can still finish. A `returnUrl` that is not a path on this site
 becomes `/account`.
 
