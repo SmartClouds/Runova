@@ -5,13 +5,14 @@ name: CI
 # and every test suite: unit, integration, the system tests on Docker
 # test servers and the end-to-end run on Linux and macOS.
 #
-# It runs on our two self-hosted runners (CD never uses them). Everything that
+# It runs on our two self-hosted runners (CD only uses the Mac for the iOS
+# TestFlight build, see cd-mobile.yml). Everything that
 # does not care about the OS (lint, types, the build and the unit suites)
 # runs on the Mac mini, which is much faster. The Linux runner keeps
 # what needs Linux: Docker, the server core, the website (its site, its API,
 # the Playwright specs and the compose stack with Lighthouse) and the desktop
 # app's Linux end-to-end shards. The macOS end-to-end shards run on the Mac
-# too. GitHub's hosted runners are for CD, which packages the installers.
+# too. GitHub's hosted runners are for the rest of CD, which packages the installers.
 #
 # .circleci/config.yml is still in the repo, but its workflows only run when a
 # pipeline is started by hand with run-workflows set (see the top of that file),
@@ -137,7 +138,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: node --test scripts/workflow-sudo.test.mjs
 
-      # The release jobs hold the signing secrets, so they never run on these self-hosted runners.
+      # The release jobs hold the signing secrets, so only the hardened iOS one runs on these
+      # self-hosted runners, and it takes nothing from them (scripts/release-runners.test.mjs).
       - name: No release job runs on a self-hosted runner
         if: ${{ !cancelled() }}
         run: node --test scripts/release-runners.test.mjs

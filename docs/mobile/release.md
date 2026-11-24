@@ -30,9 +30,15 @@ The signed APK and App Bundle are attached to the GitHub Release.
 
 ### iOS
 
-Builds on a fresh GitHub-hosted Mac (`macos-latest`), never the self-hosted one, which keeps its disk
-between jobs and runs CI for pull requests. Needs the app `com.runovahq.app` created in App Store
-Connect and an App Store Connect API key with the Admin role.
+Builds on the self-hosted Mac, which also runs CI for pushes and approved pull requests and keeps
+its disk between jobs, so the job trusts nothing left there: it clones the source into its own temp
+folder, downloads Node, XcodeGen and rustup against pinned SHA-256 sums, uses the system's shell, git
+and PATH, and builds Cargo and Xcode output from scratch. A cold build of the three release targets
+takes long, hence the 240 minute limit. Needs the app `com.runovahq.app` created in App Store Connect
+and an App Store Connect API key with the Admin role.
+
+To move to a newer Node, XcodeGen or rustup, change the version and its SHA-256 at the top of the
+`ios` job in `.github/workflows/cd-mobile.yml` together.
 
 | Repository secret | Value |
 |---|---|

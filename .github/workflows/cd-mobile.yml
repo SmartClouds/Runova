@@ -176,16 +176,33 @@ jobs:
   ios:
     name: iOS
     needs: ci-passed
-    # A fresh GitHub-hosted Mac, never the self-hosted one. The self-hosted Mac keeps its disk
-    # between jobs and runs CI for pushes and pull requests, so anything an earlier job left in its
-    # brew prefix, ~/.cargo or tool cache would run here next to the App Store Connect key.
-    runs-on: macos-latest
-    timeout-minutes: 90
-    # This job uploads nothing to the release, so it gets a read-only token.
+    # The self-hosted Mac, which also runs CI for pushes and approved pull requests as the same user
+    # and keeps its disk between jobs. Nothing an earlier job could have left is trusted here: the
+    # source is a fresh clone outside the shared workspace, every tool is downloaded into this job's
+    # own temp folder and checked against a pinned SHA-256, the shell, git and PATH are the system's
+    # own, and Cargo and Xcode build from scratch. The App Store Connect key only reaches the step
+    # that uploads, and the token is read-only.
+    runs-on: [self-hosted, macOS, ARM64]
+    # Everything is built from nothing, including the three release-profile LTO builds of the core.
+    timeout-minutes: 240
     permissions:
       contents: read
+    defaults:
+      run:
+        # Not bash from PATH, where /opt/homebrew/bin and the like come first.
+        shell: /bin/bash --noprofile --norc -eo pipefail {0}
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      SYSTEM_PATH: /usr/bin:/bin:/usr/sbin:/sbin
+      # git without the runner user's own config, which could run commands (core.fsmonitor).
+      GIT_CONFIG_GLOBAL: /dev/null
+      GIT_CONFIG_NOSYSTEM: "1"
+      NODE_VERSION: v26.13.1
+      NODE_SHA256: aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735
+      XCODEGEN_VERSION: 2.48.0
+      XCODEGEN_SHA256: 620c9f0dc10849f94728ab5df52d225ebab8187439dd6fee1925e59e80dff892
+      RUSTUP_VERSION: 1.29.3
+      RUSTUP_SHA256: 63752a1919a3a4793173ec70f8f212621a7ce38ba6a246095984482f4de20f9f
     steps:
       # The secrets are only handed to the two steps that use them, not to the job.
       - name: Is everything needed here?
@@ -196,6 +213,7 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
         run: |
+          export PATH="$SYSTEM_PATH"
           if [ -z "$KEY_BASE64" ] || [ -z "$TEAM_ID" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ]; then
             echo "::warning::The App Store Connect secrets are not all set, so nothing went to TestFlight. See docs/mobile-release-setup.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -206,54 +224,94 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout
+      # A clone of its own in this job's temp folder, by the system's git, instead of the shared
+      # workspace that CI jobs keep files in between runs.
+      - name: Fresh source and tools
         if: steps.secrets.outputs.ready == 'true'
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          export PATH="$SYSTEM_PATH"
+          work="$RUNNER_TEMP/ios-release"
+          rm -rf "$work"
+          mkdir -p "$work/tools"
+          tools="$work/tools"
 
-      - name: Setup Rust
-        if: steps.secrets.outputs.ready == 'true'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+          git init -q "$work/src"
+          git -C "$work/src" fetch -q --depth 1 "$REPO_URL" "$GITHUB_SHA"
+          git -C "$work/src" checkout -q --detach FETCH_HEAD
 
-      - name: Setup Node.js
-        if: steps.secrets.outputs.ready == 'true'
-        uses: actions/setup-node@v7
-        with:
-          node-version: "26"
+          # Cargo reads .cargo/config.toml from every folder above the one it runs in, and the
+          # same user could have left one there to wrap rustc.
+          dir="$work/src/apps/mobile/core"
+          while [ "$dir" != "/" ]; do
+            dir=$(dirname "$dir")
+            for name in config config.toml; do
+              if [ -e "$dir/.cargo/$name" ]; then
+                echo "::error::$dir/.cargo/$name would change how Cargo builds the release. Remove it from the Mac, then run this again."
+                exit 1
+              fi
+            done
+          done
+
+          fetch() { # url sha256 file
+            curl -fsSL --retry 3 -o "$3" "$1"
+            echo "$2  $3" | shasum -a 256 -c - > /dev/null
+          }
+          fetch "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-darwin-arm64.tar.gz" "$NODE_SHA256" "$tools/node.tar.gz"
+          mkdir "$tools/node"
+          tar -xzf "$tools/node.tar.gz" -C "$tools/node" --strip-components 1
+          fetch "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip" "$XCODEGEN_SHA256" "$tools/xcodegen.zip"
+          unzip -q "$tools/xcodegen.zip" -d "$tools"
+          fetch "https://static.rust-lang.org/rustup/archive/$RUSTUP_VERSION/aarch64-apple-darwin/rustup-init" "$RUSTUP_SHA256" "$tools/rustup-init"
+          chmod +x "$tools/rustup-init"
+          CARGO_HOME="$tools/cargo" RUSTUP_HOME="$tools/rustup" "$tools/rustup-init" -y -q --no-modify-path \
+            --profile minimal --default-toolchain stable \
+            --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios
+
+          {
+            echo "RELEASE_SRC=$work/src"
+            echo "RELEASE_TOOLS=$tools"
+            echo "RELEASE_PATH=$tools/node/bin:$tools/cargo/bin:$tools/xcodegen/bin:$SYSTEM_PATH"
+            echo "CARGO_HOME=$tools/cargo"
+            echo "RUSTUP_HOME=$tools/rustup"
+            echo "CARGO_TARGET_DIR=$tools/target"
+          } >> "$GITHUB_ENV"
 
       - name: Build the core and the project
         if: steps.secrets.outputs.ready == 'true'
         run: |
-          command -v xcodegen > /dev/null || brew install xcodegen
+          export PATH="$RELEASE_PATH"
+          cd "$RELEASE_SRC"
           sh apps/mobile/ios/scripts/build-core.sh
           cd apps/mobile/ios && xcodegen generate
 
       - name: Archive and upload to TestFlight
         if: steps.secrets.outputs.ready == 'true'
-        working-directory: apps/mobile/ios
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
         run: |
+          export PATH="$RELEASE_PATH"
+          cd "$RELEASE_SRC/apps/mobile/ios"
           version="$(node ../../../scripts/mobile-version.mjs "$TAG")"
           eval "$version"
-          key="$RUNNER_TEMP/AuthKey.p8"
-          base64 --decode <<< "$KEY_BASE64" > "$key"
+          key="$RELEASE_TOOLS/AuthKey.p8"
+          (umask 077; base64 --decode <<< "$KEY_BASE64" > "$key")
           trap 'rm -f "$key"' EXIT
           auth=(-allowProvisioningUpdates -authenticationKeyPath "$key"
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID")
+          # Its own DerivedData and package folder, not the ones CI's builds leave in ~/Library.
+          built=(-derivedDataPath "$RELEASE_TOOLS/DerivedData" -clonedSourcePackagesDirPath "$RELEASE_TOOLS/SourcePackages")
           # Automatic signing, so Xcode makes a profile for each target (the app and its
           # notification extension) with the API key. The settings here apply to both targets.
           # XcodeGen only sets an identity on the app, hence CODE_SIGN_IDENTITY.
           xcodebuild archive -project Runova.xcodeproj -scheme Runova \
             -destination "generic/platform=iOS" -archivePath "$RUNNER_TEMP/Runova.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" \
-            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}"
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" "${auth[@]}" "${built[@]}"
           # The version comes from the tag, so Xcode must not renumber the build on its way up.
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
