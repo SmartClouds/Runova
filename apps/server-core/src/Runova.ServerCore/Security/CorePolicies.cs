@@ -52,6 +52,18 @@ internal static class CorePolicies
                     .Build());
     }
 
+    /// <summary>
+    /// Whether the caller passes both <see cref="Admin"/> and <see cref="StepUp"/>, for a method
+    /// open to Operators that needs more only for part of what it does (acknowledging a critical
+    /// stack finding). The same policies the attributes name, evaluated in place.
+    /// </summary>
+    public static async Task<bool> IsSteppedUpAdminAsync(this IAuthorizationService authorization, ClaimsPrincipal user)
+    {
+        ArgumentNullException.ThrowIfNull(authorization);
+        return (await authorization.AuthorizeAsync(user, Admin)).Succeeded
+            && (await authorization.AuthorizeAsync(user, StepUp)).Succeeded;
+    }
+
     private static AuthorizationPolicy Roles(params string[] roles) =>
         new AuthorizationPolicyBuilder(CoreAuthentication.Scheme)
             .RequireAuthenticatedUser()

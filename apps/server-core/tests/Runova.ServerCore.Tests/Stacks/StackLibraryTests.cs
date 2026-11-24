@@ -120,7 +120,22 @@ public sealed class StackLibraryTests
         Assert.Equal(StackRiskSeverity.High, key.Severity);
         Assert.Null(key.Service);
         Assert.Equal(StackRiskSeverity.Critical, Assert.Single(risks, risk => risk.Id == "host-file:-:configs.sock:/var/run/docker.sock").Severity);
-        Assert.Single(StackOperations.Unacknowledged(risks, ["host-file:-:secrets.key:/root/.ssh/id_ed25519"]));
+        Assert.Single(StackOperations.Unacknowledged(risks, ["host-file:-:secrets.key:/root/.ssh/id_ed25519"], []));
+    }
+
+    [Fact]
+    public void A_critical_finding_counts_as_acknowledged_only_when_an_admin_acknowledged_it_after_a_step_up()
+    {
+        StackRisk[] findings =
+        [
+            new("privileged:agent", "privileged", StackRiskSeverity.Critical, "agent runs privileged.", "agent"),
+            new("host-ipc:agent", "host-ipc", StackRiskSeverity.High, "agent shares the server's shared memory.", "agent"),
+        ];
+        string[] both = ["privileged:agent", "host-ipc:agent"];
+
+        Assert.Equal(["privileged:agent"], StackOperations.Unacknowledged(findings, both, []));
+        Assert.Empty(StackOperations.Unacknowledged(findings, both, ["privileged:agent"]));
+        Assert.Equal(["privileged:agent"], StackOperations.Critical(findings, ["host-ipc:agent", "privileged:agent", "unknown:x"]));
     }
 
     [Fact]

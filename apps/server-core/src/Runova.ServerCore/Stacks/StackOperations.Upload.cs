@@ -90,6 +90,7 @@ internal sealed partial class StackOperations
                 ProxiedServices = Write(upload.ProxiedServices.Distinct(StringComparer.Ordinal).ToArray()),
                 Limits = Write(ResourceLimits.Kept(upload.Limits)),
                 AcknowledgedRisks = Write(acknowledged),
+                AdminAcknowledgedRisks = Write(caller.SteppedUpAdmin ? acknowledged : []),
                 HasBuildContext = upload.BuildContext,
                 ImageSource = upload.ImageSource?.ToString(),
                 ProjectId = upload.Source?.ProjectId,
@@ -127,7 +128,7 @@ internal sealed partial class StackOperations
             _gate.Release();
         }
 
-        return row.State == nameof(StackRevisionState.Ready) ? await ValidateAsync(stack, row.Number, cancellationToken) : StackMapper.ToInfo(row);
+        return row.State == nameof(StackRevisionState.Ready) ? await ValidateAsync(stack, row.Number, caller, cancellationToken) : StackMapper.ToInfo(row);
     }
 
     /// <summary>
@@ -196,7 +197,7 @@ internal sealed partial class StackOperations
             return StackMapper.ToInfo(await RevisionAsync(stack.Id, number, cancellationToken));
         }
 
-        return await ValidateAsync(stack, number, cancellationToken);
+        return await ValidateAsync(stack, number, caller, cancellationToken);
     }
 
     private async Task SetStateAsync(Guid stackId, int number, string state, CancellationToken cancellationToken)
@@ -209,9 +210,11 @@ internal sealed partial class StackOperations
 
     /// <summary>
     /// Asks Compose to read the revision, then records its services, findings and bindings and
-    /// writes the loopback override. Sets Ready or Invalid; nothing here refuses the request.
+    /// writes the loopback override. Sets Ready or Invalid; nothing here refuses the request. Now
+    /// that the findings are known, an acknowledgment of a critical one that no Admin gave after a
+    /// step-up is dropped (and the refusal audited), so the finding waits for one.
     /// </summary>
-    private async Task<StackRevisionInfo> ValidateAsync(StackRecord stack, int number, CancellationToken cancellationToken)
+    private async Task<StackRevisionInfo> ValidateAsync(StackRecord stack, int number, StackCaller caller, CancellationToken cancellationToken)
     {
         var folder = RevisionFolder(stack.Id, number);
         var row = await RevisionAsync(stack.Id, number, cancellationToken);
@@ -219,6 +222,7 @@ internal sealed partial class StackOperations
         var seeded = redactor.With(await EnvValuesAsync(folder, cancellationToken));
         string state;
         string? error = null;
+        string[] refused = [];
         try
         {
             var checkedConfig = await CheckAsync(stack, folder, shape, null, cancellationToken);
@@ -226,6 +230,10 @@ internal sealed partial class StackOperations
             row.Builds = checkedConfig.Builds;
             row.Findings = Write(checkedConfig.Findings);
             row.Bindings = Write(checkedConfig.Bindings);
+            var acknowledged = Read<string[]>(row.AcknowledgedRisks);
+            var byAdmin = Read<string[]>(row.AdminAcknowledgedRisks);
+            refused = Critical(checkedConfig.Findings, acknowledged.Except(byAdmin, StringComparer.Ordinal));
+            row.AcknowledgedRisks = Write(acknowledged.Except(refused, StringComparer.Ordinal).ToArray());
             state = nameof(StackRevisionState.Ready);
         }
         catch (ComposeConfigException invalid)
@@ -244,8 +252,14 @@ internal sealed partial class StackOperations
                     .SetProperty(r => r.Services, row.Services)
                     .SetProperty(r => r.Builds, row.Builds)
                     .SetProperty(r => r.Findings, row.Findings)
-                    .SetProperty(r => r.Bindings, row.Bindings),
+                    .SetProperty(r => r.Bindings, row.Bindings)
+                    .SetProperty(r => r.AcknowledgedRisks, row.AcknowledgedRisks),
                 cancellationToken);
+        if (refused.Length > 0)
+        {
+            await CriticalRefusalAuditAsync(caller, stack.Name, number, refused, cancellationToken);
+        }
+
         row.State = state;
         row.Error = error;
         return StackMapper.ToInfo(row);

@@ -171,6 +171,7 @@ internal sealed partial class StackOperations
                 Networks = source.Networks,
                 Findings = source.Findings,
                 AcknowledgedRisks = source.AcknowledgedRisks,
+                AdminAcknowledgedRisks = source.AdminAcknowledgedRisks,
                 Bindings = source.Bindings,
                 Builds = source.Builds,
                 HasBuildContext = source.HasBuildContext,
@@ -227,7 +228,7 @@ internal sealed partial class StackOperations
             {
                 // Starting mounts every bind source again, and a running container may have written
                 // into the files (a link under files/) since the deploy checked them.
-                await RecheckAsync(stack, folder, ShapeOf(row), Read<string[]>(row.AcknowledgedRisks), job, token);
+                await RecheckAsync(stack, folder, ShapeOf(row), Acknowledgments(row), job, token);
             }
 
             await ComposeStepAsync(job, Project(stack.Name, folder), arguments, ActionTimeout, "stackaction", token);
@@ -235,7 +236,7 @@ internal sealed partial class StackOperations
     }
 
     /// <summary>Has Compose read the files once more and stops the job at a finding nobody acknowledged.</summary>
-    private async Task RecheckAsync(StackRecord stack, string folder, RevisionShape shape, string[] acknowledged, JobContext job, CancellationToken token)
+    private async Task RecheckAsync(StackRecord stack, string folder, RevisionShape shape, Acknowledged acknowledged, JobContext job, CancellationToken token)
     {
         CheckedConfig checkedConfig;
         try
@@ -247,7 +248,7 @@ internal sealed partial class StackOperations
             throw new JobFailedException(invalid.Message);
         }
 
-        var waiting = Unacknowledged(checkedConfig.Findings, acknowledged);
+        var waiting = Unacknowledged(checkedConfig.Findings, acknowledged.Ids, acknowledged.ByAdmin);
         if (waiting.Length > 0)
         {
             throw new JobFailedException($"Compose now reads findings nobody acknowledged: {string.Join(", ", waiting)}.");
@@ -342,7 +343,7 @@ internal sealed partial class StackOperations
         var proxied = Read<string[]>(row.ProxiedServices);
         var limits = Read<StackServiceLimits[]>(row.Limits);
         var networks = Read<StackServiceNetworks[]>(row.Networks);
-        var acknowledged = Read<string[]>(row.AcknowledgedRisks);
+        var acknowledged = Acknowledgments(row);
         var project = Project(stack.Name, folder);
         var current = -1;
         try
@@ -411,7 +412,7 @@ internal sealed partial class StackOperations
         string folder,
         ComposeProject project,
         RevisionShape shape,
-        string[] acknowledged,
+        Acknowledged acknowledged,
         DeploySignIns signIns,
         JobContext job,
         CancellationToken token)
@@ -420,7 +421,7 @@ internal sealed partial class StackOperations
         {
             case StackStepKind.Validate:
                 var checkedConfig = await CheckAsync(stack, folder, shape, line => job.Log(line), token);
-                var waiting = Unacknowledged(checkedConfig.Findings, acknowledged);
+                var waiting = Unacknowledged(checkedConfig.Findings, acknowledged.Ids, acknowledged.ByAdmin);
                 if (waiting.Length > 0)
                 {
                     throw new JobFailedException($"Compose now reads findings nobody acknowledged: {string.Join(", ", waiting)}.");
@@ -552,6 +553,12 @@ internal sealed partial class StackOperations
         StackStepKind.Up => "start the containers and wait for them",
         _ => "check that every container runs",
     };
+
+    /// <summary>A revision's acknowledged finding ids, and those of them an Admin gave after a step-up.</summary>
+    private sealed record Acknowledged(string[] Ids, string[] ByAdmin);
+
+    private static Acknowledged Acknowledgments(StackRevisionRecord row) =>
+        new(Read<string[]>(row.AcknowledgedRisks), Read<string[]>(row.AdminAcknowledgedRisks));
 
     private static Dictionary<string, string?> Revision(int number) =>
         new() { ["revision"] = number.ToString(CultureInfo.InvariantCulture) };

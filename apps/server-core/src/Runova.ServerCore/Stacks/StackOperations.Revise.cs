@@ -73,9 +73,17 @@ internal sealed partial class StackOperations
                 composeSha = Convert.ToHexStringLower(SHA256.HashData(bytes));
             }
 
-            var acknowledged = request.AcknowledgedRisks is { } risks
-                ? Write(risks.Distinct(StringComparer.Ordinal).ToArray())
-                : source.AcknowledgedRisks;
+            var kept = request.AcknowledgedRisks is { } risks
+                ? risks.Distinct(StringComparer.Ordinal).ToArray()
+                : Read<string[]>(source.AcknowledgedRisks);
+            var acknowledged = Write(kept);
+            // An Admin's acknowledgment after a step-up carries over only to the same compose file:
+            // a new one may change what the acknowledged service runs.
+            var byAdmin = caller.SteppedUpAdmin
+                ? acknowledged
+                : request.Compose is null
+                    ? Write(Read<string[]>(source.AdminAcknowledgedRisks).Intersect(kept, StringComparer.Ordinal).ToArray())
+                    : Write<string[]>([]);
             var limits = request.Limits is { } caps ? Write(ResourceLimits.Kept(caps)) : source.Limits;
             var networks = request.Networks is { } joined ? Write(JoinedNetworks.Kept(joined)) : source.Networks;
             tracked.LastRevision = number;
@@ -95,6 +103,7 @@ internal sealed partial class StackOperations
                 Networks = networks,
                 Findings = source.Findings,
                 AcknowledgedRisks = acknowledged,
+                AdminAcknowledgedRisks = byAdmin,
                 Bindings = source.Bindings,
                 Builds = source.Builds,
                 HasBuildContext = source.HasBuildContext,
@@ -136,7 +145,7 @@ internal sealed partial class StackOperations
             }
         }
 
-        return await ValidateAsync(stack, number, cancellationToken);
+        return await ValidateAsync(stack, number, caller, cancellationToken);
     }
 
     public async Task<StackEnvEntry[]> RevealEnvAsync(StackRevisionRef? revision, StackCaller caller, CancellationToken cancellationToken)

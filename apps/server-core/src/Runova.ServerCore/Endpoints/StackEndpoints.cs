@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Runova.ServerCore.Contracts;
@@ -38,7 +39,7 @@ internal static class StackEndpoints
         return endpoints;
     }
 
-    private static async Task<IResult> UploadRevisionAsync(Guid stackId, HttpContext context, StackOperations operations)
+    private static async Task<IResult> UploadRevisionAsync(Guid stackId, HttpContext context, StackOperations operations, IAuthorizationService authorization)
     {
         LimitBody(context, MaxRevisionBytes);
         if (context.Request.ContentLength > MaxRevisionBytes)
@@ -61,7 +62,10 @@ internal static class StackEndpoints
             return Refuse("The revision is not the JSON the core expects.", StatusCodes.Status400BadRequest);
         }
 
-        return await RunAsync(() => operations.UploadAsync(stackId, upload, CallerOf(context), context.RequestAborted));
+        // The acknowledgments sent with the files count for a critical finding only from an Admin
+        // who stepped up, as with AcknowledgeStackRisks.
+        var caller = CallerOf(context) with { SteppedUpAdmin = await authorization.IsSteppedUpAdminAsync(context.User) };
+        return await RunAsync(() => operations.UploadAsync(stackId, upload, caller, context.RequestAborted));
     }
 
     /// <summary>

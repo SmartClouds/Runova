@@ -12,7 +12,8 @@ using Runova.ServerCore.Security;
 namespace Runova.ServerCore.Stacks;
 
 /// <summary>Who asked, for the audit trail and the jobs' "started by".</summary>
-internal sealed record StackCaller(Guid UserId, string UserName, Guid? DeviceId = null, int? PeerUid = null);
+/// <param name="SteppedUpAdmin">An Admin who stepped up: only they acknowledge a critical finding.</param>
+internal sealed record StackCaller(Guid UserId, string UserName, Guid? DeviceId = null, int? PeerUid = null, bool SteppedUpAdmin = false);
 
 /// <summary>A request the core turns down, with the words to show and the HTTP status for REST.</summary>
 internal sealed class StackRefusedException(string message, int status = StatusCodes.Status400BadRequest) : Exception(message)
@@ -181,10 +182,26 @@ internal sealed partial class StackOperations(
             ?? throw new StackRefusedException("There is no such app.", StatusCodes.Status404NotFound);
         var row = await db.StackRevisions.FirstOrDefaultAsync(r => r.StackId == request.StackId && r.Number == request.Revision, cancellationToken)
             ?? throw new StackRefusedException("There is no such revision.", StatusCodes.Status404NotFound);
+        var requested = request.RiskIds.Distinct(StringComparer.Ordinal).ToList();
+        // The severity comes from this revision's own findings, never from the request.
+        var critical = Critical(Read<StackRisk[]>(row.Findings), requested);
+        if (critical.Length > 0 && !caller.SteppedUpAdmin)
+        {
+            await CriticalRefusalAuditAsync(caller, stack.Name, row.Number, critical, cancellationToken);
+            throw new StackRefusedException(CriticalRefusal(critical), StatusCodes.Status403Forbidden);
+        }
+
         var acknowledged = Read<string[]>(row.AcknowledgedRisks).ToList();
-        var added = request.RiskIds.Distinct(StringComparer.Ordinal).Where(id => !acknowledged.Contains(id)).ToList();
-        acknowledged.AddRange(added);
+        var byAdmin = Read<string[]>(row.AdminAcknowledgedRisks).ToList();
+        var added = requested.Where(id => !acknowledged.Contains(id) || (caller.SteppedUpAdmin && !byAdmin.Contains(id))).ToList();
+        acknowledged.AddRange(requested.Where(id => !acknowledged.Contains(id)).ToList());
+        if (caller.SteppedUpAdmin)
+        {
+            byAdmin.AddRange(requested.Where(id => !byAdmin.Contains(id)).ToList());
+        }
+
         row.AcknowledgedRisks = Write(acknowledged);
+        row.AdminAcknowledgedRisks = Write(byAdmin);
         await db.SaveChangesAsync(cancellationToken);
         foreach (var id in added)
         {
@@ -240,10 +257,42 @@ internal sealed partial class StackOperations(
         return StackMapper.ToInfo(stack, status, revisionCount, running, containers.Count, holder?.Id);
     }
 
-    internal static string[] Unacknowledged(IEnumerable<StackRisk> findings, IEnumerable<string> acknowledged)
+    private Task CriticalRefusalAuditAsync(StackCaller caller, string stack, int revision, string[] findings, CancellationToken cancellationToken) =>
+        AuditAsync(
+            "stack.risk-acknowledge",
+            AuditResult.Denied,
+            caller,
+            stack,
+            new Dictionary<string, string?>
+            {
+                ["revision"] = revision.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["finding"] = string.Join(' ', findings),
+                ["reason"] = "critical finding, needs an Admin after a step-up",
+            },
+            cancellationToken);
+
+    internal static string CriticalRefusal(string[] findings) =>
+        $"Only an Admin who has entered their password again can acknowledge {string.Join(", ", findings)}: a critical finding gives a container the server itself.";
+
+    /// <summary>The ids among <paramref name="ids"/> that name a critical finding of the revision.</summary>
+    internal static string[] Critical(IEnumerable<StackRisk> findings, IEnumerable<string> ids)
+    {
+        var severe = findings.Where(f => f.Severity == StackRiskSeverity.Critical).Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        return [.. ids.Where(severe.Contains).Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// The findings still waiting: a critical one counts as acknowledged only when an Admin
+    /// acknowledged it after a step-up, any other when anyone with the right to deploy did.
+    /// </summary>
+    internal static string[] Unacknowledged(IEnumerable<StackRisk> findings, IEnumerable<string> acknowledged, IEnumerable<string> byAdmin)
     {
         var done = acknowledged.ToHashSet(StringComparer.Ordinal);
-        return [.. findings.Where(f => ComposeConfigLint.NeedsAcknowledgment(f.Severity) && !done.Contains(f.Id)).Select(f => f.Id)];
+        var doneByAdmin = byAdmin.ToHashSet(StringComparer.Ordinal);
+        return [.. findings
+            .Where(f => ComposeConfigLint.NeedsAcknowledgment(f.Severity)
+                && !(f.Severity == StackRiskSeverity.Critical ? doneByAdmin : done).Contains(f.Id))
+            .Select(f => f.Id)];
     }
 
     private static void CheckSource(StackSource? source)

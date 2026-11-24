@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Runova.ServerCore.Contracts;
 using Runova.ServerCore.Docker;
@@ -112,6 +113,50 @@ public sealed class StackReviseTests
         Assert.Contains("findings", huge.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, (await kit.GetAsync(stack.Id)).Stack.RevisionCount);
         Assert.Contains(await kit.AuditAsync(), e => e.Action == "stack.revise" && e.Result == "denied");
+    }
+
+    /// <summary>
+    /// An Admin's acknowledgment of a critical finding, given after a step-up, carries over to a
+    /// copy with the same compose file. A new compose file may change what the service runs, so
+    /// without a step-up the finding waits for an Admin again.
+    /// </summary>
+    [Fact]
+    public async Task A_critical_acknowledgment_carries_over_only_to_the_same_compose_file_without_a_step_up()
+    {
+        const string Privileged = "services:\n  agent:\n    image: example/agent:1.0\n    privileged: true\n";
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Admin);
+        var stack = await kit.CreateStackAsync();
+        await kit.Hub.InvokeAsync<StepUpResponse>(nameof(ICoreHub.StepUp), new StepUpRequest(AuthHarness.Password), Cancel);
+        var first = await kit.UploadAsync(stack.Id, StackKit.Upload(Privileged, proxied: [], acknowledged: ["privileged:agent"]));
+        await using (var scope = kit.Harness.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Runova.ServerCore.Data.CoreDbContext>();
+            await db.DeviceSessions.ExecuteUpdateAsync(update => update.SetProperty(s => s.StepUpUntil, (long?)null), Cancel);
+        }
+
+        var sameFile = await ReviseAsync(kit, new ReviseStackRequest(stack.Id, first.Number, [], Purpose: StackRevisionPurpose.MakePrivate));
+        var newFile = await ReviseAsync(kit, new ReviseStackRequest(stack.Id, first.Number, [], Privileged.Replace("1.0", "2.0", StringComparison.Ordinal), Purpose: StackRevisionPurpose.Update));
+
+        Assert.Empty(first.UnacknowledgedRisks);
+        Assert.Empty(sameFile.UnacknowledgedRisks);
+        Assert.Equal(["privileged:agent"], newFile.UnacknowledgedRisks);
+        Assert.Empty(newFile.AcknowledgedRisks);
+        Assert.Contains(await kit.AuditAsync(), e => e.Action == "stack.risk-acknowledge" && e.Result == "denied");
+    }
+
+    [Fact]
+    public async Task An_operator_cannot_acknowledge_a_critical_finding_through_a_revision()
+    {
+        const string Privileged = "services:\n  agent:\n    image: example/agent:1.0\n    privileged: true\n";
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Operator);
+        var stack = await kit.CreateStackAsync();
+        await kit.UploadAsync(stack.Id, StackKit.Upload(Privileged, proxied: []));
+
+        var revision = await ReviseAsync(kit, new ReviseStackRequest(stack.Id, 1, [], AcknowledgedRisks: ["privileged:agent"]));
+
+        Assert.Equal(["privileged:agent"], revision.UnacknowledgedRisks);
+        Assert.Empty(revision.AcknowledgedRisks);
+        await Assert.ThrowsAsync<HubException>(() => kit.DeployAsync(stack.Id, revision.Number));
     }
 
     [Fact]

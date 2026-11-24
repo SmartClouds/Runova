@@ -148,7 +148,7 @@ internal sealed partial class StackOperations
             }
         }
 
-        return await ValidateAsync(stack, number, cancellationToken);
+        return await ValidateAsync(stack, number, caller, cancellationToken);
     }
 
     /// <summary>

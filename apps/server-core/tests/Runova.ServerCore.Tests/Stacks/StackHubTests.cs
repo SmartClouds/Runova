@@ -69,30 +69,68 @@ public sealed class StackHubTests
         Assert.DoesNotContain(audit, e => e.Parameters?.Contains(StackKit.Secret, StringComparison.Ordinal) == true);
     }
 
+    private const string Risky = "services:\n  agent:\n    image: example/agent:1.0\n    privileged: true\n    ports:\n      - \"9000:9000\"\n";
+
+    private const string PublicPort = "public-port:agent:*:9000:9000/tcp";
+
+    private static Task<StackRevisionInfo> AcknowledgeAsync(StackKit kit, Guid stackId, int revision, params string[] ids) =>
+        kit.Hub.InvokeAsync<StackRevisionInfo>(nameof(ICoreHub.AcknowledgeStackRisks), new AcknowledgeStackRisksRequest(stackId, revision, ids), Cancel);
+
+    private static Task<StepUpResponse> StepUpAsync(StackKit kit) =>
+        kit.Hub.InvokeAsync<StepUpResponse>(nameof(ICoreHub.StepUp), new StepUpRequest(AuthHarness.Password), Cancel);
+
+    /// <summary>
+    /// An Operator acknowledges the lesser findings, but not a critical one (privileged, the
+    /// Docker socket, the server's root and the like): a container with one of those holds the
+    /// server, which is more than an Operator may reach otherwise.
+    /// </summary>
     [Fact]
-    public async Task A_finding_waits_for_its_acknowledgment_which_is_audited_once_per_id()
+    public async Task A_finding_waits_for_its_acknowledgment_and_an_operator_cannot_acknowledge_a_critical_one()
     {
         await using var kit = await StackKit.CreateAsync(CoreRoles.Operator);
         var stack = await kit.CreateStackAsync();
-        const string Risky = "services:\n  agent:\n    image: example/agent:1.0\n    privileged: true\n    ports:\n      - \"9000:9000\"\n";
 
         var revision = await kit.UploadAsync(stack.Id, StackKit.Upload(Risky, proxied: []));
         var refused = await Assert.ThrowsAsync<HubException>(() => kit.DeployAsync(stack.Id, revision.Number));
-        var acknowledged = await kit.Hub.InvokeAsync<StackRevisionInfo>(
-            nameof(ICoreHub.AcknowledgeStackRisks),
-            new AcknowledgeStackRisksRequest(stack.Id, revision.Number, ["privileged:agent", "public-port:agent:*:9000:9000/tcp"]),
-            Cancel);
+        await StepUpAsync(kit);
+        var critical = await Assert.ThrowsAsync<HubException>(() => AcknowledgeAsync(kit, stack.Id, revision.Number, "privileged:agent", PublicPort));
+        var acknowledged = await AcknowledgeAsync(kit, stack.Id, revision.Number, PublicPort);
+        var stillRefused = await Assert.ThrowsAsync<HubException>(() => kit.DeployAsync(stack.Id, revision.Number));
+
+        Assert.Equal(["privileged:agent", PublicPort], revision.UnacknowledgedRisks.Order(StringComparer.Ordinal));
+        Assert.Contains("privileged:agent", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Admin", critical.Message, StringComparison.Ordinal);
+        Assert.Equal([PublicPort], acknowledged.AcknowledgedRisks);
+        Assert.Equal(["privileged:agent"], acknowledged.UnacknowledgedRisks);
+        Assert.Contains("privileged:agent", stillRefused.Message, StringComparison.Ordinal);
+        Assert.Empty(ContainersOf(kit, "site"));
+        var audit = await kit.AuditAsync();
+        Assert.Single(audit, e => e.Action == "stack.risk-acknowledge" && e.Result == "success" && e.Parameters!.Contains(PublicPort, StringComparison.Ordinal));
+        Assert.Single(audit, e => e.Action == "stack.risk-acknowledge" && e.Result == "denied" && e.Parameters!.Contains("privileged:agent", StringComparison.Ordinal));
+        Assert.DoesNotContain(audit, e => e.Action == "stack.risk-acknowledge" && e.Result == "success" && e.Parameters!.Contains("privileged:agent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_admin_acknowledges_a_critical_finding_only_after_a_step_up_and_each_id_is_audited_once()
+    {
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Admin);
+        var stack = await kit.CreateStackAsync();
+        var revision = await kit.UploadAsync(stack.Id, StackKit.Upload(Risky, proxied: []));
+
+        var withoutStepUp = await Assert.ThrowsAsync<HubException>(() => AcknowledgeAsync(kit, stack.Id, revision.Number, "privileged:agent"));
+        await StepUpAsync(kit);
+        var acknowledged = await AcknowledgeAsync(kit, stack.Id, revision.Number, "privileged:agent", PublicPort);
+        await AcknowledgeAsync(kit, stack.Id, revision.Number, "privileged:agent");
         var (job, _) = await kit.RunAsync(await kit.DeployAsync(stack.Id, revision.Number));
 
-        Assert.Equal(["privileged:agent", "public-port:agent:*:9000:9000/tcp"], revision.UnacknowledgedRisks.Order(StringComparer.Ordinal));
-        Assert.Contains("privileged:agent", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("password again", withoutStepUp.Message, StringComparison.Ordinal);
         Assert.Empty(acknowledged.UnacknowledgedRisks);
         Assert.Equal(JobState.Succeeded, job.State);
         // Left public on purpose: the port stays on every interface.
         Assert.Contains(ContainersOf(kit, "site").SelectMany(c => c.Ports), port => port.HostIp is null or "0.0.0.0");
         var audit = await kit.AuditAsync();
         Assert.Equal(2, audit.Count(e => e.Action == "stack.risk-acknowledge" && e.Result == "success"));
-        Assert.Contains(audit, e => e.Action == "stack.risk-acknowledge" && e.Parameters!.Contains("privileged:agent", StringComparison.Ordinal));
+        Assert.Single(audit, e => e.Action == "stack.risk-acknowledge" && e.Result == "denied");
     }
 
     /// <summary>
@@ -126,13 +164,49 @@ public sealed class StackHubTests
     {
         await using var kit = await StackKit.CreateAsync(CoreRoles.Operator);
         var stack = await kit.CreateStackAsync();
-        const string Risky = "services:\n  agent:\n    image: example/agent:1.0\n    pid: host\n";
+        const string SharedMemory = "services:\n  agent:\n    image: example/agent:1.0\n    ipc: host\n";
 
-        var revision = await kit.UploadAsync(stack.Id, StackKit.Upload(Risky, proxied: [], acknowledged: ["host-pid:agent"]));
+        var revision = await kit.UploadAsync(stack.Id, StackKit.Upload(SharedMemory, proxied: [], acknowledged: ["host-ipc:agent"]));
 
-        Assert.Equal(["host-pid:agent"], revision.AcknowledgedRisks);
+        Assert.Equal(["host-ipc:agent"], revision.AcknowledgedRisks);
         Assert.Empty(revision.UnacknowledgedRisks);
         Assert.Single(await kit.AuditAsync(), e => e.Action == "stack.risk-acknowledge");
+    }
+
+    private const string HostPid = "services:\n  agent:\n    image: example/agent:1.0\n    pid: host\n";
+
+    [Fact]
+    public async Task An_operators_acknowledgment_of_a_critical_finding_sent_with_the_upload_does_not_count()
+    {
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Operator);
+        var stack = await kit.CreateStackAsync();
+        await StepUpAsync(kit);
+
+        var revision = await kit.UploadAsync(stack.Id, StackKit.Upload(HostPid, proxied: [], acknowledged: ["host-pid:agent"]));
+        var refused = await Assert.ThrowsAsync<HubException>(() => kit.DeployAsync(stack.Id, revision.Number));
+
+        Assert.Empty(revision.AcknowledgedRisks);
+        Assert.Equal(["host-pid:agent"], revision.UnacknowledgedRisks);
+        Assert.Contains("host-pid:agent", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(ContainersOf(kit, "site"));
+        Assert.Single(await kit.AuditAsync(), e => e.Action == "stack.risk-acknowledge" && e.Result == "denied" && e.Parameters!.Contains("host-pid:agent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_admin_acknowledges_a_critical_finding_with_the_upload_only_after_a_step_up()
+    {
+        await using var kit = await StackKit.CreateAsync(CoreRoles.Admin);
+        var stack = await kit.CreateStackAsync();
+
+        var withoutStepUp = await kit.UploadAsync(stack.Id, StackKit.Upload(HostPid, proxied: [], acknowledged: ["host-pid:agent"]));
+        await StepUpAsync(kit);
+        var steppedUp = await kit.UploadAsync(stack.Id, StackKit.Upload(HostPid, proxied: [], acknowledged: ["host-pid:agent"]));
+        var (job, _) = await kit.RunAsync(await kit.DeployAsync(stack.Id, steppedUp.Number));
+
+        Assert.Equal(["host-pid:agent"], withoutStepUp.UnacknowledgedRisks);
+        Assert.Equal(["host-pid:agent"], steppedUp.AcknowledgedRisks);
+        Assert.Empty(steppedUp.UnacknowledgedRisks);
+        Assert.Equal(JobState.Succeeded, job.State);
     }
 
     [Fact]

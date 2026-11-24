@@ -1523,6 +1523,10 @@ namespace Runova.ServerCore.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AdminAcknowledgedRisks")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Bindings")
                         .IsRequired()
                         .HasColumnType("TEXT");

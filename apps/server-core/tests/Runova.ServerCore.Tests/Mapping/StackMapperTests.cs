@@ -114,6 +114,29 @@ public sealed class StackMapperTests
     }
 
     [Fact]
+    public void A_critical_finding_waits_until_an_admin_acknowledged_it_after_a_step_up()
+    {
+        StackRisk[] findings = [new("privileged:agent", "privileged", StackRiskSeverity.Critical, "Runs privileged.", "agent")];
+        var row = new StackRevisionRecord
+        {
+            StackId = Guid.NewGuid(),
+            Number = 1,
+            State = nameof(StackRevisionState.Ready),
+            ComposeSha256 = "sha",
+            Findings = StackOperations.Write(findings),
+            AcknowledgedRisks = StackOperations.Write<string[]>(["privileged:agent"]),
+        };
+
+        var byOperator = StackMapper.ToInfo(row);
+        row.AdminAcknowledgedRisks = StackOperations.Write<string[]>(["privileged:agent"]);
+        var byAdmin = StackMapper.ToInfo(row);
+
+        Assert.Equal(["privileged:agent"], byOperator.UnacknowledgedRisks);
+        Assert.Empty(byAdmin.UnacknowledgedRisks);
+        Assert.Equal(["privileged:agent"], byAdmin.AcknowledgedRisks);
+    }
+
+    [Fact]
     public void A_revision_from_a_release_reads_its_source_and_the_image_it_loaded()
     {
         var image = new StackReleaseImage("acme/shop", "v1.4.0", 77, "shop-image.tar.gz", 1234, new string('a', 64), ["acme/shop:1.4.0"]);

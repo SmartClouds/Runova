@@ -69,5 +69,5 @@ internal static partial class StackMapper
     private static StackServiceNetworks[] ReadNetworks(string json) => StackOperations.Read<StackServiceNetworks[]>(json);
 
     private static string[] Unacknowledged(StackRevisionRecord row) =>
-        StackOperations.Unacknowledged(ReadFindings(row.Findings), ReadNames(row.AcknowledgedRisks));
+        StackOperations.Unacknowledged(ReadFindings(row.Findings), ReadNames(row.AcknowledgedRisks), ReadNames(row.AdminAcknowledgedRisks));
 }

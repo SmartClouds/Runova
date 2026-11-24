@@ -38,8 +38,9 @@ internal sealed class StackRecord
 
 /// <summary>
 /// One upload of a stack's files. The list columns are JSON arrays: env keys (never values),
-/// services, proxied services, resource caps, the core's findings, acknowledged finding ids, port bindings
-/// after the loopback override, and the deploy's steps.
+/// services, proxied services, resource caps, the core's findings, acknowledged finding ids (and
+/// those an Admin acknowledged after a step-up), port bindings after the loopback override, and
+/// the deploy's steps.
 /// </summary>
 internal sealed class StackRevisionRecord
 {
@@ -71,6 +72,13 @@ internal sealed class StackRevisionRecord
     public string Findings { get; set; } = "[]";
 
     public string AcknowledgedRisks { get; set; } = "[]";
+
+    /// <summary>
+    /// The acknowledged finding ids an Admin gave after a step-up. Only these count for a critical
+    /// finding (privileged, the Docker socket, the server's root and the like), since a container
+    /// with one of those holds the server itself.
+    /// </summary>
+    public string AdminAcknowledgedRisks { get; set; } = "[]";
 
     public string Bindings { get; set; } = "[]";
 

@@ -55,6 +55,20 @@ Server core:
   C# with the app's finding ids (a shared fixture in `packages/core/src/deploy/compose/fixtures`
   is checked by both linters), writes the `!override` file and marks the revision Ready or Invalid.
   Every acknowledgment is one `stack.risk-acknowledge` audit entry.
+- Who may acknowledge: Operators acknowledge high and medium findings. A critical one (privileged,
+  `pid: host`, the Docker socket, the server's root or the core's files, a writable sensitive
+  mount, an escape capability such as `SYS_ADMIN`) gives a container the server itself, so it
+  needs an Admin who has stepped up (the same `admin` and `step-up` policies as
+  `RevealStackEnv`), on every path that records one: `AcknowledgeStackRisks`, the acknowledgments
+  sent with an upload and those of `ReviseStack`. The core decides by the severity of the
+  revision's own finding. Those acknowledgments are kept apart on the revision
+  (`AdminAcknowledgedRisks`, migration `StackAdminAcknowledgments`, which keeps what was
+  acknowledged before), and the deploy gate, the Validate and Up steps and start or restart count
+  a critical finding only from there. `AcknowledgeStackRisks` refuses an Operator outright; an
+  Operator's acknowledgment of a critical finding sent with the files is dropped once validation
+  knows the findings, with a denied audit entry, so the finding waits for an Admin. An Admin's
+  acknowledgment carries over to a copy with the same compose file (make private, caps, networks,
+  rollback) but not to a new compose file made without a step-up.
 - The deploy job (validate, pull, build, `up --wait`, health) keeps its steps on the revision with
   the job log lines each one wrote, and seeds the redactor with the stack's env values. Rollback
   copies an earlier revision into a new one and deploys it. Delete with volumes is its own hub

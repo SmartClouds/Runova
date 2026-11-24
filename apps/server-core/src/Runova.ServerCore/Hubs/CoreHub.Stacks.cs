@@ -8,8 +8,9 @@ namespace Runova.ServerCore.Hubs;
 
 /// <summary>
 /// Compose stacks (E07), the Apps of a server. Every role reads them; Operators create apps,
-/// acknowledge findings, deploy, roll back, run the lifecycle and delete; deleting an app with its
-/// volumes (its data) is for Admins. Files arrive over REST (StackEndpoints), or are copied on the
+/// acknowledge findings, deploy, roll back, run the lifecycle and delete; acknowledging a critical
+/// finding (one that gives a container the server itself) needs an Admin after a step-up, and
+/// deleting an app with its volumes (its data) is for Admins. Files arrive over REST (StackEndpoints), or are copied on the
 /// server from an earlier revision (ReviseStack). Every change and every refusal lands in the audit
 /// trail; env values leave the core only through RevealStackEnv (Admins, after a step-up).
 /// </summary>
@@ -33,7 +34,7 @@ internal sealed partial class CoreHub
 
     [Authorize(Policy = CorePolicies.Operator)]
     public Task<StackRevisionInfo> AcknowledgeStackRisks(AcknowledgeStackRisksRequest request) =>
-        StackCallAsync(() => stacks.AcknowledgeAsync(request, StackCaller, Context.ConnectionAborted));
+        StackCallAsync(async () => await stacks.AcknowledgeAsync(request, await AcknowledgingCallerAsync(), Context.ConnectionAborted));
 
     [Authorize(Policy = CorePolicies.Operator)]
     public Task<JobInfo> DeployStack(StackRevisionRef revision) =>
@@ -53,7 +54,7 @@ internal sealed partial class CoreHub
 
     [Authorize(Policy = CorePolicies.Operator)]
     public Task<StackRevisionInfo> ReviseStack(ReviseStackRequest request) =>
-        StackCallAsync(() => stacks.ReviseAsync(request, StackCaller, Context.ConnectionAborted));
+        StackCallAsync(async () => await stacks.ReviseAsync(request, await AcknowledgingCallerAsync(), Context.ConnectionAborted));
 
     [Authorize(Policy = CorePolicies.Admin)]
     [Authorize(Policy = CorePolicies.StepUp)]
@@ -67,6 +68,10 @@ internal sealed partial class CoreHub
     [Authorize(Policy = CorePolicies.Admin)]
     public Task<JobInfo> DeleteStackWithVolumes(Guid stackId) =>
         StackCallAsync(() => stacks.DeleteAsync(stackId, removeVolumes: true, StackCaller, Context.ConnectionAborted));
+
+    /// <summary>The caller, and whether they pass Admin and StepUp, which a critical finding's acknowledgment needs.</summary>
+    private async Task<StackCaller> AcknowledgingCallerAsync() =>
+        StackCaller with { SteppedUpAdmin = await authorization.IsSteppedUpAdminAsync(User) };
 
     private static StackRevisionRef Required(StackRevisionRef? revision) =>
         revision ?? throw new HubException("Name the app and the revision.");
