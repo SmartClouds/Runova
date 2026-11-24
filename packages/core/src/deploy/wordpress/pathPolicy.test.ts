@@ -39,6 +39,25 @@ describe('the hard deny list', () => {
       expect(isWpHardDenied(path), path).toBe(false);
     }
   });
+
+  it('refuses a Windows short name, which may be another name for a denied folder', () => {
+    // On an NTFS volume with 8.3 names, GIT~1 opens the item's own .git folder.
+    for (const path of [
+      'GIT~1/hooks/post-checkout',
+      'inc/git~1/config',
+      'GITHUB~1/workflows/ci.yml',
+      'CLAUDE~1/settings.json',
+      'AGENTS~1.MD',
+      'GI3A7B~12/hooks/pre-commit',
+    ]) {
+      expect(isWpHardDenied(path), path).toBe(true);
+      expect(validateWpItemPath(path), path).toEqual({ ok: false, reason: 'hardDenied' });
+    }
+    // A tilde that is no short name is fine.
+    for (const path of ['inc/~draft.php', 'a~b/c.php', 'notes~/x.txt']) {
+      expect(isWpHardDenied(path), path).toBe(false);
+    }
+  });
 });
 
 describe('mirror paths', () => {

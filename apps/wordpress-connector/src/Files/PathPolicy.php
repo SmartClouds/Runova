@@ -92,6 +92,11 @@ final class PathPolicy
         if (in_array($name, self::DENY_DIRS, true) || in_array($name, self::DENY_FILES, true)) {
             return true;
         }
+        // A Windows 8.3 short name (GIT~1, AGENTS~1.MD) may open a denied folder on the desktop's
+        // NTFS drive, and no name check can tell which one, so every such segment is refused.
+        if (preg_match('/~\d+(\.[^.]*)?$/D', $name) === 1) {
+            return true;
+        }
         foreach (self::DENY_PREFIXES as $prefix) {
             if (strncmp($name, $prefix, strlen($prefix)) === 0) {
                 return true;

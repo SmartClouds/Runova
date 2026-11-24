@@ -1,5 +1,6 @@
 import { createIgnoreRules, type IgnoreLayer, type IgnoreRulesResult } from '../ignoreRules.js';
 import {
+  isWindowsShortName,
   validateWpItemPath,
   WP_AGENT_PREFIXES,
   WP_DEFAULT_IGNORE,
@@ -89,7 +90,7 @@ function fold(segment: string): string {
 
 function segmentDenied(segment: string): boolean {
   const name = fold(segment);
-  if (DENY_NAMES.has(name)) return true;
+  if (DENY_NAMES.has(name) || isWindowsShortName(name)) return true;
   if (WP_HARD_DENY_PREFIXES.some((prefix) => name.startsWith(prefix))) return true;
   return WP_HARD_DENY_SUFFIXES.some((suffix) => name.endsWith(suffix));
 }

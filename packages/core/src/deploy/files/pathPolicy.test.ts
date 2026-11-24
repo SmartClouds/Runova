@@ -62,8 +62,18 @@ describe('the file-site hard deny list', () => {
     // Lookalikes a case-insensitive disk may fold into a denied name (the long s).
     ['.curſor/rules/r.mdc', true],
     ['AGENTſ.md', true],
+    // Windows short names, which may open .git or .claude on an NTFS volume.
+    ['GIT~1/hooks/post-checkout', true],
+    ['CLAUDE~1/settings.json', true],
   ])('%s denied: %s', (path, denied) => {
     expect(isFileSiteHardDenied(path)).toBe(denied);
+  });
+
+  it('never lets a pull write through a Windows short name', () => {
+    expect(validateSyncPath('GIT~1/hooks/post-checkout')).toEqual({
+      ok: false,
+      reason: 'hardDenied',
+    });
   });
 
   it('works on a bare segment too', () => {

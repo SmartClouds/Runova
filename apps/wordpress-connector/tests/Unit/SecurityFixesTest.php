@@ -30,6 +30,18 @@ final class SecurityFixesTest extends TestCase
         $this->assertNull(PathPolicy::validate('auth.json.dist'));
     }
 
+    public function testWindowsShortNamesAreHardDenied(): void
+    {
+        // On an NTFS volume with 8.3 names, GIT~1 opens the item's own .git folder on the desktop.
+        $paths = array('GIT~1/hooks/post-checkout', 'inc/git~1/config', 'CLAUDE~1/settings.json', 'AGENTS~1.MD', 'GI3A7B~12/hooks/pre-commit');
+        foreach ($paths as $path) {
+            $this->assertSame('hardDenied', PathPolicy::validate($path), $path);
+        }
+        foreach (array('inc/~draft.php', 'a~b/c.php', 'notes~/x.txt') as $path) {
+            $this->assertNull(PathPolicy::validate($path), $path);
+        }
+    }
+
     public function testLookalikesAreJudgedAsTheNameTheyBecome(): void
     {
         $lookalikes = array(

@@ -133,11 +133,21 @@ function utf8Length(text: string): number {
   return new TextEncoder().encode(text).length;
 }
 
+/**
+ * A Windows 8.3 short name: a stem ending in ~ and digits, with an optional extension (`GIT~1`,
+ * `AGENTS~1.MD`). On an NTFS volume that keeps short names (the system drive does by default)
+ * it opens whatever long name it stands for, so `GIT~1/hooks/x` writes into `.git/hooks`. No
+ * name check can tell which one it is, so every such segment is refused.
+ */
+export function isWindowsShortName(name: string): boolean {
+  return /~\d+(\.[^.]*)?$/.test(name);
+}
+
 function segmentDenied(segment: string): boolean {
   // NFKC first, so lookalikes a case-insensitive disk may fold together (the long s in `.curſor`)
   // are judged as the name they become.
   const name = segment.normalize('NFKC').toLowerCase();
-  if (DENY_NAMES.has(name)) return true;
+  if (DENY_NAMES.has(name) || isWindowsShortName(name)) return true;
   if (WP_HARD_DENY_PREFIXES.some((prefix) => name.startsWith(prefix))) return true;
   return WP_HARD_DENY_SUFFIXES.some((suffix) => name.endsWith(suffix));
 }
