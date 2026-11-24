@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { stripAnsi } from '../process/spawnStreaming';
 import {
+  cmdLine,
   type HeadlessOutcome,
   type HeadlessPromptOptions,
   type HeadlessPromptResult,
@@ -91,11 +92,16 @@ function spawnPrompt(
   decoder: ProgressDecoder | null,
 ): Promise<HeadlessOutcome> {
   return new Promise((resolve) => {
-    // The same argv form execFile gets in runHeadlessCliPrompt: npm-installed CLIs are .cmd shims
-    // on Windows, which only cmd.exe can start.
+    // The same command line execFile gets in runHeadlessCliPrompt: npm-installed CLIs are .cmd
+    // shims on Windows, which only cmd.exe can start, and cmdLine() keeps the prompt text.
     const child =
       process.platform === 'win32'
-        ? spawn('cmd.exe', ['/d', '/s', '/c', command, ...args], { cwd, env, windowsHide: true })
+        ? spawn('cmd.exe', ['/d', '/s', '/c', cmdLine(command, args)], {
+            cwd,
+            env,
+            windowsHide: true,
+            windowsVerbatimArguments: true,
+          })
         : spawn(command, args, { cwd, env });
 
     let stdout = '';

@@ -117,13 +117,17 @@ function execPrompt(
       maxBuffer: 10 * 1024 * 1024,
       env,
     };
-    // npm-installed CLIs are .cmd shims on Windows, which Node refuses to spawn directly;
-    // cmd.exe gets an argv array (not `shell: true`), so args never get re-parsed as a
-    // single shell line. cmd.exe's own /c buffer still caps out at ~8191 characters
-    // though, so a caller with a long prompt must send it via stdin instead of argv.
+    // npm-installed CLIs are .cmd shims on Windows, which Node refuses to spawn directly, so
+    // they go through cmd.exe with a command line built by cmdLine(). cmd.exe's own /c buffer
+    // caps out at ~8191 characters, so a caller with a long prompt must send it via stdin.
     const child =
       process.platform === 'win32'
-        ? execFile('cmd.exe', ['/d', '/s', '/c', command, ...args], options, done)
+        ? execFile(
+            'cmd.exe',
+            ['/d', '/s', '/c', cmdLine(command, args)],
+            { ...options, windowsVerbatimArguments: true },
+            done,
+          )
         : execFile(command, args, options, done);
 
     if (requestId) runningPrompts.set(requestId, { child, cancelled: false });
@@ -153,6 +157,28 @@ function execPrompt(
       });
     }
   });
+}
+
+/**
+ * One argument for a command line cmd.exe runs, read back as exactly `value` by the program (a
+ * node shim's CRT, or Rust's, which split arguments the same way). Node's own quoting writes a
+ * quote inside an argument as \", which cmd.exe does not treat as an escape: the quote ends
+ * cmd's quoted text, and a prompt holding `" & del ..."` from a commit or a pull request runs
+ * the rest as commands. Here every quote is written as "" (backslashes before it doubled, so
+ * they stay literal), so cmd.exe only ever sees an even run of quotes and every &, | and > stays
+ * inside its quoted text, and the CRT reads "" in a quoted argument as one literal quote.
+ */
+export function quoteCmdArg(value: string): string {
+  return `"${value.replace(/(\\*)"/g, '$1$1""').replace(/(\\+)$/, '$1$1')}"`;
+}
+
+/**
+ * The /c command line for cmd.exe /s: the command unquoted (a .cmd shim finds its own folder
+ * from %~dp0 only when cmd found it on PATH by name), each argument quoted by quoteCmdArg(),
+ * and one outer pair of quotes, which /s strips.
+ */
+export function cmdLine(command: string, args: string[]): string {
+  return `"${[command, ...args.map(quoteCmdArg)].join(' ')}"`;
 }
 
 function supportsHeadlessPrompt(cli: CliDefinition): boolean {

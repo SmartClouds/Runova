@@ -18,6 +18,16 @@ interface Spawned {
 }
 
 const spawned: Spawned[] = [];
+
+/** Reads back what cmdLine() wrote: an outer pair of quotes, the bare command, quoted arguments. */
+function fromCmdLine(line: string): string[] {
+  const inner = line.slice(1, -1);
+  const command = inner.split(' ')[0] ?? '';
+  const args = [...inner.slice(command.length).matchAll(/"((?:[^"]|"")*)"/g)].map((match) =>
+    match[1].replace(/""/g, '"'),
+  );
+  return [command, ...args];
+}
 const settings = { current: {} as Partial<AppSettings> };
 /** CLI ids whose `--version` probe succeeds, i.e. that count as installed. */
 const installed = new Set<string>(['claude']);
@@ -30,8 +40,8 @@ vi.mock('node:child_process', () => ({
       options: { env?: Record<string, string | undefined> },
       done: (error: Error | null, stdout: string, stderr: string) => void,
     ) => {
-      // Windows goes through `cmd.exe /d /s /c <command> ...args`.
-      const [command, ...args] = file === 'cmd.exe' ? argv.slice(3) : [file, ...argv];
+      // Windows goes through `cmd.exe /d /s /c "<command> "arg" ..."`, see cmdLine().
+      const [command, ...args] = file === 'cmd.exe' ? fromCmdLine(argv[3] ?? '') : [file, ...argv];
       const entry: Spawned = { command: command ?? '', args, stdin: null, env: options?.env };
       spawned.push(entry);
       setTimeout(() => done(null, 'an answer', ''), 0);
