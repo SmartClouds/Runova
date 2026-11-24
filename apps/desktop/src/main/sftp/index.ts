@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { app, type IpcMainInvokeEvent, webContents } from 'electron';
 import { isDockerFileTargetId } from '../../shared/fileTargets';
 import { dockerFilesHost } from '../deploy/dockerFiles/backend';
@@ -77,7 +76,8 @@ export function registerSftpIpc(deps: {
     send: (ownerId, channel, payload) =>
       sendToContents(webContents.fromId(ownerId), channel, payload),
     keepAwake: (busy) => keepAwake.setBusy('sftp', busy),
-    tempDir: () => join(app.getPath('temp'), 'runova-sftp'),
+    // The temp folder itself: each save makes a private folder of its own in it.
+    tempDir: () => app.getPath('temp'),
     localBrowse,
   });
   registerSftpHandlers({

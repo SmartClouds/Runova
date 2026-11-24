@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { filesErrorCode } from '../../shared/deployFilesErrors';
 import { SFTP_EDIT_MAX_BYTES } from '../../shared/sftpTypes';
@@ -116,6 +117,41 @@ describe('readText', () => {
 
 describe('writeText', () => {
   const base = { size: 12, mtimeMs: MTIME };
+
+  it('keeps the copy it uploads in a folder of its own that only this account can read', async () => {
+    const fake = server();
+    const client = fake.connect();
+    // The temp folder is the shared /tmp on Linux, where another account may have made our
+    // folder name first and left it open to everyone.
+    const shared = tempDir('runova-shared-tmp-');
+    let seen: { folder: string; folderMode: number; fileMode: number } | null = null;
+    vi.spyOn(client, 'uploadFile').mockImplementation(async (local, _remote, options) => {
+      seen = {
+        folder: dirname(local),
+        folderMode: statSync(dirname(local)).mode & 0o777,
+        fileMode: statSync(local).mode & 0o777,
+      };
+      return { stat: { size: 13, mtimeMs: MTIME + 5, mode: options?.mode ?? 0o644 } } as never;
+    });
+
+    await writeText(
+      client,
+      { path: '/srv/site/index.html', content: 'secret\n', bom: false, base, force: false },
+      shared,
+    );
+
+    const { folder, folderMode, fileMode } = seen as unknown as {
+      folder: string;
+      folderMode: number;
+      fileMode: number;
+    };
+    expect(dirname(folder)).toBe(shared);
+    expect(existsSync(folder)).toBe(false);
+    if (process.platform !== 'win32') {
+      expect(folderMode).toBe(0o700);
+      expect(fileMode).toBe(0o600);
+    }
+  });
 
   it('saves atomically with the old mode and the hash, and answers the new entry', async () => {
     const fake = server();

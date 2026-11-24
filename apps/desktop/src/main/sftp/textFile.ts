@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { filesError } from '../../shared/deployFilesErrors';
 import {
@@ -124,18 +124,22 @@ export async function writeText(
   // Through a link, the file it points at is what gets replaced, so the link stays a link.
   const target = existing ? await coded(path, () => client.sftpRealpath(path)) : path;
 
+  // The copy is the file's whole text, and the temp folder is the shared /tmp on Linux. A fresh
+  // folder of its own (mkdtemp makes it 0700) and a file only this account can read keep it from
+  // anyone else, even where another account made a folder of ours there first.
   await mkdir(tempDir, { recursive: true });
-  const temp = join(tempDir, `runova-edit-${randomBytes(8).toString('hex')}.tmp`);
+  const folder = await mkdtemp(join(tempDir, 'runova-edit-'));
+  const temp = join(folder, `${randomBytes(8).toString('hex')}.tmp`);
   let stat: Awaited<ReturnType<SftpFileClient['uploadFile']>>['stat'];
   try {
-    await writeFile(temp, bytes);
+    await writeFile(temp, bytes, { mode: 0o600, flag: 'wx' });
     const expectedSha256 = createHash('sha256').update(bytes).digest('hex');
     const result = await coded(path, () =>
       client.uploadFile(temp, target, { mode: existing?.mode, expectedSha256 }),
     );
     stat = result.stat;
   } finally {
-    await rm(temp, { force: true });
+    await rm(folder, { recursive: true, force: true });
   }
   return {
     name: baseName(path),
